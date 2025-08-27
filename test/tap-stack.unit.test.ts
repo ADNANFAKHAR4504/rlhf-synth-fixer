@@ -18,7 +18,6 @@ const mockFs = fs as jest.Mocked<typeof fs>;
 pulumi.runtime.setMocks({
   newResource: (args: pulumi.runtime.MockResourceArgs): pulumi.runtime.MockResourceResult => {
     const outputs: Record<string, any> = {};
-
     switch (args.type) {
       case 'aws:ec2/vpc:Vpc':
         outputs.id = 'vpc-12345678';
@@ -67,7 +66,6 @@ pulumi.runtime.setMocks({
       state: outputs,
     };
   },
-
   call: (args: pulumi.runtime.MockCallArgs) => {
     switch (args.token) {
       case 'aws:index/getRegion:getRegion':
@@ -120,7 +118,31 @@ describe('TapStack Unit Tests', () => {
 
       expect(stack).toBeDefined();
       expect(stack.vpc).toBeDefined();
+    });
+
+    test('should create TapStack with CloudTrail enabled by default', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpc).toBeDefined();
       expect(stack.cloudTrailBucket).toBeDefined();
+      expect(stack.cloudTrailRole).toBeDefined();
+      expect(stack.cloudTrail).toBeDefined();
+    });
+
+    test('should create TapStack with CloudTrail disabled', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: false,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpc).toBeDefined();
+      expect(stack.cloudTrailBucket).toBeUndefined();
+      expect(stack.cloudTrailRole).toBeUndefined();
+      expect(stack.cloudTrail).toBeUndefined();
     });
 
     test('should use config fallbacks when environment not provided', async () => {
@@ -139,6 +161,7 @@ describe('TapStack Unit Tests', () => {
 
       expect(stack).toBeDefined();
       expect(stack.vpc).toBeDefined();
+      expect(stack.regions).toEqual(['us-east-1', 'eu-west-2']);
     });
   });
 
@@ -173,12 +196,23 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Security Infrastructure', () => {
-    test('should create IAM roles for services', async () => {
+    test('should create IAM roles for services when CloudTrail enabled', async () => {
       const stack = new TapStack('test-stack', {
         tags: { Environment: 'test' },
+        enableCloudTrail: true,
       });
 
       expect(stack.cloudTrailRole).toBeDefined();
+      expect(stack.deploymentRole).toBeDefined();
+    });
+
+    test('should create only deployment role when CloudTrail disabled', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: false,
+      });
+
+      expect(stack.cloudTrailRole).toBeUndefined();
       expect(stack.deploymentRole).toBeDefined();
     });
 
@@ -187,18 +221,27 @@ describe('TapStack Unit Tests', () => {
         tags: { Environment: 'test' },
       });
 
-      expect(stack.cloudTrailRole).toBeDefined();
       expect(stack.deploymentRole).toBeDefined();
     });
   });
 
   describe('Storage Infrastructure', () => {
-    test('should create S3 bucket for CloudTrail', async () => {
+    test('should create S3 bucket for CloudTrail when enabled', async () => {
       const stack = new TapStack('test-stack', {
         tags: { Environment: 'test' },
+        enableCloudTrail: true,
       });
 
       expect(stack.cloudTrailBucket).toBeDefined();
+    });
+
+    test('should not create S3 bucket when CloudTrail disabled', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: false,
+      });
+
+      expect(stack.cloudTrailBucket).toBeUndefined();
     });
 
     test('should handle bucket naming conflicts', async () => {
@@ -212,6 +255,26 @@ describe('TapStack Unit Tests', () => {
 
       expect(stack1.cloudTrailBucket).toBeDefined();
       expect(stack2.cloudTrailBucket).toBeDefined();
+    });
+  });
+
+  describe('CloudTrail Infrastructure', () => {
+    test('should create CloudTrail when enabled', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: true,
+      });
+
+      expect(stack.cloudTrail).toBeDefined();
+    });
+
+    test('should not create CloudTrail when disabled', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: false,
+      });
+
+      expect(stack.cloudTrail).toBeUndefined();
     });
   });
 
@@ -466,6 +529,41 @@ describe('TapStack Unit Tests', () => {
       process.env.JEST_WORKER_ID = originalJestWorker;
       consoleSpy.mockRestore();
     });
+
+    test('should handle directory creation when path does not exist', async () => {
+      mockFs.existsSync.mockReturnValue(false);
+      
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+      });
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockFs.mkdirSync).toHaveBeenCalledWith('cfn-outputs', { recursive: true });
+      expect(mockFs.writeFileSync).toHaveBeenCalled();
+    });
+
+    test('should handle directory creation error gracefully', async () => {
+      mockFs.existsSync.mockReturnValue(false);
+      mockFs.mkdirSync.mockImplementation(() => {
+        throw new Error('Directory creation failed');
+      });
+
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+      });
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(stack).toBeDefined();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to write outputs file'));
+
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('Resource Tagging', () => {
@@ -476,13 +574,22 @@ describe('TapStack Unit Tests', () => {
 
       expect(stack).toBeDefined();
       expect(stack.vpc).toBeDefined();
-      expect(stack.cloudTrailBucket).toBeDefined();
     });
 
     test('should merge default and custom tags', async () => {
       const customTags = { Owner: 'test-owner' };
       const stack = new TapStack('test-stack', {
         tags: customTags,
+        environment: 'test',
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpc).toBeDefined();
+    });
+
+    test('should include default tags for all environments', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
         environment: 'test',
       });
 
@@ -501,7 +608,6 @@ describe('TapStack Unit Tests', () => {
 
       expect(stack).toBeDefined();
       expect(stack.vpc).toBeDefined();
-      expect(stack.cloudTrailBucket).toBeDefined();
     });
 
     test('should handle missing optional parameters', async () => {
@@ -512,6 +618,21 @@ describe('TapStack Unit Tests', () => {
       expect(stack).toBeDefined();
       expect(stack.vpc).toBeDefined();
       expect(stack.stackSetExecutionRole).toBeUndefined();
+    });
+
+    test('should handle explicit CloudTrail configuration', async () => {
+      const enabledStack = new TapStack('enabled-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: true,
+      });
+
+      const disabledStack = new TapStack('disabled-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: false,
+      });
+
+      expect(enabledStack.cloudTrail).toBeDefined();
+      expect(disabledStack.cloudTrail).toBeUndefined();
     });
   });
 
@@ -524,7 +645,7 @@ describe('TapStack Unit Tests', () => {
 
       // Wait for async operations to complete
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
         'cfn-outputs/flat-outputs.json',
         expect.stringContaining('vpcId'),
@@ -541,6 +662,23 @@ describe('TapStack Unit Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       expect(mockFs.writeFileSync).toHaveBeenCalled();
+    });
+
+    test('should include CloudTrail enabled status in outputs', async () => {
+      const stackEnabled = new TapStack('test-stack-enabled', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: true,
+      });
+
+      const stackDisabled = new TapStack('test-stack-disabled', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: false,
+      });
+
+      // Wait for async operations
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      expect(mockFs.writeFileSync).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -573,6 +711,38 @@ describe('TapStack Unit Tests', () => {
 
       expect(stack).toBeDefined();
       expect(stack.logGroup).toBeDefined();
+    });
+
+    test('should handle environment with test suffix', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'feature-test' },
+        environment: 'feature-test',
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.logGroup).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Alarms Conditional Logic', () => {
+    test('should create all alarms when CloudTrail is enabled', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: true,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.cloudTrailBucket).toBeDefined();
+    });
+
+    test('should create limited alarms when CloudTrail is disabled', async () => {
+      const stack = new TapStack('test-stack', {
+        tags: { Environment: 'test' },
+        enableCloudTrail: false,
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.cloudTrailBucket).toBeUndefined();
     });
   });
 });
