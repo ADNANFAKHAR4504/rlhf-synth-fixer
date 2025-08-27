@@ -89,24 +89,6 @@ public class TapStackProdTest {
         ));
     }
 
-    /**
-     * Test that CloudWatch LogGroup is created with correct retention.
-     */
-    @Test
-    public void testCloudWatchLogGroupConfiguration() {
-        App app = new App();
-        TapStackProd stack = new TapStackProd(app, "TestStack", TapStackProps.builder()
-                .environmentSuffix("test")
-                .build());
-
-        Template template = Template.fromStack(stack);
-        
-        // Verify LogGroup exists with retention
-        template.hasResourceProperties("AWS::Logs::LogGroup", Map.of(
-            "LogGroupName", "/aws/lambda/file-processor-test-primary-3",
-            "RetentionInDays", 14
-        ));
-    }
 
     /**
      * Test that IAM role has correct permissions.

@@ -27,8 +27,6 @@ import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
 
-import software.amazon.awscdk.services.logs.LogGroup;
-import software.amazon.awscdk.services.logs.RetentionDays;
 
 import java.util.List;
 import java.util.Map;
@@ -110,12 +108,6 @@ class TapStackProd extends Stack {
                 .topicName("file-processor-notifications-" + environmentSuffix.toLowerCase() + "-primary-3")
                 .build();
 
-        // Create CloudWatch Log Group for Lambda function
-        LogGroup logGroup = LogGroup.Builder.create(this, "FileProcessorLogGroup" + environmentSuffix + "Primary3")
-                .logGroupName("/aws/lambda/file-processor-" + environmentSuffix.toLowerCase() + "-primary-3")
-                .retention(RetentionDays.TWO_WEEKS)
-                .build();
-
         // Create IAM role for Lambda function
         Role lambdaRole = Role.Builder.create(this, "FileProcessorRole" + environmentSuffix + "Primary3")
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
@@ -129,7 +121,7 @@ class TapStackProd extends Stack {
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                 ))
-                .resources(List.of(logGroup.getLogGroupArn() + "*"))
+                .resources(List.of("arn:aws:logs:" + this.getRegion() + ":" + this.getAccount() + ":log-group:/aws/lambda/file-processor-" + environmentSuffix.toLowerCase() + "-primary-3*"))
                 .build());
 
         // Add S3 permissions
