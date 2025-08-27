@@ -97,6 +97,19 @@ class TapStack extends Stack {
                                                 "kms:DescribeKey"
                                         ))
                                         .resources(Arrays.asList("*"))
+                                        .build(),
+                                PolicyStatement.Builder.create()
+                                        .sid("AllowCloudTrailService")
+                                        .effect(Effect.ALLOW)
+                                        .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                                        .actions(Arrays.asList(
+                                                "kms:Encrypt",
+                                                "kms:Decrypt",
+                                                "kms:ReEncrypt*",
+                                                "kms:GenerateDataKey*",
+                                                "kms:DescribeKey"
+                                        ))
+                                        .resources(Arrays.asList("*"))
                                         .build()
                         ))
                         .build())
