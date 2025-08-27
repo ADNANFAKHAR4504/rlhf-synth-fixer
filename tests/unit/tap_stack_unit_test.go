@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	stackFile = "../../lib/tap_stack.go"
+	stackFile = "tap_stack.go"
 )
 
 func TestFileStructureAndSyntax(t *testing.T) {
