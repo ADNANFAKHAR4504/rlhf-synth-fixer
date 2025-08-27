@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// DeploymentOutputs represents the Pulumi stack outputs
 type DeploymentOutputs struct {
 	Ec2InstanceId      string `json:"ec2InstanceId"`
 	Ec2PrivateIp       string `json:"ec2PrivateIp"`
@@ -61,16 +62,16 @@ func TestMain(m *testing.M) {
 }
 
 func TestVPCAndSubnets(t *testing.T) {
-	ec2Client := ec2.NewFromConfig(awsConfig)
+	client := ec2.NewFromConfig(awsConfig)
 
-	require.NotEmpty(t, outputs.VpcId, "VPC ID must not be empty")
-	resp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{VpcIds: []string{outputs.VpcId}})
+	require.NotEmpty(t, outputs.VpcId)
+	resp, err := client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{VpcIds: []string{outputs.VpcId}})
 	require.NoError(t, err)
 	require.Len(t, resp.Vpcs, 1)
 	assert.Equal(t, "10.0.0.0/16", *resp.Vpcs[0].CidrBlock)
 
 	subnetIDs := []string{outputs.PrivateSubnetEc2Id, outputs.PrivateSubnetRdsId, outputs.PublicSubnetId}
-	subnetsResp, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{SubnetIds: subnetIDs})
+	subnetsResp, err := client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{SubnetIds: subnetIDs})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(subnetsResp.Subnets), len(subnetIDs))
 
@@ -83,10 +84,10 @@ func TestVPCAndSubnets(t *testing.T) {
 }
 
 func TestEC2Instance(t *testing.T) {
-	ec2Client := ec2.NewFromConfig(awsConfig)
+	client := ec2.NewFromConfig(awsConfig)
 
-	require.NotEmpty(t, outputs.Ec2InstanceId, "EC2 instance ID must not be empty")
-	resp, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{outputs.Ec2InstanceId}})
+	require.NotEmpty(t, outputs.Ec2InstanceId)
+	resp, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{outputs.Ec2InstanceId}})
 	require.NoError(t, err)
 	require.Len(t, resp.Reservations, 1)
 
@@ -101,17 +102,17 @@ func TestEC2Instance(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, found, "EC2 instance should have expected security group")
+	assert.True(t, found)
 }
 
 func TestRDSInstance(t *testing.T) {
-	rdsClient := rds.NewFromConfig(awsConfig)
-	require.NotEmpty(t, outputs.RdsEndpoint, "RDS Endpoint must not be empty")
+	client := rds.NewFromConfig(awsConfig)
+	require.NotEmpty(t, outputs.RdsEndpoint)
 
-	instancesResp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
+	instancesResp, err := client.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	require.NoError(t, err)
 
-	var foundInstance *rdstypes.DBInstance = nil
+	var foundInstance *rdstypes.DBInstance
 	for _, db := range instancesResp.DBInstances {
 		if db.Endpoint != nil {
 			address := aws.ToString(db.Endpoint.Address)
@@ -123,7 +124,8 @@ func TestRDSInstance(t *testing.T) {
 			}
 		}
 	}
-	require.NotNil(t, foundInstance, "RDS instance with endpoint not found")
+
+	require.NotNil(t, foundInstance)
 
 	foundSG := false
 	for _, sg := range foundInstance.VpcSecurityGroups {
@@ -132,17 +134,18 @@ func TestRDSInstance(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, foundSG, "RDS instance should have expected security group")
+	assert.True(t, foundSG)
 }
 
 func TestS3Bucket(t *testing.T) {
-	s3Client := s3.NewFromConfig(awsConfig)
-	require.NotEmpty(t, outputs.S3BucketName, "S3 Bucket Name must not be empty")
+	client := s3.NewFromConfig(awsConfig)
 
-	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &outputs.S3BucketName})
+	require.NotEmpty(t, outputs.S3BucketName)
+
+	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &outputs.S3BucketName})
 	assert.NoError(t, err)
 
-	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &outputs.S3BucketName})
+	versioning, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &outputs.S3BucketName})
 	require.NoError(t, err)
-	assert.Equal(t, "Enabled", versioning.Status, "S3 bucket versioning should be Enabled")
+	assert.Equal(t, "Enabled", versioning.Status.String())
 }
