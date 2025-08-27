@@ -13,6 +13,18 @@ variable "deployment_id" {
   default     = null
 }
 
+variable "deployment_suffix" {
+  description = "Additional unique suffix for this deployment (auto-generated if not provided)"
+  type        = string
+  default     = null
+}
+
+variable "force_unique_deployment" {
+  description = "Force a unique deployment by generating new random strings"
+  type        = bool
+  default     = true
+}
+
 # Random strings
 resource "random_string" "deployment_suffix" {
   length  = 6
@@ -26,25 +38,13 @@ resource "random_string" "bucket_suffix" {
   upper   = false
 }
 
-resource "random_string" "unique_suffix" {
+resource "random_string" "unique_deployment" {
   length  = 4
   special = false
   upper   = false
 }
 
-resource "random_string" "asg_suffix" {
-  length  = 4
-  special = false
-  upper   = false
-}
-
-resource "random_string" "rds_suffix" {
-  length  = 4
-  special = false
-  upper   = false
-}
-
-resource "random_string" "iam_suffix" {
+resource "random_string" "kms_suffix" {
   length  = 4
   special = false
   upper   = false
@@ -62,21 +62,16 @@ resource "random_string" "tg_suffix" {
   upper   = false
 }
 
-resource "random_string" "kms_suffix" {
-  length  = 4
-  special = false
-  upper   = false
-}
-
 # Locals
 locals {
   project_name        = "iac-aws-nova"
   environment         = "production"
   deployment_id       = var.deployment_id != null ? var.deployment_id : random_string.deployment_suffix.result
+  deployment_suffix   = var.deployment_suffix != null ? var.deployment_suffix : random_string.unique_deployment.result
   unique_project_name = "${local.project_name}-${local.deployment_id}"
   
-  # Add timestamp for additional uniqueness
-  timestamp_suffix = formatdate("YYYYMMDD-HHmmss", timestamp())
+  # Create a unique deployment identifier that's short but unique
+  unique_deployment_id = "${substr(local.deployment_id, 0, 4)}-${local.deployment_suffix}"
 
   common_tags = {
     Project     = local.unique_project_name
@@ -354,7 +349,7 @@ resource "aws_kms_alias" "main" {
 
 # IAM Role & Policy
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.unique_project_name}-${random_string.iam_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-ec2-role"
+  name = "${local.unique_project_name}-${local.unique_deployment_id}-ec2-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -367,7 +362,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name        = "${local.unique_project_name}-${random_string.iam_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-s3-access"
+  name        = "${local.unique_project_name}-${local.unique_deployment_id}-s3-access"
   description = "Allow EC2 to access S3, KMS, and SSM"
   policy = jsonencode({
     Version = "2012-10-17"
@@ -415,7 +410,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.unique_project_name}-${random_string.iam_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-ec2-profile"
+  name = "${local.unique_project_name}-${local.unique_deployment_id}-ec2-profile"
   role = aws_iam_role.ec2_role.name
   tags = local.common_tags
 }
@@ -531,11 +526,11 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.unique_project_name}-${random_string.asg_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-asg"
+  name                      = "${local.unique_project_name}-${local.unique_deployment_id}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"   # must be ELB if attached to ALB
-  health_check_grace_period = 600     # allow 5 minutes for startup
+  health_check_grace_period = 900     # allow 15 minutes for startup
   
   min_size         = 2
   max_size         = 6
@@ -569,7 +564,7 @@ resource "aws_autoscaling_group" "main" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.unique_project_name}-${random_string.rds_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-db-subnet"
+  name       = "${local.unique_project_name}-${local.unique_deployment_id}-db-subnet"
   subnet_ids = aws_subnet.database[*].id
   tags       = merge(local.common_tags, { Name = "${local.unique_project_name}-db-subnet" })
   
@@ -580,7 +575,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier           = "${local.unique_project_name}-${random_string.rds_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-database"
+  identifier           = "${local.unique_project_name}-${local.unique_deployment_id}-database"
   allocated_storage    = 20
   max_allocated_storage = 100
   storage_type         = "gp3"
