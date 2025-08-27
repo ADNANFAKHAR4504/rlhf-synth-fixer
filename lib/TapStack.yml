@@ -733,6 +733,8 @@ Resources:
   # CloudTrail for security auditing (multi-region, all management events)
   SecurityCloudTrail:
     Type: AWS::CloudTrail::Trail
+    # THIS IS THE FIX: Explicitly depend on the bucket policy to resolve the race condition
+    DependsOn: SecureLoggingBucketPolicy
     Properties:
       TrailName: !Sub '${StackPrefix}-${EnvironmentName}-security-trail'
       S3BucketName: !Ref SecureLoggingBucket
@@ -750,7 +752,7 @@ Resources:
         - Key: Purpose
           Value: 'Security Audit Trail'
 
-  # Bucket policy for SecureLoggingBucket (deny public, enforce HTTPS, allow CloudTrail)
+  # Bucket policy for SecureLoggingBucket (CloudTrail only, no Deny statements)
   SecureLoggingBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -774,23 +776,6 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
                 'AWS:SourceAccount': !Ref AWS::AccountId
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
-              - !Ref SecureLoggingBucket
-            Condition:
-              Bool:
-                'aws:SecureTransport': false
-          - Sid: DenyPublicAccess
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !Sub 'arn:aws:s3:::${SecureLoggingBucket}/*'
-              - !Ref SecureLoggingBucket
 
 # =============================================================================
 # OUTPUTS - Important resource identifiers and endpoints
