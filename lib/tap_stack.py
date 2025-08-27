@@ -101,8 +101,9 @@ class TapStack(TerraformStack):
             route_table_id=public_route_table.id
         )
 
+        # FIX: Removed "sg-" prefix from the security group names
         alb_sg = SecurityGroup(
-            self, "albSg", name=f"sg-alb-prod-{unique_suffix}", vpc_id=secure_vpc.id,
+            self, "albSg", name=f"alb-prod-{unique_suffix}", vpc_id=secure_vpc.id,
             description="Allow HTTP traffic to ALB",
             ingress=[SecurityGroupIngress(
                 protocol="tcp", from_port=80, to_port=80, cidr_blocks=["0.0.0.0/0"]
@@ -112,7 +113,7 @@ class TapStack(TerraformStack):
             )]
         )
         app_sg = SecurityGroup(
-            self, "appSg", name=f"sg-app-prod-{unique_suffix}", vpc_id=secure_vpc.id,
+            self, "appSg", name=f"app-prod-{unique_suffix}", vpc_id=secure_vpc.id,
             description="Allow traffic from ALB to App",
             ingress=[SecurityGroupIngress(
                 protocol="tcp", from_port=80, to_port=80, security_groups=[alb_sg.id]
@@ -122,7 +123,7 @@ class TapStack(TerraformStack):
             )]
         )
         db_sg = SecurityGroup(
-            self, "dbSg", name=f"sg-db-prod-{unique_suffix}", vpc_id=secure_vpc.id,
+            self, "dbSg", name=f"db-prod-{unique_suffix}", vpc_id=secure_vpc.id,
             description="Allow traffic from App to DB",
             ingress=[SecurityGroupIngress(
                 protocol="tcp", from_port=5432, to_port=5432, security_groups=[app_sg.id]
