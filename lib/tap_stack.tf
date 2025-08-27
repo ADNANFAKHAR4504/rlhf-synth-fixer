@@ -425,25 +425,26 @@ variable "skip_final_snapshot" {
 }
 
 locals {
-  tags = merge(local.common_tags, {
-    Environment = var.environment
-    Project     = var.project_name
-    Owner       = "sivav-cmd" # <-- Replace with your email or team
-    ManagedBy   = "terraform"
-  })
-}
+  base_tags = {
+    Owner     = "sivav-cmd"
+    ManagedBy = "terraform"
+  }
 
-output "vpc_id" {
-  description = "The ID of the VPC"
-  value       = aws_vpc.main.id
-}
-
-locals {
-  common_tags = merge(local.common_tags, {
+  common_tags = merge(local.base_tags, {
     Project     = var.project_name
     Environment = var.environment
     Migration   = var.migration_date
   })
+
+  tags = merge(local.common_tags, {
+    # Additional tags can be added here if needed
+  })
+}
+
+
+output "vpc_id" {
+  description = "The ID of the VPC"
+  value       = aws_vpc.main.id
 }
 
 
@@ -453,7 +454,7 @@ output "aws_region" {
 }
 
 output "s3_bucket_name" {
-  value       = aws_s3_bucket.my_bucket.bucket
+  value       = aws_s3_bucket.main.bucket
   description = "Primary S3 bucket name for this stack"
 }
 
@@ -668,7 +669,7 @@ output "db_instance_option_group" {
 
 output "db_instance_secondary_availability_zone" {
   description = "Secondary availability zone"
-  value       = aws_db_instance.main.secondary_availability_zone
+  value       = aws_db_instance.main.multi_az
 }
 
 output "db_instance_apply_immediately" {
