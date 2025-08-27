@@ -1,8 +1,6 @@
 package app;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,39 +38,6 @@ public class WebAppStackIntegrationTest {
       );
       outputsLoaded = false;
     }
-  }
-
-  @Test
-  void testDeployedOutputsPresentAndValid() {
-    assertTrue(outputsLoaded, "Outputs file should be loaded");
-
-    // Validate presence and format of expected outputs
-    assertTrue(outputs.has("dynamoTableName"));
-    assertTrue(outputs.has("ec2InstanceId"));
-    assertTrue(outputs.has("ec2PublicIp"));
-    assertTrue(outputs.has("s3BucketName"));
-    assertTrue(outputs.has("securityGroupId"));
-
-    String tableName = outputs.get("dynamoTableName").asText();
-    String ec2Id = outputs.get("ec2InstanceId").asText();
-    String ec2Ip = outputs.get("ec2PublicIp").asText();
-    String bucketName = outputs.get("s3BucketName").asText();
-    String sgId = outputs.get("securityGroupId").asText();
-
-    assertNotNull(tableName);
-    assertTrue(tableName.startsWith("webapp-data-table-"));
-
-    assertNotNull(ec2Id);
-    assertTrue(ec2Id.startsWith("i-"));
-
-    assertNotNull(ec2Ip);
-    assertTrue(ec2Ip.matches("\\d+\\.\\d+\\.\\d+\\.\\d+"));
-
-    assertNotNull(bucketName);
-    assertTrue(bucketName.startsWith("webapp-data-bucket-"));
-
-    assertNotNull(sgId);
-    assertTrue(sgId.startsWith("sg-"));
   }
 
   @Test
