@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"fmt"
@@ -20,9 +20,31 @@ type TapStackProps struct {
 	InstanceType      string
 }
 
+// getEnvOrDefault returns environment variable value or default if not set
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 // Self-contained TapStack using raw Terraform resources to minimize dependencies
 func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
+
+	// If no props provided, create defaults from environment variables
+	if props == nil {
+		props = &TapStackProps{
+			EnvironmentSuffix: getEnvOrDefault("ENVIRONMENT_SUFFIX", "dev"),
+			StateBucket:       getEnvOrDefault("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states"),
+			StateBucketRegion: getEnvOrDefault("TERRAFORM_STATE_BUCKET_REGION", "us-east-1"),
+			AwsRegion:         getEnvOrDefault("AWS_DEFAULT_REGION", "us-east-1"),
+			RepositoryName:    getEnvOrDefault("GITHUB_REPOSITORY", "iac-test-automations"),
+			CommitAuthor:      getEnvOrDefault("COMMIT_AUTHOR", "TuringGpt"),
+			OfficeIP:          getEnvOrDefault("OFFICE_IP", "0.0.0.0/0"),
+			InstanceType:      getEnvOrDefault("INSTANCE_TYPE", "t3.micro"),
+		}
+	}
 
 	// Get environment prefix
 	envPrefix := os.Getenv("ENVIRONMENT_SUFFIX")
