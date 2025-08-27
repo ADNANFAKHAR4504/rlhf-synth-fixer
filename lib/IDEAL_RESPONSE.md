@@ -7,7 +7,7 @@ Description: Secure Three-Tier Web Application Infrastructure - TapStack
 Parameters:
   ProjectName:
     Type: String
-    Default: 'iac-aws-nova-breaking'
+    Default: 'iac-aws-nova'
     Description: Project name for resource tagging
 
   Environment:
@@ -58,7 +58,7 @@ Parameters:
     Description: EC2 instance type
 
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
+    Type: String
     Default: ''
     Description: EC2 Key Pair for SSH access (optional - leave empty to skip Bastion Host and Launch Template)
 
@@ -898,7 +898,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub '${ProjectName}-web-acl'
+      Name: !Sub '${ProjectName}-waf'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -1001,4 +1001,5 @@ Outputs:
     Description: Public IP address of the Bastion Host
     Value: !GetAtt BastionHost.PublicIp
     Condition: HasKeyPair
+
 ```
