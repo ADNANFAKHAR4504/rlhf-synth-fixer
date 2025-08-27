@@ -1,0 +1,36 @@
+{
+  "po_id": "trainr970",
+  "task_id": "trainr970",
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-08-25T13:33:58+00:00",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security Configuration",
+    "KMS Key Management",
+    "S3 Bucket Encryption",
+    "Lambda Function Security",
+    "IAM Least Privilege",
+    "VPC Flow Logs",
+    "CloudWatch Logging"
+  ],
+  "training_quality": 8,
+  "training_quality_justification": "This task provides high-value training data for security-focused IaC implementations with CDKTF+Go. The comprehensive security requirements (KMS encryption, S3 security, IAM least privilege, VPC flow logs) represent enterprise-grade patterns. The discovered technical issues with CDKTF+Go module compatibility offer valuable insights into platform limitations. The detailed failure analysis in MODEL_FAILURES.md provides exceptional debugging and troubleshooting knowledge. The extensive test coverage design demonstrates best practices for IaC validation. However, deducted 2 points due to fundamental build compatibility issues preventing actual deployment validation.",
+  "aws_services": [
+    "KMS",
+    "S3",
+    "Lambda",
+    "IAM",
+    "VPC",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

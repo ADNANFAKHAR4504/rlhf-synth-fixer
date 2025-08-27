@@ -23,7 +23,7 @@ dependencies {
     // AWS SDK v2 - BOM ensures all AWS SDK services use consistent versions
     implementation platform("software.amazon.awssdk:bom:2.25.16")
 
-    // AWS services we use in Main.java
+    // AWS services used in Main.java
     implementation "software.amazon.awssdk:ec2"
     implementation "software.amazon.awssdk:iam"
     implementation "software.amazon.awssdk:s3"
@@ -33,7 +33,7 @@ dependencies {
     implementation 'com.google.code.gson:gson:2.10.1'
     implementation 'com.google.guava:guava:33.0.0-jre'
 
-    // --- Testing ---
+    // --- Unit Testing ---
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testImplementation 'org.mockito:mockito-core:5.11.0'
@@ -72,7 +72,7 @@ sourceSets {
 
 // Configurations
 configurations {
-    integrationTestImplementation.extendsFrom testImplementation  
+    integrationTestImplementation.extendsFrom testImplementation
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
 
@@ -84,10 +84,21 @@ dependencies {
     integrationTestImplementation "software.amazon.awssdk:s3"
     integrationTestImplementation "software.amazon.awssdk:sts"
     integrationTestImplementation "software.amazon.awssdk:cloudwatch"
+    integrationTestImplementation "software.amazon.awssdk:cloudwatchlogs"
     integrationTestImplementation "software.amazon.awssdk:cloudformation"
     integrationTestImplementation "software.amazon.awssdk:cloudtrail"
     integrationTestImplementation "software.amazon.awssdk:sns"
     integrationTestImplementation "software.amazon.awssdk:kms"
+    integrationTestImplementation "software.amazon.awssdk:rds"
+    integrationTestImplementation "software.amazon.awssdk:lambda"
+    integrationTestImplementation "software.amazon.awssdk:apigateway"
+    integrationTestImplementation "software.amazon.awssdk:networkfirewall"
+    integrationTestImplementation "software.amazon.awssdk:config"
+    integrationTestImplementation "software.amazon.awssdk:secretsmanager"
+    integrationTestImplementation "software.amazon.awssdk:autoscaling"
+    integrationTestImplementation "software.amazon.awssdk:elasticloadbalancingv2"
+
+    // JSON parsing for outputs
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-core:2.17.1'
 }
@@ -168,7 +179,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.0
+                minimum = 0.0 // ✅ No coverage threshold enforced
             }
         }
         rule {
