@@ -53,8 +53,9 @@ type VPCComponent struct {
 
 // IAMComponent represents IAM roles and policies
 type IAMComponent struct {
-	EC2Role    *iam.Role
-	LambdaRole *iam.Role
+	EC2Role            *iam.Role
+	LambdaRole         *iam.Role
+	EC2InstanceProfile *iam.InstanceProfile
 }
 
 // S3Component represents S3 buckets for logging
@@ -280,7 +281,7 @@ func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*Inf
 	}
 
 	// Build Application component
-	applicationComponent, err := buildApplicationComponent(ctx, cfg, vpcComponent, securityComponent)
+	applicationComponent, err := buildApplicationComponent(ctx, cfg, vpcComponent, securityComponent, iamComponent)
 	if err != nil {
 		return nil, fmt.Errorf("error building Application component: %v", err)
 	}
@@ -316,6 +317,7 @@ func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*Inf
 	ctx.Export("logging_bucket_name", s3Component.LoggingBucket.ID())
 	ctx.Export("replication_bucket_name", s3Component.ReplicationBucket.ID())
 	ctx.Export("ec2_role_arn", iamComponent.EC2Role.Arn)
+	ctx.Export("ec2_instance_profile_arn", iamComponent.EC2InstanceProfile.Arn)
 	ctx.Export("lambda_role_arn", iamComponent.LambdaRole.Arn)
 	ctx.Export("data_kms_key_arn", kmsComponent.DataKey.Arn)
 	ctx.Export("logs_kms_key_arn", kmsComponent.LogsKey.Arn)
@@ -667,9 +669,25 @@ func buildIAMComponent(ctx *pulumi.Context, cfg *EnvironmentConfig) (*IAMCompone
 		return nil, fmt.Errorf("error attaching S3 policy to Lambda role: %v", err)
 	}
 
+	// Create EC2 instance profile
+	ec2InstanceProfile, err := iam.NewInstanceProfile(ctx, "EC2InstanceProfile", &iam.InstanceProfileArgs{
+		Name: pulumi.String(fmt.Sprintf("%s-ec2-instance-profile", cfg.RolePrefix)),
+		Role: ec2Role.Name,
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-ec2-instance-profile", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating EC2 instance profile: %v", err)
+	}
+
 	return &IAMComponent{
-		EC2Role:    ec2Role,
-		LambdaRole: lambdaRole,
+		EC2Role:            ec2Role,
+		LambdaRole:         lambdaRole,
+		EC2InstanceProfile: ec2InstanceProfile,
 	}, nil
 }
 
@@ -989,7 +1007,7 @@ func buildSecurityComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VP
 }
 
 // buildApplicationComponent creates ALB, target group, and auto scaling group
-func buildApplicationComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent, security *SecurityComponent) (*ApplicationComponent, error) {
+func buildApplicationComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComponent, security *SecurityComponent, iam *IAMComponent) (*ApplicationComponent, error) {
 	// Create target group
 	targetGroup, err := alb.NewTargetGroup(ctx, "AppTargetGroup", &alb.TargetGroupArgs{
 		Name:       pulumi.String(fmt.Sprintf("%s-app-tg", cfg.Environment)),
@@ -1069,7 +1087,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 echo "OK" > /var/www/html/healthz
 `),
 		IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileArgs{
-			Name: pulumi.String(fmt.Sprintf("%s-ec2-role", cfg.RolePrefix)),
+			Name: iam.EC2InstanceProfile.Name,
 		},
 		MetadataOptions: &ec2.LaunchTemplateMetadataOptionsArgs{
 			HttpTokens: pulumi.String("required"), // IMDSv2
@@ -1166,6 +1184,7 @@ func buildDatabaseComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VP
 
 	// Create RDS instance
 	instance, err := rds.NewInstance(ctx, "DBInstance", &rds.InstanceArgs{
+		Identifier:               pulumi.String(fmt.Sprintf("%s-db-instance", cfg.Environment)),
 		AllocatedStorage:         pulumi.Int(20),
 		StorageType:              pulumi.String("gp2"),
 		Engine:                   pulumi.String("postgres"),
