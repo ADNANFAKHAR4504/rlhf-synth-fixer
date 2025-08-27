@@ -1,0 +1,6 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node bin/tap.ts",
+  "projectId": "tap-stack",
+  "codeMakerOutput": ".gen"
+}

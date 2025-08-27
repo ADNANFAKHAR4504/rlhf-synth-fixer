@@ -1,22 +1,18 @@
 #!/usr/bin/env node
-import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
+import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
-const app = new cdk.App();
+const app = new App();
 
 // Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
-const repositoryName = process.env.REPOSITORY || 'unknown';
-const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
-// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
-Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', repositoryName);
-Tags.of(app).add('Author', commitAuthor);
-
+// Create the main TAP stack
 new TapStack(app, stackName, {
-  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
-  awsRegion: process.env.CDK_DEFAULT_REGION,
+  environmentSuffix: environmentSuffix,
+  awsRegion: process.env.CDK_DEFAULT_REGION || 'us-west-2',
 });
+
+// Synthesize the CDKTF app
+app.synth();
