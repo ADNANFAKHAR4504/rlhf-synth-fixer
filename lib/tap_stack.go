@@ -285,7 +285,42 @@ func (t *TapStack) createS3Resources() {
 		Encryption:      awss3.BucketEncryption_KMS,
 	})
 
-	// Origin Access Control will be created automatically by S3BucketOrigin
+	// Add bucket policy to allow CloudTrail service to write logs
+	t.LoggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("s3:PutObject"),
+			jsii.String("s3:GetBucketAcl"),
+			jsii.String("s3:PutBucketAcl"),
+		},
+		Resources: &[]*string{
+			t.LoggingBucket.BucketArn(),
+			jsii.String(*t.LoggingBucket.BucketArn() + "/*"),
+		},
+		Conditions: &map[string]interface{}{
+			"StringEquals": map[string]interface{}{
+				"s3:x-amz-acl": "bucket-owner-full-control",
+			},
+		},
+	}))
+
+	// Also allow CloudTrail to check bucket location and encryption
+	t.LoggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("s3:GetBucketLocation"),
+			jsii.String("s3:GetBucketVersioning"),
+		},
+		Resources: &[]*string{
+			t.LoggingBucket.BucketArn(),
+		},
+	}))
 
 	awscdk.Tags_Of(t.S3Bucket).Add(jsii.String("Name"), jsii.String(fmt.Sprintf("prod-%s-app-bucket", *t.EnvironmentSuffix)), nil)
 	awscdk.Tags_Of(t.LoggingBucket).Add(jsii.String("Name"), jsii.String(fmt.Sprintf("prod-%s-logging-bucket", *t.EnvironmentSuffix)), nil)

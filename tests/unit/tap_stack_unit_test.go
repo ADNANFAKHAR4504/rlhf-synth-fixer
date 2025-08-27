@@ -151,6 +151,28 @@ func TestTapStack(t *testing.T) {
 		})
 	})
 
+	t.Run("creates CloudTrail with proper S3 logging configuration", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(nil)
+		stack := lib.NewTapStack(app, jsii.String("CloudTrailTest"), &lib.TapStackProps{
+			StackProps:        &awscdk.StackProps{},
+			EnvironmentSuffix: jsii.String("trail-test"),
+		})
+		template := assertions.Template_FromStack(stack.Stack, nil)
+
+		// ASSERT - CloudTrail exists and is properly configured
+		template.ResourceCountIs(jsii.String("AWS::CloudTrail::Trail"), jsii.Number(1))
+		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
+			"IsMultiRegionTrail":         true,
+			"IncludeGlobalServiceEvents": true,
+			"EnableLogFileValidation":    true,
+		})
+
+		// ASSERT - At least one S3 bucket policy exists (for CloudTrail access)
+		// The exact policy structure is managed by CDK, but we verify policies exist
+		template.ResourcePropertiesCountIs(jsii.String("AWS::S3::BucketPolicy"), map[string]interface{}{}, jsii.Number(3))
+	})
+
 	t.Run("creates Lambda function with least privilege IAM role", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
