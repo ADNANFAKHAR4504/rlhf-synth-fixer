@@ -97,27 +97,40 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 		DeletionWindowInDays: jsii.Number(30), // 30 days for production safety
 		EnableKeyRotation:    jsii.Bool(true),
 		Policy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Sid": "Enable IAM User Permissions",
-					"Effect": "Allow",
-					"Principal": {"AWS": "arn:aws:iam::` + getAccountId() + `:root"},
-					"Action": "kms:*",
-					"Resource": "*"
-				},
-				{
-					"Sid": "Allow S3 Service",
-					"Effect": "Allow",
-					"Principal": {"Service": "s3.amazonaws.com"},
-					"Action": [
-						"kms:Decrypt",
-						"kms:GenerateDataKey"
-					],
-					"Resource": "*"
-				}
-			]
-		}`),
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "Enable IAM User Permissions",
+                "Effect": "Allow",
+                "Principal": {"AWS": "arn:aws:iam::` + getAccountId() + `:root"},
+                "Action": "kms:*",
+                "Resource": "*"
+            },
+            {
+                "Sid": "Allow S3 Service",
+                "Effect": "Allow",
+                "Principal": {"Service": "s3.amazonaws.com"},
+                "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "Allow CloudTrail to encrypt logs",
+                "Effect": "Allow",
+                "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                "Action": [
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey",
+                    "kms:Encrypt",
+                    "kms:ReEncrypt*",
+                    "kms:Decrypt"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }`),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("tap-s3-kms-%s", *config.Environment)),
 		},
