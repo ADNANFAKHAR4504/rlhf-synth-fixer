@@ -9,5 +9,17 @@
   "subtask": "Cloud Environment Setup",
   "subject_labels": "Cloud Environment Setup",
   "training_quality": 9,
-  "aws_services": ["VPC", "EC2", "IAM", "Secrets Manager", "CloudFormation"]
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "IAM",
+    "Secrets Manager",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
 }
