@@ -45,6 +45,12 @@ Metadata:
           - UseExistingNatGateway1EIP
           - UseExistingNatGateway2EIP
           - SkipRDSInstances
+          - EnableGreenFleet
+          - BlueTrafficWeight
+          - GreenTrafficWeight
+          - GreenMinSize
+          - GreenMaxSize
+          - GreenDesiredCapacity
 
 Parameters:
   Environment:
@@ -171,6 +177,44 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: 'Skip creation of RDS DB instances if user lacks permissions'
 
+  EnableGreenFleet:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable creation of green ASG for blue/green with weighted ALB forwarding'
+
+  BlueTrafficWeight:
+    Type: Number
+    Default: 100
+    MinValue: 0
+    MaxValue: 100
+    Description: 'Weight percentage for blue target group'
+
+  GreenTrafficWeight:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 100
+    Description: 'Weight percentage for green target group'
+
+  GreenMinSize:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: 'Green ASG minimum size when green fleet is enabled'
+
+  GreenMaxSize:
+    Type: Number
+    Default: 2
+    MinValue: 0
+    Description: 'Green ASG maximum size when green fleet is enabled'
+
+  GreenDesiredCapacity:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: 'Green ASG desired capacity when green fleet is enabled'
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -238,6 +282,7 @@ Conditions:
   CreateRDSInstances: !Equals [!Ref SkipRDSInstances, 'false']
   CreateNatGateway1EIP: !Equals [!Ref UseExistingNatGateway1EIP, '']
   CreateNatGateway2EIP: !Equals [!Ref UseExistingNatGateway2EIP, '']
+  CreateGreenFleet: !Equals [!Ref EnableGreenFleet, 'true']
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -1221,7 +1266,14 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroupBlue
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ALBTargetGroupBlue
+                Weight: !Ref BlueTrafficWeight
+              - TargetGroupArn: !Ref ALBTargetGroupGreen
+                Weight: !If [CreateGreenFleet, !Ref GreenTrafficWeight, 0]
+            TargetGroupStickinessConfig:
+              Enabled: false
 
   ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -1235,7 +1287,14 @@ Resources:
         - CertificateArn: !Ref SSLCertificateArn
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroupBlue
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ALBTargetGroupBlue
+                Weight: !Ref BlueTrafficWeight
+              - TargetGroupArn: !Ref ALBTargetGroupGreen
+                Weight: !If [CreateGreenFleet, !Ref GreenTrafficWeight, 0]
+            TargetGroupStickinessConfig:
+              Enabled: false
 
   # Launch Template for Web Servers
   WebServerLaunchTemplate:
@@ -1290,9 +1349,34 @@ Resources:
         - !Ref PrivateSubnet2
       TargetGroupARNs:
         - !If [CreateALB, !Ref ALBTargetGroupBlue, !Ref 'AWS::NoValue']
+        - !If [CreateGreenFleet, !Ref ALBTargetGroupGreen, !Ref 'AWS::NoValue']
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-instance'
+          PropagateAtLaunch: true
+
+  # Optional Green Auto Scaling Group (for canary/blue-green via ALB weights)
+  WebServerASGGreen:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: CreateGreenFleet
+    Properties:
+      AutoScalingGroupName: !Sub '${Environment}-asg-green'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      MinSize: !Ref GreenMinSize
+      MaxSize: !Ref GreenMaxSize
+      DesiredCapacity: !Ref GreenDesiredCapacity
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroupGreen
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-instance-green'
           PropagateAtLaunch: true
         - Key: Environment
           Value: !Ref Environment
@@ -1318,6 +1402,7 @@ Resources:
         - !Ref WebServerASG
       DeploymentStyle:
         DeploymentType: IN_PLACE
+        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
 
   # Lambda Function (example)
   ExampleLambdaFunction:
