@@ -303,6 +303,7 @@ public final class Main {
                     .storageEncryptionKey(kmsKey)
                     .databaseName("appdb")
                     .credentials(Credentials.fromGeneratedSecret("admin"))
+                    .deletionProtection(environment.equals("production"))
                     .build();
 
                 Table dynamoTable = Table.Builder.create(this, "DynamoTable")
@@ -334,6 +335,7 @@ public final class Main {
                     .storageEncryptionKey(kmsKey)
                     .databaseName("appdb")
                     .credentials(Credentials.fromGeneratedSecret("admin"))
+                    .deletionProtection(environment.equals("production"))
                     .build();
                 
                 Table dynamoTable = Table.Builder.create(this, "DynamoTable")
@@ -358,6 +360,7 @@ public final class Main {
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
                 .managedPolicies(Arrays.asList(
                     ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+                    ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaVPCAccessExecutionRole"),
                     ManagedPolicy.fromAwsManagedPolicyName("CloudWatchFullAccess")
                 ))
                 .build();
