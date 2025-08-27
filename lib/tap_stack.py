@@ -1,42 +1,43 @@
-import json
 import base64
-from constructs import Construct
-from cdktf import App, TerraformStack, Fn, S3Backend
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import (
-    SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-)
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
-from cdktf_cdktf_provider_aws.lb import Lb
-from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup
-from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction
-from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.launch_template import (
-    LaunchTemplate, LaunchTemplateIamInstanceProfile, LaunchTemplateMonitoring
-)
+import json
+
+from cdktf import App, Fn, S3Backend, TerraformStack
 from cdktf_cdktf_provider_aws.autoscaling_group import (
-    AutoscalingGroup, AutoscalingGroupLaunchTemplate
-)
-from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.db_instance import DbInstance
-from cdktf_cdktf_provider_aws.backup_vault import BackupVault
-from cdktf_cdktf_provider_aws.backup_plan import (
-    BackupPlan, BackupPlanRule, BackupPlanRuleLifecycle
-)
+    AutoscalingGroup, AutoscalingGroupLaunchTemplate)
+from cdktf_cdktf_provider_aws.backup_plan import (BackupPlan, BackupPlanRule,
+                                                  BackupPlanRuleLifecycle)
 from cdktf_cdktf_provider_aws.backup_selection import (
-    BackupSelection, BackupSelectionSelectionTag
-)
+    BackupSelection, BackupSelectionSelectionTag)
+from cdktf_cdktf_provider_aws.backup_vault import BackupVault
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
+from cdktf_cdktf_provider_aws.db_instance import DbInstance
+from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
+from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
+from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.launch_template import (
+    LaunchTemplate, LaunchTemplateIamInstanceProfile, LaunchTemplateMonitoring)
+from cdktf_cdktf_provider_aws.lb import Lb
+from cdktf_cdktf_provider_aws.lb_listener import (LbListener,
+                                                  LbListenerDefaultAction)
+from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import \
+    S3BucketPublicAccessBlock
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -245,7 +246,7 @@ class TapStack(TerraformStack):
             self, "dbInstance", identifier=f"db-prod-{unique_suffix}",
             allocated_storage=20,
             engine="postgres",
-            engine_version="14.5",
+            engine_version="15",
             instance_class="db.t3.micro",
             db_name="webappdb",
             username="admin",
