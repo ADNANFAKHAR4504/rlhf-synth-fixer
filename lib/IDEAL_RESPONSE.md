@@ -45,7 +45,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	awscdk.Tags_Of(stack).Add(jsii.String("Department"), jsii.String("IT"), nil)
 
 	// Create VPC with public and isolated private subnets (no NAT Gateway needed)
-	vpc := awsec2.NewVpc(stack, jsii.String("ITProductionVPC"), &awsc2.VpcProps{
+	vpc := awsec2.NewVpc(stack, jsii.String("ITProductionVPC"), &awsec2.VpcProps{
 		MaxAzs: jsii.Number(2), // Deploy across 2 availability zones for resilience
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
