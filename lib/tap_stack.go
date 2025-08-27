@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -10,7 +12,7 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elbv2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kinesisanalyticsv2"
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kinesisfirehose"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lambda"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
@@ -289,7 +291,6 @@ func main() {
 			VpcEndpointType: pulumi.String("Gateway"),
 			RouteTableIds: pulumi.StringArray{
 				publicRouteTable.ID(),
-				// Add private route table IDs here if needed
 			},
 			Tags: commonTags,
 		})
@@ -679,38 +680,11 @@ func main() {
 		dbSecret, err := secretsmanager.NewSecret(ctx, "tap-db-credentials", &secretsmanager.SecretArgs{
 			Name:                   pulumi.String("tap-db-credentials"),
 			Description:            pulumi.String("Database credentials for TapStack"),
-			KmsKeyId:               dataKMSKey.KeyId,
-			RecoveryWindowInDays:   pulumi.Int(30),
-			Tags:                   commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Database secret version
-		_, err = secretsmanager.NewSecretVersion(ctx, "tap-db-credentials-version", &secretsmanager.SecretVersionArgs{
-			SecretId: dbSecret.ID(),
 			SecretString: pulumi.String(`{
-				"username": "tapstack_admin",
-				"password": "ChangeMe123!SecurePassword"
+				"username": "tap_user",
+				"password": "tap_password"
 			}`),
+			Tags: commonTags,
 		})
 		if err != nil {
 			return err
-		}
-
-		// TODO: Enable automatic rotation for production
-		// _, err = secretsmanager.NewSecretRotation(ctx, "tap-db-credentials-rotation", &secretsmanager.SecretRotationArgs{
-		//     SecretId:           dbSecret.ID(),
-		//     RotationLambdaArn:  rotationLambda.Arn,
-		//     RotationRules: &secretsmanager.SecretRotationRotationRulesArgs{
-		//         AutomaticallyAfterDays: pulumi.Int(30),
-		//     },
-		// })
-
-		// RDS Parameter Group
-		dbParameterGroup, err := rds.NewParameterGroup(ctx, "tap-db-parameter-group", &rds.ParameterGroupArgs{
-			Name:   pulumi.String("tap-postgres-params"),
-			Family: pulumi.String("postgres15"),
-			Parameters: rds.ParameterGroupParameterArray{
-				&rds.ParameterGroupParameter
