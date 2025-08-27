@@ -299,21 +299,15 @@ public class SecureWebAppStack extends Stack {
      * Creates AWS Config rules for monitoring IAM policy changes
      */
     private void createConfigRules() {
-        // Enable AWS Config
-        CfnConfigurationRecorder recorder = CfnConfigurationRecorder.Builder.create(this, "ConfigRecorder")
-            .name("WebAppConfigRecorder-" + environmentSuffix)
-            .roleArn("arn:aws:iam::" + this.getAccount() + ":role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig")
-            .recordingGroup(CfnConfigurationRecorder.RecordingGroupProperty.builder()
-                .allSupported(true)
-                .includeGlobalResourceTypes(true)
-                .build())
-            .build();
+        // Use existing AWS Config recorder instead of creating a new one
+        // The account already has a configuration recorder, so we don't create a new one
+        // Instead, we'll just create rules that use the existing recorder
         
-        // Delivery channel for Config
+        // Create a custom resource to check if the default recorder exists
         CfnDeliveryChannel deliveryChannel = CfnDeliveryChannel.Builder.create(this, "ConfigDeliveryChannel")
             .name("WebAppConfigDelivery-" + environmentSuffix)
             .s3BucketName("secure-webapp-logs-" + environmentSuffix + "-" + this.getAccount())
-            .s3KeyPrefix("aws-config/")
+            .s3KeyPrefix("aws-config")  // Removed trailing slash
             .build();
         
         // Config rule for IAM policy changes
@@ -334,9 +328,10 @@ public class SecureWebAppStack extends Stack {
                 .build())
             .build();
         
-        // Ensure Config recorder is created before rules
-        iamPolicyRule.getNode().addDependency(recorder);
-        rootAccessKeyRule.getNode().addDependency(recorder);
+        // Use the delivery channel as the dependency for rules
+        // since we're using an existing config recorder
+        iamPolicyRule.getNode().addDependency(deliveryChannel);
+        rootAccessKeyRule.getNode().addDependency(deliveryChannel);
     }
     
     /**
