@@ -151,9 +151,9 @@ Parameters:
     Description: 'If provided, use this S3 bucket name for CloudTrail logs instead of creating a new one.'
     Default: ''
 
-  ExistingKMSKeyAlias:
+  ExistingKmsAliasName:
     Type: String
-    Description: 'If provided, use this KMS Key Alias instead of creating a new one.'
+    Description: 'If provided, use this existing KMS alias name (e.g., alias/production-encryption-key) and do not create a new alias.'
     Default: ''
 
 Conditions:
@@ -169,9 +169,7 @@ Conditions:
   CreateKMSKey: !Equals [!Ref ExistingKMSKeyArn, '']
   CreateDBSubnetGroup: !Equals [!Ref ExistingDBSubnetGroupName, '']
   CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
-  CreateKMSKeyAlias: !And
-    - !Condition CreateKMSKey
-    - !Equals [!Ref ExistingKMSKeyAlias, '']
+  CreateKMSKeyAlias: !Equals [!Ref ExistingKmsAliasName, '']
 
 Resources:
   # VPC and Networking Resources
@@ -1264,3 +1262,14 @@ Outputs:
     Value: !Ref ProdSecurityNotificationsTopic
     Export:
       Name: !Sub '${AWS::StackName}-SNS-Topic-ARN'
+
+  KmsAliasName:
+    Description: 'KMS alias name in use'
+    Value:
+      !If [
+        CreateKMSKeyAlias,
+        !Sub 'alias/${Environment}-encryption-key',
+        !Ref ExistingKmsAliasName,
+      ]
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Alias-Name'
