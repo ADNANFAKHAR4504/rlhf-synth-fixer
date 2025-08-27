@@ -468,7 +468,7 @@ class TapStack extends Stack {
                 .deletionProtection(false) // Set to true for production
                 .deleteAutomatedBackups(false)
                 .enablePerformanceInsights(false)
-                .cloudwatchLogsExports(Arrays.asList("error", "general", "slow-query"))
+                .cloudwatchLogsExports(Arrays.asList("error", "general"))
                 .monitoringInterval(Duration.minutes(1))
                 .monitoringRole(rdsMonitoringRole)
                 .removalPolicy(RemovalPolicy.DESTROY)
