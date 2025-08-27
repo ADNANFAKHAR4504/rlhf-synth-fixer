@@ -232,10 +232,10 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const securityGroups = response.SecurityGroups || [];
       expect(securityGroups.length).toBeGreaterThan(3); // At least default + our security groups
       
-      // Check for specific security groups (using more flexible matching)
-      const webSG = securityGroups.find(sg => sg.GroupName?.includes('WebServer') || sg.GroupName?.includes('Web'));
-      const dbSG = securityGroups.find(sg => sg.GroupName?.includes('Database') || sg.GroupName?.includes('DB'));
-      const albSG = securityGroups.find(sg => sg.GroupName?.includes('LoadBalancer') || sg.GroupName?.includes('ALB'));
+      // Check for specific security groups (matching CloudFormation resource names)
+      const webSG = securityGroups.find(sg => sg.GroupName?.includes('WebServerSecurityGroup'));
+      const dbSG = securityGroups.find(sg => sg.GroupName?.includes('DatabaseSecurityGroup'));
+      const albSG = securityGroups.find(sg => sg.GroupName?.includes('LoadBalancerSecurityGroup'));
       
       expect(webSG).toBeDefined();
       expect(dbSG).toBeDefined();
