@@ -43,8 +43,9 @@ class TapStack extends Stack {
     public TapStack(final App scope, final String id, final StackProps props) {
         super(scope, id, props);
         
-        // Generate unique identifiers for this deployment
-        this.uniqueId = UUID.randomUUID().toString().substring(0, 8);
+        // Generate unique identifiers for this deployment with extra randomness
+        String fullUuid = UUID.randomUUID().toString().replace("-", "");
+        this.uniqueId = fullUuid.substring(0, 8);
         this.timestamp = String.valueOf(System.currentTimeMillis());
         
         // 1. Create KMS Keys for encryption
@@ -466,9 +467,7 @@ class TapStack extends Stack {
                 .backupRetention(Duration.days(7))
                 .deletionProtection(false) // Set to true for production
                 .deleteAutomatedBackups(false)
-                .enablePerformanceInsights(true)
-                .performanceInsightEncryptionKey(rdsKmsKey)
-                .performanceInsightRetention(PerformanceInsightRetention.DEFAULT)
+                .enablePerformanceInsights(false)
                 .cloudwatchLogsExports(Arrays.asList("error", "general", "slow-query"))
                 .monitoringInterval(Duration.minutes(1))
                 .monitoringRole(rdsMonitoringRole)
