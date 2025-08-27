@@ -37,3 +37,18 @@ output "guardduty_detector_id" {
   description = "ID of the GuardDuty detector"
   value       = module.monitoring.guardduty_detector_id
 }
+
+output "config_recorder_name" {
+  description = "Name of the AWS Config recorder"
+  value       = module.monitoring.config_recorder_name
+}
+
+output "security_alerts_topic_arn" {
+  description = "ARN of the security alerts SNS topic"
+  value       = module.monitoring.security_alerts_topic_arn
+}
+
+output "config_rules" {
+  description = "List of AWS Config rule names"
+  value       = module.monitoring.config_rules
+}

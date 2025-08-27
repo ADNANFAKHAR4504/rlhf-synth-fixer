@@ -1,3 +1,9 @@
 variable "project_name" {
-  description = "Project name for resource naming"
+  description = "Name of the project"
+  type        = string
+}
+
+variable "environment" {
+  description = "Environment name"
+  type        = string
 }

@@ -1,4 +1,12 @@
-Develop a Terraform file that establishes secure and compliant infrastructure configurations as code, adhering to rigorous security standards.
+## Turn3 promt
+Your previous for the below requirement is not correct. Following are errors
+
+## Monitoring module was incomplete. Resources like config delivery channel, aws_config_configuration_recorder_status, aws_config_config_rule for s3 and encrypted volumes are missing
+## Error, an argument named "environment" is not expected here in monitoring module
+
+Please generate the correct and complete response for the following
+
+Develop a Terraform file that establishes secure and compliant infrastructure configurations as code, adhering to rigorous security standards. The terraform code must be reusable, modularized.
 
 ## Requirements (must-haves based on constraints):
 
@@ -48,6 +56,6 @@ A Terraform configuration file that complies with all specified constraints, suc
 ## Proposed statement
 The environment is a multi-region AWS setup with focus on high-security standards.  
 
-All configurations must be written in Terraform and are expected to be reusable modularize structure and scalable, supporting at least two availability zones per VPC.  
+All configurations must be written in Terraform and are expected to be reusable, modularized and scalable, supporting at least two availability zones per VPC.  
 
 Naming conventions should include `SecConfig-` as a prefix for easy identification in AWS Management Console.
