@@ -174,10 +174,10 @@ resource "aws_lb_listener" "app" {
 
 # --- Launch Template & ASG ---
 resource "aws_launch_template" "app" {
-  name_prefix            = "${var.project_name}-app-"
-  image_id               = var.ami_id
-  instance_type          = var.instance_type
-  key_name               = var.key_pair_name
+  name_prefix   = "${var.project_name}-app-"
+  image_id      = var.ami_id
+  instance_type = var.instance_type
+  # key_name               = var.key_pair_name
   vpc_security_group_ids = [aws_security_group.app.id]
   user_data              = base64encode(var.user_data_script)
   tag_specifications {
@@ -353,7 +353,7 @@ variable "asg_desired_capacity" {
 variable "db_engine_version" {
   description = "RDS engine version"
   type        = string
-  default     = "8.0.35"
+  default     = "8.0.33"
 }
 
 variable "db_instance_class" {
