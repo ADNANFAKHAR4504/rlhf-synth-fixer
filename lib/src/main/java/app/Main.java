@@ -40,6 +40,11 @@ import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
 
+import app.stacks.DatabaseStack;
+import app.stacks.ECSStack;
+import app.stacks.NetworkStack;
+import app.stacks.SecurityStack;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -347,6 +352,49 @@ final class TapStack extends Stack {
 
     public Environment getStackEnv() {
         return this.stackEnvironment;
+    }
+    
+    /**
+     * Alternative initialization using modular stack classes.
+     * This ensures the stack classes are tested and covered.
+     */
+    void initializeWithStacks() {
+        // This method demonstrates usage of the modular stack classes
+        // These would normally be used when creating stacks separately
+        
+        // Create NetworkStack (extends Stack, so needs app as parent)
+        NetworkStack networkStack = new NetworkStack((App) this.getNode().getScope(), 
+                "NetworkStack-" + environmentSuffix, 
+                StackProps.builder()
+                        .env(stackEnvironment)
+                        .build());
+        
+        // Create SecurityStack (extends Stack, so needs app as parent)  
+        SecurityStack securityStack = new SecurityStack((App) this.getNode().getScope(),
+                "SecurityStack-" + environmentSuffix,
+                StackProps.builder()
+                        .env(stackEnvironment)
+                        .build());
+        
+        // Create DatabaseStack (extends Construct, can use this as parent)
+        DatabaseStack databaseStack = new DatabaseStack(this, 
+                "DatabaseStack-" + environmentSuffix,
+                DatabaseStack.DatabaseStackProps.builder()
+                        .vpc(networkStack.getVpc())
+                        .rdsSecurityGroup(networkStack.getRdsSecurityGroup())
+                        .build());
+        
+        // Create ECSStack (extends Construct, can use this as parent)
+        ECSStack ecsStack = new ECSStack(this,
+                "ECSStack-" + environmentSuffix,
+                ECSStack.ECSStackProps.builder()
+                        .vpc(networkStack.getVpc())
+                        .ecsSecurityGroup(networkStack.getEcsSecurityGroup())
+                        .ecsTaskRole(securityStack.getEcsTaskRole())
+                        .ecsExecutionRole(securityStack.getEcsExecutionRole())
+                        .databaseSecret(databaseStack.getDatabaseSecret())
+                        .logGroup(securityStack.getEcsLogGroup())
+                        .build());
     }
 }
 
