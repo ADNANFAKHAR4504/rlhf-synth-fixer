@@ -200,6 +200,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       if (response.Payload) {
          const payload = JSON.parse(new TextDecoder().decode(response.Payload));
     const result = JSON.parse(payload.body || '{}');
+    console.log("raw payload: ", payload);
     expect(payload.statusCode).toBe(201); // ✅ Fixed
     expect(result.message).toBe('Item created successfully'); }
     });
