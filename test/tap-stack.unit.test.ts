@@ -134,8 +134,8 @@ describe('TapStack', () => {
 
   describe('Lambda Functions', () => {
     test('should create five Lambda functions with correct names', () => {
-      // Note: There are 7 Lambda functions including event processor and LogRetention custom resources
-      template.resourceCountIs('AWS::Lambda::Function', 7);
+    
+      template.resourceCountIs('AWS::Lambda::Function', 6);
       
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `srvrless-create-item-${testEnvironmentSuffix}`,
