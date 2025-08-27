@@ -124,12 +124,10 @@ class VpcInfrastructureStack extends Stack {
             ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
         .build();
 
-    IMachineImage amazonLinuxAmi = MachineImage.latestAmazonLinux(
-        AmazonLinuxImageProps.builder()
-            .generation(AmazonLinuxGeneration.AMAZON_LINUX_2)
-            .edition(AmazonLinuxEdition.STANDARD)
-            .virtualization(AmazonLinuxVirt.HVM)
+    IMachineImage amazonLinuxAmi = MachineImage.latestAmazonLinux2(
+        software.amazon.awscdk.services.ec2.AmazonLinux2ImageSsmParameterProps.builder()
             .cpuType(AmazonLinuxCpuType.X86_64)
+            .virtualization(AmazonLinuxVirt.HVM)
             .build());
 
     this.ec2Instance = Instance.Builder.create(this, "WebServerInstance")
