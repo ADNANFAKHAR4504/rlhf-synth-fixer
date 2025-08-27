@@ -151,6 +151,8 @@ Resources:
   # VPC and Networking Resources
   ProdVPC:
     Type: AWS::EC2::VPC
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       CidrBlock: !Ref VpcCidr
       EnableDnsHostnames: true
@@ -163,6 +165,8 @@ Resources:
 
   ProdInternetGateway:
     Type: AWS::EC2::InternetGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Tags:
         - Key: Name
@@ -172,12 +176,16 @@ Resources:
 
   ProdVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref ProdVPC
       InternetGatewayId: !Ref ProdInternetGateway
 
   ProdPublicSubnet1:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: !Ref PublicSubnetCidr1
@@ -191,6 +199,8 @@ Resources:
 
   ProdPublicSubnet2:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: !Ref PublicSubnetCidr2
@@ -204,6 +214,8 @@ Resources:
 
   ProdPrivateSubnet1:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: !Ref PrivateSubnetCidr1
@@ -217,6 +229,8 @@ Resources:
 
   ProdPrivateSubnet2:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref ProdVPC
       CidrBlock: !Ref PrivateSubnetCidr2
@@ -241,6 +255,8 @@ Resources:
 
   ProdNATGateway:
     Type: AWS::EC2::NatGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       AllocationId: !GetAtt ProdEIPForNAT.AllocationId
       SubnetId: !Ref ProdPublicSubnet1
@@ -384,6 +400,8 @@ Resources:
 
   ProdKMSKeyAlias:
     Type: AWS::KMS::Alias
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       AliasName: !Sub 'alias/${Environment}-encryption-key'
       TargetKeyId: !Ref ProdKMSKey
@@ -391,6 +409,8 @@ Resources:
   # S3 Buckets with Encryption
   ProdCloudTrailBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -728,6 +748,8 @@ Resources:
   # Lambda function to check for existing GuardDuty detectors
   GuardDutyDetectorCheckFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Condition: EnableGuardDutyCondition
     Properties:
       FunctionName: !Sub '${Environment}-guardduty-detector-check'
@@ -804,6 +826,8 @@ Resources:
   # Security Groups
   ProdALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-alb-sg'
       GroupDescription: 'Security group for Application Load Balancer'
@@ -831,6 +855,8 @@ Resources:
 
   ProdWebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-web-sg'
       GroupDescription: 'Security group for web servers'
@@ -863,6 +889,8 @@ Resources:
 
   ProdDatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       GroupName: !Sub '${Environment}-db-sg'
       GroupDescription: 'Security group for database servers'
@@ -928,6 +956,8 @@ Resources:
   # RDS Subnet Group
   ProdDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DBSubnetGroupName: !Sub '${Environment}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS instances'
@@ -961,6 +991,8 @@ Resources:
   # RDS Instance
   ProdRDSInstance:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-database'
       DBInstanceClass: db.t3.micro
