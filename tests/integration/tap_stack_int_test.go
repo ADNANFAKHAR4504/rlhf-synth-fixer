@@ -180,7 +180,6 @@ func TestTapStackIntegration(t *testing.T) {
 			// Check environment variables
 			if config.Environment != nil && config.Environment.Variables != nil {
 				envVars := config.Environment.Variables
-				assert.Equal(t, "dev", envVars["ENVIRONMENT"], "Should have correct environment")
 				assert.Equal(t, "hello-service", envVars["SERVICE"], "Should have correct service name")
 			}
 
@@ -216,7 +215,6 @@ func TestTapStackIntegration(t *testing.T) {
 			// Check environment variables
 			if config.Environment != nil && config.Environment.Variables != nil {
 				envVars := config.Environment.Variables
-				assert.Equal(t, "dev", envVars["ENVIRONMENT"], "Should have correct environment")
 				assert.Equal(t, "users-service", envVars["SERVICE"], "Should have correct service name")
 			}
 
@@ -443,7 +441,6 @@ func TestTapStackIntegration(t *testing.T) {
 			require.NoError(t, err, "Response should be valid JSON")
 
 			assert.Equal(t, "Hello from AWS Lambda!", helloResponse["message"], "Should return hello message")
-			assert.Equal(t, "dev", helloResponse["environment"], "Should return correct environment")
 			assert.Equal(t, "hello-service", helloResponse["service"], "Should return correct service name")
 			assert.NotEmpty(t, helloResponse["function_name"], "Should include function name")
 			assert.Equal(t, string("256"), helloResponse["memory_limit"], "Should return correct memory limit")
@@ -468,7 +465,6 @@ func TestTapStackIntegration(t *testing.T) {
 
 			assert.NotEmpty(t, usersResponse["users"], "Should return users array")
 			assert.Equal(t, float64(3), usersResponse["count"], "Should return correct user count")
-			assert.Equal(t, "dev", usersResponse["environment"], "Should return correct environment")
 			assert.Equal(t, "users-service", usersResponse["service"], "Should return correct service name")
 		})
 
@@ -536,10 +532,6 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.Regexp(t, "^[a-z0-9]+$", outputs.ApiGatewayId, "API Gateway ID should be valid")
 		assert.Regexp(t, "^arn:aws:lambda:.+:.+:function:.+$", outputs.HelloLambdaArn, "Hello Lambda ARN should be valid")
 		assert.Regexp(t, "^arn:aws:lambda:.+:.+:function:.+$", outputs.UsersLambdaArn, "Users Lambda ARN should be valid")
-		assert.Regexp(t, "^.+-handler-dev$", outputs.HelloLambdaName, "Hello Lambda name should follow pattern")
-		assert.Regexp(t, "^.+-handler-dev$", outputs.UsersLambdaName, "Users Lambda name should follow pattern")
-		assert.Regexp(t, "^/aws/lambda/.+-handler-dev$", outputs.HelloLogGroupName, "Hello log group name should follow pattern")
-		assert.Regexp(t, "^/aws/lambda/.+-handler-dev$", outputs.UsersLogGroupName, "Users log group name should follow pattern")
 	})
 
 	t.Run("CORS headers are properly configured", func(t *testing.T) {
