@@ -1,5 +1,12 @@
 package app;
 
+import java.util.List;
+import java.util.Optional;
+
+import app.stacks.DatabaseStack;
+import app.stacks.ECSStack;
+import app.stacks.NetworkStack;
+import app.stacks.SecurityStack;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Duration;
@@ -25,27 +32,18 @@ import software.amazon.awscdk.services.kms.Key;
 import software.amazon.awscdk.services.logs.ILogGroup;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
-import software.amazon.awscdk.services.rds.ISubnetGroup;
-import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.services.rds.Credentials;
 import software.amazon.awscdk.services.rds.DatabaseInstance;
 import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
 import software.amazon.awscdk.services.rds.IDatabaseInstance;
-
+import software.amazon.awscdk.services.rds.ISubnetGroup;
 import software.amazon.awscdk.services.rds.PostgresEngineVersion;
 import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
+import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.services.secretsmanager.ISecret;
 import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
-
-import app.stacks.DatabaseStack;
-import app.stacks.ECSStack;
-import app.stacks.NetworkStack;
-import app.stacks.SecurityStack;
-
-import java.util.List;
-import java.util.Optional;
 
 /**
  * TapStackProps holds configuration for the TapStack CDK stack.
@@ -148,7 +146,7 @@ final class TapStack extends Stack {
         ? props.getStackProps().getEnv()
         : Environment.builder()
             .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-            .region("us-east-1")
+            .region("us-west-2")
             .build();
 
     // Create infrastructure components
@@ -297,7 +295,7 @@ final class TapStack extends Stack {
   private IDatabaseInstance createDatabase() {
     return DatabaseInstance.Builder.create(this, "Database")
         .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder()
-            .version(PostgresEngineVersion.VER_15_4)
+            .version(PostgresEngineVersion.VER_14_13)
             .build()))
         .vpc(vpc)
         .subnetGroup(dbSubnetGroup)
@@ -418,7 +416,7 @@ public final class Main {
         .stackProps(StackProps.builder()
             .env(Environment.builder()
                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                .region("us-east-1")
+                .region("us-west-2")
                 .build())
             .build())
         .build());
