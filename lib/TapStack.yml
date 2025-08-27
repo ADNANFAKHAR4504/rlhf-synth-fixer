@@ -146,6 +146,11 @@ Parameters:
     Description: 'If provided, use this DB Subnet Group name instead of creating a new one.'
     Default: ''
 
+  ExistingCloudTrailBucketName:
+    Type: String
+    Description: 'If provided, use this S3 bucket name for CloudTrail logs instead of creating a new one.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -158,6 +163,7 @@ Conditions:
     !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
   CreateKMSKey: !Equals [!Ref ExistingKMSKeyArn, '']
   CreateDBSubnetGroup: !Equals [!Ref ExistingDBSubnetGroupName, '']
+  CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
 
 Resources:
   # VPC and Networking Resources
@@ -429,6 +435,7 @@ Resources:
   # S3 Buckets with Encryption
   ProdCloudTrailBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateCloudTrailBucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -514,7 +521,12 @@ Resources:
   ProdCloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref ProdCloudTrailBucket
+      Bucket:
+        !If [
+          CreateCloudTrailBucket,
+          !Ref ProdCloudTrailBucket,
+          !Ref ExistingCloudTrailBucketName,
+        ]
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -592,7 +604,12 @@ Resources:
     Condition: EnableCloudTrailCondition
     Properties:
       TrailName: !Sub '${Environment}-cloudtrail'
-      S3BucketName: !Ref ProdCloudTrailBucket
+      S3BucketName:
+        !If [
+          CreateCloudTrailBucket,
+          !Ref ProdCloudTrailBucket,
+          !Ref ExistingCloudTrailBucketName,
+        ]
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
       IsLogging: true
