@@ -32,10 +32,10 @@ output "cloudtrail_log_group_name" {
 }
 
 output "guardduty_detector_id" {
-  value = module.guardduty.detector_id
+  value = module.guardduty.guardduty_detector_id
 }
 
 
 output "role_arn" {
-  value = aws_iam_role.cloudtrail_cw.arn
+  value = module.iam_cloudtrail.role_arn
 }
