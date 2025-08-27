@@ -695,8 +695,18 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 				},
 				DataResource: &[]*cloudtrail.CloudtrailEventSelectorDataResource{
 					{
-						Type:   jsii.String("AWS::S3::Object"),
-						Values: &[]*string{jsii.String("arn:aws:s3:::*/*")},
+						Type: jsii.String("AWS::S3::Object"),
+						Values: &[]*string{
+							jsii.String(fmt.Sprintf("%s/*", *cloudtrailBucket.Arn())),
+							jsii.String(fmt.Sprintf("%s/*", *appDataBucket.Arn())),
+						},
+					},
+					{
+						Type: jsii.String("AWS::S3::Bucket"),
+						Values: &[]*string{
+							jsii.String(*cloudtrailBucket.Arn()),
+							jsii.String(*appDataBucket.Arn()),
+						},
 					},
 				},
 			},
