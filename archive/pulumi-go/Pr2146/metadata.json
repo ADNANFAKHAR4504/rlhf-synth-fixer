@@ -1,0 +1,50 @@
+{
+  "task_id": "trainr310",
+  "problem_id": "Security_Configuration_as_Code_CloudFormation_YAML_7t8o9q1x2w3z",
+  "po_id": "trainr310",
+  "complexity": "hard",
+  "team": "synth",
+  "startedAt": "2025-08-24T18:35:03+00:00",
+  "difficulty": "expert",
+  "platform": "pulumi",
+  "language": "go",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "HIPAA Compliance",
+    "Infrastructure Security",
+    "Access Control",
+    "Encryption at Rest",
+    "Audit Logging",
+    "Network Security",
+    "Secrets Management"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS KMS",
+    "Amazon S3",
+    "AWS Secrets Manager",
+    "Amazon VPC",
+    "AWS CloudTrail",
+    "AWS Config",
+    "AWS IAM",
+    "Amazon EC2"
+  ],
+  "problem": "Design infrastructure for a healthcare application with the following requirements: 1. Utilize AWS KMS to encrypt all S3 buckets to secure data at rest, ensuring compliance with regulatory standards. 2. Store all sensitive credentials such as passwords in AWS Secrets Manager to maintain security best practices. 3. Deploy resources in the us-west-2 region, with proper tagging including 'Project: HealthApp' and 'Environment: Production' for visibility and management. 4. The infrastructure must support updating without replacement of critical resources.",
+  "environment": "The infrastructure is designed for a healthcare application deployed in the us-west-2 region with strict compliance requirements such as HIPAA. All resources must be tagged with 'Project: HealthApp' and 'Environment: Production'.",
+  "background": "Healthcare applications require strict adherence to security and compliance standards, including the secure handling of sensitive patient data.",
+  "constraint_count": 2,
+  "constraint_items": [
+    "Use AWS KMS to encrypt all S3 buckets for data at rest",
+    "Ensure passwords are stored in AWS Secrets Manager"
+  ],
+  "expected_output": "A Pulumi Go implementation that creates secure healthcare infrastructure with S3 buckets encrypted using KMS, credentials stored in Secrets Manager, deployed in us-west-2 region with proper tagging.",
+  "research": "https://www.pulumi.com/docs/get-started/aws/ | https://aws.amazon.com/compliance/hipaa-compliance/",
+  "platform_enforcement": "pulumi+go",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}
