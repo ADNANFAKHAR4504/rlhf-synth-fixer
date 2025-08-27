@@ -40,7 +40,7 @@ func main() {
 		projectName := getEnvOrDefault("PROJECT_NAME", "secure-webapp")
 		environmentSuffix := getEnvOrDefault("ENVIRONMENT_SUFFIX", "prod")
 
-		// Create AWS provider with parameterized region
+		// Create AWS provider with parameterized region-
 		awsProvider, err := aws.NewProvider(ctx, "aws-provider", &aws.ProviderArgs{
 			Region: pulumi.String(region),
 		})
