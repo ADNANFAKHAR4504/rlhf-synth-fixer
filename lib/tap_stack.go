@@ -92,7 +92,7 @@ func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.Terr
 		subnets[i] = subnet.NewSubnet(stack, jsii.String("public-subnet-"+strconv.Itoa(i+1)), &subnet.SubnetConfig{
 			VpcId:            vpcResource.Id(),
 			CidrBlock:        jsii.String("10.0." + strconv.Itoa(i) + ".0/24"),
-			AvailabilityZone: jsii.String("us-west-2" + string('a'+i)),
+			AvailabilityZone: jsii.String("us-west-2" + string(rune('a'+i))),
 			Tags: &map[string]*string{
 				"Name": jsii.String("dev-subnet-public-" + strconv.Itoa(i+1)),
 			},
