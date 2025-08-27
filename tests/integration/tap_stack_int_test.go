@@ -45,9 +45,22 @@ func loadFlatOutputs() (FlatOutputs, error) {
 		return nil, fmt.Errorf("failed to read flat-outputs.json: %w", err)
 	}
 
-	var outputs FlatOutputs
-	if err := json.Unmarshal(data, &outputs); err != nil {
+	// Parse nested structure first
+	var nestedOutputs map[string]map[string]interface{}
+	if err := json.Unmarshal(data, &nestedOutputs); err != nil {
 		return nil, fmt.Errorf("failed to parse flat-outputs.json: %w", err)
+	}
+
+	// Flatten the nested structure
+	outputs := make(FlatOutputs)
+	for stackName, stackOutputs := range nestedOutputs {
+		for outputKey, outputValue := range stackOutputs {
+			// Convert to string
+			valueStr := fmt.Sprintf("%v", outputValue)
+			// Store both with stack prefix and without for compatibility
+			outputs[fmt.Sprintf("%s.%s", stackName, outputKey)] = valueStr
+			outputs[outputKey] = valueStr
+		}
 	}
 
 	return outputs, nil

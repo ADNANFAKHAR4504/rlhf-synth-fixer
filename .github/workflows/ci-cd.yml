@@ -31,9 +31,7 @@ env:
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
-  # Go caching optimization
-  GOCACHE: ${{ github.workspace }}/.cache/go-build
-  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+  # NOTE: intentionally removed GOCACHE/GOMODCACHE to avoid filling workspace disk
 
 jobs:
   detect-metadata:
@@ -63,6 +61,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
+
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
         with:
@@ -90,6 +97,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
 
       - name: Setup Environment
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -128,6 +144,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -172,8 +197,6 @@ jobs:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-      # Note: Deployment outputs are now collected by the deploy.sh script
-
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
         with:
@@ -181,6 +204,7 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
+
   lint:
     name: Lint
     runs-on: ubuntu-24.04
@@ -203,8 +227,6 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
-      # Python setup is handled by the setup-environment action
-
       - name: Run Linting
         run: ./scripts/lint.sh
 
@@ -218,6 +240,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -263,12 +294,12 @@ jobs:
             echo "✅ Copied JaCoCo reports from build/reports/jacoco/ to coverage/ directory"
           else
             echo "⚠️ JaCoCo reports not found in expected locations"
-            # Create a placeholder to avoid upload failure
             echo "No coverage reports generated" > coverage/no-reports.txt
           fi
 
           echo "Final coverage directory contents:"
           ls -la coverage/
+
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
@@ -276,29 +307,6 @@ jobs:
           path: |
             coverage/
             cov.json
-
-  # mocked-integration-tests:
-  #   name: Mocked Integration Tests
-  #   runs-on: ubuntu-24.04
-  #   needs: unit-tests
-
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-
-  #     - name: Setup Environment
-  #       uses: ./.github/actions/setup-environment
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-  #         download-artifacts: "true"
-
-  #     - name: Run mocked integration tests
-  #       run: npm run test:integration
-  #       env:
-  #         # Mock environment variables for testing
-  #         API_GATEWAY_ENDPOINT: "https://mock-api.example.com/prod"
-  #         READ_ONLY_API_KEY: "mock-readonly-key"
-  #         ADMIN_API_KEY: "mock-admin-key"
 
   integration-tests-live:
     name: Integration Tests (Live)
@@ -310,6 +318,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -335,7 +352,7 @@ jobs:
         run: ./scripts/integration-tests.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: '1' # Set CI for the entire step
+          CI: '1'
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
@@ -381,12 +398,14 @@ jobs:
           fi
 
       - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          timeout_minutes: '60'
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
-          prompt: |
+          custom_instructions: |
             CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
             2. Read the PROMPT files
@@ -418,8 +437,6 @@ jobs:
             then immediately FAIL the check by exiting with an error and fail the pipeline.
 
             This validation is mandatory and must be completed before any other review activities.
-          claude_args: |
-            --allowedTools Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
@@ -438,6 +455,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -482,6 +508,15 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.head_ref }}
 
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
+
       - name: Download coverage reports
         uses: actions/download-artifact@v4
         with:
@@ -513,7 +548,6 @@ jobs:
           echo "Using platform: $PLATFORM, language: $LANGUAGE"
 
           # Update metadata.json with coverage information and commit author
-          # Get commit author from GitHub context
           COMMIT_AUTHOR="${{ github.event.pull_request.user.login || github.actor }}"
           echo "Commit author: $COMMIT_AUTHOR"
 
@@ -522,14 +556,11 @@ jobs:
             echo "Extracting Python coverage from cov.json..."
             if [ -f "cov.json" ]; then
               LINES_COVERAGE=$(jq -r '.totals.percent_covered' cov.json)
-              # Calculate branch coverage percentage
               BRANCHES_NUM=$(jq -r '.totals.num_branches' cov.json)
               if [ "$BRANCHES_NUM" = "0" ] || [ "$BRANCHES_NUM" = "null" ]; then
-                # No branches to cover, set to 100%
                 BRANCHES_COVERAGE=100
               else
                 COVERED_BRANCHES=$(jq -r '.totals.covered_branches' cov.json)
-                # Calculate percentage: (covered_branches / num_branches) * 100
                 BRANCHES_COVERAGE=$(awk "BEGIN {print ($COVERED_BRANCHES / $BRANCHES_NUM) * 100}")
               fi
             else
@@ -559,18 +590,12 @@ jobs:
             fi
           fi
 
-          # If coverage is "Unknown", set to 100
-          if [ "$LINES_COVERAGE" = "Unknown" ]; then
-            LINES_COVERAGE=100
-          fi
-          if [ "$BRANCHES_COVERAGE" = "Unknown" ]; then
-            BRANCHES_COVERAGE=100
-          fi
+          if [ "$LINES_COVERAGE" = "Unknown" ]; then LINES_COVERAGE=100; fi
+          if [ "$BRANCHES_COVERAGE" = "Unknown" ]; then BRANCHES_COVERAGE=100; fi
 
           echo "Lines coverage: $LINES_COVERAGE%"
           echo "Branches coverage: $BRANCHES_COVERAGE%"
 
-          # Update metadata.json with coverage information and commit author (assuming it always exists)
           jq --arg lines "$LINES_COVERAGE" --arg branches "$BRANCHES_COVERAGE" --arg author "$COMMIT_AUTHOR" '. + {coverage: {lines: ($lines|tonumber), branches: ($branches|tonumber)}, author: $author}' metadata.json > metadata.json.tmp
           mv metadata.json.tmp metadata.json
           echo "Updated metadata.json with coverage information and commit author"
@@ -580,24 +605,20 @@ jobs:
           echo "Current directory contents before archiving:"
           ls -la
 
-          # Get Docker S3 location from the previous step and add it to metadata.json
           DOCKER_S3_LOCATION="${DOCKER_S3_LOCATION}"
           echo "Docker S3 location from previous step: $DOCKER_S3_LOCATION"
 
-          # Add the dockerS3Location to metadata.json
           jq --arg location "$DOCKER_S3_LOCATION" '. + {dockerS3Location: $location}' metadata.json > metadata.json.tmp
           mv metadata.json.tmp metadata.json
           echo "Updated metadata.json with dockerS3Location: $DOCKER_S3_LOCATION"
 
-          # Create archive directory with platform, language, and PR number
           ARCHIVE_DIR="archive/${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
           mkdir -p "$ARCHIVE_DIR"
           echo "Created archive directory: $ARCHIVE_DIR"
 
-            # Define list of paths to move to archive
-            PATHS_TO_ARCHIVE=(
+          PATHS_TO_ARCHIVE=(
             "lib"
-            "bin" 
+            "bin"
             "test"
             "tests"
             "cdk.json"
@@ -607,19 +628,17 @@ jobs:
             "setup.js"
             "cdktf.json"
             "Pulumi.yaml"
-            )
+          )
 
-          # Move paths to archive
           for path in "${PATHS_TO_ARCHIVE[@]}"; do
-          if [[ -d "$path" || -f "$path" ]]; then
-            mv "$path" "$ARCHIVE_DIR"/
-            echo "Moved $path to archive"
-          else
-            echo "Path $path not found, skipping"
-          fi
+            if [[ -d "$path" || -f "$path" ]]; then
+              mv "$path" "$ARCHIVE_DIR"/
+              echo "Moved $path to archive"
+            else
+              echo "Path $path not found, skipping"
+            fi
           done
 
-          # Check if there are changes to commit
           if git diff --quiet && git diff --cached --quiet; then
             echo "No changes to commit - no folders found to archive"
           else
@@ -646,6 +665,15 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.event.pull_request.merge_commit_sha }}
 
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
+
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
@@ -656,11 +684,7 @@ jobs:
       - name: Extract platform and language for S3 upload
         id: extract-metadata
         run: |
-          # We need to find the specific archive folder for this PR
-          # Since we don't know platform/language yet, we'll search for the PR-specific folder
           PR_FOLDER_PATTERN="archive/*/Pr${{ github.event.number }}"
-
-          # Find the archive folder for this specific PR
           ARCHIVE_FOLDER=""
           for folder in $PR_FOLDER_PATTERN; do
             if [ -d "$folder" ]; then
@@ -694,9 +718,7 @@ jobs:
           echo "Uploading archive folder to S3 bucket: ${{ env.S3_RELEASE_BUCKET_NAME }}"
           echo "S3 prefix: $S3_PREFIX"
 
-          # Check if archive folder exists
           if [ -d "archive/${S3_PREFIX}" ]; then
-            # Upload the archive folder contents to S3, preserving folder structure
             aws s3 sync "archive/${S3_PREFIX}/" "s3://${{ env.S3_RELEASE_BUCKET_NAME }}/${S3_PREFIX}/" \
               --delete \
               --exclude "*.git*" \
@@ -706,12 +728,12 @@ jobs:
             echo "Archive folder archive/${S3_PREFIX} not found, nothing to upload"
             exit 1
           fi
+
       - name: Verify S3 upload
         run: |
           PLATFORM="${{ steps.extract-metadata.outputs.platform }}"
           LANGUAGE="${{ steps.extract-metadata.outputs.language }}"
           S3_PREFIX="${PLATFORM}-${LANGUAGE}/Pr${{ github.event.number }}"
-
           echo "Verifying S3 upload for prefix: $S3_PREFIX"
           aws s3 ls "s3://${{ env.S3_RELEASE_BUCKET_NAME }}/${S3_PREFIX}/" --recursive || echo "No files found or access denied"
 
@@ -725,6 +747,15 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Maximize disk space on runner
+        run: |
+          echo "Before cleanup:" && df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          docker system prune -af || true
+          docker volume prune -f || true
+          rm -rf ~/.cache/pip ~/.npm || true
+          echo "After cleanup:" && df -h
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -749,7 +780,6 @@ jobs:
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   # TODO: For future use
-  # ? Need fine-grained Personal Access Token from repo owner
   # semantic-release:
   #   name: Semantic Release
   #   runs-on: ubuntu-24.04
@@ -758,20 +788,17 @@ jobs:
   #     contents: write
   #     issues: write
   #     pull-requests: write
-
   #   steps:
   #     - name: Checkout code
   #       uses: actions/checkout@v4
   #       with:
   #         token: ${{ secrets.GITHUB_TOKEN }}
   #         fetch-depth: 0
-
   #     - name: Setup Environment
   #       uses: ./.github/actions/setup-environment
   #       with:
   #         node-version: ${{ env.NODE_VERSION }}
   #         download-artifacts: 'false'
-
   #     - name: Run semantic-release
   #       run: npm run release
   #       env:

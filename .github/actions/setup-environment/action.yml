@@ -1,6 +1,6 @@
-
 name: "Setup Environment"
 description: "Sets up Node.js, Python, Java and Terraform environment and restores build artifacts"
+
 inputs:
   node-version:
     description: 'Node.js version to use'
@@ -64,21 +64,7 @@ runs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.23.12'
-        cache: false # We'll handle caching manually for better control
-
-    - name: Cache Go modules
-      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-          ${{ github.workspace }}/.cache/go-build
-          ${{ github.workspace }}/.cache/go-mod
-        key: ${{ runner.os }}-go-${{ inputs.platform }}-${{ hashFiles('go.sum', 'lib/go.sum', '**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ inputs.platform }}-
-          ${{ runner.os }}-go-
+        cache: true   # single source of truth for Go caching (~/go/pkg/mod, ~/.cache/go-build)
 
     - name: Cache CDKTF .gen (Go)
       if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
@@ -133,9 +119,6 @@ runs:
         UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
         PLATFORM: ${{ inputs.platform }}
         LANGUAGE: ${{ inputs.language }}
-        # Go environment variables for consistent caching
-        GOCACHE: ${{ github.workspace }}/.cache/go-build
-        GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
         GOPROXY: https://proxy.golang.org,direct
         GOSUMDB: sum.golang.org
 
