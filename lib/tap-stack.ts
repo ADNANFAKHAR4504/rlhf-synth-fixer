@@ -9,6 +9,8 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as xray from 'aws-cdk-lib/aws-xray';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -37,7 +39,7 @@ export class TapStack extends cdk.Stack {
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, 'srvrless-vpc', {
       vpcName: `srvrless-vpc-${environmentSuffix}`,
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
       natGateways: 1,
       subnetConfiguration: [
@@ -66,7 +68,9 @@ export class TapStack extends cdk.Stack {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -93,6 +97,31 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Create SQS Queue for EventBridge Dead Letter Queue
+    const eventDlq = new sqs.Queue(this, 'srvrless-event-dlq', {
+      queueName: `srvrless-event-dlq-${environmentSuffix}`,
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      retentionPeriod: cdk.Duration.days(14),
+    });
+
+    // Create SQS Queue for event processing
+    const eventQueue = new sqs.Queue(this, 'srvrless-event-queue', {
+      queueName: `srvrless-event-queue-${environmentSuffix}`,
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
+      visibilityTimeout: cdk.Duration.seconds(90),
+      deadLetterQueue: {
+        queue: eventDlq,
+        maxReceiveCount: 3,
+      },
+    });
+
+    // Apply tags to SQS queues
+    [eventDlq, eventQueue].forEach((queue) => {
+      Object.entries(commonTags).forEach(([key, value]) => {
+        cdk.Tags.of(queue).add(key, value);
+      });
+    });
+
     // Create X-Ray sampling rule for enhanced tracing
     const xraySamplingRule = new xray.CfnSamplingRule(
       this,
@@ -111,7 +140,7 @@ export class TapStack extends cdk.Stack {
           version: 1,
           resourceArn: '*',
         },
-      }
+      },
     );
 
     // Apply tags to X-Ray sampling rule
@@ -125,7 +154,7 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSLambdaVPCAccessExecutionRole'
+          'service-role/AWSLambdaVPCAccessExecutionRole',
         ),
       ],
     });
@@ -136,13 +165,22 @@ export class TapStack extends cdk.Stack {
     // Add EventBridge permissions to Lambda role
     eventBus.grantPutEventsTo(lambdaRole);
 
+    // Add SQS permissions to Lambda role
+    eventQueue.grantConsumeMessages(lambdaRole);
+    eventDlq.grantConsumeMessages(lambdaRole);
+
     // Add X-Ray permissions to Lambda role
     lambdaRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+        actions: [
+          'xray:PutTraceSegments',
+          'xray:PutTelemetryRecords',
+          'xray:GetSamplingRules',
+          'xray:GetSamplingTargets',
+        ],
         resources: ['*'],
-      })
+      }),
     );
 
     // Create VPC Endpoint for DynamoDB
@@ -160,7 +198,42 @@ export class TapStack extends cdk.Stack {
         vpc,
         description: 'Security group for Lambda functions',
         allowAllOutbound: true,
-      }
+      },
+    );
+
+    // Create CloudWatch Log Groups for Lambda functions
+    const createLogGroup = new logs.LogGroup(this, 'create-function-logs', {
+      logGroupName: `/aws/lambda/srvrless-create-item-${environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const readLogGroup = new logs.LogGroup(this, 'read-function-logs', {
+      logGroupName: `/aws/lambda/srvrless-read-item-${environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const updateLogGroup = new logs.LogGroup(this, 'update-function-logs', {
+      logGroupName: `/aws/lambda/srvrless-update-item-${environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const deleteLogGroup = new logs.LogGroup(this, 'delete-function-logs', {
+      logGroupName: `/aws/lambda/srvrless-delete-item-${environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const eventProcessorLogGroup = new logs.LogGroup(
+      this,
+      'event-processor-logs',
+      {
+        logGroupName: `/aws/lambda/srvrless-event-processor-${environmentSuffix}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      },
     );
 
     // Create Lambda function for CREATE operation
@@ -179,10 +252,11 @@ export class TapStack extends cdk.Stack {
           TABLE_NAME: table.tableName,
           EVENT_BUS_NAME: eventBus.eventBusName,
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+          _X_AMZN_TRACE_ID: 'Root=1-5e1b4151-5ac6c58b5fcf0c2946f5e4d2',
         },
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
-        logRetention: logs.RetentionDays.ONE_WEEK,
+        logGroup: createLogGroup,
         tracing: lambda.Tracing.ACTIVE,
         code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
@@ -191,7 +265,13 @@ export class TapStack extends cdk.Stack {
         const eventbridge = AWSXRay.captureAWSClient(new AWS.EventBridge());
 
         exports.handler = async (event) => {
+          const segment = AWSXRay.getSegment();
+          const subsegment = segment.addNewSubsegment('CreateItemHandler');
+          
           try {
+            subsegment.addAnnotation('operation', 'create');
+            subsegment.addMetadata('requestId', event.requestContext?.requestId);
+            
             const body = JSON.parse(event.body);
             const item = {
               id: body.id || require('crypto').randomUUID(),
@@ -199,27 +279,52 @@ export class TapStack extends cdk.Stack {
               createdAt: new Date().toISOString()
             };
 
-            await dynamodb.put({
-              TableName: process.env.TABLE_NAME,
-              Item: item
-            }).promise();
+            subsegment.addMetadata('itemId', item.id);
+
+            const putSubsegment = subsegment.addNewSubsegment('DynamoDB-Put');
+            try {
+              await dynamodb.put({
+                TableName: process.env.TABLE_NAME,
+                Item: item
+              }).promise();
+              putSubsegment.close();
+            } catch (error) {
+              putSubsegment.addError(error);
+              putSubsegment.close();
+              throw error;
+            }
 
             // Publish event to EventBridge
-            await eventbridge.putEvents({
-              Entries: [{
-                Source: 'srvrless.api',
-                DetailType: 'Item Created',
-                Detail: JSON.stringify({ item }),
-                EventBusName: process.env.EVENT_BUS_NAME
-              }]
-            }).promise();
+            const eventSubsegment = subsegment.addNewSubsegment('EventBridge-PutEvents');
+            try {
+              await eventbridge.putEvents({
+                Entries: [{
+                  Source: 'srvrless.api',
+                  DetailType: 'Item Created',
+                  Detail: JSON.stringify({ item }),
+                  EventBusName: process.env.EVENT_BUS_NAME
+                }]
+              }).promise();
+              eventSubsegment.close();
+            } catch (error) {
+              eventSubsegment.addError(error);
+              eventSubsegment.close();
+              // Don't fail the request if event publishing fails
+              console.error('Failed to publish event:', error);
+            }
 
+            subsegment.close();
             return {
               statusCode: 201,
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 
+                'Content-Type': 'application/json',
+                'X-Trace-Id': process.env._X_AMZN_TRACE_ID
+              },
               body: JSON.stringify({ message: 'Item created successfully', item })
             };
           } catch (error) {
+            subsegment.addError(error);
+            subsegment.close();
             return {
               statusCode: 500,
               headers: { 'Content-Type': 'application/json' },
@@ -228,7 +333,7 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      }
+      },
     );
 
     // Create Lambda function for READ operation
@@ -246,7 +351,7 @@ export class TapStack extends cdk.Stack {
       },
       timeout: cdk.Duration.seconds(30),
       memorySize: 256,
-      logRetention: logs.RetentionDays.ONE_WEEK,
+      logGroup: readLogGroup,
       tracing: lambda.Tracing.ACTIVE,
       code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
@@ -254,40 +359,70 @@ export class TapStack extends cdk.Stack {
         const dynamodb = AWSXRay.captureAWSClient(new AWS.DynamoDB.DocumentClient());
 
         exports.handler = async (event) => {
+          const segment = AWSXRay.getSegment();
+          const subsegment = segment.addNewSubsegment('ReadItemHandler');
+          
           try {
+            subsegment.addAnnotation('operation', 'read');
+            subsegment.addMetadata('requestId', event.requestContext?.requestId);
+            
             const id = event.pathParameters?.id;
             
             if (id) {
-              const result = await dynamodb.get({
-                TableName: process.env.TABLE_NAME,
-                Key: { id }
-              }).promise();
+              subsegment.addMetadata('itemId', id);
+              const getSubsegment = subsegment.addNewSubsegment('DynamoDB-Get');
+              
+              try {
+                const result = await dynamodb.get({
+                  TableName: process.env.TABLE_NAME,
+                  Key: { id }
+                }).promise();
+                getSubsegment.close();
 
-              if (!result.Item) {
+                if (!result.Item) {
+                  subsegment.close();
+                  return {
+                    statusCode: 404,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ error: 'Item not found' })
+                  };
+                }
+
+                subsegment.close();
                 return {
-                  statusCode: 404,
+                  statusCode: 200,
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ error: 'Item not found' })
+                  body: JSON.stringify(result.Item)
                 };
+              } catch (error) {
+                getSubsegment.addError(error);
+                getSubsegment.close();
+                throw error;
               }
-
-              return {
-                statusCode: 200,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(result.Item)
-              };
             } else {
-              const result = await dynamodb.scan({
-                TableName: process.env.TABLE_NAME
-              }).promise();
+              const scanSubsegment = subsegment.addNewSubsegment('DynamoDB-Scan');
+              
+              try {
+                const result = await dynamodb.scan({
+                  TableName: process.env.TABLE_NAME
+                }).promise();
+                scanSubsegment.close();
+                subsegment.close();
 
-              return {
-                statusCode: 200,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(result.Items)
-              };
+                return {
+                  statusCode: 200,
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(result.Items)
+                };
+              } catch (error) {
+                scanSubsegment.addError(error);
+                scanSubsegment.close();
+                throw error;
+              }
             }
           } catch (error) {
+            subsegment.addError(error);
+            subsegment.close();
             return {
               statusCode: 500,
               headers: { 'Content-Type': 'application/json' },
@@ -317,7 +452,7 @@ export class TapStack extends cdk.Stack {
         },
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
-        logRetention: logs.RetentionDays.ONE_WEEK,
+        logGroup: updateLogGroup,
         tracing: lambda.Tracing.ACTIVE,
         code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
@@ -326,40 +461,68 @@ export class TapStack extends cdk.Stack {
         const eventbridge = AWSXRay.captureAWSClient(new AWS.EventBridge());
 
         exports.handler = async (event) => {
+          const segment = AWSXRay.getSegment();
+          const subsegment = segment.addNewSubsegment('UpdateItemHandler');
+          
           try {
+            subsegment.addAnnotation('operation', 'update');
+            subsegment.addMetadata('requestId', event.requestContext?.requestId);
+            
             const id = event.pathParameters.id;
             const body = JSON.parse(event.body);
+            
+            subsegment.addMetadata('itemId', id);
 
-            const result = await dynamodb.update({
-              TableName: process.env.TABLE_NAME,
-              Key: { id },
-              UpdateExpression: 'SET #data = :data, updatedAt = :updatedAt',
-              ExpressionAttributeNames: {
-                '#data': 'data'
-              },
-              ExpressionAttributeValues: {
-                ':data': body,
-                ':updatedAt': new Date().toISOString()
-              },
-              ReturnValues: 'ALL_NEW'
-            }).promise();
+            const updateSubsegment = subsegment.addNewSubsegment('DynamoDB-Update');
+            let result;
+            try {
+              result = await dynamodb.update({
+                TableName: process.env.TABLE_NAME,
+                Key: { id },
+                UpdateExpression: 'SET #data = :data, updatedAt = :updatedAt',
+                ExpressionAttributeNames: {
+                  '#data': 'data'
+                },
+                ExpressionAttributeValues: {
+                  ':data': body,
+                  ':updatedAt': new Date().toISOString()
+                },
+                ReturnValues: 'ALL_NEW'
+              }).promise();
+              updateSubsegment.close();
+            } catch (error) {
+              updateSubsegment.addError(error);
+              updateSubsegment.close();
+              throw error;
+            }
 
             // Publish event to EventBridge
-            await eventbridge.putEvents({
-              Entries: [{
-                Source: 'srvrless.api',
-                DetailType: 'Item Updated',
-                Detail: JSON.stringify({ id, item: result.Attributes }),
-                EventBusName: process.env.EVENT_BUS_NAME
-              }]
-            }).promise();
+            const eventSubsegment = subsegment.addNewSubsegment('EventBridge-PutEvents');
+            try {
+              await eventbridge.putEvents({
+                Entries: [{
+                  Source: 'srvrless.api',
+                  DetailType: 'Item Updated',
+                  Detail: JSON.stringify({ id, item: result.Attributes }),
+                  EventBusName: process.env.EVENT_BUS_NAME
+                }]
+              }).promise();
+              eventSubsegment.close();
+            } catch (error) {
+              eventSubsegment.addError(error);
+              eventSubsegment.close();
+              console.error('Failed to publish event:', error);
+            }
 
+            subsegment.close();
             return {
               statusCode: 200,
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: 'Item updated successfully', item: result.Attributes })
             };
           } catch (error) {
+            subsegment.addError(error);
+            subsegment.close();
             return {
               statusCode: 500,
               headers: { 'Content-Type': 'application/json' },
@@ -368,7 +531,7 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      }
+      },
     );
 
     // Create Lambda function for DELETE operation
@@ -390,7 +553,7 @@ export class TapStack extends cdk.Stack {
         },
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
-        logRetention: logs.RetentionDays.ONE_WEEK,
+        logGroup: deleteLogGroup,
         tracing: lambda.Tracing.ACTIVE,
         code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
@@ -399,30 +562,56 @@ export class TapStack extends cdk.Stack {
         const eventbridge = AWSXRay.captureAWSClient(new AWS.EventBridge());
 
         exports.handler = async (event) => {
+          const segment = AWSXRay.getSegment();
+          const subsegment = segment.addNewSubsegment('DeleteItemHandler');
+          
           try {
+            subsegment.addAnnotation('operation', 'delete');
+            subsegment.addMetadata('requestId', event.requestContext?.requestId);
+            
             const id = event.pathParameters.id;
+            subsegment.addMetadata('itemId', id);
 
-            await dynamodb.delete({
-              TableName: process.env.TABLE_NAME,
-              Key: { id }
-            }).promise();
+            const deleteSubsegment = subsegment.addNewSubsegment('DynamoDB-Delete');
+            try {
+              await dynamodb.delete({
+                TableName: process.env.TABLE_NAME,
+                Key: { id }
+              }).promise();
+              deleteSubsegment.close();
+            } catch (error) {
+              deleteSubsegment.addError(error);
+              deleteSubsegment.close();
+              throw error;
+            }
 
             // Publish event to EventBridge
-            await eventbridge.putEvents({
-              Entries: [{
-                Source: 'srvrless.api',
-                DetailType: 'Item Deleted',
-                Detail: JSON.stringify({ id }),
-                EventBusName: process.env.EVENT_BUS_NAME
-              }]
-            }).promise();
+            const eventSubsegment = subsegment.addNewSubsegment('EventBridge-PutEvents');
+            try {
+              await eventbridge.putEvents({
+                Entries: [{
+                  Source: 'srvrless.api',
+                  DetailType: 'Item Deleted',
+                  Detail: JSON.stringify({ id }),
+                  EventBusName: process.env.EVENT_BUS_NAME
+                }]
+              }).promise();
+              eventSubsegment.close();
+            } catch (error) {
+              eventSubsegment.addError(error);
+              eventSubsegment.close();
+              console.error('Failed to publish event:', error);
+            }
 
+            subsegment.close();
             return {
               statusCode: 200,
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ message: 'Item deleted successfully' })
             };
           } catch (error) {
+            subsegment.addError(error);
+            subsegment.close();
             return {
               statusCode: 500,
               headers: { 'Content-Type': 'application/json' },
@@ -436,11 +625,11 @@ export class TapStack extends cdk.Stack {
 
     // Apply tags to Lambda functions
     [createFunction, readFunction, updateFunction, deleteFunction].forEach(
-      func => {
+      (func) => {
         Object.entries(commonTags).forEach(([key, value]) => {
           cdk.Tags.of(func).add(key, value);
         });
-      }
+      },
     );
 
     // Create event processor Lambda for demonstrating EventBridge functionality
@@ -460,25 +649,49 @@ export class TapStack extends cdk.Stack {
         },
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
-        logRetention: logs.RetentionDays.ONE_WEEK,
+        logGroup: eventProcessorLogGroup,
         tracing: lambda.Tracing.ACTIVE,
         code: lambda.Code.fromInline(`
         const AWSXRay = require('aws-xray-sdk-core');
 
         exports.handler = async (event) => {
-          console.log('Event received:', JSON.stringify(event, null, 2));
+          const segment = AWSXRay.getSegment();
+          const subsegment = segment.addNewSubsegment('EventProcessor');
           
-          for (const record of event.Records) {
-            const eventDetail = JSON.parse(record.body);
-            console.log('Processing event:', eventDetail['detail-type']);
-            console.log('Event source:', eventDetail.source);
-            console.log('Event details:', eventDetail.detail);
+          try {
+            subsegment.addAnnotation('eventSource', 'sqs');
+            console.log('Event received:', JSON.stringify(event, null, 2));
+            
+            for (const record of event.Records) {
+              const eventDetail = JSON.parse(record.body);
+              console.log('Processing event:', eventDetail['detail-type']);
+              console.log('Event source:', eventDetail.source);
+              console.log('Event details:', eventDetail.detail);
+              
+              subsegment.addMetadata('processedEvent', {
+                detailType: eventDetail['detail-type'],
+                source: eventDetail.source
+              });
+            }
+            
+            subsegment.close();
+            return { statusCode: 200, body: 'Events processed successfully' };
+          } catch (error) {
+            subsegment.addError(error);
+            subsegment.close();
+            throw error;
           }
-          
-          return { statusCode: 200, body: 'Events processed successfully' };
         };
       `),
-      }
+      },
+    );
+
+    // Add SQS event source to event processor function
+    eventProcessorFunction.addEventSource(
+      new SqsEventSource(eventQueue, {
+        batchSize: 10,
+        maxBatchingWindow: cdk.Duration.seconds(10),
+      }),
     );
 
     // Apply tags to event processor function
@@ -486,7 +699,7 @@ export class TapStack extends cdk.Stack {
       cdk.Tags.of(eventProcessorFunction).add(key, value);
     });
 
-    // Create EventBridge rules for different event types
+    // Create EventBridge rules for different event types with SQS targets
     const createEventRule = new events.Rule(this, 'srvrless-create-rule', {
       ruleName: `srvrless-create-rule-${environmentSuffix}`,
       eventBus: eventBus,
@@ -494,7 +707,10 @@ export class TapStack extends cdk.Stack {
         source: ['srvrless.api'],
         detailType: ['Item Created'],
       },
-      targets: [new targets.CloudWatchLogGroup(eventLogGroup)],
+      targets: [
+        new targets.CloudWatchLogGroup(eventLogGroup),
+        new targets.SqsQueue(eventQueue),
+      ],
     });
 
     const updateEventRule = new events.Rule(this, 'srvrless-update-rule', {
@@ -504,7 +720,10 @@ export class TapStack extends cdk.Stack {
         source: ['srvrless.api'],
         detailType: ['Item Updated'],
       },
-      targets: [new targets.CloudWatchLogGroup(eventLogGroup)],
+      targets: [
+        new targets.CloudWatchLogGroup(eventLogGroup),
+        new targets.SqsQueue(eventQueue),
+      ],
     });
 
     const deleteEventRule = new events.Rule(this, 'srvrless-delete-rule', {
@@ -514,11 +733,14 @@ export class TapStack extends cdk.Stack {
         source: ['srvrless.api'],
         detailType: ['Item Deleted'],
       },
-      targets: [new targets.CloudWatchLogGroup(eventLogGroup)],
+      targets: [
+        new targets.CloudWatchLogGroup(eventLogGroup),
+        new targets.SqsQueue(eventQueue),
+      ],
     });
 
     // Apply tags to EventBridge rules
-    [createEventRule, updateEventRule, deleteEventRule].forEach(rule => {
+    [createEventRule, updateEventRule, deleteEventRule].forEach((rule) => {
       Object.entries(commonTags).forEach(([key, value]) => {
         cdk.Tags.of(rule).add(key, value);
       });
@@ -640,6 +862,18 @@ export class TapStack extends cdk.Stack {
       value: eventBus.eventBusArn,
       description: 'EventBridge Event Bus ARN',
       exportName: `EventBusArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EventQueueUrl', {
+      value: eventQueue.queueUrl,
+      description: 'SQS Event Queue URL',
+      exportName: `EventQueueUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EventDlqUrl', {
+      value: eventDlq.queueUrl,
+      description: 'SQS Event Dead Letter Queue URL',
+      exportName: `EventDlqUrl-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'XRaySamplingRuleName', {
