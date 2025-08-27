@@ -3,12 +3,33 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
+
+// validateInput sanitizes and validates input strings
+func validateInput(input string) string {
+	// Remove any potentially dangerous characters
+	re := regexp.MustCompile(`[^a-zA-Z0-9-]`)
+	return re.ReplaceAllString(strings.TrimSpace(input), "")
+}
+
+// createTags creates a standardized tag map for resources
+func createTags(commonTags pulumi.StringMap, resourceName, resourceType string) pulumi.StringMap {
+	tags := pulumi.StringMap{
+		"Name": pulumi.String(resourceName),
+		"Type": pulumi.String(resourceType),
+	}
+	for k, v := range commonTags {
+		tags[k] = v
+	}
+	return tags
+}
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
@@ -20,9 +41,9 @@ func main() {
 		}
 
 		// Get environment suffix from environment variable
-		environmentSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+		environmentSuffix := validateInput(os.Getenv("ENVIRONMENT_SUFFIX"))
 		if environmentSuffix == "" {
-			environmentSuffix = "synthtrainr360"
+			environmentSuffix = "synthtrainr333"
 		}
 
 		// Set up AWS provider
@@ -43,129 +64,106 @@ func main() {
 			"Prefix":      pulumi.String(prefix),
 		}
 
-		// Get availability zones
+		// Get availability zones with validation
 		azs, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{
 			State: pulumi.StringRef("available"),
 		})
 		if err != nil {
 			return err
 		}
+		if len(azs.Names) < 2 {
+			return fmt.Errorf("insufficient availability zones: need at least 2, got %d", len(azs.Names))
+		}
 
-		// Create VPC
-		vpc, err := ec2.NewVpc(ctx, fmt.Sprintf("%s-vpc", prefix), &ec2.VpcArgs{
-			CidrBlock:          pulumi.String("10.0.0.0/16"),
-			EnableDnsHostnames: pulumi.Bool(true),
-			EnableDnsSupport:   pulumi.Bool(true),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-vpc", prefix)),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+		// Create VPC with IPv4 CIDR allocation for VPC Lattice integration
+		vpcName := fmt.Sprintf("%s-vpc", prefix)
+		vpc, err := ec2.NewVpc(ctx, vpcName, &ec2.VpcArgs{
+			CidrBlock:                       pulumi.String("10.0.0.0/16"),
+			EnableDnsHostnames:              pulumi.Bool(true),
+			EnableDnsSupport:                pulumi.Bool(true),
+			AssignGeneratedIpv6CidrBlock:    pulumi.Bool(false),
+			EnableNetworkAddressUsageMetrics: pulumi.Bool(true),
+			Tags: createTags(commonTags, vpcName, "VPC"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
 		// Create Internet Gateway
-		igw, err := ec2.NewInternetGateway(ctx, fmt.Sprintf("%s-igw", prefix), &ec2.InternetGatewayArgs{
+		igwName := fmt.Sprintf("%s-igw", prefix)
+		igw, err := ec2.NewInternetGateway(ctx, igwName, &ec2.InternetGatewayArgs{
 			VpcId: vpc.ID(),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-igw", prefix)),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+			Tags:  createTags(commonTags, igwName, "InternetGateway"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
-		// Create public subnets
-		publicSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("%s-public-subnet-1", prefix), &ec2.SubnetArgs{
-			VpcId:               vpc.ID(),
-			CidrBlock:           pulumi.String("10.0.1.0/24"),
-			AvailabilityZone:    pulumi.String(azs.Names[0]),
-			MapPublicIpOnLaunch: pulumi.Bool(true),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-public-subnet-1", prefix)),
-				"Type":        pulumi.String("Public"),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+		// Create public subnets with PrivateLink endpoint support
+		publicSubnet1Name := fmt.Sprintf("%s-public-subnet-1", prefix)
+		publicSubnet1, err := ec2.NewSubnet(ctx, publicSubnet1Name, &ec2.SubnetArgs{
+			VpcId:                           vpc.ID(),
+			CidrBlock:                       pulumi.String("10.0.1.0/24"),
+			AvailabilityZone:                pulumi.String(azs.Names[0]),
+			MapPublicIpOnLaunch:             pulumi.Bool(true),
+			EnableResourceNameDnsARecordOnLaunch: pulumi.Bool(true),
+			Tags: createTags(commonTags, publicSubnet1Name, "Public"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
-		publicSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("%s-public-subnet-2", prefix), &ec2.SubnetArgs{
-			VpcId:               vpc.ID(),
-			CidrBlock:           pulumi.String("10.0.2.0/24"),
-			AvailabilityZone:    pulumi.String(azs.Names[1]),
-			MapPublicIpOnLaunch: pulumi.Bool(true),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-public-subnet-2", prefix)),
-				"Type":        pulumi.String("Public"),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+		publicSubnet2Name := fmt.Sprintf("%s-public-subnet-2", prefix)
+		publicSubnet2, err := ec2.NewSubnet(ctx, publicSubnet2Name, &ec2.SubnetArgs{
+			VpcId:                           vpc.ID(),
+			CidrBlock:                       pulumi.String("10.0.2.0/24"),
+			AvailabilityZone:                pulumi.String(azs.Names[1]),
+			MapPublicIpOnLaunch:             pulumi.Bool(true),
+			EnableResourceNameDnsARecordOnLaunch: pulumi.Bool(true),
+			Tags: createTags(commonTags, publicSubnet2Name, "Public"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
-		// Create private subnets
-		privateSubnet1, err := ec2.NewSubnet(ctx, fmt.Sprintf("%s-private-subnet-1", prefix), &ec2.SubnetArgs{
-			VpcId:            vpc.ID(),
-			CidrBlock:        pulumi.String("10.0.10.0/24"),
-			AvailabilityZone: pulumi.String(azs.Names[0]),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-private-subnet-1", prefix)),
-				"Type":        pulumi.String("Private"),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+		// Create private subnets with PrivateLink endpoint support
+		privateSubnet1Name := fmt.Sprintf("%s-private-subnet-1", prefix)
+		privateSubnet1, err := ec2.NewSubnet(ctx, privateSubnet1Name, &ec2.SubnetArgs{
+			VpcId:                           vpc.ID(),
+			CidrBlock:                       pulumi.String("10.0.10.0/24"),
+			AvailabilityZone:                pulumi.String(azs.Names[0]),
+			EnableResourceNameDnsARecordOnLaunch: pulumi.Bool(true),
+			Tags: createTags(commonTags, privateSubnet1Name, "Private"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
-		privateSubnet2, err := ec2.NewSubnet(ctx, fmt.Sprintf("%s-private-subnet-2", prefix), &ec2.SubnetArgs{
-			VpcId:            vpc.ID(),
-			CidrBlock:        pulumi.String("10.0.11.0/24"),
-			AvailabilityZone: pulumi.String(azs.Names[1]),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-private-subnet-2", prefix)),
-				"Type":        pulumi.String("Private"),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+		privateSubnet2Name := fmt.Sprintf("%s-private-subnet-2", prefix)
+		privateSubnet2, err := ec2.NewSubnet(ctx, privateSubnet2Name, &ec2.SubnetArgs{
+			VpcId:                           vpc.ID(),
+			CidrBlock:                       pulumi.String("10.0.11.0/24"),
+			AvailabilityZone:                pulumi.String(azs.Names[1]),
+			EnableResourceNameDnsARecordOnLaunch: pulumi.Bool(true),
+			Tags: createTags(commonTags, privateSubnet2Name, "Private"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
 		// Create public route table
-		publicRouteTable, err := ec2.NewRouteTable(ctx, fmt.Sprintf("%s-public-rt", prefix), &ec2.RouteTableArgs{
+		publicRouteTableName := fmt.Sprintf("%s-public-rt", prefix)
+		publicRouteTable, err := ec2.NewRouteTable(ctx, publicRouteTableName, &ec2.RouteTableArgs{
 			VpcId: vpc.ID(),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-public-rt", prefix)),
-				"Type":        pulumi.String("Public"),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+			Tags:  createTags(commonTags, publicRouteTableName, "Public"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
 		// Create default route to Internet Gateway
-		_, err = ec2.NewRoute(ctx, fmt.Sprintf("%s-public-route", prefix), &ec2.RouteArgs{
+		publicRouteName := fmt.Sprintf("%s-public-route", prefix)
+		_, err = ec2.NewRoute(ctx, publicRouteName, &ec2.RouteArgs{
 			RouteTableId:         publicRouteTable.ID(),
 			DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
 			GatewayId:            igw.ID(),
@@ -175,7 +173,8 @@ func main() {
 		}
 
 		// Associate public subnets with public route table
-		_, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("%s-public-rta-1", prefix), &ec2.RouteTableAssociationArgs{
+		publicRta1Name := fmt.Sprintf("%s-public-rta-1", prefix)
+		_, err = ec2.NewRouteTableAssociation(ctx, publicRta1Name, &ec2.RouteTableAssociationArgs{
 			SubnetId:     publicSubnet1.ID(),
 			RouteTableId: publicRouteTable.ID(),
 		}, pulumi.Provider(provider))
@@ -183,7 +182,8 @@ func main() {
 			return err
 		}
 
-		_, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("%s-public-rta-2", prefix), &ec2.RouteTableAssociationArgs{
+		publicRta2Name := fmt.Sprintf("%s-public-rta-2", prefix)
+		_, err = ec2.NewRouteTableAssociation(ctx, publicRta2Name, &ec2.RouteTableAssociationArgs{
 			SubnetId:     publicSubnet2.ID(),
 			RouteTableId: publicRouteTable.ID(),
 		}, pulumi.Provider(provider))
@@ -192,22 +192,18 @@ func main() {
 		}
 
 		// Create private route table
-		privateRouteTable, err := ec2.NewRouteTable(ctx, fmt.Sprintf("%s-private-rt", prefix), &ec2.RouteTableArgs{
+		privateRouteTableName := fmt.Sprintf("%s-private-rt", prefix)
+		privateRouteTable, err := ec2.NewRouteTable(ctx, privateRouteTableName, &ec2.RouteTableArgs{
 			VpcId: vpc.ID(),
-			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-private-rt", prefix)),
-				"Type":        pulumi.String("Private"),
-				"Project":     commonTags["Project"],
-				"Environment": commonTags["Environment"],
-				"Prefix":      commonTags["Prefix"],
-			},
+			Tags:  createTags(commonTags, privateRouteTableName, "Private"),
 		}, pulumi.Provider(provider))
 		if err != nil {
 			return err
 		}
 
 		// Associate private subnets with private route table
-		_, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("%s-private-rta-1", prefix), &ec2.RouteTableAssociationArgs{
+		privateRta1Name := fmt.Sprintf("%s-private-rta-1", prefix)
+		_, err = ec2.NewRouteTableAssociation(ctx, privateRta1Name, &ec2.RouteTableAssociationArgs{
 			SubnetId:     privateSubnet1.ID(),
 			RouteTableId: privateRouteTable.ID(),
 		}, pulumi.Provider(provider))
@@ -215,7 +211,8 @@ func main() {
 			return err
 		}
 
-		_, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("%s-private-rta-2", prefix), &ec2.RouteTableAssociationArgs{
+		privateRta2Name := fmt.Sprintf("%s-private-rta-2", prefix)
+		_, err = ec2.NewRouteTableAssociation(ctx, privateRta2Name, &ec2.RouteTableAssociationArgs{
 			SubnetId:     privateSubnet2.ID(),
 			RouteTableId: privateRouteTable.ID(),
 		}, pulumi.Provider(provider))
