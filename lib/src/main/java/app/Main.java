@@ -101,23 +101,23 @@ class TapStackProd extends Stack {
                 .orElse("Prod");
 
         // Create SQS Dead Letter Queue for Lambda failures
-        Queue deadLetterQueue = Queue.Builder.create(this, "FileProcessorDLQ" + environmentSuffix)
-                .queueName("file-processor-dlq-" + environmentSuffix.toLowerCase())
+        Queue deadLetterQueue = Queue.Builder.create(this, "FileProcessorDLQ" + environmentSuffix + "Primary1")
+                .queueName("file-processor-dlq-" + environmentSuffix.toLowerCase() + "-primary-1")
                 .build();
 
         // Create SNS Topic for notifications
-        Topic notificationTopic = Topic.Builder.create(this, "FileProcessorTopic" + environmentSuffix)
-                .topicName("file-processor-notifications-" + environmentSuffix.toLowerCase())
+        Topic notificationTopic = Topic.Builder.create(this, "FileProcessorTopic" + environmentSuffix + "Primary1")
+                .topicName("file-processor-notifications-" + environmentSuffix.toLowerCase() + "-primary-1")
                 .build();
 
         // Create CloudWatch Log Group for Lambda function
-        LogGroup logGroup = LogGroup.Builder.create(this, "FileProcessorLogGroup" + environmentSuffix)
-                .logGroupName("/aws/lambda/file-processor-" + environmentSuffix.toLowerCase())
+        LogGroup logGroup = LogGroup.Builder.create(this, "FileProcessorLogGroup" + environmentSuffix + "Primary1")
+                .logGroupName("/aws/lambda/file-processor-" + environmentSuffix.toLowerCase() + "-primary-1")
                 .retention(RetentionDays.TWO_WEEKS)
                 .build();
 
         // Create IAM role for Lambda function
-        Role lambdaRole = Role.Builder.create(this, "FileProcessorRole" + environmentSuffix)
+        Role lambdaRole = Role.Builder.create(this, "FileProcessorRole" + environmentSuffix + "Primary1")
                 .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
                 .build();
 
@@ -157,8 +157,8 @@ class TapStackProd extends Stack {
                 .build());
 
         // Create Lambda function
-        Function fileProcessorFunction = Function.Builder.create(this, "FileProcessorFunction" + environmentSuffix)
-                .functionName("file-processor-" + environmentSuffix.toLowerCase())
+        Function fileProcessorFunction = Function.Builder.create(this, "FileProcessorFunction" + environmentSuffix + "Primary1")
+                .functionName("file-processor-" + environmentSuffix.toLowerCase() + "-primary-1")
                 .runtime(Runtime.PYTHON_3_13)
                 .handler("index.handler")
                 .code(Code.fromInline(
@@ -229,8 +229,8 @@ class TapStackProd extends Stack {
                 .build();
 
         // Create S3 bucket with encryption and versioning
-        Bucket fileBucket = Bucket.Builder.create(this, "FileProcessorBucket" + environmentSuffix)
-                .bucketName("file-processor-bucket-" + environmentSuffix.toLowerCase() + "-" + 
+        Bucket fileBucket = Bucket.Builder.create(this, "FileProcessorBucket" + environmentSuffix + "Primary1")
+                .bucketName("file-processor-bucket-" + environmentSuffix.toLowerCase() + "-primary-1-" + 
                            this.getAccount() + "-" + this.getRegion())
                 .encryption(BucketEncryption.S3_MANAGED)
                 .versioned(true)
@@ -249,26 +249,26 @@ class TapStackProd extends Stack {
         Tags.of(this).add("Environment", "Production");
 
         // Create CloudFormation outputs for integration testing
-        CfnOutput.Builder.create(this, "LambdaFunctionArn" + environmentSuffix)
-                .exportName("FileProcessorLambdaArn" + environmentSuffix)
+        CfnOutput.Builder.create(this, "LambdaFunctionArn" + environmentSuffix + "Primary1")
+                .exportName("FileProcessorLambdaArn" + environmentSuffix + "Primary1")
                 .value(fileProcessorFunction.getFunctionArn())
                 .description("ARN of the file processor Lambda function")
                 .build();
 
-        CfnOutput.Builder.create(this, "S3BucketName" + environmentSuffix)
-                .exportName("FileProcessorS3Bucket" + environmentSuffix)
+        CfnOutput.Builder.create(this, "S3BucketName" + environmentSuffix + "Primary1")
+                .exportName("FileProcessorS3Bucket" + environmentSuffix + "Primary1")
                 .value(fileBucket.getBucketName())
                 .description("Name of the file processor S3 bucket")
                 .build();
 
-        CfnOutput.Builder.create(this, "SNSTopicArn" + environmentSuffix)
-                .exportName("FileProcessorSNSTopicArn" + environmentSuffix)
+        CfnOutput.Builder.create(this, "SNSTopicArn" + environmentSuffix + "Primary1")
+                .exportName("FileProcessorSNSTopicArn" + environmentSuffix + "Primary1")
                 .value(notificationTopic.getTopicArn())
                 .description("ARN of the SNS notification topic")
                 .build();
 
-        CfnOutput.Builder.create(this, "SQSDeadLetterQueueUrl" + environmentSuffix)
-                .exportName("FileProcessorDLQUrl" + environmentSuffix)
+        CfnOutput.Builder.create(this, "SQSDeadLetterQueueUrl" + environmentSuffix + "Primary1")
+                .exportName("FileProcessorDLQUrl" + environmentSuffix + "Primary1")
                 .value(deadLetterQueue.getQueueUrl())
                 .description("URL of the SQS dead letter queue")
                 .build();
