@@ -42,6 +42,8 @@ Metadata:
           - UseExistingKMSKeyId
           - UseExistingGlobalCluster
           - UseExistingALB
+          - UseExistingNatGateway1EIP
+          - UseExistingNatGateway2EIP
           - SkipRDSInstances
 
 Parameters:
@@ -153,6 +155,16 @@ Parameters:
     Default: ''
     Description: 'Existing Application Load Balancer ARN to use. Leave empty to create new ALB.'
 
+  UseExistingNatGateway1EIP:
+    Type: String
+    Default: ''
+    Description: 'Existing EIP allocation ID for NAT Gateway 1. Leave empty to create new EIP.'
+
+  UseExistingNatGateway2EIP:
+    Type: String
+    Default: ''
+    Description: 'Existing EIP allocation ID for NAT Gateway 2. Leave empty to create new EIP.'
+
   SkipRDSInstances:
     Type: String
     Default: 'true'
@@ -224,6 +236,8 @@ Conditions:
     ]
   HasDBPasswordParameter: !Not [!Equals [!Ref DBMasterPasswordParameter, '']]
   CreateRDSInstances: !Equals [!Ref SkipRDSInstances, 'false']
+  CreateNatGateway1EIP: !Equals [!Ref UseExistingNatGateway1EIP, '']
+  CreateNatGateway2EIP: !Equals [!Ref UseExistingNatGateway2EIP, '']
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -513,6 +527,7 @@ Resources:
   # NAT Gateways
   NatGateway1EIP:
     Type: AWS::EC2::EIP
+    Condition: CreateNatGateway1EIP
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     DependsOn: InternetGatewayAttachment
@@ -524,6 +539,7 @@ Resources:
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
+    Condition: CreateNatGateway2EIP
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     DependsOn: InternetGatewayAttachment
@@ -538,7 +554,12 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      AllocationId:
+        !If [
+          CreateNatGateway1EIP,
+          !GetAtt NatGateway1EIP.AllocationId,
+          !Ref UseExistingNatGateway1EIP,
+        ]
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
@@ -549,7 +570,12 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      AllocationId:
+        !If [
+          CreateNatGateway2EIP,
+          !GetAtt NatGateway2EIP.AllocationId,
+          !Ref UseExistingNatGateway2EIP,
+        ]
       SubnetId: !Ref PublicSubnet2
       Tags:
         - Key: Name
