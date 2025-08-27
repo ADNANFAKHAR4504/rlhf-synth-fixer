@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/TuringGpt/iac-test-automations/lib"
+	"github.com/TuringGpt/iac-test-automations/lib/constructs"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
 	"github.com/aws/jsii-runtime-go"
@@ -65,9 +66,159 @@ func TestTapStack(t *testing.T) {
 		assert.Equal(t, "prod", stack.Environment)
 	})
 
-	t.Run("Write Unit Tests", func(t *testing.T) {
-		// ARRANGE & ASSERT
-		t.Skip("Unit test for TapStack should be implemented here.")
+	t.Run("creates security construct with proper VPC configuration", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(nil)
+		stack := awscdk.NewStack(app, jsii.String("SecurityTestStack"), nil)
+		environment := "test"
+
+		// ACT
+		securityConstruct := constructs.NewSecurityConstruct(stack, "SecurityConstruct", &constructs.SecurityConstructProps{
+			Environment: environment,
+		})
+
+		// ASSERT
+		template := assertions.Template_FromStack(stack, nil)
+
+		// Verify VPC is created with correct configuration
+		template.ResourceCountIs(jsii.String("AWS::EC2::VPC"), jsii.Number(1))
+		template.HasResourceProperties(jsii.String("AWS::EC2::VPC"), map[string]interface{}{
+			"CidrBlock":          "10.0.0.0/16",
+			"EnableDnsHostnames": true,
+			"EnableDnsSupport":   true,
+		})
+
+		// Verify subnets (2 public + 2 private)
+		template.ResourceCountIs(jsii.String("AWS::EC2::Subnet"), jsii.Number(4))
+
+		// Verify SNS Topic with correct naming
+		template.HasResourceProperties(jsii.String("AWS::SNS::Topic"), map[string]interface{}{
+			"TopicName": "proj-alerts-" + environment,
+		})
+
+		// Verify construct exposes required properties
+		assert.NotNil(t, securityConstruct.VPC)
+		assert.NotNil(t, securityConstruct.LambdaRole)
+		assert.NotNil(t, securityConstruct.AlertingTopic)
+	})
+
+	t.Run("creates storage construct with S3 buckets and lifecycle policies", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(nil)
+		stack := awscdk.NewStack(app, jsii.String("StorageTestStack"), nil)
+		environment := "test"
+
+		// ACT
+		storageConstruct := constructs.NewStorageConstruct(stack, "StorageConstruct", &constructs.StorageConstructProps{
+			Environment: environment,
+		})
+
+		// ASSERT
+		template := assertions.Template_FromStack(stack, nil)
+
+		// Verify 2 S3 buckets are created (main + logging)
+		template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(2))
+
+		// Verify main bucket configuration
+		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+			"BucketName": "proj-s3-" + environment,
+			"VersioningConfiguration": map[string]interface{}{
+				"Status": "Enabled",
+			},
+			"PublicAccessBlockConfiguration": map[string]interface{}{
+				"BlockPublicAcls":       true,
+				"BlockPublicPolicy":     true,
+				"IgnorePublicAcls":      true,
+				"RestrictPublicBuckets": true,
+			},
+		})
+
+		// Verify S3 encryption
+		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+			"BucketEncryption": map[string]interface{}{
+				"ServerSideEncryptionConfiguration": []interface{}{
+					map[string]interface{}{
+						"ServerSideEncryptionByDefault": map[string]interface{}{
+							"SSEAlgorithm": "AES256",
+						},
+					},
+				},
+			},
+		})
+
+		// Verify construct exposes required properties
+		assert.NotNil(t, storageConstruct.Bucket)
+		assert.NotNil(t, storageConstruct.LoggingBucket)
+	})
+
+	t.Run("creates database construct with DynamoDB table", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(nil)
+		stack := awscdk.NewStack(app, jsii.String("DatabaseTestStack"), nil)
+		environment := "test"
+
+		// ACT
+		databaseConstruct := constructs.NewDatabaseConstruct(stack, "DatabaseConstruct", &constructs.DatabaseConstructProps{
+			Environment: environment,
+		})
+
+		// ASSERT
+		template := assertions.Template_FromStack(stack, nil)
+
+		// Verify DynamoDB table is created
+		template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))
+
+		// Verify table configuration
+		template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
+			"TableName":   "proj-dynamodb-" + environment,
+			"BillingMode": "PAY_PER_REQUEST",
+		})
+
+		// Verify encryption and backup settings
+		template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
+			"SSESpecification": map[string]interface{}{
+				"SSEEnabled": true,
+			},
+		})
+
+		// Verify construct exposes the table
+		assert.NotNil(t, databaseConstruct.Table)
+	})
+
+	t.Run("validates security best practices across all resources", func(t *testing.T) {
+		// ARRANGE
+		app := awscdk.NewApp(nil)
+		stack := lib.NewTapStack(app, jsii.String("SecurityTestStack"), &lib.TapStackProps{
+			StackProps:  awscdk.StackProps{},
+			Environment: "security-test",
+		})
+
+		// ASSERT
+		template := assertions.Template_FromStack(stack.Stack, nil)
+
+		// Verify all S3 buckets have public access blocked
+		template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
+			"PublicAccessBlockConfiguration": map[string]interface{}{
+				"BlockPublicAcls":       true,
+				"BlockPublicPolicy":     true,
+				"IgnorePublicAcls":      true,
+				"RestrictPublicBuckets": true,
+			},
+		})
+
+		// Verify DynamoDB has encryption enabled
+		template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
+			"SSESpecification": map[string]interface{}{
+				"SSEEnabled": true,
+			},
+		})
+
+		// Verify CloudTrail has proper security settings
+		template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
+			"IncludeGlobalServiceEvents": true,
+			"IsMultiRegionTrail":         true,
+			"EnableLogFileValidation":    true,
+		})
 	})
 }
 

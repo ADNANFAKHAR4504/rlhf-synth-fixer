@@ -21,6 +21,7 @@ type TapStackProps struct {
 
 type TapStack struct {
 	awscdk.Stack
+	Environment string
 }
 
 // NewTapStack creates a new instance of TapStack with comprehensive AWS infrastructure.
@@ -122,6 +123,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 	})
 
 	return &TapStack{
-		Stack: stack,
+		Stack:       stack,
+		Environment: environment,
 	}
 }

@@ -31,11 +31,11 @@ func NewStorageConstruct(scope constructs.Construct, id string, props *StorageCo
 			{
 				Id:         jsii.String("DeleteOldAccessLogs"),
 				Enabled:    jsii.Bool(true),
-				Expiration: awscdk.Duration_Days(jsii.Number(30)),
+				Expiration: awscdk.Duration_Days(jsii.Number(90)),
 				Transitions: &[]*awss3.Transition{
 					{
 						StorageClass:    awss3.StorageClass_INFREQUENT_ACCESS(),
-						TransitionAfter: awscdk.Duration_Days(jsii.Number(7)),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(30)),
 					},
 				},
 			},
