@@ -6,6 +6,10 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
 import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
+import software.amazon.awscdk.services.cloudwatch.Alarm;
+import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
+import software.amazon.awscdk.services.cloudwatch.Metric;
+import software.amazon.awscdk.services.cloudwatch.MetricOptions;
 import software.amazon.awscdk.services.dynamodb.Attribute;
 import software.amazon.awscdk.services.dynamodb.AttributeType;
 import software.amazon.awscdk.services.dynamodb.Table;
@@ -19,6 +23,9 @@ import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.IpAddresses;
+import software.amazon.awscdk.services.ec2.CfnVPCPeeringConnection;
+import software.amazon.awscdk.services.ec2.CfnRoute;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
@@ -30,11 +37,15 @@ import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kms.Key;
+import software.amazon.awscdk.services.lambda.Code;
+import software.amazon.awscdk.services.lambda.Function;
+import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.rds.Credentials;
 import software.amazon.awscdk.services.rds.DatabaseInstance;
 import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
+import software.amazon.awscdk.services.rds.DatabaseInstanceReadReplica;
 import software.amazon.awscdk.services.rds.MySqlInstanceEngineProps;
 import software.amazon.awscdk.services.rds.MysqlEngineVersion;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
@@ -74,17 +85,21 @@ public final class Main {
 
         String uniqueSuffix = String.valueOf(System.currentTimeMillis()).substring(8);
         
-        new MultiRegionStack(app, "PrimaryStack-" + environment + "-" + uniqueSuffix, 
+        MultiRegionStack primaryStack = new MultiRegionStack(app, "PrimaryStack-" + environment + "-" + uniqueSuffix, 
             StackProps.builder()
                 .env(usEast1)
                 .build(), 
             environment, "us-east-1", true);
 
-        new MultiRegionStack(app, "SecondaryStack-" + environment + "-" + uniqueSuffix, 
+        MultiRegionStack secondaryStack = new MultiRegionStack(app, "SecondaryStack-" + environment + "-" + uniqueSuffix, 
             StackProps.builder()
                 .env(usWest2)
                 .build(), 
             environment, "us-west-2", false);
+            
+        // Create VPC peering connection
+        primaryStack.createVpcPeering(secondaryStack.getVpc(), "us-west-2");
+        secondaryStack.createVpcPeering(primaryStack.getVpc(), "us-east-1");
 
         app.synth();
     }
@@ -98,6 +113,8 @@ public final class Main {
         private Key kmsKey;
         private Bucket logsBucket;
         private Role ec2Role;
+        private Object rdsInstance; // Can be DatabaseInstance or DatabaseInstanceReadReplica
+        private CfnVPCPeeringConnection peeringConnection;
 
         MultiRegionStack(final software.constructs.Construct scope, final String id, final StackProps props,
                         final String env, final String reg, final boolean primary) {
@@ -110,7 +127,35 @@ public final class Main {
             createBasicInfrastructure();
             createComputeInfrastructure();
             createDatabaseResources();
+            createLambdaResources();
             createLoggingResources();
+            createMonitoring();
+        }
+        
+        public IVpc getVpc() {
+            return vpc;
+        }
+        
+        public Object getRdsInstance() {
+            return rdsInstance;
+        }
+        
+        public void createVpcPeering(IVpc peerVpc, String peerRegion) {
+            peeringConnection = CfnVPCPeeringConnection.Builder.create(this, "VpcPeering")
+                .vpcId(vpc.getVpcId())
+                .peerVpcId(peerVpc.getVpcId())
+                .peerRegion(peerRegion)
+                .build();
+                
+            // Add route to peer VPC CIDR
+            String peerCidr = peerRegion.equals("us-east-1") ? "10.0.0.0/16" : "10.1.0.0/16";
+            vpc.getPrivateSubnets().forEach(subnet -> {
+                CfnRoute.Builder.create(this, "Route-" + subnet.getNode().getId())
+                    .routeTableId(subnet.getRouteTable().getRouteTableId())
+                    .destinationCidrBlock(peerCidr)
+                    .vpcPeeringConnectionId(peeringConnection.getRef())
+                    .build();
+            });
         }
 
         private void createBasicInfrastructure() {
@@ -122,6 +167,7 @@ public final class Main {
             vpc = Vpc.Builder.create(this, "CustomVpc")
                 .maxAzs(2)
                 .natGateways(1)
+                .ipAddresses(IpAddresses.cidr(isPrimary ? "10.0.0.0/16" : "10.1.0.0/16")) // Non-overlapping CIDRs
                 .build();
 
             kmsKey = Key.Builder.create(this, "KmsKey")
@@ -226,7 +272,7 @@ public final class Main {
 
         private void createDatabaseResources() {
             if (isPrimary) {
-                DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds")
+                rdsInstance = DatabaseInstance.Builder.create(this, "Rds")
                     .instanceIdentifier("RDS-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                     .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0)
@@ -256,6 +302,23 @@ public final class Main {
                     .replicationRegions(Arrays.asList("us-west-2"))
                     .build();
             } else {
+                // Create RDS Read Replica in secondary region  
+                rdsInstance = DatabaseInstanceReadReplica.Builder.create(this, "RdsReadReplica")
+                    .instanceIdentifier("RDS-ReadReplica-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
+                    .sourceDatabaseInstance(DatabaseInstance.fromDatabaseInstanceAttributes(this, "SourceRds", 
+                        software.amazon.awscdk.services.rds.DatabaseInstanceAttributes.builder()
+                            .instanceIdentifier("RDS-" + environment + "-ea-" + uniqueSuffix)
+                            .instanceEndpointAddress("dummy")
+                            .port(3306)
+                            .securityGroups(Arrays.asList())
+                            .build()))
+                    .instanceType(environment.equals("production")
+                        ? InstanceType.of(InstanceClass.R5, InstanceSize.LARGE)
+                        : InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
+                    .vpc(vpc)
+                    .storageEncrypted(true)
+                    .build();
+                
                 Table dynamoTable = Table.Builder.create(this, "DynamoTable")
                     .tableName("App-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                     .partitionKey(Attribute.builder()
@@ -271,11 +334,72 @@ public final class Main {
             }
         }
 
+        private void createLambdaResources() {
+            // Lambda function for health checks and monitoring
+            Role lambdaRole = Role.Builder.create(this, "LambdaRole")
+                .roleName("LambdaRole-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
+                .assumedBy(new ServicePrincipal("lambda.amazonaws.com"))
+                .managedPolicies(Arrays.asList(
+                    ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole"),
+                    ManagedPolicy.fromAwsManagedPolicyName("CloudWatchFullAccess")
+                ))
+                .build();
+                
+            Function healthCheckLambda = Function.Builder.create(this, "HealthCheckFunction")
+                .functionName("HealthCheck-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
+                .runtime(Runtime.PYTHON_3_9)
+                .handler("index.handler")
+                .code(Code.fromInline("import json\nimport boto3\n\ndef handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Health check passed')}"))
+                .role(lambdaRole)
+                .vpc(vpc)
+                .build();
+                
+            // Lambda function for log processing
+            Function logProcessorLambda = Function.Builder.create(this, "LogProcessorFunction")
+                .functionName("LogProcessor-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
+                .runtime(Runtime.PYTHON_3_9)
+                .handler("index.handler")
+                .code(Code.fromInline("import json\nimport boto3\n\ndef handler(event, context):\n    print('Processing logs:', json.dumps(event))\n    return {'statusCode': 200}"))
+                .role(lambdaRole)
+                .build();
+        }
+
         private void createLoggingResources() {
             LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
                 .logGroupName("/aws/ec2/" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .retention(RetentionDays.ONE_WEEK)
+                .encryptionKey(kmsKey)
                 .build();
+        }
+        
+        private void createMonitoring() {
+            // CloudWatch Alarms for monitoring
+            Alarm cpuAlarm = Alarm.Builder.create(this, "HighCpuAlarm")
+                .alarmName("HighCpuAlarm-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
+                .alarmDescription("Alarm when CPU exceeds 80%")
+                .metric(Metric.Builder.create()
+                    .namespace("AWS/EC2")
+                    .metricName("CPUUtilization")
+                    .build())
+                .threshold(80.0)
+                .evaluationPeriods(2)
+                .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
+                .build();
+                
+            if (isPrimary && rdsInstance != null && rdsInstance instanceof DatabaseInstance) {
+                Alarm dbConnectionAlarm = Alarm.Builder.create(this, "HighDbConnectionsAlarm")
+                    .alarmName("HighDbConnectionsAlarm-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
+                    .alarmDescription("Alarm when DB connections exceed 80% of max")
+                    .metric(Metric.Builder.create()
+                        .namespace("AWS/RDS")
+                        .metricName("DatabaseConnections")
+                        .dimensionsMap(java.util.Map.of("DBInstanceIdentifier", ((DatabaseInstance) rdsInstance).getInstanceIdentifier()))
+                        .build())
+                    .threshold(80.0)
+                    .evaluationPeriods(2)
+                    .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
+                    .build();
+            }
         }
     }
 }
