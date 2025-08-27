@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr479cdkjava",
+  "team": "synth",
+  "startedAt": "2025-08-26T20:03:32+05:30",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "IaC Optimization",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "Database Management"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS CDK",
+    "Amazon VPC",
+    "Amazon EC2",
+    "Amazon S3",
+    "Amazon RDS",
+    "AWS KMS",
+    "AWS IAM",
+    "AWS CloudTrail",
+    "Amazon GuardDuty",
+    "AWS Security Hub",
+    "Amazon CloudWatch",
+    "AWS Systems Manager",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
