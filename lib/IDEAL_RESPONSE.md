@@ -1,1 +1,1532 @@
-Insert here the ideal response
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Multi-Region Infrastructure for HIPAA/PCI DSS Compliant Web Application'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - Environment
+          - EnvironmentSuffix
+          - CostCenter
+      - Label:
+          default: 'Network Configuration'
+        Parameters:
+          - PrimaryRegion
+          - VpcCidr
+      - Label:
+          default: 'Compute Configuration'
+        Parameters:
+          - WebInstanceType
+          - DBInstanceClass
+          - KeyName
+      - Label:
+          default: 'Database Configuration'
+        Parameters:
+          - DBMasterUsername
+          - DBMasterPasswordParameter
+          - DBName
+          - GlobalClusterIdentifier
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - SSLCertificateArn
+          - NotificationEmail
+      - Label:
+          default: 'Advanced Configuration'
+        Parameters:
+          - LambdaCodeS3Bucket
+          - LambdaCodeS3Key
+          - UseExistingS3Bucket
+          - UseExistingKMSKeyId
+          - UseExistingGlobalCluster
+          - UseExistingALB
+          - UseExistingNatGateway1EIP
+          - UseExistingNatGateway2EIP
+          - SkipRDSInstances
+          - EnableGreenFleet
+          - BlueTrafficWeight
+          - GreenTrafficWeight
+          - GreenMinSize
+          - GreenMaxSize
+          - GreenDesiredCapacity
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'Production'
+    AllowedValues: ['Development', 'Staging', 'Production']
+    Description: 'Environment name for resource tagging and configuration'
+
+  CostCenter:
+    Type: String
+    Default: 'Compliance'
+    Description: 'Cost center for billing allocation'
+
+  PrimaryRegion:
+    Type: String
+    Default: 'us-east-1'
+    Description: 'Primary AWS region for deployment'
+
+  VpcCidr:
+    Type: String
+    Default: '10.0.0.0/16'
+    Description: 'CIDR block for VPC'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+
+  DBInstanceClass:
+    Type: String
+    Default: 'db.r5.xlarge'
+    AllowedValues: ['db.r5.large', 'db.r5.xlarge', 'db.r5.2xlarge']
+    Description: 'RDS instance class for database'
+
+  WebInstanceType:
+    Type: String
+    Default: 't3.medium'
+    AllowedValues: ['t3.small', 't3.medium', 't3.large']
+    Description: 'EC2 instance type for web servers'
+
+  NotificationEmail:
+    Type: String
+    Default: 'admin@example.com'
+    Description: 'Email address for CloudFormation notifications'
+    AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+  SSLCertificateArn:
+    Type: String
+    Description: 'ARN of SSL certificate in ACM'
+    Default: ''
+
+  KeyName:
+    Type: String
+    Description: 'Name of an existing EC2 KeyPair to enable SSH access to instances. Leave empty if no SSH access is needed.'
+    Default: ''
+
+  DBMasterUsername:
+    Type: String
+    Default: 'admin'
+    Description: 'Master username for database'
+    NoEcho: true
+
+  DBMasterPasswordParameter:
+    Type: String
+    Default: ''
+    Description: 'SSM Parameter Store path for database master password. Leave empty to use default password.'
+
+  DBName:
+    Type: String
+    Default: 'secureapp'
+    Description: 'Database name'
+
+  GlobalClusterIdentifier:
+    Type: String
+    Default: ''
+    Description: 'Global cluster identifier for Aurora Global Database. Leave empty to use auto-generated name.'
+    AllowedPattern: '^$|^[a-zA-Z]{1}(?:-?[a-zA-Z0-9]){0,62}$'
+
+  LambdaCodeS3Bucket:
+    Type: String
+    Default: ''
+    Description: 'S3 bucket containing Lambda function code'
+
+  LambdaCodeS3Key:
+    Type: String
+    Default: ''
+    Description: 'S3 key for Lambda function code'
+
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming and isolation'
+    AllowedPattern: '^[a-zA-Z0-9-]+$'
+
+  UseExistingS3Bucket:
+    Type: String
+    Default: ''
+    Description: 'Existing S3 bucket name to use. Leave empty to create new bucket.'
+
+  UseExistingKMSKeyId:
+    Type: String
+    Default: ''
+    Description: 'Existing KMS key ARN to use. Leave empty to create new key.'
+
+  UseExistingGlobalCluster:
+    Type: String
+    Default: ''
+    Description: 'Existing global cluster identifier to use. Leave empty to create new cluster.'
+
+  UseExistingALB:
+    Type: String
+    Default: ''
+    Description: 'Existing Application Load Balancer ARN to use. Leave empty to create new ALB.'
+
+  UseExistingNatGateway1EIP:
+    Type: String
+    Default: ''
+    Description: 'Existing EIP allocation ID for NAT Gateway 1. Leave empty to create new EIP.'
+
+  UseExistingNatGateway2EIP:
+    Type: String
+    Default: ''
+    Description: 'Existing EIP allocation ID for NAT Gateway 2. Leave empty to create new EIP.'
+
+  SkipRDSInstances:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Skip creation of RDS DB instances if user lacks permissions'
+
+  EnableGreenFleet:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable creation of green ASG for blue/green with weighted ALB forwarding'
+
+  BlueTrafficWeight:
+    Type: Number
+    Default: 100
+    MinValue: 0
+    MaxValue: 100
+    Description: 'Weight percentage for blue target group'
+
+  GreenTrafficWeight:
+    Type: Number
+    Default: 0
+    MinValue: 0
+    MaxValue: 100
+    Description: 'Weight percentage for green target group'
+
+  GreenMinSize:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: 'Green ASG minimum size when green fleet is enabled'
+
+  GreenMaxSize:
+    Type: Number
+    Default: 2
+    MinValue: 0
+    Description: 'Green ASG maximum size when green fleet is enabled'
+
+  GreenDesiredCapacity:
+    Type: Number
+    Default: 1
+    MinValue: 0
+    Description: 'Green ASG desired capacity when green fleet is enabled'
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: 'ami-0c02fb55956c7d316'
+    us-west-2:
+      AMI: 'ami-0841edc20334f9287'
+
+  EnvironmentMap:
+    Development:
+      MinSize: 1
+      MaxSize: 2
+      DesiredCapacity: 1
+    Staging:
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+    Production:
+      MinSize: 2
+      MaxSize: 8
+      DesiredCapacity: 4
+
+  EnvironmentLowerMap:
+    Development:
+      Name: development
+    Staging:
+      Name: staging
+    Production:
+      Name: production
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'Production']
+
+  IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
+
+  HasLambdaCode:
+    !And [
+      !Not [!Equals [!Ref LambdaCodeS3Bucket, '']],
+      !Not [!Equals [!Ref LambdaCodeS3Key, '']],
+    ]
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+  CreateS3Bucket: !Equals [!Ref UseExistingS3Bucket, '']
+  CreateKMSKey: !Equals [!Ref UseExistingKMSKeyId, '']
+  HasExistingKMSKeyId: !Not [!Equals [!Ref UseExistingKMSKeyId, '']]
+  # CreateKMSAlias: !Equals [!Ref UseExistingKMSAlias, '']
+  CreateS3BucketAndPrimary:
+    !And [
+      !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion],
+      !Equals [!Ref UseExistingS3Bucket, ''],
+    ]
+  CreateGlobalCluster: !Equals [!Ref UseExistingGlobalCluster, '']
+  CreateGlobalClusterAndHasGlobal:
+    !And [
+      !Not [!Equals [!Ref GlobalClusterIdentifier, '']],
+      !Equals [!Ref UseExistingGlobalCluster, ''],
+    ]
+  CreateGlobalClusterAndAutoGenerated:
+    !Equals [!Ref GlobalClusterIdentifier, '']
+  CreateALB: !Equals [!Ref UseExistingALB, '']
+  CreateALBAndHasSSL:
+    !And [
+      !Equals [!Ref UseExistingALB, ''],
+      !Not [!Equals [!Ref SSLCertificateArn, '']],
+    ]
+  HasDBPasswordParameter: !Not [!Equals [!Ref DBMasterPasswordParameter, '']]
+  CreateRDSInstances: !Equals [!Ref SkipRDSInstances, 'false']
+  CreateNatGateway1EIP: !Equals [!Ref UseExistingNatGateway1EIP, '']
+  CreateNatGateway2EIP: !Equals [!Ref UseExistingNatGateway2EIP, '']
+  CreateGreenFleet: !Equals [!Ref EnableGreenFleet, 'true']
+
+Resources:
+  # SNS Topic for CloudFormation Notifications
+  CloudFormationNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-cloudformation-notifications'
+      DisplayName: 'CloudFormation Stack Notifications'
+      KmsMasterKeyId:
+        !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKeyId]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  CloudFormationNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref CloudFormationNotificationTopic
+      Endpoint: !Ref NotificationEmail
+
+  # KMS Key for Encryption
+  KMSKey:
+    Type: AWS::KMS::Key
+    Condition: CreateKMSKey
+    Properties:
+      Description: 'KMS Key for HIPAA/PCI DSS Compliant Infrastructure'
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      Enabled: true
+      KeyPolicy:
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow SNS
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow EC2/EBS to use the key for EBS encryption
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+              Bool:
+                'kms:GrantIsForAWSResource': true
+              ForAnyValue:StringLike:
+                'kms:EncryptionContext:aws:ebs:id': '*'
+          - Sid: Allow EC2 in this account via service to use key
+            Effect: Allow
+            Principal: '*'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:CallerAccount': !Ref 'AWS::AccountId'
+                'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: Compliance
+          Value: 'HIPAA-PCI-DSS'
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Condition: CreateKMSKey
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AliasName: !Sub 'alias/${Environment}-${EnvironmentSuffix}-secure-app-key-${AWS::StackName}'
+      TargetKeyId: !Ref KMSKey
+
+  # VPC and Network Infrastructure
+  VPC:
+    Type: AWS::EC2::VPC
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-secure-vpc'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # VPC Flow Logs
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudWatchLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+
+  VPCFlowLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKeyId]
+
+  VPCFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: 'VPC'
+      ResourceId: !Ref VPC
+      TrafficType: 'ALL'
+      LogDestinationType: 'cloud-watch-logs'
+      LogDestination: !GetAtt VPCFlowLogsGroup.Arn
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-vpc-flow-logs'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-igw'
+        - Key: Environment
+          Value: !Ref Environment
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  # Public Subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.1.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.2.0/24'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Private Subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.10.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.11.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Database Subnets
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.0.20.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database-subnet-1'
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.0.21.0/24'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database-subnet-2'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # NAT Gateways
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    Condition: CreateNatGateway1EIP
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat-gateway-1-eip'
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    Condition: CreateNatGateway2EIP
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat-gateway-2-eip'
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AllocationId:
+        !If [
+          CreateNatGateway1EIP,
+          !GetAtt NatGateway1EIP.AllocationId,
+          !Ref UseExistingNatGateway1EIP,
+        ]
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat-gateway-1'
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AllocationId:
+        !If [
+          CreateNatGateway2EIP,
+          !GetAtt NatGateway2EIP.AllocationId,
+          !Ref UseExistingNatGateway2EIP,
+        ]
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat-gateway-2'
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-routes'
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-routes-1'
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-routes-2'
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  # Security Groups
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-alb-sg'
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS traffic'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTP traffic (redirect to HTTPS)'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-alb-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-web-sg'
+      GroupDescription: 'Security group for web servers'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: 'HTTP from ALB'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: 'HTTPS from ALB'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+          Description: 'SSH from Bastion'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-web-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-db-sg'
+      GroupDescription: 'Security group for database'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          Description: 'MySQL from web servers'
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: 'MySQL from Lambda'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-bastion-sg'
+      GroupDescription: 'Security group for bastion host'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !If [IsProduction, '0.0.0.0/0', '0.0.0.0/0'] # Note: Restrict to specific IPs in production
+          Description: 'SSH access'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-bastion-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-lambda-sg'
+      GroupDescription: 'Security group for Lambda functions'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-lambda-sg'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # S3 Buckets (only in primary region to avoid naming conflicts)
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsPrimaryRegion
+    Properties:
+      BucketName: !Sub
+        - '${EnvironmentLower}-secure-app-access-logs-${AWS::AccountId}'
+        - EnvironmentLower:
+            !FindInMap [EnvironmentLowerMap, !Ref Environment, Name]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID:
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateS3BucketAndPrimary
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub
+        - '${EnvironmentLower}-${EnvironmentSuffix}-${AWS::AccountId}'
+        - EnvironmentLower:
+            !FindInMap [EnvironmentLowerMap, !Ref Environment, Name]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID:
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'access-logs/'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-${EnvironmentSuffix}-secure-app-assets'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: EnvironmentSuffix
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Database Subnet Group
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS database'
+      SubnetIds:
+        - !Ref DatabaseSubnet1
+        - !Ref DatabaseSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-subnet-group'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # RDS Enhanced Monitoring Role
+  RDSEnhancedMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-RDS-Monitoring-Role-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
+      Path: /
+
+  # Aurora Global Cluster (only in primary region)
+  GlobalCluster:
+    Type: AWS::RDS::GlobalCluster
+    Condition: CreateGlobalClusterAndHasGlobal
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GlobalClusterIdentifier: !Ref GlobalClusterIdentifier
+      Engine: aurora-mysql
+      EngineVersion: '8.0.mysql_aurora.3.08.2'
+      DeletionProtection: false
+      StorageEncrypted: true
+
+  # Auto-generated Aurora Global Cluster (only in primary region)
+  AutoGeneratedGlobalCluster:
+    Type: AWS::RDS::GlobalCluster
+    Condition: CreateGlobalClusterAndAutoGenerated
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GlobalClusterIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}'
+      Engine: aurora-mysql
+      EngineVersion: '8.0.mysql_aurora.3.08.2'
+      DeletionProtection: false
+      StorageEncrypted: true
+
+  # RDS Database Cluster
+  DatabaseCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Engine: aurora-mysql
+      EngineVersion: '8.0.mysql_aurora.3.08.2'
+      DatabaseName: !Ref DBName
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !If
+        - HasDBPasswordParameter
+        - !Sub '{{resolve:ssm-secure:${DBMasterPasswordParameter}:1}}'
+        - 'SecurePass123!'
+      GlobalClusterIdentifier:
+        !If [
+          CreateGlobalCluster,
+          !If [
+            CreateGlobalClusterAndAutoGenerated,
+            !Ref AutoGeneratedGlobalCluster,
+            !Ref GlobalClusterIdentifier,
+          ],
+          !Ref UseExistingGlobalCluster,
+        ]
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      StorageEncrypted: true
+      KmsKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      BackupRetentionPeriod: !If [IsProduction, 30, 7]
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+      EnableCloudwatchLogsExports:
+        - error
+        - general
+        - slowquery
+      DeletionProtection: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-aurora-cluster'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  DatabasePrimaryInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateRDSInstances
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Engine: aurora-mysql
+      DBInstanceClass: !Ref DBInstanceClass
+      DBClusterIdentifier: !Ref DatabaseCluster
+      PubliclyAccessible: false
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-aurora-primary'
+        - Key: Environment
+          Value: !Ref Environment
+
+  DatabaseReplicaInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateRDSInstances
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Engine: aurora-mysql
+      DBInstanceClass: !Ref DBInstanceClass
+      DBClusterIdentifier: !Ref DatabaseCluster
+      PubliclyAccessible: false
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-aurora-replica'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Log Groups
+  WebServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/ec2/webserver/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKeyId]
+
+  S3LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/s3/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKeyId]
+
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKeyId]
+
+  # IAM Roles
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-EC2-Role-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      Policies:
+        - !If
+          - IsPrimaryRegion
+          - PolicyName: S3Access
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 's3:GetObject'
+                    - 's3:PutObject'
+                  Resource: !Sub
+                    - 'arn:aws:s3:::${BucketName}/*'
+                    - BucketName:
+                        !If [
+                          CreateS3Bucket,
+                          !Ref S3Bucket,
+                          !Ref UseExistingS3Bucket,
+                        ]
+                - Effect: Allow
+                  Action:
+                    - 'kms:Decrypt'
+                    - 'kms:GenerateDataKey'
+                  Resource:
+                    !If [
+                      CreateKMSKey,
+                      !GetAtt KMSKey.Arn,
+                      !Ref UseExistingKMSKeyId,
+                    ]
+          - PolicyName: KMSOnlyAccess
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'kms:Decrypt'
+                    - 'kms:GenerateDataKey'
+                  Resource:
+                    !If [
+                      CreateKMSKey,
+                      !GetAtt KMSKey.Arn,
+                      !Ref UseExistingKMSKeyId,
+                    ]
+        - PolicyName: ParameterStoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter'
+                  - 'ssm:GetParameters'
+                  - 'ssm:GetParametersByPath'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Environment}*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-Lambda-Role-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies:
+        - PolicyName: DatabaseAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'rds:DescribeDBClusters'
+                  - 'rds:DescribeDBInstances'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${DatabaseCluster}*'
+        - PolicyName: KMSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt KMSKey.Arn,
+                    !Ref UseExistingKMSKeyId,
+                  ]
+
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'TapStack-${Environment}-${EnvironmentSuffix}-CodeDeploy-Role-${AWS::Region}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
+        - 'arn:aws:iam::aws:policy/AutoScalingFullAccess'
+
+  # Systems Manager Parameters
+  DatabaseEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/database/endpoint'
+      Type: 'String'
+      Value: !GetAtt DatabaseCluster.Endpoint.Address
+      Description: 'Database cluster endpoint'
+      Tags:
+        Environment: !Ref Environment
+        CostCenter: !Ref CostCenter
+
+  DatabasePortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${Environment}/database/port'
+      Type: 'String'
+      Value: !GetAtt DatabaseCluster.Endpoint.Port
+      Description: 'Database cluster port'
+      Tags:
+        Environment: !Ref Environment
+        CostCenter: !Ref CostCenter
+
+  # Application Load Balancer
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: CreateALB
+    Properties:
+      Name: !Sub '${Environment}-alb'
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-alb'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # ALB Target Groups for blue/green deployment
+  ALBTargetGroupBlue:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-tg-blue'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-tg-blue'
+        - Key: Environment
+          Value: !Ref Environment
+
+  ALBTargetGroupGreen:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${Environment}-tg-green'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-tg-green'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ALB Listeners
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: CreateALB
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ALBTargetGroupBlue
+                Weight: !Ref BlueTrafficWeight
+              - TargetGroupArn: !Ref ALBTargetGroupGreen
+                Weight: !If [CreateGreenFleet, !Ref GreenTrafficWeight, 0]
+            TargetGroupStickinessConfig:
+              Enabled: false
+
+  ALBHTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: CreateALBAndHasSSL
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 443
+      Protocol: HTTPS
+      SslPolicy: ELBSecurityPolicy-TLS-1-2-2017-01
+      Certificates:
+        - CertificateArn: !Ref SSLCertificateArn
+      DefaultActions:
+        - Type: forward
+          ForwardConfig:
+            TargetGroups:
+              - TargetGroupArn: !Ref ALBTargetGroupBlue
+                Weight: !Ref BlueTrafficWeight
+              - TargetGroupArn: !Ref ALBTargetGroupGreen
+                Weight: !If [CreateGreenFleet, !Ref GreenTrafficWeight, 0]
+            TargetGroupStickinessConfig:
+              Enabled: false
+
+  # Launch Template for Web Servers
+  WebServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${Environment}-launch-template'
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        InstanceType: !Ref WebInstanceType
+        KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              Encrypted: true
+              KmsKeyId:
+                !If [
+                  HasExistingKMSKeyId,
+                  !Ref UseExistingKMSKeyId,
+                  'alias/aws/ebs',
+                ]
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            # Add application deployment script here
+
+  # Auto Scaling Group
+  WebServerASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${Environment}-asg'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      MinSize: !FindInMap [EnvironmentMap, !Ref Environment, MinSize]
+      MaxSize: !FindInMap [EnvironmentMap, !Ref Environment, MaxSize]
+      DesiredCapacity:
+        !FindInMap [EnvironmentMap, !Ref Environment, DesiredCapacity]
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !If [CreateALB, !Ref ALBTargetGroupBlue, !Ref 'AWS::NoValue']
+        - !If [CreateGreenFleet, !Ref ALBTargetGroupGreen, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-instance'
+          PropagateAtLaunch: true
+
+  # Optional Green Auto Scaling Group (for canary/blue-green via ALB weights)
+  WebServerASGGreen:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: CreateGreenFleet
+    Properties:
+      AutoScalingGroupName: !Sub '${Environment}-asg-green'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref WebServerLaunchTemplate
+        Version: !GetAtt WebServerLaunchTemplate.LatestVersionNumber
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      MinSize: !Ref GreenMinSize
+      MaxSize: !Ref GreenMaxSize
+      DesiredCapacity: !Ref GreenDesiredCapacity
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroupGreen
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-instance-green'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+        - Key: CostCenter
+          Value: !Ref CostCenter
+          PropagateAtLaunch: true
+
+  # CodeDeploy Application and Deployment Group for blue/green deployments
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub '${Environment}-app'
+      ComputePlatform: Server
+
+  CodeDeployDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub '${Environment}-dg'
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+      AutoScalingGroups:
+        - !Ref WebServerASG
+      DeploymentStyle:
+        DeploymentType: IN_PLACE
+        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
+
+  # Lambda Function (example)
+  ExampleLambdaFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasLambdaCode
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: !Sub '${Environment}-example-function'
+      Runtime: python3.12
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Ref LambdaCodeS3Key
+      Handler: index.lambda_handler
+      Timeout: 30
+      MemorySize: 128
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-lambda'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # CloudWatch Alarms
+  HighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateKMSKey
+    Properties:
+      AlarmName: !Sub '${Environment}-asg-high-cpu'
+      AlarmDescription: 'Alarm when ASG CPU utilization is high'
+      Namespace: 'AWS/EC2'
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerASG
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref CloudFormationNotificationTopic
+      OKActions:
+        - !Ref CloudFormationNotificationTopic
+
+  LowCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateKMSKey
+    Properties:
+      AlarmName: !Sub '${Environment}-asg-low-cpu'
+      AlarmDescription: 'Alarm when ASG CPU utilization is low'
+      Namespace: 'AWS/EC2'
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerASG
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 20
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+        - !Ref CloudFormationNotificationTopic
+      OKActions:
+        - !Ref CloudFormationNotificationTopic
+
+  # Bastion Host
+  BastionHost:
+    Type: AWS::EC2::Instance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-bastion'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+Outputs:
+  ALBDNSName:
+    Description: 'DNS name of the Application Load Balancer'
+    Value: !If [CreateALB, !GetAtt ALB.DNSName, !Ref UseExistingALB]
+
+  DatabaseEndpoint:
+    Description: 'Endpoint of the database cluster'
+    Value: !GetAtt DatabaseCluster.Endpoint.Address
+
+  S3BucketName:
+    Description: 'Name of the S3 bucket for assets'
+    Value:
+      !If [CreateS3BucketAndPrimary, !Ref S3Bucket, !Ref UseExistingS3Bucket]
+    Condition: IsPrimaryRegion
+
+  GlobalClusterIdentifier:
+    Description: 'Global cluster identifier for multi-region deployment'
+    Value: !Ref AutoGeneratedGlobalCluster
+    Condition: CreateGlobalClusterAndAutoGenerated
+
+  CodeDeployApplicationName:
+    Description: 'Name of the CodeDeploy application'
+    Value: !Ref CodeDeployApplication
+
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function'
+    Value: !Ref ExampleLambdaFunction
+    Condition: HasLambdaCode
+```

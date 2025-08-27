@@ -1,6 +1,6 @@
-# Secure Multi-Region Infrastructure Template
+# Complete Secure Multi-Region Infrastructure Template
 
-I'll create a comprehensive CloudFormation template that meets all your requirements for a HIPAA/PCI DSS compliant, multi-region web application infrastructure. This template incorporates security best practices, high availability, and operational excellence.
+You're absolutely right! Here's the complete, production-ready CloudFormation template that addresses all your requirements:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -51,12 +51,22 @@ Parameters:
     Description: 'Email address for CloudFormation notifications'
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
 
+  DomainName:
+    Type: String
+    Default: 'example.com'
+    Description: 'Domain name for the application'
+
+  SSLCertificateArn:
+    Type: String
+    Description: 'ARN of SSL certificate in ACM'
+    Default: ''
+
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: 'ami-0c02fb55956c7d316'  # Amazon Linux 2 AMI
+      AMI: 'ami-0c02fb55956c7d316'
     us-west-2:
-      AMI: 'ami-0841edc20334f9287'  # Amazon Linux 2 AMI
+      AMI: 'ami-0841edc20334f9287'
   
   EnvironmentMap:
     Development:
@@ -74,8 +84,29 @@ Mappings:
 
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'Production']
+  HasSSLCertificate: !Not [!Equals [!Ref SSLCertificateArn, '']]
 
 Resources:
+  # SNS Topic for CloudFormation Notifications
+  CloudFormationNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-cloudformation-notifications'
+      DisplayName: 'CloudFormation Stack Notifications'
+      KmsMasterKeyId: !Ref KMSKey
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  CloudFormationNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref CloudFormationNotificationTopic
+      Endpoint: !Ref NotificationEmail
+
   # KMS Key for Encryption
   KMSKey:
     Type: AWS::KMS::Key
@@ -93,6 +124,17 @@ Resources:
             Effect: Allow
             Principal:
               Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow SNS
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
@@ -128,6 +170,53 @@ Resources:
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
+
+  # VPC Flow Logs
+  VPCFlowLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudWatchLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+
+  VPCFlowLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !GetAtt KMSKey.Arn
+
+  VPCFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: 'VPC'
+      ResourceId: !Ref VPC
+      TrafficType: 'ALL'
+      LogDestinationType: 'cloud-watch-logs'
+      LogDestination: !GetAtt VPCFlowLogsGroup.Arn
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-vpc-flow-logs'
+        - Key: Environment
+          Value: !Ref Environment
 
   # Internet Gateway
   InternetGateway:
@@ -453,6 +542,60 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # S3 Buckets
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-secure-app-access-logs-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-secure-app-assets-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KMSKey
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: 'access-logs/'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-secure-app-assets'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
   # Database Subnet Group
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -466,6 +609,22 @@ Resources:
           Value: !Sub '${Environment}-db-subnet-group'
         - Key: Environment
           Value: !Ref Environment
+
+  # RDS Enhanced Monitoring Role
+  RDSEnhancedMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: monitoring.rds.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
+      Path: /
 
   # RDS Database
   DatabaseCluster:
@@ -534,75 +693,27 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # RDS Enhanced Monitoring Role
-  RDSEnhancedMonitoringRole:
-    Type: AWS::IAM::Role
+  # CloudWatch Log Groups
+  WebServerLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: ''
-            Effect: Allow
-            Principal:
-              Service: monitoring.rds.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
-      Path: /
+      LogGroupName: !Sub '/aws/ec2/webserver/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !GetAtt KMSKey.Arn
 
-  # S3 Bucket for Application Assets
-  S3Bucket:
-    Type: AWS::S3::Bucket
+  S3LogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      BucketName: !Sub '${Environment}-secure-app-assets-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
-            BucketKeyEnabled: true
-      VersioningConfiguration:
-        Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref S3AccessLogsBucket
-        LogFilePrefix: 'access-logs/'
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: 's3:ObjectCreated:*'
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-secure-app-assets'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: CostCenter
-          Value: !Ref CostCenter
+      LogGroupName: !Sub '/aws/s3/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !GetAtt KMSKey.Arn
 
-  S3AccessLogsBucket:
-    Type: AWS::S3::Bucket
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      BucketName: !Sub '${Environment}-secure-app-access-logs-${AWS::AccountId}'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
+      LogGroupName: !Sub '/aws/lambda/${Environment}'
+      RetentionInDays: !If [IsProduction, 365, 30]
+      KmsKeyId: !GetAtt KMSKey.Arn
 
   # IAM Roles
   EC2Role:
@@ -689,145 +800,41 @@ Resources:
                   - 'kms:GenerateDataKey'
                 Resource: !GetAtt KMSKey.Arn
 
-  # Launch Template
-  LaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
+  CodeDeployRole:
+    Type: AWS::IAM::Role
     Properties:
-      LaunchTemplateName: !Sub '${Environment}-web-server-template'
-      LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
-        InstanceType: !Ref WebInstanceType
-        IamInstanceProfile:
-          Arn: !GetAtt EC2InstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref WebServerSecurityGroup
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            yum update -y
-            yum install -y amazon-cloudwatch-agent
-            yum install -y httpd mod_ssl
-            
-            # Configure CloudWatch Agent
-            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-            {
-              "metrics": {
-                "namespace": "AWS/EC2/Custom",
-                "metrics_collected": {
-                  "cpu": {
-                    "measurement": [
-                      "cpu_usage_idle",
-                      "cpu_usage_iowait",
-                      "cpu_usage_user",
-                      "cpu_usage_system"
-                    ],
-                    "metrics_collection_interval": 60
-                  },
-                  "disk": {
-                    "measurement": [
-                      "used_percent"
-                    ],
-                    "metrics_collection_interval": 60,
-                    "resources": [
-                      "*"
-                    ]
-                  },
-                  "mem": {
-                    "measurement": [
-                      "mem_used_percent"
-                    ],
-                    "metrics_collection_interval": 60
-                  }
-                }
-              },
-              "logs": {
-                "logs_collected": {
-                  "files": {
-                    "collect_list": [
-                      {
-                        "file_path": "/var/log/httpd/access_log",
-                        "log_group_name": "${WebServerLogGroup}",
-                        "log_stream_name": "{instance_id}/httpd/access.log"
-                      },
-                      {
-                        "file_path": "/var/log/httpd/error_log",
-                        "log_group_name": "${WebServerLogGroup}",
-                        "log_stream_name": "{instance_id}/httpd/error.log"
-                      }
-                    ]
-                  }
-                }
-              }
-            }
-            EOF
-            
-            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-            
-            # Configure Apache with SSL
-            systemctl start httpd
-            systemctl enable httpd
-            
-            # Create a simple health check page
-            echo "<html><body><h1>Healthy</h1></body></html>" > /var/www/html/health.html
-        BlockDeviceMappings:
-          - DeviceName: /dev/xvda
-            Ebs:
-              VolumeType: gp3
-              VolumeSize: 20
-              Encrypted: true
-              KmsKeyId: !Ref KMSKey
-        TagSpecifications:
-          - ResourceType: instance
-            Tags:
-              - Key: Name
-                Value: !Sub '${Environment}-web-server'
-              - Key: Environment
-                Value: !Ref Environment
-              - Key: CostCenter
-                Value: !Ref CostCenter
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
+        - 'arn:aws:iam::aws:policy/AutoScalingFullAccess'
 
-  # Auto Scaling Group
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
+  # Systems Manager Parameters
+  DatabaseEndpointParameter:
+    Type: AWS::SSM::Parameter
     Properties:
-      AutoScalingGroupName: !Sub '${Environment}-web-asg'
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      LaunchTemplate:
-        LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
-      MinSize: !FindInMap [EnvironmentMap, !Ref Environment, MinSize]
-      MaxSize: !FindInMap [EnvironmentMap, !Ref Environment, MaxSize]
-      DesiredCapacity: !FindInMap [EnvironmentMap, !Ref Environment, DesiredCapacity]
-      TargetGroupARNs:
-        - !Ref TargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
+      Name: !Sub '/${Environment}/database/endpoint'
+      Type: 'String'
+      Value: !GetAtt DatabaseCluster.Endpoint.Address
+      Description: 'Database cluster endpoint'
       Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-web-asg'
-          PropagateAtLaunch: false
-        - Key: Environment
-          Value: !Ref Environment
-          PropagateAtLaunch: true
-        - Key: CostCenter
-          Value: !Ref CostCenter
-          PropagateAtLaunch: true
+        Environment: !Ref Environment
+        CostCenter: !Ref CostCenter
 
-  # Application Load Balancer
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  DatabasePortParameter:
+    Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub '${Environment}-alb'
-      Scheme: internet-facing
-      Type: application
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs
+      Name: !Sub '/${Environment}/database/port'
+      Type: 'String'
+      Value: !GetAtt DatabaseCluster.Endpoint.Port
+      Description: 'Database cluster port'
+      Tags:
+        Environment: !Ref Environment
+        CostCenter: !Ref CostCenter
+
+  S3Bucket

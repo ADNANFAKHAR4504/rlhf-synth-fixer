@@ -1,6 +1,83 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure Multi-Region Infrastructure for HIPAA/PCI DSS Compliant Web Application",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "Environment",
+                        "EnvironmentSuffix",
+                        "CostCenter"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "PrimaryRegion",
+                        "VpcCidr"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Compute Configuration"
+                    },
+                    "Parameters": [
+                        "WebInstanceType",
+                        "DBInstanceClass",
+                        "KeyName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DBMasterUsername",
+                        "DBMasterPasswordParameter",
+                        "DBName",
+                        "GlobalClusterIdentifier"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "SSLCertificateArn",
+                        "NotificationEmail"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Advanced Configuration"
+                    },
+                    "Parameters": [
+                        "LambdaCodeS3Bucket",
+                        "LambdaCodeS3Key",
+                        "UseExistingS3Bucket",
+                        "UseExistingKMSKeyId",
+                        "UseExistingGlobalCluster",
+                        "UseExistingALB",
+                        "UseExistingNatGateway1EIP",
+                        "UseExistingNatGateway2EIP",
+                        "SkipRDSInstances",
+                        "EnableGreenFleet",
+                        "BlueTrafficWeight",
+                        "GreenTrafficWeight",
+                        "GreenMinSize",
+                        "GreenMaxSize",
+                        "GreenDesiredCapacity"
+                    ]
+                }
+            ]
+        }
+    },
     "Parameters": {
         "Environment": {
             "Type": "String",
@@ -60,8 +137,8 @@
             "Default": ""
         },
         "KeyName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Name of an existing EC2 KeyPair to enable SSH access to instances",
+            "Type": "String",
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to instances. Leave empty if no SSH access is needed.",
             "Default": ""
         },
         "DBMasterUsername": {
@@ -70,6 +147,11 @@
             "Description": "Master username for database",
             "NoEcho": true
         },
+        "DBMasterPasswordParameter": {
+            "Type": "String",
+            "Default": "",
+            "Description": "SSM Parameter Store path for database master password. Leave empty to use default password."
+        },
         "DBName": {
             "Type": "String",
             "Default": "secureapp",
@@ -77,9 +159,9 @@
         },
         "GlobalClusterIdentifier": {
             "Type": "String",
-            "Default": "my-global-cluster",
-            "Description": "Global cluster identifier for Aurora Global Database. Leave empty for single region.",
-            "AllowedPattern": "^[a-zA-Z]{1}(?:-?[a-zA-Z0-9]){0,62}$"
+            "Default": "",
+            "Description": "Global cluster identifier for Aurora Global Database. Leave empty to use auto-generated name.",
+            "AllowedPattern": "^$|^[a-zA-Z]{1}(?:-?[a-zA-Z0-9]){0,62}$"
         },
         "LambdaCodeS3Bucket": {
             "Type": "String",
@@ -90,6 +172,92 @@
             "Type": "String",
             "Default": "",
             "Description": "S3 key for Lambda function code"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming and isolation",
+            "AllowedPattern": "^[a-zA-Z0-9-]+$"
+        },
+        "UseExistingS3Bucket": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing S3 bucket name to use. Leave empty to create new bucket."
+        },
+        "UseExistingKMSKeyId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing KMS key ARN to use. Leave empty to create new key."
+        },
+        "UseExistingGlobalCluster": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing global cluster identifier to use. Leave empty to create new cluster."
+        },
+        "UseExistingALB": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing Application Load Balancer ARN to use. Leave empty to create new ALB."
+        },
+        "UseExistingNatGateway1EIP": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing EIP allocation ID for NAT Gateway 1. Leave empty to create new EIP."
+        },
+        "UseExistingNatGateway2EIP": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Existing EIP allocation ID for NAT Gateway 2. Leave empty to create new EIP."
+        },
+        "SkipRDSInstances": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Skip creation of RDS DB instances if user lacks permissions"
+        },
+        "EnableGreenFleet": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable creation of green ASG for blue/green with weighted ALB forwarding"
+        },
+        "BlueTrafficWeight": {
+            "Type": "Number",
+            "Default": 100,
+            "MinValue": 0,
+            "MaxValue": 100,
+            "Description": "Weight percentage for blue target group"
+        },
+        "GreenTrafficWeight": {
+            "Type": "Number",
+            "Default": 0,
+            "MinValue": 0,
+            "MaxValue": 100,
+            "Description": "Weight percentage for green target group"
+        },
+        "GreenMinSize": {
+            "Type": "Number",
+            "Default": 1,
+            "MinValue": 0,
+            "Description": "Green ASG minimum size when green fleet is enabled"
+        },
+        "GreenMaxSize": {
+            "Type": "Number",
+            "Default": 2,
+            "MinValue": 0,
+            "Description": "Green ASG maximum size when green fleet is enabled"
+        },
+        "GreenDesiredCapacity": {
+            "Type": "Number",
+            "Default": 1,
+            "MinValue": 0,
+            "Description": "Green ASG desired capacity when green fleet is enabled"
         }
     },
     "Mappings": {
@@ -117,6 +285,17 @@
                 "MaxSize": 8,
                 "DesiredCapacity": 4
             }
+        },
+        "EnvironmentLowerMap": {
+            "Development": {
+                "Name": "development"
+            },
+            "Staging": {
+                "Name": "staging"
+            },
+            "Production": {
+                "Name": "production"
+            }
         }
     },
     "Conditions": {
@@ -128,18 +307,6 @@
                 "Production"
             ]
         },
-        "HasSSLCertificate": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "SSLCertificateArn"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        },
         "IsPrimaryRegion": {
             "Fn::Equals": [
                 {
@@ -147,18 +314,6 @@
                 },
                 {
                     "Ref": "PrimaryRegion"
-                }
-            ]
-        },
-        "HasGlobalCluster": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "GlobalClusterIdentifier"
-                        },
-                        ""
-                    ]
                 }
             ]
         },
@@ -189,6 +344,184 @@
                     ]
                 }
             ]
+        },
+        "HasKeyName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateS3Bucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingS3Bucket"
+                },
+                ""
+            ]
+        },
+        "CreateKMSKey": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingKMSKeyId"
+                },
+                ""
+            ]
+        },
+        "HasExistingKMSKeyId": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "UseExistingKMSKeyId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateS3BucketAndPrimary": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        {
+                            "Ref": "PrimaryRegion"
+                        }
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "UseExistingS3Bucket"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateGlobalCluster": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingGlobalCluster"
+                },
+                ""
+            ]
+        },
+        "CreateGlobalClusterAndHasGlobal": {
+            "Fn::And": [
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "GlobalClusterIdentifier"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "UseExistingGlobalCluster"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateGlobalClusterAndAutoGenerated": {
+            "Fn::Equals": [
+                {
+                    "Ref": "GlobalClusterIdentifier"
+                },
+                ""
+            ]
+        },
+        "CreateALB": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingALB"
+                },
+                ""
+            ]
+        },
+        "CreateALBAndHasSSL": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "UseExistingALB"
+                        },
+                        ""
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "SSLCertificateArn"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "HasDBPasswordParameter": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DBMasterPasswordParameter"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateRDSInstances": {
+            "Fn::Equals": [
+                {
+                    "Ref": "SkipRDSInstances"
+                },
+                "false"
+            ]
+        },
+        "CreateNatGateway1EIP": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingNatGateway1EIP"
+                },
+                ""
+            ]
+        },
+        "CreateNatGateway2EIP": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingNatGateway2EIP"
+                },
+                ""
+            ]
+        },
+        "CreateGreenFleet": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableGreenFleet"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -200,7 +533,18 @@
                 },
                 "DisplayName": "CloudFormation Stack Notifications",
                 "KmsMasterKeyId": {
-                    "Ref": "KMSKey"
+                    "Fn::If": [
+                        "CreateKMSKey",
+                        {
+                            "Fn::GetAtt": [
+                                "KMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "UseExistingKMSKeyId"
+                        }
+                    ]
                 },
                 "Tags": [
                     {
@@ -232,8 +576,12 @@
         },
         "KMSKey": {
             "Type": "AWS::KMS::Key",
+            "Condition": "CreateKMSKey",
             "Properties": {
                 "Description": "KMS Key for HIPAA/PCI DSS Compliant Infrastructure",
+                "KeySpec": "SYMMETRIC_DEFAULT",
+                "KeyUsage": "ENCRYPT_DECRYPT",
+                "Enabled": true,
                 "KeyPolicy": {
                     "Statement": [
                         {
@@ -278,6 +626,59 @@
                                 "kms:DescribeKey"
                             ],
                             "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow EC2/EBS to use the key for EBS encryption",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                },
+                                "Bool": {
+                                    "kms:GrantIsForAWSResource": true
+                                },
+                                "ForAnyValue:StringLike": {
+                                    "kms:EncryptionContext:aws:ebs:id": "*"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow EC2 in this account via service to use key",
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:CallerAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    },
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "ec2.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
                         }
                     ]
                 },
@@ -303,9 +704,12 @@
         },
         "KMSKeyAlias": {
             "Type": "AWS::KMS::Alias",
+            "Condition": "CreateKMSKey",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/${Environment}-secure-app-key"
+                    "Fn::Sub": "alias/${Environment}-${EnvironmentSuffix}-secure-app-key-${AWS::StackName}"
                 },
                 "TargetKeyId": {
                     "Ref": "KMSKey"
@@ -314,6 +718,8 @@
         },
         "VPC": {
             "Type": "AWS::EC2::VPC",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "CidrBlock": {
                     "Ref": "VpcCidr"
@@ -394,9 +800,17 @@
                     ]
                 },
                 "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "KMSKey",
-                        "Arn"
+                    "Fn::If": [
+                        "CreateKMSKey",
+                        {
+                            "Fn::GetAtt": [
+                                "KMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "UseExistingKMSKeyId"
+                        }
                     ]
                 }
             }
@@ -440,6 +854,8 @@
         },
         "InternetGateway": {
             "Type": "AWS::EC2::InternetGateway",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "Tags": [
                     {
@@ -459,6 +875,8 @@
         },
         "InternetGatewayAttachment": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "InternetGatewayId": {
                     "Ref": "InternetGateway"
@@ -470,6 +888,8 @@
         },
         "PublicSubnet1": {
             "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -502,6 +922,8 @@
         },
         "PublicSubnet2": {
             "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -534,6 +956,8 @@
         },
         "PrivateSubnet1": {
             "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -565,6 +989,8 @@
         },
         "PrivateSubnet2": {
             "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -596,6 +1022,8 @@
         },
         "DatabaseSubnet1": {
             "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -627,6 +1055,8 @@
         },
         "DatabaseSubnet2": {
             "Type": "AWS::EC2::Subnet",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -658,6 +1088,9 @@
         },
         "NatGateway1EIP": {
             "Type": "AWS::EC2::EIP",
+            "Condition": "CreateNatGateway1EIP",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "DependsOn": "InternetGatewayAttachment",
             "Properties": {
                 "Domain": "vpc",
@@ -673,6 +1106,9 @@
         },
         "NatGateway2EIP": {
             "Type": "AWS::EC2::EIP",
+            "Condition": "CreateNatGateway2EIP",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "DependsOn": "InternetGatewayAttachment",
             "Properties": {
                 "Domain": "vpc",
@@ -688,11 +1124,21 @@
         },
         "NatGateway1": {
             "Type": "AWS::EC2::NatGateway",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatGateway1EIP",
-                        "AllocationId"
+                    "Fn::If": [
+                        "CreateNatGateway1EIP",
+                        {
+                            "Fn::GetAtt": [
+                                "NatGateway1EIP",
+                                "AllocationId"
+                            ]
+                        },
+                        {
+                            "Ref": "UseExistingNatGateway1EIP"
+                        }
                     ]
                 },
                 "SubnetId": {
@@ -710,11 +1156,21 @@
         },
         "NatGateway2": {
             "Type": "AWS::EC2::NatGateway",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "AllocationId": {
-                    "Fn::GetAtt": [
-                        "NatGateway2EIP",
-                        "AllocationId"
+                    "Fn::If": [
+                        "CreateNatGateway2EIP",
+                        {
+                            "Fn::GetAtt": [
+                                "NatGateway2EIP",
+                                "AllocationId"
+                            ]
+                        },
+                        {
+                            "Ref": "UseExistingNatGateway2EIP"
+                        }
                     ]
                 },
                 "SubnetId": {
@@ -861,6 +1317,8 @@
         },
         "ALBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "${Environment}-alb-sg"
@@ -909,6 +1367,8 @@
         },
         "WebServerSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "${Environment}-web-sg"
@@ -964,6 +1424,8 @@
         },
         "DatabaseSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "${Environment}-db-sg"
@@ -1010,6 +1472,8 @@
         },
         "BastionSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "${Environment}-bastion-sg"
@@ -1051,6 +1515,8 @@
         },
         "LambdaSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
                     "Fn::Sub": "${Environment}-lambda-sg"
@@ -1086,7 +1552,20 @@
             "Condition": "IsPrimaryRegion",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-secure-app-access-logs-${AWS::AccountId}"
+                    "Fn::Sub": [
+                        "${EnvironmentLower}-secure-app-access-logs-${AWS::AccountId}",
+                        {
+                            "EnvironmentLower": {
+                                "Fn::FindInMap": [
+                                    "EnvironmentLowerMap",
+                                    {
+                                        "Ref": "Environment"
+                                    },
+                                    "Name"
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1094,7 +1573,15 @@
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
-                                    "Ref": "KMSKey"
+                                    "Fn::If": [
+                                        "CreateKMSKey",
+                                        {
+                                            "Ref": "KMSKey"
+                                        },
+                                        {
+                                            "Ref": "UseExistingKMSKeyId"
+                                        }
+                                    ]
                                 }
                             }
                         }
@@ -1133,10 +1620,25 @@
         },
         "S3Bucket": {
             "Type": "AWS::S3::Bucket",
-            "Condition": "IsPrimaryRegion",
+            "Condition": "CreateS3BucketAndPrimary",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${Environment}-secure-app-assets-${AWS::AccountId}"
+                    "Fn::Sub": [
+                        "${EnvironmentLower}-${EnvironmentSuffix}-${AWS::AccountId}",
+                        {
+                            "EnvironmentLower": {
+                                "Fn::FindInMap": [
+                                    "EnvironmentLowerMap",
+                                    {
+                                        "Ref": "Environment"
+                                    },
+                                    "Name"
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1144,7 +1646,15 @@
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
-                                    "Ref": "KMSKey"
+                                    "Fn::If": [
+                                        "CreateKMSKey",
+                                        {
+                                            "Ref": "KMSKey"
+                                        },
+                                        {
+                                            "Ref": "UseExistingKMSKeyId"
+                                        }
+                                    ]
                                 }
                             },
                             "BucketKeyEnabled": true
@@ -1170,13 +1680,19 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${Environment}-secure-app-assets"
+                            "Fn::Sub": "${Environment}-${EnvironmentSuffix}-secure-app-assets"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
                             "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "EnvironmentSuffix",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
                         }
                     },
                     {
@@ -1219,6 +1735,9 @@
         "RDSEnhancedMonitoringRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack-${Environment}-${EnvironmentSuffix}-RDS-Monitoring-Role-${AWS::Region}"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1240,25 +1759,38 @@
         },
         "GlobalCluster": {
             "Type": "AWS::RDS::GlobalCluster",
-            "Condition": "HasGlobalCluster",
+            "Condition": "CreateGlobalClusterAndHasGlobal",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GlobalClusterIdentifier": {
                     "Ref": "GlobalClusterIdentifier"
                 },
                 "Engine": "aurora-mysql",
                 "EngineVersion": "8.0.mysql_aurora.3.08.2",
-                "DeletionProtection": {
-                    "Fn::If": [
-                        "IsProduction",
-                        true,
-                        false
-                    ]
+                "DeletionProtection": false,
+                "StorageEncrypted": true
+            }
+        },
+        "AutoGeneratedGlobalCluster": {
+            "Type": "AWS::RDS::GlobalCluster",
+            "Condition": "CreateGlobalClusterAndAutoGenerated",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "GlobalClusterIdentifier": {
+                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}"
                 },
+                "Engine": "aurora-mysql",
+                "EngineVersion": "8.0.mysql_aurora.3.08.2",
+                "DeletionProtection": false,
                 "StorageEncrypted": true
             }
         },
         "DatabaseCluster": {
             "Type": "AWS::RDS::DBCluster",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "Engine": "aurora-mysql",
                 "EngineVersion": "8.0.mysql_aurora.3.08.2",
@@ -1268,20 +1800,31 @@
                 "MasterUsername": {
                     "Ref": "DBMasterUsername"
                 },
-                "ManageMasterUserPassword": true,
-                "MasterUserSecret": {
-                    "KmsKeyId": {
-                        "Ref": "KMSKey"
-                    }
+                "MasterUserPassword": {
+                    "Fn::If": [
+                        "HasDBPasswordParameter",
+                        {
+                            "Fn::Sub": "{{resolve:ssm-secure:${DBMasterPasswordParameter}:1}}"
+                        },
+                        "SecurePass123!"
+                    ]
                 },
                 "GlobalClusterIdentifier": {
                     "Fn::If": [
-                        "HasGlobalCluster",
+                        "CreateGlobalCluster",
                         {
-                            "Ref": "GlobalClusterIdentifier"
+                            "Fn::If": [
+                                "CreateGlobalClusterAndAutoGenerated",
+                                {
+                                    "Ref": "AutoGeneratedGlobalCluster"
+                                },
+                                {
+                                    "Ref": "GlobalClusterIdentifier"
+                                }
+                            ]
                         },
                         {
-                            "Ref": "AWS::NoValue"
+                            "Ref": "UseExistingGlobalCluster"
                         }
                     ]
                 },
@@ -1295,7 +1838,15 @@
                 },
                 "StorageEncrypted": true,
                 "KmsKeyId": {
-                    "Ref": "KMSKey"
+                    "Fn::If": [
+                        "CreateKMSKey",
+                        {
+                            "Ref": "KMSKey"
+                        },
+                        {
+                            "Ref": "UseExistingKMSKeyId"
+                        }
+                    ]
                 },
                 "BackupRetentionPeriod": {
                     "Fn::If": [
@@ -1311,13 +1862,7 @@
                     "general",
                     "slowquery"
                 ],
-                "DeletionProtection": {
-                    "Fn::If": [
-                        "IsProduction",
-                        true,
-                        false
-                    ]
-                },
+                "DeletionProtection": false,
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1342,6 +1887,9 @@
         },
         "DatabasePrimaryInstance": {
             "Type": "AWS::RDS::DBInstance",
+            "Condition": "CreateRDSInstances",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "Engine": "aurora-mysql",
                 "DBInstanceClass": {
@@ -1376,7 +1924,9 @@
         },
         "DatabaseReplicaInstance": {
             "Type": "AWS::RDS::DBInstance",
-            "Condition": "IsProduction",
+            "Condition": "CreateRDSInstances",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "Engine": "aurora-mysql",
                 "DBInstanceClass": {
@@ -1423,9 +1973,17 @@
                     ]
                 },
                 "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "KMSKey",
-                        "Arn"
+                    "Fn::If": [
+                        "CreateKMSKey",
+                        {
+                            "Fn::GetAtt": [
+                                "KMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "UseExistingKMSKeyId"
+                        }
                     ]
                 }
             }
@@ -1444,9 +2002,17 @@
                     ]
                 },
                 "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "KMSKey",
-                        "Arn"
+                    "Fn::If": [
+                        "CreateKMSKey",
+                        {
+                            "Fn::GetAtt": [
+                                "KMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "UseExistingKMSKeyId"
+                        }
                     ]
                 }
             }
@@ -1465,9 +2031,17 @@
                     ]
                 },
                 "KmsKeyId": {
-                    "Fn::GetAtt": [
-                        "KMSKey",
-                        "Arn"
+                    "Fn::If": [
+                        "CreateKMSKey",
+                        {
+                            "Fn::GetAtt": [
+                                "KMSKey",
+                                "Arn"
+                            ]
+                        },
+                        {
+                            "Ref": "UseExistingKMSKeyId"
+                        }
                     ]
                 }
             }
@@ -1475,6 +2049,9 @@
         "EC2Role": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack-${Environment}-${EnvironmentSuffix}-EC2-Role-${AWS::Region}"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1507,7 +2084,22 @@
                                                 "s3:PutObject"
                                             ],
                                             "Resource": {
-                                                "Fn::Sub": "${S3Bucket}/*"
+                                                "Fn::Sub": [
+                                                    "arn:aws:s3:::${BucketName}/*",
+                                                    {
+                                                        "BucketName": {
+                                                            "Fn::If": [
+                                                                "CreateS3Bucket",
+                                                                {
+                                                                    "Ref": "S3Bucket"
+                                                                },
+                                                                {
+                                                                    "Ref": "UseExistingS3Bucket"
+                                                                }
+                                                            ]
+                                                        }
+                                                    }
+                                                ]
                                             }
                                         },
                                         {
@@ -1517,9 +2109,17 @@
                                                 "kms:GenerateDataKey"
                                             ],
                                             "Resource": {
-                                                "Fn::GetAtt": [
-                                                    "KMSKey",
-                                                    "Arn"
+                                                "Fn::If": [
+                                                    "CreateKMSKey",
+                                                    {
+                                                        "Fn::GetAtt": [
+                                                            "KMSKey",
+                                                            "Arn"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "Ref": "UseExistingKMSKeyId"
+                                                    }
                                                 ]
                                             }
                                         }
@@ -1538,9 +2138,17 @@
                                                 "kms:GenerateDataKey"
                                             ],
                                             "Resource": {
-                                                "Fn::GetAtt": [
-                                                    "KMSKey",
-                                                    "Arn"
+                                                "Fn::If": [
+                                                    "CreateKMSKey",
+                                                    {
+                                                        "Fn::GetAtt": [
+                                                            "KMSKey",
+                                                            "Arn"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "Ref": "UseExistingKMSKeyId"
+                                                    }
                                                 ]
                                             }
                                         }
@@ -1562,7 +2170,7 @@
                                         "ssm:GetParametersByPath"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Environment}/*"
+                                        "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Environment}*"
                                     }
                                 }
                             ]
@@ -1592,6 +2200,9 @@
         "LambdaExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack-${Environment}-${EnvironmentSuffix}-Lambda-Role-${AWS::Region}"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1627,7 +2238,7 @@
                                         "secretsmanager:GetSecretValue"
                                     ],
                                     "Resource": {
-                                        "Ref": "DatabaseCluster"
+                                        "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${DatabaseCluster}*"
                                     }
                                 }
                             ]
@@ -1645,9 +2256,17 @@
                                         "kms:GenerateDataKey"
                                     ],
                                     "Resource": {
-                                        "Fn::GetAtt": [
-                                            "KMSKey",
-                                            "Arn"
+                                        "Fn::If": [
+                                            "CreateKMSKey",
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "KMSKey",
+                                                    "Arn"
+                                                ]
+                                            },
+                                            {
+                                                "Ref": "UseExistingKMSKeyId"
+                                            }
                                         ]
                                     }
                                 }
@@ -1660,6 +2279,9 @@
         "CodeDeployRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "TapStack-${Environment}-${EnvironmentSuffix}-CodeDeploy-Role-${AWS::Region}"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1728,6 +2350,7 @@
         },
         "ALB": {
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Condition": "CreateALB",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "${Environment}-alb"
@@ -1829,6 +2452,7 @@
         },
         "ALBListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "CreateALB",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "ALB"
@@ -1838,8 +2462,34 @@
                 "DefaultActions": [
                     {
                         "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ALBTargetGroupBlue"
+                        "ForwardConfig": {
+                            "TargetGroups": [
+                                {
+                                    "TargetGroupArn": {
+                                        "Ref": "ALBTargetGroupBlue"
+                                    },
+                                    "Weight": {
+                                        "Ref": "BlueTrafficWeight"
+                                    }
+                                },
+                                {
+                                    "TargetGroupArn": {
+                                        "Ref": "ALBTargetGroupGreen"
+                                    },
+                                    "Weight": {
+                                        "Fn::If": [
+                                            "CreateGreenFleet",
+                                            {
+                                                "Ref": "GreenTrafficWeight"
+                                            },
+                                            0
+                                        ]
+                                    }
+                                }
+                            ],
+                            "TargetGroupStickinessConfig": {
+                                "Enabled": false
+                            }
                         }
                     }
                 ]
@@ -1847,7 +2497,7 @@
         },
         "ALBHTTPSListener": {
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Condition": "HasSSLCertificate",
+            "Condition": "CreateALBAndHasSSL",
             "Properties": {
                 "LoadBalancerArn": {
                     "Ref": "ALB"
@@ -1865,8 +2515,34 @@
                 "DefaultActions": [
                     {
                         "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ALBTargetGroupBlue"
+                        "ForwardConfig": {
+                            "TargetGroups": [
+                                {
+                                    "TargetGroupArn": {
+                                        "Ref": "ALBTargetGroupBlue"
+                                    },
+                                    "Weight": {
+                                        "Ref": "BlueTrafficWeight"
+                                    }
+                                },
+                                {
+                                    "TargetGroupArn": {
+                                        "Ref": "ALBTargetGroupGreen"
+                                    },
+                                    "Weight": {
+                                        "Fn::If": [
+                                            "CreateGreenFleet",
+                                            {
+                                                "Ref": "GreenTrafficWeight"
+                                            },
+                                            0
+                                        ]
+                                    }
+                                }
+                            ],
+                            "TargetGroupStickinessConfig": {
+                                "Enabled": false
+                            }
                         }
                     }
                 ]
@@ -1892,7 +2568,15 @@
                         "Ref": "WebInstanceType"
                     },
                     "KeyName": {
-                        "Ref": "KeyName"
+                        "Fn::If": [
+                            "HasKeyName",
+                            {
+                                "Ref": "KeyName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     },
                     "SecurityGroupIds": [
                         {
@@ -1915,7 +2599,13 @@
                                 "VolumeType": "gp3",
                                 "Encrypted": true,
                                 "KmsKeyId": {
-                                    "Ref": "KMSKey"
+                                    "Fn::If": [
+                                        "HasExistingKMSKeyId",
+                                        {
+                                            "Ref": "UseExistingKMSKeyId"
+                                        },
+                                        "alias/aws/ebs"
+                                    ]
                                 }
                             }
                         }
@@ -1943,6 +2633,8 @@
                         ]
                     }
                 },
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
                 "MinSize": {
                     "Fn::FindInMap": [
                         "EnvironmentMap",
@@ -1980,7 +2672,26 @@
                 ],
                 "TargetGroupARNs": [
                     {
-                        "Ref": "ALBTargetGroupBlue"
+                        "Fn::If": [
+                            "CreateALB",
+                            {
+                                "Ref": "ALBTargetGroupBlue"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "CreateGreenFleet",
+                            {
+                                "Ref": "ALBTargetGroupGreen"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     }
                 ],
                 "Tags": [
@@ -1988,6 +2699,59 @@
                         "Key": "Name",
                         "Value": {
                             "Fn::Sub": "${Environment}-instance"
+                        },
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "WebServerASGGreen": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Condition": "CreateGreenFleet",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${Environment}-asg-green"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "WebServerLaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "WebServerLaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "MinSize": {
+                    "Ref": "GreenMinSize"
+                },
+                "MaxSize": {
+                    "Ref": "GreenMaxSize"
+                },
+                "DesiredCapacity": {
+                    "Ref": "GreenDesiredCapacity"
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroupGreen"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-instance-green"
                         },
                         "PropagateAtLaunch": true
                     },
@@ -2038,47 +2802,16 @@
                     }
                 ],
                 "DeploymentStyle": {
-                    "DeploymentType": "BLUE_GREEN",
-                    "DeploymentOption": "WITH_TRAFFIC_CONTROL"
-                },
-                "BlueGreenDeploymentConfiguration": {
-                    "DeploymentReadyOption": {
-                        "ActionOnTimeout": "CONTINUE_DEPLOYMENT",
-                        "WaitTimeInMinutes": 0
-                    },
-                    "TerminateBlueInstancesOnDeploymentSuccess": {
-                        "Action": "TERMINATE",
-                        "TerminationWaitTimeInMinutes": 5
-                    },
-                    "GreenFleetProvisioningOption": {
-                        "Action": "COPY_AUTO_SCALING_GROUP"
-                    }
-                },
-                "LoadBalancerInfo": {
-                    "TargetGroupInfoList": [
-                        {
-                            "Name": {
-                                "Fn::GetAtt": [
-                                    "ALBTargetGroupBlue",
-                                    "TargetGroupName"
-                                ]
-                            }
-                        },
-                        {
-                            "Name": {
-                                "Fn::GetAtt": [
-                                    "ALBTargetGroupGreen",
-                                    "TargetGroupName"
-                                ]
-                            }
-                        }
-                    ]
+                    "DeploymentType": "IN_PLACE",
+                    "DeploymentOption": "WITHOUT_TRAFFIC_CONTROL"
                 }
             }
         },
         "ExampleLambdaFunction": {
             "Type": "AWS::Lambda::Function",
             "Condition": "HasLambdaCode",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "FunctionName": {
                     "Fn::Sub": "${Environment}-example-function"
@@ -2145,6 +2878,7 @@
         },
         "HighCPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "CreateKMSKey",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${Environment}-asg-high-cpu"
@@ -2179,6 +2913,7 @@
         },
         "LowCPUAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
+            "Condition": "CreateKMSKey",
             "Properties": {
                 "AlarmName": {
                     "Fn::Sub": "${Environment}-asg-low-cpu"
@@ -2213,6 +2948,8 @@
         },
         "BastionHost": {
             "Type": "AWS::EC2::Instance",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "InstanceType": "t3.micro",
                 "ImageId": {
@@ -2225,7 +2962,15 @@
                     ]
                 },
                 "KeyName": {
-                    "Ref": "KeyName"
+                    "Fn::If": [
+                        "HasKeyName",
+                        {
+                            "Ref": "KeyName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
                 },
                 "SecurityGroupIds": [
                     {
@@ -2262,9 +3007,17 @@
         "ALBDNSName": {
             "Description": "DNS name of the Application Load Balancer",
             "Value": {
-                "Fn::GetAtt": [
-                    "ALB",
-                    "DNSName"
+                "Fn::If": [
+                    "CreateALB",
+                    {
+                        "Fn::GetAtt": [
+                            "ALB",
+                            "DNSName"
+                        ]
+                    },
+                    {
+                        "Ref": "UseExistingALB"
+                    }
                 ]
             }
         },
@@ -2280,16 +3033,24 @@
         "S3BucketName": {
             "Description": "Name of the S3 bucket for assets",
             "Value": {
-                "Ref": "S3Bucket"
+                "Fn::If": [
+                    "CreateS3BucketAndPrimary",
+                    {
+                        "Ref": "S3Bucket"
+                    },
+                    {
+                        "Ref": "UseExistingS3Bucket"
+                    }
+                ]
             },
             "Condition": "IsPrimaryRegion"
         },
         "GlobalClusterIdentifier": {
             "Description": "Global cluster identifier for multi-region deployment",
             "Value": {
-                "Ref": "GlobalClusterIdentifier"
+                "Ref": "AutoGeneratedGlobalCluster"
             },
-            "Condition": "HasGlobalCluster"
+            "Condition": "CreateGlobalClusterAndAutoGenerated"
         },
         "CodeDeployApplicationName": {
             "Description": "Name of the CodeDeploy application",
