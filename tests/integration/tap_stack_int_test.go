@@ -4,15 +4,13 @@ package lib_test
 
 import (
 	"context"
-	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,26 +18,38 @@ import (
 
 // Outputs represents the structure of the CloudFormation outputs.
 type Outputs struct {
-	VPCId               string `json:"VPCId"`
-	WebServerInstanceId string `json:"WebServerInstanceId"`
-	WebServerPublicIP   string `json:"WebServerPublicIP"`
-	DatabaseEndpoint    string `json:"DatabaseEndpoint"`
-	DatabaseIdentifier  string `json:"DatabaseIdentifier"`
-	DatabaseSecretArn   string `json:"DatabaseSecretArn"`
+	VPCId               string
+	WebServerInstanceId string
+	WebServerPublicIP   string
+	DatabaseEndpoint    string
+	DatabaseIdentifier  string
+	DatabaseSecretArn   string
 }
 
-// loadOutputs loads deployment outputs from the specified JSON file.
-func loadOutputs(t *testing.T) *Outputs {
-	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
-	if err != nil {
-		t.Skipf("Cannot load cfn-outputs/flat-outputs.json: %v", err)
+// loadOutputs dynamically fetches outputs from the deployed CloudFormation stack.
+func loadOutputs(t *testing.T, ctx context.Context, cfg aws.Config) *Outputs {
+	cfnClient := cloudformation.NewFromConfig(cfg)
+	stackName := "TapStack"
+
+	resp, err := cfnClient.DescribeStacks(ctx, &cloudformation.DescribeStacksInput{
+		StackName: aws.String(stackName),
+	})
+	require.NoError(t, err, "Failed to describe CloudFormation stack")
+	require.Len(t, resp.Stacks, 1, "Expected exactly one stack named TapStack")
+
+	outputsMap := make(map[string]string)
+	for _, output := range resp.Stacks[0].Outputs {
+		outputsMap[*output.OutputKey] = *output.OutputValue
 	}
 
-	var outputs Outputs
-	err = json.Unmarshal(data, &outputs)
-	require.NoError(t, err, "Failed to parse cfn-outputs/flat-outputs.json")
-
-	return &outputs
+	return &Outputs{
+		VPCId:               outputsMap["VPCId"],
+		WebServerInstanceId: outputsMap["WebServerInstanceId"],
+		WebServerPublicIP:   outputsMap["WebServerPublicIP"],
+		DatabaseEndpoint:    outputsMap["DatabaseEndpoint"],
+		DatabaseIdentifier:  outputsMap["DatabaseIdentifier"],
+		DatabaseSecretArn:   outputsMap["DatabaseSecretArn"],
+	}
 }
 
 func TestTapStackIntegration(t *testing.T) {
@@ -55,7 +65,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 	ec2Client := ec2.NewFromConfig(cfg)
 	rdsClient := rds.NewFromConfig(cfg)
-	outputs := loadOutputs(t)
+	outputs := loadOutputs(t, ctx, cfg)
 
 	t.Run("VPC is correctly configured", func(t *testing.T) {
 		require.NotEmpty(t, outputs.VPCId, "VPCId should be exported")

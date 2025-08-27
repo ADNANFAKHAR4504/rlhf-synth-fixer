@@ -142,9 +142,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	})
 
 	// Use the latest and greatest Amazon Linux 2 AMI
-	amazonLinuxAmi := awsec2.MachineImage_LatestAmazonLinux(&awsec2.AmazonLinuxImageProps{
-		Generation: awsec2.AmazonLinuxGeneration_AMAZON_LINUX_2,
-		CpuType:    awsec2.AmazonLinuxCpuType_X86_64,
+	amazonLinuxAmi := awsec2.MachineImage_LatestAmazonLinux2(&awsec2.AmazonLinux2ImageSsmParameterProps{
+		CpuType: awsec2.AmazonLinuxCpuType_X86_64,
 	})
 
 	// Create the EC2 instance itself
