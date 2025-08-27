@@ -1,12 +1,5 @@
-name: trainr360-infra
-description: A comprehensive AWS cloud environment setup with VPC and networking components
-runtime: go
-config:
-  pulumi:tags:
-    value:
-      pulumi:template: aws-go
-      project: trainr360
-      environment: dev
-  region:
-    description: The AWS region to deploy resources
-    default: us-east-1
+name: TapStack
+runtime:
+  name: go
+description: Pulumi infrastructure for TAP
+main: ./lib
