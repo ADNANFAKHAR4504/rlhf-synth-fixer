@@ -464,33 +464,39 @@ func main() {
 		if err != nil {
 			return err
 		}
-
+		// IAM Policy with correct S3 permissions
 		ec2Policy, err := iam.NewPolicy(ctx, "ec2-policy", &iam.PolicyArgs{
 			Description: pulumi.String("Least privilege policy for EC2 instances"),
-			Policy: s3Bucket.Bucket.ApplyT(func(bucket string) string {
+			Policy: pulumi.All(s3Bucket.Arn).ApplyT(func(args []interface{}) string {
+				bucketArn := args[0].(string)
 				return fmt.Sprintf(`{
-					"Version": "2012-10-17",
-					"Statement": [
-						{
-							"Effect": "Allow",
-							"Action": [
-								"logs:CreateLogGroup",
-								"logs:CreateLogStream",
-								"logs:PutLogEvents",
-								"logs:DescribeLogStreams"
-							],
-							"Resource": "*"
-						},
-						{
-							"Effect": "Allow",
-							"Action": [
-								"s3:GetObject",
-								"s3:PutObject"
-							],
-							"Resource": "%s/*"
-						}
-					]
-				}`, bucket)
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Effect": "Allow",
+					"Action": [
+						"logs:CreateLogGroup",
+						"logs:CreateLogStream",
+						"logs:PutLogEvents",
+						"logs:DescribeLogStreams"
+					],
+					"Resource": "*"
+				},
+				{
+					"Effect": "Allow",
+					"Action": "s3:ListBucket",
+					"Resource": "%s"
+				},
+				{
+					"Effect": "Allow",
+					"Action": [
+						"s3:GetObject",
+						"s3:PutObject"
+					],
+					"Resource": "%s/*"
+				}
+			]
+		}`, bucketArn, bucketArn)
 			}).(pulumi.StringOutput),
 		})
 		if err != nil {
