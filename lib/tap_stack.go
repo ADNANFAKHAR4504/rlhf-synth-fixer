@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"regexp"
 	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/autoscaling"
@@ -26,7 +27,14 @@ const (
 	privateCIDR2 = "10.0.4.0/24"
 )
 
-// generateRandomString generates a random string of specified length
+func sanitizeBucketName(name string) string {
+	name = strings.ToLower(name)
+	reg := regexp.MustCompile(`[^a-z0-9\.-]`)
+	name = reg.ReplaceAllString(name, "-")
+	name = strings.Trim(name, "-.")
+	return name
+}
+
 func generateRandomString(length int, includeSpecial bool) (string, error) {
 	var charset string
 	if includeSpecial {
@@ -344,7 +352,7 @@ func main() {
 			return err
 		}
 
-		dbSubnetGroupName := strings.ToLower(fmt.Sprintf("%s-%s-db-subnet-group", projectName, stackName))
+		dbSubnetGroupName := sanitizeBucketName(fmt.Sprintf("%s-%s-db-subnet-group", projectName, stackName))
 		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, "db-subnet-group", &rds.SubnetGroupArgs{
 			Name:      pulumi.String(dbSubnetGroupName),
 			SubnetIds: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
@@ -358,23 +366,23 @@ func main() {
 		}
 
 		rdsInstance, err := rds.NewInstance(ctx, "hipaa-db", &rds.InstanceArgs{
-			AllocatedStorage:        pulumi.Int(20),
-			StorageType:             pulumi.String("gp2"),
-			Engine:                  pulumi.String("mysql"),
-			EngineVersion:           pulumi.String("8.0"),
-			InstanceClass:           pulumi.String("db.t3.micro"),
-			DbName:                  pulumi.String("hipaadb"),
-			Username:                pulumi.String(dbUsername),
-			Password:                pulumi.String(dbPassword),
-			VpcSecurityGroupIds:     pulumi.StringArray{dbSecurityGroup.ID()},
-			DbSubnetGroupName:       dbSubnetGroup.Name,
-			MultiAz:                 pulumi.Bool(true),
-			StorageEncrypted:        pulumi.Bool(true),
-			BackupRetentionPeriod:   pulumi.Int(30),
-			BackupWindow:            pulumi.String("03:00-04:00"),
-			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
-			DeletionProtection:      pulumi.Bool(true),
-			SkipFinalSnapshot:       pulumi.Bool(false),
+			AllocatedStorage:      pulumi.Int(20),
+			StorageType:           pulumi.String("gp2"),
+			Engine:                pulumi.String("mysql"),
+			EngineVersion:         pulumi.String("8.0"),
+			InstanceClass:         pulumi.String("db.t3.micro"),
+			DbName:                pulumi.String("hipaadb"),
+			Username:              pulumi.String(dbUsername),
+			Password:              pulumi.String(dbPassword),
+			VpcSecurityGroupIds:   pulumi.StringArray{dbSecurityGroup.ID()},
+			DbSubnetGroupName:     dbSubnetGroup.Name,
+			MultiAz:               pulumi.Bool(true),
+			StorageEncrypted:      pulumi.Bool(true),
+			BackupRetentionPeriod: pulumi.Int(30),
+			BackupWindow:          pulumi.String("03:00-04:00"),
+			MaintenanceWindow:     pulumi.String("sun:04:00-sun:05:00"),
+			DeletionProtection:    pulumi.Bool(true),
+			SkipFinalSnapshot:     pulumi.Bool(false),
 			FinalSnapshotIdentifier: pulumi.String(fmt.Sprintf("%s-%s-final-snapshot", projectName, stackName)),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-rds", projectName, stackName)),
@@ -388,18 +396,18 @@ func main() {
 
 		ec2Role, err := iam.NewRole(ctx, "ec2-role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(`{
-				"Version": "2012-10-17",
-				"Statement": [
-					{
-						"Action": "sts:AssumeRole",
-						"Principal": {
-							"Service": "ec2.amazonaws.com"
-						},
-						"Effect": "Allow",
-						"Sid": ""
-					}
-				]
-			}`),
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Action": "sts:AssumeRole",
+                        "Principal": {
+                            "Service": "ec2.amazonaws.com"
+                        },
+                        "Effect": "Allow",
+                        "Sid": ""
+                    }
+                ]
+            }`),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-ec2-role", projectName, stackName)),
 				"Environment": pulumi.String(stackName),
@@ -409,10 +417,11 @@ func main() {
 			return err
 		}
 
+		bucketName := sanitizeBucketName(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName))
 		s3Bucket, err := s3.NewBucketV2(ctx, "hipaa-bucket", &s3.BucketV2Args{
-			Bucket: pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
+			Bucket: pulumi.String(bucketName),
 			Tags: pulumi.StringMap{
-				"Name":        pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
+				"Name":        pulumi.String(bucketName),
 				"Environment": pulumi.String(stackName),
 				"Compliance":  pulumi.String("HIPAA"),
 			},
