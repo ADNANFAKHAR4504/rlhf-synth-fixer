@@ -6,13 +6,28 @@ from aws_cdk import (
     Duration,
 )
 from constructs import Construct
+import hashlib
 
 
 class RdsStack(Stack):
     def __init__(self, scope: Construct, stack_id: str, vpc: ec2.Vpc, **kwargs):
         super().__init__(scope, stack_id, **kwargs)
 
-        instance_identifier = f"{self.stack_name}-rds-instance"
+        # Create a shortened identifier to stay under AWS 63-character limit
+        def create_short_identifier(stack_name: str, suffix: str = "rds") -> str:
+            """Create a shortened RDS identifier that stays under 63 characters."""
+            # If the full name is short enough, use it
+            full_name = f"{stack_name}-{suffix}"
+            if len(full_name) <= 57:  # Leave room for "-instance"
+                return f"{full_name}-instance"
+            
+            # Otherwise, create a shortened version with hash
+            # Take first part of stack name and add hash of full name
+            short_hash = hashlib.md5(stack_name.encode()).hexdigest()[:8]
+            base_name = f"tap-{suffix}-{short_hash}"
+            return f"{base_name}-instance"
+
+        instance_identifier = create_short_identifier(self.stack_name, "rds")
 
         secret = secretsmanager.Secret(
             self,
@@ -65,10 +80,13 @@ class RdsStack(Stack):
                 ip_addresses=ec2.IpAddresses.cidr("10.1.0.0/16"),
             )
 
+            # Use shortened identifier for replica too
+            replica_identifier = create_short_identifier(self.stack_name, "replica")
+
             rds.DatabaseInstance(
                 replica_stack,
                 "RDSReplica",
-                instance_identifier=f"{self.stack_name}-replica",
+                instance_identifier=replica_identifier,
                 engine=rds.DatabaseInstanceEngine.mysql(
                     version=rds.MysqlEngineVersion.VER_8_0
                 ),

@@ -18,7 +18,7 @@ You are an AWS Solutions Architect, Create a **complex CI/CD pipeline** using CD
 
 ### 1. Infrastructure as Code & Container Deployment
 
-- **Python AWS CDK**: Use AWS Python cdl to define the entire infrastructure
+- **Python AWS CDK**: Use AWS Python cdk to define the entire infrastructure
 - **ECS Container Deployment**: Deploy Docker containers to Amazon ECS Fargate clusters
 - **ECR Integration**: Build applications, package to Amazon Elastic Container Registry (ECR)
 - **Developer Workflow**: Enable developers to commit, push, with automated build and deployment
@@ -82,7 +82,7 @@ You are an AWS Solutions Architect, Create a **complex CI/CD pipeline** using CD
 
 ## Outputs
 
-- Complete Pulumi Python module
+- Complete CDK Python module
 - GitHub Actions workflow files
 - Docker containerized applications
 - Infrastructure components (VPC, ALB, ECS, etc.)
