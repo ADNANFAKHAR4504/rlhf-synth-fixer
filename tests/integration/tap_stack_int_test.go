@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// DeploymentOutputs reflects your Pulumi flat-outputs.json
 type DeploymentOutputs struct {
 	Ec2InstanceId      string `json:"ec2InstanceId"`
 	Ec2PrivateIp       string `json:"ec2PrivateIp"`
@@ -62,32 +61,32 @@ func TestMain(m *testing.M) {
 }
 
 func TestVPCAndSubnets(t *testing.T) {
-	client := ec2.NewFromConfig(awsConfig)
+	ec2Client := ec2.NewFromConfig(awsConfig)
 
 	require.NotEmpty(t, outputs.VpcId, "VPC ID must not be empty")
-	vpcs, err := client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{VpcIds: []string{outputs.VpcId}})
+	resp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{VpcIds: []string{outputs.VpcId}})
 	require.NoError(t, err)
-	require.Len(t, vpcs.Vpcs, 1)
-	assert.Equal(t, "10.0.0.0/16", *vpcs.Vpcs[0].CidrBlock)
+	require.Len(t, resp.Vpcs, 1)
+	assert.Equal(t, "10.0.0.0/16", *resp.Vpcs[0].CidrBlock)
 
 	subnetIDs := []string{outputs.PrivateSubnetEc2Id, outputs.PrivateSubnetRdsId, outputs.PublicSubnetId}
-	subnets, err := client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{SubnetIds: subnetIDs})
+	subnetsResp, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{SubnetIds: subnetIDs})
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(subnets.Subnets), len(subnetIDs))
+	assert.GreaterOrEqual(t, len(subnetsResp.Subnets), len(subnetIDs))
 
-	azSet := make(map[string]bool)
-	for _, subnet := range subnets.Subnets {
-		assert.Equal(t, outputs.VpcId, *subnet.VpcId)
-		azSet[*subnet.AvailabilityZone] = true
+	azSet := map[string]bool{}
+	for _, sn := range subnetsResp.Subnets {
+		assert.Equal(t, outputs.VpcId, *sn.VpcId)
+		azSet[*sn.AvailabilityZone] = true
 	}
 	assert.GreaterOrEqual(t, len(azSet), 2)
 }
 
 func TestEC2Instance(t *testing.T) {
-	client := ec2.NewFromConfig(awsConfig)
+	ec2Client := ec2.NewFromConfig(awsConfig)
 
 	require.NotEmpty(t, outputs.Ec2InstanceId, "EC2 instance ID must not be empty")
-	resp, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{outputs.Ec2InstanceId}})
+	resp, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{outputs.Ec2InstanceId}})
 	require.NoError(t, err)
 	require.Len(t, resp.Reservations, 1)
 
@@ -106,20 +105,20 @@ func TestEC2Instance(t *testing.T) {
 }
 
 func TestRDSInstance(t *testing.T) {
-	client := rds.NewFromConfig(awsConfig)
+	rdsClient := rds.NewFromConfig(awsConfig)
 	require.NotEmpty(t, outputs.RdsEndpoint, "RDS Endpoint must not be empty")
 
-	instancesResp, err := client.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
+	instancesResp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
 	require.NoError(t, err)
 
-	var foundInstance *rdstypes.DBInstance
+	var foundInstance *rdstypes.DBInstance = nil
 	for _, db := range instancesResp.DBInstances {
 		if db.Endpoint != nil {
 			address := aws.ToString(db.Endpoint.Address)
 			port := aws.ToInt32(db.Endpoint.Port)
 			endpoint := fmt.Sprintf("%s:%d", address, port)
 			if endpoint == outputs.RdsEndpoint {
-				foundInstance = db
+				foundInstance = &db
 				break
 			}
 		}
@@ -137,13 +136,13 @@ func TestRDSInstance(t *testing.T) {
 }
 
 func TestS3Bucket(t *testing.T) {
-	client := s3.NewFromConfig(awsConfig)
+	s3Client := s3.NewFromConfig(awsConfig)
 	require.NotEmpty(t, outputs.S3BucketName, "S3 Bucket Name must not be empty")
 
-	_, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &outputs.S3BucketName})
+	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &outputs.S3BucketName})
 	assert.NoError(t, err)
 
-	versioning, err := client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &outputs.S3BucketName})
+	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &outputs.S3BucketName})
 	require.NoError(t, err)
 	assert.Equal(t, "Enabled", versioning.Status, "S3 bucket versioning should be Enabled")
 }
