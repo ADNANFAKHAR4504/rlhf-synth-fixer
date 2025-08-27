@@ -33,7 +33,7 @@ resource "aws_s3_bucket_versioning" "this_bucket_versioning" {
   bucket = aws_s3_bucket.this_bucket.id
 
   versioning_configuration {
-    status = Enabled
+    status = "Enabled"
   }
 }
 
