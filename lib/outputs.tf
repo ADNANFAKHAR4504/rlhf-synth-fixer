@@ -27,3 +27,13 @@ output "terraform_user_arn" {
   description = "ARN of the Terraform user"
   value       = module.iam.terraform_user_arn
 }
+
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail"
+  value       = module.monitoring.cloudtrail_arn
+}
+
+output "guardduty_detector_id" {
+  description = "ID of the GuardDuty detector"
+  value       = module.monitoring.guardduty_detector_id
+}

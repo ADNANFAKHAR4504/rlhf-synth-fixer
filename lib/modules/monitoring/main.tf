@@ -1,16 +1,31 @@
-# CloudTrail S3 Bucket
-resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "secconfig-cloudtrail-${var.environment}-${random_string.cloudtrail_suffix.result}"
+# Get current AWS account ID and region
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
-  tags = {
-    Name = "SecConfig-CloudTrail-Bucket-${var.environment}"
-  }
-}
-
+# Random string for unique bucket naming
 resource "random_string" "cloudtrail_suffix" {
   length  = 8
   special = false
   upper   = false
+}
+
+# CloudTrail S3 Bucket
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket = "${lower(var.project_name)}-cloudtrail-${var.environment}-${random_string.cloudtrail_suffix.result}"
+
+  tags = {
+    Name = "${var.project_name}-CloudTrail-Bucket-${var.environment}"
+  }
+}
+
+# CloudTrail S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # CloudTrail S3 Bucket Policy
@@ -28,6 +43,11 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.cloudtrail.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-CloudTrail-${var.environment}"
+          }
+        }
       },
       {
         Sid    = "AWSCloudTrailWrite"
@@ -40,6 +60,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-CloudTrail-${var.environment}"
           }
         }
       }

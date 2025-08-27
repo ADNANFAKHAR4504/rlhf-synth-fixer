@@ -3,7 +3,7 @@ data "aws_caller_identity" "current" {}
 
 # IAM Policy for S3 Read-Only Access
 resource "aws_iam_policy" "s3_read_only" {
-  name        = "SecConfig-S3ReadOnly-${var.environment}"
+  name        = "${var.project_name}-S3ReadOnly-${var.environment}"
   description = "Read-only access to specific S3 services"
 
   policy = jsonencode({
@@ -18,8 +18,8 @@ resource "aws_iam_policy" "s3_read_only" {
           "s3:GetBucketLocation"
         ]
         Resource = [
-          "arn:aws:s3:::secconfig-*",
-          "arn:aws:s3:::secconfig-*/*"
+          "arn:aws:s3:::${lower(var.project_name)}-*",
+          "arn:aws:s3:::${lower(var.project_name)}-*/*"
         ]
       }
     ]
@@ -28,7 +28,7 @@ resource "aws_iam_policy" "s3_read_only" {
 
 # IAM Role for EC2 with S3 Read-Only Access
 resource "aws_iam_role" "ec2_s3_readonly" {
-  name = "SecConfig-EC2-S3ReadOnly-${var.environment}"
+  name = "${var.project_name}-EC2-S3ReadOnly-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -57,13 +57,13 @@ resource "aws_iam_role_policy_attachment" "ec2_s3_readonly" {
 
 # Instance Profile for EC2
 resource "aws_iam_instance_profile" "ec2_s3_readonly" {
-  name = "SecConfig-EC2-S3ReadOnly-${var.environment}"
+  name = "${var.project_name}-EC2-S3ReadOnly-${var.environment}"
   role = aws_iam_role.ec2_s3_readonly.name
 }
 
 # IAM Policy for Terraform Operations
 resource "aws_iam_policy" "terraform_policy" {
-  name        = "SecConfig-TerraformPolicy-${var.environment}"
+  name        = "${var.project_name}-TerraformPolicy-${var.environment}"
   description = "Policy for Terraform stack creation and management"
 
   policy = jsonencode({
@@ -82,6 +82,7 @@ resource "aws_iam_policy" "terraform_policy" {
           "logs:*",
           "guardduty:*",
           "config:*",
+          "sns:*",
           "sts:GetCallerIdentity"
         ]
         Resource = "*"
@@ -92,11 +93,11 @@ resource "aws_iam_policy" "terraform_policy" {
 
 # IAM User for Terraform
 resource "aws_iam_user" "terraform_user" {
-  name = "SecConfig-TerraformUser-${var.environment}"
+  name = "${var.project_name}-TerraformUser-${var.environment}"
   path = "/"
 
   tags = {
-    Name        = "SecConfig-TerraformUser-${var.environment}"
+    Name        = "${var.project_name}-TerraformUser-${var.environment}"
     Description = "User for Terraform stack creation"
   }
 }
@@ -109,7 +110,7 @@ resource "aws_iam_user_policy_attachment" "terraform_user_policy" {
 
 # MFA Policy for Console Access
 resource "aws_iam_policy" "mfa_policy" {
-  name        = "SecConfig-MFAPolicy-${var.environment}"
+  name        = "${var.project_name}-MFAPolicy-${var.environment}"
   description = "Enforce MFA for console access"
 
   policy = jsonencode({

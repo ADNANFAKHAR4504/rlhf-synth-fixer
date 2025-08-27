@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "SecConfig-VPC-${var.environment}"
+    Name = "${var.project_name}-VPC-${var.environment}"
   }
 }
 
@@ -14,7 +14,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "SecConfig-IGW-${var.environment}"
+    Name = "${var.project_name}-IGW-${var.environment}"
   }
 }
 
@@ -28,7 +28,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "SecConfig-Public-Subnet-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-Public-Subnet-${count.index + 1}-${var.environment}"
     Type = "Public"
   }
 }
@@ -42,7 +42,7 @@ resource "aws_subnet" "private" {
   availability_zone = var.availability_zones[count.index]
 
   tags = {
-    Name = "SecConfig-Private-Subnet-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-Private-Subnet-${count.index + 1}-${var.environment}"
     Type = "Private"
   }
 }
@@ -55,7 +55,7 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 
   tags = {
-    Name = "SecConfig-NAT-EIP-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-NAT-EIP-${count.index + 1}-${var.environment}"
   }
 }
 
@@ -66,7 +66,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "SecConfig-NAT-Gateway-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-NAT-Gateway-${count.index + 1}-${var.environment}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -82,7 +82,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "SecConfig-Public-RT-${var.environment}"
+    Name = "${var.project_name}-Public-RT-${var.environment}"
   }
 }
 
@@ -97,7 +97,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "SecConfig-Private-RT-${count.index + 1}-${var.environment}"
+    Name = "${var.project_name}-Private-RT-${count.index + 1}-${var.environment}"
   }
 }
 

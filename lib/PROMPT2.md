@@ -1,7 +1,13 @@
-## Turn2
-Your previous response was not fully modularized and still has some resources directly created in the root main.tf for the requirement 
+## Turn2 promt
+Your previous for the below requirement is not correct. Following are errors
 
-Develop a Terraform file that establishes secure and compliant infrastructure configurations as code, adhering to rigorous security standards.
+## Monitoring module was incomplete
+## Error, the argument "project_name" is required, but no definition was found in monitoring module
+## Error, an argument named "environment" is not expected here in monitoring module
+
+Please generate the correct response for the following
+
+Develop a Terraform file that establishes secure and compliant infrastructure configurations as code, adhering to rigorous security standards. The terraform code must be reusable, modularized.
 
 ## Requirements (must-haves based on constraints):
 
@@ -51,6 +57,6 @@ A Terraform configuration file that complies with all specified constraints, suc
 ## Proposed statement
 The environment is a multi-region AWS setup with focus on high-security standards.  
 
-All configurations must be written in Terraform and are expected to be reusable modularize structure and scalable, supporting at least two availability zones per VPC.  
+All configurations must be written in Terraform and are expected to be reusable, modularized and scalable, supporting at least two availability zones per VPC.  
 
 Naming conventions should include `SecConfig-` as a prefix for easy identification in AWS Management Console.

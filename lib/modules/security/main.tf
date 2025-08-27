@@ -1,6 +1,6 @@
 # Security Group for SSH Access
 resource "aws_security_group" "ssh_access" {
-  name        = "SecConfig-SSH-Access-${var.environment}"
+  name        = "${var.project_name}-SSH-Access-${var.environment}"
   description = "Security group for SSH access from specific IP"
   vpc_id      = var.vpc_id
 
@@ -20,13 +20,13 @@ resource "aws_security_group" "ssh_access" {
   }
 
   tags = {
-    Name = "SecConfig-SSH-SG-${var.environment}"
+    Name = "${var.project_name}-SSH-SG-${var.environment}"
   }
 }
 
 # Security Group for Web Traffic
 resource "aws_security_group" "web_access" {
-  name        = "SecConfig-Web-Access-${var.environment}"
+  name        = "${var.project_name}-Web-Access-${var.environment}"
   description = "Security group for web traffic"
   vpc_id      = var.vpc_id
 
@@ -54,7 +54,7 @@ resource "aws_security_group" "web_access" {
   }
 
   tags = {
-    Name = "SecConfig-Web-SG-${var.environment}"
+    Name = "${var.project_name}-Web-SG-${var.environment}"
   }
 }
 
@@ -103,6 +103,6 @@ resource "aws_network_acl" "restrictive" {
   }
 
   tags = {
-    Name = "SecConfig-Restrictive-NACL-${var.environment}"
+    Name = "${var.project_name}-Restrictive-NACL-${var.environment}"
   }
 }
