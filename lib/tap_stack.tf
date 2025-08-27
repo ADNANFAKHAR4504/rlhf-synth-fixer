@@ -531,6 +531,7 @@ output "db_subnet_group_name" {
 output "db_instance_endpoint" {
   description = "Endpoint of the database instance"
   value       = aws_db_instance.main.endpoint
+  sensitive   = true
 }
 
 output "db_instance_id" {
@@ -640,6 +641,7 @@ output "db_instance_resource_id" {
 output "db_instance_username" {
   description = "Master username for the database instance"
   value       = aws_db_instance.main.username
+  sensitive   = true
 }
 
 output "db_instance_db_name" {
