@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	region       = "us-west-2"
+	region       = "us-east-1"
 	vpcCIDR      = "10.0.0.0/16"
-	az1          = "us-west-2a"
-	az2          = "us-west-2b"
+	az1          = "us-east-1a"
+	az2          = "us-east-1b"
 	publicCIDR1  = "10.0.1.0/24"
 	publicCIDR2  = "10.0.2.0/24"
 	privateCIDR1 = "10.0.3.0/24"
@@ -366,23 +366,23 @@ func main() {
 		}
 
 		rdsInstance, err := rds.NewInstance(ctx, "hipaa-db", &rds.InstanceArgs{
-			AllocatedStorage:      pulumi.Int(20),
-			StorageType:           pulumi.String("gp2"),
-			Engine:                pulumi.String("mysql"),
-			EngineVersion:         pulumi.String("8.0"),
-			InstanceClass:         pulumi.String("db.t3.micro"),
-			DbName:                pulumi.String("hipaadb"),
-			Username:              pulumi.String(dbUsername),
-			Password:              pulumi.String(dbPassword),
-			VpcSecurityGroupIds:   pulumi.StringArray{dbSecurityGroup.ID()},
-			DbSubnetGroupName:     dbSubnetGroup.Name,
-			MultiAz:               pulumi.Bool(true),
-			StorageEncrypted:      pulumi.Bool(true),
-			BackupRetentionPeriod: pulumi.Int(30),
-			BackupWindow:          pulumi.String("03:00-04:00"),
-			MaintenanceWindow:     pulumi.String("sun:04:00-sun:05:00"),
-			DeletionProtection:    pulumi.Bool(true),
-			SkipFinalSnapshot:     pulumi.Bool(false),
+			AllocatedStorage:        pulumi.Int(20),
+			StorageType:             pulumi.String("gp2"),
+			Engine:                  pulumi.String("mysql"),
+			EngineVersion:           pulumi.String("8.0"),
+			InstanceClass:           pulumi.String("db.t3.micro"),
+			DbName:                  pulumi.String("hipaadb"),
+			Username:                pulumi.String(dbUsername),
+			Password:                pulumi.String(dbPassword),
+			VpcSecurityGroupIds:     pulumi.StringArray{dbSecurityGroup.ID()},
+			DbSubnetGroupName:       dbSubnetGroup.Name,
+			MultiAz:                 pulumi.Bool(true),
+			StorageEncrypted:        pulumi.Bool(true),
+			BackupRetentionPeriod:   pulumi.Int(30),
+			BackupWindow:            pulumi.String("03:00-04:00"),
+			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
+			DeletionProtection:      pulumi.Bool(true),
+			SkipFinalSnapshot:       pulumi.Bool(false),
 			FinalSnapshotIdentifier: pulumi.String(fmt.Sprintf("%s-%s-final-snapshot", projectName, stackName)),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-rds", projectName, stackName)),
