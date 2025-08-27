@@ -979,6 +979,7 @@ output "config_recorder_name" { value = var.enable_config ? aws_config_configura
 ```hcl
 # provider.tf (for completeness in IDEAL_RESPONSE)
 
+
 terraform {
   required_version = ">= 1.4.0"
 
