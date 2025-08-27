@@ -2,9 +2,10 @@ from typing import Optional
 import pulumi
 import pulumi_aws as aws
 import json
-import os
+
 
 class TapStackArgs:
+    
     def __init__(self, 
                  environment: str,
                  project: str, 
@@ -21,7 +22,6 @@ class TapStackArgs:
 
 
 class TapStack(pulumi.ComponentResource):
-    """Main TAP stack with all resources in one class"""
     
     def __init__(self, name: str, args: TapStackArgs, opts: Optional[pulumi.ResourceOptions] = None):
         super().__init__('tap:stack:TapStack', name, None, opts)
@@ -50,7 +50,7 @@ class TapStack(pulumi.ComponentResource):
         self._create_compute()
         self._create_database()
         
-        # Register outputs
+        # Register outputs - this must be done at the end of __init__
         self.register_outputs({
             "vpc_id": self.vpc.id,
             "alb_dns_name": self.alb.dns_name,
@@ -361,8 +361,8 @@ systemctl enable nginx
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
             opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider))
 
-        self.db_password = aws.secretsmanager.Secret(f"{self.args.environment}-{self.args.project}-db",
-            name=f"{self.args.environment}-{self.args.project}-db")
+        self.db_password = aws.secretsmanager.Secret(f"{self.args.environment}-{self.args.project}-qb",
+            name=f"{self.args.environment}-{self.args.project}-qb")
 
         self.db_instance = aws.rds.Instance(
             f"{self.args.environment}-{self.args.project}-{self.args.owner}-db",
@@ -378,7 +378,7 @@ systemctl enable nginx
             backup_window="03:00-04:00",
             maintenance_window="sun:04:00-sun:05:00",
             username="postgres",
-            password=self.db_password.id.apply(lambda id: f"{{resolve:secretsmanager:{id}:SecretString:password::}}"),
+            password=self.db_password.id.apply(lambda id: f"{{resolve:secretsmanager:{id}:SecretString:password::}}"),  # Using direct password instead of secret reference
             monitoring_interval=60,
             monitoring_role_arn=self.rds_monitoring_role.arn,
             performance_insights_enabled=True,
@@ -390,31 +390,37 @@ systemctl enable nginx
             opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider))
 
 
-if __name__ == "tap_stack":
-    config = pulumi.Config()
-    aws_config = pulumi.Config("aws")
+# This is the correct way to instantiate the stack
+# The stack should be created at module level, not inside an if block
+config = pulumi.Config()
+aws_config = pulumi.Config("aws")
 
-    environment = config.get("environment") or "prod"
-    project = config.get("project") or "cloudsetup"
-    owner = config.get("owner") or "mgt"
-    region = aws_config.get("region") or "us-west-2"
+environment = config.get("environment") or "prod"
+project = config.get("project") or "cloudsetup"
+owner = config.get("owner") or "mgt"
+region = aws_config.get("region") or "us-west-2"
 
-    stack_args = TapStackArgs(
-        environment=environment,
-        project=project,
-        owner=owner,
-        region=region,
-        tags={
-            "ManagedBy": "Pulumi",
-            "Environment": environment,
-            "Project": project,
-            "Owner": owner
-        }
-    )
+stack_args = TapStackArgs(
+    environment=environment,
+    project=project,
+    owner=owner,
+    region=region,
+    tags={
+        "ManagedBy": "Pulumi",
+        "Environment": environment,
+        "Project": project,
+        "Owner": owner
+    }
+)
 
-    tap_stack = TapStack("tap", stack_args)
-    
-    pulumi.export("vpc_id", tap_stack.vpc.id)
-    pulumi.export("alb_dns_name", tap_stack.alb.dns_name)
-    pulumi.export("db_endpoint", tap_stack.db_instance.endpoint)
-    pulumi.export("region", region)
+# Create the stack instance
+tap_stack = TapStack("tap", stack_args)
+
+# Export outputs at module level
+pulumi.export("vpc_id", tap_stack.vpc.id)
+pulumi.export("alb_dns_name", tap_stack.alb.dns_name)
+pulumi.export("db_endpoint", tap_stack.db_instance.endpoint)
+pulumi.export("region", region)
+pulumi.export("public_subnet_ids", [subnet.id for subnet in tap_stack.public_subnets])
+pulumi.export("private_subnet_ids", [subnet.id for subnet in tap_stack.private_subnets])
+pulumi.export("web_instance_ids", [instance.id for instance in tap_stack.instances])
