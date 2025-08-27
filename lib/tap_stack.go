@@ -13,6 +13,7 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbsubnetgroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicy"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmsalias"
@@ -399,16 +400,6 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 		})
 	}
 
-	// ALB egress to app servers
-	securitygrouprule.NewSecurityGroupRule(stack, jsii.String("alb-app-egress"), &securitygrouprule.SecurityGroupRuleConfig{
-		Type:                  jsii.String("egress"),
-		FromPort:              jsii.Number(8080),
-		ToPort:                jsii.Number(8080),
-		Protocol:              jsii.String("tcp"),
-		SourceSecurityGroupId: nil, // Will be set to app SG
-		SecurityGroupId:       albSg.Id(),
-	})
-
 	// Application Security Group
 	appSg := securitygroup.NewSecurityGroup(stack, jsii.String("app-sg"), &securitygroup.SecurityGroupConfig{
 		Name:        jsii.String(fmt.Sprintf("tap-app-sg-%s", *config.Environment)),
@@ -417,6 +408,16 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("tap-app-sg-%s", *config.Environment)),
 		},
+	})
+
+	// ALB egress to app servers
+	securitygrouprule.NewSecurityGroupRule(stack, jsii.String("alb-app-egress"), &securitygrouprule.SecurityGroupRuleConfig{
+		Type:                  jsii.String("egress"),
+		FromPort:              jsii.Number(8080),
+		ToPort:                jsii.Number(8080),
+		Protocol:              jsii.String("tcp"),
+		SourceSecurityGroupId: appSg.Id(),
+		SecurityGroupId:       albSg.Id(),
 	})
 
 	// App ingress from ALB
@@ -621,39 +622,41 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 	})
 
 	// IAM Role for CloudTrail
+	// IAM Role for CloudTrail
 	cloudtrailRole := iamrole.NewIamRole(stack, jsii.String("cloudtrail-role"), &iamrole.IamRoleConfig{
 		Name: jsii.String(fmt.Sprintf("tap-cloudtrail-role-%s", *config.Environment)),
 		AssumeRolePolicy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Effect": "Allow",
-					"Principal": {"Service": "cloudtrail.amazonaws.com"},
-					"Action": "sts:AssumeRole"
-				}
-			]
-		}`),
-		InlinePolicy: &[]*iamrole.IamRoleInlinePolicy{
+		"Version": "2012-10-17",
+		"Statement": [
 			{
-				Name: jsii.String("CloudTrailLogsPolicy"),
-				Policy: jsii.String(fmt.Sprintf(`{
-					"Version": "2012-10-17",
-					"Statement": [
-						{
-							"Effect": "Allow",
-							"Action": [
-								"logs:CreateLogStream",
-								"logs:PutLogEvents"
-							],
-							"Resource": "arn:aws:logs:%s:%s:log-group:/aws/cloudtrail/tap-%s:*"
-						}
-					]
-				}`, *config.Region, getAccountId(), *config.Environment)),
-			},
-		},
+				"Effect": "Allow",
+				"Principal": {"Service": "cloudtrail.amazonaws.com"},
+				"Action": "sts:AssumeRole"
+			}
+		]
+	}`),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("tap-cloudtrail-role-%s", *config.Environment)),
 		},
+	})
+
+	// Separate IAM Role Policy for CloudTrail
+	iamrolepolicy.NewIamRolePolicy(stack, jsii.String("cloudtrail-role-policy"), &iamrolepolicy.IamRolePolicyConfig{
+		Name: jsii.String("CloudTrailLogsPolicy"),
+		Role: cloudtrailRole.Id(),
+		Policy: jsii.String(fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Action": [
+					"logs:CreateLogStream",
+					"logs:PutLogEvents"
+				],
+				"Resource": "arn:aws:logs:%s:%s:log-group:/aws/cloudtrail/tap-%s:*"
+			}
+		]
+	}`, *config.Region, getAccountId(), *config.Environment)),
 	})
 
 	// CloudTrail
@@ -681,10 +684,6 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 					{
 						Type:   jsii.String("AWS::S3::Object"),
 						Values: &[]*string{jsii.String("arn:aws:s3:::*/*")},
-					},
-					{
-						Type:   jsii.String("AWS::S3::Bucket"),
-						Values: &[]*string{jsii.String("arn:aws:s3:::*")},
 					},
 				},
 			},
@@ -746,59 +745,63 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 	ec2Role := iamrole.NewIamRole(stack, jsii.String("ec2-app-role"), &iamrole.IamRoleConfig{
 		Name: jsii.String(fmt.Sprintf("tap-ec2-app-role-%s", *config.Environment)),
 		AssumeRolePolicy: jsii.String(`{
-			"Version": "2012-10-17",
-			"Statement": [
-				{
-					"Effect": "Allow",
-					"Principal": {"Service": "ec2.amazonaws.com"},
-					"Action": "sts:AssumeRole"
-				}
-			]
-		}`),
-		InlinePolicy: &[]*iamrole.IamRoleInlinePolicy{
+		"Version": "2012-10-17",
+		"Statement": [
 			{
-				Name: jsii.String("S3AppDataAccess"),
-				Policy: jsii.String(fmt.Sprintf(`{
-					"Version": "2012-10-17",
-					"Statement": [
-						{
-							"Effect": "Allow",
-							"Action": [
-								"s3:GetObject",
-								"s3:PutObject",
-								"s3:DeleteObject"
-							],
-							"Resource": "arn:aws:s3:::tap-app-data-%s-*/*"
-						},
-						{
-							"Effect": "Allow",
-							"Action": [
-								"s3:ListBucket"
-							],
-							"Resource": "arn:aws:s3:::tap-app-data-%s-*"
-						}
-					]
-				}`, *config.Environment, *config.Environment)),
-			},
-			{
-				Name: jsii.String("SecretsManagerAccess"),
-				Policy: jsii.String(fmt.Sprintf(`{
-					"Version": "2012-10-17",
-					"Statement": [
-						{
-							"Effect": "Allow",
-							"Action": [
-								"secretsmanager:GetSecretValue"
-							],
-							"Resource": "arn:aws:secretsmanager:%s:%s:secret:tap/rds/master-password-%s-*"
-						}
-					]
-				}`, *config.Region, getAccountId(), *config.Environment)),
-			},
-		},
+				"Effect": "Allow",
+				"Principal": {"Service": "ec2.amazonaws.com"},
+				"Action": "sts:AssumeRole"
+			}
+		]
+	}`),
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("tap-ec2-app-role-%s", *config.Environment)),
 		},
+	})
+
+	// S3 Access Policy
+	iamrolepolicy.NewIamRolePolicy(stack, jsii.String("ec2-s3-policy"), &iamrolepolicy.IamRolePolicyConfig{
+		Name: jsii.String("S3AppDataAccess"),
+		Role: ec2Role.Id(),
+		Policy: jsii.String(fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Action": [
+					"s3:GetObject",
+					"s3:PutObject",
+					"s3:DeleteObject"
+				],
+				"Resource": "arn:aws:s3:::tap-app-data-%s-*/*"
+			},
+			{
+				"Effect": "Allow",
+				"Action": [
+					"s3:ListBucket"
+				],
+				"Resource": "arn:aws:s3:::tap-app-data-%s-*"
+			}
+		]
+	}`, *config.Environment, *config.Environment)),
+	})
+
+	// Secrets Manager Access Policy
+	iamrolepolicy.NewIamRolePolicy(stack, jsii.String("ec2-secrets-policy"), &iamrolepolicy.IamRolePolicyConfig{
+		Name: jsii.String("SecretsManagerAccess"),
+		Role: ec2Role.Id(),
+		Policy: jsii.String(fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Action": [
+					"secretsmanager:GetSecretValue"
+				],
+				"Resource": "arn:aws:secretsmanager:%s:%s:secret:tap/rds/master-password-%s-*"
+			}
+		]
+	}`, *config.Region, getAccountId(), *config.Environment)),
 	})
 
 	// Attach AWS managed policy for CloudWatch agent (least privilege approach)
