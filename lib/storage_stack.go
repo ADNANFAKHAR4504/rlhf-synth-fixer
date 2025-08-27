@@ -52,7 +52,7 @@ func NewStorageStack(scope constructs.Construct, id *string, props *StorageStack
 
 	// Aurora Serverless v2 Database
 	cluster := awsrds.NewDatabaseCluster(nestedStack, jsii.String("AuroraCluster"), &awsrds.DatabaseClusterProps{
-		Engine: awsrds.DatabaseClusterEngine_AuroraMysql(nil),
+		Engine: awsrds.DatabaseClusterEngine_AuroraMysql(&awsrds.AuroraMysqlClusterEngineProps{}),
 		Writer: awsrds.ClusterInstance_ServerlessV2(jsii.String("writer"), &awsrds.ServerlessV2ClusterInstanceProps{
 			ScaleWithWriter: jsii.Bool(true),
 		}),
