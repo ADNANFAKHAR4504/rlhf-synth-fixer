@@ -17,4 +17,4 @@ Constraints:
 Output:  
 - Terraform code with structure (main.tf, variables.tf, locals.tf, etc.).  
 - Examples for staging + prod.  
-- Add comments showing how lookup(local.map, environment) works.  
+- Add comments showing how lookup(local.map, environment) works.
