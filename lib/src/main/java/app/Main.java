@@ -6,6 +6,7 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.CfnOutput;
 
 import software.constructs.Construct;
 
@@ -68,6 +69,7 @@ import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
 import software.amazon.awscdk.services.sns.Topic;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public final class Main {
 
@@ -168,7 +170,7 @@ public final class Main {
             DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
                 .engine(DatabaseInstanceEngine.postgres(
                     PostgresInstanceEngineProps.builder()
-                        .version(PostgresEngineVersion.VER_16) // always latest supported
+                        .version(PostgresEngineVersion.VER_16)
                         .build()))
                 .vpc(vpc)
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
@@ -176,7 +178,7 @@ public final class Main {
                 .credentials(Credentials.fromGeneratedSecret("dbadmin"))
                 .multiAz(true)
                 .allocatedStorage(20)
-                .storageEncrypted(true)   // required by integration test
+                .storageEncrypted(true)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
@@ -190,7 +192,7 @@ public final class Main {
 
             Alarm cpuAlarm = Alarm.Builder.create(this, env + "-cpu-alarm")
                 .metric(cpuMetric)
-                .threshold(70)  // match integration test expectation
+                .threshold(70)
                 .evaluationPeriods(2)
                 .datapointsToAlarm(2)
                 .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
@@ -217,6 +219,62 @@ public final class Main {
                     .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
                     .build();
             }
+
+            // ===== Outputs for Integration Tests =====
+            CfnOutput.Builder.create(this, env + "-VpcId")
+                .value(vpc.getVpcId())
+                .exportName(env + "-VpcId")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-PublicSubnets")
+                .value(vpc.getPublicSubnets().stream().map(s -> s.getSubnetId()).collect(Collectors.joining(",")))
+                .exportName(env + "-PublicSubnets")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-PrivateSubnets")
+                .value(vpc.getPrivateSubnets().stream().map(s -> s.getSubnetId()).collect(Collectors.joining(",")))
+                .exportName(env + "-PrivateSubnets")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-LogBucket")
+                .value(logBucket.getBucketName())
+                .exportName(env + "-LogBucket")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-Ec2RoleArn")
+                .value(ec2Role.getRoleArn())
+                .exportName(env + "-Ec2RoleArn")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-SecurityGroupId")
+                .value(sg.getSecurityGroupId())
+                .exportName(env + "-SecurityGroupId")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-AsgName")
+                .value(asg.getAutoScalingGroupName())
+                .exportName(env + "-AsgName")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-AlbDns")
+                .value(alb.getLoadBalancerDnsName())
+                .exportName(env + "-AlbDns")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-RdsEndpoint")
+                .value(rds.getDbInstanceEndpointAddress())
+                .exportName(env + "-RdsEndpoint")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-CpuAlarmName")
+                .value(cpuAlarm.getAlarmName())
+                .exportName(env + "-CpuAlarmName")
+                .build();
+
+            CfnOutput.Builder.create(this, env + "-AlarmTopicArn")
+                .value(alarmTopic.getTopicArn())
+                .exportName(env + "-AlarmTopicArn")
+                .build();
         }
     }
 }
