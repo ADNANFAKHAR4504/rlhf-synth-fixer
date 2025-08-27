@@ -10,7 +10,7 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Security Configuration",
-    "Network Configuration", 
+    "Network Configuration",
     "Database Management",
     "Access Control",
     "Monitoring Setup",
@@ -19,7 +19,7 @@
   "training_quality": 9,
   "aws_services": [
     "VPC",
-    "EC2", 
+    "EC2",
     "RDS",
     "S3",
     "IAM",
@@ -27,5 +27,11 @@
     "CloudTrail",
     "GuardDuty",
     "VPC Endpoints"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
