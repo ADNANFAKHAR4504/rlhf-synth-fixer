@@ -13,46 +13,45 @@ import (
 func TestTapStack(t *testing.T) {
 	defer jsii.Close()
 
-	t.Run("creates an S3 bucket with the correct environment suffix", func(t *testing.T) {
+	t.Run("creates stack with the correct environment and region", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
-		envSuffix := "testenv"
-		stack := lib.NewTapStack(app, jsii.String("TapStackTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String(envSuffix),
+		environment := "test"
+		region := "us-east-1"
+		stack := lib.NewTapStack(app, "TapStackTest", &lib.TapStackProps{
+			StackProps:  awscdk.StackProps{},
+			Environment: environment,
+			Region:      region,
 		})
 		_ = assertions.Template_FromStack(stack.Stack, nil)
 
 		// ASSERT
-		// Note: Uncomment these assertions when S3 bucket is actually created
-		// template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(1))
-		// template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
-		//     "BucketName": "tap-bucket-" + envSuffix,
-		// })
-
-		// For now, just verify stack was created successfully
+		// Verify stack was created successfully
 		assert.NotNil(t, stack)
-		assert.Equal(t, envSuffix, *stack.EnvironmentSuffix)
+		assert.NotNil(t, stack.ApiEndpoint)
+		assert.NotNil(t, stack.LambdaArn)
+		assert.NotNil(t, stack.LogGroups)
 	})
 
-	t.Run("defaults environment suffix to 'dev' if not provided", func(t *testing.T) {
+	t.Run("creates stack with production environment", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackTestDefault"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackProd", &lib.TapStackProps{
+			StackProps:  awscdk.StackProps{},
+			Environment: "prod",
+			Region:      "us-west-2",
 		})
 		_ = assertions.Template_FromStack(stack.Stack, nil)
 
 		// ASSERT
-		// Note: Uncomment these assertions when S3 bucket is actually created
-		// template.ResourceCountIs(jsii.String("AWS::S3::Bucket"), jsii.Number(1))
-		// template.HasResourceProperties(jsii.String("AWS::S3::Bucket"), map[string]interface{}{
-		//     "BucketName": "tap-bucket-dev",
-		// })
-
-		// For now, just verify stack was created successfully with default suffix
+		// Verify stack was created successfully
 		assert.NotNil(t, stack)
-		assert.Equal(t, "dev", *stack.EnvironmentSuffix)
+		assert.NotNil(t, stack.ApiEndpoint)
+		assert.NotNil(t, stack.LambdaArn)
+		assert.NotNil(t, stack.LogGroups)
+		assert.NotNil(t, stack.ApiKeyOutput)
+		assert.NotNil(t, stack.CrossRegionTopicArn)
+		assert.NotNil(t, stack.VpcId)
 	})
 
 	t.Run("Write Unit Tests", func(t *testing.T) {
@@ -67,9 +66,10 @@ func BenchmarkTapStackCreation(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		app := awscdk.NewApp(nil)
-		lib.NewTapStack(app, jsii.String("BenchStack"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
-			EnvironmentSuffix: jsii.String("bench"),
+		lib.NewTapStack(app, "BenchStack", &lib.TapStackProps{
+			StackProps:  awscdk.StackProps{},
+			Environment: "bench",
+			Region:      "us-east-1",
 		})
 	}
 }

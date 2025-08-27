@@ -227,7 +227,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) *T
 
 	// Associate WAF with API Gateway
 	awswafv2.NewCfnWebACLAssociation(stack, jsii.String("WebAclAssociation"), &awswafv2.CfnWebACLAssociationProps{
-		ResourceArn: api.ArnForExecuteApi(jsii.String("*"), jsii.String("*"), jsii.String("*")),
+		ResourceArn: api.DeploymentStage().StageArn(),
 		WebAclArn:   webAcl.AttrArn(),
 	})
 
