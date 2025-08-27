@@ -1,0 +1,15 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "multi",
+  "po_id": "346085",
+  "team": "4",
+  "startedAt": "2025-08-26T16:33:06.884Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
