@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"math/big"
 	"regexp"
@@ -532,6 +533,14 @@ func main() {
 			return err
 		}
 
+		rawUserData := `#!/bin/bash
+yum update -y
+yum install -y amazon-cloudwatch-agent
+systemctl enable amazon-cloudwatch-agent
+systemctl start amazon-cloudwatch-agent
+`
+		encodedUserData := base64.StdEncoding.EncodeToString([]byte(rawUserData))
+
 		launchTemplate, err := ec2.NewLaunchTemplate(ctx, "web-launch-template", &ec2.LaunchTemplateArgs{
 			Name:         pulumi.String(fmt.Sprintf("%s-%s-web-lt", projectName, stackName)),
 			ImageId:      pulumi.String(amiResult.Id),
@@ -542,12 +551,7 @@ func main() {
 			IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileArgs{
 				Name: instanceProfile.Name,
 			},
-			UserData: pulumi.String(`#!/bin/bash
-yum update -y
-yum install -y amazon-cloudwatch-agent
-systemctl enable amazon-cloudwatch-agent
-systemctl start amazon-cloudwatch-agent
-`),
+			UserData: pulumi.String(encodedUserData), // ✅ FIX: Base64-encoded
 			TagSpecifications: ec2.LaunchTemplateTagSpecificationArray{
 				&ec2.LaunchTemplateTagSpecificationArgs{
 					ResourceType: pulumi.String("instance"),
@@ -562,7 +566,6 @@ systemctl start amazon-cloudwatch-agent
 		if err != nil {
 			return err
 		}
-
 		asg, err := autoscaling.NewGroup(ctx, "web-asg", &autoscaling.GroupArgs{
 			VpcZoneIdentifiers: pulumi.StringArray{privateSubnet1.ID(), privateSubnet2.ID()},
 			HealthCheckType:    pulumi.String("EC2"),
