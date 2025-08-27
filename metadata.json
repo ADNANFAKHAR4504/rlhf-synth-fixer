@@ -6,6 +6,7 @@
   "difficulty": "medium",
   "team": "synth",
   "category": "Cloud Environment Setup",
+  "startedAt": "2025-08-27T04:13:26-05:00",
   "description": "Set up a basic AWS cloud environment with VPC, subnets, and routing components",
   "subtask": "Network Infrastructure Design",
   "po_id": "trainr360",
