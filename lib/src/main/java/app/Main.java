@@ -280,7 +280,6 @@ class TapStack extends Stack {
                 .enableFileValidation(true)
                 .encryptionKey(kmsKey)
                 .cloudWatchLogGroup(cloudTrailLogGroup)
-                .cloudWatchLogsRole(cloudTrailRole)
                 .sendToCloudWatchLogs(true)
                 .build();
     }
@@ -421,7 +420,6 @@ class TapStack extends Stack {
         
         // Create parameter group with encryption settings
         ParameterGroup rdsParameterGroup = ParameterGroup.Builder.create(this, "RDSParameterGroup" + uniqueId)
-                .parameterGroupName("rds-param-group-" + uniqueId)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0_35)
                         .build()))
