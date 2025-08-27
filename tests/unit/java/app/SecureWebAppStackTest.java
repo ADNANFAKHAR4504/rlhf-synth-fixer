@@ -170,10 +170,7 @@ public class SecureWebAppStackTest {
             "IsLogging", true
         ));
         
-        // Verify CloudWatch log group for CloudTrail
-        template.hasResourceProperties("AWS::Logs::LogGroup", Map.of(
-            "RetentionInDays", 365
-        ));
+        // We are now using an imported log group, so there is no AWS::Logs::LogGroup resource to check
     }
     
     /**

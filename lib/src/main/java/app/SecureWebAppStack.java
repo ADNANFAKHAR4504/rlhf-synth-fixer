@@ -208,12 +208,9 @@ public class SecureWebAppStack extends Stack {
      * Creates CloudTrail for comprehensive API logging with network activity events
      */
     private Trail createCloudTrail(Bucket logsBucket, Vpc vpc) {
-        // Create CloudWatch log group for CloudTrail
-        LogGroup cloudTrailLogGroup = LogGroup.Builder.create(this, "CloudTrailLogGroup")
-            .logGroupName("/aws/cloudtrail/webapp-" + environmentSuffix)
-            .retention(RetentionDays.ONE_YEAR)
-            .removalPolicy(RemovalPolicy.DESTROY) // Add removal policy to clean up during testing
-            .build();
+        // Import existing CloudWatch log group for CloudTrail instead of creating a new one
+        ILogGroup cloudTrailLogGroup = LogGroup.fromLogGroupName(this, "ImportedCloudTrailLogGroup",
+            "/aws/cloudtrail/webapp-" + environmentSuffix);
         
         // Create CloudTrail with enhanced features
         Trail trail = Trail.Builder.create(this, "WebAppCloudTrail")
@@ -224,8 +221,8 @@ public class SecureWebAppStack extends Stack {
             .isMultiRegionTrail(true)
             .enableFileValidation(true)
             .sendToCloudWatchLogs(true) // This automatically sends logs to CloudWatch
-            .cloudWatchLogGroup(cloudTrailLogGroup) // Explicitly set the log group
-            .cloudWatchLogsRetention(RetentionDays.ONE_YEAR)
+            .cloudWatchLogGroup(cloudTrailLogGroup) // Using the imported log group
+            // Removed cloudWatchLogsRetention since we're using an existing log group
             .build();
         
         // Add event selectors for enhanced monitoring including network activity
