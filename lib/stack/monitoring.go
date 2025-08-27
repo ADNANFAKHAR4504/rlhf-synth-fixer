@@ -1,6 +1,7 @@
 package stack
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudtrail"
@@ -34,6 +35,47 @@ func createMonitoring(ctx *pulumi.Context, usEast1Provider, euWest1Provider pulu
 		return err
 	}
 	_, err = s3.NewBucketPublicAccessBlock(ctx, "cloudtrail-pab", &s3.BucketPublicAccessBlockArgs{Bucket: cloudtrailBucket.ID(), BlockPublicAcls: pulumi.Bool(true), BlockPublicPolicy: pulumi.Bool(true), IgnorePublicAcls: pulumi.Bool(true), RestrictPublicBuckets: pulumi.Bool(true)}, pulumi.Provider(usEast1Provider))
+	if err != nil {
+		return err
+	}
+
+	// CloudTrail bucket policy to allow CloudTrail service to write logs
+	_, err = s3.NewBucketPolicy(ctx, "cloudtrail-bucket-policy", &s3.BucketPolicyArgs{
+		Bucket: cloudtrailBucket.ID(),
+		Policy: pulumi.All(cloudtrailBucket.Arn).ApplyT(func(args []interface{}) (string, error) {
+			bucketArn := args[0].(string)
+			policy := map[string]interface{}{
+				"Version": "2012-10-17",
+				"Statement": []map[string]interface{}{
+					{
+						"Sid":    "AWSCloudTrailAclCheck",
+						"Effect": "Allow",
+						"Principal": map[string]interface{}{
+							"Service": "cloudtrail.amazonaws.com",
+						},
+						"Action":   "s3:GetBucketAcl",
+						"Resource": bucketArn,
+					},
+					{
+						"Sid":    "AWSCloudTrailWrite",
+						"Effect": "Allow",
+						"Principal": map[string]interface{}{
+							"Service": "cloudtrail.amazonaws.com",
+						},
+						"Action":   "s3:PutObject",
+						"Resource": bucketArn + "/AWSLogs/" + accountId + "/*",
+						"Condition": map[string]interface{}{
+							"StringEquals": map[string]interface{}{
+								"s3:x-amz-acl": "bucket-owner-full-control",
+							},
+						},
+					},
+				},
+			}
+			b, _ := json.Marshal(policy)
+			return string(b), nil
+		}).(pulumi.StringOutput),
+	}, pulumi.Provider(usEast1Provider))
 	if err != nil {
 		return err
 	}
