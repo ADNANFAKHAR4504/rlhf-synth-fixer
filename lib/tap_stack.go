@@ -171,7 +171,7 @@ func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *
 		Engine: awsrds.DatabaseInstanceEngine_Mysql(&awsrds.MySqlInstanceEngineProps{
 			Version: awsrds.MysqlEngineVersion_VER_8_0(),
 		}),
-		InstanceType:   awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
+		InstanceType:   awsec2.InstanceType_Of(awsec2.InstanceClass_BURSTABLE3, awsec2.InstanceSize_SMALL),
 		Vpc:            vpc,
 		SecurityGroups: &[]awsec2.ISecurityGroup{rdsSecurityGroup},
 		SubnetGroup:    dbSubnetGroup,
