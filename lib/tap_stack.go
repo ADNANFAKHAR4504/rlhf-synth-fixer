@@ -1,6 +1,3 @@
-I'll help you create a comprehensive, production-ready `tap_stack.go` file that meets all your requirements. This will be enterprise-grade infrastructure with proper security, monitoring, and high availability.
-
-```go
 package main
 
 import (
