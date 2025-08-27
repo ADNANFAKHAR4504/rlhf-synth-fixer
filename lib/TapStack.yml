@@ -555,7 +555,6 @@ Resources:
   # ============================================================================
   S3Bucket:
     Type: AWS::S3::Bucket
-    DependsOn: KMSKey
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -585,7 +584,6 @@ Resources:
   # ============================================================================
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
-    DependsOn: KMSKey
     Properties:
       Name: !Sub '${AWS::StackName}-db-password-${EnvironmentSuffix}'
       Description: 'RDS MySQL master password'
@@ -643,9 +641,6 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
-    DependsOn: 
-      - KMSKey
-      - DBPasswordSecret
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
@@ -828,7 +823,6 @@ Resources:
   # ============================================================================
   WebServerLogGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn: KMSKey
     Properties:
       LogGroupName: !Sub '/aws/ec2/${AWS::StackName}/webserver-${EnvironmentSuffix}'
       RetentionInDays: 14
