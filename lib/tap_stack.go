@@ -19,7 +19,7 @@ import (
 )
 
 // getEnvOrDefault retrieves an environment variable or returns a default value
-// This helper function enables flexible configuration without hardcoding values
+// This helper function enables flexible configuration without hardcoding parameters
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
