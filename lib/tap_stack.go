@@ -408,7 +408,6 @@ func main() {
 			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
 			DeletionProtection:      pulumi.Bool(false),
 			SkipFinalSnapshot:       pulumi.Bool(true),
-			FinalSnapshotIdentifier: pulumi.String(fmt.Sprintf("%s-%s-final-snapshot", projectName, stackName)),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-rds", projectName, stackName)),
 				"Environment": pulumi.String(stackName),
