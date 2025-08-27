@@ -108,7 +108,7 @@ module "iam_config" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
-module "iam_config" {
+module "iam_mfa_role" {
   source = "./modules/iam"
   role_name= "${var.project}-MFA-Required-Role"
   policy_name = "${var.project}-mfa-required-policy"
