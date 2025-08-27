@@ -74,6 +74,9 @@ locals {
   environment         = "production"
   deployment_id       = var.deployment_id != null ? var.deployment_id : random_string.deployment_suffix.result
   unique_project_name = "${local.project_name}-${local.deployment_id}"
+  
+  # Add timestamp for additional uniqueness
+  timestamp_suffix = formatdate("YYYYMMDD-HHmmss", timestamp())
 
   common_tags = {
     Project     = local.unique_project_name
@@ -351,7 +354,7 @@ resource "aws_kms_alias" "main" {
 
 # IAM Role & Policy
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.unique_project_name}-${random_string.iam_suffix.result}-ec2-role"
+  name = "${local.unique_project_name}-${random_string.iam_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-ec2-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -364,7 +367,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "s3_access" {
-  name        = "${local.unique_project_name}-${random_string.iam_suffix.result}-s3-access"
+  name        = "${local.unique_project_name}-${random_string.iam_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-s3-access"
   description = "Allow EC2 to access S3, KMS, and SSM"
   policy = jsonencode({
     Version = "2012-10-17"
@@ -412,7 +415,7 @@ resource "aws_iam_role_policy_attachment" "s3_access" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.unique_project_name}-${random_string.iam_suffix.result}-ec2-profile"
+  name = "${local.unique_project_name}-${random_string.iam_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-ec2-profile"
   role = aws_iam_role.ec2_role.name
   tags = local.common_tags
 }
@@ -530,7 +533,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.unique_project_name}-${random_string.asg_suffix.result}-asg"
+  name                      = "${local.unique_project_name}-${random_string.asg_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "EC2"  # Use EC2 health checks for faster startup
@@ -568,7 +571,7 @@ resource "aws_autoscaling_group" "main" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.unique_project_name}-${random_string.rds_suffix.result}-db-subnet"
+  name       = "${local.unique_project_name}-${random_string.rds_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-db-subnet"
   subnet_ids = aws_subnet.database[*].id
   tags       = merge(local.common_tags, { Name = "${local.unique_project_name}-db-subnet" })
   
@@ -579,7 +582,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier           = "${local.unique_project_name}-${random_string.rds_suffix.result}-database"
+  identifier           = "${local.unique_project_name}-${random_string.rds_suffix.result}-${substr(local.timestamp_suffix, 0, 8)}-database"
   allocated_storage    = 20
   max_allocated_storage = 100
   storage_type         = "gp3"
