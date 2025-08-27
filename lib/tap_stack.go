@@ -286,6 +286,7 @@ func (t *TapStack) createS3Resources() {
 	})
 
 	// Add bucket policy to allow CloudTrail service to write logs
+	// Separate statement for PutObject with ACL condition
 	t.LoggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Effect: awsiam.Effect_ALLOW,
 		Principals: &[]awsiam.IPrincipal{
@@ -293,17 +294,28 @@ func (t *TapStack) createS3Resources() {
 		},
 		Actions: &[]*string{
 			jsii.String("s3:PutObject"),
-			jsii.String("s3:GetBucketAcl"),
-			jsii.String("s3:PutBucketAcl"),
 		},
 		Resources: &[]*string{
-			t.LoggingBucket.BucketArn(),
 			jsii.String(*t.LoggingBucket.BucketArn() + "/*"),
 		},
 		Conditions: &map[string]interface{}{
 			"StringEquals": map[string]interface{}{
 				"s3:x-amz-acl": "bucket-owner-full-control",
 			},
+		},
+	}))
+
+	// Separate statement for GetBucketAcl without conditions
+	t.LoggingBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("s3:GetBucketAcl"),
+		},
+		Resources: &[]*string{
+			t.LoggingBucket.BucketArn(),
 		},
 	}))
 
