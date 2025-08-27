@@ -19,7 +19,7 @@ func TestTapStack(t *testing.T) {
 
 	// WHEN
 	stack := lib.NewTapStack(app, "test-stack", &lib.TapStackProps{
-		awscdk.StackProps{
+		StackProps: awscdk.StackProps{
 			Env: &awscdk.Environment{
 				Account: jsii.String("123456789012"),
 				Region:  jsii.String("us-east-1"),
@@ -78,7 +78,7 @@ func TestStackHasRequiredOutputs(t *testing.T) {
 
 	// WHEN
 	stack := lib.NewTapStack(app, "test-stack", &lib.TapStackProps{
-		awscdk.StackProps{
+		StackProps: awscdk.StackProps{
 			Env: &awscdk.Environment{
 				Account: jsii.String("123456789012"),
 				Region:  jsii.String("us-east-1"),

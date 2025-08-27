@@ -22,9 +22,16 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 	}
 	stack := awscdk.NewStack(scope, &id, &sprops)
 
-	// Apply tags to the stack
-	awscdk.Tags_Of(stack).Add(jsii.String("Environment"), jsii.String("Production"), nil)
-	awscdk.Tags_Of(stack).Add(jsii.String("Department"), jsii.String("IT"), nil)
+	// Common tags for all resources
+	commonTags := &map[string]*string{
+		"Environment": jsii.String("Production"),
+		"Department":  jsii.String("IT"),
+	}
+
+	// Apply tags to the stack, which will be inherited by all resources
+	for k, v := range *commonTags {
+		awscdk.Tags_Of(stack).Add(jsii.String(k), v, nil)
+	}
 
 	// Create VPC with public and private subnets across 2 AZs
 	vpc := awsec2.NewVpc(stack, jsii.String("ITProductionVPC"), &awsec2.VpcProps{
@@ -85,6 +92,11 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 		},
 	})
 
+	// Instance Profile for the EC2 role
+	instanceProfile := awsiam.NewInstanceProfile(stack, jsii.String("WebServerInstanceProfile"), &awsiam.InstanceProfileProps{
+		Role: ec2Role,
+	})
+
 	// Get the latest Amazon Linux 2 AMI - Fixed the Generation field issue
 	amazonLinuxAmi := awsec2.MachineImage_LatestAmazonLinux2(&awsec2.AmazonLinux2ImageSsmParameterProps{
 		// Removed the Generation field as it's not available in this version
@@ -105,6 +117,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) aw
 			Shebang: jsii.String("#!/bin/bash"),
 		}),
 	})
+
+	// Explicitly add dependency on the instance profile to resolve unused variable error.
+	webServer.Node().AddDependency(instanceProfile)
 
 	// Add basic setup commands to user data
 	webServer.UserData().AddCommands(
