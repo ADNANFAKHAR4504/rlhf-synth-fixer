@@ -1,690 +1,723 @@
-package main
+package lib
 
 import (
-	"archive/zip"
-	"bytes"
-	"encoding/json"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"os"
 
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/autoscaling"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/cloudwatch"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/elbv2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kinesisfirehose"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/kms"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lambda"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/s3"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/secretsmanager"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/sns"
-	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/wafv2"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func main() {
-	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Common tags for all resources
-		commonTags := pulumi.StringMap{
-			"Name":        pulumi.String("TapStack"),
-			"Environment": pulumi.String("Prod"),
-			"Project":     pulumi.String("TapStack"),
-			"ManagedBy":   pulumi.String("Pulumi"),
+// EnvironmentConfig holds all environment-specific configuration
+type EnvironmentConfig struct {
+	Environment  string
+	Region       string
+	AccountID    string
+	Suffix       string // Environment suffix for resource naming
+	RandomSuffix string // Random suffix to avoid naming conflicts
+	// Networking
+	VPCCidr            string
+	PublicSubnetCidrs  []string
+	PrivateSubnetCidrs []string
+	// S3
+	LoggingBucket     string
+	ReplicationBucket string
+	// IAM
+	RolePrefix string
+	// Tags
+	CommonTags map[string]string
+}
+
+// VPCComponent represents a complete VPC setup
+type VPCComponent struct {
+	VPC             *ec2.Vpc
+	PublicSubnets   []*ec2.Subnet
+	PrivateSubnets  []*ec2.Subnet
+	InternetGateway *ec2.InternetGateway
+	NATGateways     []*ec2.NatGateway
+}
+
+// IAMComponent represents IAM roles and policies
+type IAMComponent struct {
+	EC2Role    *iam.Role
+	LambdaRole *iam.Role
+}
+
+// S3Component represents S3 buckets for logging
+type S3Component struct {
+	LoggingBucket     *s3.BucketV2
+	ReplicationBucket *s3.BucketV2
+}
+
+// InfrastructureStack represents the main infrastructure stack
+type InfrastructureStack struct {
+	Config  *EnvironmentConfig
+	VPC     *VPCComponent
+	IAM     *IAMComponent
+	Storage *S3Component
+}
+
+// generateRandomSuffix creates a random 6-character suffix for resource naming
+func generateRandomSuffix() string {
+	bytes := make([]byte, 3)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to a simple timestamp-based suffix if random generation fails
+		return fmt.Sprintf("%d", os.Getpid()%1000000)
+	}
+	return hex.EncodeToString(bytes)
+}
+
+// getEnvironmentSuffix returns the environment suffix from environment variables
+func getEnvironmentSuffix(environment string) string {
+	suffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if suffix == "" {
+		suffix = environment
+	}
+	return suffix
+}
+
+// getAccountID returns the account ID from environment variable or uses placeholder
+func getAccountID(environment string) string {
+	accountID := os.Getenv("AWS_ACCOUNT_ID")
+	if accountID == "" {
+		// Use environment-specific placeholder if no account ID is provided
+		switch environment {
+		case "dev":
+			return "123456789012" // Replace with your dev account ID
+		case "staging":
+			return "123456789013" // Replace with your staging account ID
+		case "prod":
+			return "123456789014" // Replace with your prod account ID
+		default:
+			return "123456789012" // Default fallback
 		}
+	}
+	return accountID
+}
 
-		// TODO: Configure these values for your specific deployment
-		trustedCIDRs := []string{
-			"10.0.0.0/8",    // Internal networks
-			"172.16.0.0/12", // Internal networks
-			// "YOUR_OFFICE_IP/32", // Add your office IP
-		}
+// GetConfig returns the configuration for the specified environment
+func GetConfig(env string) (*EnvironmentConfig, error) {
+	configs := map[string]*EnvironmentConfig{
+		"dev":     getDevConfig(),
+		"staging": getStagingConfig(),
+		"prod":    getProdConfig(),
+	}
 
-		// TODO: Replace with your ACM certificate ARN
-		// certificateArn := "arn:aws:acm:us-east-1:ACCOUNT:certificate/CERT-ID"
+	config, exists := configs[env]
+	if !exists {
+		return nil, fmt.Errorf("unknown environment: %s", env)
+	}
 
-		// TODO: Replace with your domain name
-		// domainName := "yourdomain.com"
+	return config, nil
+}
 
-		// Get current AWS account and region info
-		current, err := aws.GetCallerIdentity(ctx, nil, nil)
-		if err != nil {
-			return err
-		}
-		region, err := aws.GetRegion(ctx, nil, nil)
-		if err != nil {
-			return err
-		}
+func getDevConfig() *EnvironmentConfig {
+	environment := "dev"
+	suffix := getEnvironmentSuffix(environment)
+	randomSuffix := generateRandomSuffix()
+	accountID := getAccountID(environment)
 
-		// =============================================================================
-		// KMS KEYS - Create encryption keys first
-		// =============================================================================
+	return &EnvironmentConfig{
+		Environment:        environment,
+		Region:             "us-east-1",
+		AccountID:          accountID,
+		Suffix:             suffix,
+		RandomSuffix:       randomSuffix,
+		VPCCidr:            "10.0.0.0/16",
+		PublicSubnetCidrs:  []string{"10.0.1.0/24", "10.0.2.0/24"},
+		PrivateSubnetCidrs: []string{"10.0.10.0/24", "10.0.20.0/24"},
+		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
+		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
+		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
+		CommonTags: map[string]string{
+			"Environment": environment,
+			"Project":     "infrastructure",
+			"ManagedBy":   "pulumi",
+			"Suffix":      suffix,
+		},
+	}
+}
 
-		// KMS Key for data encryption (S3, RDS, Secrets Manager)
-		dataKMSKey, err := kms.NewKey(ctx, "tap-data-kms-key", &kms.KeyArgs{
-			Description:           pulumi.String("TapStack Data Encryption Key"),
-			DeletionWindowInDays:  pulumi.Int(30),
-			EnableKeyRotation:     pulumi.Bool(true),
-			MultiRegion:          pulumi.Bool(false),
-			Tags:                 commonTags,
-		})
-		if err != nil {
-			return err
-		}
+func getStagingConfig() *EnvironmentConfig {
+	environment := "staging"
+	suffix := getEnvironmentSuffix(environment)
+	randomSuffix := generateRandomSuffix()
+	accountID := getAccountID(environment)
 
-		// KMS Key alias for data
-		_, err = kms.NewAlias(ctx, "tap-data-kms-alias", &kms.AliasArgs{
-			Name:         pulumi.String("alias/tapstack-data"),
-			TargetKeyId:  dataKMSKey.KeyId,
-		})
-		if err != nil {
-			return err
-		}
+	return &EnvironmentConfig{
+		Environment:        environment,
+		Region:             "us-east-2",
+		AccountID:          accountID,
+		Suffix:             suffix,
+		RandomSuffix:       randomSuffix,
+		VPCCidr:            "10.1.0.0/16",
+		PublicSubnetCidrs:  []string{"10.1.1.0/24", "10.1.2.0/24"},
+		PrivateSubnetCidrs: []string{"10.1.10.0/24", "10.1.20.0/24"},
+		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
+		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
+		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
+		CommonTags: map[string]string{
+			"Environment": environment,
+			"Project":     "infrastructure",
+			"ManagedBy":   "pulumi",
+			"Suffix":      suffix,
+		},
+	}
+}
 
-		// KMS Key for logs encryption (CloudWatch, WAF)
-		logsKMSKey, err := kms.NewKey(ctx, "tap-logs-kms-key", &kms.KeyArgs{
-			Description:           pulumi.String("TapStack Logs Encryption Key"),
-			DeletionWindowInDays:  pulumi.Int(30),
-			EnableKeyRotation:     pulumi.Bool(true),
-			MultiRegion:          pulumi.Bool(false),
-			Tags:                 commonTags,
-		})
-		if err != nil {
-			return err
-		}
+func getProdConfig() *EnvironmentConfig {
+	environment := "prod"
+	suffix := getEnvironmentSuffix(environment)
+	randomSuffix := generateRandomSuffix()
+	accountID := getAccountID(environment)
 
-		// KMS Key alias for logs
-		_, err = kms.NewAlias(ctx, "tap-logs-kms-alias", &kms.AliasArgs{
-			Name:         pulumi.String("alias/tapstack-logs"),
-			TargetKeyId:  logsKMSKey.KeyId,
-		})
-		if err != nil {
-			return err
-		}
+	return &EnvironmentConfig{
+		Environment:        environment,
+		Region:             "us-west-1",
+		AccountID:          accountID,
+		Suffix:             suffix,
+		RandomSuffix:       randomSuffix,
+		VPCCidr:            "10.2.0.0/16",
+		PublicSubnetCidrs:  []string{"10.2.1.0/24", "10.2.2.0/24"},
+		PrivateSubnetCidrs: []string{"10.2.10.0/24", "10.2.20.0/24"},
+		LoggingBucket:      fmt.Sprintf("logs-%s-%s-%s", accountID, suffix, randomSuffix),
+		ReplicationBucket:  fmt.Sprintf("logs-replica-%s-%s-%s", accountID, suffix, randomSuffix),
+		RolePrefix:         fmt.Sprintf("%s-%s", suffix, randomSuffix),
+		CommonTags: map[string]string{
+			"Environment": environment,
+			"Project":     "infrastructure",
+			"ManagedBy":   "pulumi",
+			"Suffix":      suffix,
+		},
+	}
+}
 
-		// =============================================================================
-		// NETWORKING - VPC, Subnets, Gateways, Route Tables
-		// =============================================================================
+// BuildInfrastructureStack provisions the complete multi-environment infrastructure
+func BuildInfrastructureStack(ctx *pulumi.Context, cfg *EnvironmentConfig) (*InfrastructureStack, error) {
+	// Build VPC component
+	vpcComponent, err := buildVPCComponent(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error building VPC component: %v", err)
+	}
 
-		// Create VPC
-		vpc, err := ec2.NewVpc(ctx, "tap-vpc", &ec2.VpcArgs{
-			CidrBlock:          pulumi.String("10.20.0.0/16"),
-			EnableDnsHostnames: pulumi.Bool(true),
-			EnableDnsSupport:   pulumi.Bool(true),
+	// Build IAM component
+	iamComponent, err := buildIAMComponent(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error building IAM component: %v", err)
+	}
+
+	// Build S3 component
+	s3Component, err := buildS3Component(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error building S3 component: %v", err)
+	}
+
+	// Outputs
+	ctx.Export("vpc_id", vpcComponent.VPC.ID())
+
+	publicSubnetIds := pulumi.All(vpcComponent.PublicSubnets[0].ID(), vpcComponent.PublicSubnets[1].ID())
+	ctx.Export("public_subnet_ids", publicSubnetIds)
+
+	privateSubnetIds := pulumi.All(vpcComponent.PrivateSubnets[0].ID(), vpcComponent.PrivateSubnets[1].ID())
+	ctx.Export("private_subnet_ids", privateSubnetIds)
+
+	ctx.Export("logging_bucket_name", s3Component.LoggingBucket.ID())
+	ctx.Export("replication_bucket_name", s3Component.ReplicationBucket.ID())
+	ctx.Export("ec2_role_arn", iamComponent.EC2Role.Arn)
+	ctx.Export("lambda_role_arn", iamComponent.LambdaRole.Arn)
+
+	return &InfrastructureStack{
+		Config:  cfg,
+		VPC:     vpcComponent,
+		IAM:     iamComponent,
+		Storage: s3Component,
+	}, nil
+}
+
+// buildVPCComponent creates a complete VPC with public and private subnets
+func buildVPCComponent(ctx *pulumi.Context, cfg *EnvironmentConfig) (*VPCComponent, error) {
+	// Get availability zones - using a simpler approach
+	availabilityZones := []string{"us-east-1a", "us-east-1b", "us-east-1c"}
+	if cfg.Region == "us-east-2" {
+		availabilityZones = []string{"us-east-2a", "us-east-2b", "us-east-2c"}
+	} else if cfg.Region == "us-west-1" {
+		availabilityZones = []string{"us-west-1a", "us-west-1b", "us-west-1c"}
+	}
+
+	// Create VPC
+	mainVPC, err := ec2.NewVpc(ctx, "MainVPC", &ec2.VpcArgs{
+		CidrBlock:          pulumi.String(cfg.VPCCidr),
+		EnableDnsHostnames: pulumi.Bool(true),
+		EnableDnsSupport:   pulumi.Bool(true),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-vpc", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating VPC: %v", err)
+	}
+
+	// Create Internet Gateway
+	internetGateway, err := ec2.NewInternetGateway(ctx, "InternetGateway", &ec2.InternetGatewayArgs{
+		VpcId: mainVPC.ID(),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-igw", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating Internet Gateway: %v", err)
+	}
+
+	// Create public subnets and NAT gateways
+	var publicSubnets []*ec2.Subnet
+	var natGateways []*ec2.NatGateway
+
+	for i, cidr := range cfg.PublicSubnetCidrs {
+		publicSubnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("PublicSubnet%d", i), &ec2.SubnetArgs{
+			VpcId:               mainVPC.ID(),
+			CidrBlock:           pulumi.String(cidr),
+			AvailabilityZone:    pulumi.String(availabilityZones[i]),
+			MapPublicIpOnLaunch: pulumi.Bool(true),
 			Tags: pulumi.StringMap{
-				"Name":        pulumi.String("tap-vpc"),
-				"Environment": commonTags["Environment"],
-				"Project":     commonTags["Project"],
+				"Name":        pulumi.String(fmt.Sprintf("%s-public-subnet-%d", cfg.Environment, i)),
+				"Type":        pulumi.String("public"),
+				"Environment": pulumi.String(cfg.Environment),
+				"Project":     pulumi.String(cfg.CommonTags["Project"]),
+				"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
 			},
 		})
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("error creating public subnet %d: %v", i, err)
 		}
+		publicSubnets = append(publicSubnets, publicSubnet)
 
-		// Internet Gateway
-		igw, err := ec2.NewInternetGateway(ctx, "tap-igw", &ec2.InternetGatewayArgs{
-			VpcId: vpc.ID(),
+		// Create EIP for NAT Gateway
+		natEIP, err := ec2.NewEip(ctx, fmt.Sprintf("NatEIP%d", i), &ec2.EipArgs{
+			Domain: pulumi.String("vpc"),
 			Tags: pulumi.StringMap{
-				"Name":        pulumi.String("tap-igw"),
-				"Environment": commonTags["Environment"],
-				"Project":     commonTags["Project"],
+				"Name":        pulumi.String(fmt.Sprintf("%s-nat-eip-%d", cfg.Environment, i)),
+				"Environment": pulumi.String(cfg.Environment),
+				"Project":     pulumi.String(cfg.CommonTags["Project"]),
+				"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
 			},
 		})
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("error creating NAT EIP %d: %v", i, err)
 		}
 
-		// Availability Zones
-		azs := []string{"us-east-1a", "us-east-1b", "us-east-1c"}
-
-		// Public Subnets
-		var publicSubnets []*ec2.Subnet
-		var publicSubnetIds pulumi.StringArray
-		for i, az := range azs {
-			subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("tap-public-subnet-%d", i+1), &ec2.SubnetArgs{
-				VpcId:                       vpc.ID(),
-				CidrBlock:                   pulumi.String(fmt.Sprintf("10.20.%d.0/24", i+1)),
-				AvailabilityZone:            pulumi.String(az),
-				MapPublicIpOnLaunch:         pulumi.Bool(true),
-				AssignIpv6AddressOnCreation: pulumi.Bool(false),
-				Tags: pulumi.StringMap{
-					"Name":        pulumi.String(fmt.Sprintf("tap-public-subnet-%d", i+1)),
-					"Type":        pulumi.String("Public"),
-					"Environment": commonTags["Environment"],
-					"Project":     commonTags["Project"],
-				},
-			})
-			if err != nil {
-				return err
-			}
-			publicSubnets = append(publicSubnets, subnet)
-			publicSubnetIds = append(publicSubnetIds, subnet.ID())
-		}
-
-		// Private Subnets
-		var privateSubnets []*ec2.Subnet
-		var privateSubnetIds pulumi.StringArray
-		for i, az := range azs {
-			subnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("tap-private-subnet-%d", i+1), &ec2.SubnetArgs{
-				VpcId:                       vpc.ID(),
-				CidrBlock:                   pulumi.String(fmt.Sprintf("10.20.%d.0/24", i+10)),
-				AvailabilityZone:            pulumi.String(az),
-				MapPublicIpOnLaunch:         pulumi.Bool(false),
-				AssignIpv6AddressOnCreation: pulumi.Bool(false),
-				Tags: pulumi.StringMap{
-					"Name":        pulumi.String(fmt.Sprintf("tap-private-subnet-%d", i+1)),
-					"Type":        pulumi.String("Private"),
-					"Environment": commonTags["Environment"],
-					"Project":     commonTags["Project"],
-				},
-			})
-			if err != nil {
-				return err
-			}
-			privateSubnets = append(privateSubnets, subnet)
-			privateSubnetIds = append(privateSubnetIds, subnet.ID())
-		}
-
-		// Elastic IPs for NAT Gateways
-		var natEIPs []*ec2.Eip
-		for i := range azs {
-			eip, err := ec2.NewEip(ctx, fmt.Sprintf("tap-nat-eip-%d", i+1), &ec2.EipArgs{
-				Domain: pulumi.String("vpc"),
-				Tags: pulumi.StringMap{
-					"Name":        pulumi.String(fmt.Sprintf("tap-nat-eip-%d", i+1)),
-					"Environment": commonTags["Environment"],
-					"Project":     commonTags["Project"],
-				},
-			}, pulumi.DependsOn([]pulumi.Resource{igw}))
-			if err != nil {
-				return err
-			}
-			natEIPs = append(natEIPs, eip)
-		}
-
-		// NAT Gateways (one per AZ for high availability)
-		var natGateways []*ec2.NatGateway
-		for i := range azs {
-			nat, err := ec2.NewNatGateway(ctx, fmt.Sprintf("tap-nat-gateway-%d", i+1), &ec2.NatGatewayArgs{
-				AllocationId: natEIPs[i].ID(),
-				SubnetId:     publicSubnets[i].ID(),
-				Tags: pulumi.StringMap{
-					"Name":        pulumi.String(fmt.Sprintf("tap-nat-gateway-%d", i+1)),
-					"Environment": commonTags["Environment"],
-					"Project":     commonTags["Project"],
-				},
-			}, pulumi.DependsOn([]pulumi.Resource{igw}))
-			if err != nil {
-				return err
-			}
-			natGateways = append(natGateways, nat)
-		}
-
-		// Public Route Table
-		publicRouteTable, err := ec2.NewRouteTable(ctx, "tap-public-rt", &ec2.RouteTableArgs{
-			VpcId: vpc.ID(),
-			Routes: ec2.RouteTableRouteArray{
-				&ec2.RouteTableRouteArgs{
-					CidrBlock: pulumi.String("0.0.0.0/0"),
-					GatewayId: igw.ID(),
-				},
-			},
+		// Create NAT Gateway
+		natGateway, err := ec2.NewNatGateway(ctx, fmt.Sprintf("NatGateway%d", i), &ec2.NatGatewayArgs{
+			AllocationId: natEIP.ID(),
+			SubnetId:     publicSubnet.ID(),
 			Tags: pulumi.StringMap{
-				"Name":        pulumi.String("tap-public-rt"),
-				"Environment": commonTags["Environment"],
-				"Project":     commonTags["Project"],
+				"Name":        pulumi.String(fmt.Sprintf("%s-nat-gw-%d", cfg.Environment, i)),
+				"Environment": pulumi.String(cfg.Environment),
+				"Project":     pulumi.String(cfg.CommonTags["Project"]),
+				"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
 			},
 		})
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("error creating NAT Gateway %d: %v", i, err)
+		}
+		natGateways = append(natGateways, natGateway)
+	}
+
+	// Create public route table
+	publicRouteTable, err := ec2.NewRouteTable(ctx, "PublicRouteTable", &ec2.RouteTableArgs{
+		VpcId: mainVPC.ID(),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-public-rt", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating public route table: %v", err)
+	}
+
+	// Add route to internet gateway
+	_, err = ec2.NewRoute(ctx, "PublicRoute", &ec2.RouteArgs{
+		RouteTableId:         publicRouteTable.ID(),
+		DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
+		GatewayId:            internetGateway.ID(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating public route: %v", err)
+	}
+
+	// Associate public subnets with public route table
+	for i, subnet := range publicSubnets {
+		_, err := ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("PublicRouteTableAssociation%d", i), &ec2.RouteTableAssociationArgs{
+			SubnetId:     subnet.ID(),
+			RouteTableId: publicRouteTable.ID(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error associating public subnet %d: %v", i, err)
+		}
+	}
+
+	// Create private subnets
+	var privateSubnets []*ec2.Subnet
+	for i, cidr := range cfg.PrivateSubnetCidrs {
+		privateSubnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("PrivateSubnet%d", i), &ec2.SubnetArgs{
+			VpcId:            mainVPC.ID(),
+			CidrBlock:        pulumi.String(cidr),
+			AvailabilityZone: pulumi.String(availabilityZones[i]),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String(fmt.Sprintf("%s-private-subnet-%d", cfg.Environment, i)),
+				"Type":        pulumi.String("private"),
+				"Environment": pulumi.String(cfg.Environment),
+				"Project":     pulumi.String(cfg.CommonTags["Project"]),
+				"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error creating private subnet %d: %v", i, err)
+		}
+		privateSubnets = append(privateSubnets, privateSubnet)
+
+		// Create private route table for this subnet
+		privateRouteTable, err := ec2.NewRouteTable(ctx, fmt.Sprintf("PrivateRouteTable%d", i), &ec2.RouteTableArgs{
+			VpcId: mainVPC.ID(),
+			Tags: pulumi.StringMap{
+				"Name":        pulumi.String(fmt.Sprintf("%s-private-rt-%d", cfg.Environment, i)),
+				"Environment": pulumi.String(cfg.Environment),
+				"Project":     pulumi.String(cfg.CommonTags["Project"]),
+				"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error creating private route table %d: %v", i, err)
 		}
 
-		// Associate public subnets with public route table
-		for i, subnet := range publicSubnets {
-			_, err := ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("tap-public-rta-%d", i+1), &ec2.RouteTableAssociationArgs{
-				SubnetId:     subnet.ID(),
-				RouteTableId: publicRouteTable.ID(),
-			})
-			if err != nil {
-				return err
+		// Add route to NAT gateway (use element function to get the corresponding NAT gateway)
+		// For simplicity, we'll use the same index as the subnet (assuming 1:1 mapping)
+		var natGatewayId pulumi.IDOutput
+		if i < len(natGateways) {
+			natGatewayId = natGateways[i].ID()
+		} else {
+			// If we have more private subnets than NAT gateways, use modulo
+			natGatewayId = natGateways[i%len(natGateways)].ID()
+		}
+
+		_, err = ec2.NewRoute(ctx, fmt.Sprintf("PrivateRoute%d", i), &ec2.RouteArgs{
+			RouteTableId:         privateRouteTable.ID(),
+			DestinationCidrBlock: pulumi.String("0.0.0.0/0"),
+			NatGatewayId:         natGatewayId,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error creating private route %d: %v", i, err)
+		}
+
+		// Associate private subnet with private route table
+		_, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("PrivateRouteTableAssociation%d", i), &ec2.RouteTableAssociationArgs{
+			SubnetId:     privateSubnet.ID(),
+			RouteTableId: privateRouteTable.ID(),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error associating private subnet %d: %v", i, err)
+		}
+	}
+
+	return &VPCComponent{
+		VPC:             mainVPC,
+		PublicSubnets:   publicSubnets,
+		PrivateSubnets:  privateSubnets,
+		InternetGateway: internetGateway,
+		NATGateways:     natGateways,
+	}, nil
+}
+
+// buildIAMComponent creates common IAM roles
+func buildIAMComponent(ctx *pulumi.Context, cfg *EnvironmentConfig) (*IAMComponent, error) {
+	// EC2 assume role policy
+	ec2AssumeRolePolicy := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Action": "sts:AssumeRole",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "ec2.amazonaws.com"
+				}
 			}
-		}
+		]
+	}`
 
-		// Private Route Tables (one per AZ)
-		for i, natGateway := range natGateways {
-			privateRouteTable, err := ec2.NewRouteTable(ctx, fmt.Sprintf("tap-private-rt-%d", i+1), &ec2.RouteTableArgs{
-				VpcId: vpc.ID(),
-				Routes: ec2.RouteTableRouteArray{
-					&ec2.RouteTableRouteArgs{
-						CidrBlock:    pulumi.String("0.0.0.0/0"),
-						NatGatewayId: natGateway.ID(),
-					},
-				},
-				Tags: pulumi.StringMap{
-					"Name":        pulumi.String(fmt.Sprintf("tap-private-rt-%d", i+1)),
-					"Environment": commonTags["Environment"],
-					"Project":     commonTags["Project"],
-				},
-			})
-			if err != nil {
-				return err
+	// Create EC2 role
+	ec2Role, err := iam.NewRole(ctx, "EC2Role", &iam.RoleArgs{
+		Name:             pulumi.String(fmt.Sprintf("%s-ec2-role", cfg.RolePrefix)),
+		AssumeRolePolicy: pulumi.String(ec2AssumeRolePolicy),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-ec2-role", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating EC2 role: %v", err)
+	}
+
+	// Attach basic EC2 policies
+	_, err = iam.NewRolePolicyAttachment(ctx, "EC2SSMPolicy", &iam.RolePolicyAttachmentArgs{
+		Role:      ec2Role.Name,
+		PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error attaching SSM policy to EC2 role: %v", err)
+	}
+
+	// Lambda assume role policy
+	lambdaAssumeRolePolicy := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Action": "sts:AssumeRole",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "lambda.amazonaws.com"
+				}
 			}
+		]
+	}`
 
-			// Associate private subnet with its route table
-			_, err = ec2.NewRouteTableAssociation(ctx, fmt.Sprintf("tap-private-rta-%d", i+1), &ec2.RouteTableAssociationArgs{
-				SubnetId:     privateSubnets[i].ID(),
-				RouteTableId: privateRouteTable.ID(),
-			})
-			if err != nil {
-				return err
-			}
-		}
+	// Create Lambda role
+	lambdaRole, err := iam.NewRole(ctx, "LambdaRole", &iam.RoleArgs{
+		Name:             pulumi.String(fmt.Sprintf("%s-lambda-role", cfg.RolePrefix)),
+		AssumeRolePolicy: pulumi.String(lambdaAssumeRolePolicy),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(fmt.Sprintf("%s-lambda-role", cfg.Environment)),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating Lambda role: %v", err)
+	}
 
-		// =============================================================================
-		// VPC ENDPOINTS - Keep traffic internal
-		// =============================================================================
+	// Attach basic Lambda execution policy
+	_, err = iam.NewRolePolicyAttachment(ctx, "LambdaBasicPolicy", &iam.RolePolicyAttachmentArgs{
+		Role:      lambdaRole.Name,
+		PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error attaching basic policy to Lambda role: %v", err)
+	}
 
-		// S3 VPC Endpoint (Gateway)
-		_, err = ec2.NewVpcEndpoint(ctx, "tap-s3-endpoint", &ec2.VpcEndpointArgs{
-			VpcId:           vpc.ID(),
-			ServiceName:     pulumi.String(fmt.Sprintf("com.amazonaws.%s.s3", region.Name)),
-			VpcEndpointType: pulumi.String("Gateway"),
-			RouteTableIds: pulumi.StringArray{
-				publicRouteTable.ID(),
-			},
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Interface VPC Endpoints
-		interfaceEndpoints := map[string]string{
-			"secrets-manager": fmt.Sprintf("com.amazonaws.%s.secretsmanager", region.Name),
-			"logs":           fmt.Sprintf("com.amazonaws.%s.logs", region.Name),
-			"ssm":            fmt.Sprintf("com.amazonaws.%s.ssm", region.Name),
-			"kms":            fmt.Sprintf("com.amazonaws.%s.kms", region.Name),
-		}
-
-		// Security Group for VPC Endpoints
-		vpcEndpointSG, err := ec2.NewSecurityGroup(ctx, "tap-vpc-endpoint-sg", &ec2.SecurityGroupArgs{
-			Name:        pulumi.String("tap-vpc-endpoint-sg"),
-			Description: pulumi.String("Security group for VPC endpoints"),
-			VpcId:       vpc.ID(),
-			Ingress: ec2.SecurityGroupIngressArray{
-				&ec2.SecurityGroupIngressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					CidrBlocks: pulumi.StringArray{pulumi.String("10.20.0.0/16")},
-				},
-			},
-			Egress: ec2.SecurityGroupEgressArray{
-				&ec2.SecurityGroupEgressArgs{
-					Protocol:   pulumi.String("-1"),
-					FromPort:   pulumi.Int(0),
-					ToPort:     pulumi.Int(0),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
-				},
-			},
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Create interface VPC endpoints
-		for name, serviceName := range interfaceEndpoints {
-			_, err := ec2.NewVpcEndpoint(ctx, fmt.Sprintf("tap-%s-endpoint", name), &ec2.VpcEndpointArgs{
-				VpcId:             vpc.ID(),
-				ServiceName:       pulumi.String(serviceName),
-				VpcEndpointType:   pulumi.String("Interface"),
-				SubnetIds:         privateSubnetIds,
-				SecurityGroupIds:  pulumi.StringArray{vpcEndpointSG.ID()},
-				PrivateDnsEnabled: pulumi.Bool(true),
-				Tags:              commonTags,
-			})
-			if err != nil {
-				return err
-			}
-		}
-
-		// =============================================================================
-		// S3 BUCKET - Secure storage for logs and artifacts
-		// =============================================================================
-
-		// S3 Bucket for logs and artifacts
-		s3Bucket, err := s3.NewBucketV2(ctx, "tap-logs-bucket", &s3.BucketV2Args{
-			Bucket: pulumi.String(fmt.Sprintf("tap-logs-bucket-%s", current.AccountId)),
-			Tags:   commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Block all public access
-		_, err = s3.NewBucketPublicAccessBlock(ctx, "tap-logs-bucket-pab", &s3.BucketPublicAccessBlockArgs{
-			Bucket:                s3Bucket.ID(),
-			BlockPublicAcls:       pulumi.Bool(true),
-			BlockPublicPolicy:     pulumi.Bool(true),
-			IgnorePublicAcls:      pulumi.Bool(true),
-			RestrictPublicBuckets: pulumi.Bool(true),
-		})
-		if err != nil {
-			return err
-		}
-
-		// Enable versioning
-		_, err = s3.NewBucketVersioningV2(ctx, "tap-logs-bucket-versioning", &s3.BucketVersioningV2Args{
-			Bucket: s3Bucket.ID(),
-			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
-				Status: pulumi.String("Enabled"),
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Server-side encryption
-		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "tap-logs-bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
-			Bucket: s3Bucket.ID(),
-			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
-				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
-					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
-						KmsMasterKeyId: dataKMSKey.Arn,
-						SseAlgorithm:   pulumi.String("aws:kms"),
-					},
-					BucketKeyEnabled: pulumi.Bool(true),
-				},
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Bucket policy to deny non-TLS uploads
-		bucketPolicyDoc := s3Bucket.ID().ApplyT(func(bucketName string) (string, error) {
-			policy := map[string]interface{}{
-				"Version": "2012-10-17",
-				"Statement": []map[string]interface{}{
-					{
-						"Sid":    "DenyNonTLSUploads",
-						"Effect": "Deny",
-						"Principal": "*",
-						"Action":   "s3:*",
-						"Resource": []string{
-							fmt.Sprintf("arn:aws:s3:::%s", bucketName),
-							fmt.Sprintf("arn:aws:s3:::%s/*", bucketName),
-						},
-						"Condition": map[string]interface{}{
-							"Bool": map[string]interface{}{
-								"aws:SecureTransport": "false",
-							},
-						},
-					},
-				},
-			}
-			policyJSON, err := json.Marshal(policy)
-			if err != nil {
-				return "", err
-			}
-			return string(policyJSON), nil
-		}).(pulumi.StringOutput)
-
-		_, err = s3.NewBucketPolicy(ctx, "tap-logs-bucket-policy", &s3.BucketPolicyArgs{
-			Bucket: s3Bucket.ID(),
-			Policy: bucketPolicyDoc,
-		})
-		if err != nil {
-			return err
-		}
-
-		// =============================================================================
-		// SECURITY GROUPS
-		// =============================================================================
-
-		// ALB Security Group
-		albSG, err := ec2.NewSecurityGroup(ctx, "tap-alb-sg", &ec2.SecurityGroupArgs{
-			Name:        pulumi.String("tap-alb-sg"),
-			Description: pulumi.String("Security group for Application Load Balancer"),
-			VpcId:       vpc.ID(),
-			Ingress: ec2.SecurityGroupIngressArray{
-				&ec2.SecurityGroupIngressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(80),
-					ToPort:     pulumi.Int(80),
-					CidrBlocks: pulumi.ToStringArray(trustedCIDRs),
-				},
-				&ec2.SecurityGroupIngressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					CidrBlocks: pulumi.ToStringArray(trustedCIDRs),
-				},
-			},
-			Egress: ec2.SecurityGroupEgressArray{
-				&ec2.SecurityGroupEgressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(80),
-					ToPort:     pulumi.Int(80),
-					CidrBlocks: pulumi.StringArray{pulumi.String("10.20.0.0/16")},
-				},
-			},
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// App Instance Security Group
-		appSG, err := ec2.NewSecurityGroup(ctx, "tap-app-sg", &ec2.SecurityGroupArgs{
-			Name:        pulumi.String("tap-app-sg"),
-			Description: pulumi.String("Security group for application instances"),
-			VpcId:       vpc.ID(),
-			Ingress: ec2.SecurityGroupIngressArray{
-				&ec2.SecurityGroupIngressArgs{
-					Protocol:                pulumi.String("tcp"),
-					FromPort:                pulumi.Int(80),
-					ToPort:                  pulumi.Int(80),
-					SourceSecurityGroupId:   albSG.ID(),
-				},
-			},
-			Egress: ec2.SecurityGroupEgressArray{
-				// HTTPS to VPC endpoints
-				&ec2.SecurityGroupEgressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					CidrBlocks: pulumi.StringArray{pulumi.String("10.20.0.0/16")},
-				},
-				// HTTP for package updates (through NAT)
-				&ec2.SecurityGroupEgressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(80),
-					ToPort:     pulumi.Int(80),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
-				},
-				// HTTPS for package updates (through NAT)
-				&ec2.SecurityGroupEgressArgs{
-					Protocol:   pulumi.String("tcp"),
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
-				},
-			},
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Database Security Group
-		dbSG, err := ec2.NewSecurityGroup(ctx, "tap-db-sg", &ec2.SecurityGroupArgs{
-			Name:        pulumi.String("tap-db-sg"),
-			Description: pulumi.String("Security group for RDS database"),
-			VpcId:       vpc.ID(),
-			Ingress: ec2.SecurityGroupIngressArray{
-				&ec2.SecurityGroupIngressArgs{
-					Protocol:              pulumi.String("tcp"),
-					FromPort:              pulumi.Int(5432),
-					ToPort:                pulumi.Int(5432),
-					SourceSecurityGroupId: appSG.ID(),
-				},
-			},
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Add database egress rule to app security group
-		_, err = ec2.NewSecurityGroupRule(ctx, "tap-app-sg-db-egress", &ec2.SecurityGroupRuleArgs{
-			Type:                     pulumi.String("egress"),
-			FromPort:                 pulumi.Int(5432),
-			ToPort:                   pulumi.Int(5432),
-			Protocol:                 pulumi.String("tcp"),
-			SecurityGroupId:          appSG.ID(),
-			SourceSecurityGroupId:    dbSG.ID(),
-		})
-		if err != nil {
-			return err
-		}
-
-		// =============================================================================
-		// IAM ROLES AND POLICIES
-		// =============================================================================
-
-		// EC2 Instance Role
-		ec2Role, err := iam.NewRole(ctx, "tap-ec2-role", &iam.RoleArgs{
-			Name: pulumi.String("tap-ec2-role"),
-			AssumeRolePolicy: pulumi.String(`{
-				"Version": "2012-10-17",
-				"Statement": [
-					{
-						"Action": "sts:AssumeRole",
-						"Effect": "Allow",
-						"Principal": {
-							"Service": "ec2.amazonaws.com"
-						}
-					}
+	// Create custom policy for cross-account S3 access
+	s3CrossAccountPolicy := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Action": [
+					"s3:GetObject",
+					"s3:PutObject",
+					"s3:DeleteObject"
+				],
+				"Resource": [
+					"arn:aws:s3:::%s/*",
+					"arn:aws:s3:::%s/*"
 				]
-			}`),
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+			},
+			{
+				"Effect": "Allow",
+				"Action": [
+					"s3:ListBucket"
+				],
+				"Resource": [
+					"arn:aws:s3:::%s",
+					"arn:aws:s3:::%s"
+				]
+			}
+		]
+	}`, cfg.LoggingBucket, cfg.ReplicationBucket, cfg.LoggingBucket, cfg.ReplicationBucket)
 
-		// EC2 Instance Policy for Secrets Manager and CloudWatch
-		ec2Policy, err := iam.NewPolicy(ctx, "tap-ec2-policy", &iam.PolicyArgs{
-			Name: pulumi.String("tap-ec2-policy"),
-			Policy: pulumi.All(dataKMSKey.Arn, logsKMSKey.Arn).ApplyT(func(args []interface{}) (string, error) {
-				dataKeyArn := args[0].(string)
-				logsKeyArn := args[1].(string)
-				policy := map[string]interface{}{
-					"Version": "2012-10-17",
-					"Statement": []map[string]interface{}{
-						{
-							"Effect": "Allow",
-							"Action": []string{
-								"secretsmanager:GetSecretValue",
-								"secretsmanager:DescribeSecret",
-							},
-							"Resource": fmt.Sprintf("arn:aws:secretsmanager:%s:%s:secret:tap-db-credentials-*", region.Name, current.AccountId),
-						},
-						{
-							"Effect": "Allow",
-							"Action": []string{
-								"logs:CreateLogGroup",
-								"logs:CreateLogStream",
-								"logs:PutLogEvents",
-								"logs:DescribeLogStreams",
-								"logs:DescribeLogGroups",
-							},
-							"Resource": fmt.Sprintf("arn:aws:logs:%s:%s:*", region.Name, current.AccountId),
-						},
-						{
-							"Effect": "Allow",
-							"Action": []string{
-								"kms:Decrypt",
-								"kms:DescribeKey",
-							},
-							"Resource": []string{dataKeyArn, logsKeyArn},
-						},
-						{
-							"Effect": "Allow",
-							"Action": []string{
-								"ssm:GetParameter",
-								"ssm:GetParameters",
-								"ssm:GetParametersByPath",
-							},
-							"Resource": fmt.Sprintf("arn:aws:ssm:%s:%s:parameter/tap/*", region.Name, current.AccountId),
-						},
-					},
+	s3Policy, err := iam.NewPolicy(ctx, "S3CrossAccountPolicy", &iam.PolicyArgs{
+		Name:        pulumi.String(fmt.Sprintf("%s-s3-cross-account-policy", cfg.RolePrefix)),
+		Description: pulumi.String("Policy for cross-account S3 access"),
+		Policy:      pulumi.String(s3CrossAccountPolicy),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating S3 cross-account policy: %v", err)
+	}
+
+	// Attach S3 policy to both roles
+	_, err = iam.NewRolePolicyAttachment(ctx, "EC2S3PolicyAttachment", &iam.RolePolicyAttachmentArgs{
+		Role:      ec2Role.Name,
+		PolicyArn: s3Policy.Arn,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error attaching S3 policy to EC2 role: %v", err)
+	}
+
+	_, err = iam.NewRolePolicyAttachment(ctx, "LambdaS3PolicyAttachment", &iam.RolePolicyAttachmentArgs{
+		Role:      lambdaRole.Name,
+		PolicyArn: s3Policy.Arn,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error attaching S3 policy to Lambda role: %v", err)
+	}
+
+	return &IAMComponent{
+		EC2Role:    ec2Role,
+		LambdaRole: lambdaRole,
+	}, nil
+}
+
+// buildS3Component creates S3 buckets with proper configuration
+func buildS3Component(ctx *pulumi.Context, cfg *EnvironmentConfig) (*S3Component, error) {
+	// Create main logging bucket
+	loggingBucket, err := s3.NewBucketV2(ctx, "LoggingBucket", &s3.BucketV2Args{
+		Bucket: pulumi.String(cfg.LoggingBucket),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(cfg.LoggingBucket),
+			"Purpose":     pulumi.String("logging"),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating logging bucket: %v", err)
+	}
+
+	// Enable versioning on logging bucket
+	_, err = s3.NewBucketVersioningV2(ctx, "LoggingBucketVersioning", &s3.BucketVersioningV2Args{
+		Bucket: loggingBucket.ID(),
+		VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+			Status: pulumi.String("Enabled"),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error enabling versioning on logging bucket: %v", err)
+	}
+
+	// Enable encryption on logging bucket
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "LoggingBucketEncryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
+		Bucket: loggingBucket.ID(),
+		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+					SseAlgorithm: pulumi.String("AES256"),
+				},
+				BucketKeyEnabled: pulumi.Bool(true),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error enabling encryption on logging bucket: %v", err)
+	}
+
+	// Block public access on logging bucket
+	_, err = s3.NewBucketPublicAccessBlock(ctx, "LoggingBucketPAB", &s3.BucketPublicAccessBlockArgs{
+		Bucket:                loggingBucket.ID(),
+		BlockPublicAcls:       pulumi.Bool(true),
+		BlockPublicPolicy:     pulumi.Bool(true),
+		IgnorePublicAcls:      pulumi.Bool(true),
+		RestrictPublicBuckets: pulumi.Bool(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error blocking public access on logging bucket: %v", err)
+	}
+
+	// Create replication bucket
+	replicationBucket, err := s3.NewBucketV2(ctx, "ReplicationBucket", &s3.BucketV2Args{
+		Bucket: pulumi.String(cfg.ReplicationBucket),
+		Tags: pulumi.StringMap{
+			"Name":        pulumi.String(cfg.ReplicationBucket),
+			"Purpose":     pulumi.String("replication"),
+			"Environment": pulumi.String(cfg.Environment),
+			"Project":     pulumi.String(cfg.CommonTags["Project"]),
+			"ManagedBy":   pulumi.String(cfg.CommonTags["ManagedBy"]),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating replication bucket: %v", err)
+	}
+
+	// Configure replication bucket similarly
+	_, err = s3.NewBucketVersioningV2(ctx, "ReplicationBucketVersioning", &s3.BucketVersioningV2Args{
+		Bucket: replicationBucket.ID(),
+		VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+			Status: pulumi.String("Enabled"),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error enabling versioning on replication bucket: %v", err)
+	}
+
+	_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "ReplicationBucketEncryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
+		Bucket: replicationBucket.ID(),
+		Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+			&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+				ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+					SseAlgorithm: pulumi.String("AES256"),
+				},
+				BucketKeyEnabled: pulumi.Bool(true),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error enabling encryption on replication bucket: %v", err)
+	}
+
+	_, err = s3.NewBucketPublicAccessBlock(ctx, "ReplicationBucketPAB", &s3.BucketPublicAccessBlockArgs{
+		Bucket:                replicationBucket.ID(),
+		BlockPublicAcls:       pulumi.Bool(true),
+		BlockPublicPolicy:     pulumi.Bool(true),
+		IgnorePublicAcls:      pulumi.Bool(true),
+		RestrictPublicBuckets: pulumi.Bool(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error blocking public access on replication bucket: %v", err)
+	}
+
+	// Add bucket policy for secure transport
+	bucketPolicy := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Sid": "DenyInsecureConnections",
+				"Effect": "Deny",
+				"Principal": "*",
+				"Action": "s3:*",
+				"Resource": [
+					"arn:aws:s3:::%s",
+					"arn:aws:s3:::%s/*"
+				],
+				"Condition": {
+					"Bool": {
+						"aws:SecureTransport": "false"
+					}
 				}
-				policyJSON, err := json.Marshal(policy)
-				if err != nil {
-					return "", err
-				}
-				return string(policyJSON), nil
-			}).(pulumi.StringOutput),
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
+			}
+		]
+	}`, cfg.LoggingBucket, cfg.LoggingBucket)
 
-		// Attach policy to role
-		_, err = iam.NewRolePolicyAttachment(ctx, "tap-ec2-policy-attachment", &iam.RolePolicyAttachmentArgs{
-			Role:      ec2Role.Name,
-			PolicyArn: ec2Policy.Arn,
-		})
-		if err != nil {
-			return err
-		}
+	_, err = s3.NewBucketPolicy(ctx, "LoggingBucketPolicy", &s3.BucketPolicyArgs{
+		Bucket: loggingBucket.ID(),
+		Policy: pulumi.String(bucketPolicy),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating bucket policy: %v", err)
+	}
 
-		// Attach AWS managed policy for SSM
-		_, err = iam.NewRolePolicyAttachment(ctx, "tap-ec2-ssm-policy-attachment", &iam.RolePolicyAttachmentArgs{
-			Role:      ec2Role.Name,
-			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"),
-		})
-		if err != nil {
-			return err
-		}
-
-		// Instance Profile
-		instanceProfile, err := iam.NewInstanceProfile(ctx, "tap-instance-profile", &iam.InstanceProfileArgs{
-			Name: pulumi.String("tap-instance-profile"),
-			Role: ec2Role.Name,
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// =============================================================================
-		// RDS DATABASE
-		// =============================================================================
-
-		// Database Subnet Group
-		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, "tap-db-subnet-group", &rds.SubnetGroupArgs{
-			Name:       pulumi.String("tap-db-subnet-group"),
-			SubnetIds:  privateSubnetIds,
-			Tags:       commonTags,
-		})
-		if err != nil {
-			return err
-		}
-
-		// Database credentials in Secrets Manager
-		dbSecret, err := secretsmanager.NewSecret(ctx, "tap-db-credentials", &secretsmanager.SecretArgs{
-			Name:                   pulumi.String("tap-db-credentials"),
-			Description:            pulumi.String("Database credentials for TapStack"),
-			SecretString: pulumi.String(`{
-				"username": "tap_user",
-				"password": "tap_password"
-			}`),
-			Tags: commonTags,
-		})
-		if err != nil {
-			return err
+	return &S3Component{
+		LoggingBucket:     loggingBucket,
+		ReplicationBucket: replicationBucket,
+	}, nil
+}
