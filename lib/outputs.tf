@@ -47,12 +47,12 @@ output "s3_config_bucket" {
   value = module.s3_config_bucket.s3_bucket_id
 }
 
-output "bastion_sg_id" {
+output "scurity_group_id_bastion" {
   description = "ID of the bastion security group"
-  value       = module.sg.bastion.id
+  value       = module.sg.bastion_sg_id
 }
 
-output "private_sg_id" {
+output "private_sg_id_private_instance" {
   description = "ID of the private instance security group"
-  value       = module.sg.private_instance.id
+  value       = module.sg.private_sg_id
 }
