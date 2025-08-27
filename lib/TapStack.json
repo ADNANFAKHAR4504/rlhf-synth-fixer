@@ -148,6 +148,7 @@
         "DBPassword": {
             "Type": "String",
             "Description": "Database master password",
+            "Default": "SecurePassword123",
             "NoEcho": true,
             "MinLength": 8,
             "MaxLength": 41,
