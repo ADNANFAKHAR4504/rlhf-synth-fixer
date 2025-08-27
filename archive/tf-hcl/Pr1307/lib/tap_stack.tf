@@ -407,7 +407,7 @@ resource "aws_codebuild_project" "deploy" {
       name  = "LAMBDA_FUNCTION_NAME"
       value = aws_lambda_function.main.function_name
     }
-    
+
     environment_variable {
       name  = "LAMBDA_ALIAS_NAME"
       value = aws_lambda_alias.main.name

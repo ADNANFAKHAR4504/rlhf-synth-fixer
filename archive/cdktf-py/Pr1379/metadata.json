@@ -1,0 +1,39 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291230",
+  "team": "4",
+  "startedAt": "2025-08-07T20:49:13.333Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Security Group",
+    "S3 Bucket",
+    "IAM Role",
+    "RDS (DB Instance)",
+    "DB Subnet Group",
+    "CloudWatch Log Group",
+    "CloudTrail",
+    "KMS Key",
+    "Secrets Manager Secret",
+    "Secrets Manager Secret Version",
+    "IAM Role Policy Attachment"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Bepoadewale",
+  "dockerS3Location": ""
+}

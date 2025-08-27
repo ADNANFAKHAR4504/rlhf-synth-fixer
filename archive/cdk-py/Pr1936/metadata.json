@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291963",
+  "team": "3",
+  "startedAt": "2025-08-21T19:04:25.828Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akash-TuringOps",
+  "dockerS3Location": ""
+}
