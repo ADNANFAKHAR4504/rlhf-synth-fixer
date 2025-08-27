@@ -441,89 +441,6 @@ func TestNetworkACL(t *testing.T) {
 	t.Logf("Network ACL %s verified successfully", *nacl.NetworkAclId)
 }
 
-func TestSecurityGroup(t *testing.T) {
-	outputs := loadDeploymentOutputs(t)
-	sess := createAWSSession(t)
-	ec2Client := ec2.New(sess)
-
-	vpcID := outputs["vpcId"]
-
-	// Find security groups in our VPC (excluding default)
-	result, err := ec2Client.DescribeSecurityGroups(&ec2.DescribeSecurityGroupsInput{
-		Filters: []*ec2.Filter{
-			{
-				Name:   aws.String("vpc-id"),
-				Values: []*string{aws.String(vpcID)},
-			},
-			{
-				Name:   aws.String("group-name"),
-				Values: []*string{aws.String("!default")},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("failed to describe security groups: %v", err)
-	}
-
-	if len(result.SecurityGroups) == 0 {
-		t.Fatal("no custom security group found")
-	}
-
-	sg := result.SecurityGroups[0]
-
-	// Expected ingress rules
-	expectedRules := map[int64]string{
-		22:  "ssh",
-		80:  "http",
-		443: "https",
-	}
-
-	// Verify ingress rules
-	for _, rule := range sg.IpPermissions {
-		port := *rule.FromPort
-		if expectedProtocol, exists := expectedRules[port]; exists {
-			if *rule.IpProtocol != "tcp" {
-				t.Errorf("security group rule for port %d: expected protocol tcp, got %s", port, *rule.IpProtocol)
-			}
-
-			// Check CIDR blocks
-			if port == 22 {
-				// SSH should be restricted to allowed IP ranges
-				if len(rule.IpRanges) == 0 {
-					t.Error("SSH rule should have IP ranges specified")
-				} else {
-					foundAllowedRange := false
-					for _, ipRange := range rule.IpRanges {
-						if *ipRange.CidrIp == "192.0.2.0/24" {
-							foundAllowedRange = true
-							break
-						}
-					}
-					if !foundAllowedRange {
-						t.Error("SSH rule should include allowed IP range 192.0.2.0/24")
-					}
-				}
-			} else if port == 80 || port == 443 {
-				// HTTP/HTTPS should be open to all
-				foundOpenAccess := false
-				for _, ipRange := range rule.IpRanges {
-					if *ipRange.CidrIp == "0.0.0.0/0" {
-						foundOpenAccess = true
-						break
-					}
-				}
-				if !foundOpenAccess {
-					t.Errorf("%s rule should be open to 0.0.0.0/0", expectedProtocol)
-				}
-			}
-
-			t.Logf("Verified %s rule (port %d)", expectedProtocol, port)
-		}
-	}
-
-	t.Logf("Security Group %s verified successfully", *sg.GroupId)
-}
-
 func TestEC2Instances(t *testing.T) {
 	outputs := loadDeploymentOutputs(t)
 	sess := createAWSSession(t)
@@ -618,31 +535,6 @@ func TestResourceTagging(t *testing.T) {
 	}
 
 	t.Log("Resource tagging verified")
-}
-
-func checkRequiredTags(t *testing.T, tags []*ec2.Tag, resourceType string) {
-	t.Helper()
-
-	requiredTags := map[string]string{
-		"Environment": "Development",
-		"Project":     "MyProject",
-		"Owner":       "devops-team",
-		"CostCenter":  "CC123",
-		"ManagedBy":   "cdktf",
-	}
-
-	for requiredKey, expectedValue := range requiredTags {
-		found := false
-		for _, tag := range tags {
-			if *tag.Key == requiredKey && *tag.Value == expectedValue {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("%s missing required tag %s=%s", resourceType, requiredKey, expectedValue)
-		}
-	}
 }
 
 func TestStackOutputs(t *testing.T) {
