@@ -238,6 +238,48 @@ class TapStack extends Stack {
         .removalPolicy(RemovalPolicy.DESTROY)
         .autoDeleteObjects(true)
         .build());
+
+    // Add comprehensive bucket policy for AWS Config service
+    // AWS Config requires specific permissions with account and region conditions
+    String accountId = this.getAccount();
+    String region = this.getRegion();
+
+    // Allow Config service to check bucket ACL and location
+    configBucket.addToResourcePolicy(PolicyStatement.Builder.create()
+        .effect(Effect.ALLOW)
+        .principals(List.of(new ServicePrincipal("config.amazonaws.com")))
+        .actions(List.of(
+            "s3:GetBucketAcl",
+            "s3:GetBucketLocation"))
+        .resources(List.of(configBucket.getBucketArn()))
+        .conditions(Map.of(
+            "StringEquals", Map.of(
+                "AWS:SourceAccount", accountId)))
+        .build());
+
+    // Allow Config service to put objects with proper ACL
+    configBucket.addToResourcePolicy(PolicyStatement.Builder.create()
+        .effect(Effect.ALLOW)
+        .principals(List.of(new ServicePrincipal("config.amazonaws.com")))
+        .actions(List.of("s3:PutObject"))
+        .resources(List.of(configBucket.getBucketArn() + "/AWSLogs/" + accountId + "/Config/*"))
+        .conditions(Map.of(
+            "StringEquals", Map.of(
+                "s3:x-amz-acl", "bucket-owner-full-control",
+                "AWS:SourceAccount", accountId)))
+        .build());
+
+    // Allow Config service to get bucket ACL for delivery channel verification
+    configBucket.addToResourcePolicy(PolicyStatement.Builder.create()
+        .effect(Effect.ALLOW)
+        .principals(List.of(new ServicePrincipal("config.amazonaws.com")))
+        .actions(List.of("s3:ListBucket"))
+        .resources(List.of(configBucket.getBucketArn()))
+        .conditions(Map.of(
+            "StringEquals", Map.of(
+                "AWS:SourceAccount", accountId)))
+        .build());
+
     commonTags.forEach((key, value) -> Tags.of(configBucket).add(key, value));
 
     return configBucket;
@@ -417,10 +459,11 @@ class TapStack extends Stack {
                     .build())
             .build());
 
-    // AWS Config Delivery Channel using CFN construct
+    // AWS Config Delivery Channel using CFN construct with proper S3 key prefix
     CfnDeliveryChannel configDelivery = new CfnDeliveryChannel(this, "ConfigDelivery",
         software.amazon.awscdk.services.config.CfnDeliveryChannelProps.builder()
             .s3BucketName(configBucket.getBucketName())
+            .s3KeyPrefix("AWSLogs/" + this.getAccount() + "/Config")
             .build());
 
     commonTags.forEach((key, value) -> Tags.of(configRole).add(key, value));
