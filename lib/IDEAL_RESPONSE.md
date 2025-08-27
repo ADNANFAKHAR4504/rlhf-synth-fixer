@@ -13,223 +13,234 @@ All code resides in the lib/ folder.
 ```java
 package app;
 
+import java.util.Arrays;
+import java.util.Optional;
+
 import software.amazon.awscdk.App;
+import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.Duration;
-import software.amazon.awscdk.RemovalPolicy;
-
-import software.constructs.Construct;
-
-// EC2
+import software.amazon.awscdk.Tags;
+import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
+import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
+import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
+import software.amazon.awscdk.services.ec2.AmazonLinuxImageProps;
+import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
+import software.amazon.awscdk.services.ec2.IMachineImage;
+import software.amazon.awscdk.services.ec2.Instance;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
-import software.amazon.awscdk.services.ec2.IMachineImage;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.IpAddresses;
 import software.amazon.awscdk.services.ec2.MachineImage;
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.UserData;
 import software.amazon.awscdk.services.ec2.Vpc;
-
-// AutoScaling
-import software.amazon.awscdk.services.autoscaling.AutoScalingGroup;
-
-// ELBv2
-import software.amazon.awscdk.services.elasticloadbalancingv2.AddApplicationTargetsProps;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationListener;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
-import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
-import software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps;
-
-// S3
-import software.amazon.awscdk.services.s3.BlockPublicAccess;
-import software.amazon.awscdk.services.s3.Bucket;
-import software.amazon.awscdk.services.s3.BucketEncryption;
-import software.amazon.awscdk.services.s3.LifecycleRule;
-
-// IAM
-import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.constructs.Construct;
 
-// RDS
-import software.amazon.awscdk.services.rds.Credentials;
-import software.amazon.awscdk.services.rds.DatabaseInstance;
-import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
-import software.amazon.awscdk.services.rds.PostgresEngineVersion;
-import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
+/**
+ * TapStackProps holds configuration for the TapStack CDK stack.
+ */
+final class TapStackProps {
+  private final String environmentSuffix;
+  private final StackProps stackProps;
 
-// CloudWatch
-import software.amazon.awscdk.services.cloudwatch.Alarm;
-import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
-import software.amazon.awscdk.services.cloudwatch.Metric;
+  private TapStackProps(final String envSuffix, final StackProps props) {
+    this.environmentSuffix = envSuffix;
+    this.stackProps = props != null ? props : StackProps.builder().build();
+  }
 
-// CloudWatch → SNS
-import software.amazon.awscdk.services.cloudwatch.actions.SnsAction;
+  public String getEnvironmentSuffix() {
+    return environmentSuffix;
+  }
 
-// Route53
-import software.amazon.awscdk.services.route53.ARecord;
-import software.amazon.awscdk.services.route53.HostedZoneAttributes;
-import software.amazon.awscdk.services.route53.IHostedZone;
-import software.amazon.awscdk.services.route53.RecordTarget;
+  public StackProps getStackProps() {
+    return stackProps;
+  }
 
-// Route53 alias target for ALB
-import software.amazon.awscdk.services.route53.targets.LoadBalancerTarget;
+  public static Builder builder() {
+    return new Builder();
+  }
 
-// SNS
-import software.amazon.awscdk.services.sns.Topic;
+  public static class Builder {
+    private String environmentSuffix;
+    private StackProps stackProps;
 
-import java.util.List;
+    public Builder environmentSuffix(final String suffix) {
+      this.environmentSuffix = suffix;
+      return this;
+    }
 
+    public Builder stackProps(final StackProps props) {
+      this.stackProps = props;
+      return this;
+    }
+
+    public TapStackProps build() {
+      return new TapStackProps(environmentSuffix, stackProps);
+    }
+  }
+}
+
+/**
+ * VPC Infrastructure Stack
+ */
+class VpcInfrastructureStack extends Stack {
+  private final Vpc vpc;
+  private final Instance ec2Instance;
+  private final SecurityGroup sshSecurityGroup;
+
+  VpcInfrastructureStack(final Construct scope, final String id, final String environmentSuffix,
+      final StackProps props) {
+    super(scope, id, props);
+
+    this.vpc = Vpc.Builder.create(this, "MainVpc")
+        .vpcName("tap-" + environmentSuffix + "-vpc")
+        .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
+        .maxAzs(2)
+        .enableDnsSupport(true)
+        .enableDnsHostnames(true)
+        .subnetConfiguration(Arrays.asList(
+            SubnetConfiguration.builder()
+                .subnetType(SubnetType.PUBLIC)
+                .name("PublicSubnet")
+                .cidrMask(24)
+                .build()))
+        .natGateways(0)
+        .build();
+
+    this.sshSecurityGroup = SecurityGroup.Builder.create(this, "SshSecurityGroup")
+        .securityGroupName("tap-" + environmentSuffix + "-ssh-sg")
+        .vpc(vpc)
+        .description("Security group for SSH access to EC2 instances")
+        .allowAllOutbound(true)
+        .build();
+
+    sshSecurityGroup.addIngressRule(
+        Peer.ipv4("203.0.113.0/32"),
+        Port.tcp(22),
+        "SSH access from specific IP");
+
+    Role ec2Role = Role.Builder.create(this, "Ec2Role")
+        .roleName("tap-" + environmentSuffix + "-ec2-role")
+        .assumedBy(ServicePrincipal.Builder.create("ec2.amazonaws.com").build())
+        .managedPolicies(Arrays.asList(
+            ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
+        .build();
+
+    IMachineImage amazonLinuxAmi = MachineImage.latestAmazonLinux2(
+        software.amazon.awscdk.services.ec2.AmazonLinux2ImageSsmParameterProps.builder()
+            .cpuType(AmazonLinuxCpuType.X86_64)
+            .virtualization(AmazonLinuxVirt.HVM)
+            .build());
+
+    this.ec2Instance = Instance.Builder.create(this, "WebServerInstance")
+        .instanceName("tap-" + environmentSuffix + "-ec2-instance")
+        .vpc(vpc)
+        .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
+        .machineImage(amazonLinuxAmi)
+        .securityGroup(sshSecurityGroup)
+        .vpcSubnets(SubnetSelection.builder()
+            .subnetType(SubnetType.PUBLIC)
+            .availabilityZones(Arrays.asList(vpc.getAvailabilityZones().get(0)))
+            .build())
+        .role(ec2Role)
+        .userData(UserData.forLinux())
+        .build();
+
+    Tags.of(this).add("Environment", environmentSuffix);
+    Tags.of(this).add("Project", "VpcInfrastructure");
+    Tags.of(this).add("CreatedBy", "CDK");
+
+    // ---- Outputs ----
+    CfnOutput.Builder.create(this, "VpcId")
+        .value(vpc.getVpcId())
+        .exportName("TapStack-" + environmentSuffix + "-VpcId")
+        .build();
+
+    CfnOutput.Builder.create(this, "InstanceId")
+        .value(ec2Instance.getInstanceId())
+        .exportName("TapStack-" + environmentSuffix + "-InstanceId")
+        .build();
+
+    CfnOutput.Builder.create(this, "SecurityGroupId")
+        .value(sshSecurityGroup.getSecurityGroupId())
+        .exportName("TapStack-" + environmentSuffix + "-SecurityGroupId")
+        .build();
+  }
+
+  public Vpc getVpc() { return vpc; }
+  public Instance getEc2Instance() { return ec2Instance; }
+  public SecurityGroup getSshSecurityGroup() { return sshSecurityGroup; }
+}
+
+/**
+ * Main TapStack
+ */
+class TapStack extends Stack {
+  private final String environmentSuffix;
+  private final VpcInfrastructureStack vpcStack;
+
+  TapStack(final Construct scope, final String id, final TapStackProps props) {
+    super(scope, id, props != null ? props.getStackProps() : null);
+
+    this.environmentSuffix = Optional.ofNullable(props)
+        .map(TapStackProps::getEnvironmentSuffix)
+        .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
+            .map(Object::toString))
+        .orElse("dev");
+
+    this.vpcStack = new VpcInfrastructureStack(
+        this,
+        "VpcInfrastructure",
+        environmentSuffix,
+        StackProps.builder()
+            .env(props != null ? props.getStackProps().getEnv() : null)
+            .description("VpcInfra for " + environmentSuffix)
+            .build());
+  }
+
+  public String getEnvironmentSuffix() { return environmentSuffix; }
+  public VpcInfrastructureStack getVpcStack() { return vpcStack; }
+}
+
+/**
+ * Entry point
+ */
 public final class Main {
+  private Main() {}
 
-    private Main() {
-        // Prevent instantiation
-    }
+  public static void main(final String[] args) {
+    App app = new App();
 
-    public static void main(final String[] args) {
-        App app = new App();
+    String account = System.getenv("CDK_DEFAULT_ACCOUNT");
+    if (account == null) account = "123456789012";
 
-        new FaultTolerantStack(app, "Nova-East", StackProps.builder()
-            .env(Environment.builder()
-                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                .region("us-east-1")
-                .build())
-            .build());
+    // Deploy East
+    new TapStack(app, "TapStack-East", TapStackProps.builder()
+        .environmentSuffix("east")
+        .stackProps(StackProps.builder()
+            .env(Environment.builder().account(account).region("us-east-1").build())
+            .build())
+        .build());
 
-        new FaultTolerantStack(app, "Nova-West", StackProps.builder()
-            .env(Environment.builder()
-                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                .region("us-west-2")
-                .build())
-            .build());
+    // Deploy West
+    new TapStack(app, "TapStack-West", TapStackProps.builder()
+        .environmentSuffix("west")
+        .stackProps(StackProps.builder()
+            .env(Environment.builder().account(account).region("us-west-2").build())
+            .build())
+        .build());
 
-        app.synth();
-    }
-
-    public static class FaultTolerantStack extends Stack {
-        public FaultTolerantStack(final Construct scope, final String id, final StackProps props) {
-            super(scope, id, props);
-
-            String env = id.toLowerCase();
-
-            // VPC
-            Vpc vpc = Vpc.Builder.create(this, env + "-vpc")
-                .maxAzs(2)
-                .build();
-
-            // Logging bucket
-            Bucket logBucket = Bucket.Builder.create(this, env + "-logs")
-                .versioned(true)
-                .encryption(BucketEncryption.KMS_MANAGED)
-                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .lifecycleRules(List.of(LifecycleRule.builder()
-                    .expiration(Duration.days(365))
-                    .build()))
-                .build();
-
-            // EC2 Role
-            Role ec2Role = Role.Builder.create(this, env + "-ec2-role")
-                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-                .managedPolicies(List.of(
-                    ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore"),
-                    ManagedPolicy.fromAwsManagedPolicyName("CloudWatchAgentServerPolicy")))
-                .build();
-
-            // Security Group
-            SecurityGroup sg = SecurityGroup.Builder.create(this, env + "-sg")
-                .vpc(vpc)
-                .allowAllOutbound(true)
-                .build();
-            sg.addIngressRule(Peer.anyIpv4(), Port.tcp(80), "Allow HTTP");
-            sg.addIngressRule(Peer.anyIpv4(), Port.tcp(443), "Allow HTTPS");
-
-            // AutoScaling Group
-            IMachineImage ami = MachineImage.latestAmazonLinux2();
-            AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, env + "-asg")
-                .vpc(vpc)
-                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
-                    InstanceClass.BURSTABLE2, InstanceSize.MICRO))
-                .machineImage(ami)
-                .securityGroup(sg)
-                .role(ec2Role)
-                .minCapacity(1)
-                .maxCapacity(2)
-                .build();
-
-            // ALB
-            ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, env + "-alb")
-                .vpc(vpc)
-                .internetFacing(true)
-                .build();
-
-            ApplicationListener listener = alb.addListener(env + "-listener",
-                BaseApplicationListenerProps.builder()
-                    .port(80)
-                    .protocol(ApplicationProtocol.HTTP)
-                    .build());
-
-            listener.addTargets(env + "-targets",
-                AddApplicationTargetsProps.builder()
-                    .port(80)
-                    .targets(List.of(asg))
-                    .build());
-
-            // RDS
-            DatabaseInstance rds = DatabaseInstance.Builder.create(this, env + "-rds")
-                .engine(DatabaseInstanceEngine.postgres(
-                    PostgresInstanceEngineProps.builder()
-                        .version(PostgresEngineVersion.VER_16)
-                        .build()))
-                .vpc(vpc)
-                .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(
-                    InstanceClass.BURSTABLE3, InstanceSize.MEDIUM))
-                .credentials(Credentials.fromGeneratedSecret("dbadmin"))
-                .multiAz(true)
-                .allocatedStorage(20)
-                .storageEncrypted(true)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
-
-            // Monitoring
-            Metric cpuMetric = Metric.Builder.create()
-                .namespace("AWS/EC2")
-                .metricName("CPUUtilization")
-                .statistic("Average")
-                .period(Duration.minutes(5))
-                .build();
-
-            Alarm cpuAlarm = Alarm.Builder.create(this, env + "-cpu-alarm")
-                .metric(cpuMetric)
-                .threshold(70) // aligns with unit tests
-                .evaluationPeriods(2)
-                .datapointsToAlarm(2)
-                .comparisonOperator(ComparisonOperator.GREATER_THAN_THRESHOLD)
-                .build();
-
-            Topic alarmTopic = new Topic(this, env + "-alarm-topic");
-            cpuAlarm.addAlarmAction(new SnsAction(alarmTopic));
-
-            // Route53 DNS (optional)
-            String hostedZoneId = (String) this.getNode().tryGetContext("hostedZoneId");
-            String zoneName = (String) this.getNode().tryGetContext("zoneName");
-
-            if (hostedZoneId != null && zoneName != null) {
-                IHostedZone zone = software.amazon.awscdk.services.route53.HostedZone.fromHostedZoneAttributes(
-                    this, env + "-zone",
-                    HostedZoneAttributes.builder()
-                        .hostedZoneId(hostedZoneId)
-                        .zoneName(zoneName)
-                        .build());
-
-                ARecord.Builder.create(this, env + "-dns")
-                    .zone(zone)
-                    .recordName(env + "." + zoneName)
-                    .target(RecordTarget.fromAlias(new LoadBalancerTarget(alb)))
-                    .build();
-            }
-        }
-    }
+    app.synth();
+  }
 }
