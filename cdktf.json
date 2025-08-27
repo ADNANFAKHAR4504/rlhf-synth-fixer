@@ -3,7 +3,7 @@
   "app": "npx ts-node bin/tap.ts",
   "projectId": "tap-stack",
   "terraformProviders": [
-    "@cdktf/provider-aws"
+    "hashicorp/aws@~> 5.0"
   ],
   "terraformModules": [],
   "codeMakerOutput": ".gen"
