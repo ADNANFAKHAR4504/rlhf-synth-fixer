@@ -80,18 +80,20 @@ public final class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        new FaultTolerantStack(app, "Nova-East", StackProps.builder()
+        new FaultTolerantStack(app, "TapStack-East", StackProps.builder()
             .env(Environment.builder()
                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
                 .region("us-east-1")
                 .build())
+            .stackName("TapStack-East")
             .build());
 
-        new FaultTolerantStack(app, "Nova-West", StackProps.builder()
+        new FaultTolerantStack(app, "TapStack-West", StackProps.builder()
             .env(Environment.builder()
                 .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
                 .region("us-west-2")
                 .build())
+            .stackName("TapStack-West")
             .build());
 
         app.synth();
@@ -101,7 +103,7 @@ public final class Main {
         public FaultTolerantStack(final Construct scope, final String id, final StackProps props) {
             super(scope, id, props);
 
-            String env = id.toLowerCase();
+            String env = id.toLowerCase().contains("east") ? "east" : "west";
 
             // VPC
             Vpc vpc = Vpc.Builder.create(this, env + "-vpc")
@@ -220,7 +222,7 @@ public final class Main {
                     .build();
             }
 
-            // ===== Outputs for Integration Tests =====
+            // ===== Outputs =====
             CfnOutput.Builder.create(this, env + "-VpcId")
                 .value(vpc.getVpcId())
                 .exportName(env + "-VpcId")
