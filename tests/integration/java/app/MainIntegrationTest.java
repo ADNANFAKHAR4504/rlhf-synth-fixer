@@ -10,6 +10,7 @@ import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
 
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -130,11 +131,12 @@ public class MainIntegrationTest {
 
     @Test
     public void testOutputsAreDefined() {
-    TapStack stack = synthesizeStack("TapStackOutputs", "outputs");
-    Template template = Template.fromStack(stack.getVpcStack());
+        TapStack stack = synthesizeStack("TapStackOutputs", "outputs");
+        Template template = Template.fromStack(stack.getVpcStack());
 
-    assertThat(template.findOutputs(Map.of())).isNotEmpty();
-}
+        // Use an explicit empty map with correct typing
+        assertThat(template.findOutputs(Collections.emptyMap())).isNotEmpty();
+    }
 
     @Test
     public void testRouteTableCreated() {
@@ -145,7 +147,7 @@ public class MainIntegrationTest {
     }
 
     @Test
-    public void testTagsApplied() {
+    public void testVpcHasEnvironmentTag() {
         TapStack stack = synthesizeStack("TapStackTags", "tags");
         Template template = Template.fromStack(stack.getVpcStack());
 
