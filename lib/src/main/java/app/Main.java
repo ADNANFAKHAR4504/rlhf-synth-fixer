@@ -421,7 +421,7 @@ class TapStack extends Stack {
         // Create parameter group with encryption settings
         ParameterGroup rdsParameterGroup = ParameterGroup.Builder.create(this, "RDSParameterGroup" + uniqueId)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-                        .version(MysqlEngineVersion.VER_8_0_35)
+                        .version(MysqlEngineVersion.VER_8_0_34)
                         .build()))
                 .description("Parameter group for secure RDS instance - " + uniqueId)
                 .parameters(Map.of(
@@ -451,7 +451,7 @@ class TapStack extends Stack {
         DatabaseInstance.Builder.create(this, "SecureRDSInstance" + uniqueId)
                 .instanceIdentifier("secure-db-instance-" + uniqueId)
                 .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
-                        .version(MysqlEngineVersion.VER_8_0_35)
+                        .version(MysqlEngineVersion.VER_8_0_34)
                         .build()))
                 .instanceType(software.amazon.awscdk.services.ec2.InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
                 .vpc(vpc)
