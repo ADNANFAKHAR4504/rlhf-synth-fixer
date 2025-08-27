@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -146,9 +147,9 @@ func readPulumiOutputs(t *testing.T) *PulumiOutputs {
 	cmd := exec.Command("pulumi", "stack", "output", "--json", "--stack", stackName)
 	output, err := cmd.Output()
 	if err != nil {
-		// If Pulumi command fails, return empty outputs (tests will be skipped)
-		t.Logf("Warning: Could not read Pulumi outputs: %v", err)
-		return &PulumiOutputs{}
+		// If Pulumi command fails, try to use fallback resource IDs from AWS discovery
+		t.Logf("Warning: Could not read Pulumi outputs: %v. Attempting AWS resource discovery...", err)
+		return discoverAWSResources(t)
 	}
 
 	// Parse the raw outputs
@@ -622,6 +623,148 @@ func TestHighAvailabilityConfiguration(t *testing.T) {
 		assert.Equal(t, "us-east-1a", outputs.Subnets.Private.SubnetA.AZ)
 		assert.Equal(t, "us-east-1b", outputs.Subnets.Private.SubnetB.AZ)
 	}
+}
+
+// discoverAWSResources discovers AWS resources when output files are not available
+func discoverAWSResources(t *testing.T) *PulumiOutputs {
+	ctx := context.TODO()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
+	if err != nil {
+		t.Logf("Failed to load AWS config: %v", err)
+		return &PulumiOutputs{}
+	}
+
+	ec2Client := ec2.NewFromConfig(cfg)
+	outputs := &PulumiOutputs{}
+
+	// Discover VPC
+	vpcs, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
+		Filters: []types.Filter{
+			{Name: aws.String("tag:Project"), Values: []string{"secure-vpc"}},
+			{Name: aws.String("state"), Values: []string{"available"}},
+		},
+	})
+	if err == nil && len(vpcs.Vpcs) > 0 {
+		outputs.VpcID = aws.ToString(vpcs.Vpcs[0].VpcId)
+		t.Logf("Discovered VPC: %s", outputs.VpcID)
+	}
+
+	if outputs.VpcID != "" {
+		// Discover Internet Gateway
+		igws, err := ec2Client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{
+			Filters: []types.Filter{
+				{Name: aws.String("attachment.vpc-id"), Values: []string{outputs.VpcID}},
+			},
+		})
+		if err == nil && len(igws.InternetGateways) > 0 {
+			outputs.InternetGatewayID = aws.ToString(igws.InternetGateways[0].InternetGatewayId)
+		}
+
+		// Discover Subnets
+		subnets, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{
+			Filters: []types.Filter{
+				{Name: aws.String("vpc-id"), Values: []string{outputs.VpcID}},
+				{Name: aws.String("tag:Project"), Values: []string{"secure-vpc"}},
+			},
+		})
+		if err == nil {
+			for _, subnet := range subnets.Subnets {
+				subnetId := aws.ToString(subnet.SubnetId)
+				az := aws.ToString(subnet.AvailabilityZone)
+				isPublic := aws.ToBool(subnet.MapPublicIpOnLaunch)
+				
+				// More robust matching based on AZ and public/private nature
+				if isPublic && az == "us-east-1a" {
+					outputs.PublicSubnetAID = subnetId
+				} else if isPublic && az == "us-east-1b" {
+					outputs.PublicSubnetBID = subnetId
+				} else if !isPublic && az == "us-east-1a" {
+					outputs.PrivateSubnetAID = subnetId
+				} else if !isPublic && az == "us-east-1b" {
+					outputs.PrivateSubnetBID = subnetId
+				}
+			}
+		}
+
+		// Discover NAT Gateways
+		nats, err := ec2Client.DescribeNatGateways(ctx, &ec2.DescribeNatGatewaysInput{
+			Filter: []types.Filter{
+				{Name: aws.String("vpc-id"), Values: []string{outputs.VpcID}},
+				{Name: aws.String("state"), Values: []string{"available"}},
+			},
+		})
+		if err == nil {
+			for _, nat := range nats.NatGateways {
+				natId := aws.ToString(nat.NatGatewayId)
+				subnetId := aws.ToString(nat.SubnetId)
+				
+				// Determine AZ based on subnet location
+				if subnetId == outputs.PublicSubnetAID {
+					outputs.NatGatewayAID = natId
+					if len(nat.NatGatewayAddresses) > 0 {
+						outputs.ElasticIPAAddress = aws.ToString(nat.NatGatewayAddresses[0].PublicIp)
+					}
+				} else if subnetId == outputs.PublicSubnetBID {
+					outputs.NatGatewayBID = natId
+					if len(nat.NatGatewayAddresses) > 0 {
+						outputs.ElasticIPBAddress = aws.ToString(nat.NatGatewayAddresses[0].PublicIp)
+					}
+				} else {
+					// Fallback: assign first NAT gateway to A, second to B
+					if outputs.NatGatewayAID == "" {
+						outputs.NatGatewayAID = natId
+						if len(nat.NatGatewayAddresses) > 0 {
+							outputs.ElasticIPAAddress = aws.ToString(nat.NatGatewayAddresses[0].PublicIp)
+						}
+					} else if outputs.NatGatewayBID == "" {
+						outputs.NatGatewayBID = natId
+						if len(nat.NatGatewayAddresses) > 0 {
+							outputs.ElasticIPBAddress = aws.ToString(nat.NatGatewayAddresses[0].PublicIp)
+						}
+					}
+				}
+			}
+		}
+
+		// Discover Security Groups
+		sgs, err := ec2Client.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{
+			Filters: []types.Filter{
+				{Name: aws.String("vpc-id"), Values: []string{outputs.VpcID}},
+				{Name: aws.String("tag:Project"), Values: []string{"secure-vpc"}},
+			},
+		})
+		if err == nil {
+			for _, sg := range sgs.SecurityGroups {
+				sgName := aws.ToString(sg.GroupName)
+				sgId := aws.ToString(sg.GroupId)
+				sgDesc := aws.ToString(sg.Description)
+				
+				// Match based on description for more accuracy
+				switch {
+				case strings.Contains(sgDesc, "web servers"):
+					outputs.WebSecurityGroupID = sgId
+				case strings.Contains(sgDesc, "SSH access"):
+					outputs.SSHSecurityGroupID = sgId
+				case strings.Contains(sgDesc, "database servers"):
+					outputs.DatabaseSecurityGroupID = sgId
+				case strings.Contains(sgName, "web"):
+					outputs.WebSecurityGroupID = sgId
+				case strings.Contains(sgName, "ssh"):
+					outputs.SSHSecurityGroupID = sgId
+				case strings.Contains(sgName, "db"):
+					outputs.DatabaseSecurityGroupID = sgId
+				}
+			}
+		}
+	}
+
+	if outputs.VpcID != "" {
+		t.Logf("Successfully discovered AWS resources for VPC: %s", outputs.VpcID)
+	} else {
+		t.Logf("No AWS resources discovered - infrastructure may not be deployed")
+	}
+
+	return outputs
 }
 
 // Helper function to validate resource tags
