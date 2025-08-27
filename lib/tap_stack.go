@@ -422,14 +422,38 @@ func main() {
 			return err
 		}
 
-		// Create S3 Bucket first to get its name for the policy
+		// Create S3 Bucket with versioning and encryption
 		s3Bucket, err := s3.NewBucket(ctx, "hipaa-bucket", &s3.BucketArgs{
 			Bucket: pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
+			Versioning: &s3.BucketVersioningArgs{
+				Enabled: pulumi.Bool(true),
+			},
+			ServerSideEncryptionConfiguration: &s3.BucketServerSideEncryptionConfigurationArgs{
+				Rules: s3.BucketServerSideEncryptionConfigurationRuleArray{
+					&s3.BucketServerSideEncryptionConfigurationRuleArgs{
+						ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
+							SseAlgorithm: pulumi.String("AES256"),
+						},
+					},
+				},
+			},
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-hipaa-bucket", projectName, stackName)),
 				"Environment": pulumi.String(stackName),
 				"Compliance":  pulumi.String("HIPAA"),
 			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Block public access to S3 bucket
+		_, err = s3.NewBucketPublicAccessBlock(ctx, "bucket-pab", &s3.BucketPublicAccessBlockArgs{
+			Bucket:                s3Bucket.ID(),
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
 		})
 		if err != nil {
 			return err
@@ -502,10 +526,12 @@ func main() {
 
 		// Create Launch Template
 		launchTemplate, err := ec2.NewLaunchTemplate(ctx, "web-launch-template", &ec2.LaunchTemplateArgs{
-			Name:                pulumi.String(fmt.Sprintf("%s-%s-web-lt", projectName, stackName)),
-			ImageId:             pulumi.String(amiResult.Id),
-			InstanceType:        pulumi.String("t3.micro"),
-			VpcSecurityGroupIds: pulumi.StringArray{webSecurityGroup.ID()},
+			Name:         pulumi.String(fmt.Sprintf("%s-%s-web-lt", projectName, stackName)),
+			ImageId:      pulumi.String(amiResult.Id),
+			InstanceType: pulumi.String("t3.micro"),
+			VpcSecurityGroupIds: pulumi.StringArray{
+				webSecurityGroup.ID(),
+			},
 			IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileArgs{
 				Name: instanceProfile.Name,
 			},
@@ -554,46 +580,6 @@ systemctl start amazon-cloudwatch-agent
 					PropagateAtLaunch: pulumi.Bool(true),
 				},
 			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Enable S3 bucket versioning using BucketV2 approach
-		_, err = s3.NewBucketVersioningV2(ctx, "bucket-versioning", &s3.BucketVersioningV2Args{
-			Bucket: s3Bucket.ID(),
-			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
-				Status: pulumi.String("Enabled"),
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Enable S3 bucket encryption using BucketV2 approach
-		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, "bucket-encryption", &s3.BucketServerSideEncryptionConfigurationV2Args{
-			Bucket: s3Bucket.ID(),
-			ServerSideEncryptionConfiguration: &s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationArgs{
-				Rules: s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArray{
-					&s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleArgs{
-						ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2ServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs{
-							SseAlgorithm: pulumi.String("AES256"),
-						},
-					},
-				},
-			},
-		})
-		if err != nil {
-			return err
-		}
-
-		// Block public access to S3 bucket
-		_, err = s3.NewBucketPublicAccessBlock(ctx, "bucket-pab", &s3.BucketPublicAccessBlockArgs{
-			Bucket:                s3Bucket.ID(),
-			BlockPublicAcls:       pulumi.Bool(true),
-			BlockPublicPolicy:     pulumi.Bool(true),
-			IgnorePublicAcls:      pulumi.Bool(true),
-			RestrictPublicBuckets: pulumi.Bool(true),
 		})
 		if err != nil {
 			return err
