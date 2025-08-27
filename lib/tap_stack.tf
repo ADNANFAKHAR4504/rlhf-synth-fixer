@@ -434,14 +434,14 @@ resource "aws_lb_target_group" "main" {
 
   health_check {
     enabled             = true
-    healthy_threshold   = 2
-    interval            = 15     # Faster checks every 15 seconds
-    matcher             = "200"
+    healthy_threshold   = 2      # Require 2 successful checks to mark healthy
+    interval            = 15     # Check every 15 seconds
+    matcher             = "200"  # Expect HTTP 200 response
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5      # Shorter timeout
-    unhealthy_threshold = 2      # Fewer failures before marking unhealthy
+    timeout             = 5      # 5-second timeout for health checks
+    unhealthy_threshold = 2      # Mark unhealthy after 2 consecutive failures
   }
 
   tags = merge(local.common_tags, { Name = "${local.unique_project_name}-target-group" })
@@ -491,13 +491,18 @@ resource "aws_launch_template" "main" {
 
     echo "Starting EC2 setup..."
 
-    # Wait a little for network and yum
-    sleep 20
+    # Wait for system to be ready
+    sleep 30
 
-    yum install -y httpd -q
+    # Install Apache with retry logic
+    for i in {1..3}; do
+      yum install -y httpd -q && break || sleep 10
+    done
+
     systemctl enable httpd
     systemctl start httpd
 
+    # Create health endpoints immediately
     mkdir -p /var/www/html
     echo "healthy" > /var/www/html/health
     echo "<h1>Hello from ${local.unique_project_name}</h1><p>Instance is healthy!</p>" > /var/www/html/index.html
@@ -505,9 +510,19 @@ resource "aws_launch_template" "main" {
     chmod 644 /var/www/html/health
     chmod 644 /var/www/html/index.html
 
-    # Quick verification
-    curl -f http://localhost/ || echo "Index failed but continuing"
-    curl -f http://localhost/health || echo "Health failed but continuing"
+    # Wait for Apache to fully start
+    sleep 5
+
+    # Verify endpoints are working
+    for i in {1..5}; do
+      if curl -f http://localhost/health > /dev/null 2>&1; then
+        echo "Health endpoint is working"
+        break
+      else
+        echo "Health endpoint not ready, attempt $i/5"
+        sleep 10
+      fi
+    done
 
     echo "EC2 setup complete."
   EOF
@@ -525,12 +540,22 @@ resource "aws_launch_template" "main" {
 }
 
 # Auto Scaling Group
+# 
+# Health Check Strategy:
+# - Uses ELB health checks (required when attached to ALB target group)
+# - 10-minute grace period allows sufficient time for instance boot and Apache startup
+# - User data script includes retry logic and health endpoint verification
+# - Target group health checks run every 15 seconds with 5-second timeout
+# - Instances marked unhealthy after 2 consecutive failures
+# - This configuration ensures reliable instance health detection while allowing
+#   sufficient time for the user data script to complete successfully
+#
 resource "aws_autoscaling_group" "main" {
   name                      = "${local.unique_project_name}-${local.unique_deployment_id}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"   # must be ELB if attached to ALB
-  health_check_grace_period = 900     # allow 15 minutes for startup
+  health_check_grace_period = 600     # allow 10 minutes for startup (matches Terraform timeout)
   
   min_size         = 2
   max_size         = 6
