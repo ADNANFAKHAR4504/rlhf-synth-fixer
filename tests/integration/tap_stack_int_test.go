@@ -79,13 +79,25 @@ func loadFlatOutputs() (FlatOutputs, error) {
 
 // getOutputValue retrieves a specific output value from the flat outputs
 func getOutputValue(outputs FlatOutputs, outputKey string) (string, bool) {
+	fmt.Printf("DEBUG: Looking for output key: %s\n", outputKey)
+	fmt.Printf("DEBUG: Available outputs: %+v\n", outputs)
+
+	// First try direct lookup
+	if value, exists := outputs[outputKey]; exists {
+		fmt.Printf("DEBUG: Found direct match for %s: %s\n", outputKey, value)
+		return value, true
+	}
+
 	// Look for the output key in the flat outputs
 	// The key format is typically: StackName.OutputKey
 	for key, value := range outputs {
 		if strings.HasSuffix(key, "."+outputKey) || strings.Contains(key, outputKey) {
+			fmt.Printf("DEBUG: Found match for %s in key %s: %s\n", outputKey, key, value)
 			return value, true
 		}
 	}
+
+	fmt.Printf("DEBUG: No match found for %s\n", outputKey)
 	return "", false
 }
 
@@ -332,12 +344,16 @@ func TestInternetGatewayExists(t *testing.T) {
 
 	// Verify IGW is attached to our VPC
 	var attachedToVPC bool
+	t.Logf("DEBUG: Checking IGW attachments for VPC %s", vpcID)
 	for _, attachment := range igw.Attachments {
+		t.Logf("DEBUG: IGW attachment - VpcId: %s, State: %s", *attachment.VpcId, attachment.State)
 		if *attachment.VpcId == vpcID && attachment.State == ec2Types.AttachmentStatusAttached {
 			attachedToVPC = true
 			break
 		}
 	}
+
+	t.Logf("DEBUG: attachedToVPC result: %v", attachedToVPC)
 
 	if !attachedToVPC {
 		t.Errorf("Internet Gateway should be attached to VPC %s", vpcID)
