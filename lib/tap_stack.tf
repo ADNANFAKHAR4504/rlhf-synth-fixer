@@ -44,6 +44,16 @@ module "s3_cloudtrail_bucket" {
   bucket_policy = data.aws_iam_policy_document.cloudtrail_s3.json
 }
 
+# S3_cloudtrail
+module "s3_cloudtrail_bucket" {
+  source      = "./modules/s3"
+  project     = var.project
+  kms_key_id = module.kms.kms_key_arn
+  bucket_name = "secconfig-cloudtrail-bucket-pr2219"
+  versioning_enabled = true
+  bucket_policy = data.aws_iam_policy_document.cloudtrail_s3.json
+}
+
 # SNS
 module "sns" {
   source      = "./modules/sns"
@@ -52,7 +62,7 @@ module "sns" {
 }
 
 # CloudWatch
-module "cloudwatch" {
+module "cloudwatch_security" {
   source      = "./modules/cloudwatch"
   log_group_name = "/aws/secconfig/security-logs-pr2219"
   retention_in_days = 90
@@ -60,7 +70,7 @@ module "cloudwatch" {
 }
 
 # CloudWatch
-module "cloudwatch" {
+module "cloudwatch_cloudtrail" {
   source      = "./modules/cloudwatch"
   log_group_name = "/aws/cloudtrail/cloudtrail-logs-pr2219"
   retention_in_days = 90
@@ -81,7 +91,13 @@ module "guardduty" {
   source  = "./modules/guardduty"
 }
 
-module "iam" {
+module "iam_cloudtrail" {
+  source = "./modules/iam"
+  role_name= "${var.project}-cloudtrail-cw-role"
+  policy_name = "${var.project}-cloudtrail-cw-policy"
+}
+
+module "iam_config" {
   source = "./modules/iam"
   role_name= "${var.project}-cloudtrail-cw-role"
   policy_name = "${var.project}-cloudtrail-cw-policy"
