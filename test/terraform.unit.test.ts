@@ -362,8 +362,8 @@ describe('Terraform Infrastructure Unit Tests', () => {
       expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.public\[\*\]\.id/);
     });
 
-    test('Auto Scaling Group uses ELB health checks', () => {
-      expect(stackContent).toMatch(/health_check_type\s*=\s*"ELB"/);
+    test('Auto Scaling Group uses EC2 health checks', () => {
+      expect(stackContent).toMatch(/health_check_type\s*=\s*"EC2"/);
     });
   });
 

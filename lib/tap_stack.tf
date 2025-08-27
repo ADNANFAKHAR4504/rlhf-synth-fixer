@@ -419,13 +419,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 30
+    interval            = 15     # Faster checks every 15 seconds
     matcher             = "200"
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 10
-    unhealthy_threshold = 3
+    timeout             = 5      # Shorter timeout
+    unhealthy_threshold = 2      # Fewer failures before marking unhealthy
   }
 
   tags = merge(local.common_tags, { Name = "${local.unique_project_name}-target-group" })
@@ -484,15 +484,15 @@ resource "aws_launch_template" "main" {
     echo "<h1>Hello from ${local.unique_project_name}</h1>" > /var/www/html/index.html
     echo "<p>Instance is healthy!</p>" >> /var/www/html/index.html
 
-    # Install Apache quickly
-    yum install -y httpd
+    # Install Apache quickly without updates
+    yum install -y httpd --quiet
 
     # Start Apache immediately
     systemctl enable httpd
     systemctl start httpd
 
     # Quick verification
-    sleep 3
+    sleep 2
     curl -f http://localhost/health || echo "Health check failed but continuing"
 
     echo "EC2 setup complete."
@@ -515,24 +515,24 @@ resource "aws_autoscaling_group" "main" {
   name                      = "${local.unique_project_name}-${random_string.asg_suffix.result}-asg"
   vpc_zone_identifier       = aws_subnet.public[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"  # Use ELB health checks
-  health_check_grace_period = 300    # Grace period for ELB checks
-
+  health_check_type         = "EC2"  # Use EC2 health checks for faster startup
+  health_check_grace_period = 180    # 3 minutes grace period for EC2 checks
+  
   min_size         = 2
   max_size         = 6
   desired_capacity = 2
-
+  
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
-
+  
   tag {
     key                 = "Name"
     value               = "${local.unique_project_name}-asg-instance"
     propagate_at_launch = true
   }
-
+  
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -541,9 +541,10 @@ resource "aws_autoscaling_group" "main" {
       propagate_at_launch = true
     }
   }
-
+  
   lifecycle {
     create_before_destroy = true
+    ignore_changes        = [desired_capacity]
   }
 }
 
@@ -582,8 +583,11 @@ resource "aws_db_instance" "main" {
   deletion_protection    = false
   tags = merge(local.common_tags, { Name = "${local.unique_project_name}-database" })
   
+  depends_on = [aws_db_subnet_group.main]
+  
   lifecycle {
     create_before_destroy = false
+    replace_triggered_by = [aws_db_subnet_group.main.name]
   }
 }
 
