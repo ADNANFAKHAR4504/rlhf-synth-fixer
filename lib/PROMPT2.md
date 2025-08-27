@@ -1,7 +1,7 @@
-Hey! I need your help building a serverless setup using AWS CDK with Golang. The idea is to create a highly available infrastructure that works across two AWS region: US-West-2. Here's what I'm thinking:
+Hey there! I need your help designing a serverless infrastructure using AWS CDK with Golang. The goal is to create a highly available setup that spans two AWS region: US-West-2. Here's what I have in mind:
 
-The application logic will be handled by AWS Lambda functions, and each function should stay within a memory limit of 256MB. These functions will be triggered by an API Gateway, which will handle all incoming HTTP requests. It's super important that the API Gateway is properly connected to the Lambda functions so everything runs smoothly.
+First, the application logic should be handled by AWS Lambda functions. Each function needs to stay within a memory limit of 256MB. These Lambda functions will be triggered by an API Gateway, which will manage incoming HTTP requests. It's important that the API Gateway is properly linked to the Lambda functions so everything works seamlessly.
 
-Also, I want to make sure that all Lambda executions are logged in CloudWatch. This will help with monitoring and debugging. Since this is for a production environment, every resource we create should be tagged with `Environment: EnvironementSuffix`.
+I also want to make sure that all Lambda executions are logged in CloudWatch. This will help with monitoring and debugging. And since this is for a production environment, every resource we create should be tagged with `Environment: EnvironmentSuffix`.
 
-The setup should be clean, efficient, and follow best practices. Can you write the code for this in AWS CDK using Golang? It should be fully functional, deployable, and meet all the requirements. Let me know if you need anything else from me!
+The setup should be clean, efficient, and adhere to best practices. Can you write the code for this in AWS CDK using Golang? The solution should be fully functional, deployable, and meet all the requirements. Let me know if you need any additional details!
