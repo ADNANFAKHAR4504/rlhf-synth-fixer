@@ -79,6 +79,43 @@ public class WebAppStackIntegrationTest {
   }
 
   @Test
+  void testApplicationLoads() {
+    assertDoesNotThrow(() -> {
+      Class.forName("app.Main");
+    });
+  }
+
+  /** Test that Pulumi dependencies are available on classpath. */
+  @Test
+  void testPulumiDependenciesAvailable() {
+    assertDoesNotThrow(
+      () -> {
+        Class.forName("com.pulumi.Pulumi");
+        Class.forName("com.pulumi.aws.s3.Bucket");
+        Class.forName("com.pulumi.aws.s3.BucketArgs");
+      },
+      "Pulumi dependencies should be available on classpath"
+    );
+  }
+
+  /** Test that required project files exist. */
+  @Test
+  void testProjectStructure() {
+    assertTrue(
+      Files.exists(Paths.get("lib/src/main/java/app/Main.java")),
+      "Main.java should exist"
+    );
+    assertTrue(
+      Files.exists(Paths.get("Pulumi.yaml")),
+      "Pulumi.yaml should exist"
+    );
+    assertTrue(
+      Files.exists(Paths.get("build.gradle")),
+      "build.gradle should exist"
+    );
+  }
+
+  @Test
   void testS3Integration() {
     if (stackOutputs.isEmpty() || !stackOutputs.containsKey("s3BucketName")) {
       System.out.println(
