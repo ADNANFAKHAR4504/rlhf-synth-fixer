@@ -36,5 +36,11 @@
     "AWS Internet Gateway",
     "AWS Security Groups",
     "AWS CloudWatch Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
