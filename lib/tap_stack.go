@@ -685,32 +685,6 @@ func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig)
 		CloudWatchLogsRoleArn:      cloudtrailRole.Arn(),
 		KmsKeyId:                   s3KmsKey.Arn(),
 
-		EventSelector: &[]*cloudtrail.CloudtrailEventSelector{
-			{
-				ReadWriteType:           jsii.String("All"),
-				IncludeManagementEvents: jsii.Bool(true),
-				ExcludeManagementEventSources: &[]*string{
-					jsii.String("kms.amazonaws.com"),
-					jsii.String("rdsdata.amazonaws.com"),
-				},
-				DataResource: &[]*cloudtrail.CloudtrailEventSelectorDataResource{
-					{
-						Type: jsii.String("AWS::S3::Object"),
-						Values: &[]*string{
-							jsii.String(fmt.Sprintf("%s/*", *cloudtrailBucket.Arn())),
-							jsii.String(fmt.Sprintf("%s/*", *appDataBucket.Arn())),
-						},
-					},
-					{
-						Type: jsii.String("AWS::S3::Bucket"),
-						Values: &[]*string{
-							jsii.String(*cloudtrailBucket.Arn()),
-							jsii.String(*appDataBucket.Arn()),
-						},
-					},
-				},
-			},
-		},
 		Tags: &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("tap-cloudtrail-%s", *config.Environment)),
 		},
