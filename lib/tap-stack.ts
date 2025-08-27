@@ -5,6 +5,7 @@ import {
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+
 import { Construct } from 'constructs';
 
 // Import your modules (you'll need to create these based on your requirements)
@@ -26,18 +27,19 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags;
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-const AWS_REGION_OVERRIDE = 'us-east-1';
-
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+
+    // Handle AWS_REGION_OVERRIDE environment variable
+    const awsRegionOverride = process.env.AWS_REGION_OVERRIDE;
+    const awsRegion =
+      awsRegionOverride && awsRegionOverride.trim() !== ''
+        ? awsRegionOverride.trim()
+        : props?.awsRegion || 'us-east-1';
+
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];

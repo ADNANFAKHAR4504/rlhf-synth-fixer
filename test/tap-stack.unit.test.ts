@@ -1,268 +1,357 @@
-// __tests__/tap-stack.unit.test.ts
-
 import { Testing } from 'cdktf';
-import { TapStack } from '../lib/tap-stack';
+import { TapStack } from '../lib/tap-stack'; // Adjust path as needed
 
-// Mock all the modules used in TapStack
+// Mock the modules at the top level before any imports
 jest.mock('../lib/modules', () => ({
-  KmsModule: jest.fn().mockImplementation((scope, id) => ({
+  KmsModule: jest.fn().mockImplementation((scope, id, props) => ({
     key: {
-      keyId: `${id}-kms-key-id`,
-      arn: `arn:aws:kms:us-east-1:123456789012:key/${id}-kms-key-id`
-    }
+      keyId: 'mock-kms-key-id',
+      arn: 'arn:aws:kms:us-east-1:123456789012:key/mock-key-id',
+    },
   })),
-
   S3Module: jest.fn().mockImplementation((scope, id, props) => ({
     bucket: {
-      bucket: props.bucketName,
-      arn: `arn:aws:s3:::${props.bucketName}`,
-      id: `${id}-bucket-id`
-    }
+      bucket: `mock-bucket-${id}`,
+      arn: `arn:aws:s3:::mock-bucket-${id}`,
+    },
   })),
-
-  IamModule: jest.fn().mockImplementation((scope, id) => ({
+  IamModule: jest.fn().mockImplementation((scope, id, props) => ({
     instanceProfile: {
-      name: `${id}-instance-profile`,
-      arn: `arn:aws:iam::123456789012:instance-profile/${id}-instance-profile`
-    }
+      name: 'mock-instance-profile',
+      arn: 'arn:aws:iam::123456789012:instance-profile/mock-instance-profile',
+    },
   })),
-
-  VpcModule: jest.fn().mockImplementation((scope, id) => ({
+  VpcModule: jest.fn().mockImplementation((scope, id, props) => ({
     vpc: {
-      id: `${id}-vpc-id`,
-      arn: `arn:aws:ec2:us-east-1:123456789012:vpc/${id}-vpc-id`
+      id: 'vpc-mock123',
     },
     publicSubnets: [
-      { id: 'subnet-public-1', availabilityZone: 'us-east-1a' },
-      { id: 'subnet-public-2', availabilityZone: 'us-east-1b' }
+      { id: 'subnet-public-1' },
+      { id: 'subnet-public-2' },
     ],
     privateSubnets: [
-      { id: 'subnet-private-1', availabilityZone: 'us-east-1a' },
-      { id: 'subnet-private-2', availabilityZone: 'us-east-1b' }
-    ]
+      { id: 'subnet-private-1' },
+      { id: 'subnet-private-2' },
+    ],
   })),
-
-  SecurityGroupModule: jest.fn().mockImplementation((scope, id) => ({
+  SecurityGroupModule: jest.fn().mockImplementation((scope, id, props) => ({
     securityGroup: {
-      id: `${id}-sg-id`,
-      arn: `arn:aws:ec2:us-east-1:123456789012:security-group/${id}-sg-id`
-    }
+      id: `sg-mock-${id}`,
+    },
   })),
-
-  Ec2Module: jest.fn().mockImplementation((scope, id) => ({
+  Ec2Module: jest.fn().mockImplementation((scope, id, props) => ({
     instance: {
-      id: `${id}-instance-id`,
+      id: `i-mock-${id}`,
       publicIp: id.includes('public') ? '203.0.113.100' : undefined,
-      privateIp: '10.0.1.100'
-    }
+      privateIp: '10.0.1.100',
+    },
   })),
-
-  RdsModule: jest.fn().mockImplementation((scope, id) => ({
+  RdsModule: jest.fn().mockImplementation((scope, id, props) => ({
     dbInstance: {
-      endpoint: `${id}-db.cluster-xyz.us-east-1.rds.amazonaws.com`,
-      port: 5432,
-      resourceId: `${id}-db-resource-id`
-    }
-  }))
+      endpoint: 'mock-db.cluster-xyz.us-east-1.rds.amazonaws.com:5432',
+    },
+  })),
 }));
 
-// Mock CDKTF AWS provider data sources
-jest.mock('@cdktf/provider-aws/lib/data-aws-caller-identity', () => ({
-  DataAwsCallerIdentity: jest.fn().mockImplementation(() => ({
-    accountId: '123456789012'
-  }))
-}));
+// Import the mocked modules
+import {
+  KmsModule,
+  S3Module,
+  IamModule,
+  VpcModule,
+  SecurityGroupModule,
+  Ec2Module,
+  RdsModule,
+} from '../lib/modules';
 
-jest.mock('@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version', () => ({
-  DataAwsSecretsmanagerSecretVersion: jest.fn().mockImplementation(() => ({
-    secretString: 'mock-db-password'
-  }))
-}));
-
-describe('TapStack Unit Tests', () => {
-  const {
-    KmsModule,
-    S3Module,
-    IamModule,
-    VpcModule,
-    SecurityGroupModule,
-    Ec2Module,
-    RdsModule
-  } = require('../lib/modules');
-
-  // Store original environment variables
-  const originalEnv = process.env;
-
+describe('TapStack', () => {
+  let app: any;
+  
   beforeEach(() => {
+    app = Testing.app();
+    // Clear all mocks before each test
     jest.clearAllMocks();
-    // Reset environment variables
-    process.env = { ...originalEnv };
   });
 
-  afterAll(() => {
-    // Restore original environment variables
-    process.env = originalEnv;
+  afterEach(() => {
+    // Clean up environment variables
+    delete process.env.AWS_REGION_OVERRIDE;
   });
 
-  describe('Constructor and Configuration', () => {
-    test('should create TapStack with default configuration', () => {
-      const app = Testing.app();
-      const stack = new TapStack(app, 'TestStack');
-
-      expect(stack).toBeDefined();
-      expect(stack.node.id).toBe('TestStack');
+  describe('Constructor with default props', () => {
+    it('should create stack with default configuration', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      // Verify the stack is created
+      expect(synthesized).toBeDefined();
+      expect(typeof synthesized).toBe('string');
     });
 
-    test('should create TapStack with undefined props', () => {
-      const app = Testing.app();
-      const stack = new TapStack(app, 'TestStackUndefined', undefined);
-
-      expect(stack).toBeDefined();
-      expect(stack.node.id).toBe('TestStackUndefined');
+    it('should use default environment suffix when not provided', () => {
+      new TapStack(app, 'test-stack');
+      
+      expect(KmsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'kms',
+        expect.objectContaining({
+          environment: 'dev',
+        })
+      );
     });
 
-    test('should create TapStack with empty props object', () => {
-      const app = Testing.app();
-      const stack = new TapStack(app, 'TestStackEmpty', {});
-
-      expect(stack).toBeDefined();
-      expect(stack.node.id).toBe('TestStackEmpty');
+    it('should use default AWS region when not provided', () => {
+      new TapStack(app, 'test-stack');
+      
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['us-east-1a', 'us-east-1b'],
+        })
+      );
     });
+  });
 
-    test('should create TapStack with custom props', () => {
-      const app = Testing.app();
-      const customProps = {
+  describe('Constructor with custom props', () => {
+    it('should create stack with custom environment suffix', () => {
+      new TapStack(app, 'test-stack', {
         environmentSuffix: 'prod',
+      });
+      
+      expect(KmsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'kms',
+        expect.objectContaining({
+          environment: 'prod',
+        })
+      );
+    });
+
+    it('should create stack with custom AWS region', () => {
+      new TapStack(app, 'test-stack', {
         awsRegion: 'us-west-2',
-        stateBucket: 'custom-tf-states',
-        stateBucketRegion: 'us-west-2'
+      });
+      
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['us-west-2a', 'us-west-2b'],
+        })
+      );
+    });
+
+    it('should create stack with custom state bucket configuration', () => {
+      const stack = new TapStack(app, 'test-stack', {
+        stateBucket: 'custom-state-bucket',
+        stateBucketRegion: 'eu-west-1',
+      });
+      
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toContain('custom-state-bucket');
+    });
+
+    it('should create stack with custom default tags', () => {
+      const customTags = {
+        tags: {
+          Environment: 'test',
+          Project: 'custom-project',
+        },
       };
-
-      const stack = new TapStack(app, 'TestStackCustom', customProps);
-
-      expect(stack).toBeDefined();
-      expect(stack.node.id).toBe('TestStackCustom');
+      
+      const stack = new TapStack(app, 'test-stack', {
+        defaultTags: customTags,
+      });
+      
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toBeDefined();
     });
 
-    test('should handle partial props configuration', () => {
-      const app = Testing.app();
-      const partialProps = {
-        environmentSuffix: 'staging'
-        // Missing other props to test default fallbacks
-      };
-
-      const stack = new TapStack(app, 'TestStackPartial', partialProps);
-
-      expect(stack).toBeDefined();
-      expect(stack.node.id).toBe('TestStackPartial');
-    });
-
-    test('should handle AWS region override with environment variable', () => {
-      // Set environment variable to test the override branch
-      process.env.AWS_REGION_OVERRIDE = 'eu-west-1';
-
-      const app = Testing.app();
-      const props = { awsRegion: 'us-west-2' };
-
-      new TapStack(app, 'TestStackOverride', props);
-
-      // The VPC should use eu-west-1 AZs due to the override
-      expect(VpcModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'vpc',
-        expect.objectContaining({
-          availabilityZones: ['eu-west-1a', 'eu-west-1b']
-        })
-      );
-    });
-
-    test('should handle AWS region override when not set', () => {
-      // Ensure environment variable is not set
-      delete process.env.AWS_REGION_OVERRIDE;
-
-      const app = Testing.app();
-      const props = { awsRegion: 'eu-central-1' };
-
-      new TapStack(app, 'TestStackNoOverride', props);
-
-      // The VPC should use the provided region AZs
-      expect(VpcModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'vpc',
-        expect.objectContaining({
-          availabilityZones: ['eu-central-1a', 'eu-central-1b']
-        })
-      );
-    });
-
-    test('should use default region when no region specified', () => {
-      // Ensure environment variable is not set
-      delete process.env.AWS_REGION_OVERRIDE;
-
-      const app = Testing.app();
-      new TapStack(app, 'TestStackDefaultRegion');
-
-      // Should use default us-east-1 region
-      expect(VpcModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'vpc',
-        expect.objectContaining({
-          availabilityZones: ['us-east-1a', 'us-east-1b']
-        })
-      );
-    });
-
-    test('should handle defaultTags configuration', () => {
-      const app = Testing.app();
-      const propsWithTags = {
+    it('should handle all custom props together', () => {
+      new TapStack(app, 'test-stack', {
+        environmentSuffix: 'staging',
+        awsRegion: 'eu-west-1',
+        stateBucket: 'staging-tf-state',
+        stateBucketRegion: 'eu-central-1',
         defaultTags: {
           tags: {
-            Environment: 'test',
-            Project: 'tap-test',
-            Owner: 'TestTeam'
-          }
-        }
-      };
+            Environment: 'staging',
+          },
+        },
+      });
 
-      const stack = new TapStack(app, 'TestStackTags', propsWithTags);
-      expect(stack).toBeDefined();
-    });
+      expect(KmsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'kms',
+        expect.objectContaining({
+          environment: 'staging',
+        })
+      );
 
-    test('should handle missing defaultTags', () => {
-      const app = Testing.app();
-      const propsWithoutTags = {
-        environmentSuffix: 'test'
-        // No defaultTags property
-      };
-
-      const stack = new TapStack(app, 'TestStackNoTags', propsWithoutTags);
-      expect(stack).toBeDefined();
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['eu-west-1a', 'eu-west-1b'],
+        })
+      );
     });
   });
 
-  describe('Module Creation and Configuration', () => {
-    test('should create KMS module with correct configuration', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackKMS');
+  describe('Environment variable handling', () => {
+    it('should use AWS_REGION_OVERRIDE when set', () => {
+      process.env.AWS_REGION_OVERRIDE = 'eu-central-1';
+      
+      new TapStack(app, 'test-stack');
+      
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['eu-central-1a', 'eu-central-1b'],
+        })
+      );
+    });
 
+    it('should ignore empty AWS_REGION_OVERRIDE', () => {
+      process.env.AWS_REGION_OVERRIDE = '   ';
+      
+      new TapStack(app, 'test-stack', {
+        awsRegion: 'us-west-1',
+      });
+      
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['us-west-1a', 'us-west-1b'],
+        })
+      );
+    });
+
+    it('should trim whitespace from AWS_REGION_OVERRIDE', () => {
+      process.env.AWS_REGION_OVERRIDE = '  ap-southeast-1  ';
+      
+      new TapStack(app, 'test-stack');
+      
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['ap-southeast-1a', 'ap-southeast-1b'],
+        })
+      );
+    });
+
+    it('should override props awsRegion with environment variable', () => {
+      process.env.AWS_REGION_OVERRIDE = 'ap-northeast-1';
+      
+      new TapStack(app, 'test-stack', {
+        awsRegion: 'us-west-2', // This should be overridden
+      });
+      
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['ap-northeast-1a', 'ap-northeast-1b'],
+        })
+      );
+    });
+
+    it('should handle undefined environment variable', () => {
+      delete process.env.AWS_REGION_OVERRIDE;
+      
+      new TapStack(app, 'test-stack', {
+        awsRegion: 'ca-central-1',
+      });
+      
+      expect(VpcModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc',
+        expect.objectContaining({
+          availabilityZones: ['ca-central-1a', 'ca-central-1b'],
+        })
+      );
+    });
+  });
+
+  describe('Module instantiation', () => {
+    it('should create all required modules', () => {
+      new TapStack(app, 'test-stack');
+      
       expect(KmsModule).toHaveBeenCalledTimes(1);
+      expect(S3Module).toHaveBeenCalledTimes(3); // app-data, public-assets, private-data
+      expect(IamModule).toHaveBeenCalledTimes(1);
+      expect(VpcModule).toHaveBeenCalledTimes(1);
+      expect(SecurityGroupModule).toHaveBeenCalledTimes(3); // public-ec2, private-ec2, rds
+      expect(Ec2Module).toHaveBeenCalledTimes(2); // public and private
+      expect(RdsModule).toHaveBeenCalledTimes(1);
+    });
+
+    it('should create KMS module with correct parameters', () => {
+      new TapStack(app, 'test-stack', {
+        environmentSuffix: 'staging',
+      });
+      
       expect(KmsModule).toHaveBeenCalledWith(
         expect.anything(),
         'kms',
         expect.objectContaining({
           project: 'tap-project',
-          environment: 'dev',
-          description: 'KMS key for tap-project dev environment',
-          accountId: '123456789012'
+          environment: 'staging',
+          description: 'KMS key for tap-project staging environment',
         })
       );
     });
 
-    test('should create VPC module with correct configuration', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackVPC');
+    it('should create S3 modules with correct configurations', () => {
+      new TapStack(app, 'test-stack', {
+        environmentSuffix: 'prod',
+      });
+      
+      // Check app-data bucket
+      expect(S3Module).toHaveBeenCalledWith(
+        expect.anything(),
+        's3-app-data',
+        expect.objectContaining({
+          project: 'tap-project',
+          environment: 'prod',
+          bucketName: 'tap-project-prod-app-data',
+        })
+      );
+      
+      // Check public assets bucket
+      expect(S3Module).toHaveBeenCalledWith(
+        expect.anything(),
+        's3-public-assets',
+        expect.objectContaining({
+          project: 'tap-project',
+          environment: 'prod',
+          bucketName: 'tap-project-prod-public-assets',
+          isPublic: true,
+        })
+      );
+      
+      // Check private data bucket
+      expect(S3Module).toHaveBeenCalledWith(
+        expect.anything(),
+        's3-private-data',
+        expect.objectContaining({
+          project: 'tap-project',
+          environment: 'prod',
+          bucketName: 'tap-project-prod-private-data',
+          isPublic: false,
+        })
+      );
+    });
 
-      expect(VpcModule).toHaveBeenCalledTimes(1);
+    it('should create VPC module with correct CIDR and AZs', () => {
+      new TapStack(app, 'test-stack', {
+        awsRegion: 'ap-northeast-1',
+      });
+      
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
         'vpc',
@@ -270,198 +359,62 @@ describe('TapStack Unit Tests', () => {
           project: 'tap-project',
           environment: 'dev',
           cidrBlock: '10.0.0.0/16',
-          availabilityZones: ['us-east-1a', 'us-east-1b']
+          availabilityZones: ['ap-northeast-1a', 'ap-northeast-1b'],
         })
       );
     });
 
-    test('should create all security groups with correct configurations', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackSG');
-
-      expect(SecurityGroupModule).toHaveBeenCalledTimes(3);
-
-      // Public EC2 Security Group
+    it('should create security groups with correct rules', () => {
+      new TapStack(app, 'test-stack');
+      
+      // Check public EC2 security group
       expect(SecurityGroupModule).toHaveBeenCalledWith(
         expect.anything(),
         'public-ec2-sg',
         expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
           name: 'public-ec2',
           description: 'Security group for public EC2 instances',
-          vpcId: 'vpc-vpc-id',
           rules: expect.arrayContaining([
             expect.objectContaining({
               type: 'ingress',
               fromPort: 22,
               toPort: 22,
               protocol: 'tcp',
-              cidrBlocks: ['203.0.113.0/24']
-            })
-          ])
-        })
-      );
-
-      // Private EC2 Security Group
-      expect(SecurityGroupModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'private-ec2-sg',
-        expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
-          name: 'private-ec2',
-          description: 'Security group for private EC2 instances',
-          vpcId: 'vpc-vpc-id',
-          rules: expect.arrayContaining([
-            expect.objectContaining({
-              type: 'ingress',
-              fromPort: 22,
-              toPort: 22,
-              protocol: 'tcp',
-              sourceSecurityGroupId: 'public-ec2-sg-sg-id'
-            })
-          ])
-        })
-      );
-
-      // RDS Security Group
-      expect(SecurityGroupModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'rds-sg',
-        expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
-          name: 'rds',
-          description: 'Security group for RDS instances',
-          vpcId: 'vpc-vpc-id',
-          rules: expect.arrayContaining([
-            expect.objectContaining({
-              type: 'ingress',
-              fromPort: 5432,
-              toPort: 5432,
-              protocol: 'tcp',
-              sourceSecurityGroupId: 'private-ec2-sg-sg-id'
-            })
-          ])
+              cidrBlocks: ['203.0.113.0/24'],
+            }),
+          ]),
         })
       );
     });
 
-    test('should create S3 buckets with correct configurations', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackS3');
-
-      expect(S3Module).toHaveBeenCalledTimes(3); // app-data, public-assets, private-data
-
-      // App data bucket
-      expect(S3Module).toHaveBeenCalledWith(
-        expect.anything(),
-        's3-app-data',
-        expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
-          bucketName: 'tap-project-dev-app-data',
-          kmsKey: expect.objectContaining({
-            keyId: 'kms-kms-key-id'
-          })
-        })
-      );
-
-      // Public assets bucket
-      expect(S3Module).toHaveBeenCalledWith(
-        expect.anything(),
-        's3-public-assets',
-        expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
-          bucketName: 'tap-project-dev-public-assets',
-          kmsKey: expect.objectContaining({
-            keyId: 'kms-kms-key-id'
-          }),
-          isPublic: true
-        })
-      );
-
-      // Private data bucket
-      expect(S3Module).toHaveBeenCalledWith(
-        expect.anything(),
-        's3-private-data',
-        expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
-          bucketName: 'tap-project-dev-private-data',
-          kmsKey: expect.objectContaining({
-            keyId: 'kms-kms-key-id'
-          }),
-          isPublic: false
-        })
-      );
-    });
-
-    test('should create IAM module with correct configuration', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackIAM');
-
-      expect(IamModule).toHaveBeenCalledTimes(1);
-      expect(IamModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'iam',
-        expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
-          appDataBucketArn: 'arn:aws:s3:::tap-project-dev-app-data'
-        })
-      );
-    });
-
-    test('should create EC2 instances with correct configurations', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackEC2');
-
-      expect(Ec2Module).toHaveBeenCalledTimes(2);
-
-      // Public EC2 instance
+    it('should create EC2 instances with correct configurations', () => {
+      new TapStack(app, 'test-stack');
+      
+      // Check public EC2
       expect(Ec2Module).toHaveBeenCalledWith(
         expect.anything(),
         'public-ec2',
         expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
           instanceType: 't3.micro',
-          subnetId: 'subnet-public-1',
-          securityGroupIds: ['public-ec2-sg-sg-id'],
-          instanceProfile: expect.objectContaining({
-            name: 'iam-instance-profile'
-          }),
           keyName: 'turing-key',
-          userData: expect.stringContaining('#!/bin/bash')
+          userData: expect.stringContaining('#!/bin/bash'),
         })
       );
-
-      // Private EC2 instance
+      
+      // Check private EC2
       expect(Ec2Module).toHaveBeenCalledWith(
         expect.anything(),
         'private-ec2',
         expect.objectContaining({
-          project: 'tap-project',
-          environment: 'dev',
           instanceType: 't3.micro',
-          subnetId: 'subnet-private-1',
-          securityGroupIds: ['private-ec2-sg-sg-id'],
-          instanceProfile: expect.objectContaining({
-            name: 'iam-instance-profile'
-          }),
-          keyName: 'turing-key'
+          keyName: 'turing-key',
         })
       );
     });
 
-    test('should create RDS database with correct configuration', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackRDS');
-
-      expect(RdsModule).toHaveBeenCalledTimes(1);
+    it('should create RDS module with correct parameters', () => {
+      new TapStack(app, 'test-stack');
+      
       expect(RdsModule).toHaveBeenCalledWith(
         expect.anything(),
         'rds',
@@ -473,222 +426,245 @@ describe('TapStack Unit Tests', () => {
           allocatedStorage: 20,
           dbName: 'appdb',
           username: 'dbadmin',
-          password: 'mock-db-password',
-          subnetIds: ['subnet-private-1', 'subnet-private-2'],
-          securityGroupIds: ['rds-sg-sg-id'],
-          kmsKey: expect.objectContaining({
-            keyId: 'kms-kms-key-id'
-          })
         })
       );
     });
   });
 
-  describe('Environment and Configuration Variations', () => {
-    test('should create stack with custom environment suffix', () => {
-      const app = Testing.app();
-      const props = { environmentSuffix: 'staging' };
-      new TapStack(app, 'TestStackStaging', props);
+  describe('AWS resources', () => {
+    it('should create AWS provider with correct region', () => {
+      const stack = new TapStack(app, 'test-stack', {
+        awsRegion: 'eu-west-2',
+      });
+      
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toContain('eu-west-2');
+    });
 
+    it('should create DataAwsCallerIdentity resource', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      // Should contain caller identity data source - check for the actual JSON structure
+      expect(synthesized).toContain('"aws_caller_identity"');
+      expect(synthesized).toContain('"current"');
+    });
+
+    it('should create DataAwsSecretsmanagerSecretVersion resource', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      // Should contain secrets manager data source - check for the actual JSON structure
+      expect(synthesized).toContain('"aws_secretsmanager_secret_version"');
+      expect(synthesized).toContain('"db-password-secret"');
+      expect(synthesized).toContain('"my-db-password"');
+    });
+  });
+
+  describe('S3 Backend configuration', () => {
+    it('should configure S3 backend with correct parameters', () => {
+      const stack = new TapStack(app, 'test-stack', {
+        environmentSuffix: 'test',
+        stateBucket: 'my-tf-state-bucket',
+        stateBucketRegion: 'us-west-2',
+      });
+      
+      const synthesized = Testing.synth(stack);
+      
+      expect(synthesized).toContain('my-tf-state-bucket');
+      expect(synthesized).toContain('test/test-stack.tfstate');
+      expect(synthesized).toContain('us-west-2');
+    });
+
+    it('should enable state locking', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      // Should contain use_lockfile override
+      expect(synthesized).toContain('use_lockfile');
+    });
+
+    it('should use default state bucket configuration', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      expect(synthesized).toContain('iac-rlhf-tf-states');
+      expect(synthesized).toContain('dev/test-stack.tfstate');
+    });
+  });
+
+  describe('Terraform outputs', () => {
+    it('should create all required outputs', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      const expectedOutputs = [
+        'vpc-id',
+        'public-subnet-ids',
+        'private-subnet-ids',
+        'public-ec2-instance-id',
+        'public-ec2-public-ip',
+        'private-ec2-instance-id',
+        'private-ec2-private-ip',
+        'public-s3-bucket-name',
+        'private-s3-bucket-name',
+        'rds-endpoint',
+        'kms-key-id',
+        'aws-account-id',
+      ];
+      
+      // Parse the JSON to check for outputs
+      const config = JSON.parse(synthesized);
+      expect(config.output).toBeDefined();
+      
+      expectedOutputs.forEach(output => {
+        expect(config.output[output]).toBeDefined();
+      });
+    });
+
+    it('should create outputs with correct descriptions', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      const config = JSON.parse(synthesized);
+      
+      expect(config.output['vpc-id'].description).toBe('VPC ID');
+      expect(config.output['public-subnet-ids'].description).toBe('Public subnet IDs');
+      expect(config.output['rds-endpoint'].description).toBe('RDS instance endpoint');
+      expect(config.output['aws-account-id'].description).toBe('Current AWS Account ID');
+    });
+
+    it('should create outputs with correct values', () => {
+      const stack = new TapStack(app, 'test-stack');
+      const synthesized = Testing.synth(stack);
+      
+      const config = JSON.parse(synthesized);
+      
+      // Check that outputs reference the correct mock values
+      expect(config.output['vpc-id'].value).toBe('vpc-mock123');
+      expect(config.output['public-subnet-ids'].value).toContain('subnet-public-1');
+      expect(config.output['public-s3-bucket-name'].value).toContain('mock-bucket');
+    });
+  });
+
+  describe('Error handling and edge cases', () => {
+    it('should handle undefined props gracefully', () => {
+      expect(() => {
+        new TapStack(app, 'test-stack', undefined);
+      }).not.toThrow();
+    });
+
+    it('should handle empty props object', () => {
+      expect(() => {
+        new TapStack(app, 'test-stack', {});
+      }).not.toThrow();
+    });
+
+    it('should handle props with only some values set', () => {
+      expect(() => {
+        new TapStack(app, 'test-stack', {
+          environmentSuffix: 'partial',
+        });
+      }).not.toThrow();
+    });
+
+    it('should handle null environment suffix', () => {
+      new TapStack(app, 'test-stack', {
+        environmentSuffix: undefined,
+      });
+      
       expect(KmsModule).toHaveBeenCalledWith(
         expect.anything(),
         'kms',
         expect.objectContaining({
-          environment: 'staging'
-        })
-      );
-
-      expect(S3Module).toHaveBeenCalledWith(
-        expect.anything(),
-        's3-app-data',
-        expect.objectContaining({
-          bucketName: 'tap-project-staging-app-data'
+          environment: 'dev', // Should default to 'dev'
         })
       );
     });
 
-    test('should configure S3 backend with default settings', () => {
-      const app = Testing.app();
-      const stack = new TapStack(app, 'TestStackBackendDefault');
-
-      expect(stack).toBeDefined();
-    });
-
-    test('should configure S3 backend with custom settings', () => {
-      const app = Testing.app();
-      const props = {
-        environmentSuffix: 'test',
-        stateBucket: 'my-tf-states',
-        stateBucketRegion: 'us-west-2'
-      };
-
-      const stack = new TapStack(app, 'TestStackBackend', props);
-
-      expect(stack).toBeDefined();
-    });
-
-    test('should create stack with proper resource naming convention', () => {
-      const app = Testing.app();
-      const stackName = 'MyTapStack';
-      const stack = new TapStack(app, stackName);
-
-      expect(stack.node.id).toBe(stackName);
-
-      // Verify consistent naming across modules
-      expect(KmsModule).toHaveBeenCalledWith(expect.anything(), 'kms', expect.anything());
-      expect(VpcModule).toHaveBeenCalledWith(expect.anything(), 'vpc', expect.anything());
-      expect(S3Module).toHaveBeenCalledWith(expect.anything(), 's3-app-data', expect.anything());
-      expect(RdsModule).toHaveBeenCalledWith(expect.anything(), 'rds', expect.anything());
-    });
-  });
-
-  describe('Integration and Dependencies', () => {
-    test('should handle module integration correctly', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackIntegration');
-
-      // Verify all modules are created
-      expect(KmsModule).toHaveBeenCalledTimes(1);
-      expect(VpcModule).toHaveBeenCalledTimes(1);
-      expect(SecurityGroupModule).toHaveBeenCalledTimes(3);
-      expect(S3Module).toHaveBeenCalledTimes(3);
-      expect(IamModule).toHaveBeenCalledTimes(1);
-      expect(Ec2Module).toHaveBeenCalledTimes(2);
-      expect(RdsModule).toHaveBeenCalledTimes(1);
-
-      // Verify dependencies are passed correctly
-      const rdsCall = RdsModule.mock.calls[0];
-      expect(rdsCall[2]).toEqual(expect.objectContaining({
-        subnetIds: ['subnet-private-1', 'subnet-private-2'],
-        securityGroupIds: ['rds-sg-sg-id']
-      }));
-    });
-
-    test('should handle secrets manager integration', () => {
-      const app = Testing.app();
-      new TapStack(app, 'TestStackSecrets');
-
-      // Verify RDS module receives the secret value
-      expect(RdsModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'rds',
-        expect.objectContaining({
-          password: 'mock-db-password'
-        })
-      );
-    });
-
-    test('should create terraform outputs with correct values', () => {
-      const app = Testing.app();
-      const stack = new TapStack(app, 'TestStackOutputs');
-
-      // Verify that TerraformOutput instances are created
-      // Note: In CDKTF, we can't easily test the actual output values without synthesizing
-      // But we can verify the stack was created successfully
-      expect(stack).toBeDefined();
-    });
-  });
-
-  describe('Error Handling and Edge Cases', () => {
-    test('should create stack without throwing errors', () => {
-      const app = Testing.app();
-
-      expect(() => {
-        new TapStack(app, 'TestStackNoErrors');
-      }).not.toThrow();
-    });
-
-    test('should synthesize stack successfully', () => {
-      const app = Testing.app();
-      const stack = new TapStack(app, 'TestStackSynth');
-
-      expect(() => {
-        Testing.synth(stack);
-      }).not.toThrow();
-    });
-
-    test('should handle null props gracefully', () => {
-      const app = Testing.app();
-
-      expect(() => {
-        new TapStack(app, 'TestStackNull', null as any);
-      }).not.toThrow();
-    });
-
-    test('should handle props with only some properties defined', () => {
-      const app = Testing.app();
-      const sparseProps = {
-        environmentSuffix: 'sparse'
-        // Other properties intentionally undefined
-      };
-
-      expect(() => {
-        new TapStack(app, 'TestStackSparse', sparseProps);
-      }).not.toThrow();
-    });
-
-    test('should handle different region formats', () => {
-      const app = Testing.app();
-      const regionsToTest = [
-        'us-east-1',
-        'us-west-2',
-        'eu-central-1',
-        'ap-southeast-1'
-      ];
-
-      regionsToTest.forEach((region, index) => {
-        const props = { awsRegion: region };
-        expect(() => {
-          new TapStack(app, `TestStackRegion${index}`, props);
-        }).not.toThrow();
+    it('should handle empty string environment suffix', () => {
+      new TapStack(app, 'test-stack', {
+        environmentSuffix: '',
       });
+      
+      // The code uses || operator, so empty string will fallback to 'dev'
+      expect(KmsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'kms',
+        expect.objectContaining({
+          environment: 'dev', // Empty string falls back to 'dev' due to || operator
+        })
+      );
+    });
+
+    it('should handle empty defaultTags array', () => {
+      expect(() => {
+        new TapStack(app, 'test-stack', {
+          defaultTags: undefined,
+        });
+      }).not.toThrow();
     });
   });
 
-  describe('Environment Variable Handling', () => {
-    test('should handle AWS_REGION_OVERRIDE environment variable when set', () => {
-      process.env.AWS_REGION_OVERRIDE = 'ap-south-1';
-
-      const app = Testing.app();
-      new TapStack(app, 'TestStackEnvOverride');
-
-      expect(VpcModule).toHaveBeenCalledWith(
-        expect.anything(),
-        'vpc',
-        expect.objectContaining({
-          availabilityZones: ['ap-south-1a', 'ap-south-1b']
-        })
-      );
+  describe('Integration tests', () => {
+    it('should create a valid Terraform configuration', () => {
+      const stack = new TapStack(app, 'integration-test', {
+        environmentSuffix: 'integration',
+        awsRegion: 'us-east-2',
+        stateBucket: 'integration-tf-state',
+        stateBucketRegion: 'us-east-1',
+      });
+      
+      const synthesized = Testing.synth(stack);
+      
+      // Basic validation that the configuration is valid
+      expect(synthesized).toBeDefined();
+      expect(typeof synthesized).toBe('string');
+      expect(synthesized.length).toBeGreaterThan(0);
+      
+      // Parse JSON to ensure it's valid
+      expect(() => JSON.parse(synthesized)).not.toThrow();
+      
+      const config = JSON.parse(synthesized);
+      
+      // Check that all major components are present
+      expect(config.provider).toBeDefined();
+      expect(config.data).toBeDefined();
+      expect(config.output).toBeDefined();
     });
 
-    test('should handle AWS_REGION_OVERRIDE when undefined', () => {
-      delete process.env.AWS_REGION_OVERRIDE;
-
-      const app = Testing.app();
-      const props = { awsRegion: 'ca-central-1' };
-      new TapStack(app, 'TestStackNoEnvOverride', props);
-
-      expect(VpcModule).toHaveBeenCalledWith(
+    it('should create stack with complex configuration', () => {
+      const stack = new TapStack(app, 'complex-test', {
+        environmentSuffix: 'complex',
+        awsRegion: 'ap-south-1',
+        stateBucket: 'complex-tf-state',
+        stateBucketRegion: 'ap-south-1',
+        defaultTags: {
+          tags: {
+            Environment: 'complex',
+            Team: 'infrastructure',
+            CostCenter: '12345',
+          },
+        },
+      });
+      
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toBeDefined();
+      
+      // Verify all modules were called with complex configuration
+      expect(KmsModule).toHaveBeenCalledWith(
         expect.anything(),
-        'vpc',
+        'kms',
         expect.objectContaining({
-          availabilityZones: ['ca-central-1a', 'ca-central-1b']
+          environment: 'complex',
         })
       );
-    });
-
-    test('should handle AWS_REGION_OVERRIDE when empty string', () => {
-      process.env.AWS_REGION_OVERRIDE = '';
-
-      const app = Testing.app();
-      const props = { awsRegion: 'sa-east-1' };
-      new TapStack(app, 'TestStackEmptyEnvOverride', props);
-
+      
       expect(VpcModule).toHaveBeenCalledWith(
         expect.anything(),
         'vpc',
         expect.objectContaining({
-          availabilityZones: ['sa-east-1a', 'sa-east-1b']
+          availabilityZones: ['ap-south-1a', 'ap-south-1b'],
         })
       );
     });

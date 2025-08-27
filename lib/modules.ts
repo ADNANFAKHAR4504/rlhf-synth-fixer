@@ -1,16 +1,5 @@
 import { Construct } from 'constructs';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -19,13 +8,30 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule as AwsSecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
 
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 // KMS Module
 interface KmsModuleProps {
   project: string;
@@ -523,7 +529,7 @@ export class SecurityGroupModule extends Construct {
 
     // Create security group rules
     rules.forEach((rule, index) => {
-      new AwsSecurityGroupRule(this, `rule-${index}`, {
+      new SecurityGroupRule(this, `rule-${index}`, {
         // Fixed: use aliased import
         type: rule.type,
         fromPort: rule.fromPort,
