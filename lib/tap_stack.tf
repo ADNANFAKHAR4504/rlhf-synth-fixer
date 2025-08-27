@@ -18,15 +18,14 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
-  tags = {
+  tags = merge(local.tags, {
     Name = "${var.project_name}-vpc"
-  }
+  })
 }
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "${var.project_name}-igw" }
+  tags   = merge(local.tags, { Name = "${var.project_name}-igw" })
 }
 
 resource "aws_subnet" "public" {
@@ -35,10 +34,10 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
-  tags = {
+  tags = merge(local.tags, {
     Name = "${var.project_name}-public-subnet-${count.index + 1}"
     Type = "public"
-  }
+  })
 }
 
 resource "aws_subnet" "private" {
@@ -46,10 +45,10 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.available.names[count.index]
-  tags = {
+  tags = merge(local.tags, {
     Name = "${var.project_name}-private-subnet-${count.index + 1}"
     Type = "private"
-  }
+  })
 }
 
 # --- Route Tables ---
@@ -59,13 +58,13 @@ resource "aws_route_table" "public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  tags = { Name = "${var.project_name}-public-rt" }
+  tags = merge(local.tags, { Name = "${var.project_name}-public-rt" })
 }
 
 resource "aws_route_table" "private" {
   count  = length(aws_subnet.private)
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "${var.project_name}-private-rt-${count.index + 1}" }
+  tags   = merge(local.tags, { Name = "${var.project_name}-private-rt-${count.index + 1}" })
 }
 
 resource "aws_route_table_association" "public" {
@@ -102,7 +101,7 @@ resource "aws_security_group" "web" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "${var.project_name}-web-sg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-web-sg" })
 }
 
 resource "aws_security_group" "app" {
@@ -120,7 +119,7 @@ resource "aws_security_group" "app" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "${var.project_name}-app-sg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-app-sg" })
 }
 
 resource "aws_security_group" "database" {
@@ -132,7 +131,7 @@ resource "aws_security_group" "database" {
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
   }
-  tags = { Name = "${var.project_name}-db-sg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-db-sg" })
 }
 
 # --- Load Balancer ---
@@ -143,7 +142,7 @@ resource "aws_lb" "main" {
   security_groups            = [aws_security_group.web.id]
   subnets                    = aws_subnet.public[*].id
   enable_deletion_protection = var.enable_deletion_protection
-  tags                       = { Name = "${var.project_name}-alb" }
+  tags                       = merge(local.tags, { Name = "${var.project_name}-alb" })
 }
 
 resource "aws_lb_target_group" "app" {
@@ -160,7 +159,7 @@ resource "aws_lb_target_group" "app" {
     path                = "/health"
     matcher             = "200"
   }
-  tags = { Name = "${var.project_name}-app-tg" }
+  tags = merge(local.tags, { Name = "${var.project_name}-app-tg" })
 }
 
 resource "aws_lb_listener" "app" {
@@ -183,9 +182,9 @@ resource "aws_launch_template" "app" {
   user_data              = base64encode(var.user_data_script)
   tag_specifications {
     resource_type = "instance"
-    tags          = { Name = "${var.project_name}-app-instance" }
+    tags          = merge(local.tags, { Name = "${var.project_name}-app-instance" })
   }
-  tags = { Name = "${var.project_name}-app-lt" }
+  tags = merge(local.tags, { Name = "${var.project_name}-app-lt" })
 }
 
 resource "aws_autoscaling_group" "app" {
@@ -212,7 +211,7 @@ resource "aws_autoscaling_group" "app" {
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
-  tags       = { Name = "${var.project_name}-db-subnet-group" }
+  tags       = merge(local.tags, { Name = "${var.project_name}-db-subnet-group" })
 }
 
 resource "aws_db_instance" "main" {
@@ -234,7 +233,27 @@ resource "aws_db_instance" "main" {
   maintenance_window      = var.db_maintenance_window
   skip_final_snapshot     = var.skip_final_snapshot
   deletion_protection     = var.enable_deletion_protection
-  tags                    = { Name = "${var.project_name}-database" }
+  tags                    = merge(local.tags, { Name = "${var.project_name}-database" })
+}
+
+# --- S3 Bucket ---
+resource "aws_s3_bucket" "main" {
+  bucket        = "${var.project_name}-bucket-${var.environment}"
+  force_destroy = true
+
+  tags = merge(local.tags, {
+    Name = "${var.project_name}-bucket"
+  })
+}
+
+output "bucket_name" {
+  description = "Name of the S3 bucket"
+  value       = aws_s3_bucket.main.bucket
+}
+
+output "bucket_tags" {
+  description = "Tags applied to the S3 bucket"
+  value       = aws_s3_bucket.main.tags
 }
 
 ########################################
@@ -267,7 +286,7 @@ variable "migration_date" {
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.0.0.0/16" # <-- Change if you need a different range
 }
 
 variable "public_subnet_cidrs" {
@@ -372,6 +391,7 @@ variable "db_password" {
   description = "Database password"
   type        = string
   sensitive   = true
+  default     = "devpassword123!" # <-- Only for dev, remove for prod!
 }
 
 variable "db_backup_retention_period" {
@@ -404,35 +424,338 @@ variable "skip_final_snapshot" {
   default     = false
 }
 
-# backend.tf
-terraform {
-  backend "s3" {
-    bucket         = "PLACEHOLDER-terraform-state-bucket"
-    key            = "myapp/us-west-2/terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "PLACEHOLDER-terraform-locks"
-
-    # Optional: Use assume role for cross-account access
-    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
-  }
+locals {
+  tags = merge(local.common_tags, {
+    Environment = var.environment
+    Project     = var.project_name
+    Owner       = "sivav-cmd" # <-- Replace with your email or team
+    ManagedBy   = "terraform"
+  })
 }
 
-# Alternative backend configuration for remote state management
-# terraform {
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "PLACEHOLDER-ORG-NAME"
-#
-#     workspaces {
-#       name = "myapp-us-west-2"
-#     }
-#   }
-# }
+output "vpc_id" {
+  description = "The ID of the VPC"
+  value       = aws_vpc.main.id
+}
 
-# Local backend for testing (not recommended for production)
-# terraform {
-#   backend "local" {
-#     path = "terraform.tfstate"
-#   }
-# }
+locals {
+  common_tags = merge(local.common_tags, {
+    Project     = var.project_name
+    Environment = var.environment
+    Migration   = var.migration_date
+  })
+}
+
+
+output "aws_region" {
+  description = "AWS region"
+  value       = var.aws_region
+}
+
+output "availability_zones" {
+  description = "List of availability zones"
+  value       = data.aws_availability_zones.available.names
+}
+
+output "public_subnet_ids" {
+  description = "List of public subnet IDs"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "List of private subnet IDs"
+  value       = aws_subnet.private[*].id
+}
+
+output "vpc_cidr_block" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "public_route_table_id" {
+  description = "Route table ID for public subnets"
+  value       = aws_route_table.public.id
+}
+
+output "private_route_table_ids" {
+  description = "List of private route table IDs"
+  value       = aws_route_table.private[*].id
+}
+
+output "web_security_group_id" {
+  description = "Security group ID for web access"
+  value       = aws_security_group.web.id
+}
+
+output "app_security_group_id" {
+  description = "Security group ID for app access"
+  value       = aws_security_group.app.id
+}
+
+output "database_security_group_id" {
+  description = "Security group ID for database access"
+  value       = aws_security_group.database.id
+}
+
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = aws_lb.main.arn
+}
+
+output "app_target_group_arn" {
+  description = "ARN of the target group for the app"
+  value       = aws_lb_target_group.app.arn
+}
+
+output "app_launch_template_id" {
+  description = "ID of the launch template for the app"
+  value       = aws_launch_template.app.id
+}
+
+output "app_autoscaling_group_id" {
+  description = "ID of the Auto Scaling group for the app"
+  value       = aws_autoscaling_group.app.id
+}
+
+output "db_subnet_group_name" {
+  description = "Name of the DB subnet group"
+  value       = aws_db_subnet_group.main.name
+}
+
+output "db_instance_endpoint" {
+  description = "Endpoint of the database instance"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "db_instance_id" {
+  description = "ID of the database instance"
+  value       = aws_db_instance.main.id
+}
+
+output "db_instance_arn" {
+  description = "ARN of the database instance"
+  value       = aws_db_instance.main.arn
+}
+
+output "db_instance_port" {
+  description = "Port of the database instance"
+  value       = aws_db_instance.main.port
+}
+
+output "db_instance_engine" {
+  description = "Database engine"
+  value       = aws_db_instance.main.engine
+}
+
+output "db_instance_engine_version" {
+  description = "Database engine version"
+  value       = aws_db_instance.main.engine_version
+}
+
+output "db_instance_class" {
+  description = "Database instance class"
+  value       = aws_db_instance.main.instance_class
+}
+
+output "db_allocated_storage" {
+  description = "Allocated storage for the database instance (GB)"
+  value       = aws_db_instance.main.allocated_storage
+}
+
+output "db_max_allocated_storage" {
+  description = "Max allocated storage for the database instance (GB)"
+  value       = aws_db_instance.main.max_allocated_storage
+}
+
+output "db_backup_retention_period" {
+  description = "Backup retention period for the database (days)"
+  value       = aws_db_instance.main.backup_retention_period
+}
+
+output "db_backup_window" {
+  description = "Backup window for the database"
+  value       = aws_db_instance.main.backup_window
+}
+
+output "db_maintenance_window" {
+  description = "Database maintenance window"
+  value       = aws_db_instance.main.maintenance_window
+}
+
+output "db_instance_status" {
+  description = "Status of the database instance"
+  value       = aws_db_instance.main.status
+}
+
+output "db_instance_storage_encrypted" {
+  description = "Indicates if storage is encrypted for the database instance"
+  value       = aws_db_instance.main.storage_encrypted
+}
+
+output "db_instance_kms_key_id" {
+  description = "KMS key ID for encryption of the database instance"
+  value       = aws_db_instance.main.kms_key_id
+}
+
+output "db_instance_iops" {
+  description = "IOPS for the database instance (if provisioned IOPS storage is used)"
+  value       = aws_db_instance.main.iops
+}
+
+output "db_instance_publicly_accessible" {
+  description = "Whether the database instance is publicly accessible"
+  value       = aws_db_instance.main.publicly_accessible
+}
+
+output "db_instance_multi_az" {
+  description = "Whether the database instance is multi-AZ"
+  value       = aws_db_instance.main.multi_az
+}
+
+output "db_instance_vpc_security_group_ids" {
+  description = "VPC security group IDs attached to the database instance"
+  value       = aws_db_instance.main.vpc_security_group_ids
+}
+
+output "db_instance_db_subnet_group_name" {
+  description = "DB subnet group name"
+  value       = aws_db_instance.main.db_subnet_group_name
+}
+
+output "db_instance_identifier" {
+  description = "Database instance identifier"
+  value       = aws_db_instance.main.identifier
+}
+
+output "db_instance_resource_id" {
+  description = "Resource ID of the database instance"
+  value       = aws_db_instance.main.resource_id
+}
+output "db_instance_username" {
+  description = "Master username for the database instance"
+  value       = aws_db_instance.main.username
+}
+
+output "db_instance_db_name" {
+  description = "Database name"
+  value       = aws_db_instance.main.db_name
+}
+
+output "db_instance_ca_cert_identifier" {
+  description = "CA certificate identifier"
+  value       = aws_db_instance.main.ca_cert_identifier
+}
+
+output "db_instance_license_model" {
+  description = "License model of the database instance"
+  value       = aws_db_instance.main.license_model
+}
+
+output "db_instance_parameter_group" {
+  description = "Parameter group name"
+  value       = aws_db_instance.main.parameter_group_name
+}
+
+output "db_instance_option_group" {
+  description = "Option group name"
+  value       = aws_db_instance.main.option_group_name
+}
+
+output "db_instance_secondary_availability_zone" {
+  description = "Secondary availability zone"
+  value       = aws_db_instance.main.secondary_availability_zone
+}
+
+output "db_instance_apply_immediately" {
+  description = "Whether apply_immediately is set"
+  value       = aws_db_instance.main.apply_immediately
+}
+
+output "db_instance_monitoring_interval" {
+  description = "Monitoring interval"
+  value       = aws_db_instance.main.monitoring_interval
+}
+
+output "db_instance_monitoring_role_arn" {
+  description = "Monitoring role ARN"
+  value       = aws_db_instance.main.monitoring_role_arn
+}
+
+output "db_instance_performance_insights_enabled" {
+  description = "Whether performance insights are enabled"
+  value       = aws_db_instance.main.performance_insights_enabled
+}
+
+output "db_instance_performance_insights_kms_key_id" {
+  description = "Performance insights KMS key ID"
+  value       = aws_db_instance.main.performance_insights_kms_key_id
+}
+
+output "db_instance_performance_insights_retention_period" {
+  description = "Performance insights retention period"
+  value       = aws_db_instance.main.performance_insights_retention_period
+}
+
+output "db_instance_deletion_protection" {
+  description = "Whether deletion protection is enabled"
+  value       = aws_db_instance.main.deletion_protection
+}
+
+output "db_instance_copy_tags_to_snapshot" {
+  description = "Whether tags are copied to snapshots"
+  value       = aws_db_instance.main.copy_tags_to_snapshot
+}
+
+output "db_instance_final_snapshot_identifier" {
+  description = "Final snapshot identifier"
+  value       = aws_db_instance.main.final_snapshot_identifier
+}
+
+output "db_instance_skip_final_snapshot" {
+  description = "Whether to skip final snapshot"
+  value       = aws_db_instance.main.skip_final_snapshot
+}
+
+output "db_instance_auto_minor_version_upgrade" {
+  description = "Whether auto minor version upgrade is enabled"
+  value       = aws_db_instance.main.auto_minor_version_upgrade
+}
+
+output "db_instance_enabled_cloudwatch_logs_exports" {
+  description = "Enabled CloudWatch logs exports"
+  value       = aws_db_instance.main.enabled_cloudwatch_logs_exports
+}
+
+output "db_instance_domain" {
+  description = "Domain"
+  value       = aws_db_instance.main.domain
+}
+
+output "db_instance_domain_iam_role_name" {
+  description = "Domain IAM role name"
+  value       = aws_db_instance.main.domain_iam_role_name
+}
+
+output "db_instance_timezone" {
+  description = "Timezone"
+  value       = aws_db_instance.main.timezone
+}
+
+output "db_instance_maintenance_window" {
+  description = "Maintenance window"
+  value       = aws_db_instance.main.maintenance_window
+}
+
+output "db_instance_backup_window" {
+  description = "Backup window"
+  value       = aws_db_instance.main.backup_window
+}
+
+output "db_instance_backup_retention_period" {
+  description = "Backup retention period"
+  value       = aws_db_instance.main.backup_retention_period
+}
+output "db_instance_storage_type" {
+  description = "Storage type"
+  value       = aws_db_instance.main.storage_type
+}
