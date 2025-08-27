@@ -65,7 +65,7 @@ class TapStack extends Stack {
         Function secureFunction = createSecureLambdaFunction(vpc, mainKmsKey, secureS3Bucket);
         
         // 6. Create RDS instance with encryption
-        createSecureRdsInstance(vpc, rdsKmsKey);
+        createSecureRdsInstance(vpc, rdsKmsKey, mainKmsKey);
         
         // 7. Create additional security groups
         createSecurityGroups(vpc);
@@ -399,7 +399,7 @@ class TapStack extends Stack {
                 .build();
     }
     
-    private void createSecureRdsInstance(Vpc vpc, Key rdsKmsKey) {
+    private void createSecureRdsInstance(Vpc vpc, Key rdsKmsKey, Key mainKmsKey) {
         // Create security group for RDS
         SecurityGroup rdsSecurityGroup = SecurityGroup.Builder.create(this, "RDSSecurityGroup" + uniqueId)
                 .securityGroupName("RDSSecurityGroup-" + uniqueId)
@@ -435,7 +435,7 @@ class TapStack extends Stack {
         LogGroup rdsLogGroup = LogGroup.Builder.create(this, "RDSLogGroup" + uniqueId)
                 .logGroupName("/aws/rds/instance/secure-db-" + uniqueId + "/error")
                 .retention(RetentionDays.ONE_MONTH)
-                .encryptionKey(rdsKmsKey)
+                .encryptionKey(mainKmsKey)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
         
