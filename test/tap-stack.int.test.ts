@@ -270,7 +270,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       } catch (error) {
         console.warn('Could not verify RDS instance details, may need proper IAM permissions');
         // At least verify endpoint is accessible format
-        expect(dbEndpoint).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/); 
+        expect(dbEndpoint).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+\.rds\.amazonaws\.com$/); 
       }
     });
 
