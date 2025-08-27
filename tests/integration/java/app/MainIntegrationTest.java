@@ -25,7 +25,6 @@ public class MainIntegrationTest {
     public void testMultiRegionDeployment() {
         App app = new App();
 
-        // Define test parameters
         String environmentName = "test";
         String primaryRegion = "us-east-1";
         String secondaryRegion = "us-west-2";
