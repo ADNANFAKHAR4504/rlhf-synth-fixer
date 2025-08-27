@@ -158,3 +158,5 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
+
+require github.com/jmespath/go-jmespath v0.4.0 // indirect
