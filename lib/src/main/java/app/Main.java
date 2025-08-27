@@ -128,7 +128,7 @@ public final class Main {
 
             if (isPrimary) {
                 logsBucket = Bucket.Builder.create(this, "LogsBucket")
-                    .bucketName("logs-bucket-" + environment + "-" + region + "-" + uniqueSuffix)
+                    .bucketName("logs-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                     .encryption(BucketEncryption.KMS)
                     .encryptionKey(kmsKey)
                     .versioned(true)
@@ -138,7 +138,7 @@ public final class Main {
             }
 
             ec2Role = Role.Builder.create(this, "Ec2Role")
-                .roleName("Ec2Role-" + environment + "-" + region + "-" + uniqueSuffix)
+                .roleName("Ec2Role-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
                 .managedPolicies(Arrays.asList(
                     ManagedPolicy.fromAwsManagedPolicyName("CloudWatchAgentServerPolicy")
@@ -156,7 +156,7 @@ public final class Main {
 
         private void createComputeInfrastructure() {
             SecurityGroup albSg = SecurityGroup.Builder.create(this, "AlbSg")
-                .securityGroupName("AlbSg-" + environment + "-" + region + "-" + uniqueSuffix)
+                .securityGroupName("AlbSg-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .description("ALB Security Group (" + uniqueSuffix + ")")
                 .build();
@@ -165,7 +165,7 @@ public final class Main {
             albSg.addIngressRule(Peer.anyIpv4(), Port.tcp(443), "HTTPS");
 
             SecurityGroup ec2Sg = SecurityGroup.Builder.create(this, "Ec2Sg")
-                .securityGroupName("Ec2Sg-" + environment + "-" + region + "-" + uniqueSuffix)
+                .securityGroupName("Ec2Sg-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .description("EC2 Security Group (" + uniqueSuffix + ")")
                 .build();
@@ -173,7 +173,7 @@ public final class Main {
             ec2Sg.addIngressRule(albSg, Port.tcp(80), "HTTP from ALB");
 
             ApplicationLoadBalancer alb = ApplicationLoadBalancer.Builder.create(this, "Alb")
-                .loadBalancerName("Alb-" + environment + "-" + region + "-" + uniqueSuffix)
+                .loadBalancerName("ALB-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .internetFacing(true)
                 .securityGroup(albSg)
@@ -190,7 +190,7 @@ public final class Main {
             }
 
             ApplicationTargetGroup targetGroup = ApplicationTargetGroup.Builder.create(this, "TargetGroup")
-                .targetGroupName("TargetGroup-" + environment + "-" + region + "-" + uniqueSuffix)
+                .targetGroupName("TG-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .port(80)
                 .protocol(ApplicationProtocol.HTTP)
@@ -206,7 +206,7 @@ public final class Main {
                 .build());
 
             AutoScalingGroup asg = AutoScalingGroup.Builder.create(this, "Asg")
-                .autoScalingGroupName("Asg-" + environment + "-" + region + "-" + uniqueSuffix)
+                .autoScalingGroupName("ASG-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .vpc(vpc)
                 .instanceType(environment.equals("production")
                     ? InstanceType.of(InstanceClass.M5, InstanceSize.LARGE)
@@ -225,7 +225,7 @@ public final class Main {
         private void createDatabaseResources() {
             if (isPrimary) {
                 DatabaseInstance rds = DatabaseInstance.Builder.create(this, "Rds")
-                    .instanceIdentifier("Rds-" + environment + "-" + region + "-" + uniqueSuffix)
+                    .instanceIdentifier("RDS-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                     .engine(DatabaseInstanceEngine.mysql(MySqlInstanceEngineProps.builder()
                         .version(MysqlEngineVersion.VER_8_0)
                         .build()))
@@ -241,7 +241,7 @@ public final class Main {
                     .build();
 
                 Table dynamoTable = Table.Builder.create(this, "DynamoTable")
-                    .tableName("AppTable-" + environment + "-" + region + "-" + uniqueSuffix)
+                    .tableName("App-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                     .partitionKey(Attribute.builder()
                         .name("id")
                         .type(AttributeType.STRING)
@@ -255,7 +255,7 @@ public final class Main {
                     .build();
             } else {
                 Table dynamoTable = Table.Builder.create(this, "DynamoTable")
-                    .tableName("AppTable-" + environment + "-" + region + "-" + uniqueSuffix)
+                    .tableName("App-" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                     .partitionKey(Attribute.builder()
                         .name("id")
                         .type(AttributeType.STRING)
@@ -271,7 +271,7 @@ public final class Main {
 
         private void createLoggingResources() {
             LogGroup logGroup = LogGroup.Builder.create(this, "LogGroup")
-                .logGroupName("/aws/ec2/" + environment + "-" + region + "-" + uniqueSuffix)
+                .logGroupName("/aws/ec2/" + environment + "-" + region.substring(3, 5) + "-" + uniqueSuffix)
                 .retention(RetentionDays.ONE_WEEK)
                 .build();
         }
