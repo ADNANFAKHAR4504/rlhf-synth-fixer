@@ -78,7 +78,7 @@ func getOutputValue(outputs FlatOutputs, outputKey string) (string, bool) {
 	if value, exists := outputs[outputKey]; exists {
 		return value, true
 	}
-	
+
 	// Look for the output key in the flat outputs
 	// The key format is typically: StackName.OutputKey
 	for key, value := range outputs {
@@ -86,9 +86,9 @@ func getOutputValue(outputs FlatOutputs, outputKey string) (string, bool) {
 			return value, true
 		}
 	}
-	
+
 	return "", false
-}// getEnvironmentSuffix returns the environment suffix from env var or default
+} // getEnvironmentSuffix returns the environment suffix from env var or default
 func getEnvironmentSuffix() string {
 	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if envSuffix == "" {
