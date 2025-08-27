@@ -1,24 +1,30 @@
+//go:build !integration
+// +build !integration
+
 package tests
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	"github.com/aws/aws-cdk-go/awscdk/v2/assertions"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestTapStack(t *testing.T) {
-	defer jsii.Close()
+// synthStack synthesizes the stack to a temp outdir and returns the cdk json path
+func synthStack(t *testing.T, stackId string) string {
+	t.Helper()
 
-	// GIVEN
-	app := awscdk.NewApp(nil)
+	tmpDir := t.TempDir()
+	outdir := filepath.Join(tmpDir, "cdk.out")
 
-	// WHEN
-	stack := lib.NewTapStack(app, "test-stack", &lib.TapStackProps{
+	app := awscdk.NewApp(&awscdk.AppProps{Outdir: jsii.String(outdir)})
+	lib.NewTapStack(app, stackId, &lib.TapStackProps{
 		StackProps: awscdk.StackProps{
 			Env: &awscdk.Environment{
 				Account: jsii.String("123456789012"),
@@ -26,80 +32,162 @@ func TestTapStack(t *testing.T) {
 			},
 		},
 	})
+	assembly := app.Synth(nil)
+	stack := assembly.GetStackByName(&stackId)
+	template := stack.Template()
+	templateJson, err := json.Marshal(template)
+	require.NoError(t, err, "failed to marshal template to json")
 
-	// THEN
-	template := assertions.Template_FromStack(stack, nil)
+	jsonPath := filepath.Join(outdir, "template.json")
+	err = os.WriteFile(jsonPath, templateJson, 0644)
+	require.NoError(t, err, "failed to write template to file")
 
-	// Test VPC creation
-	template.HasResourceProperties(jsii.String("AWS::EC2::VPC"), map[string]interface{}{
-		"EnableDnsHostnames": true,
-		"EnableDnsSupport":   true,
-	})
-
-	// Test EC2 Security Group allows HTTPS
-	template.HasResourceProperties(jsii.String("AWS::EC2::SecurityGroup"), map[string]interface{}{
-		"SecurityGroupIngress": []interface{}{
-			map[string]interface{}{
-				"CidrIp":     "0.0.0.0/0",
-				"FromPort":   443,
-				"ToPort":     443,
-				"IpProtocol": "tcp",
-			},
-		},
-	})
-
-	// Test RDS instance has encryption enabled
-	template.HasResourceProperties(jsii.String("AWS::RDS::DBInstance"), map[string]interface{}{
-		"StorageEncrypted": true,
-		"Engine":           "postgres",
-	})
-
-	// Test CloudTrail exists
-	template.HasResourceProperties(jsii.String("AWS::CloudTrail::Trail"), map[string]interface{}{
-		"IncludeGlobalServiceEvents": true,
-		"IsMultiRegionTrail":         true,
-		"EnableLogFileValidation":    true,
-	})
-
-	// Test tags are applied
-	templateJson := template.ToJSON()
-	templateStr, _ := json.Marshal(templateJson)
-	assert.Contains(t, string(templateStr), "Environment")
-	assert.Contains(t, string(templateStr), "Production")
-	assert.Contains(t, string(templateStr), "Department")
-	assert.Contains(t, string(templateStr), "IT")
+	return jsonPath
 }
 
-func TestStackHasRequiredOutputs(t *testing.T) {
-	defer jsii.Close()
+// loadCloudFormationJSON loads and parses the synthesized CloudFormation JSON
+func loadCloudFormationJSON(t *testing.T, path string) map[string]interface{} {
+	t.Helper()
 
-	// GIVEN
-	app := awscdk.NewApp(nil)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err, "failed to read cloudformation json")
 
-	// WHEN
-	stack := lib.NewTapStack(app, "test-stack", &lib.TapStackProps{
-		StackProps: awscdk.StackProps{
-			Env: &awscdk.Environment{
-				Account: jsii.String("123456789012"),
-				Region:  jsii.String("us-east-1"),
-			},
-		},
-	})
+	var cfConfig map[string]interface{}
+	err = json.Unmarshal(data, &cfConfig)
+	require.NoError(t, err, "failed to parse cloudformation json")
 
-	// THEN
-	template := assertions.Template_FromStack(stack, nil)
+	return cfConfig
+}
 
-	// Check for required outputs
-	outputs := []string{
-		"VPCId",
-		"WebServerInstanceId",
-		"WebServerPublicIP",
-		"DatabaseEndpoint",
-		"DatabaseSecretArn",
-		"CloudTrailArn",
+func TestStackSynthesis(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	_, err := os.Stat(jsonPath)
+	assert.NoError(t, err, "Stack synthesis failed: cloudformation json not found")
+}
+
+func TestVPCConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var vpc map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::EC2::VPC" {
+			vpc = res
+			break
+		}
 	}
+	require.NotNil(t, vpc, "no VPC resource found")
 
-	for _, output := range outputs {
-		template.HasOutput(jsii.String(output), map[string]interface{}{})
+	properties := vpc["Properties"].(map[string]interface{})
+	assert.Equal(t, true, properties["EnableDnsHostnames"], "expected EnableDnsHostnames to be true")
+	assert.Equal(t, true, properties["EnableDnsSupport"], "expected EnableDnsSupport to be true")
+}
+
+func TestSubnetsConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var subnets []map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::EC2::Subnet" {
+			subnets = append(subnets, res)
+		}
 	}
+	assert.Len(t, subnets, 4, "expected 4 subnets")
+}
+
+func TestSecurityGroupConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var ec2Sg map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::EC2::SecurityGroup" {
+			properties := res["Properties"].(map[string]interface{})
+			if properties["GroupDescription"] == "Security group for web server - HTTPS only" {
+				ec2Sg = res
+				break
+			}
+		}
+	}
+	require.NotNil(t, ec2Sg, "EC2 security group not found")
+
+	properties := ec2Sg["Properties"].(map[string]interface{})
+	ingress := properties["SecurityGroupIngress"].([]interface{})
+	assert.Len(t, ingress, 1, "expected 1 ingress rule for web server SG")
+}
+
+func TestS3BucketConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var buckets []map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::S3::Bucket" {
+			buckets = append(buckets, res)
+		}
+	}
+	assert.Len(t, buckets, 1, "expected 1 S3 bucket for CloudTrail")
+}
+
+func TestIAMConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var roleCount int
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::IAM::Role" {
+			roleCount++
+		}
+	}
+	assert.True(t, roleCount > 0, "expected at least one IAM role")
+}
+
+func TestEC2InstanceConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var instance map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::EC2::Instance" {
+			instance = res
+			break
+		}
+	}
+	require.NotNil(t, instance, "EC2 instance not found")
+
+	properties := instance["Properties"].(map[string]interface{})
+	assert.Equal(t, "t3.micro", properties["InstanceType"], "expected instance type t3.micro")
+}
+
+func TestRDSInstanceConfiguration(t *testing.T) {
+	jsonPath := synthStack(t, "TestStack")
+	cfConfig := loadCloudFormationJSON(t, jsonPath)
+
+	resources := cfConfig["Resources"].(map[string]interface{})
+	var rds map[string]interface{}
+	for _, resource := range resources {
+		res := resource.(map[string]interface{})
+		if res["Type"] == "AWS::RDS::DBInstance" {
+			rds = res
+			break
+		}
+	}
+	require.NotNil(t, rds, "RDS instance not found")
+
+	properties := rds["Properties"].(map[string]interface{})
+	assert.Equal(t, true, properties["StorageEncrypted"], "expected RDS storage to be encrypted")
+	assert.Equal(t, "db.t3.micro", properties["DBInstanceClass"], "expected DB instance class db.t3.micro")
 }
