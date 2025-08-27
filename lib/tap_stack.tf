@@ -85,10 +85,10 @@ module "cloudtrail" {
   cw_logs_group_arn = module.cloudwatch_cloudtrail.log_group_arn
 }
 
-# GuardDuty
-module "guardduty" {
-  source  = "./modules/guardduty"
-}
+## GuardDuty
+#module "guardduty" {
+#  source  = "./modules/guardduty"
+#}
 
 module "iam_cloudtrail" {
   source = "./modules/iam"
