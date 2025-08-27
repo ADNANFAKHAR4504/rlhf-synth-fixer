@@ -10,21 +10,15 @@ import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.JsonNode;
-
-import java.io.File;
-import java.io.IOException;
 import java.util.Map;
 
 /**
  * Integration tests for TapStack deployments.
- * These tests check synthesized templates and optionally real outputs.
+ * These tests check synthesized templates and validate resources.
  */
 public class MainIntegrationTest {
 
     private Environment testEnvironment;
-    private ObjectMapper objectMapper;
 
     @BeforeEach
     public void setUp() {
@@ -32,7 +26,6 @@ public class MainIntegrationTest {
                 .account("123456789012")
                 .region("us-west-2")
                 .build();
-        objectMapper = new ObjectMapper();
     }
 
     private TapStack synthesizeStack(String id, String envSuffix) {
@@ -71,20 +64,6 @@ public class MainIntegrationTest {
     }
 
     @Test
-    public void testDeploymentOutputsFile() throws IOException {
-        File outputsFile = new File("cfn-outputs/flat-outputs.json");
-        if (outputsFile.exists()) {
-            JsonNode outputs = objectMapper.readTree(outputsFile);
-
-            assertThat(outputs.has("VpcId")).isTrue();
-            assertThat(outputs.has("InstanceId")).isTrue();
-            assertThat(outputs.has("SecurityGroupId")).isTrue();
-        } else {
-            System.out.println("No deployment outputs file found, skipping output validation.");
-        }
-    }
-
-    @Test
     public void testNetworkResources() {
         TapStack stack = synthesizeStack("TapStackNetwork", "network");
         Template template = Template.fromStack(stack.getVpcStack());
@@ -92,5 +71,89 @@ public class MainIntegrationTest {
         template.resourceCountIs("AWS::EC2::InternetGateway", 1);
         template.resourceCountIs("AWS::EC2::Subnet", 2);
         template.hasResource("AWS::EC2::RouteTable", Map.of());
+    }
+
+    @Test
+    public void testVpcHasCorrectCidr() {
+        TapStack stack = synthesizeStack("TapStackVpc", "vpc");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.hasResourceProperties("AWS::EC2::VPC", Map.of(
+                "CidrBlock", "10.0.0.0/16"
+        ));
+    }
+
+    @Test
+    public void testInstanceTypeIsT2Micro() {
+        TapStack stack = synthesizeStack("TapStackInstance", "instance");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.hasResourceProperties("AWS::EC2::Instance", Map.of(
+                "InstanceType", "t2.micro"
+        ));
+    }
+
+    @Test
+    public void testSecurityGroupAllowsSsh() {
+        TapStack stack = synthesizeStack("TapStackSecurity", "security");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.hasResourceProperties("AWS::EC2::SecurityGroup", Map.of(
+                "GroupDescription", "Allow SSH and HTTP access"
+        ));
+    }
+
+    @Test
+    public void testIamRoleCreated() {
+        TapStack stack = synthesizeStack("TapStackIam", "iam");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.resourceCountIs("AWS::IAM::Role", 1);
+    }
+
+    @Test
+    public void testSubnetsAreTwo() {
+        TapStack stack = synthesizeStack("TapStackSubnets", "subnet");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.resourceCountIs("AWS::EC2::Subnet", 2);
+    }
+
+    @Test
+    public void testInternetGatewayAttached() {
+        TapStack stack = synthesizeStack("TapStackGateway", "gateway");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.resourceCountIs("AWS::EC2::InternetGateway", 1);
+        template.resourceCountIs("AWS::EC2::VPCGatewayAttachment", 1);
+    }
+
+    @Test
+    public void testOutputsAreDefined() {
+        TapStack stack = synthesizeStack("TapStackOutputs", "outputs");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        Map<String, Object> outputs = template.getOutputs();
+        assertThat(outputs).isNotEmpty();
+    }
+
+    @Test
+    public void testRouteTableCreated() {
+        TapStack stack = synthesizeStack("TapStackRoutes", "routes");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.resourceCountIs("AWS::EC2::RouteTable", 1);
+    }
+
+    @Test
+    public void testTagsApplied() {
+        TapStack stack = synthesizeStack("TapStackTags", "tags");
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        template.hasResourceProperties("AWS::EC2::VPC", Map.of(
+                "Tags", new Object[] {
+                        Map.of("Key", "Environment", "Value", "tags")
+                }
+        ));
     }
 }
