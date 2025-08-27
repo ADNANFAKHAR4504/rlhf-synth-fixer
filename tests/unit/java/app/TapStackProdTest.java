@@ -49,7 +49,7 @@ public class TapStackProdTest {
         template.hasResourceProperties("AWS::Lambda::Function", Map.of(
             "Runtime", "python3.13",
             "Handler", "index.handler",
-            "FunctionName", "file-processor-test"
+            "FunctionName", "file-processor-test-primary-3"
         ));
     }
 
@@ -67,7 +67,7 @@ public class TapStackProdTest {
         
         // Verify SNS topic exists
         template.hasResourceProperties("AWS::SNS::Topic", Map.of(
-            "TopicName", "file-processor-notifications-test"
+            "TopicName", "file-processor-notifications-test-primary-3"
         ));
     }
 
@@ -85,7 +85,7 @@ public class TapStackProdTest {
         
         // Verify SQS queue exists
         template.hasResourceProperties("AWS::SQS::Queue", Map.of(
-            "QueueName", "file-processor-dlq-test"
+            "QueueName", "file-processor-dlq-test-primary-3"
         ));
     }
 
@@ -103,7 +103,7 @@ public class TapStackProdTest {
         
         // Verify LogGroup exists with retention
         template.hasResourceProperties("AWS::Logs::LogGroup", Map.of(
-            "LogGroupName", "/aws/lambda/file-processor-test",
+            "LogGroupName", "/aws/lambda/file-processor-test-primary-3",
             "RetentionInDays", 14
         ));
     }
@@ -141,10 +141,10 @@ public class TapStackProdTest {
         Template template = Template.fromStack(stack);
         
         // Verify all outputs exist
-        template.hasOutput("LambdaFunctionArntest", Match.anyValue());
-        template.hasOutput("S3BucketNametest", Match.anyValue());
-        template.hasOutput("SNSTopicArntest", Match.anyValue());
-        template.hasOutput("SQSDeadLetterQueueUrltest", Match.anyValue());
+        template.hasOutput("LambdaFunctionArntestPrimary3", Match.anyValue());
+        template.hasOutput("S3BucketNametestPrimary3", Match.anyValue());
+        template.hasOutput("SNSTopicArntestPrimary3", Match.anyValue());
+        template.hasOutput("SQSDeadLetterQueueUrltestPrimary3", Match.anyValue());
     }
 
     /**
