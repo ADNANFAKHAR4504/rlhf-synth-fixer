@@ -229,13 +229,9 @@ public class SecureWebAppStackTest {
      */
     @Test
     public void testConfigRules() {
-        // We no longer create a Config recorder to avoid the MaxNumberOfConfigurationRecordersExceededException
-        // since we're now using the existing one in the account
-        
-        // Verify Config delivery channel
-        template.hasResourceProperties("AWS::Config::DeliveryChannel", Match.objectLike(Map.of(
-            "S3KeyPrefix", "aws-config" // Updated to remove trailing slash
-        )));
+        // We no longer create a Config recorder or delivery channel
+        // We're using the existing ones in the account to avoid MaxNumberOfConfigurationRecordersExceededException
+        // and MaxNumberOfDeliveryChannelsExceededException
         
         // Verify IAM policy admin access config rule
         template.hasResourceProperties("AWS::Config::ConfigRule", Map.of(

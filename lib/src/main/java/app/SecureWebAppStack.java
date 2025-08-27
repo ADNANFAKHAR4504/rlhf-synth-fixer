@@ -299,16 +299,19 @@ public class SecureWebAppStack extends Stack {
      * Creates AWS Config rules for monitoring IAM policy changes
      */
     private void createConfigRules() {
-        // Use existing AWS Config recorder instead of creating a new one
-        // The account already has a configuration recorder, so we don't create a new one
-        // Instead, we'll just create rules that use the existing recorder
+        // Use existing AWS Config recorder and delivery channel
+        // The account already has both a configuration recorder and delivery channel (limit of 1 each)
+        // Instead, we'll just create rules that use the existing recorder and delivery channel
         
-        // Create a custom resource to check if the default recorder exists
+        // We don't need to create a delivery channel - we'll use the existing one
+        // Comment out the delivery channel creation to avoid MaxNumberOfDeliveryChannelsExceededException
+        /*
         CfnDeliveryChannel deliveryChannel = CfnDeliveryChannel.Builder.create(this, "ConfigDeliveryChannel")
             .name("WebAppConfigDelivery-" + environmentSuffix)
             .s3BucketName("secure-webapp-logs-" + environmentSuffix + "-" + this.getAccount())
             .s3KeyPrefix("aws-config")  // Removed trailing slash
             .build();
+        */
         
         // Config rule for IAM policy changes
         CfnConfigRule iamPolicyRule = CfnConfigRule.Builder.create(this, "IAMPolicyChangesRule")
@@ -328,10 +331,8 @@ public class SecureWebAppStack extends Stack {
                 .build())
             .build();
         
-        // Use the delivery channel as the dependency for rules
-        // since we're using an existing config recorder
-        iamPolicyRule.getNode().addDependency(deliveryChannel);
-        rootAccessKeyRule.getNode().addDependency(deliveryChannel);
+        // We no longer have a recorder or delivery channel to depend on
+        // No need to add dependencies
     }
     
     /**
