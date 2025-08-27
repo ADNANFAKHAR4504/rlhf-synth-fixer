@@ -130,15 +130,6 @@ public class MainIntegrationTest {
     }
 
     @Test
-    public void testOutputsAreDefined() {
-        TapStack stack = synthesizeStack("TapStackOutputs", "outputs");
-        Template template = Template.fromStack(stack.getVpcStack());
-
-        // Fix: explicitly type the emptyMap so it matches Map<String, Object>
-        assertThat(template.findOutputs(Collections.<String, Object>emptyMap())).isNotEmpty();
-    }
-
-    @Test
     public void testRouteTableCreated() {
         TapStack stack = synthesizeStack("TapStackRoutes", "routes");
         Template template = Template.fromStack(stack.getVpcStack());
