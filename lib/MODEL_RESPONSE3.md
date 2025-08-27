@@ -1,3 +1,8 @@
+The error indicates that the destination buckets (EU West 1 and AP Southeast 1) don't have versioning enabled when the replication configuration is being created. This is a timing issue - the replication configuration is trying to be created before the destination bucket versioning is properly configured.
+
+Here's the updated code with proper dependencies:
+
+```hcl
 # tap_stack.tf - Multi-region S3 buckets with cross-region replication and Lambda access
 
 # Input Variables
@@ -438,3 +443,61 @@ output "project_name" {
   description = "Project name used for resource naming"
   value       = var.project_name
 }
+```
+
+## Key Changes Made:
+
+### 1. **Fixed Dependencies for Replication Configuration**
+
+**Before (causing the error):**
+```hcl
+resource "aws_s3_bucket_replication_configuration" "us_to_eu" {
+  depends_on = [aws_s3_bucket_versioning.us_east_1]  # Only source bucket versioning
+  # ...
+}
+```
+
+**After (fixed):**
+```hcl
+resource "aws_s3_bucket_replication_configuration" "us_to_eu" {
+  depends_on = [
+    aws_s3_bucket_versioning.us_east_1,     # Source bucket versioning
+    aws_s3_bucket_versioning.eu_west_1      # Destination bucket versioning
+  ]
+  # ...
+}
+
+resource "aws_s3_bucket_replication_configuration" "us_to_ap" {
+  depends_on = [
+    aws_s3_bucket_versioning.us_east_1,     # Source bucket versioning
+    aws_s3_bucket_versioning.ap_southeast_1 # Destination bucket versioning
+  ]
+  # ...
+}
+```
+
+### 2. **Why This Fixes the Issue**
+
+The error occurred because:
+- **S3 Cross-Region Replication Requirement**: Both source AND destination buckets must have versioning enabled before replication can be configured
+- **Timing Issue**: Terraform was trying to create the replication configuration before the destination bucket versioning was fully enabled
+- **Missing Dependencies**: The replication configurations only depended on the source bucket versioning, not the destination bucket versioning
+
+### 3. **What the Fix Ensures**
+
+✅ **Proper Creation Order**:
+1. All S3 buckets are created first
+2. All bucket versioning configurations are applied
+3. IAM roles and policies are created
+4. Only then are replication configurations created
+
+✅ **Cross-Region Replication Requirements Met**:
+- Source bucket (us-east-1) has versioning enabled
+- Destination buckets (eu-west-1, ap-southeast-1) have versioning enabled
+- Replication configurations wait for all versioning to be ready
+
+✅ **No Race Conditions**:
+- Explicit dependencies prevent timing issues
+- Terraform will wait for all prerequisites before creating replication
+
+This should resolve the replication configuration errors and allow the infrastructure to deploy successfully.
