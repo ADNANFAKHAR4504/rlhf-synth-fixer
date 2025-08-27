@@ -1,233 +1,124 @@
 package app;
 
-import java.util.Arrays;
-import java.util.Optional;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.*;
 
-import software.amazon.awscdk.App;
-import software.amazon.awscdk.CfnOutput;
-import software.amazon.awscdk.Environment;
-import software.amazon.awscdk.Stack;
-import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
-import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
-import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
-import software.amazon.awscdk.services.ec2.AmazonLinuxImageProps;
-import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
-import software.amazon.awscdk.services.ec2.IMachineImage;
-import software.amazon.awscdk.services.ec2.Instance;
-import software.amazon.awscdk.services.ec2.InstanceClass;
-import software.amazon.awscdk.services.ec2.InstanceSize;
-import software.amazon.awscdk.services.ec2.InstanceType;
-import software.amazon.awscdk.services.ec2.IpAddresses;
-import software.amazon.awscdk.services.ec2.MachineImage;
-import software.amazon.awscdk.services.ec2.Peer;
-import software.amazon.awscdk.services.ec2.Port;
-import software.amazon.awscdk.services.ec2.SecurityGroup;
-import software.amazon.awscdk.services.ec2.SubnetConfiguration;
-import software.amazon.awscdk.services.ec2.SubnetSelection;
-import software.amazon.awscdk.services.ec2.SubnetType;
-import software.amazon.awscdk.services.ec2.UserData;
-import software.amazon.awscdk.services.ec2.Vpc;
-import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.ManagedPolicy;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
-import software.constructs.Construct;
+import software.amazon.awssdk.services.iam.IamClient;
+import software.amazon.awssdk.services.iam.model.*;
+
+import java.util.List;
 
 /**
- * TapStackProps holds configuration for the TapStack CDK stack.
+ * Example AWS SDK v2 implementation of TapStack.
+ * Creates a VPC, Security Group, IAM Role, and an EC2 instance.
  */
-final class TapStackProps {
-  private final String environmentSuffix;
-  private final StackProps stackProps;
+public class Main {
 
-  private TapStackProps(final String envSuffix, final StackProps props) {
-    this.environmentSuffix = envSuffix;
-    this.stackProps = props != null ? props : StackProps.builder().build();
-  }
+    public static void main(String[] args) {
+        String envSuffix = System.getenv().getOrDefault("ENVIRONMENT_SUFFIX", "dev");
 
-  public String getEnvironmentSuffix() {
-    return environmentSuffix;
-  }
+        // Choose region based on suffix
+        Region region = envSuffix.equalsIgnoreCase("east") ? Region.US_EAST_1 : Region.US_WEST_2;
 
-  public StackProps getStackProps() {
-    return stackProps;
-  }
+        try (Ec2Client ec2 = Ec2Client.builder()
+                        .region(region)
+                        .credentialsProvider(DefaultCredentialsProvider.create())
+                        .build();
+             IamClient iam = IamClient.builder()
+                        .region(region)
+                        .credentialsProvider(DefaultCredentialsProvider.create())
+                        .build()) {
 
-  public static Builder builder() {
-    return new Builder();
-  }
+            // 1. Create VPC
+            CreateVpcResponse vpcResponse = ec2.createVpc(CreateVpcRequest.builder()
+                    .cidrBlock("10.0.0.0/16")
+                    .build());
+            String vpcId = vpcResponse.vpc().vpcId();
+            System.out.println("✅ Created VPC: " + vpcId);
 
-  public static class Builder {
-    private String environmentSuffix;
-    private StackProps stackProps;
+            // Enable DNS support
+            ec2.modifyVpcAttribute(ModifyVpcAttributeRequest.builder()
+                    .vpcId(vpcId)
+                    .enableDnsSupport(AttributeBooleanValue.builder().value(true).build())
+                    .build());
+            ec2.modifyVpcAttribute(ModifyVpcAttributeRequest.builder()
+                    .vpcId(vpcId)
+                    .enableDnsHostnames(AttributeBooleanValue.builder().value(true).build())
+                    .build());
 
-    public Builder environmentSuffix(final String suffix) {
-      this.environmentSuffix = suffix;
-      return this;
+            // 2. Create Security Group
+            CreateSecurityGroupResponse sgResponse = ec2.createSecurityGroup(CreateSecurityGroupRequest.builder()
+                    .groupName("tap-" + envSuffix + "-sg")
+                    .description("Allow SSH from specific IP")
+                    .vpcId(vpcId)
+                    .build());
+            String sgId = sgResponse.groupId();
+            System.out.println("✅ Created Security Group: " + sgId);
+
+            ec2.authorizeSecurityGroupIngress(AuthorizeSecurityGroupIngressRequest.builder()
+                    .groupId(sgId)
+                    .ipPermissions(IpPermission.builder()
+                            .ipProtocol("tcp")
+                            .fromPort(22)
+                            .toPort(22)
+                            .ipRanges(IpRange.builder().cidrIp("203.0.113.0/32").build())
+                            .build())
+                    .build());
+
+            // 3. Create IAM Role for EC2
+            String assumeRolePolicy = "{\n" +
+                    "  \"Version\": \"2012-10-17\",\n" +
+                    "  \"Statement\": [\n" +
+                    "    {\n" +
+                    "      \"Effect\": \"Allow\",\n" +
+                    "      \"Principal\": {\"Service\": \"ec2.amazonaws.com\"},\n" +
+                    "      \"Action\": \"sts:AssumeRole\"\n" +
+                    "    }\n" +
+                    "  ]\n" +
+                    "}";
+            CreateRoleResponse roleResponse = iam.createRole(CreateRoleRequest.builder()
+                    .roleName("tap-" + envSuffix + "-ec2-role")
+                    .assumeRolePolicyDocument(assumeRolePolicy)
+                    .build());
+            String roleArn = roleResponse.role().arn();
+            System.out.println("✅ Created IAM Role: " + roleArn);
+
+            iam.attachRolePolicy(AttachRolePolicyRequest.builder()
+                    .roleName("tap-" + envSuffix + "-ec2-role")
+                    .policyArn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
+                    .build());
+
+            // 4. Launch EC2 Instance (Amazon Linux 2 AMI ID must be region-specific!)
+            RunInstancesResponse runResponse = ec2.runInstances(RunInstancesRequest.builder()
+                    .imageId("ami-0c02fb55956c7d316") // Replace with latest AL2 AMI for region
+                    .instanceType(InstanceType.T3_MICRO)
+                    .maxCount(1)
+                    .minCount(1)
+                    .securityGroupIds(sgId)
+                    .build());
+
+            String instanceId = runResponse.instances().get(0).instanceId();
+            System.out.println("✅ Launched EC2 Instance: " + instanceId);
+
+            // Tag resources
+            ec2.createTags(CreateTagsRequest.builder()
+                    .resources(runResponse.instances().get(0).instanceId())
+                    .tags(software.amazon.awssdk.services.ec2.model.Tag.builder()
+                            .key("Environment")
+                            .value(envSuffix)
+                            .build())
+                    .tags(software.amazon.awssdk.services.ec2.model.Tag.builder()
+                            .key("CreatedBy")
+                            .value("AWS-SDK")
+                            .build())
+                    .build());
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.err.println("❌ Error provisioning TapStack: " + e.getMessage());
+        }
     }
-
-    public Builder stackProps(final StackProps props) {
-      this.stackProps = props;
-      return this;
-    }
-
-    public TapStackProps build() {
-      return new TapStackProps(environmentSuffix, stackProps);
-    }
-  }
-}
-
-/**
- * VPC Infrastructure Stack
- */
-class VpcInfrastructureStack extends Stack {
-  private final Vpc vpc;
-  private final Instance ec2Instance;
-  private final SecurityGroup sshSecurityGroup;
-
-  VpcInfrastructureStack(final Construct scope, final String id, final String environmentSuffix,
-      final StackProps props) {
-    super(scope, id, props);
-
-    this.vpc = Vpc.Builder.create(this, "MainVpc")
-        .vpcName("tap-" + environmentSuffix + "-vpc")
-        .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
-        .maxAzs(2)
-        .enableDnsSupport(true)
-        .enableDnsHostnames(true)
-        .subnetConfiguration(Arrays.asList(
-            SubnetConfiguration.builder()
-                .subnetType(SubnetType.PUBLIC)
-                .name("PublicSubnet")
-                .cidrMask(24)
-                .build()))
-        .natGateways(0)
-        .build();
-
-    this.sshSecurityGroup = SecurityGroup.Builder.create(this, "SshSecurityGroup")
-        .securityGroupName("tap-" + environmentSuffix + "-ssh-sg")
-        .vpc(vpc)
-        .description("Security group for SSH access to EC2 instances")
-        .allowAllOutbound(true)
-        .build();
-
-    sshSecurityGroup.addIngressRule(
-        Peer.ipv4("203.0.113.0/32"),
-        Port.tcp(22),
-        "SSH access from specific IP");
-
-    Role ec2Role = Role.Builder.create(this, "Ec2Role")
-        .roleName("tap-" + environmentSuffix + "-ec2-role")
-        .assumedBy(ServicePrincipal.Builder.create("ec2.amazonaws.com").build())
-        .managedPolicies(Arrays.asList(
-            ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
-        .build();
-
-    IMachineImage amazonLinuxAmi = MachineImage.latestAmazonLinux2(
-        software.amazon.awscdk.services.ec2.AmazonLinux2ImageSsmParameterProps.builder()
-            .cpuType(AmazonLinuxCpuType.X86_64)
-            .virtualization(AmazonLinuxVirt.HVM)
-            .build());
-
-    this.ec2Instance = Instance.Builder.create(this, "WebServerInstance")
-        .instanceName("tap-" + environmentSuffix + "-ec2-instance")
-        .vpc(vpc)
-        .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
-        .machineImage(amazonLinuxAmi)
-        .securityGroup(sshSecurityGroup)
-        .vpcSubnets(SubnetSelection.builder()
-            .subnetType(SubnetType.PUBLIC)
-            .availabilityZones(Arrays.asList(vpc.getAvailabilityZones().get(0)))
-            .build())
-        .role(ec2Role)
-        .userData(UserData.forLinux())
-        .build();
-
-    Tags.of(this).add("Environment", environmentSuffix);
-    Tags.of(this).add("Project", "VpcInfrastructure");
-    Tags.of(this).add("CreatedBy", "CDK");
-
-    // ---- Outputs ----
-    CfnOutput.Builder.create(this, "VpcId")
-        .value(vpc.getVpcId())
-        .exportName("TapStack-" + environmentSuffix + "-VpcId")
-        .build();
-
-    CfnOutput.Builder.create(this, "InstanceId")
-        .value(ec2Instance.getInstanceId())
-        .exportName("TapStack-" + environmentSuffix + "-InstanceId")
-        .build();
-
-    CfnOutput.Builder.create(this, "SecurityGroupId")
-        .value(sshSecurityGroup.getSecurityGroupId())
-        .exportName("TapStack-" + environmentSuffix + "-SecurityGroupId")
-        .build();
-  }
-
-  public Vpc getVpc() { return vpc; }
-  public Instance getEc2Instance() { return ec2Instance; }
-  public SecurityGroup getSshSecurityGroup() { return sshSecurityGroup; }
-}
-
-/**
- * Main TapStack
- */
-class TapStack extends Stack {
-  private final String environmentSuffix;
-  private final VpcInfrastructureStack vpcStack;
-
-  TapStack(final Construct scope, final String id, final TapStackProps props) {
-    super(scope, id, props != null ? props.getStackProps() : null);
-
-    this.environmentSuffix = Optional.ofNullable(props)
-        .map(TapStackProps::getEnvironmentSuffix)
-        .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
-            .map(Object::toString))
-        .orElse("dev");
-
-    this.vpcStack = new VpcInfrastructureStack(
-        this,
-        "VpcInfrastructure",
-        environmentSuffix,
-        StackProps.builder()
-            .env(props != null ? props.getStackProps().getEnv() : null)
-            .description("VpcInfra for " + environmentSuffix)
-            .build());
-  }
-
-  public String getEnvironmentSuffix() { return environmentSuffix; }
-  public VpcInfrastructureStack getVpcStack() { return vpcStack; }
-}
-
-/**
- * Entry point
- */
-public final class Main {
-  private Main() {}
-
-  public static void main(final String[] args) {
-    App app = new App();
-
-    String account = System.getenv("CDK_DEFAULT_ACCOUNT");
-    if (account == null) account = "123456789012";
-
-    // Deploy East
-    new TapStack(app, "TapStack-East", TapStackProps.builder()
-        .environmentSuffix("east")
-        .stackProps(StackProps.builder()
-            .env(Environment.builder().account(account).region("us-east-1").build())
-            .build())
-        .build());
-
-    // Deploy West
-    new TapStack(app, "TapStack-West", TapStackProps.builder()
-        .environmentSuffix("west")
-        .stackProps(StackProps.builder()
-            .env(Environment.builder().account(account).region("us-west-2").build())
-            .build())
-        .build());
-
-    app.synth();
-  }
 }
