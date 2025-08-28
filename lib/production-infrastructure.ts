@@ -670,8 +670,8 @@ export class ProductionInfrastructure {
       {
         role: this.ec2Role.id,
         policy: pulumi
-          .all([this.s3Bucket.arn, this.vpcFlowLogGroup.arn])
-          .apply(([bucketArn, logGroupArn]) =>
+          .all([this.s3Bucket.arn, this.vpcFlowLogGroup.arn, this.kmsKey.arn])
+          .apply(([bucketArn, logGroupArn, kmsKeyArn]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -698,7 +698,7 @@ export class ProductionInfrastructure {
                 {
                   Effect: 'Allow',
                   Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
-                  Resource: this.kmsKey.arn,
+                  Resource: kmsKeyArn,
                 },
               ],
             })
