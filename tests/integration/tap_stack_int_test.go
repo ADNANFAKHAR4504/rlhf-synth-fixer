@@ -1,5 +1,5 @@
 // tests/integration/tap_stack_int_test.go
-package integration
+package main
 
 import (
 	"context"
