@@ -2,441 +2,247 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-describe('TapStack', () => {
+describe('TapStack Unit Tests', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
 
-  beforeEach(() => {
+  beforeAll(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', {
-      environmentSuffix: 'test',
-      env: { account: '123456789012', region: 'us-east-1' },
-    });
+    stack = new TapStack(app, 'TestTapStack');
     template = Template.fromStack(stack);
   });
 
-  describe('VPC Configuration', () => {
-    test('creates VPC with correct configuration', () => {
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true,
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: 'production' },
-          { Key: 'Project', Value: 'tap-secure-baseline' },
-          { Key: 'Owner', Value: 'platform-team' },
-        ]),
-      });
+  test('VPC Created with Correct Configuration', () => {
+    template.resourceCountIs('AWS::EC2::VPC', 1);
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.0.0.0/16',
     });
+    template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 AZs * 3 subnet types
+    template.resourceCountIs('AWS::EC2::NatGateway', 2);
+  });
 
-    test('creates public, private, and database subnets', () => {
-      template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 AZs * 3 subnet types
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        MapPublicIpOnLaunch: true,
-      });
-    });
-
-    test('creates NAT gateways for private subnet egress', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 2);
-    });
-
-    test('creates internet gateway', () => {
-      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+  test('VPC FlowLogs Enabled', () => {
+    template.resourceCountIs('AWS::EC2::FlowLog', 1);
+    template.hasResourceProperties('AWS::EC2::FlowLog', {
+      ResourceType: 'VPC',
+      TrafficType: 'ALL',
+      LogDestinationType: 'cloud-watch-logs',
     });
   });
 
-  describe('Security Groups', () => {
-    test('creates EC2 security group with least privilege', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for EC2 instances',
-        SecurityGroupEgress: [
-          {
-            CidrIp: '0.0.0.0/0',
-            FromPort: 443,
-            IpProtocol: 'tcp',
-            ToPort: 443,
+  test('KMS Key Created', () => {
+    template.resourceCountIs('AWS::KMS::Key', 1);
+    template.hasResourceProperties('AWS::KMS::Key', {
+      EnableKeyRotation: true,
+    });
+  });
+
+  test('Security Groups Created with Correct Rules', () => {
+    template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Security group for web servers',
+      SecurityGroupIngress: [
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 443,
+          ToPort: 443,
+          IpProtocol: 'tcp',
+        },
+      ],
+      SecurityGroupEgress: [
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 443,
+          ToPort: 443,
+          IpProtocol: 'tcp',
+        },
+      ],
+    });
+
+    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+      GroupDescription: 'Security group for database',
+    });
+
+    template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+      Description: 'PostgreSQL from web servers',
+      FromPort: 5432,
+      ToPort: 5432,
+      IpProtocol: 'tcp',
+      SourceSecurityGroupId: {
+        'Fn::GetAtt': [Match.stringLikeRegexp('^WebSecurityGroup.*'), 'GroupId'],
+      },
+      GroupId: {
+        'Fn::GetAtt': [Match.stringLikeRegexp('^DatabaseSecurityGroup.*'), 'GroupId'],
+      },
+    });
+  });
+
+  test('EC2 Instance Created with Encrypted Volume and Correct Role', () => {
+    template.resourceCountIs('AWS::EC2::Instance', 1);
+    template.hasResourceProperties('AWS::EC2::Instance', {
+      InstanceType: 't3.micro',
+      BlockDeviceMappings: [
+        {
+          DeviceName: '/dev/xvda',
+          Ebs: {
+            Encrypted: true,
+            VolumeType: 'gp3',
           },
+        },
+      ],
+    });
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
           {
-            CidrIp: '0.0.0.0/0',
-            FromPort: 80,
-            IpProtocol: 'tcp',
-            ToPort: 80,
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
           },
         ],
-      });
+      },
+      ManagedPolicyArns: [
+        {
+          'Fn::Join': [
+            '',
+            [
+              'arn:',
+              { Ref: 'AWS::Partition' },
+              ':iam::aws:policy/CloudWatchAgentServerPolicy',
+            ],
+          ],
+        },
+      ],
     });
+  });
 
-    test('creates RDS security group with restricted access', () => {
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for RDS database',
-        SecurityGroupIngress: [
+  test('CloudWatch Alarms for EC2 Created', () => {
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 2);
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'CPUUtilization',
+      Namespace: 'AWS/EC2',
+      Threshold: 80,
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      MetricName: 'mem_used_percent',
+      Namespace: 'CWAgent',
+      Threshold: 80,
+    });
+  });
+
+  test('S3 Bucket Created with Secure Defaults', () => {
+    template.resourceCountIs('AWS::S3::Bucket', 1);
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketEncryption: {
+        ServerSideEncryptionConfiguration: [
           {
-            FromPort: 3306,
-            IpProtocol: 'tcp',
-            SourceSecurityGroupId: Match.anyValue(),
-            ToPort: 3306,
+            ServerSideEncryptionByDefault: {
+              SSEAlgorithm: 'AES256',
+            },
           },
         ],
-      });
+      },
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+      VersioningConfiguration: {
+        Status: 'Enabled',
+      },
     });
   });
 
-  describe('KMS Encryption', () => {
-    test('creates KMS key with rotation enabled', () => {
-      template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'TAP encryption key',
-        EnableKeyRotation: true,
-        KeyPolicy: {
-          Statement: Match.arrayWith([
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: { AWS: Match.anyValue() },
-              Action: 'kms:*',
-              Resource: '*',
-            },
-          ]),
-        },
-      });
+  test('RDS Database Created with Encryption', () => {
+    template.resourceCountIs('AWS::RDS::DBInstance', 1);
+    template.hasResourceProperties('AWS::RDS::DBInstance', {
+      DBInstanceClass: 'db.t3.micro',
+      Engine: 'postgres',
+      StorageEncrypted: true,
+      DeletionProtection: true,
+      BackupRetentionPeriod: 7,
     });
   });
 
-  describe('S3 Buckets', () => {
-    test('creates CloudTrail bucket with encryption and versioning', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: [
-            {
-              ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'aws:kms',
-                KMSMasterKeyID: Match.anyValue(),
-              },
-            },
-          ],
-        },
-        VersioningConfiguration: {
-          Status: 'Enabled',
-        },
-        PublicAccessBlockConfiguration: {
-          BlockPublicAcls: true,
-          BlockPublicPolicy: true,
-          IgnorePublicAcls: true,
-          RestrictPublicBuckets: true,
-        },
-      });
+  test('API Gateway and WAF Created', () => {
+    template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
+    template.resourceCountIs('AWS::WAFv2::WebACL', 1);
+    template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
+    template.hasResourceProperties('AWS::WAFv2::WebACL', {
+      DefaultAction: { Allow: {} },
+      Scope: 'REGIONAL',
+      Rules: Match.arrayWith([
+        Match.objectLike({ Name: 'AWSManagedRulesCommonRuleSet' }),
+        Match.objectLike({ Name: 'AWSManagedRulesKnownBadInputsRuleSet' }),
+      ]),
     });
+  });
 
-    test('creates Config bucket with encryption', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: [
-            {
-              ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'aws:kms',
-              },
-            },
-          ],
-        },
-      });
+  test('IAM Groups and MFA Policy Created', () => {
+    template.resourceCountIs('AWS::IAM::Group', 2);
+    template.hasResourceProperties('AWS::IAM::Group', {
+      GroupName: 'TapAdmins',
+      ManagedPolicyArns: [ Match.anyValue() ],
     });
-
-    test('creates app bucket with S3 managed encryption', () => {
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketEncryption: {
-          ServerSideEncryptionConfiguration: [
-            {
-              ServerSideEncryptionByDefault: {
-                SSEAlgorithm: 'AES256',
-              },
-            },
-          ],
-        },
-      });
+    template.hasResourceProperties('AWS::IAM::Group', {
+      GroupName: 'TapReadOnly',
+      ManagedPolicyArns: [ Match.anyValue() ],
     });
-
-    test('enforces SSL for all buckets', () => {
-      template.resourceCountIs('AWS::S3::BucketPolicy', 3);
-      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+    template.resourceCountIs('AWS::IAM::ManagedPolicy', 1);
+    template.hasResourceProperties('AWS::IAM::ManagedPolicy', {
         PolicyDocument: {
-          Statement: [
-            {
-              Effect: 'Deny',
-              Principal: { AWS: '*' },
-              Action: 's3:*',
-              Condition: {
-                Bool: {
-                  'aws:SecureTransport': 'false',
+            Statement: [
+                {
+                    Condition: {
+                        BoolIfExists: {
+                            'aws:MultiFactorAuthPresent': 'false',
+                        },
+                    },
+                    Effect: 'Deny',
+                    NotAction: Match.anyValue(),
+                    Resource: '*',
                 },
-              },
-            },
-          ],
-        },
-      });
+            ],
+        }
     });
   });
 
-  describe('EC2 Instance', () => {
-    test('creates EC2 instance in private subnet with encryption', () => {
-      template.hasResourceProperties('AWS::EC2::Instance', {
-        InstanceType: 't3.micro',
-        IamInstanceProfile: Match.anyValue(),
-        SecurityGroupIds: [Match.anyValue()],
-        BlockDeviceMappings: [
-          {
-            DeviceName: '/dev/xvda',
-            Ebs: {
-              Encrypted: true,
-              VolumeSize: 20,
-              VolumeType: 'gp3',
-            },
-          },
-        ],
-      });
-    });
+  test('All Resources are Tagged', () => {
+    const resources = template.toJSON().Resources;
+    const untaggableResources = [
+      'AWS::CDK::Metadata',
+      'AWS::EC2::SubnetRouteTableAssociation',
+      'AWS::EC2::Route',
+      'AWS::EC2::RouteTable',
+      'AWS::EC2::NatGateway',
+      'AWS::EC2::InternetGateway',
+      'AWS::EC2::VPCGatewayAttachment',
+      'AWS::IAM::Policy',
+      'AWS::S3::BucketPolicy',
+      'AWS::WAFv2::WebACLAssociation',
+      'AWS::EC2::EIP',
+    ];
 
-    test('creates IAM role with least privilege policies', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com',
-              },
-              Action: 'sts:AssumeRole',
-            },
-          ],
-        },
-        ManagedPolicyArns: [
-          'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
-          'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
-        ],
-      });
-    });
+    for (const [id, res] of Object.entries(resources)) {
+      if (!untaggableResources.includes(res.Type) && res.Properties.Tags) {
+        expect(res.Properties.Tags).toEqual(expect.arrayContaining([
+          { Key: 'Environment', Value: 'production' },
+          { Key: 'Project', Value: 'tap' },
+          { Key: 'Owner', Value: 'platform-team' },
+        ]));
+      }
+    }
   });
 
-  describe('RDS Database', () => {
-    test('creates MySQL database with encryption', () => {
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        Engine: 'mysql',
-        EngineVersion: '8.0.35',
-        DBInstanceClass: 'db.t3.micro',
-        StorageEncrypted: true,
-        KmsKeyId: Match.anyValue(),
-        BackupRetentionPeriod: 7,
-        DeletionProtection: true,
-        MultiAZ: false,
-      });
-    });
-
-    test('creates DB subnet group in isolated subnets', () => {
-      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupDescription: 'Subnet group for RDS database',
-      });
-    });
-  });
-
-  describe('CloudTrail', () => {
-    test('creates CloudTrail with encryption and validation', () => {
-      template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        IncludeGlobalServiceEvents: true,
-        IsMultiRegionTrail: true,
-        EnableLogFileValidation: true,
-        KMSKeyId: Match.anyValue(),
-      });
-    });
-  });
-
-  describe('AWS Config', () => {
-    test('creates configuration recorder', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        Name: 'tap-config-recorder',
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResourceTypes: true,
-        },
-      });
-    });
-
-    test('creates delivery channel', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        Name: 'tap-config-delivery-channel',
-        S3KeyPrefix: 'config',
-      });
-    });
-
-    test('creates managed rules for compliance', () => {
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'EBS_ENCRYPTED_VOLUMES',
-        },
-      });
-
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        Source: {
-          Owner: 'AWS',
-          SourceIdentifier: 'RDS_STORAGE_ENCRYPTED',
-        },
-      });
-    });
-  });
-
-  describe('IAM Groups and Policies', () => {
-    test('creates admin group with administrator access', () => {
-      template.hasResourceProperties('AWS::IAM::Group', {
-        GroupName: 'TapAdministrators',
-        ManagedPolicyArns: ['arn:aws:iam::aws:policy/AdministratorAccess'],
-      });
-    });
-
-    test('creates developer group with limited permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Group', {
-        GroupName: 'TapDevelopers',
-      });
-
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'ec2:Describe*',
-                's3:GetObject',
-                's3:PutObject',
-                's3:ListBucket',
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLog*',
-                'cloudwatch:GetMetricStatistics',
-                'cloudwatch:ListMetrics',
-                'cloudwatch:PutMetricData',
-              ],
-              Resource: '*',
-            },
-          ],
-        },
-      });
-    });
-  });
-
-  describe('VPC Flow Logs', () => {
-    test('creates VPC flow logs with encryption', () => {
-      template.hasResourceProperties('AWS::EC2::FlowLog', {
-        ResourceType: 'VPC',
-        TrafficType: 'ALL',
-        LogDestinationType: 'cloud-watch-logs',
-      });
-
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        RetentionInDays: 365,
-        KmsKeyId: Match.anyValue(),
-      });
-    });
-  });
-
-  describe('CloudWatch Monitoring', () => {
-    test('creates CPU alarm for EC2 instance', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'CPUUtilization',
-        Namespace: 'AWS/EC2',
-        Threshold: 80,
-        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-        EvaluationPeriods: 2,
-      });
-    });
-
-    test('creates memory alarm for EC2 instance', () => {
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'mem_used_percent',
-        Namespace: 'CWAgent',
-        Threshold: 80,
-        ComparisonOperator: 'GreaterThanOrEqualToThreshold',
-        EvaluationPeriods: 2,
-      });
-    });
-  });
-
-  describe('SSM Association', () => {
-    test('creates CloudWatch agent association', () => {
-      template.hasResourceProperties('AWS::SSM::Association', {
-        Name: 'AmazonCloudWatch-ManageAgent',
-        Targets: [
-          {
-            Key: 'InstanceIds',
-            Values: [Match.anyValue()],
-          },
-        ],
-        Parameters: {
-          action: ['configure'],
-          mode: ['ec2'],
-          optionalConfigurationSource: ['ssm'],
-          optionalConfigurationLocation: ['AmazonCloudWatch-linux'],
-          optionalRestart: ['yes'],
-        },
-      });
-    });
-  });
-
-  describe('Stack Outputs', () => {
-    test('creates required outputs', () => {
-      template.hasOutput('VpcId-test', {
-        Description: 'VPC ID',
-      });
-
-      template.hasOutput('DatabaseEndpoint-test', {
-        Description: 'RDS Database Endpoint',
-      });
-
-      template.hasOutput('AppBucketName-test', {
-        Description: 'Application S3 Bucket Name',
-      });
-    });
-  });
-
-  describe('Resource Tagging', () => {
-    test('applies consistent tags to all resources', () => {
-      // Tags are now applied at the app level, so resources inherit them
-      // Check that resources have tags (exact values depend on environment)
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: Match.anyValue() },
-        ]),
-      });
-
-      template.hasResourceProperties('AWS::S3::Bucket', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: Match.anyValue() },
-        ]),
-      });
-
-      template.hasResourceProperties('AWS::RDS::DBInstance', {
-        Tags: Match.arrayWith([
-          { Key: 'Environment', Value: Match.anyValue() },
-        ]),
-      });
-    });
+  test('CfnOutputs are Correct', () => {
+    template.hasOutput('VpcId', {});
+    template.hasOutput('ApiGatewayUrl', {});
+    template.hasOutput('BucketName', {});
+    template.hasOutput('DatabaseEndpoint', {});
   });
 });

@@ -10,7 +10,7 @@ const app = new cdk.App();
 new TapStack(app, 'TapStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
+    region: process.env.CDK_DEFAULT_REGION,
   },
 });
 ```
@@ -23,412 +23,114 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as config from 'aws-cdk-lib/aws-config';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const tags = {
+    const defaultTags = {
       Environment: 'production',
-      Project: 'tap-secure-baseline',
-      Owner: 'platform-team',
+      Project: 'tap',
+      Owner: 'platform-team'
     };
 
-    Object.entries(tags).forEach(([key, value]) => {
+    Object.entries(defaultTags).forEach(([key, value]) => {
       cdk.Tags.of(this).add(key, value);
     });
 
-    const kmsKey = new kms.Key(this, 'TapKmsKey', {
-      description: 'TAP encryption key',
-      enableKeyRotation: true,
-      keyPolicy: new iam.PolicyDocument({
-        statements: [
-          new iam.PolicyStatement({
-            sid: 'Enable IAM User Permissions',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.AccountRootPrincipal()],
-            actions: ['kms:*'],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow CloudWatch Logs',
-            effect: iam.Effect.ALLOW,
-            principals: [
-              new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
-            ],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-          new iam.PolicyStatement({
-            sid: 'Allow CloudTrail',
-            effect: iam.Effect.ALLOW,
-            principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-            actions: [
-              'kms:Encrypt',
-              'kms:Decrypt',
-              'kms:ReEncrypt*',
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-            ],
-            resources: ['*'],
-          }),
-        ],
-      }),
-    });
-
     const vpc = new ec2.Vpc(this, 'TapVpc', {
-      maxAzs: 2,
-      natGateways: 2,
+      maxAzs: 3,
+      natGateways: 3,
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: 'Public',
+          name: 'public',
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           cidrMask: 24,
-          name: 'Private',
+          name: 'private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
-          name: 'Database',
+          name: 'isolated',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-    });
-
-    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      retention: logs.RetentionDays.ONE_YEAR,
-      encryptionKey: kmsKey,
     });
 
     const flowLogRole = new iam.Role(this, 'FlowLogRole', {
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      inlinePolicies: {
-        FlowLogDeliveryRolePolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              resources: [flowLogGroup.logGroupArn],
-            }),
-          ],
-        }),
-      },
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/VPCFlowLogsDeliveryRolePolicy'),
+      ],
+    });
+
+    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+      retention: logs.RetentionDays.ONE_MONTH,
     });
 
     new ec2.FlowLog(this, 'VpcFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(
-        flowLogGroup,
-        flowLogRole
-      ),
-      trafficType: ec2.FlowLogTrafficType.ALL,
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup, flowLogRole),
     });
 
-    const cloudTrailBucket = new s3.Bucket(this, 'CloudTrailBucket', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
-      versioned: true,
-      lifecycleRules: [
-        {
-          id: 'DeleteOldVersions',
-          noncurrentVersionExpiration: cdk.Duration.days(90),
-        },
-      ],
-      enforceSSL: true,
+    const kmsKey = new kms.Key(this, 'TapKmsKey', {
+      enableKeyRotation: true,
+      description: 'KMS key for TAP resources',
     });
 
-    const trail = new cloudtrail.Trail(this, 'CloudTrail', {
-      bucket: cloudTrailBucket,
-      encryptionKey: kmsKey,
-      includeGlobalServiceEvents: true,
-      isMultiRegionTrail: true,
-      enableFileValidation: true,
-    });
-
-    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: kmsKey,
-      versioned: true,
-      enforceSSL: true,
-    });
-
-    const configRole = new iam.Role(this, 'ConfigRole', {
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
-      ],
-      inlinePolicies: {
-        ConfigBucketPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:GetBucketAcl', 's3:ListBucket'],
-              resources: [configBucket.bucketArn],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:GetObject', 's3:PutObject'],
-              resources: [`${configBucket.bucketArn}/*`],
-              conditions: {
-                StringEquals: {
-                  's3:x-amz-server-side-encryption': 'aws:kms',
-                },
-              },
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey',
-              ],
-              resources: [kmsKey.keyArn],
-            }),
-          ],
-        }),
-      },
-    });
-
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        name: 'tap-config-recorder',
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
-
-    const configDeliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'ConfigDeliveryChannel',
-      {
-        name: 'tap-config-delivery-channel',
-        s3BucketName: configBucket.bucketName,
-        s3KeyPrefix: 'config',
-      }
-    );
-
-    configDeliveryChannel.addDependency(configRecorder);
-
-    new config.ManagedRule(this, 'RootMfaEnabledRule', {
-      identifier: config.ManagedRuleIdentifiers.ROOT_MFA_ENABLED,
-    });
-
-    new config.ManagedRule(this, 'S3BucketPublicAccessProhibitedRule', {
-      identifier:
-        config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_ACCESS_PROHIBITED,
-    });
-
-    new config.ManagedRule(this, 'S3BucketSslRequestsOnlyRule', {
-      identifier: config.ManagedRuleIdentifiers.S3_BUCKET_SSL_REQUESTS_ONLY,
-    });
-
-    new config.ManagedRule(this, 'EbsEncryptedVolumesRule', {
-      identifier: config.ManagedRuleIdentifiers.ENCRYPTED_VOLUMES,
-    });
-
-    new config.ManagedRule(this, 'RdsEncryptedRule', {
-      identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
-    });
-
-    const adminGroup = new iam.Group(this, 'AdminGroup', {
-      groupName: 'TapAdministrators',
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
-      ],
-    });
-
-    const developerGroup = new iam.Group(this, 'DeveloperGroup', {
-      groupName: 'TapDevelopers',
-      inlinePolicies: {
-        DeveloperPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'ec2:Describe*',
-                's3:GetObject',
-                's3:PutObject',
-                's3:ListBucket',
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLog*',
-                'cloudwatch:GetMetricStatistics',
-                'cloudwatch:ListMetrics',
-                'cloudwatch:PutMetricData',
-              ],
-              resources: ['*'],
-            }),
-          ],
-        }),
-      },
-    });
-
-    const ec2SecurityGroup = new ec2.SecurityGroup(this, 'Ec2SecurityGroup', {
+    const webSg = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
       vpc,
-      description: 'Security group for EC2 instances',
+      description: 'Security group for web servers',
       allowAllOutbound: false,
     });
 
-    ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS outbound'
-    );
+    webSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS from internet');
+    webSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP from internet');
+    webSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS outbound');
+    webSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP outbound');
 
-    ec2SecurityGroup.addEgressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
-      'HTTP outbound'
-    );
-
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+    const dbSg = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
       vpc,
-      description: 'Security group for RDS database',
+      description: 'Security group for database',
       allowAllOutbound: false,
     });
 
-    rdsSecurityGroup.addIngressRule(
-      ec2SecurityGroup,
-      ec2.Port.tcp(3306),
-      'MySQL from EC2'
-    );
+    dbSg.addIngressRule(webSg, ec2.Port.tcp(5432), 'PostgreSQL from web servers');
 
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'CloudWatchAgentServerPolicy'
-        ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMManagedInstanceCore'
-        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
       ],
-      inlinePolicies: {
-        Ec2Policy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogStreams',
-              ],
-              resources: [`arn:aws:logs:${this.region}:${this.account}:*`],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'cloudwatch:PutMetricData',
-                'ec2:DescribeVolumes',
-                'ec2:DescribeTags',
-              ],
-              resources: ['*'],
-            }),
-          ],
-        }),
-      },
     });
 
-    const ec2InstanceProfile = new iam.InstanceProfile(
-      this,
-      'Ec2InstanceProfile',
-      {
-        role: ec2Role,
-      }
-    );
+    const ec2InstanceProfile = new iam.InstanceProfile(this, 'Ec2InstanceProfile', {
+      role: ec2Role,
+    });
 
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       'yum update -y',
       'yum install -y amazon-cloudwatch-agent',
-      'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
-      JSON.stringify({
-        metrics: {
-          namespace: 'CWAgent',
-          metrics_collected: {
-            cpu: {
-              measurement: [
-                'cpu_usage_idle',
-                'cpu_usage_iowait',
-                'cpu_usage_user',
-                'cpu_usage_system',
-              ],
-              metrics_collection_interval: 60,
-              totalcpu: false,
-            },
-            disk: {
-              measurement: ['used_percent'],
-              metrics_collection_interval: 60,
-              resources: ['*'],
-            },
-            diskio: {
-              measurement: ['io_time'],
-              metrics_collection_interval: 60,
-              resources: ['*'],
-            },
-            mem: {
-              measurement: ['mem_used_percent'],
-              metrics_collection_interval: 60,
-            },
-            netstat: {
-              measurement: ['tcp_established', 'tcp_time_wait'],
-              metrics_collection_interval: 60,
-            },
-            swap: {
-              measurement: ['swap_used_percent'],
-              metrics_collection_interval: 60,
-            },
-          },
-        },
-      }),
-      'EOF',
-      '/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s'
+      'systemctl enable amazon-cloudwatch-agent',
+      'systemctl start amazon-cloudwatch-agent'
     );
 
-    const ec2Instance = new ec2.Instance(this, 'Ec2Instance', {
+    const instance = new ec2.Instance(this, 'WebInstance', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: ec2SecurityGroup,
+      securityGroup: webSg,
       role: ec2Role,
       userData,
       blockDevices: [
@@ -442,90 +144,193 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DbSubnetGroup', {
-      vpc,
-      description: 'Subnet group for RDS database',
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-    });
-
-    const database = new rds.DatabaseInstance(this, 'Database', {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [rdsSecurityGroup],
-      storageEncrypted: true,
-      storageEncryptionKey: kmsKey,
-      backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
-      multiAz: false,
-      autoMinorVersionUpgrade: true,
-      deleteAutomatedBackups: false,
-    });
-
-    const appBucket = new s3.Bucket(this, 'AppBucket', {
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      versioned: true,
-      enforceSSL: true,
-    });
-
-    const cpuAlarm = new cloudwatch.Alarm(this, 'Ec2CpuAlarm', {
-      metric: ec2Instance.metricCPUUtilization(),
+    new cloudwatch.Alarm(this, 'InstanceCpuAlarm', {
+      metric: instance.metricCPUUtilization(),
       threshold: 80,
       evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    const memoryAlarm = new cloudwatch.Alarm(this, 'Ec2MemoryAlarm', {
+    new cloudwatch.Alarm(this, 'InstanceMemoryAlarm', {
       metric: new cloudwatch.Metric({
         namespace: 'CWAgent',
         metricName: 'mem_used_percent',
         dimensionsMap: {
-          InstanceId: ec2Instance.instanceId,
+          InstanceId: instance.instanceId,
         },
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
       }),
       threshold: 80,
       evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    new ssm.Association(this, 'CloudWatchAgentAssociation', {
-      target: ssm.AssociationTarget.fromInstanceIds([ec2Instance.instanceId]),
-      document: ssm.Document.fromDocumentName(
-        this,
-        'AmazonCloudWatch-ManageAgent',
-        'AmazonCloudWatch-ManageAgent'
-      ),
-      parameters: {
-        action: ['configure'],
-        mode: ['ec2'],
-        optionalConfigurationSource: ['ssm'],
-        optionalConfigurationLocation: ['AmazonCloudWatch-linux'],
-        optionalRestart: ['yes'],
+    const bucket = new s3.Bucket(this, 'TapBucket', {
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      versioned: true,
+      enforceSSL: true,
+      serverAccessLogsPrefix: 'access-logs/',
+    });
+
+    const dbSubnetGroup = new rds.SubnetGroup(this, 'DbSubnetGroup', {
+      vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      description: 'Subnet group for RDS database',
+    });
+
+    const database = new rds.DatabaseInstance(this, 'Database', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_15_4,
+      }),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      vpc,
+      subnetGroup: dbSubnetGroup,
+      securityGroups: [dbSg],
+      storageEncrypted: true,
+      storageEncryptionKey: kmsKey,
+      backupRetention: cdk.Duration.days(7),
+      deletionProtection: true,
+      cloudwatchLogsExports: ['postgresql'],
+      credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
+    });
+
+    const api = new apigateway.RestApi(this, 'TapApi', {
+      restApiName: 'TAP API',
+      description: 'TAP REST API',
+      endpointConfiguration: {
+        types: [apigateway.EndpointType.REGIONAL],
+      },
+      policy: new iam.PolicyDocument({
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.AnyPrincipal()],
+            actions: ['execute-api:Invoke'],
+            resources: ['*'],
+          }),
+        ],
+      }),
+    });
+
+    const integration = new apigateway.MockIntegration({
+      integrationResponses: [
+        {
+          statusCode: '200',
+          responseTemplates: {
+            'application/json': '{"message": "Hello from TAP API"}',
+          },
+        },
+      ],
+      requestTemplates: {
+        'application/json': '{"statusCode": 200}',
       },
     });
+
+    api.root.addMethod('GET', integration, {
+      methodResponses: [{ statusCode: '200' }],
+    });
+
+    const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
+      scope: 'REGIONAL',
+      defaultAction: { allow: {} },
+      rules: [
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 1,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'CommonRuleSetMetric',
+          },
+        },
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'KnownBadInputsRuleSetMetric',
+          },
+        },
+      ],
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: 'TapWebAcl',
+      },
+    });
+
+    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+      resourceArn: api.deploymentStage.stageArn,
+      webAclArn: webAcl.attrArn,
+    });
+
+    const adminGroup = new iam.Group(this, 'AdminGroup', {
+      groupName: 'TapAdmins',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
+      ],
+    });
+
+    const mfaPolicy = new iam.ManagedPolicy(this, 'MfaPolicy', {
+      statements: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.DENY,
+          actions: ['*'],
+          resources: ['*'],
+          conditions: {
+            BoolIfExists: {
+              'aws:MultiFactorAuthPresent': 'false',
+            },
+            NumericLessThan: {
+              'aws:MultiFactorAuthAge': '3600',
+            },
+          },
+        }),
+      ],
+    });
+
+    adminGroup.addManagedPolicy(mfaPolicy);
+
+    const readOnlyGroup = new iam.Group(this, 'ReadOnlyGroup', {
+      groupName: 'TapReadOnly',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
+      ],
+    });
+
+    readOnlyGroup.addManagedPolicy(mfaPolicy);
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID',
     });
 
+    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
+      value: api.url,
+      description: 'API Gateway URL',
+    });
+
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: bucket.bucketName,
+      description: 'S3 Bucket Name',
+    });
+
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: 'RDS Database Endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'AppBucketName', {
-      value: appBucket.bucketName,
-      description: 'Application S3 Bucket Name',
     });
   }
 }
@@ -537,7 +342,9 @@ export class TapStack extends cdk.Stack {
 {
   "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
   "watch": {
-    "include": ["**"],
+    "include": [
+      "**"
+    ],
     "exclude": [
       "README.md",
       "cdk*.json",
@@ -570,7 +377,7 @@ export class TapStack extends cdk.Stack {
     "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
     "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
     "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
-    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
+    "@aws-cdk/aws-apigateway:disableCloudWatchRole": false,
     "@aws-cdk/core:enablePartitionLiterals": true,
     "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
     "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
@@ -586,20 +393,33 @@ export class TapStack extends cdk.Stack {
     "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
     "@aws-cdk/aws-redshift:columnId": true,
     "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
-    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
     "@aws-cdk/aws-kms:aliasNameRef": true,
     "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
     "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
     "@aws-cdk/aws-efs:denyAnonymousAccess": true,
     "@aws-cdk/aws-opensearchservice:enableLogging": true,
-    "@aws-cdk/aws-lambda:baseEnvironmentVariables": true,
-    "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
-    "@aws-cdk/aws-lambda:powertoolsLogLevel": true,
-    "@aws-cdk/aws-rds:auroraClusterChangeScopeOfInstanceParameterGroupWithEachParameters": true,
-    "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": true,
+    "@aws-cdk/aws-s3:autoDeleteObjects": true,
+    "@aws-cdk/aws-codebuild:batchServiceRole": true,
+    "@aws-cdk/aws-synthetics:enableAutoDeleteLambdas": true,
+    "@aws-cdk/aws-applicationautoscaling:generateUniqueNames": true,
+    "@aws-cdk/aws-codedeploy:retainApplicationRevisions": false,
     "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": true,
-    "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForSourceAction": true
+    "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForCodeCommitSource": true,
+    "@aws-cdk/aws-cloudwatch-actions:changeLambdaPermissionLogicalIdForLambdaAction": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
+    "@aws-cdk/aws-codepipeline:defaultPipelineTypeToV2": true,
+    "@aws-cdk/aws-kms:reduceCrossAccountRegionPolicyScope": true,
+    "@aws-cdk/aws-eks:nodegroupNameAttribute": true,
+    "@aws-cdk/aws-ec2:ebsDefaultGp3Volume": true,
+    "@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm": false,
+    "@aws-cdk/custom-resources:logApiResponseDataPropertyTrueDefault": false,
+    "@aws-cdk/aws-s3:keepNotificationInImportedBucket": false,
+    "@aws-cdk/aws-ecs:reduceEc2FargateCloudWatchPermissions": true,
+    "@aws-cdk/aws-ec2:ec2SumTImeoutEnabled": true,
+    "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": true,
+    "@aws-cdk/aws-rds:setCorrectValueForDatabaseInstanceReadReplicaInstanceResourceId": true,
+    "@aws-cdk/aws-route53-resolver:removeEmptyEndpointRuleTargetIps": true,
+    "@aws-cdk/aws-lambda:useLatestRuntimeVersion": true
   }
 }
 ```
