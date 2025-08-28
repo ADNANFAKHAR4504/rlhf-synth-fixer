@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AcmeWeb Highly Available Web Application Infrastructure - Production Ready'
+Description: 'AcmeWeb Highly Available Web Application Infrastructure - Production Ready - v1.0'
 
 Parameters:
   Environment:
