@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import yaml from 'js-yaml';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -7,11 +8,75 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
+    // Load YAML template directly with CloudFormation schema support
+    const templatePath = path.join(__dirname, '../lib/TapStack.yml');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
+    
+    // Define comprehensive CloudFormation schema
+    const CloudFormationSchema = yaml.DEFAULT_SCHEMA.extend([
+      new yaml.Type('!Ref', {
+        kind: 'scalar',
+        construct: (data) => ({ Ref: data })
+      }),
+      new yaml.Type('!GetAtt', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::GetAtt': data })
+      }),
+      new yaml.Type('!GetAtt', {
+        kind: 'scalar',
+        construct: (data) => ({ 'Fn::GetAtt': data.split('.') })
+      }),
+      new yaml.Type('!Join', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Join': data })
+      }),
+      new yaml.Type('!Sub', {
+        kind: 'scalar',
+        construct: (data) => ({ 'Fn::Sub': data })
+      }),
+      new yaml.Type('!Sub', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Sub': data })
+      }),
+      new yaml.Type('!Equals', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Equals': data })
+      }),
+      new yaml.Type('!Not', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Not': data })
+      }),
+      new yaml.Type('!If', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::If': data })
+      }),
+      new yaml.Type('!FindInMap', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::FindInMap': data })
+      }),
+      new yaml.Type('!Select', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Select': data })
+      }),
+      new yaml.Type('!Split', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Split': data })
+      }),
+      new yaml.Type('!Base64', {
+        kind: 'scalar',
+        construct: (data) => ({ 'Fn::Base64': data })
+      }),
+      new yaml.Type('!GetAZs', {
+        kind: 'scalar',
+        construct: (data) => ({ 'Fn::GetAZs': data })
+      }),
+      new yaml.Type('!ImportValue', {
+        kind: 'scalar',
+        construct: (data) => ({ 'Fn::ImportValue': data })
+      })
+    ]);
+    
+    template = yaml.load(templateContent, { schema: CloudFormationSchema });
   });
 
 
@@ -198,7 +263,7 @@ describe('TapStack CloudFormation Template', () => {
       const output = template.Outputs.DatabaseEndpoint;
       expect(output.Description).toBe('RDS MySQL database endpoint');
       expect(output.Value).toEqual({
-        'Fn::GetAtt': ['RDSInstance', 'Endpoint.Address'],
+        'Fn::GetAtt': ['RDSInstance', 'Endpoint', 'Address'],
       });
     });
 
@@ -348,6 +413,301 @@ describe('TapStack CloudFormation Template', () => {
       const kms = template.Resources.KMSKey;
       expect(kms).toBeDefined();
       expect(kms.Type).toBe('AWS::KMS::Key');
+    });
+  });
+
+  describe('Network ACLs Security Layer', () => {
+    test('should have Network ACLs for all subnet types', () => {
+      expect(template.Resources.PublicNetworkAcl).toBeDefined();
+      expect(template.Resources.PrivateNetworkAcl).toBeDefined();
+      expect(template.Resources.DatabaseNetworkAcl).toBeDefined();
+      
+      const publicAcl = template.Resources.PublicNetworkAcl;
+      expect(publicAcl.Type).toBe('AWS::EC2::NetworkAcl');
+      expect(publicAcl.Properties.VpcId).toEqual({ Ref: 'VPC' });
+    });
+
+    test('should have Network ACL entries with proper rules', () => {
+      expect(template.Resources.PublicNetworkAclEntryInbound).toBeDefined();
+      expect(template.Resources.PublicNetworkAclEntryOutbound).toBeDefined();
+      expect(template.Resources.DatabaseNetworkAclEntryInbound).toBeDefined();
+      expect(template.Resources.DatabaseNetworkAclEntryOutbound).toBeDefined();
+      
+      const dbInboundRule = template.Resources.DatabaseNetworkAclEntryInbound;
+      expect(dbInboundRule.Properties.Protocol).toBe(6); // TCP
+      expect(dbInboundRule.Properties.PortRange.From).toBe(3306);
+      expect(dbInboundRule.Properties.PortRange.To).toBe(3306);
+    });
+
+    test('should have Network ACL subnet associations', () => {
+      expect(template.Resources.PublicSubnet1NetworkAclAssociation).toBeDefined();
+      expect(template.Resources.PublicSubnet2NetworkAclAssociation).toBeDefined();
+      expect(template.Resources.DatabaseSubnet1NetworkAclAssociation).toBeDefined();
+      expect(template.Resources.DatabaseSubnet2NetworkAclAssociation).toBeDefined();
+    });
+  });
+
+  describe('Parameter Store Configuration Management', () => {
+    test('should have application configuration parameter', () => {
+      expect(template.Resources.AppConfigParameter).toBeDefined();
+      const param = template.Resources.AppConfigParameter;
+      expect(param.Type).toBe('AWS::SSM::Parameter');
+      expect(param.Properties.Type).toBe('String');
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/app/config'
+      });
+    });
+
+    test('should have database configuration parameter', () => {
+      expect(template.Resources.DBConfigParameter).toBeDefined();
+      const param = template.Resources.DBConfigParameter;
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/database/config'
+      });
+    });
+
+    test('should have ALB configuration parameter', () => {
+      expect(template.Resources.ALBConfigParameter).toBeDefined();
+      const param = template.Resources.ALBConfigParameter;
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/alb/config'
+      });
+    });
+
+    test('should have Auto Scaling configuration parameter', () => {
+      expect(template.Resources.ASGConfigParameter).toBeDefined();
+      const param = template.Resources.ASGConfigParameter;
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/autoscaling/config'
+      });
+    });
+
+    test('should have monitoring configuration parameter', () => {
+      expect(template.Resources.MonitoringConfigParameter).toBeDefined();
+      const param = template.Resources.MonitoringConfigParameter;
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/monitoring/config'
+      });
+    });
+  });
+
+  describe('HTTPS/SSL Termination Support', () => {
+    test('should have SSL certificate parameter', () => {
+      expect(template.Parameters.SSLCertificateArn).toBeDefined();
+      const param = template.Parameters.SSLCertificateArn;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('');
+      expect(param.AllowedPattern).toBe('^$|^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$');
+    });
+
+    test('should have HasSSLCertificate condition', () => {
+      expect(template.Conditions.HasSSLCertificate).toBeDefined();
+      expect(template.Conditions.HasSSLCertificate).toEqual({
+        'Fn::Not': [{ 'Fn::Equals': [{ Ref: 'SSLCertificateArn' }, ''] }]
+      });
+    });
+
+    test('should have HTTP listener with conditional redirect', () => {
+      expect(template.Resources.ALBListenerHTTP).toBeDefined();
+      const listener = template.Resources.ALBListenerHTTP;
+      expect(listener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(listener.Properties.Port).toBe(80);
+      expect(listener.Properties.Protocol).toBe('HTTP');
+    });
+
+    test('should have conditional HTTPS listener', () => {
+      expect(template.Resources.ALBListenerHTTPS).toBeDefined();
+      const httpsListener = template.Resources.ALBListenerHTTPS;
+      expect(httpsListener.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+      expect(httpsListener.Condition).toBe('HasSSLCertificate');
+      expect(httpsListener.Properties.Port).toBe(443);
+      expect(httpsListener.Properties.Protocol).toBe('HTTPS');
+      expect(httpsListener.Properties.SslPolicy).toBe('ELBSecurityPolicy-TLS-1-2-2017-01');
+    });
+  });
+
+  describe('CloudTrail API Monitoring', () => {
+    test('should have CloudTrail logs S3 bucket', () => {
+      expect(template.Resources.CloudTrailLogsBucket).toBeDefined();
+      const bucket = template.Resources.CloudTrailLogsBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+    });
+
+    test('should have CloudTrail log group', () => {
+      expect(template.Resources.CloudTrailLogGroup).toBeDefined();
+      const logGroup = template.Resources.CloudTrailLogGroup;
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.LogGroupName).toEqual({
+        'Fn::Sub': '/aws/cloudtrail/${AWS::StackName}-${EnvironmentSuffix}'
+      });
+      expect(logGroup.Properties.RetentionInDays).toBe(14);
+    });
+
+    test('should have CloudTrail with proper configuration', () => {
+      expect(template.Resources.CloudTrail).toBeDefined();
+      const trail = template.Resources.CloudTrail;
+      expect(trail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(trail.Properties.IsMultiRegionTrail).toBe(true);
+      expect(trail.Properties.IncludeGlobalServiceEvents).toBe(true);
+      expect(trail.Properties.EnableLogFileValidation).toBe(true);
+      expect(trail.Properties.EventSelectors).toBeDefined();
+    });
+
+    test('should have CloudTrail IAM role', () => {
+      expect(template.Resources.CloudTrailLogsRole).toBeDefined();
+      const role = template.Resources.CloudTrailLogsRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('cloudtrail.amazonaws.com');
+    });
+
+    test('should have CloudTrail S3 bucket policy', () => {
+      expect(template.Resources.CloudTrailBucketPolicy).toBeDefined();
+      const policy = template.Resources.CloudTrailBucketPolicy;
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(policy.Properties.PolicyDocument.Statement).toHaveLength(2); // AclCheck and Write permissions
+    });
+  });
+
+  describe('Enhanced Route 53 Failover', () => {
+    test('should have primary health check', () => {
+      expect(template.Resources.PrimaryHealthCheck).toBeDefined();
+      const healthCheck = template.Resources.PrimaryHealthCheck;
+      expect(healthCheck.Type).toBe('AWS::Route53::HealthCheck');
+      expect(healthCheck.Properties.HealthCheckConfig.ResourcePath).toBe('/health');
+      expect(healthCheck.Properties.HealthCheckConfig.RequestInterval).toBe(30);
+      expect(healthCheck.Properties.HealthCheckConfig.FailureThreshold).toBe(3);
+    });
+
+    test('should have primary DNS record with failover', () => {
+      expect(template.Resources.PrimaryDNSRecord).toBeDefined();
+      const record = template.Resources.PrimaryDNSRecord;
+      expect(record.Type).toBe('AWS::Route53::RecordSet');
+      expect(record.Properties.Failover).toBe('PRIMARY');
+      expect(record.Properties.SetIdentifier).toBe('Primary');
+      // TTL removed because AliasTarget records cannot have TTL
+    });
+
+    test('should have secondary DNS record for failover', () => {
+      expect(template.Resources.SecondaryDNSRecord).toBeDefined();
+      const record = template.Resources.SecondaryDNSRecord;
+      expect(record.Type).toBe('AWS::Route53::RecordSet');
+      expect(record.Properties.Failover).toBe('SECONDARY');
+      expect(record.Properties.SetIdentifier).toBe('Secondary');
+    });
+
+    test('should have apex DNS record', () => {
+      expect(template.Resources.ApexDNSRecord).toBeDefined();
+      const record = template.Resources.ApexDNSRecord;
+      expect(record.Properties.SetIdentifier).toBe('Apex-Primary');
+      expect(record.Properties.Failover).toBe('PRIMARY');
+    });
+
+    test('should have cross-region configuration parameter', () => {
+      expect(template.Resources.CrossRegionConfigParameter).toBeDefined();
+      const param = template.Resources.CrossRegionConfigParameter;
+      expect(param.Type).toBe('AWS::SSM::Parameter');
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/failover/config'
+      });
+    });
+  });
+
+  describe('AWS Trusted Advisor Integration', () => {
+    test('should have Trusted Advisor configuration parameter', () => {
+      expect(template.Resources.TrustedAdvisorConfigParameter).toBeDefined();
+      const param = template.Resources.TrustedAdvisorConfigParameter;
+      expect(param.Type).toBe('AWS::SSM::Parameter');
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/trusted-advisor/config'
+      });
+    });
+
+    test('should have Trusted Advisor Lambda role', () => {
+      expect(template.Resources.TrustedAdvisorLambdaRole).toBeDefined();
+      const role = template.Resources.TrustedAdvisorLambdaRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+    });
+
+    test('should have Trusted Advisor log group', () => {
+      expect(template.Resources.TrustedAdvisorLogGroup).toBeDefined();
+      const logGroup = template.Resources.TrustedAdvisorLogGroup;
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.LogGroupName).toEqual({
+        'Fn::Sub': '/aws/lambda/${AWS::StackName}-trusted-advisor-${EnvironmentSuffix}'
+      });
+    });
+
+    test('should have Trusted Advisor SNS topic', () => {
+      expect(template.Resources.TrustedAdvisorAlertsTopic).toBeDefined();
+      const topic = template.Resources.TrustedAdvisorAlertsTopic;
+      expect(topic.Type).toBe('AWS::SNS::Topic');
+      expect(topic.Properties.DisplayName).toBe('AWS Trusted Advisor Alerts');
+    });
+
+    test('should have Trusted Advisor CloudWatch dashboard', () => {
+      expect(template.Resources.TrustedAdvisorDashboard).toBeDefined();
+      const dashboard = template.Resources.TrustedAdvisorDashboard;
+      expect(dashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+    });
+
+    test('should have Trusted Advisor EventBridge rule', () => {
+      expect(template.Resources.TrustedAdvisorEventRule).toBeDefined();
+      const rule = template.Resources.TrustedAdvisorEventRule;
+      expect(rule.Type).toBe('AWS::Events::Rule');
+      expect(rule.Properties.ScheduleExpression).toBe('cron(0 9 ? * MON *)');
+      expect(rule.Properties.State).toBe('ENABLED');
+    });
+
+    test('should have Trusted Advisor recommendations parameter', () => {
+      expect(template.Resources.TrustedAdvisorRecommendationsParameter).toBeDefined();
+      const param = template.Resources.TrustedAdvisorRecommendationsParameter;
+      expect(param.Properties.Name).toEqual({
+        'Fn::Sub': '/${AWS::StackName}/${EnvironmentSuffix}/trusted-advisor/recommendations'
+      });
+    });
+  });
+
+  describe('Enhanced Parameters', () => {
+    test('should have domain name parameter', () => {
+      expect(template.Parameters.DomainName).toBeDefined();
+      const param = template.Parameters.DomainName;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('failoverdemo.com');
+    });
+
+    test('should have DNS & SSL configuration in metadata', () => {
+      const cfnInterface = template.Metadata['AWS::CloudFormation::Interface'];
+      const dnsGroup = cfnInterface.ParameterGroups.find((group: any) => 
+        group.Label.default === 'DNS & SSL Configuration'
+      );
+      expect(dnsGroup).toBeDefined();
+      expect(dnsGroup.Parameters).toContain('DomainName');
+      expect(dnsGroup.Parameters).toContain('SSLCertificateArn');
+    });
+  });
+
+  describe('Enhanced Security and Compliance', () => {
+    test('should have Secrets Manager for database credentials', () => {
+      expect(template.Resources.DBPasswordSecret).toBeDefined();
+      const secret = template.Resources.DBPasswordSecret;
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.KmsKeyId).toEqual({ Ref: 'KMSKey' });
+    });
+
+    test('RDS should use Secrets Manager for password', () => {
+      const rds = template.Resources.RDSInstance;
+      expect(rds.Properties.MasterUserPassword).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+      });
+    });
+
+    test('should have comprehensive resource counts', () => {
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBeGreaterThan(50); // With all new features, should have many more resources
     });
   });
 });
