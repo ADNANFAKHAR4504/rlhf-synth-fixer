@@ -12,7 +12,7 @@ import java.util.Comparator;
 
 /**
  * Example AWS SDK v2 implementation of TapStack.
- * Creates a VPC, Security Group, IAM Role, and an EC2 instance.
+ * Creates a VPC, Security Group, IAM Role (if not exists), and an EC2 instance.
  */
 public class Main {
 
@@ -67,28 +67,37 @@ public class Main {
                             .build())
                     .build());
 
-            // 3. Create IAM Role for EC2
-            String assumeRolePolicy = "{\n" +
-                    "  \"Version\": \"2012-10-17\",\n" +
-                    "  \"Statement\": [\n" +
-                    "    {\n" +
-                    "      \"Effect\": \"Allow\",\n" +
-                    "      \"Principal\": {\"Service\": \"ec2.amazonaws.com\"},\n" +
-                    "      \"Action\": \"sts:AssumeRole\"\n" +
-                    "    }\n" +
-                    "  ]\n" +
-                    "}";
-            CreateRoleResponse roleResponse = iam.createRole(CreateRoleRequest.builder()
-                    .roleName("tap-" + envSuffix + "-ec2-role")
-                    .assumeRolePolicyDocument(assumeRolePolicy)
-                    .build());
-            String roleArn = roleResponse.role().arn();
-            System.out.println("✅ Created IAM Role: " + roleArn);
+            // 3. Ensure IAM Role exists (idempotent)
+            String roleName = "tap-" + envSuffix + "-ec2-role";
+            String roleArn;
 
-            iam.attachRolePolicy(AttachRolePolicyRequest.builder()
-                    .roleName("tap-" + envSuffix + "-ec2-role")
-                    .policyArn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
-                    .build());
+            try {
+                GetRoleResponse getRoleResponse = iam.getRole(GetRoleRequest.builder().roleName(roleName).build());
+                roleArn = getRoleResponse.role().arn();
+                System.out.println("ℹ️ IAM Role already exists: " + roleArn);
+            } catch (NoSuchEntityException e) {
+                String assumeRolePolicy = "{\n" +
+                        "  \"Version\": \"2012-10-17\",\n" +
+                        "  \"Statement\": [\n" +
+                        "    {\n" +
+                        "      \"Effect\": \"Allow\",\n" +
+                        "      \"Principal\": {\"Service\": \"ec2.amazonaws.com\"},\n" +
+                        "      \"Action\": \"sts:AssumeRole\"\n" +
+                        "    }\n" +
+                        "  ]\n" +
+                        "}";
+                CreateRoleResponse roleResponse = iam.createRole(CreateRoleRequest.builder()
+                        .roleName(roleName)
+                        .assumeRolePolicyDocument(assumeRolePolicy)
+                        .build());
+                roleArn = roleResponse.role().arn();
+                System.out.println("✅ Created IAM Role: " + roleArn);
+
+                iam.attachRolePolicy(AttachRolePolicyRequest.builder()
+                        .roleName(roleName)
+                        .policyArn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
+                        .build());
+            }
 
             // 4. Launch EC2 Instance with dynamic latest Amazon Linux 2 AMI
             DescribeImagesResponse describeImages = ec2.describeImages(
