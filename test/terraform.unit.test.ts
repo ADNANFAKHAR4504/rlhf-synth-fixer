@@ -1,21 +1,21 @@
 // tests/unit/terraform-unit-tests.ts
-// Simple presence + sanity checks for ../lib/main.tf
+// Simple presence + sanity checks for ../lib/tap_stack.tf
 // No Terraform commands are executed.
 
 import fs from "fs";
 import path from "path";
 
-const TERRAFORM_FILE_REL = "../lib/main.tf";
+const TERRAFORM_FILE_REL = "../lib/tap_stack.tf";
 const terraformFilePath = path.resolve(__dirname, TERRAFORM_FILE_REL);
 
-describe("Terraform multi-region VPC configuration: main.tf", () => {
+describe("Terraform multi-region VPC configuration: tap_stack.tf", () => {
   let terraformContent: string;
   
   beforeAll(() => {
     terraformContent = fs.readFileSync(terraformFilePath, "utf8");
   });
 
-  test("main.tf exists", () => {
+  test("tap_stack.tf exists", () => {
     const exists = fs.existsSync(terraformFilePath);
     if (!exists) {
       console.error(`[unit] Expected terraform file at: ${terraformFilePath}`);
