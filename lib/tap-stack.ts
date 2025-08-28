@@ -37,6 +37,12 @@ export interface TapStackProps extends cdk.StackProps {
    * Project name for tagging
    */
   projectName: string;
+
+  /**
+   * Whether to create a new CodeCommit repo or use an existing one
+   * (default: false → import existing)
+   */
+  createNewRepo?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
@@ -48,7 +54,7 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    // Apply organizational tags to all resources in this stack
+    // Apply organizational tags
     const commonTags = {
       Project: props.projectName,
       Environment: props.environment,
@@ -61,7 +67,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('ManagedBy', commonTags.ManagedBy);
     cdk.Tags.of(this).add('Region', commonTags.Region);
 
-    // Create S3 bucket for pipeline artifacts
+    // Artifact bucket
     this.artifactBucket = new s3.Bucket(this, 'PipelineArtifacts', {
       bucketName: `tap-pipeline-artifacts-${props.environment.toLowerCase()}-${this.account}`,
       versioned: true,
@@ -77,21 +83,29 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // Create CodeCommit repository if using CodeCommit as source
-    let sourceRepository: codecommit.Repository | undefined;
+    // Source repository (CodeCommit or GitHub)
+    let sourceRepository: codecommit.IRepository | undefined;
     if (props.sourceType === 'codecommit') {
-      sourceRepository = new codecommit.Repository(this, 'SourceRepository', {
-        repositoryName: props.repositoryName,
-        description: `Source repository for ${props.projectName} project`,
-      });
+      if (props.createNewRepo) {
+        sourceRepository = new codecommit.Repository(this, 'SourceRepository', {
+          repositoryName: props.repositoryName,
+          description: `Source repository for ${props.projectName} project`,
+        });
+      } else {
+        sourceRepository = codecommit.Repository.fromRepositoryName(
+          this,
+          'ImportedRepository',
+          props.repositoryName
+        );
+      }
     }
 
-    // Create IAM roles with least privilege
+    // IAM roles
     const pipelineRole = this.createPipelineRole();
     const buildRole = this.createBuildRole();
     const deployRole = this.createDeployRole();
 
-    // Create CodeBuild projects
+    // CodeBuild projects
     this.buildProject = this.createBuildProject(
       'BuildProject',
       buildRole,
@@ -103,7 +117,7 @@ export class TapStack extends cdk.Stack {
       'buildspec-test.yml'
     );
 
-    // Create the pipeline
+    // Pipeline
     this.pipeline = new codepipeline.Pipeline(this, 'Pipeline', {
       pipelineName: `tap-pipeline-${props.environment.toLowerCase()}`,
       role: pipelineRole,
@@ -112,7 +126,7 @@ export class TapStack extends cdk.Stack {
       restartExecutionOnUpdate: true,
     });
 
-    // Output important ARNs and names
+    // Outputs
     new cdk.CfnOutput(this, 'PipelineArn', {
       value: this.pipeline.pipelineArn,
       description: 'ARN of the created pipeline',
@@ -123,9 +137,9 @@ export class TapStack extends cdk.Stack {
       description: 'Name of the artifact bucket',
     });
 
-    if (sourceRepository) {
+    if (sourceRepository && props.createNewRepo) {
       new cdk.CfnOutput(this, 'RepositoryCloneUrl', {
-        value: sourceRepository.repositoryCloneUrlHttp,
+        value: (sourceRepository as codecommit.Repository).repositoryCloneUrlHttp,
         description: 'HTTP clone URL of the source repository',
       });
     }
@@ -137,7 +151,6 @@ export class TapStack extends cdk.Stack {
       description: 'IAM role for CodePipeline with least privilege access',
     });
 
-    // Least privilege policy for pipeline
     role.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -158,7 +171,7 @@ export class TapStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ['codebuild:BatchGetBuilds', 'codebuild:StartBuild'],
-        resources: ['*'], // Will be refined after build projects are created
+        resources: ['*'],
       })
     );
 
@@ -200,11 +213,9 @@ export class TapStack extends cdk.Stack {
   private createBuildRole(): iam.Role {
     const role = new iam.Role(this, 'BuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description:
-        'IAM role for CodeBuild projects with least privilege access',
+      description: 'IAM role for CodeBuild projects with least privilege access',
     });
 
-    // CloudWatch Logs permissions
     role.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -219,7 +230,6 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // S3 permissions for artifacts
     role.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -228,7 +238,6 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // CodeBuild report permissions (for test results)
     role.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -254,31 +263,9 @@ export class TapStack extends cdk.Stack {
       description: 'IAM role for CloudFormation deployments',
     });
 
-    // Add necessary permissions for your application deployment
-    // This is a basic set - customize based on your application needs
     role.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess')
     );
-
-    // For production, replace PowerUserAccess with specific permissions
-    // Example for common AWS services:
-    /*
-    role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'lambda:*',
-        'apigateway:*',
-        'dynamodb:*',
-        's3:*',
-        'iam:CreateRole',
-        'iam:DeleteRole',
-        'iam:AttachRolePolicy',
-        'iam:DetachRolePolicy',
-        'iam:PassRole',
-      ],
-      resources: ['*'],
-    }));
-    */
 
     return role;
   }
@@ -288,48 +275,28 @@ export class TapStack extends cdk.Stack {
     role: iam.Role,
     buildspecFile: string
   ): codebuild.Project {
-    // Create inline buildspec for testing (in production, use buildspecFile)
     const buildSpec = buildspecFile.includes('test')
       ? codebuild.BuildSpec.fromObject({
-          version: '0.2',
-          phases: {
-            pre_build: {
-              commands: ['echo "Installing dependencies"', 'npm install'],
-            },
-            build: {
-              commands: [
-                'echo "Running tests"',
-                'npm run test:unit',
-                'echo "Tests completed"',
-              ],
-            },
+        version: '0.2',
+        phases: {
+          pre_build: { commands: ['echo "Installing dependencies"', 'npm install'] },
+          build: { commands: ['echo "Running tests"', 'npm run test:unit'] },
+        },
+        reports: {
+          'test-results': {
+            files: 'test-results.xml',
+            'file-format': 'JUNITXML',
           },
-          reports: {
-            'test-results': {
-              files: 'test-results.xml',
-              'file-format': 'JUNITXML',
-            },
-          },
-        })
+        },
+      })
       : codebuild.BuildSpec.fromObject({
-          version: '0.2',
-          phases: {
-            pre_build: {
-              commands: ['echo "Installing dependencies"', 'npm install'],
-            },
-            build: {
-              commands: [
-                'echo "Building the application"',
-                'npm run build',
-                'echo "Build completed"',
-              ],
-            },
-          },
-          artifacts: {
-            files: ['**/*'],
-            'base-directory': '.',
-          },
-        });
+        version: '0.2',
+        phases: {
+          pre_build: { commands: ['echo "Installing dependencies"', 'npm install'] },
+          build: { commands: ['echo "Building the application"', 'npm run build'] },
+        },
+        artifacts: { files: ['**/*'], 'base-directory': '.' },
+      });
 
     return new codebuild.Project(this, id, {
       projectName: `tap-${id.toLowerCase()}-${this.stackName}`,
@@ -347,22 +314,17 @@ export class TapStack extends cdk.Stack {
 
   private createPipelineStages(
     props: TapStackProps,
-    sourceRepository?: codecommit.Repository,
+    sourceRepository?: codecommit.IRepository,
     deployRole?: iam.Role
   ): codepipeline.StageProps[] {
     const sourceOutput = new codepipeline.Artifact('SourceOutput');
     const buildOutput = new codepipeline.Artifact('BuildOutput');
 
-    const stages: codepipeline.StageProps[] = [
-      // Source Stage
+    return [
       {
         stageName: 'Source',
-        actions: [
-          this.createSourceAction(props, sourceRepository, sourceOutput),
-        ],
+        actions: [this.createSourceAction(props, sourceRepository, sourceOutput)],
       },
-
-      // Build Stage
       {
         stageName: 'Build',
         actions: [
@@ -371,12 +333,9 @@ export class TapStack extends cdk.Stack {
             project: this.buildProject,
             input: sourceOutput,
             outputs: [buildOutput],
-            runOrder: 1,
           }),
         ],
       },
-
-      // Test Stage
       {
         stageName: 'Test',
         actions: [
@@ -384,12 +343,9 @@ export class TapStack extends cdk.Stack {
             actionName: 'UnitTests',
             project: this.testProject,
             input: sourceOutput,
-            runOrder: 1,
           }),
         ],
       },
-
-      // Deploy Stage
       {
         stageName: 'Deploy',
         actions: [
@@ -399,7 +355,6 @@ export class TapStack extends cdk.Stack {
             stackName: `tap-application-${props.environment.toLowerCase()}`,
             adminPermissions: false,
             role: deployRole,
-            runOrder: 1,
             parameterOverrides: {
               Environment: props.environment,
               ProjectName: props.projectName,
@@ -408,13 +363,11 @@ export class TapStack extends cdk.Stack {
         ],
       },
     ];
-
-    return stages;
   }
 
   private createSourceAction(
     props: TapStackProps,
-    sourceRepository?: codecommit.Repository,
+    sourceRepository?: codecommit.IRepository,
     output?: codepipeline.Artifact
   ): codepipeline_actions.Action {
     if (props.sourceType === 'codecommit' && sourceRepository) {
@@ -428,7 +381,6 @@ export class TapStack extends cdk.Stack {
       if (!props.githubConnectionArn) {
         throw new Error('GitHub connection ARN is required for GitHub source');
       }
-
       return new codepipeline_actions.CodeStarConnectionsSourceAction({
         actionName: 'Source',
         owner: props.repositoryName.split('/')[0],
@@ -437,23 +389,14 @@ export class TapStack extends cdk.Stack {
         output: output!,
         connectionArn: props.githubConnectionArn,
       });
-    } else {
-      throw new Error(
-        'Invalid source type or missing repository configuration'
-      );
     }
+    throw new Error('Invalid source type or missing repository configuration');
   }
 
-  /**
-   * Add a new stage to the pipeline (for extensibility)
-   */
   public addStage(stage: codepipeline.StageProps): void {
     this.pipeline.addStage(stage);
   }
 
-  /**
-   * Add a new action to an existing stage (for extensibility)
-   */
   public addActionToStage(
     stageName: string,
     action: codepipeline_actions.Action
