@@ -2,11 +2,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'AcmeWeb Highly Available Web Application Infrastructure - Production Ready - v1.0'
 
 Parameters:
-  Environment:
+  EnvironmentSuffix:
     Type: String
     Default: prod
     AllowedValues: [dev, staging, prod]
-    Description: Environment name for resource tagging
+    Description: Environment suffix for resource tagging and naming
 
   CreateKeyPair:
     Type: String
@@ -27,7 +27,7 @@ Resources:
   AcmeWebDBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'AcmeWeb-${Environment}-DB-Password'
+      Name: !Sub 'AcmeWeb-${EnvironmentSuffix}-DB-Password'
       Description: 'Auto-generated password for AcmeWeb RDS database'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -36,22 +36,22 @@ Resources:
         ExcludeCharacters: '"@/\'
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-DB-Secret'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-DB-Secret'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Create EC2 Key Pair if needed
   AcmeWebKeyPair:
     Type: AWS::EC2::KeyPair
     Condition: ShouldCreateKeyPair
     Properties:
-      KeyName: !Sub 'AcmeWeb-${Environment}-KeyPair'
+      KeyName: !Sub 'AcmeWeb-${EnvironmentSuffix}-KeyPair'
       KeyType: rsa
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-KeyPair'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-KeyPair'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # VPC Configuration
   AcmeWebVPC:
@@ -62,9 +62,9 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-VPC'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-VPC'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Internet Gateway
   AcmeWebInternetGateway:
@@ -72,9 +72,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-IGW'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-IGW'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebInternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -92,9 +92,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Public-Subnet-AZ1'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Public-Subnet-AZ1'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebPublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -105,9 +105,9 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Public-Subnet-AZ2'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Public-Subnet-AZ2'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Private Subnets - Dynamic AZ selection
   AcmeWebPrivateSubnet1:
@@ -118,9 +118,9 @@ Resources:
       CidrBlock: 10.0.3.0/24
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Private-Subnet-AZ1'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Private-Subnet-AZ1'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebPrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -130,9 +130,9 @@ Resources:
       CidrBlock: 10.0.4.0/24
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Private-Subnet-AZ2'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Private-Subnet-AZ2'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # NAT Gateways
   AcmeWebNATGateway1EIP:
@@ -142,9 +142,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-NAT-Gateway-1-EIP'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-NAT-Gateway-1-EIP'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebNATGateway2EIP:
     Type: AWS::EC2::EIP
@@ -153,9 +153,9 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-NAT-Gateway-2-EIP'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-NAT-Gateway-2-EIP'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebNATGateway1:
     Type: AWS::EC2::NatGateway
@@ -164,9 +164,9 @@ Resources:
       SubnetId: !Ref AcmeWebPublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-NAT-Gateway-AZ1'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-NAT-Gateway-AZ1'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebNATGateway2:
     Type: AWS::EC2::NatGateway
@@ -175,9 +175,9 @@ Resources:
       SubnetId: !Ref AcmeWebPublicSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-NAT-Gateway-AZ2'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-NAT-Gateway-AZ2'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Route Tables
   AcmeWebPublicRouteTable:
@@ -186,9 +186,9 @@ Resources:
       VpcId: !Ref AcmeWebVPC
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Public-Routes'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Public-Routes'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebDefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -216,9 +216,9 @@ Resources:
       VpcId: !Ref AcmeWebVPC
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Private-Routes-AZ1'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Private-Routes-AZ1'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebDefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -239,9 +239,9 @@ Resources:
       VpcId: !Ref AcmeWebVPC
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Private-Routes-AZ2'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Private-Routes-AZ2'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebDefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -260,7 +260,7 @@ Resources:
   AcmeWebEC2Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'AcmeWeb-${Environment}-EC2-Role'
+      RoleName: !Sub 'AcmeWeb-${EnvironmentSuffix}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -282,14 +282,14 @@ Resources:
                 Resource: !Ref AcmeWebDBPasswordSecret
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-EC2-Role'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-EC2-Role'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebEC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'AcmeWeb-${Environment}-EC2-Profile'
+      InstanceProfileName: !Sub 'AcmeWeb-${EnvironmentSuffix}-EC2-Profile'
       Roles:
         - !Ref AcmeWebEC2Role
 
@@ -297,7 +297,7 @@ Resources:
   AcmeWebLoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'AcmeWeb-${Environment}-LoadBalancer-SG'
+      GroupName: !Sub 'AcmeWeb-${EnvironmentSuffix}-LoadBalancer-SG'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref AcmeWebVPC
       SecurityGroupIngress:
@@ -313,14 +313,14 @@ Resources:
           Description: HTTPS access from internet
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-LoadBalancer-SG'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-LoadBalancer-SG'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebWebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'AcmeWeb-${Environment}-WebServer-SG'
+      GroupName: !Sub 'AcmeWeb-${EnvironmentSuffix}-WebServer-SG'
       GroupDescription: Security group for web servers
       VpcId: !Ref AcmeWebVPC
       SecurityGroupIngress:
@@ -336,14 +336,14 @@ Resources:
           Description: HTTPS from Load Balancer
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-WebServer-SG'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-WebServer-SG'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebDatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'AcmeWeb-${Environment}-Database-SG'
+      GroupName: !Sub 'AcmeWeb-${EnvironmentSuffix}-Database-SG'
       GroupDescription: Security group for RDS database
       VpcId: !Ref AcmeWebVPC
       SecurityGroupIngress:
@@ -354,15 +354,15 @@ Resources:
           Description: MySQL from Web Servers
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Database-SG'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Database-SG'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # Application Load Balancer
   AcmeWebApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'AcmeWeb-${Environment}-ALB'
+      Name: !Sub 'AcmeWeb-${EnvironmentSuffix}-ALB'
       Scheme: internet-facing
       Type: application
       IpAddressType: ipv4
@@ -373,14 +373,14 @@ Resources:
         - !Ref AcmeWebLoadBalancerSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-ALB'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-ALB'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'AcmeWeb-${Environment}-TG'
+      Name: !Sub 'AcmeWeb-${EnvironmentSuffix}-TG'
       Port: 80
       Protocol: HTTP
       ProtocolVersion: HTTP1
@@ -397,9 +397,9 @@ Resources:
       TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-TG'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-TG'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   AcmeWebLoadBalancerListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -415,7 +415,7 @@ Resources:
   AcmeWebLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub 'AcmeWeb-${Environment}-LaunchTemplate'
+      LaunchTemplateName: !Sub 'AcmeWeb-${EnvironmentSuffix}-LaunchTemplate'
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
@@ -461,7 +461,7 @@ Resources:
                 <div class="container">
                     <h1>AcmeWeb Application Server</h1>
                     <div class="info">
-                        <strong>Environment:</strong> ${Environment}
+                        <strong>Environment:</strong> ${EnvironmentSuffix}
                     </div>
                     <div class="info">
                         <strong>Instance ID:</strong> <span id="instance-id">Loading...</span>
@@ -502,21 +502,21 @@ Resources:
           - ResourceType: instance
             Tags:
               - Key: Name
-                Value: !Sub 'AcmeWeb-${Environment}-WebServer'
+                Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-WebServer'
               - Key: Environment
-                Value: !Ref Environment
+                Value: !Ref EnvironmentSuffix
           - ResourceType: volume
             Tags:
               - Key: Name
-                Value: !Sub 'AcmeWeb-${Environment}-WebServer-Volume'
+                Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-WebServer-Volume'
               - Key: Environment
-                Value: !Ref Environment
+                Value: !Ref EnvironmentSuffix
 
   # Auto Scaling Group
   AcmeWebAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub 'AcmeWeb-${Environment}-ASG'
+      AutoScalingGroupName: !Sub 'AcmeWeb-${EnvironmentSuffix}-ASG'
       VPCZoneIdentifier:
         - !Ref AcmeWebPrivateSubnet1
         - !Ref AcmeWebPrivateSubnet2
@@ -532,10 +532,10 @@ Resources:
       HealthCheckGracePeriod: 300
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-ASG-Instance'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-ASG-Instance'
           PropagateAtLaunch: true
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
           PropagateAtLaunch: true
     UpdatePolicy:
       AutoScalingRollingUpdate:
@@ -567,7 +567,7 @@ Resources:
   AcmeWebCPUAlarmHigh:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'AcmeWeb-${Environment}-CPU-High'
+      AlarmName: !Sub 'AcmeWeb-${EnvironmentSuffix}-CPU-High'
       AlarmDescription: Scale up on high CPU utilization
       AlarmActions:
         - !Ref AcmeWebScaleUpPolicy
@@ -586,7 +586,7 @@ Resources:
   AcmeWebCPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub 'AcmeWeb-${Environment}-CPU-Low'
+      AlarmName: !Sub 'AcmeWeb-${EnvironmentSuffix}-CPU-Low'
       AlarmDescription: Scale down on low CPU utilization
       AlarmActions:
         - !Ref AcmeWebScaleDownPolicy
@@ -606,16 +606,16 @@ Resources:
   AcmeWebDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub 'acmeweb-${Environment}-db-subnet-group'
-      DBSubnetGroupDescription: !Sub 'Subnet group for AcmeWeb ${Environment} RDS database'
+      DBSubnetGroupName: !Sub 'acmeweb-${EnvironmentSuffix}-db-subnet-group'
+      DBSubnetGroupDescription: !Sub 'Subnet group for AcmeWeb ${EnvironmentSuffix} RDS database'
       SubnetIds:
         - !Ref AcmeWebPrivateSubnet1
         - !Ref AcmeWebPrivateSubnet2
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-DB-SubnetGroup'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-DB-SubnetGroup'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
   # RDS MySQL Database
   AcmeWebDatabase:
@@ -623,7 +623,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub 'acmeweb-${Environment}-database'
+      DBInstanceIdentifier: !Sub 'acmeweb-${EnvironmentSuffix}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -647,9 +647,9 @@ Resources:
       MonitoringInterval: 0
       Tags:
         - Key: Name
-          Value: !Sub 'AcmeWeb-${Environment}-Database'
+          Value: !Sub 'AcmeWeb-${EnvironmentSuffix}-Database'
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentSuffix
 
 Outputs:
   StackName:
@@ -660,7 +660,7 @@ Outputs:
 
   Environment:
     Description: Environment name
-    Value: !Ref Environment
+    Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub '${AWS::StackName}-Environment'
 

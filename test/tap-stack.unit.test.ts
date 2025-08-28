@@ -14,11 +14,15 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
   // Template Structure Tests
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
-      expect(templateContent).toContain("AWSTemplateFormatVersion: '2010-09-09'");
+      expect(templateContent).toContain(
+        "AWSTemplateFormatVersion: '2010-09-09'"
+      );
     });
 
     test('should have correct description', () => {
-      expect(templateContent).toContain('AcmeWeb Highly Available Web Application Infrastructure - Production Ready');
+      expect(templateContent).toContain(
+        'AcmeWeb Highly Available Web Application Infrastructure - Production Ready'
+      );
     });
 
     test('should have all required sections', () => {
@@ -31,8 +35,8 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
 
   // Parameters Tests
   describe('Parameters', () => {
-    test('should have Environment parameter', () => {
-      expect(templateContent).toContain('Environment:');
+    test('should have EnvironmentSuffix parameter', () => {
+      expect(templateContent).toContain('EnvironmentSuffix:');
       expect(templateContent).toContain('Type: String');
       expect(templateContent).toContain('Default: prod');
       expect(templateContent).toContain('AllowedValues: [dev, staging, prod]');
@@ -98,20 +102,26 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
   describe('Application Load Balancer (PROMPT.md Requirements)', () => {
     test('should have Application Load Balancer', () => {
       expect(templateContent).toContain('AcmeWebApplicationLoadBalancer:');
-      expect(templateContent).toContain('Type: AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(templateContent).toContain(
+        'Type: AWS::ElasticLoadBalancingV2::LoadBalancer'
+      );
       expect(templateContent).toContain('Scheme: internet-facing');
       expect(templateContent).toContain('Type: application');
     });
 
     test('should have Target Group with health check', () => {
       expect(templateContent).toContain('AcmeWebTargetGroup:');
-      expect(templateContent).toContain('Type: AWS::ElasticLoadBalancingV2::TargetGroup');
+      expect(templateContent).toContain(
+        'Type: AWS::ElasticLoadBalancingV2::TargetGroup'
+      );
       expect(templateContent).toContain('HealthCheckPath: /health');
     });
 
     test('should have Load Balancer Listener', () => {
       expect(templateContent).toContain('AcmeWebLoadBalancerListener:');
-      expect(templateContent).toContain('Type: AWS::ElasticLoadBalancingV2::Listener');
+      expect(templateContent).toContain(
+        'Type: AWS::ElasticLoadBalancingV2::Listener'
+      );
     });
   });
 
@@ -119,7 +129,9 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
   describe('Auto Scaling Group (PROMPT.md Requirements)', () => {
     test('should have Auto Scaling Group with min=2, max=4 configuration', () => {
       expect(templateContent).toContain('AcmeWebAutoScalingGroup:');
-      expect(templateContent).toContain('Type: AWS::AutoScaling::AutoScalingGroup');
+      expect(templateContent).toContain(
+        'Type: AWS::AutoScaling::AutoScalingGroup'
+      );
       expect(templateContent).toContain('MinSize: 2');
       expect(templateContent).toContain('MaxSize: 4');
       expect(templateContent).toContain('DesiredCapacity: 2');
@@ -129,13 +141,17 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
       expect(templateContent).toContain('AcmeWebLaunchTemplate:');
       expect(templateContent).toContain('Type: AWS::EC2::LaunchTemplate');
       expect(templateContent).toContain('InstanceType: t3.micro');
-      expect(templateContent).toContain('{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}');
+      expect(templateContent).toContain(
+        '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      );
     });
 
     test('should have scaling policies', () => {
       expect(templateContent).toContain('AcmeWebScaleUpPolicy:');
       expect(templateContent).toContain('AcmeWebScaleDownPolicy:');
-      expect(templateContent).toContain('Type: AWS::AutoScaling::ScalingPolicy');
+      expect(templateContent).toContain(
+        'Type: AWS::AutoScaling::ScalingPolicy'
+      );
     });
 
     test('should have CloudWatch alarms', () => {
@@ -194,7 +210,9 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
     test('should have EC2 IAM role with SSM permissions', () => {
       expect(templateContent).toContain('AcmeWebEC2Role:');
       expect(templateContent).toContain('Type: AWS::IAM::Role');
-      expect(templateContent).toContain('arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore');
+      expect(templateContent).toContain(
+        'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      );
     });
 
     test('should have instance profile', () => {
@@ -207,10 +225,19 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const requiredOutputs = [
-        'StackName:', 'Environment:', 'VPCId:', 'AvailabilityZones:',
-        'LoadBalancerURL:', 'LoadBalancerDNS:', 'DatabaseEndpoint:',
-        'DatabaseSecretArn:', 'AutoScalingGroupName:', 'KeyPairName:',
-        'PublicSubnets:', 'PrivateSubnets:', 'Region:'
+        'StackName:',
+        'Environment:',
+        'VPCId:',
+        'AvailabilityZones:',
+        'LoadBalancerURL:',
+        'LoadBalancerDNS:',
+        'DatabaseEndpoint:',
+        'DatabaseSecretArn:',
+        'AutoScalingGroupName:',
+        'KeyPairName:',
+        'PublicSubnets:',
+        'PrivateSubnets:',
+        'Region:',
       ];
 
       requiredOutputs.forEach(outputName => {
@@ -227,9 +254,9 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
 
   // Environment-Agnostic Implementation Tests
   describe('Environment-Agnostic Implementation', () => {
-    test('should use Environment parameter consistently', () => {
-      expect(templateContent).toContain('!Ref Environment');
-      expect(templateContent).toContain('${Environment}');
+    test('should use EnvironmentSuffix parameter consistently', () => {
+      expect(templateContent).toContain('!Ref EnvironmentSuffix');
+      expect(templateContent).toContain('${EnvironmentSuffix}');
     });
 
     test('should use dynamic AZ selection', () => {
@@ -239,7 +266,9 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
     });
 
     test('should use dynamic AMI lookup', () => {
-      expect(templateContent).toContain('{{resolve:ssm:/aws/service/ami-amazon-linux-latest');
+      expect(templateContent).toContain(
+        '{{resolve:ssm:/aws/service/ami-amazon-linux-latest'
+      );
     });
   });
 
@@ -251,14 +280,15 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
     });
 
     test('should have comprehensive resource definitions', () => {
-      const resourceCount = (templateContent.match(/Type: AWS::/g) || []).length;
+      const resourceCount = (templateContent.match(/Type: AWS::/g) || [])
+        .length;
       expect(resourceCount).toBeGreaterThan(20);
     });
 
     test('should have consistent tagging strategy', () => {
       expect(templateContent).toContain('Key: Name');
       expect(templateContent).toContain('Key: Environment');
-      expect(templateContent).toContain('Value: !Ref Environment');
+      expect(templateContent).toContain('Value: !Ref EnvironmentSuffix');
     });
   });
 
@@ -271,7 +301,9 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
     });
 
     test('should have proper key pair conditions', () => {
-      expect(templateContent).toContain('ShouldCreateKeyPair: !Equals [!Ref CreateKeyPair');
+      expect(templateContent).toContain(
+        'ShouldCreateKeyPair: !Equals [!Ref CreateKeyPair'
+      );
     });
   });
 

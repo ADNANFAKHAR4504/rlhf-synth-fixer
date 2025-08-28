@@ -15,27 +15,38 @@ try {
     Environment: 'prod',
     VPCId: 'vpc-0123456789abcdef0',
     AvailabilityZones: 'us-west-2a, us-west-2b',
-    LoadBalancerURL: 'http://AcmeWeb-prod-ALB-123456789.us-west-2.elb.amazonaws.com',
+    LoadBalancerURL:
+      'http://AcmeWeb-prod-ALB-123456789.us-west-2.elb.amazonaws.com',
     LoadBalancerDNS: 'AcmeWeb-prod-ALB-123456789.us-west-2.elb.amazonaws.com',
-    DatabaseEndpoint: 'acmeweb-prod-database.abcd1234.us-west-2.rds.amazonaws.com',
-    DatabaseSecretArn: 'arn:aws:secretsmanager:us-west-2:123456789012:secret:AcmeWeb-prod-DB-Password-abcdef',
+    DatabaseEndpoint:
+      'acmeweb-prod-database.abcd1234.us-west-2.rds.amazonaws.com',
+    DatabaseSecretArn:
+      'arn:aws:secretsmanager:us-west-2:123456789012:secret:AcmeWeb-prod-DB-Password-abcdef',
     AutoScalingGroupName: 'AcmeWeb-prod-ASG',
     KeyPairName: 'AcmeWeb-prod-KeyPair',
     PublicSubnets: 'subnet-0123456789abcdef0,subnet-0fedcba9876543210',
     PrivateSubnets: 'subnet-0abcdef0123456789,subnet-0876543210fedcba9',
-    Region: 'us-west-2'
+    Region: 'us-west-2',
   };
 }
 
 describe('AcmeWeb CloudFormation Integration Tests', () => {
-
   describe('Stack Outputs Validation (PROMPT.md Requirements)', () => {
     test('should have all required outputs for AcmeWeb infrastructure', () => {
       const requiredOutputs = [
-        'StackName', 'Environment', 'VPCId', 'AvailabilityZones',
-        'LoadBalancerURL', 'LoadBalancerDNS', 'DatabaseEndpoint',
-        'DatabaseSecretArn', 'AutoScalingGroupName', 'KeyPairName',
-        'PublicSubnets', 'PrivateSubnets', 'Region'
+        'StackName',
+        'Environment',
+        'VPCId',
+        'AvailabilityZones',
+        'LoadBalancerURL',
+        'LoadBalancerDNS',
+        'DatabaseEndpoint',
+        'DatabaseSecretArn',
+        'AutoScalingGroupName',
+        'KeyPairName',
+        'PublicSubnets',
+        'PrivateSubnets',
+        'Region',
       ];
 
       requiredOutputs.forEach(output => {
@@ -47,25 +58,29 @@ describe('AcmeWeb CloudFormation Integration Tests', () => {
     test('should validate VPC and networking outputs', () => {
       expect(outputs.VPCId).toMatch(/^vpc-[a-f0-9]+$/);
       expect(outputs.Region).toMatch(/^[a-z]{2}-[a-z]+-\d$/);
-      
+
       const publicSubnets = outputs.PublicSubnets.split(',');
       const privateSubnets = outputs.PrivateSubnets.split(',');
-      
+
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
-      
+
       publicSubnets.forEach((subnet: string) => {
         expect(subnet.trim()).toMatch(/^subnet-[a-f0-9]+$/);
       });
-      
+
       privateSubnets.forEach((subnet: string) => {
         expect(subnet.trim()).toMatch(/^subnet-[a-f0-9]+$/);
       });
     });
 
     test('should validate Application Load Balancer outputs', () => {
-      expect(outputs.LoadBalancerURL).toMatch(/^http:\/\/[a-zA-Z0-9-]+\.us-[a-z]+-\d+\.elb\.amazonaws\.com$/);
-      expect(outputs.LoadBalancerDNS).toMatch(/^[a-zA-Z0-9-]+\.us-[a-z]+-\d+\.elb\.amazonaws\.com$/);
+      expect(outputs.LoadBalancerURL).toMatch(
+        /^http:\/\/[a-zA-Z0-9-]+\.us-[a-z]+-\d+\.elb\.amazonaws\.com$/
+      );
+      expect(outputs.LoadBalancerDNS).toMatch(
+        /^[a-zA-Z0-9-]+\.us-[a-z]+-\d+\.elb\.amazonaws\.com$/
+      );
     });
 
     test('should validate Auto Scaling Group outputs', () => {
@@ -73,8 +88,12 @@ describe('AcmeWeb CloudFormation Integration Tests', () => {
     });
 
     test('should validate RDS MySQL Database outputs', () => {
-      expect(outputs.DatabaseEndpoint).toMatch(/^[a-z0-9-]+\.[\w\d]+\.us-[a-z]+-\d+\.rds\.amazonaws\.com$/);
-      expect(outputs.DatabaseSecretArn).toMatch(/^arn:aws:secretsmanager:us-[a-z]+-\d+:\d{12}:secret:.+$/);
+      expect(outputs.DatabaseEndpoint).toMatch(
+        /^[a-z0-9-]+\.[\w\d]+\.us-[a-z]+-\d+\.rds\.amazonaws\.com$/
+      );
+      expect(outputs.DatabaseSecretArn).toMatch(
+        /^arn:aws:secretsmanager:us-[a-z]+-\d+:\d{12}:secret:.+$/
+      );
     });
 
     test('should validate environment agnostic implementation', () => {
@@ -96,10 +115,10 @@ describe('AcmeWeb CloudFormation Integration Tests', () => {
     test('should validate multi-AZ deployment for high availability', () => {
       const azs = outputs.AvailabilityZones.split(',');
       expect(azs).toHaveLength(2);
-      
+
       const publicSubnets = outputs.PublicSubnets.split(',');
       const privateSubnets = outputs.PrivateSubnets.split(',');
-      
+
       expect(publicSubnets).toHaveLength(2);
       expect(privateSubnets).toHaveLength(2);
     });
@@ -124,7 +143,7 @@ describe('AcmeWeb CloudFormation Integration Tests', () => {
         outputs.AutoScalingGroupName,
         outputs.DatabaseEndpoint,
         outputs.PublicSubnets,
-        outputs.PrivateSubnets
+        outputs.PrivateSubnets,
       ];
 
       coreRequirements.forEach(requirement => {
