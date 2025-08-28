@@ -68,14 +68,18 @@ tasks.named('run') {
             }"""
         }
 
-        // 2. Write manifest.json pointing to template
+        // 2. Resolve AWS Account + Region dynamically
+        def accountId = System.getenv().getOrDefault("CDK_DEFAULT_ACCOUNT", "000000000000")
+        def region    = System.getenv().getOrDefault("CDK_DEFAULT_REGION", "us-east-1")
+
+        // 3. Write manifest.json pointing to template
         def manifest = new File(outDir, "manifest.json")
         manifest.text = """{
           "version": "0.36.0",
           "artifacts": {
             "TapStack": {
               "type": "aws:cloudformation:stack",
-              "environment": "aws://000000000000/${System.getenv().getOrDefault("CDK_DEFAULT_REGION","us-east-1")}",
+              "environment": "aws://${accountId}/${region}",
               "properties": {
                 "templateFile": "TapStack.template.json"
               }
@@ -83,7 +87,7 @@ tasks.named('run') {
           }
         }"""
 
-        println "✅ Ensured cdk.out/manifest.json and TapStack.template.json exist"
+        println "✅ Ensured cdk.out/manifest.json and TapStack.template.json exist (account=${accountId}, region=${region})"
     }
 }
 
