@@ -354,6 +354,15 @@ tasks.register('lint') {
     group = 'verification'
 }
 
+// cdk.json 
+tasks.register('cdkSynth', JavaExec) {
+    group = 'cdk'
+    description = 'Run CDK synth'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'app.CdkApp'
+}
+
+
 // Make check depend on integration tests and coverage
 check.dependsOn integrationTest, jacocoTestCoverageVerification
 
