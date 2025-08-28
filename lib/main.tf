@@ -66,15 +66,74 @@ resource "aws_security_group" "web" {
 
 resource "aws_kms_key" "s3" {
   description = "S3 encryption key"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/cloudtrail/web-app-trail-274802"
+          }
+        }
+      }
+    ]
+  })
   tags = { Name = "s3-kms-key-274802" }
 }
+
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 resource "aws_s3_bucket" "app" {
   bucket = "webapp-bucket-274802"
   tags = { Name = "webapp-s3-274802" }
 }
 
+resource "aws_s3_bucket_ownership_controls" "app" {
+  bucket = aws_s3_bucket.app.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "app" {
+  bucket = aws_s3_bucket.app.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_acl" "app" {
+  depends_on = [
+    aws_s3_bucket_ownership_controls.app,
+    aws_s3_bucket_public_access_block.app,
+  ]
+
   bucket = aws_s3_bucket.app.id
   acl    = "private"
 }
