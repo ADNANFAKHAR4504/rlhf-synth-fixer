@@ -28,3 +28,13 @@ output "config_rules" {
     aws_config_config_rule.mfa_enabled_for_iam_console_access.name
   ]
 }
+
+#output "cloudtrail_arn" {
+#  description = "ARN of the CloudTrail"
+#  value       = module.monitoring.cloudtrail_arn
+#}
+#
+#output "guardduty_detector_id" {
+#  description = "ID of the GuardDuty detector"
+#  value       = module.monitoring.guardduty_detector_id
+#}

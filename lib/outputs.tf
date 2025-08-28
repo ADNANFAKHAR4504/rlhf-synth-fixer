@@ -42,3 +42,13 @@ output "config_rules" {
   description = "List of AWS Config rule names"
   value       = module.monitoring.config_rules
 }
+
+#output "cloudtrail_arn" {
+#  description = "ARN of the CloudTrail"
+#  value       = module.monitoring.cloudtrail_arn
+#}
+#
+#output "guardduty_detector_id" {
+#  description = "ID of the GuardDuty detector"
+#  value       = module.monitoring.guardduty_detector_id
+#
