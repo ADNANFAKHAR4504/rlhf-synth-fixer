@@ -1,0 +1,62 @@
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+  
+  default_tags {
+    tags = var.common_tags
+  }
+}
+
+# Data source for availability zones
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+# VPC Module
+module "vpc" {
+  source = "./modules/vpc"
+  
+  vpc_cidr             = var.vpc_cidr
+  availability_zones   = data.aws_availability_zones.available.names
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  common_tags         = var.common_tags
+}
+
+# IAM Module
+module "iam" {
+  source = "./modules/iam"
+  
+  common_tags = var.common_tags
+}
+
+# Secrets Manager Module
+module "secrets" {
+  source = "./modules/secrets"
+  
+  secrets_config = var.secrets_config
+  common_tags   = var.common_tags
+}
+
+# EC2 Module
+module "ec2" {
+  source = "./modules/ec2"
+  
+  instance_type           = var.instance_type
+  vpc_id                 = module.vpc.vpc_id
+  public_subnet_ids      = module.vpc.public_subnet_ids
+  private_subnet_ids     = module.vpc.private_subnet_ids
+  ec2_instance_profile   = module.iam.ec2_instance_profile_name
+  common_tags           = var.common_tags
+  
+  depends_on = [module.vpc, module.iam]
+}
