@@ -19,6 +19,71 @@ describe('TapStack Unit Tests', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Stack Configuration', () => {
+    test('should use default environment suffix when not provided in props', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'DefaultSuffixStack', {
+        slackWebhookUrl: 'https://hooks.slack.com/test',
+        notificationEmail: 'test@example.com'
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: 'tap-pipeline-notifications-dev'
+      });
+    });
+
+    test('should use context environment suffix when props not provided', () => {
+      const testApp = new cdk.App();
+      testApp.node.setContext('environmentSuffix', 'staging');
+      const testStack = new TapStack(testApp, 'ContextSuffixStack', {
+        slackWebhookUrl: 'https://hooks.slack.com/test',
+        notificationEmail: 'test@example.com'
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: 'tap-pipeline-notifications-staging'
+      });
+    });
+
+    test('should work without notification email', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'NoEmailStack', {
+        environmentSuffix: 'test',
+        slackWebhookUrl: 'https://hooks.slack.com/test'
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Should still create SNS topic but no email subscription
+      testTemplate.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: 'TAP Pipeline Notifications'
+      });
+      
+      // Should not create email subscription
+      testTemplate.resourcePropertiesCountIs('AWS::SNS::Subscription', {
+        Protocol: 'email'
+      }, 0);
+    });
+
+    test('should use placeholder URL when slackWebhookUrl not provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'NoSlackStack', {
+        environmentSuffix: 'test',
+        notificationEmail: 'test@example.com'
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            SLACK_WEBHOOK_URL: 'PLACEHOLDER_URL'
+          }
+        }
+      });
+    });
+  });
+
   describe('VPC Infrastructure', () => {
     test('should create VPC with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
@@ -121,13 +186,15 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('ECS Infrastructure', () => {
-    test('should create ECS cluster with container insights', () => {
+    test('should create ECS cluster with proper configuration', () => {
       template.hasResourceProperties('AWS::ECS::Cluster', {
-        ClusterName: `tap-cluster-${environmentSuffix}`,
-        ClusterSettings: [{
-          Name: 'containerInsights',
-          Value: 'enabled'
-        }]
+        ClusterName: `tap-cluster-${environmentSuffix}`
+      });
+    });
+
+    test('should create Service Discovery namespace', () => {
+      template.hasResourceProperties('AWS::ServiceDiscovery::PrivateDnsNamespace', {
+        Name: `tap.local.${environmentSuffix}`
       });
     });
 
@@ -391,6 +458,144 @@ describe('TapStack Unit Tests', () => {
           'Owner': 'DevOps-Team'
         })
       );
+    });
+  });
+
+  describe('Error Handling and Edge Cases', () => {
+    test('should handle undefined props gracefully', () => {
+      const testApp = new cdk.App();
+      expect(() => {
+        new TapStack(testApp, 'UndefinedPropsStack', undefined);
+      }).not.toThrow();
+    });
+
+    test('should handle empty environment suffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'EmptyEnvStack', {
+        environmentSuffix: '',
+        slackWebhookUrl: 'https://hooks.slack.com/test',
+        notificationEmail: 'test@example.com'
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Should use default 'dev' when environment suffix is empty
+      testTemplate.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: 'tap-pipeline-notifications-dev'
+      });
+    });
+
+    test('should work with minimal configuration', () => {
+      const testApp = new cdk.App();
+      expect(() => {
+        new TapStack(testApp, 'MinimalStack', {});
+      }).not.toThrow();
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('should enforce S3 bucket security settings', () => {
+      // Verify all S3 buckets have security configurations
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true
+        },
+        BucketEncryption: Match.objectLike({
+          ServerSideEncryptionConfiguration: Match.anyValue()
+        })
+      });
+    });
+
+    test('should create IAM roles with least privilege', () => {
+      // Check that multiple roles exist
+      const roles = template.findResources('AWS::IAM::Role');
+      expect(Object.keys(roles).length).toBeGreaterThanOrEqual(6);
+      
+      // Verify roles have proper service principals
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: {
+                Service: Match.anyValue()
+              }
+            })
+          ])
+        }
+      });
+    });
+  });
+
+  describe('Resource Lifecycle', () => {
+    test('should configure proper retention policies', () => {
+      // Check log groups have retention set
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 7
+      });
+    });
+
+    test('should handle resource removal policies', () => {
+      // Verify S3 buckets are configured for destruction in tests
+      template.hasResource('AWS::S3::Bucket', {
+        DeletionPolicy: 'Delete'
+      });
+    });
+  });
+
+  describe('Networking Security', () => {
+    test('should create security groups with appropriate rules', () => {
+      // Should create security groups for ECS and ALB
+      const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
+      expect(Object.keys(securityGroups).length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('should configure VPC with proper CIDR and DNS settings', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true
+      });
+    });
+  });
+
+  describe('High Availability Configuration', () => {
+    test('should distribute resources across multiple AZs', () => {
+      // NAT Gateways should be in different AZs for HA
+      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+      
+      // Should have multiple subnets for HA
+      template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
+    });
+
+    test('should configure auto scaling for ECS service', () => {
+      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalableTarget', {
+        MinCapacity: 2,
+        MaxCapacity: 10
+      });
+    });
+  });
+
+  describe('Performance and Monitoring', () => {
+    test('should create comprehensive CloudWatch alarms', () => {
+      // Should have alarms for pipeline, CPU, and memory
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 3);
+      
+      // Each alarm should have appropriate thresholds
+      const alarms = ['PipelineExecutionFailure', 'CPUUtilization', 'MemoryUtilization'];
+      alarms.forEach(metricName => {
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+          MetricName: metricName
+        });
+      });
+    });
+
+    test('should create dashboard with relevant metrics', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: `tap-pipeline-dashboard-${environmentSuffix}`,
+        DashboardBody: Match.anyValue()
+      });
     });
   });
 

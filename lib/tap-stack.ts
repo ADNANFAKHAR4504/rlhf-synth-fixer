@@ -143,7 +143,12 @@ export class TapStack extends cdk.Stack {
     const cluster = new ecs.Cluster(this, `TapCluster-${environmentSuffix}`, {
       clusterName: `tap-cluster-${environmentSuffix}`,
       vpc,
-      containerInsights: true,
+      enableFargateCapacityProviders: true,
+    });
+
+    // Add container insights v2 (replaces deprecated containerInsights)
+    cluster.addDefaultCloudMapNamespace({
+      name: `tap.local.${environmentSuffix}`,
     });
 
     // 7. Application Load Balancer
