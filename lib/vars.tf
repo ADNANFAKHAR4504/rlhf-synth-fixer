@@ -45,10 +45,6 @@ variable "aws_region" {
   description = "AWS region for resources"
   type        = string
   default     = "us-west-2"
-  validation {
-    condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
-    error_message = "AWS region must be a valid region format (e.g., us-west-2)."
-  }
 }
 
 variable "environment" {
@@ -129,7 +125,7 @@ variable "flow_logs_retention_days" {
 variable "app_port" {
   description = "Application port number"
   type        = number
-  default     = 8080
+  default     = 80
   validation {
     condition     = var.app_port > 0 && var.app_port <= 65535
     error_message = "Application port must be between 1 and 65535."
