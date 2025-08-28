@@ -19,6 +19,11 @@ import {
   HeadBucketCommand,
   S3Client
 } from "@aws-sdk/client-s3";
+import {
+  DescribeSecretCommand,
+  GetSecretValueCommand,
+  SecretsManagerClient
+} from "@aws-sdk/client-secrets-manager";
 // Note: Secrets Manager client not available in current AWS SDK version
 import fs from "fs";
 import path from "path";
@@ -31,7 +36,7 @@ const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
 const ec2Client = new EC2Client({ region: "us-west-2" });
 const s3Client = new S3Client({ region: "us-west-2" });
 const iamClient = new IAMClient({ region: "us-west-2" });
-// const secretsClient = new SecretsManagerClient({ region: "us-west-2" }); // Not available
+const secretsClient = new SecretsManagerClient({ region: "us-west-2" });
 
 describe("Terraform Infrastructure Stack: tap_stack.tf - Integration Tests", () => {
   const TIMEOUT = 30000; // 30 seconds timeout for AWS API calls
@@ -399,16 +404,22 @@ describe("Terraform Infrastructure Stack: tap_stack.tf - Integration Tests", () 
   });
 
   describe("Secrets Manager", () => {
-    test("Secrets Manager secret should be configured in infrastructure", () => {
-      // Since we can't access Secrets Manager directly without the SDK,
-      // we validate that the infrastructure is configured correctly
-      // by checking that the IAM role has Secrets Manager permissions
+    test("Secrets Manager secret should be configured in infrastructure", async () => {
+      const command = new DescribeSecretCommand({
+        SecretId: "example-secret"
+      });
 
-      // This test validates that our IAM role has the necessary permissions
-      // to access Secrets Manager, which indicates the infrastructure
-      // is set up for Secrets Manager integration
-      expect(true).toBe(true); // Placeholder - actual validation done in IAM tests
-    });
+      await expect(secretsClient.send(command)).resolves.toBeDefined();
+    }, TIMEOUT);
+
+    test("Secrets Manager secret value can be retrieved", async () => {
+      const command = new GetSecretValueCommand({
+        SecretId: "example-secret"
+      });
+
+      const response = await secretsClient.send(command);
+      expect(response.SecretString).toBe("my-secret-value");
+    }, TIMEOUT);
   });
 
   describe("Network Connectivity", () => {
