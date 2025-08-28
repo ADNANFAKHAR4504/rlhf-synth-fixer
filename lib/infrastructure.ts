@@ -453,7 +453,7 @@ export class SecureCloudEnvironment {
       {
         identifier: `${environment}-mysql-db`,
         engine: 'mysql',
-        engineVersion: '8.0.35',
+        engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         storageType: 'gp2',
