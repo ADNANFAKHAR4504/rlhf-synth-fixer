@@ -87,7 +87,6 @@ tasks.named('run') {
     }
 }
 
-
 // Configure source directories
 sourceSets {
     main.java {
@@ -243,3 +242,10 @@ tasks.register('testAll') {
 }
 
 check.dependsOn integrationTest, jacocoTestCoverageVerification
+
+// 🔧 NEW: lint alias so ./scripts/lint.sh works
+tasks.register('lint') {
+    group = 'verification'
+    description = 'Runs lint checks (Checkstyle).'
+    dependsOn 'checkstyleMain', 'checkstyleTest', 'checkstyleIntegrationTest'
+}
