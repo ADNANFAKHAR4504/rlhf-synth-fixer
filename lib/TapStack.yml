@@ -177,6 +177,7 @@ Parameters:
     Type: String
     Description: 'If provided, use this existing ACM certificate ARN and do not create a new certificate.'
     Default: ''
+    AllowedPattern: '^$|^arn:aws:acm:us-east-1:[0-9]{12}:certificate/.+'
 
   HostedZoneId:
     Type: String
@@ -253,9 +254,16 @@ Conditions:
   CreatePrivateDefaultRoute:
     !Or [!Condition CreateNatGateway, !Condition UseExistingNatGateway]
   CreateALB: !Equals [!Ref ExistingALBDNSName, '']
+  IsUsEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
   CreateCertificate: !And
     - !Equals [!Ref ExistingCertificateArn, '']
     - !Not [!Equals [!Ref HostedZoneId, '']]
+    - !Condition IsUsEast1
+  HasCertificateArn:
+    !Or [
+      !Condition CreateCertificate,
+      !Not [!Equals [!Ref ExistingCertificateArn, '']],
+    ]
   CreateGuardDuty:
     !And [!Equals [!Ref CreateDetector, 'true'], !Condition IsPrimaryRegion]
   CreateConfigRecorder:
@@ -1362,11 +1370,18 @@ Resources:
         ViewerCertificate:
           AcmCertificateArn:
             !If [
-              CreateCertificate,
-              !Ref ProdSSLCertificate,
-              !Ref ExistingCertificateArn,
+              HasCertificateArn,
+              !If [
+                CreateCertificate,
+                !Ref ProdSSLCertificate,
+                !Ref ExistingCertificateArn,
+              ],
+              !Ref 'AWS::NoValue',
             ]
-          SslSupportMethod: 'sni-only'
+          SslSupportMethod:
+            !If [HasCertificateArn, 'sni-only', !Ref 'AWS::NoValue']
+          CloudFrontDefaultCertificate:
+            !If [HasCertificateArn, !Ref 'AWS::NoValue', true]
         WebACLId: !Ref ProdWAFWebACL
       Tags:
         - Key: Name
