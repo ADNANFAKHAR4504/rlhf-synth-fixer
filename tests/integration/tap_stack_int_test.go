@@ -21,6 +21,11 @@ func Test_TapStack_Integration(t *testing.T) {
 		t.Skip("Skipping integration test; set RUN_INTEGRATION=1 to enable")
 	}
 
+	// Also require AWS credentials; without creds, deployment will fail in CI.
+	if !hasAWSCreds() {
+		t.Skip("Skipping integration test; AWS credentials not found in environment")
+	}
+
 	// Ensure passphrase is set for ephemeral stacks
 	_ = os.Setenv("PULUMI_CONFIG_PASSPHRASE", "test")
 
