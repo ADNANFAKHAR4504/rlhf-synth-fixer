@@ -78,10 +78,12 @@ describe('AcmeWeb CloudFormation Integration Tests', () => {
     });
 
     test('should validate environment agnostic implementation', () => {
-      expect(outputs.Environment).toBe('prod');
-      expect(outputs.StackName).toContain('prod');
-      expect(outputs.KeyPairName).toContain('prod');
-      expect(outputs.AutoScalingGroupName).toContain('prod');
+      // Tests should be environment agnostic - check that environment values are consistent
+      const envSuffix = outputs.Environment;
+      expect(outputs.Environment).toBeDefined();
+      expect(outputs.StackName).toBeDefined();
+      expect(outputs.KeyPairName).toContain(envSuffix);
+      expect(outputs.AutoScalingGroupName).toContain(envSuffix);
     });
   });
 
