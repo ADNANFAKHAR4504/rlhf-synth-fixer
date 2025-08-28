@@ -1,17 +1,17 @@
-output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
-}
+#output "cloudtrail_arn" {
+#  description = "ARN of the CloudTrail"
+#  value       = aws_cloudtrail.main.arn
+#}
+#
+#output "cloudtrail_name" {
+#  description = "Name of the CloudTrail"
+#  value       = aws_cloudtrail.main.name
+#}
 
-output "cloudtrail_name" {
-  description = "Name of the CloudTrail"
-  value       = aws_cloudtrail.main.name
-}
-
-output "guardduty_detector_id" {
-  description = "ID of the GuardDuty detector"
-  value       = aws_guardduty_detector.main.id
-}
+#output "guardduty_detector_id" {
+#  description = "ID of the GuardDuty detector"
+#  value       = aws_guardduty_detector.main.id
+#}
 
 output "config_recorder_name" {
   description = "Name of the Config recorder"
@@ -38,7 +38,7 @@ output "config_rules" {
   value = [
     aws_config_config_rule.s3_bucket_server_side_encryption_enabled.name,
     aws_config_config_rule.encrypted_volumes.name,
-    aws_config_config_rule.s3_bucket_public_access_prohibited.name,
+    aws_config_config_rule.s3_bucket_public_read_prohibited.name,
     aws_config_config_rule.root_access_key_check.name,
     aws_config_config_rule.mfa_enabled_for_iam_console_access.name
   ]

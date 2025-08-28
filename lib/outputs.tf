@@ -28,15 +28,15 @@ output "terraform_user_arn" {
   value       = module.iam.terraform_user_arn
 }
 
-output "cloudtrail_arn" {
-  description = "ARN of the CloudTrail"
-  value       = module.monitoring.cloudtrail_arn
-}
-
-output "guardduty_detector_id" {
-  description = "ID of the GuardDuty detector"
-  value       = module.monitoring.guardduty_detector_id
-}
+#output "cloudtrail_arn" {
+#  description = "ARN of the CloudTrail"
+#  value       = module.monitoring.cloudtrail_arn
+#}
+#
+#output "guardduty_detector_id" {
+#  description = "ID of the GuardDuty detector"
+#  value       = module.monitoring.guardduty_detector_id
+#}
 
 output "config_recorder_name" {
   description = "Name of the AWS Config recorder"
