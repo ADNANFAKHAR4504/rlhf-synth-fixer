@@ -13,9 +13,15 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // ============================================================================
     // KMS Keys for Encryption
@@ -193,7 +199,7 @@ export class TapStack extends cdk.Stack {
     // ============================================================================
 
     const applicationBucket = new s3.Bucket(this, 'ApplicationBucket', {
-      bucketName: `secure-app-bucket-${this.account}-${this.region}`,
+      bucketName: `secure-app-bucket-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3KmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -211,7 +217,7 @@ export class TapStack extends cdk.Stack {
     });
 
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
-      bucketName: `secure-logs-bucket-${this.account}-${this.region}`,
+      bucketName: `secure-logs-bucket-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3KmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -498,11 +504,13 @@ export class TapStack extends cdk.Stack {
 
     // Health check for API Gateway using the correct CloudFormation properties
     const healthCheck = new route53.CfnHealthCheck(this, 'APIHealthCheck', {
-      type: 'HTTPS',
-      fullyQualifiedDomainName: `${api.restApiId}.execute-api.${this.region}.amazonaws.com`,
-      resourcePath: '/prod/health',
-      requestInterval: 30,
-      failureThreshold: 3,
+      healthCheckConfig: {
+        type: 'HTTPS',
+        fullyQualifiedDomainName: `${api.restApiId}.execute-api.${this.region}.amazonaws.com`,
+        resourcePath: '/prod/health',
+        requestInterval: 30,
+        failureThreshold: 3,
+      },
     });
 
     // Primary record with health check
@@ -596,6 +604,46 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'CloudTrailArn', {
       value: cloudTrail.trailArn,
       description: 'CloudTrail ARN',
+    });
+
+    new cdk.CfnOutput(this, 'HealthCheckId', {
+      value: healthCheck.ref,
+      description: 'Route53 Health Check ID',
+    });
+
+    new cdk.CfnOutput(this, 'ApplicationUserId', {
+      value: applicationUser.userName,
+      description: 'Application User Name',
+    });
+
+    new cdk.CfnOutput(this, 'ApplicationLogGroupArn', {
+      value: applicationLogGroup.logGroupArn,
+      description: 'Application Log Group ARN',
+    });
+
+    new cdk.CfnOutput(this, 'APIGatewayLogGroupArn', {
+      value: apiGatewayLogGroup.logGroupArn,
+      description: 'API Gateway Log Group ARN',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaErrorAlarmArn', {
+      value: lambdaErrorAlarm.alarmArn,
+      description: 'Lambda Error Alarm ARN',
+    });
+
+    new cdk.CfnOutput(this, 'APIGateway4xxAlarmArn', {
+      value: apiGateway4xxAlarm.alarmArn,
+      description: 'API Gateway 4xx Error Alarm ARN',
+    });
+
+    new cdk.CfnOutput(this, 'APIGateway5xxAlarmArn', {
+      value: apiGateway5xxAlarm.alarmArn,
+      description: 'API Gateway 5xx Error Alarm ARN',
+    });
+
+    new cdk.CfnOutput(this, 'APIGatewaySecurityGroupId', {
+      value: apiGatewaySecurityGroup.securityGroupId,
+      description: 'API Gateway Security Group ID',
     });
   }
 }
