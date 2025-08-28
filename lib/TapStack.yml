@@ -17,13 +17,7 @@ Metadata:
             CorporateIPRange,
           ]
       - Label: { default: 'Security Configuration' }
-        Parameters:
-          [
-            NotificationEmail,
-            EnableCloudTrail,
-            EnableAWSConfig,
-            EnableGuardDuty,
-          ]
+        Parameters: [NotificationEmail, EnableCloudTrail, EnableAWSConfig]
       - Label: { default: 'Database Configuration' }
         Parameters: [DBUsername, DBPassword]
       - Label: { default: 'Web Configuration' }
@@ -131,15 +125,15 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
-  EnableGuardDuty:
-    Type: String
-    Description: 'Enable GuardDuty detector creation'
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-
   EnableNatGateway:
     Type: String
     Description: 'Enable creation of a new NAT Gateway when no ExistingNatGatewayId is provided'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CreateDetector:
+    Type: String
+    Description: 'Set to true to create a new GuardDuty detector; set false to skip.'
     Default: 'false'
     AllowedValues: ['true', 'false']
 
@@ -184,6 +178,11 @@ Parameters:
     Description: 'If provided, use this existing ACM certificate ARN and do not create a new certificate.'
     Default: ''
 
+  HostedZoneId:
+    Type: String
+    Description: 'Route53 Hosted Zone ID for DomainName (optional, used to auto-create DNS validation records)'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -192,8 +191,6 @@ Conditions:
   EnableAWSConfigCondition:
     !And [!Equals [!Ref EnableAWSConfig, 'true'], !Condition IsPrimaryRegion]
   EnableCloudFrontCondition: !Equals [!Ref EnableCloudFront, 'true']
-  EnableGuardDutyCondition:
-    !And [!Equals [!Ref EnableGuardDuty, 'true'], !Condition IsPrimaryRegion]
   CreateKMSKey: !And
     - !Equals [!Ref ExistingKMSKeyArn, '']
     - !Equals [!Ref ExistingKMSKeyAlias, '']
@@ -210,6 +207,9 @@ Conditions:
     !Or [!Condition CreateNatGateway, !Condition UseExistingNatGateway]
   CreateALB: !Equals [!Ref ExistingALBDNSName, '']
   CreateCertificate: !Equals [!Ref ExistingCertificateArn, '']
+  HaveHostedZone: !Not [!Equals [!Ref HostedZoneId, '']]
+  CreateGuardDuty:
+    !And [!Equals [!Ref CreateDetector, 'true'], !Condition IsPrimaryRegion]
 
 Resources:
   # VPC and Networking Resources
@@ -838,7 +838,7 @@ Resources:
   # Custom Resource to check for existing GuardDuty detectors
   GuardDutyDetectorCheck:
     Type: Custom::GuardDutyDetectorCheck
-    Condition: EnableGuardDutyCondition
+    Condition: CreateGuardDuty
     Properties:
       ServiceToken:
         !If [
@@ -852,7 +852,7 @@ Resources:
     Type: AWS::Lambda::Function
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Condition: CreateGuardDutyCheckFunction
+    Condition: CreateGuardDuty
     Properties:
       Runtime: python3.9
       Handler: index.handler
@@ -889,7 +889,7 @@ Resources:
   # IAM Role for Lambda function
   GuardDutyDetectorCheckRole:
     Type: AWS::IAM::Role
-    Condition: CreateGuardDutyCheckFunction
+    Condition: CreateGuardDuty
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -913,7 +913,7 @@ Resources:
   # GuardDuty Detector - Only created if no detector exists
   ProdGuardDutyDetector:
     Type: AWS::GuardDuty::Detector
-    Condition: EnableGuardDutyCondition
+    Condition: CreateGuardDuty
     DependsOn: GuardDutyDetectorCheck
     Properties:
       Enable: true
@@ -1150,6 +1150,11 @@ Resources:
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
+      DomainValidationOptions: !If
+        - HaveHostedZone
+        - - DomainName: !Ref DomainName
+            HostedZoneId: !Ref HostedZoneId
+        - !Ref 'AWS::NoValue'
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-ssl-certificate'
@@ -1285,6 +1290,7 @@ Outputs:
 
   GuardDutyDetectorId:
     Description: 'GuardDuty detector ID'
+    Condition: CreateGuardDuty
     Value: !Ref ProdGuardDutyDetector
     Export:
       Name: !Sub '${AWS::StackName}-GuardDuty-Detector-ID'
