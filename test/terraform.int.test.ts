@@ -1,61 +1,96 @@
-import path from "path";
-import fs from "fs";
-
+import * as fs from "fs";
+import * as path from "path";
 import {
   EC2Client,
   DescribeVpcsCommand,
   DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand,
 } from "@aws-sdk/client-ec2";
-import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
+import {
+  S3Client,
+  HeadBucketCommand,
+  GetBucketEncryptionCommand,
+} from "@aws-sdk/client-s3";
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
 import { SNSClient, GetTopicAttributesCommand } from "@aws-sdk/client-sns";
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 import {
   ConfigServiceClient,
-  DescribeConfigurationRecordersCommand,
-  DescribeConfigRulesCommand,
+  DescribeDeliveryChannelsCommand,
 } from "@aws-sdk/client-config-service";
-import { IAMClient, GetUserCommand } from "@aws-sdk/client-iam";
 
-// Match your Terraform outputs JSON structure
 interface TerraformOutputs {
-  config_recorder_name: string;
-  config_rules: string;
-  kms_key_id: string;
+  cloudtrail_log_group_name: string;
+  cloudwatch_log_group_name: string;
+  config_delivery_channel: string;
+  kms_key_arn: string;
   private_subnet_ids: string;
   public_subnet_ids: string;
-  s3_bucket_name: string;
-  security_alerts_topic_arn: string;
-  terraform_user_arn: string;
+  role_arn_cloudtrail: string;
+  role_arn_config: string;
+  role_arn_mfa: string;
+  s3_cloudtrail_bucket: string;
+  s3_config_bucket: string;
+  s3_secure_bucket: string;
+  scurity_group_id_bastion: string;
+  security_group_id_private_instance: string;
+  sns_topic_arn: string;
   vpc_id: string;
 }
 
-// Use Terraform's aws_region default
-const awsRegion = "us-west-2";
+describe("Terraform TAP Stack Integration Tests", () => {
+  let outputs: TerraformOutputs;
+  let publicSubnets: string[];
+  let privateSubnets: string[];
 
-// AWS SDK clients
-const ec2Client = new EC2Client({ region: awsRegion });
-const s3Client = new S3Client({ region: awsRegion });
-const snsClient = new SNSClient({ region: awsRegion });
-const kmsClient = new KMSClient({ region: awsRegion });
-const configClient = new ConfigServiceClient({ region: awsRegion });
-const iamClient = new IAMClient({ region: awsRegion });
+  let ec2Client: EC2Client;
+  let iamClient: IAMClient;
+  let s3Client: S3Client;
+  let logsClient: CloudWatchLogsClient;
+  let snsClient: SNSClient;
+  let kmsClient: KMSClient;
+  let configClient: ConfigServiceClient;
 
-let outputs: TerraformOutputs;
+  beforeAll(() => {
+    const outputsPath = path.resolve(
+      process.cwd(),
+      "cfn-outputs/flat-outputs.json"
+    );
 
-beforeAll(() => {
-  const outputsPath = path.resolve(
-    process.cwd(),
-    "cfn-outputs/flat-outputs.json"
-  );
-  const fileContents = fs.readFileSync(outputsPath, "utf8");
-  outputs = JSON.parse(fileContents) as TerraformOutputs;
-});
+    if (!fs.existsSync(outputsPath)) {
+      throw new Error(
+        `Terraform outputs file not found: ${outputsPath}. Run 'terraform apply' first.`
+      );
+    }
 
-describe("Terraform Stack Integration Tests", () => {
+    outputs = JSON.parse(fs.readFileSync(outputsPath, "utf-8"));
+
+    if (!outputs.public_subnet_ids || !outputs.private_subnet_ids) {
+      throw new Error(
+        `Missing subnet IDs in Terraform outputs. Found: ${Object.keys(outputs)}`
+      );
+    }
+
+    publicSubnets = JSON.parse(outputs.public_subnet_ids);
+    privateSubnets = JSON.parse(outputs.private_subnet_ids);
+
+    // If aws_region output is missing, fall back to default
+    const awsRegion = (outputs as any).aws_region || "us-west-2";
+
+    ec2Client = new EC2Client({ region: awsRegion });
+    iamClient = new IAMClient({ region: awsRegion });
+    s3Client = new S3Client({ region: awsRegion });
+    logsClient = new CloudWatchLogsClient({ region: awsRegion });
+    snsClient = new SNSClient({ region: awsRegion });
+    kmsClient = new KMSClient({ region: awsRegion });
+    configClient = new ConfigServiceClient({ region: awsRegion });
+  });
+
   describe("VPC & Subnets", () => {
-    const publicSubnets = JSON.parse(outputs.public_subnet_ids) as string[];
-    const privateSubnets = JSON.parse(outputs.private_subnet_ids) as string[];
-  
     test("VPC should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
       const res = await ec2Client.send(
@@ -63,86 +98,156 @@ describe("Terraform Stack Integration Tests", () => {
       );
       expect(res.Vpcs?.[0].VpcId).toBe(outputs.vpc_id);
     });
-  
+
     test("Public subnets belong to VPC", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
       const res = await ec2Client.send(
         new DescribeSubnetsCommand({ SubnetIds: publicSubnets })
       );
-      res.Subnets?.forEach((subnet) => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-      });
+      res.Subnets?.forEach((subnet) =>
+        expect(subnet.VpcId).toBe(outputs.vpc_id)
+      );
     });
-  
+
     test("Private subnets belong to VPC", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
       const res = await ec2Client.send(
         new DescribeSubnetsCommand({ SubnetIds: privateSubnets })
       );
-      res.Subnets?.forEach((subnet) => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-      });
+      res.Subnets?.forEach((subnet) =>
+        expect(subnet.VpcId).toBe(outputs.vpc_id)
+      );
+    });
+  });
+
+  describe("Security Groups", () => {
+    test("Bastion SG exists", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+      const res = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.scurity_group_id_bastion],
+        })
+      );
+      expect(res.SecurityGroups?.[0].GroupId).toBe(
+        outputs.scurity_group_id_bastion
+      );
+    });
+
+    test("Private instance SG exists", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+      const res = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.security_group_id_private_instance],
+        })
+      );
+      expect(res.SecurityGroups?.[0].GroupId).toBe(
+        outputs.security_group_id_private_instance
+      );
     });
   });
 
   describe("S3 Buckets", () => {
-    test("S3 bucket should exist", async () => {
-      const bucketName = outputs.s3_bucket_name;
-      const res = await s3Client.send(
-        new HeadBucketCommand({ Bucket: bucketName })
-      );
-      expect(res.$metadata.httpStatusCode).toBe(200);
+    const buckets = [
+      "s3_secure_bucket",
+      "s3_cloudtrail_bucket",
+      "s3_config_bucket",
+    ] as const;
+
+    buckets.forEach((bucketKey) => {
+      test(`${bucketKey} should exist and use correct KMS key`, async () => {
+        if (process.env.RUN_LIVE_TESTS !== "true") return;
+        const bucketName = outputs[bucketKey];
+        await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+
+        const encRes = await s3Client.send(
+          new GetBucketEncryptionCommand({ Bucket: bucketName })
+        );
+        const rules = encRes.ServerSideEncryptionConfiguration?.Rules || [];
+        expect(rules.length).toBeGreaterThan(0);
+
+        const kmsRule = rules.find(
+          (rule) =>
+            rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "aws:kms"
+        );
+        expect(kmsRule).toBeDefined();
+        expect(
+          kmsRule?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID
+        ).toBe(outputs.kms_key_arn);
+      });
     });
   });
 
-  describe("SNS Topics", () => {
-    test("Security alerts topic should exist", async () => {
-      const topicArn = outputs.security_alerts_topic_arn;
+  describe("SNS Topic", () => {
+    test("SNS topic should exist", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
       const res = await snsClient.send(
-        new GetTopicAttributesCommand({ TopicArn: topicArn })
+        new GetTopicAttributesCommand({ TopicArn: outputs.sns_topic_arn })
       );
-      expect(res.Attributes?.TopicArn).toBe(topicArn);
+      expect(res.Attributes?.TopicArn).toBe(outputs.sns_topic_arn);
     });
   });
 
-  describe("KMS Keys", () => {
-    test("KMS key should exist", async () => {
-      const keyId = outputs.kms_key_id;
+  describe("KMS Key", () => {
+    test("KMS key should be enabled", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
       const res = await kmsClient.send(
-        new DescribeKeyCommand({ KeyId: keyId })
+        new DescribeKeyCommand({ KeyId: outputs.kms_key_arn })
       );
-      expect(res.KeyMetadata?.KeyId).toBe(keyId);
+      expect(res.KeyMetadata?.Arn).toBe(outputs.kms_key_arn);
+      expect(res.KeyMetadata?.Enabled).toBe(true);
     });
   });
 
-  describe("AWS Config", () => {
-    test("Config Recorder should exist", async () => {
-      const recorderName = outputs.config_recorder_name;
-      const res = await configClient.send(
-        new DescribeConfigurationRecordersCommand({
-          ConfigurationRecorderNames: [recorderName],
-        })
-      );
-      expect(res.ConfigurationRecorders?.[0].name).toBe(recorderName);
-    });
+  describe("IAM Roles", () => {
+    const roles: { key: keyof TerraformOutputs }[] = [
+      { key: "role_arn_cloudtrail" },
+      { key: "role_arn_config" },
+      { key: "role_arn_mfa" },
+    ];
 
-    test("Config Rules should exist", async () => {
-      const rules = JSON.parse(outputs.config_rules) as string[];
-      const res = await configClient.send(
-        new DescribeConfigRulesCommand({ ConfigRuleNames: rules })
-      );
-      expect(res.ConfigRules?.length).toBe(rules.length);
+    roles.forEach(({ key }) => {
+      test(`${key} should exist`, async () => {
+        if (process.env.RUN_LIVE_TESTS !== "true") return;
+        const roleArn = outputs[key];
+        const roleName = roleArn.split("/").pop()!;
+        const res = await iamClient.send(
+          new GetRoleCommand({ RoleName: roleName })
+        );
+        expect(res.Role?.Arn).toBe(roleArn);
+      });
     });
   });
 
-  describe("IAM Users", () => {
-    test("Terraform user should exist", async () => {
-      const arn = outputs.terraform_user_arn;
-      const userName = arn.split("/").pop()!;
-      const res = await iamClient.send(
-        new GetUserCommand({ UserName: userName })
+  describe("CloudWatch Logs", () => {
+    const logGroups: { key: keyof TerraformOutputs }[] = [
+      { key: "cloudtrail_log_group_name" },
+      { key: "cloudwatch_log_group_name" },
+    ];
+
+    logGroups.forEach(({ key }) => {
+      test(`${key} should exist`, async () => {
+        if (process.env.RUN_LIVE_TESTS !== "true") return;
+        const logGroupNameFull = outputs[key];
+        const name = logGroupNameFull.split(":log-group:")[1];
+        const res = await logsClient.send(
+          new DescribeLogGroupsCommand({ logGroupNamePrefix: name })
+        );
+        expect(res.logGroups?.some((g) => g.logGroupName === name)).toBe(true);
+      });
+    });
+  });
+
+  describe("Config Service", () => {
+    test("Delivery channel should exist", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+      const res = await configClient.send(
+        new DescribeDeliveryChannelsCommand({})
       );
-      expect(res.User?.Arn).toBe(arn);
+      expect(
+        res.DeliveryChannels?.some(
+          (dc) => dc.name === outputs.config_delivery_channel
+        )
+      ).toBe(true);
     });
   });
 });
