@@ -23,7 +23,7 @@ module "security_module" {
 
     environment         = var.environment
     project_name        = var.project_name
-    vpc_id             = module.vpc.vpc_id
+    vpc_id             = module.vpc_module.vpc_id
     app_port           = var.app_port
     db_port            = var.db_port
     enable_ssh_access  = var.enable_ssh_access
@@ -40,9 +40,9 @@ module "alb_module" {
 
     environment                = var.environment
     project_name              = var.project_name
-    vpc_id                    = module.vpc.vpc_id
-    public_subnet_ids         = module.vpc.public_subnet_ids
-    alb_security_group_id     = module.security.alb_security_group_id
+    vpc_id                    = module.vpc_module.vpc_id
+    public_subnet_ids         = module.vpc_module.public_subnet_ids
+    alb_security_group_id     = module.security_module.alb_module_security_group_id
     target_port               = var.app_port
     target_protocol           = var.target_protocol
     ssl_certificate_arn       = var.ssl_certificate_arn
@@ -80,10 +80,10 @@ module "ec2_module" {
 
     environment                = var.environment
     project_name              = var.project_name
-    private_subnet_ids        = module.vpc.private_subnet_ids
-    web_security_group_id     = module.security.web_security_group_id
-    iam_instance_profile_name = module.security.ec2_instance_profile_name
-    target_group_arn          = module.alb.target_group_arn
+    private_subnet_ids        = module.vpc_module.private_subnet_ids
+    web_security_group_id     = module.security_module.web_security_group_id
+    iam_instance_profile_name = module.security_module.ec2_instance_profile_name
+    target_group_arn          = module.alb_module.target_group_arn
     instance_type             = local.current_config.instance_type
     ami_id                    = var.ami_id
     key_pair_name             = var.key_pair_name
@@ -222,7 +222,7 @@ output "cloudwatch_log_group_name" {
 # Application URL
 output "application_url" {
     description = "URL to access the application"
-    #   value       = var.ssl_certificate_arn != "" ? "https://${module.alb.alb_dns_name}" : "http://${module.alb.alb_dns_name}"
+    #   value       = var.ssl_certificate_arn != "" ? "https://${module.alb_module.alb_dns_name}" : "http://${module.alb_module.alb_dns_name}"
     value = module.alb_module.alb_dns_name
 }
 
