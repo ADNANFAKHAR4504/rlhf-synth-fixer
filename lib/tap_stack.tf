@@ -54,9 +54,8 @@ locals {
 ########################################
 # Data Sources (CI/CD Read-Only)
 ########################################
-
 ########################################
-# Data Sources
+# Data Sources (CI/CD Read-Only)
 ########################################
 
 # VPC
@@ -69,32 +68,31 @@ data "aws_vpc" "main" {
 # Public Subnets
 data "aws_subnet" "public" {
   for_each   = toset(var.public_subnet_cidrs)
-  cidr_block = each.key
+  cidr_block = each.value
+  vpc_id     = data.aws_vpc.main.id
 }
 
 # Private Subnets
 data "aws_subnet" "private" {
   for_each   = toset(var.private_subnet_cidrs)
-  cidr_block = each.key
+  cidr_block = each.value
+  vpc_id     = data.aws_vpc.main.id
 }
 
 # Security Groups
 data "aws_security_group" "web" {
-  tags = {
-    Name = "${var.project_name}-web-sg"
-  }
+  name   = "${var.project_name}-web-sg"
+  vpc_id = data.aws_vpc.main.id
 }
 
 data "aws_security_group" "app" {
-  tags = {
-    Name = "${var.project_name}-app-sg"
-  }
+  name   = "${var.project_name}-app-sg"
+  vpc_id = data.aws_vpc.main.id
 }
 
 data "aws_security_group" "database" {
-  tags = {
-    Name = "${var.project_name}-db-sg"
-  }
+  name   = "${var.project_name}-db-sg"
+  vpc_id = data.aws_vpc.main.id
 }
 
 # Application Load Balancer
@@ -107,7 +105,6 @@ data "aws_lb_target_group" "app" {
   name = "${var.project_name}-app-tg"
 }
 
-
 # RDS Database
 data "aws_db_instance" "main" {
   db_instance_identifier = "${var.project_name}-database"
@@ -117,6 +114,7 @@ data "aws_db_instance" "main" {
 data "aws_s3_bucket" "main" {
   bucket = "${var.project_name}-bucket-${var.environment}"
 }
+
 
 ########################################
 # Outputs
