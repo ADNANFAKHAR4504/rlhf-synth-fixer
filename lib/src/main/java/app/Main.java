@@ -23,6 +23,8 @@ import software.amazon.awscdk.services.cloudfront.origins.S3Origin;
 import software.amazon.awscdk.services.ec2.IVpc;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
+// FIX: use EC2 InstanceType, not RDS InstanceType
+import software.amazon.awscdk.services.ec2.InstanceType;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SecurityGroupProps;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
@@ -41,7 +43,6 @@ import software.amazon.awscdk.services.rds.Credentials;
 import software.amazon.awscdk.services.rds.DatabaseInstance;
 import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
 import software.amazon.awscdk.services.rds.DatabaseInstanceProps;
-import software.amazon.awscdk.services.rds.InstanceType;
 import software.amazon.awscdk.services.rds.PostgresEngineVersion;
 import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.services.rds.SubnetGroupProps;
@@ -260,6 +261,7 @@ class EcommerceStack extends Stack {
                 software.amazon.awscdk.services.rds.PostgresInstanceEngineProps.builder()
                     .version(PostgresEngineVersion.VER_15_4)
                     .build()))
+            // FIX: use EC2 InstanceType.of(...)
             .instanceType(InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
             .credentials(Credentials.fromSecret(dbSecret))
             .vpc(vpc)
@@ -282,7 +284,7 @@ class EcommerceStack extends Stack {
         .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
         .encryption(BucketEncryption.S3_MANAGED)
         .versioned(true)
-        .enforceSSL(true)
+        // REMOVED: .enforceSSL(true) — not available in your CDK version
         .build());
 
     // Create Origin Access Control for CloudFront
