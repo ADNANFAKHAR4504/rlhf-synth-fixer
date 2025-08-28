@@ -19,7 +19,7 @@ describe('TapStack Unit Tests', () => {
       CidrBlock: '10.0.0.0/16',
     });
     template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 AZs * 3 subnet types
-    template.resourceCountIs('AWS::EC2::NatGateway', 2);
+    template.resourceCountIs('AWS::EC2::NatGateway', 1);
   });
 
   test('VPC FlowLogs Enabled', () => {
@@ -50,12 +50,24 @@ describe('TapStack Unit Tests', () => {
           ToPort: 443,
           IpProtocol: 'tcp',
         },
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 80,
+          ToPort: 80,
+          IpProtocol: 'tcp',
+        },
       ],
       SecurityGroupEgress: [
         {
           CidrIp: '0.0.0.0/0',
           FromPort: 443,
           ToPort: 443,
+          IpProtocol: 'tcp',
+        },
+        {
+          CidrIp: '0.0.0.0/0',
+          FromPort: 80,
+          ToPort: 80,
           IpProtocol: 'tcp',
         },
       ],
@@ -187,24 +199,27 @@ describe('TapStack Unit Tests', () => {
     template.resourceCountIs('AWS::IAM::Group', 2);
     template.hasResourceProperties('AWS::IAM::Group', {
       GroupName: 'TapAdmins',
-      ManagedPolicyArns: [ Match.anyValue() ],
+      ManagedPolicyArns: [ Match.anyValue(), Match.anyValue() ],
     });
     template.hasResourceProperties('AWS::IAM::Group', {
       GroupName: 'TapReadOnly',
-      ManagedPolicyArns: [ Match.anyValue() ],
+      ManagedPolicyArns: [ Match.anyValue(), Match.anyValue() ],
     });
     template.resourceCountIs('AWS::IAM::ManagedPolicy', 1);
     template.hasResourceProperties('AWS::IAM::ManagedPolicy', {
         PolicyDocument: {
             Statement: [
                 {
+                    Action: '*',
                     Condition: {
                         BoolIfExists: {
                             'aws:MultiFactorAuthPresent': 'false',
                         },
+                        NumericLessThan: {
+                            'aws:MultiFactorAuthAge': '3600',
+                        },
                     },
                     Effect: 'Deny',
-                    NotAction: Match.anyValue(),
                     Resource: '*',
                 },
             ],
