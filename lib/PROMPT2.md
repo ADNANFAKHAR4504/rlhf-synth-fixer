@@ -6,3 +6,7 @@ Identify gaps in the your current configuration, and recommend steps on how to r
 2. Complete the root level configuration with all module imports and variable or/and locals configuration
 The expected output should include:  
 - A clear evaluation and resolution of the failure
+
+
+If the response exceeds the output limit, continue seamlessly across multiple outputs until the entire task is fully completed.
+Do not limit the response by character or token count. Continue generating until the entire task is fully completed, using as many turns as necessary. Resume exactly from where the previous output ended without repeating or omitting any content, and only stop once the task is finished.
