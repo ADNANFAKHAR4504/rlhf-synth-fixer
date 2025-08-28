@@ -41,8 +41,7 @@ export interface TapStackArgs {
  * - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
  */
 export class TapStack extends pulumi.ComponentResource {
-  // Example of a public property for a nested resource's output.
-  // public readonly table: pulumi.Output<string>;
+  public readonly infrastructure: SecureCloudEnvironment;
 
   /**
    * Creates a new TapStack component.
@@ -54,12 +53,11 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
-    const infrastructure = new SecureCloudEnvironment(environmentSuffix);
+    this.infrastructure = new SecureCloudEnvironment(environmentSuffix);
 
     // Register the outputs of this component.
     this.registerOutputs({
-      // table: this.table,
-      infrastructure: infrastructure,
+      infrastructure: this.infrastructure,
     });
   }
 }
