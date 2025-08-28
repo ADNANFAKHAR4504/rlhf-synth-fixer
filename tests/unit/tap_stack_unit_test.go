@@ -17,7 +17,7 @@ const (
 )
 
 func TestFileStructureAndSyntax(t *testing.T) {
-	stackPath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	stackPath := filepath.Join("lib", "tap_stack.go")
 
 	t.Run("tap_stack.go exists and is readable", func(t *testing.T) {
 		exists := fileExists(stackPath)
@@ -63,7 +63,7 @@ func TestFileStructureAndSyntax(t *testing.T) {
 }
 
 func TestVariableDefinitions(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -85,7 +85,7 @@ func TestVariableDefinitions(t *testing.T) {
 }
 
 func TestVPCAndNetworkingResources(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -122,7 +122,7 @@ func TestVPCAndNetworkingResources(t *testing.T) {
 }
 
 func TestSecurityGroups(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -156,7 +156,7 @@ func TestSecurityGroups(t *testing.T) {
 }
 
 func TestS3Buckets(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -200,7 +200,7 @@ func TestS3Buckets(t *testing.T) {
 }
 
 func TestRDSResources(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -232,7 +232,7 @@ func TestRDSResources(t *testing.T) {
 }
 
 func TestIAMRoles(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -260,7 +260,7 @@ func TestIAMRoles(t *testing.T) {
 }
 
 func TestCloudWatchMonitoring(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -285,7 +285,7 @@ func TestCloudWatchMonitoring(t *testing.T) {
 }
 
 func TestExports(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -325,7 +325,7 @@ func TestExports(t *testing.T) {
 }
 
 func TestNamingConventions(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -344,7 +344,7 @@ func TestNamingConventions(t *testing.T) {
 }
 
 func TestCommonTags(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -362,7 +362,7 @@ func TestCommonTags(t *testing.T) {
 }
 
 func TestHelperFunctions(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -373,7 +373,7 @@ func TestHelperFunctions(t *testing.T) {
 }
 
 func TestSecurityCompliance(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
@@ -398,7 +398,7 @@ func TestSecurityCompliance(t *testing.T) {
 }
 
 func TestResourceDependencies(t *testing.T) {
-	content, err := os.ReadFile(filepath.Join("..", "..", "lib", "tap_stack.go"))
+	content, err := os.ReadFile(filepath.Join("lib", "tap_stack.go"))
 	require.NoError(t, err)
 	contentStr := string(content)
 
