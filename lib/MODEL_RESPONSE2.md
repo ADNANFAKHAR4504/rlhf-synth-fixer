@@ -5,6 +5,7 @@ Parameters:
   DBMasterUserPassword:
     Type: String
     NoEcho: true
+    Default: "SecurePassword123!"
     Description: Master password for RDS instance
 
 Resources:
