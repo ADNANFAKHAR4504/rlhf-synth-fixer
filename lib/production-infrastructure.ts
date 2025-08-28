@@ -263,12 +263,26 @@ export class ProductionInfrastructure {
       { provider }
     );
 
-    new aws.iam.RolePolicyAttachment(
+    new aws.iam.RolePolicy(
       `${environment}-vpc-flow-log-policy`,
       {
-        role: this.vpcFlowLogRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+        role: this.vpcFlowLogRole.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
       },
       { provider }
     );
