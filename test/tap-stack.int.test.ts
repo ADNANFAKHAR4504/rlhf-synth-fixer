@@ -92,7 +92,7 @@ function createMockOutputs(outputFilePath: string) {
       type: 'string',
     },
     'tap-ec2-iam-role-arn': {
-      value: 'arn:aws:iam::123456789012:role/secure-app-ec2-role-tap-dev',
+      value: 'arn:aws:iam::123456789012:role/tap-ec2-role-dev',
       type: 'string',
     },
   };
