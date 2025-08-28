@@ -205,7 +205,7 @@ export class TapStack extends TerraformStack {
       name: `fullstack-alb-${environmentSuffix}`,
       vpcId: vpc.vpcIdOutput,
       publicSubnetIds: vpc.publicSubnetIdsOutput,
-      targetGroupArn: ec2.targetGroupArnOutput, // 
+      targetGroupArn: ec2.targetGroupArnOutput, //
       albSecurityGroupId: albSecurityGroup.id,
     });
 
@@ -213,8 +213,8 @@ export class TapStack extends TerraformStack {
     new Route53Module(this, 'dns-record', {
       zoneName: domainName,
       recordName: recordName,
-      albZoneId: alb.albZoneIdOutput, // 
-      albDnsName: alb.albDnsNameOutput, // 
+      albZoneId: alb.albZoneIdOutput, //
+      albDnsName: alb.albDnsNameOutput, //
     });
 
     new CloudwatchModule(this, 'alarms', {
