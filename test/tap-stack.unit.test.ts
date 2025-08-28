@@ -141,7 +141,7 @@ export class TapStack extends TerraformStack {
       description: 'EC2 Security Group ID',
     });
     new TerraformOutput(this, 'tap-ec2-iam-role-arn', {
-      value: 'arn:aws:iam::123456789012:role/tap-compute-stack-role',
+      value: 'arn:aws:iam::123456789012:role/secure-app-ec2-role-tap-dev',
       description: 'EC2 IAM Role ARN',
     });
 

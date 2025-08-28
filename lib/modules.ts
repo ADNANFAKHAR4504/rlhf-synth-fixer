@@ -389,7 +389,7 @@ export class ComputeModule extends Construct {
 
     // Create IAM role for EC2 instance
     this.iamRole = new IamRole(this, 'tap-ec2-iam-role', {
-      name: `${props.projectName}-EC2Role`,
+      name: `secure-app-ec2-role-${props.projectName}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -403,13 +403,13 @@ export class ComputeModule extends Construct {
         ],
       }),
       tags: {
-        Name: `${props.projectName}-EC2Role`,
+        Name: `secure-app-ec2-role-${props.projectName}`,
       },
     });
 
     // Create IAM policy with least privilege access to specific S3 bucket
     new IamRolePolicy(this, 'tap-ec2-s3-policy', {
-      name: `${props.projectName}-EC2S3Policy`,
+      name: `secure-app-ec2-policy-${props.projectName}`,
       role: this.iamRole.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -438,7 +438,7 @@ export class ComputeModule extends Construct {
       this,
       'tap-ec2-instance-profile',
       {
-        name: `${props.projectName}-EC2InstanceProfile`,
+        name: `secure-app-ec2-profile-${props.projectName}`,
         role: this.iamRole.name,
       }
     );
