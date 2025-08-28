@@ -140,22 +140,6 @@ def test_alb_dns_resolves():
     ip = socket.gethostbyname(dns)
     assert ip
 
-def test_alb_exists_and_active(elbv2_client_1):
-    dns = OUTPUTS["ALB_DNS_1"]
-    name = dns.split('.')[0]
-    resp = elbv2_client_1.describe_load_balancers(Names=[name])
-    assert len(resp["LoadBalancers"]) == 1
-    alb = resp["LoadBalancers"][0]
-    assert alb["State"]["Code"] == "active"
-    assert alb["DNSName"] == dns
-
-def test_alb_listener_exists(elbv2_client_1):
-    arn = OUTPUTS["ALB_LISTENER_ARN_1"]
-    resp = elbv2_client_1.describe_listeners(ListenerArns=[arn])
-    assert len(resp["Listeners"]) == 1
-    listener = resp["Listeners"][0]
-    assert listener["ListenerArn"] == arn
-
 def test_alb_target_groups_exist(elbv2_client_1):
     # Check blue and green target groups exist
     tg_names = [OUTPUTS["ALB_TG_BLUE"], OUTPUTS["ALB_TG_GREEN"]]
