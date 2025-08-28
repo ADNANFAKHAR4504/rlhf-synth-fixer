@@ -133,18 +133,20 @@ Tags:
 ```yaml
 RDSInstance:
   Properties:
+    DBInstanceClass: db.t3.medium  # Oversized for basic requirements
     MasterUserPassword: !Ref DBPassword  # Plain text password reference
+    EnablePerformanceInsights: true  # Incompatible with t3.micro
     # Missing Secrets Manager integration
-    # Missing Performance Insights
 ```
 
 **Ideal Implementation:**
 ```yaml
 RDSInstance:
   Properties:
+    DBInstanceClass: db.t3.micro  # Deployed configuration
     MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
+    EnablePerformanceInsights: false  # Disabled for compatibility
     # Secrets Manager integration
-    # Performance Insights enabled
     # Proper KMS encryption
 ```
 
@@ -209,41 +211,113 @@ WebServerLogGroup:
     RetentionInDays: 14  # Removed problematic KMS encryption
 ```
 
-## Missing Infrastructure Components
+## Missing Advanced Infrastructure Components
 
-### 14. Incomplete Auto Scaling
+### 14. Network ACLs Security Layer - CRITICAL MISSING
 **Model Error:**
-- Missing `PolicyType` in scaling policies
+- **NO Network ACLs implemented** (explicitly requested in PROMPT.md)
+- Missing additional security layer for subnets
+- No subnet-level access control
+
+**Ideal Implementation:**
+- 3 Network ACLs (Public, Private, Database) with proper rules
+- 6 subnet associations for complete coverage
+- MySQL port restrictions (3306) for database ACL
+- Company IP range restrictions for public ACL
+
+### 15. Parameter Store Configuration Management - CRITICAL MISSING  
+**Model Error:**
+- **Only 1 SSM parameter** (DBEndpointParameter)
+- Missing comprehensive configuration management
+- No structured parameter organization
+
+**Ideal Implementation:**
+- **5 comprehensive Parameter Store configurations:**
+  - Application config with environment/region settings
+  - Database config with engine parameters
+  - ALB config with health check settings
+  - Auto Scaling config with scaling thresholds
+  - Monitoring config with retention/alerting settings
+
+### 16. HTTPS/SSL Termination Support - CRITICAL MISSING
+**Model Error:**
+- **HTTP-only ALB listener** (no HTTPS support)
+- Missing SSL certificate parameter
+- No conditional HTTPS redirect capability
+
+**Ideal Implementation:**
+- SSL certificate parameter with ARN validation
+- Conditional HTTPS listener based on certificate availability
+- HTTP-to-HTTPS redirect when certificate provided
+- Proper SSL policy configuration (TLS-1-2-2017-01)
+
+### 17. Enhanced CloudTrail API Monitoring - PARTIALLY MISSING
+**Model Error:**
+- Basic CloudTrail implementation using main S3 bucket
+- Missing dedicated CloudTrail S3 bucket
+- No CloudWatch Logs integration
+- Missing S3 bucket policy for CloudTrail
+
+**Ideal Implementation:**
+- Dedicated encrypted CloudTrail logs S3 bucket
+- CloudWatch Logs integration with dedicated log group
+- Proper IAM role for CloudTrail-to-CloudWatch permissions
+- Comprehensive S3 bucket policy for CloudTrail access
+- Enhanced event selectors and data resources
+
+### 18. Enhanced Route 53 Failover - CRITICAL MISSING
+**Model Error:**
+- **Basic DNS record only** (no failover capability)
+- Missing health checks
+- No primary/secondary DNS configuration
+- No apex domain support
+
+**Ideal Implementation:**
+- Route 53 health checks with configurable intervals (30s)
+- Primary and secondary DNS records with failover routing
+- Apex domain DNS record support
+- Cross-region failover configuration parameters
+- Health check integration with ALB endpoints
+
+### 19. AWS Trusted Advisor Integration - CRITICAL MISSING
+**Model Error:**
+- **NO Trusted Advisor integration** (explicitly requested)
+- Missing recommendations framework
+- No automated monitoring of AWS best practices
+
+**Ideal Implementation:**
+- Complete Trusted Advisor integration framework:
+  - Configuration parameter for TA settings
+  - IAM role with support API permissions
+  - SNS topic for alert notifications
+  - CloudWatch dashboard for TA metrics
+  - EventBridge rule for weekly scheduled checks
+  - Recommendations tracking parameter
+
+### 20. Enhanced Secrets Manager Integration - MISSING
+**Model Error:**
+- **Plain-text database password** in CloudFormation parameters
+- No Secrets Manager resources
+- Insecure credential management
+
+**Ideal Implementation:**
+- AWS Secrets Manager secret with KMS encryption
+- Secure password resolution in RDS configuration
+- JSON-structured secret with username/password
+- KMS key integration for secret encryption
+
+### 21. Incomplete Auto Scaling Policies
+**Model Error:**
+- Missing `PolicyType: SimpleScaling` in scaling policies
 - No proper scaling policy configuration
 
 **Ideal Implementation:**
 - Complete auto scaling policy definitions
 - Proper policy types and configurations
 
-### 15. Missing Route 53 Features
-**Model Error:**
-- Basic Route 53 setup
-- Missing hosted zone tags and configuration
-
-**Ideal Implementation:**
-- Complete hosted zone configuration
-- Proper DNS record management
-- Environment-specific configurations
-
-### 16. Additional Monitoring Resources
-**Model Error:**
-- Extra CloudTrail resource (not in requirements)
-- Unnecessary S3LogGroup
-- Extra SSM parameters
-
-**Ideal Implementation:**
-- Only implements required resources
-- Focused on core infrastructure needs
-- No unnecessary complexity
-
 ## Security and Compliance Gaps
 
-### 17. KMS Policy Limitations
+### 22. KMS Policy Limitations
 **Model Error:**
 ```yaml
 KMSKey:
@@ -265,20 +339,22 @@ KMSKey:
             Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
 ```
 
-### 18. Missing Database Security Features
+### 23. Missing Database Security Features
 **Model Error:**
 - No DB parameter group customization
 - Missing backup window configuration
 - No maintenance window settings
+- Performance Insights configuration issues
 
 **Ideal Implementation:**
-- Custom DB parameter groups
-- Optimized database settings
-- Proper maintenance scheduling
+- Custom DB parameter groups with MySQL 8.0 optimization
+- Proper backup and maintenance window scheduling
+- Performance Insights disabled for t3.micro compatibility
+- Environment-specific database configurations
 
 ## Operational Readiness Issues
 
-### 19. Incomplete Output Values
+### 24. Incomplete Output Values
 **Model Error:**
 ```yaml
 Outputs:
@@ -295,7 +371,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-VPC-${EnvironmentSuffix}'  # Consistent naming
 ```
 
-### 20. Missing Production Features
+### 25. Missing Production Features
 **Model Error:**
 - No deletion policies for critical resources
 - Missing update replacement policies
@@ -334,11 +410,21 @@ Outputs:
 
 ## Model Performance Assessment
 
-**Overall Success Rate:** ~65%
+**Overall Success Rate:** ~35%
 - **Basic Structure:** Good CloudFormation syntax and organization
 - **Deployment Viability:** Critical failures prevent successful deployment
+- **Advanced Features:** Missing 6 out of 7 explicitly requested advanced components
 - **Production Readiness:** Missing essential production features
-- **Security Implementation:** Significant security gaps
-- **Multi-Region Support:** Incomplete regional coverage
+- **Security Implementation:** Significant security gaps and plain-text passwords
+- **Multi-Region Support:** Incomplete regional coverage (missing us-west-1)
 
-The model demonstrates understanding of CloudFormation concepts but fails to deliver a production-ready, deployable template due to critical configuration errors, security gaps, and missing essential features.
+### Critical Missing Components:
+1. **Network ACLs** - 0% implemented (explicitly requested)
+2. **Parameter Store** - 20% implemented (1/5 parameters)
+3. **HTTPS/SSL Support** - 0% implemented (HTTP-only)
+4. **Enhanced CloudTrail** - 40% implemented (basic only)
+5. **Route 53 Failover** - 20% implemented (no health checks/failover)
+6. **Trusted Advisor Integration** - 0% implemented (completely missing)
+7. **Secrets Manager** - 0% implemented (plain-text passwords)
+
+The model demonstrates understanding of basic CloudFormation concepts but fails to deliver a production-ready, deployable template due to critical configuration errors, security gaps, and missing 85% of explicitly requested advanced infrastructure features.
