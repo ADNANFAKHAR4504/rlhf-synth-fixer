@@ -699,11 +699,11 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Auto Scaling Group
+    // Primary Auto Scaling Group
     const autoScalingGroup = new aws.autoscaling.Group(
-      `${sanitizedName}-main-asg`,
+      `${sanitizedName}-primary-asg`,
       {
-        name: `${sanitizedName}-asg`,
+        name: `${sanitizedName}-primary-asg`,
         vpcZoneIdentifiers: privateSubnets.map(subnet => subnet.id),
         targetGroupArns: [targetGroup.arn],
         healthCheckType: 'ELB',
@@ -718,7 +718,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         tags: [
           {
             key: 'Name',
-            value: `${sanitizedName}-asg`,
+            value: `${sanitizedName}-primary-asg`,
             propagateAtLaunch: false,
           },
           {
@@ -1109,7 +1109,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [webAcl] }
     );
 
-    // Additional Auto Scaling Group for redundancy (second service)
+    // Secondary Auto Scaling Group for redundancy
     const secondaryAutoScalingGroup = new aws.autoscaling.Group(
       `${sanitizedName}-secondary-asg`,
       {
