@@ -22,13 +22,10 @@
     "EC2",
     "RDS",
     "S3",
-    "CloudFront",
     "CloudWatch",
-    "CloudTrail",
     "IAM",
     "KMS",
     "VPC",
-    "Config",
     "SSM"
   ]
 }
