@@ -450,6 +450,7 @@ Resources:
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-postgres-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
@@ -495,7 +496,7 @@ Resources:
           Value: !Ref CostCenter
         - Key: Region
           Value: 'simulated-us-west-2'
-    DependsOn: DatabaseInstance
+
 
   # Launch Template
   LaunchTemplate:
@@ -727,7 +728,7 @@ Resources:
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
-    DependsOn: VPCEast
+
 
   # Route 53 Record - Primary (no health check for private zone)
   DNSRecordPrimary:
@@ -866,10 +867,7 @@ Resources:
         IamRoleArn: !GetAtt BackupRole.Arn
         Resources:
           - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${Environment}-postgres-db-${EnvironmentSuffix}'
-    DependsOn:
-      - BackupPlan
-      - BackupRole
-      - DatabaseInstance
+
 
 Outputs:
   VPCId:
