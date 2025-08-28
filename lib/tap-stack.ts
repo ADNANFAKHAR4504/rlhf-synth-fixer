@@ -44,7 +44,7 @@ export class TapStack extends cdk.Stack {
     };
 
     // 1. NETWORKING INFRASTRUCTURE
-    console.log('Creating VPC and networking components...');
+    // console.log('Creating VPC and networking components...');
 
     // Create VPC
     const vpc = new ec2.Vpc(this, `TapVPC-${environmentSuffix}`, {

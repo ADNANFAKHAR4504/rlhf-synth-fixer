@@ -15,6 +15,54 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Configuration', () => {
+    test('Uses environmentSuffix from props when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', { environmentSuffix: 'test' });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Project',
+            Value: 'tap-test',
+          }),
+        ]),
+      });
+    });
+
+    test('Uses environmentSuffix from context when props not provided', () => {
+      const testApp = new cdk.App();
+      testApp.node.setContext('environmentSuffix', 'context-env');
+      const testStack = new TapStack(testApp, 'TestStack', {});
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Project',
+            Value: 'tap-context-env',
+          }),
+        ]),
+      });
+    });
+
+    test('Falls back to dev when neither props nor context provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack');
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Project',
+            Value: 'tap-dev',
+          }),
+        ]),
+      });
+    });
+  });
+
   describe('VPC and Networking', () => {
     test('Creates VPC with correct CIDR block', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
