@@ -254,7 +254,9 @@ describe("LIVE: ALB Domain verification from Terraform structured outputs", () =
     const dns = promisify(require('dns').lookup);
     
     const dnsResult = await retry(async () => {
-      return await dns(albDomain);
+      const result = await dns(albDomain);
+      // Extract just the address string
+      return result.address;
     }, 5, 2000);
 
     // Should return valid IP address
@@ -263,6 +265,6 @@ describe("LIVE: ALB Domain verification from Terraform structured outputs", () =
     
     // Basic IP address format validation (IPv4)
     const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-    expect(ipRegex.test(dnsResult as string)).toBe(true);
+    expect(ipRegex.test(dnsResult)).toBe(true);
   }, 45000);
 });
