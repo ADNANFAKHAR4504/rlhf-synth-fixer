@@ -258,7 +258,7 @@ export class TapStack extends cdk.Stack {
       `rds-mysql-${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0_35,
+          version: rds.MysqlEngineVersion.VER_8_0_42,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
@@ -273,7 +273,7 @@ export class TapStack extends cdk.Stack {
         deletionProtection: false,
         storageEncrypted: true,
         monitoringInterval: cdk.Duration.seconds(60),
-        enablePerformanceInsights: true,
+        enablePerformanceInsights: false,
         credentials: rds.Credentials.fromGeneratedSecret('admin', {
           secretName: `rds-credentials-${environmentSuffix}`,
         }),

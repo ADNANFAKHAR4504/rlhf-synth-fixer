@@ -164,7 +164,7 @@ describe('TapStack', () => {
     test('should create RDS MySQL instance with multi-AZ', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'mysql',
-        EngineVersion: '8.0.35',
+        EngineVersion: '8.0.42',
         DBInstanceClass: 'db.t3.micro',
         MultiAZ: true,
         BackupRetentionPeriod: 7,
