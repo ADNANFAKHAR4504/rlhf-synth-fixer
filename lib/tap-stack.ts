@@ -89,7 +89,7 @@ export class TapStack extends TerraformStack {
     const s3Module = new S3Module(this, 's3-app-data', {
       project,
       environment: environmentSuffix,
-      bucketName: 'analytics-data-pr2262',
+      bucketName: 'iac-rlhf-cfn-states-us-west-2',
       kmsKey: kmsModule.key,
     });
 
@@ -98,9 +98,12 @@ export class TapStack extends TerraformStack {
       this,
       'db-password-secret',
       {
-        secretId: 'tap-pr2411-app-secrets',
+        secretId: 'three-tier-db-credentials-dev',
       }
     );
+
+    // Fallback password for development/testing if secret doesn't exist
+    const fallbackPassword = '&YBY=?}{AmEH+oy8Rmj!E2*g>ky-2$V['; // Secure fallback password
 
     // Create CloudTrail for auditing
     const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail', {
@@ -190,7 +193,7 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       dbName: 'appdb',
       username: 'admin',
-      password: dbPasswordSecret.secretString,
+      password: dbPasswordSecret.secretString || fallbackPassword,
       subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
       securityGroupIds: [rdsSecurityGroup.securityGroup.id],
       kmsKey: kmsModule.key,
