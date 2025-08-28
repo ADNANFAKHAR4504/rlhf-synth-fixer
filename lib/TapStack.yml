@@ -233,6 +233,8 @@ Conditions:
     - !Equals [!Ref CreateKMSResources, 'true']
     - !Equals [!Ref ExistingKMSKeyArn, '']
     - !Equals [!Ref ExistingKMSKeyAlias, '']
+  HasKmsKey:
+    !Or [!Condition CreateKMSKey, !Not [!Equals [!Ref ExistingKMSKeyArn, '']]]
   CreateDBSubnetGroup:
     !And [
       !Equals [!Ref ExistingDBSubnetGroupName, ''],
@@ -553,9 +555,13 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID:
                 !If [
-                  CreateKMSKey,
-                  !GetAtt ProdKMSKey.Arn,
-                  !Ref ExistingKMSKeyArn,
+                  HasKmsKey,
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt ProdKMSKey.Arn,
+                    !Ref ExistingKMSKeyArn,
+                  ],
+                  !Ref 'AWS::NoValue',
                 ]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -666,7 +672,11 @@ Resources:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}-trail'
       RetentionInDays: 365
       KmsKeyId:
-        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-cloudtrail-logs'
@@ -811,7 +821,11 @@ Resources:
       TopicName: !Sub '${Environment}-security-notifications'
       DisplayName: !Sub '${Environment} Security Notifications'
       KmsMasterKeyId:
-        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-security-notifications'
@@ -1137,7 +1151,11 @@ Resources:
       Name: !Sub '${Environment}-database-credentials'
       Description: !Sub 'Database credentials for ${Environment} environment'
       KmsKeyId:
-        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
       SecretString: !Sub |
         {
           "username": "${DBUsername}",
@@ -1164,7 +1182,11 @@ Resources:
       StorageType: gp2
       StorageEncrypted: true
       KmsKeyId:
-        !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
       MasterUsername: !Sub '{{resolve:secretsmanager:${ProdDatabaseSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProdDatabaseSecret}:SecretString:password}}'
       VPCSecurityGroups:
