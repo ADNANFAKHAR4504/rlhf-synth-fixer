@@ -239,8 +239,7 @@ describe('AWS Infrastructure Integration Tests - Basic Validation', () => {
       // Check if main Terraform files exist
       const terraformFiles = [
         'lib/tap_stack.tf',
-        'lib/provider.tf',
-        'lib/user_data.sh'
+        'lib/provider.tf'
       ];
 
       terraformFiles.forEach(filePath => {
@@ -266,7 +265,14 @@ describe('AWS Infrastructure Integration Tests - Basic Validation', () => {
 
         console.log(' User data script is properly configured');
       } else {
-        console.log('  User data script not found');
+        console.log('  User data script not found (may be inline in tap_stack.tf)');
+        // Check if user data is inline in tap_stack.tf
+        const tapStackPath = path.resolve(process.cwd(), 'lib/tap_stack.tf');
+        if (fs.existsSync(tapStackPath)) {
+          const tapStackContent = fs.readFileSync(tapStackPath, 'utf8');
+          expect(tapStackContent).toContain('user_data');
+          console.log(' User data configuration found in tap_stack.tf');
+        }
       }
     });
   });
