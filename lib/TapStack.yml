@@ -199,6 +199,12 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
 
+  EnableDBSubnetGroupCreation:
+    Type: String
+    Description: 'Set to true to create a new DB Subnet Group when no existing name is provided.'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -210,7 +216,11 @@ Conditions:
   CreateKMSKey: !And
     - !Equals [!Ref ExistingKMSKeyArn, '']
     - !Equals [!Ref ExistingKMSKeyAlias, '']
-  CreateDBSubnetGroup: !Equals [!Ref ExistingDBSubnetGroupName, '']
+  CreateDBSubnetGroup:
+    !And [
+      !Equals [!Ref ExistingDBSubnetGroupName, ''],
+      !Equals [!Ref EnableDBSubnetGroupCreation, 'true'],
+    ]
   CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
   CreateKMSKeyAlias: !Equals [!Ref ExistingKMSKeyAlias, '']
   CreateGuardDutyCheckFunction:
