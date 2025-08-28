@@ -1,4 +1,4 @@
-Your previous response for the below requirement is not correct. Following is the error
+The deployment is failing because of an error in secret module.
 
 ## Error
 Monitoring module was incomplete

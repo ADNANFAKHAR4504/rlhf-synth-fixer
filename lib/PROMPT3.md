@@ -1,4 +1,4 @@
-Your previous response was throwing error, and it was an incomplete response.
+The deployment is failing because of an in monitoring module.
 
 ## Error
 aws_cloudwatch_dashboard has reference to undeclared resource. 
