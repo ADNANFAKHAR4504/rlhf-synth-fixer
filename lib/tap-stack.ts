@@ -17,7 +17,7 @@ export class TapStack extends cdk.Stack {
     const defaultTags = {
       Environment: 'production',
       Project: 'tap',
-      Owner: 'platform-team'
+      Owner: 'platform-team',
     };
 
     Object.entries(defaultTags).forEach(([key, value]) => {
@@ -73,7 +73,10 @@ export class TapStack extends cdk.Stack {
 
     new ec2.FlowLog(this, 'VpcFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup, flowLogRole),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        flowLogGroup,
+        flowLogRole
+      ),
     });
 
     const kmsKey = new kms.Key(this, 'TapKmsKey', {
@@ -87,9 +90,21 @@ export class TapStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    webSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS from internet');
-    webSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP from internet');
-    webSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'HTTPS outbound');
+    webSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'HTTPS from internet'
+    );
+    webSg.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'HTTP from internet'
+    );
+    webSg.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'HTTPS outbound'
+    );
     webSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP outbound');
 
     const dbSg = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
@@ -98,17 +113,19 @@ export class TapStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    dbSg.addIngressRule(webSg, ec2.Port.tcp(5432), 'PostgreSQL from web servers');
+    dbSg.addIngressRule(
+      webSg,
+      ec2.Port.tcp(5432),
+      'PostgreSQL from web servers'
+    );
 
     const ec2Role = new iam.Role(this, 'Ec2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
-    });
-
-    const ec2InstanceProfile = new iam.InstanceProfile(this, 'Ec2InstanceProfile', {
-      role: ec2Role,
     });
 
     const userData = ec2.UserData.forLinux();
@@ -122,7 +139,10 @@ export class TapStack extends cdk.Stack {
     const instance = new ec2.Instance(this, 'WebInstance', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       securityGroup: webSg,
       role: ec2Role,
@@ -180,7 +200,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_14_9,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       subnetGroup: dbSubnetGroup,
       securityGroups: [dbSg],

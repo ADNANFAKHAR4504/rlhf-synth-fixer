@@ -229,8 +229,9 @@ describe('TapStack Unit Tests', () => {
     ];
 
     for (const [id, res] of Object.entries(resources)) {
-      if (!untaggableResources.includes(res.Type) && res.Properties.Tags) {
-        expect(res.Properties.Tags).toEqual(expect.arrayContaining([
+      const resource = res as any;
+      if (!untaggableResources.includes(resource.Type) && resource.Properties.Tags) {
+        expect(resource.Properties.Tags).toEqual(expect.arrayContaining([
           { Key: 'Environment', Value: 'production' },
           { Key: 'Project', Value: 'tap' },
           { Key: 'Owner', Value: 'platform-team' },

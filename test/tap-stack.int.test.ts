@@ -43,8 +43,8 @@ describe('TAP Stack Integration Tests', () => {
     const command = new DescribeVpcsCommand({ VpcIds: [vpcId] });
     const response = await ec2Client.send(command);
     expect(response.Vpcs).toHaveLength(1);
-    const vpc = response.Vpcs[0];
-    expect(vpc.Tags).toEqual(
+    const vpc = response.Vpcs?.[0];
+    expect(vpc?.Tags).toEqual(
       expect.arrayContaining([
         { Key: 'Environment', Value: 'production' },
         { Key: 'Project', Value: 'tap' },
@@ -63,8 +63,8 @@ describe('TAP Stack Integration Tests', () => {
     });
     const encryptionResponse = await s3Client.send(encryptionCommand);
     expect(
-      encryptionResponse.ServerSideEncryptionConfiguration.Rules[0]
-        .ServerSideEncryptionByDefault.SSEAlgorithm
+      encryptionResponse.ServerSideEncryptionConfiguration?.Rules?.[0]
+        ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
     ).toBe('AES256');
 
     // Check versioning
@@ -99,9 +99,9 @@ describe('TAP Stack Integration Tests', () => {
     });
     const response = await rdsClient.send(command);
     expect(response.DBInstances).toHaveLength(1);
-    const dbInstance = response.DBInstances[0];
-    expect(dbInstance.StorageEncrypted).toBe(true);
-    expect(dbInstance.DeletionProtection).toBe(true);
+    const dbInstance = response.DBInstances?.[0];
+    expect(dbInstance?.StorageEncrypted).toBe(true);
+    expect(dbInstance?.DeletionProtection).toBe(true);
   });
 
   // Test EC2 Instance
@@ -111,9 +111,9 @@ describe('TAP Stack Integration Tests', () => {
       InstanceIds: [instanceId],
     });
     const response = await ec2Client.send(command);
-    expect(response.Reservations[0].Instances).toHaveLength(1);
-    const instance = response.Reservations[0].Instances[0];
-    expect(instance.InstanceType).toBe('t3.micro');
+    expect(response.Reservations?.[0]?.Instances).toHaveLength(1);
+    const instance = response.Reservations?.[0]?.Instances?.[0];
+    expect(instance?.InstanceType).toBe('t3.micro');
   });
 
   // Test API Gateway and WAF
@@ -140,10 +140,10 @@ describe('TAP Stack Integration Tests', () => {
     const readOnlyGroupCommand = new GetGroupCommand({ GroupName: 'TapReadOnly' });
 
     const adminGroupResponse = await iamClient.send(adminGroupCommand);
-    expect(adminGroupResponse.Group.GroupName).toBe('TapAdmins');
+    expect(adminGroupResponse.Group?.GroupName).toBe('TapAdmins');
 
     const readOnlyGroupResponse = await iamClient.send(readOnlyGroupCommand);
-    expect(readOnlyGroupResponse.Group.GroupName).toBe('TapReadOnly');
+    expect(readOnlyGroupResponse.Group?.GroupName).toBe('TapReadOnly');
   });
 
   // Test KMS Key
