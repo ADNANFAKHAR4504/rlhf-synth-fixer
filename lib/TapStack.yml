@@ -1438,7 +1438,7 @@ Outputs:
     Description: 'RDS endpoint address'
     Value:
       !If [
-        CreateDBInstance,
+        CreateDBInstanceEffective,
         !GetAtt ProdRDSInstance.Endpoint.Address,
         !Ref ExistingRDSEndpointAddress,
       ]
