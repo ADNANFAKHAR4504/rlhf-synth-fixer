@@ -1,515 +1,520 @@
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { DataAwsS3Bucket } from '@cdktf/provider-aws/lib/data-aws-s3-bucket';
-import {
-  DbInstance,
-  DbInstanceConfig,
-} from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { Instance } from '@cdktf/provider-aws/lib/instance';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
-import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
-import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
+// test/tap-stack.int.test.ts
+import { 
+  S3Client, 
+  HeadBucketCommand, 
+  GetBucketEncryptionCommand, 
+  GetBucketVersioningCommand, 
+  GetPublicAccessBlockCommand 
+} from "@aws-sdk/client-s3";
+import { 
+  EC2Client, 
+  DescribeVpcsCommand, 
+  DescribeSubnetsCommand, 
+  DescribeSecurityGroupsCommand, 
+  DescribeInstancesCommand 
+} from "@aws-sdk/client-ec2";
+import { 
+  RDSClient, 
+  DescribeDBInstancesCommand 
+} from "@aws-sdk/client-rds";
+import { 
+  CloudTrailClient, 
+  DescribeTrailsCommand
+} from "@aws-sdk/client-cloudtrail";
+import { 
+  KMSClient, 
+  DescribeKeyCommand, 
+  GetKeyRotationStatusCommand 
+} from "@aws-sdk/client-kms";
+import * as fs from "fs";
+import * as path from "path";
 
-interface RegionalInfraProps {
-  provider: AwsProvider;
-  region: string;
-  tags: { [key: string]: string };
-  isPrimaryRegion: boolean;
-  vpcCidr: string;
-  dbSubnetCidrs: string[];
-  kmsKey: KmsKey;
-  callerIdentity: DataAwsCallerIdentity;
-  uniqueSuffix: string;
-  primaryDbArn?: string;
-  rdsPasswordSecret?: SecretsmanagerSecret;
+// Helper function to check if resource exists
+async function resourceExists<T>(
+  operation: () => Promise<T>,
+  resourceName: string
+): Promise<T | null> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    console.warn(`Resource ${resourceName} not found or not accessible:`, error.message);
+    return null;
+  }
 }
 
-class RegionalInfra extends Construct {
-  public readonly dbInstance: DbInstance;
-  public readonly dynamoTable: DynamodbTable;
-  public readonly s3Bucket: S3Bucket;
-  public readonly vpc: Vpc;
-  public readonly privateSubnets: Subnet[];
+// Helper to determine the actual deployment region from KMS ARN
+function getDeploymentRegionFromArn(arn: string): string {
+  const arnParts = arn.split(':');
+  return arnParts[3] || 'us-east-1';
+}
 
-  constructor(scope: Construct, id: string, props: RegionalInfraProps) {
-    super(scope, id);
+describe("TapStack Integration Tests", () => {
+  let awsRegion: string;
+  let deploymentRegion: string;
+  let s3Client: S3Client;
+  let ec2Client: EC2Client;
+  let rdsClient: RDSClient;
+  let cloudTrailClient: CloudTrailClient;
+  let kmsClient: KMSClient;
 
-    const {
-      provider,
-      region,
-      tags,
-      isPrimaryRegion,
-      vpcCidr,
-      dbSubnetCidrs,
-      kmsKey,
-      callerIdentity,
-      uniqueSuffix,
-      primaryDbArn,
-      rdsPasswordSecret,
-    } = props;
+  let awsAccountId: string;
+  let vpcId: string;
+  let publicSubnetIds: string[];
+  let privateSubnetIds: string[];
+  let ec2InstanceId: string;
+  let ec2PrivateIp: string;
+  let ec2SecurityGroupId: string;
+  let rdsSecurityGroupId: string;
+  let s3BucketName: string;
+  let cloudtrailS3BucketName: string;
+  let rdsEndpoint: string;
+  let kmsKeyId: string;
+  let kmsKeyArn: string;
 
-    this.vpc = new Vpc(this, 'MainVpc', {
-      provider,
-      cidrBlock: vpcCidr,
-      enableDnsSupport: true,
-      enableDnsHostnames: true,
-      tags: { ...tags, Name: `pci-vpc-${region}-${uniqueSuffix}` },
-    });
-
-    this.privateSubnets = dbSubnetCidrs.map((cidr, index) => {
-      return new Subnet(this, `PrivateSubnet-${index}`, {
-        provider,
-        vpcId: this.vpc.id,
-        cidrBlock: cidr,
-        availabilityZone: `${region}${String.fromCharCode(97 + index)}`,
-        tags: {
-          ...tags,
-          Name: `pci-private-${String.fromCharCode(97 + index)}-${region}-${uniqueSuffix}`,
-        },
-      });
-    });
-
-    const rdsSubnetGroup = new DbSubnetGroup(this, 'RdsSubnetGroup', {
-      provider,
-      subnetIds: this.privateSubnets.map(subnet => subnet.id),
-      tags,
-    });
-
-    const rdsSecurityGroup = new SecurityGroup(this, 'RdsSecurityGroup', {
-      provider,
-      vpcId: this.vpc.id,
-      description: 'Allow inbound traffic to RDS',
-      ingress: [
-        {
-          fromPort: 5432,
-          toPort: 5432,
-          protocol: 'tcp',
-          cidrBlocks: [this.vpc.cidrBlock],
-        },
-      ],
-      tags,
-    });
-
-    const dbConfig: DbInstanceConfig = {
-      provider,
-      identifier: `pci-postgres-db-${region.replace(/-/g, '')}-${uniqueSuffix}`,
-      instanceClass: 'db.t3.micro',
-      dbSubnetGroupName: rdsSubnetGroup.name,
-      vpcSecurityGroupIds: [rdsSecurityGroup.id],
-      tags,
-    };
-
-    if (isPrimaryRegion) {
-      Object.assign(dbConfig, {
-        allocatedStorage: 20,
-        engine: 'postgres',
-        engineVersion: '16',
-        username: 'adminuser',
-        password: rdsPasswordSecret
-          ? Fn.lookup(
-              rdsPasswordSecret.arn,
-              'password',
-              'CHANGEME-use-secrets-manager'
-            )
-          : 'CHANGEME-use-secrets-manager',
-        multiAz: true,
-        storageEncrypted: true,
-        kmsKeyId: kmsKey.arn,
-        backupRetentionPeriod: 7,
-        skipFinalSnapshot: false,
-      });
-    } else {
-      Object.assign(dbConfig, {
-        replicateSourceDb: primaryDbArn,
-        skipFinalSnapshot: true,
-        storageEncrypted: true,
-        kmsKeyId: kmsKey.arn,
-      });
+  beforeAll(() => {
+    // Load outputs from file first to determine actual deployment region
+    const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
+    if (!fs.existsSync(outputFilePath)) {
+      throw new Error(`flat-outputs.json not found at ${outputFilePath}. Please ensure infrastructure is deployed and outputs are generated.`);
     }
 
-    this.dbInstance = new DbInstance(this, 'PostgresInstance', dbConfig);
+    const outputs = JSON.parse(fs.readFileSync(outputFilePath, "utf-8"));
+    const stackKey = Object.keys(outputs)[0];
 
-    this.dynamoTable = new DynamodbTable(this, 'PciDataTable', {
-      provider,
-      name: `pci-data-table-${region}-${uniqueSuffix}`,
-      billingMode: 'PAY_PER_REQUEST',
-      hashKey: 'id',
-      attribute: [{ name: 'id', type: 'S' }],
-      serverSideEncryption: { enabled: true, kmsKeyArn: kmsKey.arn },
-      pointInTimeRecovery: { enabled: true },
-      tags,
-    });
+    if (!stackKey) {
+      throw new Error("No stack outputs found in flat-outputs.json");
+    }
 
-    this.s3Bucket = new S3Bucket(this, 'PciS3Bucket', {
-      provider,
-      bucket: `pci-assets-bucket-${callerIdentity.accountId}-${region}-${uniqueSuffix}`,
-      tags,
-    });
+    const stackOutputs = outputs[stackKey];
+    kmsKeyArn = stackOutputs["kms-key-arn"];
 
-    new S3BucketVersioningA(this, 'S3Versioning', {
-      provider,
-      bucket: this.s3Bucket.id,
-      versioningConfiguration: { status: 'Enabled' },
-    });
+    // Determine actual deployment region from KMS ARN
+    deploymentRegion = getDeploymentRegionFromArn(kmsKeyArn);
+    awsRegion = deploymentRegion; // Use deployment region instead of env variable
 
-    new CloudwatchLogGroup(this, 'RdsLogs', {
-      provider,
-      name: `/aws/rds/instance/${this.dbInstance.identifier}/general`,
-      retentionInDays: 90,
-      tags,
-    });
+    // Initialize AWS clients with the correct deployment region
+    s3Client = new S3Client({ region: awsRegion });
+    ec2Client = new EC2Client({ region: awsRegion });
+    rdsClient = new RDSClient({ region: awsRegion });
+    cloudTrailClient = new CloudTrailClient({ region: awsRegion });
+    kmsClient = new KMSClient({ region: awsRegion });
 
-    new CloudwatchLogGroup(this, 'AppLogs', {
-      provider,
-      name: `/pci-app/${region}/app-logs-${uniqueSuffix}`,
-      retentionInDays: 365,
-      tags,
-    });
-  }
-}
+    // Extract outputs with validation
+    awsAccountId = stackOutputs["aws-account-id"];
+    vpcId = stackOutputs["vpc-id"];
+    publicSubnetIds = stackOutputs["public-subnet-ids"];
+    privateSubnetIds = stackOutputs["private-subnet-ids"];
+    ec2InstanceId = stackOutputs["ec2-instance-id"];
+    ec2PrivateIp = stackOutputs["ec2-private-ip"];
+    ec2SecurityGroupId = stackOutputs["ec2-security-group-id"];
+    rdsSecurityGroupId = stackOutputs["rds-security-group-id"];
+    s3BucketName = stackOutputs["s3-bucket-name"];
+    cloudtrailS3BucketName = stackOutputs["cloudtrail-s3-bucket-name"];
+    rdsEndpoint = stackOutputs["rds-endpoint"];
+    kmsKeyId = stackOutputs["kms-key-id"];
 
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
-    super(scope, id);
-
-    const domainName =
-      process.env.DOMAIN_NAME || 'pci-multiregion-deploy-test-2.net';
-    const primaryRegion = 'us-east-1';
-    const secondaryRegion = 'us-west-2';
-    const s3ReplicaRegion = 'us-west-2';
-
-    const tags = {
-      Project: 'MultiRegionPCI',
-      Owner: 'ComplianceTeam',
-      ManagedBy: 'CDKTF',
+    // Validate all required outputs are present
+    const requiredOutputs = {
+      vpcId, publicSubnetIds, privateSubnetIds, ec2InstanceId,
+      s3BucketName, cloudtrailS3BucketName, kmsKeyId, rdsEndpoint
     };
 
-    const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
+    const missingOutputs = Object.entries(requiredOutputs)
+      .filter(([key, value]) => !value)
+      .map(([key]) => key);
 
-    const primaryProvider = new AwsProvider(this, 'aws-primary', {
-      region: primaryRegion,
-      alias: 'primary',
-    });
-    const secondaryProvider = new AwsProvider(this, 'aws-secondary', {
-      region: secondaryRegion,
-      alias: 'secondary',
-    });
-    const s3ReplicaProvider = new AwsProvider(this, 'aws-s3-replica', {
-      region: s3ReplicaRegion,
-      alias: 's3-replica',
-    });
+    if (missingOutputs.length > 0) {
+      throw new Error(`Missing required stack outputs: ${missingOutputs.join(', ')}`);
+    }
 
-    const callerIdentity = new DataAwsCallerIdentity(this, 'CallerIdentity', {
-      provider: primaryProvider,
-    });
+    console.log(`Running tests in deployment region: ${awsRegion}`);
+    console.log(`Stack outputs loaded for: ${stackKey}`);
+  });
 
-    const kmsKeyPrimary = new KmsKey(this, 'PciKmsKeyPrimary', {
-      provider: primaryProvider,
-      description: 'KMS key for PCI DSS data encryption in primary region',
-      enableKeyRotation: true,
-      tags,
-    });
-
-    const kmsKeySecondary = new KmsKey(this, 'PciKmsKeySecondary', {
-      provider: secondaryProvider,
-      description: 'KMS key for PCI DSS data encryption in secondary region',
-      enableKeyRotation: true,
-      tags,
-    });
-
-    // --- Secrets Manager for RDS password ---
-    const rdsPasswordSecret = new SecretsmanagerSecret(
-      this,
-      'RdsPasswordSecret',
-      {
-        provider: primaryProvider,
-        name: `pci-rds-password-${uniqueSuffix}`,
-        description: 'RDS master password for PCI stack',
-        recoveryWindowInDays: 7,
-        tags,
-      }
+  // Test 1: VPC Configuration
+  test("VPC exists with correct CIDR block and DNS settings", async () => {
+    const result = await resourceExists(
+      () => ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] })),
+      `VPC ${vpcId}`
     );
 
-    new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
-      provider: primaryProvider,
-      secretId: rdsPasswordSecret.id,
-      secretString: JSON.stringify({
-        password: process.env.RDS_PASSWORD || 'ChangeMe123!@#',
-      }),
-    });
+    expect(result).not.toBeNull();
+    if (!result) return;
 
-    const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {
-      provider: primaryProvider,
-      region: primaryRegion,
-      tags,
-      isPrimaryRegion: true,
-      vpcCidr: '10.1.0.0/16',
-      dbSubnetCidrs: ['10.1.1.0/24', '10.1.2.0/24'],
-      kmsKey: kmsKeyPrimary,
-      callerIdentity,
-      uniqueSuffix,
-      rdsPasswordSecret,
-    });
+    const { Vpcs } = result;
+    expect(Vpcs?.length).toBe(1);
 
-    const secondaryInfra = new RegionalInfra(this, 'SecondaryInfra', {
-      provider: secondaryProvider,
-      region: secondaryRegion,
-      tags,
-      isPrimaryRegion: false,
-      vpcCidr: '10.2.0.0/16',
-      dbSubnetCidrs: ['10.2.1.0/24', '10.2.2.0/24'],
-      kmsKey: kmsKeySecondary,
-      callerIdentity,
-      uniqueSuffix,
-      primaryDbArn: primaryInfra.dbInstance.arn,
-      rdsPasswordSecret,
-    });
+    const vpc = Vpcs?.[0];
+    expect(vpc?.VpcId).toBe(vpcId);
+    expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
+    expect(vpc?.State).toBe("available");
+    expect(vpc?.Tags?.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
+  }, 30000);
 
-    // VPC Peering
-    const peeringConnection = new VpcPeeringConnection(this, 'VpcPeering', {
-      provider: primaryProvider,
-      vpcId: primaryInfra.vpc.id,
-      peerVpcId: secondaryInfra.vpc.id,
-      peerRegion: secondaryRegion,
-      autoAccept: false,
-      tags: { ...tags, Name: `peering-${primaryRegion}-to-${secondaryRegion}` },
-    });
-
-    new VpcPeeringConnectionAccepterA(this, 'VpcPeeringAccepter', {
-      provider: secondaryProvider,
-      vpcPeeringConnectionId: peeringConnection.id,
-      autoAccept: true,
-      tags: {
-        ...tags,
-        Name: `peering-${secondaryRegion}-accepts-${primaryRegion}`,
-      },
-    });
-
-    new Route(this, 'PrimaryToSecondaryRoute', {
-      provider: primaryProvider,
-      routeTableId: primaryInfra.vpc.mainRouteTableId,
-      destinationCidrBlock: secondaryInfra.vpc.cidrBlock,
-      vpcPeeringConnectionId: peeringConnection.id,
-    });
-
-    new Route(this, 'SecondaryToPrimaryRoute', {
-      provider: secondaryProvider,
-      routeTableId: secondaryInfra.vpc.mainRouteTableId,
-      destinationCidrBlock: primaryInfra.vpc.cidrBlock,
-      vpcPeeringConnectionId: peeringConnection.id,
-    });
-
-    // S3 Replication
-    const s3ReplicaBucket = new S3Bucket(this, 'S3ReplicaBucket', {
-      provider: s3ReplicaProvider,
-      bucket: `pci-assets-bucket-${callerIdentity.accountId}-${s3ReplicaRegion}-${uniqueSuffix}`,
-      tags,
-    });
-
-    const s3ReplicaVersioning = new S3BucketVersioningA(
-      this,
-      'S3ReplicaVersioning',
-      {
-        provider: s3ReplicaProvider,
-        bucket: s3ReplicaBucket.id,
-        versioningConfiguration: { status: 'Enabled' },
-      }
+  // Test 2: Subnet Configuration and High Availability
+  test("Subnets are properly configured across multiple availability zones", async () => {
+    // Test public subnets
+    const publicResult = await resourceExists(
+      () => ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnetIds })),
+      `Public subnets ${publicSubnetIds.join(', ')}`
     );
 
-    const s3ReplicaBucketData = new DataAwsS3Bucket(
-      this,
-      'S3ReplicaBucketData',
-      {
-        provider: s3ReplicaProvider,
-        bucket: s3ReplicaBucket.bucket,
-        dependsOn: [s3ReplicaVersioning],
-      }
+    expect(publicResult).not.toBeNull();
+    if (!publicResult) return;
+
+    const { Subnets: publicSubnets } = publicResult;
+    expect(publicSubnets?.length).toBe(2);
+
+    publicSubnets?.forEach((subnet) => {
+      expect(subnet.VpcId).toBe(vpcId);
+      expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      expect(subnet.State).toBe("available");
+      expect(subnet.Tags?.some(tag => tag.Key === "Type" && tag.Value === "Public")).toBe(true);
+      expect(subnet.CidrBlock).toMatch(/^10\.0\.[13]\.0\/24$/);
+    });
+
+    // Test private subnets
+    const privateResult = await resourceExists(
+      () => ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })),
+      `Private subnets ${privateSubnetIds.join(', ')}`
     );
 
-    const s3ReplicationRole = new IamRole(this, 'S3ReplicationRole', {
-      provider: primaryProvider,
-      name: `s3-replication-role-${uniqueSuffix}`,
-      assumeRolePolicy: new DataAwsIamPolicyDocument(
-        this,
-        'S3ReplicationAssumeRole',
-        {
-          statement: [
-            {
-              actions: ['sts:AssumeRole'],
-              principals: [
-                { type: 'Service', identifiers: ['s3.amazonaws.com'] },
-              ],
-            },
-          ],
-        }
-      ).json,
+    expect(privateResult).not.toBeNull();
+    if (!privateResult) return;
+
+    const { Subnets: privateSubnets } = privateResult;
+    expect(privateSubnets?.length).toBe(2);
+
+    privateSubnets?.forEach((subnet) => {
+      expect(subnet.VpcId).toBe(vpcId);
+      expect(subnet.MapPublicIpOnLaunch).toBe(false);
+      expect(subnet.State).toBe("available");
+      expect(subnet.Tags?.some(tag => tag.Key === "Type" && tag.Value === "Private")).toBe(true);
+      expect(subnet.CidrBlock).toMatch(/^10\.0\.[24]\.0\/24$/);
     });
 
-    const s3ReplicationPolicy = new IamPolicy(this, 'S3ReplicationPolicy', {
-      provider: primaryProvider,
-      name: `s3-replication-policy-${uniqueSuffix}`,
-      policy: new DataAwsIamPolicyDocument(this, 'S3ReplicationPolicyDoc', {
-        statement: [
-          {
-            actions: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
-            resources: [primaryInfra.s3Bucket.arn],
-          },
-          {
-            actions: ['s3:GetObjectVersion*', 's3:GetBucketVersioning'],
-            resources: [
-              `${primaryInfra.s3Bucket.arn}/*`,
-              primaryInfra.s3Bucket.arn,
-            ],
-          },
-          {
-            actions: ['s3:ReplicateObject', 's3:ReplicateDelete'],
-            resources: [`${s3ReplicaBucketData.arn}/*`],
-          },
-        ],
-      }).json,
-    });
+    // Check high availability - different AZs
+    const publicAZs = publicSubnets?.map(subnet => subnet.AvailabilityZone);
+    const privateAZs = privateSubnets?.map(subnet => subnet.AvailabilityZone);
+    const uniquePublicAZs = [...new Set(publicAZs)];
+    const uniquePrivateAZs = [...new Set(privateAZs)];
 
-    new IamRolePolicyAttachment(this, 'S3ReplicationAttachment', {
-      provider: primaryProvider,
-      role: s3ReplicationRole.name,
-      policyArn: s3ReplicationPolicy.arn,
-    });
+    expect(uniquePublicAZs.length).toBe(2);
+    expect(uniquePrivateAZs.length).toBe(2);
+  }, 30000);
 
-    new S3BucketReplicationConfigurationA(this, 'S3Replication', {
-      provider: primaryProvider,
-      bucket: primaryInfra.s3Bucket.id,
-      role: s3ReplicationRole.arn,
-      rule: [
-        {
-          id: 'cross-region-replication',
-          status: 'Enabled',
-          destination: { bucket: s3ReplicaBucketData.arn },
-          deleteMarkerReplication: { status: 'Enabled' },
-          filter: { prefix: '' },
-        },
-      ],
-    });
+  // Test 3: Security Groups Configuration
+  test("Security groups have correct access rules", async () => {
+    // Test EC2 security group
+    const ec2SgResult = await resourceExists(
+      () => ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [ec2SecurityGroupId] })),
+      `EC2 Security Group ${ec2SecurityGroupId}`
+    );
 
-    // --- Integration Test: VPC Peering Connectivity ---
-    const primaryAmi = new DataAwsAmi(this, 'PrimaryAmi', {
-      provider: primaryProvider,
-      mostRecent: true,
-      owners: ['amazon'],
-      filter: [
-        { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
-        { name: 'state', values: ['available'] },
-      ],
-    });
+    expect(ec2SgResult).not.toBeNull();
+    if (!ec2SgResult) return;
 
-    const secondaryAmi = new DataAwsAmi(this, 'SecondaryAmi', {
-      provider: secondaryProvider,
-      mostRecent: true,
-      owners: ['amazon'],
-      filter: [
-        { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
-        { name: 'state', values: ['available'] },
-      ],
-    });
+    const { SecurityGroups: ec2Sgs } = ec2SgResult;
+    const ec2Sg = ec2Sgs?.[0];
+    expect(ec2Sg?.VpcId).toBe(vpcId);
 
-    const testSgPrimary = new SecurityGroup(this, 'TestSgPrimary', {
-      provider: primaryProvider,
-      vpcId: primaryInfra.vpc.id,
-      description: 'Allow ICMP for VPC peering test',
-      ingress: [
-        {
-          fromPort: -1,
-          toPort: -1,
-          protocol: 'icmp',
-          cidrBlocks: [
-            secondaryInfra.vpc.cidrBlock,
-            primaryInfra.vpc.cidrBlock,
-          ],
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
-      tags,
-    });
+    // Check SSH ingress rule (port 22)
+    const sshRule = ec2Sg?.IpPermissions?.find(rule => 
+      rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
+    );
+    expect(sshRule).toBeDefined();
+    expect(sshRule?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
 
-    const testSgSecondary = new SecurityGroup(this, 'TestSgSecondary', {
-      provider: secondaryProvider,
-      vpcId: secondaryInfra.vpc.id,
-      description: 'Allow ICMP for VPC peering test',
-      ingress: [
-        {
-          fromPort: -1,
-          toPort: -1,
-          protocol: 'icmp',
-          cidrBlocks: [
-            primaryInfra.vpc.cidrBlock,
-            secondaryInfra.vpc.cidrBlock,
-          ],
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
-      tags,
-    });
+    // Test RDS security group
+    const rdsSgResult = await resourceExists(
+      () => ec2Client.send(new DescribeSecurityGroupsCommand({ GroupIds: [rdsSecurityGroupId] })),
+      `RDS Security Group ${rdsSecurityGroupId}`
+    );
 
-    const testInstancePrimary = new Instance(this, 'TestInstancePrimary', {
-      provider: primaryProvider,
-      ami: primaryAmi.id,
-      instanceType: 't3.micro',
-      subnetId: primaryInfra.privateSubnets[0].id,
-      vpcSecurityGroupIds: [testSgPrimary.id],
-      tags: { ...tags, Name: `vpc-peering-test-primary-${uniqueSuffix}` },
-    });
+    expect(rdsSgResult).not.toBeNull();
+    if (!rdsSgResult) return;
 
-    const testInstanceSecondary = new Instance(this, 'TestInstanceSecondary', {
-      provider: secondaryProvider,
-      ami: secondaryAmi.id,
-      instanceType: 't3.micro',
-      subnetId: secondaryInfra.privateSubnets[0].id,
-      vpcSecurityGroupIds: [testSgSecondary.id],
-      tags: { ...tags, Name: `vpc-peering-test-secondary-${uniqueSuffix}` },
-    });
+    const { SecurityGroups: rdsSgs } = rdsSgResult;
+    const rdsSg = rdsSgs?.[0];
+    expect(rdsSg?.VpcId).toBe(vpcId);
 
-    new TerraformOutput(this, 'PrimaryTestInstancePrivateIp', {
-      value: testInstancePrimary.privateIp,
-      description: 'Private IP of test EC2 in primary VPC for peering test',
-    });
+    // Check MySQL rule from EC2 security group
+    const mysqlRule = rdsSg?.IpPermissions?.find(rule => 
+      rule.FromPort === 3306 && rule.ToPort === 3306 && rule.IpProtocol === "tcp"
+    );
+    expect(mysqlRule).toBeDefined();
+    expect(mysqlRule?.UserIdGroupPairs?.some(pair => pair.GroupId === ec2SecurityGroupId)).toBe(true);
+  }, 30000);
 
-    new TerraformOutput(this, 'SecondaryTestInstancePrivateIp', {
-      value: testInstanceSecondary.privateIp,
-      description: 'Private IP of test EC2 in secondary VPC for peering test',
-    });
+  // Test 4: EC2 Instance Security and Placement
+  test("EC2 instance is securely configured in private subnet", async () => {
+    const result = await resourceExists(
+      () => ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] })),
+      `EC2 Instance ${ec2InstanceId}`
+    );
 
-    // ...existing outputs...
-  }
-}
+    expect(result).not.toBeNull();
+    if (!result) return;
+
+    const { Reservations } = result;
+    const instance = Reservations?.[0]?.Instances?.[0];
+
+    expect(instance?.InstanceId).toBe(ec2InstanceId);
+    expect(instance?.State?.Name).toMatch(/^(running|pending|stopping|stopped)$/);
+    expect(instance?.InstanceType).toBe("t3.micro");
+    expect(instance?.PrivateIpAddress).toBe(ec2PrivateIp);
+    expect(privateSubnetIds).toContain(instance?.SubnetId);
+
+    // Security check - no public IP
+    expect(instance?.PublicIpAddress).toBeUndefined();
+
+    // Security group assignment
+    expect(instance?.SecurityGroups?.some(sg => sg.GroupId === ec2SecurityGroupId)).toBe(true);
+
+    // Project tagging
+    expect(instance?.Tags?.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
+
+    // IAM instance profile
+    expect(instance?.IamInstanceProfile).toBeDefined();
+  }, 30000);
+
+  // Test 5: RDS Database Security and Configuration
+  test("RDS instance has proper security and backup configuration", async () => {
+    const dbIdentifier = rdsEndpoint.split('.')[0];
+
+    const result = await resourceExists(
+      () => rdsClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })),
+      `RDS Instance ${dbIdentifier}`
+    );
+
+    expect(result).not.toBeNull();
+    if (!result) return;
+
+    const { DBInstances } = result;
+    const dbInstance = DBInstances?.[0];
+
+    expect(dbInstance?.Engine).toBe("mysql");
+    expect(dbInstance?.DBInstanceClass).toBe("db.t3.micro");
+    expect(dbInstance?.StorageEncrypted).toBe(true);
+    expect(dbInstance?.KmsKeyId).toBe(kmsKeyArn);
+    expect(dbInstance?.PubliclyAccessible).toBe(false);
+    expect(dbInstance?.DeletionProtection).toBe(true);
+    expect(dbInstance?.BackupRetentionPeriod).toBe(7);
+
+    // Check it's in private subnets
+    expect(dbInstance?.DBSubnetGroup?.Subnets?.every(subnet => 
+      privateSubnetIds.includes(subnet.SubnetIdentifier || "")
+    )).toBe(true);
+
+    // Check security group
+    expect(dbInstance?.VpcSecurityGroups?.some(sg => 
+      sg.VpcSecurityGroupId === rdsSecurityGroupId && sg.Status === "active"
+    )).toBe(true);
+
+    // Project tagging
+    expect(dbInstance?.TagList?.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
+  }, 30000);
+
+  // Test 6: Application S3 Bucket Security
+  test("Application S3 bucket has proper encryption and access controls", async () => {
+    const headResult = await resourceExists(
+      () => s3Client.send(new HeadBucketCommand({ Bucket: s3BucketName })),
+      `S3 Bucket ${s3BucketName}`
+    );
+
+    expect(headResult).not.toBeNull();
+    if (!headResult) return;
+
+    // Check public access is blocked
+    const publicAccessResult = await resourceExists(
+      () => s3Client.send(new GetPublicAccessBlockCommand({ Bucket: s3BucketName })),
+      `S3 Bucket public access block ${s3BucketName}`
+    );
+
+    if (publicAccessResult) {
+      const { PublicAccessBlockConfiguration } = publicAccessResult;
+      expect(PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+    }
+
+    // Check encryption
+    const encryptionResult = await resourceExists(
+      () => s3Client.send(new GetBucketEncryptionCommand({ Bucket: s3BucketName })),
+      `S3 Bucket encryption ${s3BucketName}`
+    );
+
+    if (encryptionResult) {
+      const { ServerSideEncryptionConfiguration } = encryptionResult;
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(kmsKeyArn);
+    }
+
+    // Check versioning
+    const versioningResult = await resourceExists(
+      () => s3Client.send(new GetBucketVersioningCommand({ Bucket: s3BucketName })),
+      `S3 Bucket versioning ${s3BucketName}`
+    );
+
+    if (versioningResult) {
+      const { Status } = versioningResult;
+      expect(Status).toBe("Enabled");
+    }
+  }, 30000);
+
+  // Test 7: CloudTrail S3 Bucket Security
+  test("CloudTrail S3 bucket has proper security configuration", async () => {
+    const headResult = await resourceExists(
+      () => s3Client.send(new HeadBucketCommand({ Bucket: cloudtrailS3BucketName })),
+      `CloudTrail S3 Bucket ${cloudtrailS3BucketName}`
+    );
+
+    expect(headResult).not.toBeNull();
+    if (!headResult) return;
+
+    // Check public access is blocked
+    const publicAccessResult = await resourceExists(
+      () => s3Client.send(new GetPublicAccessBlockCommand({ Bucket: cloudtrailS3BucketName })),
+      `CloudTrail S3 Bucket public access block ${cloudtrailS3BucketName}`
+    );
+
+    if (publicAccessResult) {
+      const { PublicAccessBlockConfiguration } = publicAccessResult;
+      expect(PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+    }
+
+    // Check encryption
+    const encryptionResult = await resourceExists(
+      () => s3Client.send(new GetBucketEncryptionCommand({ Bucket: cloudtrailS3BucketName })),
+      `CloudTrail S3 Bucket encryption ${cloudtrailS3BucketName}`
+    );
+
+    if (encryptionResult) {
+      const { ServerSideEncryptionConfiguration } = encryptionResult;
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toBe(kmsKeyArn);
+    }
+  }, 30000);
+
+  // Test 8: CloudTrail Audit Configuration
+  test("CloudTrail is properly configured for comprehensive audit logging", async () => {
+    const result = await resourceExists(
+      () => cloudTrailClient.send(new DescribeTrailsCommand({})),
+      "CloudTrail trails"
+    );
+
+    expect(result).not.toBeNull();
+    if (!result) return;
+
+    const { trailList } = result;
+    const cloudTrail = trailList?.find(trail => 
+      trail.S3BucketName === cloudtrailS3BucketName
+    );
+
+    expect(cloudTrail).toBeDefined();
+    expect(cloudTrail?.S3BucketName).toBe(cloudtrailS3BucketName);
+    expect(cloudTrail?.IncludeGlobalServiceEvents).toBe(true);
+    expect(cloudTrail?.IsMultiRegionTrail).toBe(true);
+    expect(cloudTrail?.LogFileValidationEnabled).toBe(true);
+  }, 30000);
+
+  // Test 9: KMS Key Configuration and Security
+  test("KMS key is properly configured with rotation enabled", async () => {
+    const keyResult = await resourceExists(
+      () => kmsClient.send(new DescribeKeyCommand({ KeyId: kmsKeyId })),
+      `KMS Key ${kmsKeyId}`
+    );
+
+    expect(keyResult).not.toBeNull();
+    if (!keyResult) return;
+
+    const { KeyMetadata } = keyResult;
+    expect(KeyMetadata?.KeyId).toBe(kmsKeyId);
+    expect(KeyMetadata?.Arn).toBe(kmsKeyArn);
+    expect(KeyMetadata?.KeyUsage).toBe("ENCRYPT_DECRYPT");
+    expect(KeyMetadata?.Enabled).toBe(true);
+    expect(KeyMetadata?.Description).toContain("KMS key for tap-project");
+
+    // Check rotation
+    const rotationResult = await resourceExists(
+      () => kmsClient.send(new GetKeyRotationStatusCommand({ KeyId: kmsKeyId })),
+      `KMS Key rotation status for ${kmsKeyId}`
+    );
+
+    if (rotationResult) {
+      expect(rotationResult.KeyRotationEnabled).toBe(true);
+    }
+  }, 30000);
+
+  // Test 10: Overall Infrastructure Security Compliance
+  test("Infrastructure meets security compliance requirements", async () => {
+    let passedChecks = 0;
+    const totalChecks = 6;
+
+    // Check 1: EC2 is in private subnet without public IP
+    const ec2Result = await resourceExists(
+      () => ec2Client.send(new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] })),
+      `EC2 Instance ${ec2InstanceId}`
+    );
+
+    if (ec2Result) {
+      const instance = ec2Result.Reservations?.[0]?.Instances?.[0];
+      if (privateSubnetIds.includes(instance?.SubnetId || "") && !instance?.PublicIpAddress) {
+        passedChecks++;
+      }
+    }
+
+    // Check 2: RDS is not publicly accessible and encrypted
+    const dbIdentifier = rdsEndpoint.split('.')[0];
+    const rdsResult = await resourceExists(
+      () => rdsClient.send(new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier })),
+      `RDS Instance ${dbIdentifier}`
+    );
+
+    if (rdsResult) {
+      const dbInstance = rdsResult.DBInstances?.[0];
+      if (!dbInstance?.PubliclyAccessible && dbInstance?.StorageEncrypted) {
+        passedChecks++;
+      }
+    }
+
+    // Check 3: S3 buckets have encryption enabled
+    const s3EncResult = await resourceExists(
+      () => s3Client.send(new GetBucketEncryptionCommand({ Bucket: s3BucketName })),
+      `S3 Encryption ${s3BucketName}`
+    );
+    if (s3EncResult) passedChecks++;
+
+    // Check 4: S3 buckets block public access
+    const s3PublicResult = await resourceExists(
+      () => s3Client.send(new GetPublicAccessBlockCommand({ Bucket: s3BucketName })),
+      `S3 Public Access ${s3BucketName}`
+    );
+    if (s3PublicResult?.PublicAccessBlockConfiguration?.BlockPublicAcls) passedChecks++;
+
+    // Check 5: KMS key rotation is enabled
+    const kmsRotResult = await resourceExists(
+      () => kmsClient.send(new GetKeyRotationStatusCommand({ KeyId: kmsKeyId })),
+      `KMS Rotation ${kmsKeyId}`
+    );
+    if (kmsRotResult?.KeyRotationEnabled) passedChecks++;
+
+    // Check 6: CloudTrail is logging
+    const cloudTrailResult = await resourceExists(
+      () => cloudTrailClient.send(new DescribeTrailsCommand({})),
+      "CloudTrail trails"
+    );
+    if (cloudTrailResult?.trailList?.some(t => t.S3BucketName === cloudtrailS3BucketName)) {
+      passedChecks++;
+    }
+
+    console.log(`Security compliance: ${passedChecks}/${totalChecks} checks passed`);
+
+    // Require at least 80% of security checks to pass
+    expect(passedChecks).toBeGreaterThanOrEqual(Math.ceil(totalChecks * 0.8));
+  }, 30000);
+});

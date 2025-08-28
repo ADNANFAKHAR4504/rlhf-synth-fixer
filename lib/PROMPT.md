@@ -1,28 +1,72 @@
-Need CDKTF (TypeScript) code to build a multi-environment AWS setup deployed consistently across **us-east-1** and **us-west-2**. Infra must support high availability, security, and PCI DSS compliance.
+## I need you to act as an experienced DevOps engineer who’s comfortable with Infrastructure as Code (IaC), specifically using CDKTF with AWS.
 
-Main goals:
+## The goal is to produce a production-ready CDKTF project in TypeScript that sets up a secure AWS environment. The code should be deployable straight away with cdktf deploy, without requiring manual fixes.
 
-- Custom VPC per region with proper subnet allocation for HA
-- Deploy in both regions:
-  - Amazon RDS PostgreSQL (with replication + automated backups enabled)
-  - DynamoDB table.
-  - S3 bucket (replication enabled across regions)
+## Project Context
 
-- CloudFront distribution:
-  - Serves global traffic from S3
-  - Latency-based routing for performance
-  - Protected with AWS WAF.
+- **IaC Framework:** CDKTF (Cloud Development Kit for Terraform)  
+- **Language:** TypeScript  
+- **Cloud Provider:** AWS  
+- **Region:** us-west-2  
+- **Account Setup:** The AWS account is part of an AWS Organization  
+- **Naming Convention:** All resources should use a project-environment pattern (for example, webapp-prod-vpc or webapp-dev-db-sg). Variables for project and environment should be used consistently.  
 
-- IAM: roles + policies must be consistent across regions, following least privilege
-- Route 53: DNS management + failover configurations across the two regions
+## What Needs to Be Implemented
 
-Constraints:
+### IAM Roles & Policies
+- Create a dedicated S3 bucket for application data.  
+- Define an IAM role and instance profile for EC2 instances.  
+- The IAM role should have an inline policy with only the following permissions: s3:GetObject, s3:PutObject, and s3:DeleteObject, scoped to the application’s bucket path:arn:aws:s3:::project-environment-app-data/*
 
-- Resources deployed identically in **both regions**
-- RDS PostgreSQL: multi-AZ, replication across regions, automated backups
-- DynamoDB: For real-time sync
-- S3: versioning + replication between us-east-1 and eu-west-1
-- CloudFront + Route 53 configured for latency-based routing + failover
-- AWS WAF enabled for CloudFront distribution
-- Infra must comply with **PCI DSS** (encryption, IAM best practices, monitoring, logging)
-- Code must be valid CDKTF (TypeScript), pass `cdktf synth` and `terraform plan/apply` without errors
+### Security Groups (Principle of Least Privilege)
+- Security groups must allow only the traffic that’s actually required.  
+- EC2 instances should only accept inbound traffic from trusted sources on the application port (e.g., 8080).  
+- The RDS instance should only accept inbound traffic from the EC2 security group on the database port (e.g., 5432).  
+- All other inbound traffic should be denied.  
+
+### RDS Encryption
+- Provision an RDS instance.  
+- Make sure encryption at rest is enabled with a customer-managed KMS key.  
+- The RDS instance must not be publicly accessible.  
+
+### CloudTrail Logging
+- Set up a CloudTrail trail to capture all management and data events.  
+- Logs should go to a centralized S3 bucket.  
+- This bucket should be encrypted with a customer-managed KMS key.  
+
+### KMS Key Management
+- Create a customer-managed AWS KMS key.  
+- Use this key to encrypt both the CloudTrail S3 bucket and the RDS instance.  
+
+## Code Structure
+
+The entire solution must live in exactly two files:
+
+### lib/modules.ts
+This file should define reusable, modular TypeScript classes.  
+Each class should take scope, id, and props in its constructor.  
+
+Required modules:
+- KmsModule → Creates the KMS key  
+- S3Module → Creates an encrypted S3 bucket  
+- CloudTrailModule → Sets up CloudTrail and centralized logging bucket  
+- IamModule → Creates IAM role, instance profile, and EC2 policies  
+- VpcModule → Creates a VPC with public and private subnets  
+- SecurityGroupModule → Creates security groups with configurable rules  
+- Ec2Module → Launches EC2 instances with IAM role  
+- RdsModule → Creates the encrypted RDS instance  
+
+### lib/tap-stack.ts
+The main stack file.  
+
+Defines project and environment variables.  
+Instantiates all the modules and wires them together (for example, passing the KMS key to RDS and S3, or linking security groups).  
+
+## Final Deliverable
+
+Provide the complete TypeScript code for both lib/modules.ts and lib/tap-stack.ts.
+
+The code should:
+- Be ready to deploy with cdktf deploy  
+- Follow best practices for security and naming  
+- Be clear, well-commented, and production-ready  

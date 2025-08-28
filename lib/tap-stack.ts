@@ -1,636 +1,268 @@
-import { AcmCertificate } from '@cdktf/provider-aws/lib/acm-certificate';
-import { AcmCertificateValidation } from '@cdktf/provider-aws/lib/acm-certificate-validation';
-import { CloudfrontDistribution } from '@cdktf/provider-aws/lib/cloudfront-distribution';
-import { CloudfrontOriginAccessIdentity } from '@cdktf/provider-aws/lib/cloudfront-origin-access-identity';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
-import { DataAwsRoute53Zone } from '@cdktf/provider-aws/lib/data-aws-route53-zone';
-import { DataAwsS3Bucket } from '@cdktf/provider-aws/lib/data-aws-s3-bucket';
 import {
-  DbInstance,
-  DbInstanceConfig,
-} from '@cdktf/provider-aws/lib/db-instance';
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
-import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
-import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { S3BucketReplicationConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { VpcPeeringConnection } from '@cdktf/provider-aws/lib/vpc-peering-connection';
-import { VpcPeeringConnectionAccepterA } from '@cdktf/provider-aws/lib/vpc-peering-connection-accepter';
-import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
-import { Fn, TerraformOutput, TerraformStack } from 'cdktf';
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { Construct } from 'constructs';
 
-// --- Reusable Regional Construct ---
-interface RegionalInfraProps {
-  provider: AwsProvider;
-  region: string;
-  tags: { [key: string]: string };
-  isPrimaryRegion: boolean;
-  vpcCidr: string;
-  dbSubnetCidrs: string[];
-  kmsKey: KmsKey;
-  callerIdentity: DataAwsCallerIdentity;
-  uniqueSuffix: string;
-  primaryDbArn?: string;
-  rdsPasswordSecret?: SecretsmanagerSecret;
+// Import your modules
+import {
+  KmsModule,
+  S3Module,
+  CloudTrailModule,
+  IamModule,
+  VpcModule,
+  SecurityGroupModule,
+  Ec2Module,
+  RdsModule,
+} from './modules';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags;
+  // Add this for testing - allows overriding the region override
+  _regionOverrideForTesting?: string | null;
 }
 
-class RegionalInfra extends Construct {
-  public readonly dbInstance: DbInstance;
-  public readonly dynamoTable: DynamodbTable;
-  public readonly s3Bucket: S3Bucket;
-  public readonly vpc: Vpc;
-
-  constructor(scope: Construct, id: string, props: RegionalInfraProps) {
-    super(scope, id);
-
-    const {
-      provider,
-      region,
-      tags,
-      isPrimaryRegion,
-      vpcCidr,
-      dbSubnetCidrs,
-      kmsKey,
-      callerIdentity,
-      uniqueSuffix,
-      primaryDbArn,
-      rdsPasswordSecret,
-    } = props;
-
-    this.vpc = new Vpc(this, 'MainVpc', {
-      provider,
-      cidrBlock: vpcCidr,
-      enableDnsSupport: true,
-      enableDnsHostnames: true,
-      tags: { ...tags, Name: `pci-vpc-${region}-${uniqueSuffix}` },
-    });
-
-    const privateSubnets = dbSubnetCidrs.map((cidr, index) => {
-      return new Subnet(this, `PrivateSubnet-${index}`, {
-        provider,
-        vpcId: this.vpc.id,
-        cidrBlock: cidr,
-        availabilityZone: `${region}${String.fromCharCode(97 + index)}`,
-        tags: {
-          ...tags,
-          Name: `pci-private-${String.fromCharCode(97 + index)}-${region}-${uniqueSuffix}`,
-        },
-      });
-    });
-
-    const rdsSubnetGroup = new DbSubnetGroup(this, 'RdsSubnetGroup', {
-      provider,
-      subnetIds: privateSubnets.map(subnet => subnet.id),
-      tags,
-    });
-
-    const rdsSecurityGroup = new SecurityGroup(this, 'RdsSecurityGroup', {
-      provider,
-      vpcId: this.vpc.id,
-      description: 'Allow inbound traffic to RDS',
-      ingress: [
-        {
-          fromPort: 5432,
-          toPort: 5432,
-          protocol: 'tcp',
-          cidrBlocks: [this.vpc.cidrBlock],
-        },
-      ],
-      tags,
-    });
-
-    const dbConfig: DbInstanceConfig = {
-      provider,
-      identifier: `pci-postgres-db-${region.replace(/-/g, '')}-${uniqueSuffix}`,
-      instanceClass: 'db.t3.micro',
-      dbSubnetGroupName: rdsSubnetGroup.name,
-      vpcSecurityGroupIds: [rdsSecurityGroup.id],
-      tags,
-    };
-
-    if (isPrimaryRegion) {
-      Object.assign(dbConfig, {
-        allocatedStorage: 20,
-        engine: 'postgres',
-        engineVersion: '16',
-        username: 'adminuser',
-        password: rdsPasswordSecret
-          ? Fn.lookup(
-              rdsPasswordSecret.arn,
-              'password',
-              'CHANGEME-use-secrets-manager'
-            )
-          : 'CHANGEME-use-secrets-manager',
-        multiAz: true,
-        storageEncrypted: true,
-        kmsKeyId: kmsKey.arn,
-        backupRetentionPeriod: 7,
-        skipFinalSnapshot: false,
-      });
-    } else {
-      Object.assign(dbConfig, {
-        replicateSourceDb: primaryDbArn,
-        skipFinalSnapshot: true,
-        storageEncrypted: true,
-        kmsKeyId: kmsKey.arn,
-      });
-    }
-
-    this.dbInstance = new DbInstance(this, 'PostgresInstance', dbConfig);
-
-    this.dynamoTable = new DynamodbTable(this, 'PciDataTable', {
-      provider,
-      name: `pci-data-table-${region}-${uniqueSuffix}`,
-      billingMode: 'PAY_PER_REQUEST',
-      hashKey: 'id',
-      attribute: [{ name: 'id', type: 'S' }],
-      serverSideEncryption: { enabled: true, kmsKeyArn: kmsKey.arn },
-      pointInTimeRecovery: { enabled: true },
-      tags,
-    });
-
-    this.s3Bucket = new S3Bucket(this, 'PciS3Bucket', {
-      provider,
-      bucket: `pci-assets-bucket-${callerIdentity.accountId}-${region}-${uniqueSuffix}`,
-      tags,
-    });
-
-    new S3BucketVersioningA(this, 'S3Versioning', {
-      provider,
-      bucket: this.s3Bucket.id,
-      versioningConfiguration: { status: 'Enabled' },
-    });
-
-    new CloudwatchLogGroup(this, 'RdsLogs', {
-      provider,
-      name: `/aws/rds/instance/${this.dbInstance.identifier}/general`,
-      retentionInDays: 90,
-      tags,
-    });
-
-    new CloudwatchLogGroup(this, 'AppLogs', {
-      provider,
-      name: `/pci-app/${region}/app-logs-${uniqueSuffix}`,
-      retentionInDays: 365,
-      tags,
-    });
-  }
-}
+// If you need to override the AWS Region for the terraform provider for any particular task,
+// you can set it here. Otherwise, it will default to 'us-west-2'.
+const AWS_REGION_OVERRIDE = 'us-west-2';
 
 export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
-    // Parameterized domain name for reusability
-    const domainName =
-      process.env.DOMAIN_NAME || 'pci-multiregion-deploy-test-2.net';
-    const primaryRegion = 'us-east-1';
-    const secondaryRegion = 'us-west-2';
-    const s3ReplicaRegion = 'us-west-2'; // FIX: Replication region changed to us-west-2
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    const tags = {
-      Project: 'MultiRegionPCI',
-      Owner: 'ComplianceTeam',
-      ManagedBy: 'CDKTF',
-    };
+    // Use the testing override if provided, otherwise use the constant
+    const regionOverride =
+      props?._regionOverrideForTesting !== undefined
+        ? props._regionOverrideForTesting
+        : AWS_REGION_OVERRIDE;
 
-    const uniqueSuffix = Fn.substr(Fn.uuid(), 0, 8);
+    const awsRegion = regionOverride
+      ? regionOverride
+      : props?.awsRegion || 'us-west-2';
 
-    const primaryProvider = new AwsProvider(this, 'aws-primary', {
-      region: primaryRegion,
-      alias: 'primary',
-    });
-    const secondaryProvider = new AwsProvider(this, 'aws-secondary', {
-      region: secondaryRegion,
-      alias: 'secondary',
-    });
-    const s3ReplicaProvider = new AwsProvider(this, 'aws-s3-replica', {
-      region: s3ReplicaRegion,
-      alias: 's3-replica',
+    const stateBucketRegion = props?.stateBucketRegion || 'us-west-2';
+    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+
+    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: defaultTags,
     });
 
-    const callerIdentity = new DataAwsCallerIdentity(this, 'CallerIdentity', {
-      provider: primaryProvider,
+    // Get current AWS account information
+    const current = new DataAwsCallerIdentity(this, 'current');
+
+    // Configure S3 Backend with native state locking
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
+    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
+    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
+    this.addOverride('terraform.backend.s3.use_lockfile', true);
+
+    // Instantiate your modules here
+    const project = 'tap-project'; // You can make this configurable
+
+    // Create KMS key for encryption
+    const kmsModule = new KmsModule(this, 'kms', {
+      project,
+      environment: environmentSuffix,
+      description: `KMS key for ${project} ${environmentSuffix} environment`,
+      accountId: current.accountId, // Add this
     });
 
-    const kmsKeyPrimary = new KmsKey(this, 'PciKmsKeyPrimary', {
-      provider: primaryProvider,
-      description: 'KMS key for PCI DSS data encryption in primary region',
-      enableKeyRotation: true,
-      tags,
+    // Create S3 bucket for application data
+    const s3Module = new S3Module(this, 's3-app-data', {
+      project,
+      environment: environmentSuffix,
+      bucketName: 'analytics-data-pr2262',
+      kmsKey: kmsModule.key,
     });
 
-    const kmsKeySecondary = new KmsKey(this, 'PciKmsKeySecondary', {
-      provider: secondaryProvider,
-      description: 'KMS key for PCI DSS data encryption in secondary region',
-      enableKeyRotation: true,
-      tags,
-    });
-
-    // --- Secrets Manager for RDS password ---
-    const rdsPasswordSecret = new SecretsmanagerSecret(
+    // Get database credentials from AWS Secrets Manager
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
       this,
-      'RdsPasswordSecret',
+      'db-password-secret',
       {
-        provider: primaryProvider,
-        name: `pci-rds-password-${uniqueSuffix}`,
-        description: 'RDS master password for PCI stack',
-        recoveryWindowInDays: 7,
-        tags,
+        secretId: 'tap-pr2411-app-secrets',
       }
     );
 
-    new SecretsmanagerSecretVersion(this, 'RdsPasswordSecretVersion', {
-      provider: primaryProvider,
-      secretId: rdsPasswordSecret.id,
-      secretString: JSON.stringify({
-        password: process.env.RDS_PASSWORD || 'ChangeMe123!@#',
-      }),
+    // Create CloudTrail for auditing
+    const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail', {
+      project,
+      environment: environmentSuffix,
+      kmsKey: kmsModule.key,
+      accountId: current.accountId, // Add this
+      region: awsRegion, // Add this
     });
 
-    const primaryInfra = new RegionalInfra(this, 'PrimaryInfra', {
-      provider: primaryProvider,
-      region: primaryRegion,
-      tags,
-      isPrimaryRegion: true,
-      vpcCidr: '10.1.0.0/16',
-      dbSubnetCidrs: ['10.1.1.0/24', '10.1.2.0/24'],
-      kmsKey: kmsKeyPrimary,
-      callerIdentity,
-      uniqueSuffix,
-      rdsPasswordSecret,
+    // Create IAM role and instance profile for EC2
+    const iamModule = new IamModule(this, 'iam', {
+      project,
+      environment: environmentSuffix,
+      appDataBucketArn: s3Module.bucket.arn,
     });
 
-    const secondaryInfra = new RegionalInfra(this, 'SecondaryInfra', {
-      provider: secondaryProvider,
-      region: secondaryRegion,
-      tags,
-      isPrimaryRegion: false,
-      vpcCidr: '10.2.0.0/16',
-      dbSubnetCidrs: ['10.2.1.0/24', '10.2.2.0/24'],
-      kmsKey: kmsKeySecondary,
-      callerIdentity,
-      uniqueSuffix,
-      primaryDbArn: primaryInfra.dbInstance.arn,
-      rdsPasswordSecret,
+    // Create VPC with public and private subnets
+    const vpcModule = new VpcModule(this, 'vpc', {
+      project,
+      environment: environmentSuffix,
+      cidrBlock: '10.0.0.0/16',
+      availabilityZones: [`${awsRegion}a`, `${awsRegion}b`], // Adjust based on your region
     });
 
-    const peeringConnection = new VpcPeeringConnection(this, 'VpcPeering', {
-      provider: primaryProvider,
-      vpcId: primaryInfra.vpc.id,
-      peerVpcId: secondaryInfra.vpc.id,
-      peerRegion: secondaryRegion,
-      autoAccept: false,
-      tags: { ...tags, Name: `peering-${primaryRegion}-to-${secondaryRegion}` },
-    });
-
-    new VpcPeeringConnectionAccepterA(this, 'VpcPeeringAccepter', {
-      provider: secondaryProvider,
-      vpcPeeringConnectionId: peeringConnection.id,
-      autoAccept: true,
-      tags: {
-        ...tags,
-        Name: `peering-${secondaryRegion}-accepts-${primaryRegion}`,
-      },
-    });
-
-    new Route(this, 'PrimaryToSecondaryRoute', {
-      provider: primaryProvider,
-      routeTableId: primaryInfra.vpc.mainRouteTableId,
-      destinationCidrBlock: secondaryInfra.vpc.cidrBlock,
-      vpcPeeringConnectionId: peeringConnection.id,
-    });
-
-    new Route(this, 'SecondaryToPrimaryRoute', {
-      provider: secondaryProvider,
-      routeTableId: secondaryInfra.vpc.mainRouteTableId,
-      destinationCidrBlock: primaryInfra.vpc.cidrBlock,
-      vpcPeeringConnectionId: peeringConnection.id,
-    });
-
-    const s3ReplicaBucket = new S3Bucket(this, 'S3ReplicaBucket', {
-      provider: s3ReplicaProvider,
-      bucket: `pci-assets-bucket-${callerIdentity.accountId}-${s3ReplicaRegion}-${uniqueSuffix}`,
-      tags,
-    });
-
-    const s3ReplicaVersioning = new S3BucketVersioningA(
-      this,
-      'S3ReplicaVersioning',
-      {
-        provider: s3ReplicaProvider,
-        bucket: s3ReplicaBucket.id,
-        versioningConfiguration: { status: 'Enabled' },
-      }
-    );
-
-    const s3ReplicaBucketData = new DataAwsS3Bucket(
-      this,
-      'S3ReplicaBucketData',
-      {
-        provider: s3ReplicaProvider,
-        bucket: s3ReplicaBucket.bucket,
-        dependsOn: [s3ReplicaVersioning],
-      }
-    );
-
-    const s3ReplicationRole = new IamRole(this, 'S3ReplicationRole', {
-      provider: primaryProvider,
-      name: `s3-replication-role-${uniqueSuffix}`,
-      assumeRolePolicy: new DataAwsIamPolicyDocument(
-        this,
-        'S3ReplicationAssumeRole',
+    // Create security group for EC2 instances
+    const ec2SecurityGroup = new SecurityGroupModule(this, 'ec2-sg', {
+      project,
+      environment: environmentSuffix,
+      name: 'ec2',
+      description: 'Security group for EC2 instances',
+      vpcId: vpcModule.vpc.id,
+      rules: [
         {
-          statement: [
-            {
-              actions: ['sts:AssumeRole'],
-              principals: [
-                { type: 'Service', identifiers: ['s3.amazonaws.com'] },
-              ],
-            },
-          ],
-        }
-      ).json,
-    });
-
-    const s3ReplicationPolicy = new IamPolicy(this, 'S3ReplicationPolicy', {
-      provider: primaryProvider,
-      name: `s3-replication-policy-${uniqueSuffix}`,
-      policy: new DataAwsIamPolicyDocument(this, 'S3ReplicationPolicyDoc', {
-        statement: [
-          {
-            actions: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
-            resources: [primaryInfra.s3Bucket.arn],
-          },
-          {
-            actions: ['s3:GetObjectVersion*', 's3:GetBucketVersioning'],
-            resources: [
-              `${primaryInfra.s3Bucket.arn}/*`,
-              primaryInfra.s3Bucket.arn,
-            ],
-          },
-          {
-            actions: ['s3:ReplicateObject', 's3:ReplicateDelete'],
-            resources: [`${s3ReplicaBucketData.arn}/*`],
-          },
-        ],
-      }).json,
-    });
-
-    new IamRolePolicyAttachment(this, 'S3ReplicationAttachment', {
-      provider: primaryProvider,
-      role: s3ReplicationRole.name,
-      policyArn: s3ReplicationPolicy.arn,
-    });
-
-    new S3BucketReplicationConfigurationA(this, 'S3Replication', {
-      provider: primaryProvider,
-      bucket: primaryInfra.s3Bucket.id,
-      role: s3ReplicationRole.arn,
-      rule: [
+          type: 'ingress',
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'], // Consider restricting this in production
+        },
         {
-          id: 'cross-region-replication',
-          status: 'Enabled',
-          destination: { bucket: s3ReplicaBucketData.arn },
-          deleteMarkerReplication: { status: 'Enabled' },
-          filter: { prefix: '' },
+          type: 'egress',
+          fromPort: 0,
+          toPort: 65535,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
         },
       ],
     });
 
-    const zone = new DataAwsRoute53Zone(this, 'DnsZoneLookup', {
-      provider: primaryProvider,
-      name: domainName,
-    });
-
-    const certificate = new AcmCertificate(this, 'AcmCert', {
-      provider: primaryProvider,
-      domainName: domainName,
-      validationMethod: 'DNS',
-      tags,
-    });
-
-    const dvo = certificate.domainValidationOptions.get(0);
-    const certValidationRecord = new Route53Record(
-      this,
-      'CertValidationRecord',
-      {
-        provider: primaryProvider,
-        zoneId: zone.zoneId,
-        name: dvo.resourceRecordName,
-        type: dvo.resourceRecordType,
-        records: [dvo.resourceRecordValue],
-        ttl: 60,
-        allowOverwrite: true,
-      }
-    );
-
-    const certificateValidation = new AcmCertificateValidation(
-      this,
-      'AcmCertificateValidation',
-      {
-        provider: primaryProvider,
-        certificateArn: certificate.arn,
-        validationRecordFqdns: [certValidationRecord.fqdn],
-      }
-    );
-
-    certificateValidation.node.addDependency(certValidationRecord);
-
-    const originAccessIdentity = new CloudfrontOriginAccessIdentity(
-      this,
-      'OAI',
-      {
-        provider: primaryProvider,
-        comment: `OAI for PCI S3 bucket ${uniqueSuffix}`,
-      }
-    );
-
-    new S3BucketPolicy(this, 'S3BucketPolicy', {
-      provider: primaryProvider,
-      bucket: primaryInfra.s3Bucket.id,
-      policy: new DataAwsIamPolicyDocument(this, 'S3PolicyDoc', {
-        statement: [
-          {
-            actions: ['s3:GetObject'],
-            resources: [`${primaryInfra.s3Bucket.arn}/*`],
-            principals: [
-              {
-                type: 'AWS',
-                identifiers: [originAccessIdentity.iamArn],
-              },
-            ],
-          },
-        ],
-      }).json,
-    });
-
-    const webAcl = new Wafv2WebAcl(this, 'WebAcl', {
-      provider: primaryProvider,
-      name: `pci-waf-acl-${uniqueSuffix}`,
-      scope: 'CLOUDFRONT',
-      defaultAction: { allow: {} },
-      visibilityConfig: {
-        cloudwatchMetricsEnabled: true,
-        metricName: `pci-waf-acl-${uniqueSuffix}`,
-        sampledRequestsEnabled: true,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rule: [
+    // Create security group for RDS
+    const rdsSecurityGroup = new SecurityGroupModule(this, 'rds-sg', {
+      project,
+      environment: environmentSuffix,
+      name: 'rds',
+      description: 'Security group for RDS instances',
+      vpcId: vpcModule.vpc.id,
+      rules: [
         {
-          name: 'AWS-Managed-Rules-Common',
-          priority: 1,
-          overrideAction: { none: {} },
-          statement: {
-            managed_rule_group_statement: {
-              name: 'AWSManagedRulesCommonRuleSet',
-              vendor_name: 'AWS',
-            },
-          },
-          visibilityConfig: {
-            cloudwatchMetricsEnabled: true,
-            metricName: `aws-common-rules-${uniqueSuffix}`,
-            sampledRequestsEnabled: true,
-          },
-        },
-      ] as any,
-      tags,
-    });
-
-    const cfDistribution = new CloudfrontDistribution(this, 'CfDistribution', {
-      provider: primaryProvider,
-      enabled: true,
-      origin: [
-        {
-          originId: primaryInfra.s3Bucket.id,
-          domainName: primaryInfra.s3Bucket.bucketRegionalDomainName,
-          s3OriginConfig: {
-            originAccessIdentity:
-              originAccessIdentity.cloudfrontAccessIdentityPath,
-          },
+          type: 'ingress',
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          sourceSecurityGroupId: ec2SecurityGroup.securityGroup.id,
         },
       ],
-      defaultCacheBehavior: {
-        targetOriginId: primaryInfra.s3Bucket.id,
-        viewerProtocolPolicy: 'redirect-to-https',
-        allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
-        cachedMethods: ['GET', 'HEAD'],
-        forwardedValues: {
-          queryString: false,
-          cookies: { forward: 'none' },
-        },
-      },
-      viewerCertificate: {
-        acmCertificateArn: certificateValidation.certificateArn,
-        sslSupportMethod: 'sni-only',
-      },
-      restrictions: {
-        geoRestriction: {
-          restrictionType: 'none',
-        },
-      },
-      webAclId: webAcl.arn,
-      tags,
     });
 
-    const primaryDbHealthCheck = new Route53HealthCheck(
-      this,
-      'PrimaryDbHealthCheck',
-      {
-        provider: primaryProvider,
-        fqdn: primaryInfra.dbInstance.address,
-        port: 5432,
-        type: 'TCP',
-        failureThreshold: 3,
-        requestInterval: 30,
-        tags,
-      }
-    );
-
-    const secondaryDbHealthCheck = new Route53HealthCheck(
-      this,
-      'SecondaryDbHealthCheck',
-      {
-        provider: primaryProvider,
-        fqdn: secondaryInfra.dbInstance.address,
-        port: 5432,
-        type: 'TCP',
-        failureThreshold: 3,
-        requestInterval: 30,
-        tags,
-      }
-    );
-
-    new Route53Record(this, 'CloudfrontRecord', {
-      provider: primaryProvider,
-      zoneId: zone.zoneId,
-      name: domainName,
-      type: 'A',
-      allowOverwrite: true,
-      alias: {
-        name: cfDistribution.domainName,
-        zoneId: cfDistribution.hostedZoneId,
-        evaluateTargetHealth: true,
-      },
+    // Create EC2 instance
+    const ec2Module = new Ec2Module(this, 'ec2', {
+      project,
+      environment: environmentSuffix,
+      instanceType: 't3.micro',
+      subnetId: vpcModule.privateSubnets[0].id, // Deploy in private subnet
+      securityGroupIds: [ec2SecurityGroup.securityGroup.id],
+      instanceProfile: iamModule.instanceProfile,
+      keyName: 'compute-secure-key', // Uncomment and set if you have a key pair
     });
 
-    new Route53Record(this, 'LatencyRecordEast', {
-      provider: primaryProvider,
-      zoneId: zone.zoneId,
-      name: `db.${domainName}`,
-      type: 'CNAME',
-      ttl: 300,
-      records: [primaryInfra.dbInstance.address],
-      latencyRoutingPolicy: { region: primaryRegion },
-      setIdentifier: 'primary-db-us-east-1',
-      allowOverwrite: true,
-      healthCheckId: primaryDbHealthCheck.id,
+    // Create RDS instance
+    const rdsModule = new RdsModule(this, 'rds', {
+      project,
+      environment: environmentSuffix,
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: 'db.t3.micro',
+      allocatedStorage: 20,
+      dbName: 'appdb',
+      username: 'admin',
+      password: dbPasswordSecret.secretString,
+      subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
+      securityGroupIds: [rdsSecurityGroup.securityGroup.id],
+      kmsKey: kmsModule.key,
     });
 
-    new Route53Record(this, 'LatencyRecordWest', {
-      provider: primaryProvider,
-      zoneId: zone.zoneId,
-      name: `db.${domainName}`,
-      type: 'CNAME',
-      ttl: 300,
-      records: [secondaryInfra.dbInstance.address],
-      latencyRoutingPolicy: { region: secondaryRegion },
-      setIdentifier: 'secondary-db-us-west-2',
-      allowOverwrite: true,
-      healthCheckId: secondaryDbHealthCheck.id,
+    // Outputs for reference
+    new TerraformOutput(this, 'vpc-id', {
+      value: vpcModule.vpc.id,
+      description: 'VPC ID',
     });
 
-    new TerraformOutput(this, 'PrimaryRdsEndpoint', {
-      value: primaryInfra.dbInstance.address,
+    new TerraformOutput(this, 'public-subnet-ids', {
+      value: vpcModule.publicSubnets.map(subnet => subnet.id),
+      description: 'Public subnet IDs',
     });
-    new TerraformOutput(this, 'SecondaryRdsEndpoint', {
-      value: secondaryInfra.dbInstance.address,
+
+    new TerraformOutput(this, 'private-subnet-ids', {
+      value: vpcModule.privateSubnets.map(subnet => subnet.id),
+      description: 'Private subnet IDs',
     });
-    new TerraformOutput(this, 'DynamoDbTableName', {
-      value: primaryInfra.dynamoTable.name,
+
+    new TerraformOutput(this, 'ec2-instance-id', {
+      value: ec2Module.instance.id,
+      description: 'EC2 instance ID',
     });
-    new TerraformOutput(this, 'PrimaryS3BucketName', {
-      value: primaryInfra.s3Bucket.bucket,
+
+    new TerraformOutput(this, 'ec2-private-ip', {
+      value: ec2Module.instance.privateIp,
+      description: 'EC2 instance private IP address',
     });
-    new TerraformOutput(this, 'CloudFrontDomain', {
-      value: cfDistribution.domainName,
+
+    new TerraformOutput(this, 's3-bucket-name', {
+      value: s3Module.bucket.bucket,
+      description: 'S3 bucket name for application data',
     });
+
+    new TerraformOutput(this, 'cloudtrail-s3-bucket-name', {
+      value: cloudTrailModule.logsBucket.bucket,
+      description: 'S3 bucket name for CloudTrail logs',
+    });
+
+    new TerraformOutput(this, 'ec2-security-group-id', {
+      value: ec2SecurityGroup.securityGroup.id,
+      description: 'EC2 Security Group ID',
+    });
+
+    new TerraformOutput(this, 'rds-security-group-id', {
+      value: rdsSecurityGroup.securityGroup.id,
+      description: 'RDS Security Group ID',
+    });
+
+    new TerraformOutput(this, 'rds-endpoint', {
+      value: rdsModule.dbInstance.endpoint,
+      description: 'RDS instance endpoint',
+    });
+
+    new TerraformOutput(this, 'kms-key-id', {
+      value: kmsModule.key.keyId,
+      description: 'KMS key ID',
+    });
+
+    new TerraformOutput(this, 'kms-key-arn', {
+      value: kmsModule.key.arn,
+      description: 'KMS key ARN',
+    });
+
+    new TerraformOutput(this, 'aws-account-id', {
+      value: current.accountId,
+      description: 'Current AWS Account ID',
+    });
+
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
   }
 }
