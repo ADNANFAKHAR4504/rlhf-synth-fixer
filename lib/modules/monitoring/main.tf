@@ -75,26 +75,26 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 }
 
 # CloudTrail
-resource "aws_cloudtrail" "main" {
-  name           = "${var.project_name}-CloudTrail-${var.environment}"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
-
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"] # Logs all object-level operations in all buckets
-    }
-  }
-
-  tags = {
-    Name = "${var.project_name}-CloudTrail-${var.environment}"
-  }
-
-  depends_on = [aws_s3_bucket_policy.cloudtrail]
-}
+#resource "aws_cloudtrail" "main" {
+#  name           = "${var.project_name}-CloudTrail-${var.environment}"
+#  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+#
+#  event_selector {
+#    read_write_type           = "All"
+#    include_management_events = true
+#
+#    data_resource {
+#      type   = "AWS::S3::Object"
+#      values = ["arn:aws:s3:::*/*"] # Logs all object-level operations in all buckets
+#    }
+#  }
+#
+#  tags = {
+#    Name = "${var.project_name}-CloudTrail-${var.environment}"
+#  }
+#
+#  depends_on = [aws_s3_bucket_policy.cloudtrail]
+#}
 
 
 # CloudWatch Log Group for security logs
@@ -199,31 +199,31 @@ resource "aws_sns_topic" "security_alerts" {
 }
 
 # GuardDuty
-resource "aws_guardduty_detector" "main" {
-  enable = true
-
-  datasources {
-    s3_logs {
-      enable = true
-    }
-    kubernetes {
-      audit_logs {
-        enable = true
-      }
-    }
-    malware_protection {
-      scan_ec2_instance_with_findings {
-        ebs_volumes {
-          enable = true
-        }
-      }
-    }
-  }
-
-  tags = {
-    Name = "${var.project_name}-GuardDuty-${var.environment}"
-  }
-}
+#resource "aws_guardduty_detector" "main" {
+#  enable = true
+#
+#  datasources {
+#    s3_logs {
+#      enable = true
+#    }
+#    kubernetes {
+#      audit_logs {
+#        enable = true
+#      }
+#    }
+#    malware_protection {
+#      scan_ec2_instance_with_findings {
+#        ebs_volumes {
+#          enable = true
+#        }
+#      }
+#    }
+#  }
+#
+#  tags = {
+#    Name = "${var.project_name}-GuardDuty-${var.environment}"
+#  }
+#}
 
 # AWS Config S3 Bucket
 resource "aws_s3_bucket" "config" {
@@ -319,7 +319,7 @@ resource "aws_iam_role" "config" {
 # Attach AWS managed policy for Config
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # Additional IAM policy for Config to access S3
@@ -417,18 +417,18 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 }
 
 # Config Rule: S3 Bucket Public Access Prohibited
-resource "aws_config_config_rule" "s3_bucket_public_access_prohibited" {
-  name = "${var.project_name}-s3-bucket-public-access-prohibited-${var.environment}"
+resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
+  name = "${var.project_name}-s3-bucket-public-read-prohibited-${var.environment}"
 
   source {
     owner             = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
   }
 
   depends_on = [aws_config_configuration_recorder.main]
 
   tags = {
-    Name = "${var.project_name}-S3-Public-Access-Rule-${var.environment}"
+    Name = "${var.project_name}-S3-Public-Read-Rule-${var.environment}"
   }
 }
 
@@ -438,7 +438,7 @@ resource "aws_config_config_rule" "root_access_key_check" {
 
   source {
     owner             = "AWS"
-    source_identifier = "ROOT_ACCESS_KEY_CHECK"
+    source_identifier = "IAM_ROOT_ACCESS_KEY_CHECK"
   }
 
   depends_on = [aws_config_configuration_recorder.main]
