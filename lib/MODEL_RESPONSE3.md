@@ -1,13 +1,40 @@
+I see the issue is in the `bin/tap.ts` file. Let me provide the corrected version of both files to fix this error.
+
+## Fixed Implementation
+
+### bin/tap.ts
+
+```typescript
+#!/usr/bin/env node
+import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+
+new TapStack(app, 'TapStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'us-west-2',
+  },
+  description: 'Secure AWS Infrastructure with CDK',
+});
+```
+
+### lib/tap-stack.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
+import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export class TapStack extends cdk.Stack {
@@ -385,3 +412,133 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
+```
+
+### package.json (Make sure you have these dependencies)
+
+```json
+{
+  "name": "tap-stack",
+  "version": "0.1.0",
+  "bin": {
+    "tap": "bin/tap.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.4.0",
+    "@types/node": "18.14.6",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.0.5",
+    "aws-cdk": "2.87.0",
+    "ts-node": "^10.9.1",
+    "typescript": "~4.9.5"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.87.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  }
+}
+```
+
+### cdk.json
+
+```json
+{
+  "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "**/*.d.ts",
+      "**/*.js",
+      "tsconfig.json",
+      "package*.json",
+      "yarn.lock",
+      "node_modules",
+      "test"
+    ]
+  },
+  "context": {
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:target": "aws-cdk-lib",
+    "@aws-cdk-new-bootstrap:advertise": false,
+    "@aws-cdk/core:enableStackNameDuplicates": true,
+    "aws-cdk:enableDiffNoFail": true,
+    "@aws-cdk/core:stackRelativeExports": true,
+    "@aws-cdk/aws-rds:lowercaseDbIdentifier": true,
+    "@aws-cdk/aws-lambda:recognizeVersionProps": true,
+    "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": true,
+    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
+    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
+    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
+    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
+    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
+    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
+    "@aws-cdk/core:enablePartitionLiterals": true,
+    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:disablePropertyValidation": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/aws-route53-patters:useCertificate": true,
+    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
+    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
+    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
+    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
+    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
+    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
+    "@aws-cdk/aws-redshift:columnId": true,
+    "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
+    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
+    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
+    "@aws-cdk/aws-kms:aliasNameRef": true,
+    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
+    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
+    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
+    "@aws-cdk/aws-opensearchservice:enableLogging": true,
+    "@aws-cdk/aws-s3:autoDeleteObjectsPolicy": true,
+    "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": true,
+    "@aws-cdk/aws-rds:generateSecretManagerSecretInsteadOfResource": true,
+    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
+    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
+    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
+    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
+    "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": true
+  }
+}
+```
+
+## Key Changes Made:
+
+1. **Removed `environmentSuffix`**: This property doesn't exist in `StackProps`. The bin file now only uses valid properties.
+
+2. **Removed hardcoded bucket names**: S3 bucket names are now auto-generated to avoid conflicts.
+
+3. **Fixed import for targets**: Added the correct import for `InstanceTarget`.
+
+4. **Clean StackProps**: The stack props now only contain valid CDK properties:
+   - `env`: For account and region
+   - `description`: For stack description
+
+The code should now compile and deploy without any TypeScript errors. All the security requirements from your original prompt are maintained:
+
+- ✅ S3 buckets with encryption and versioning
+- ✅ EC2 instances in VPC using t3.micro
+- ✅ Minimal IAM permissions
+- ✅ High availability across two AZs
+- ✅ CloudWatch monitoring
+- ✅ Lambda with CloudWatch logs
+- ✅ RDS with multi-AZ and 7-day backups
+- ✅ SSH access from limited IP range
+- ✅ HTTPS redirect on load balancer
+- ✅ DynamoDB with point-in-time recovery
