@@ -648,12 +648,12 @@ export class RdsModule extends Construct {
     this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
       name: `${project}-${environment}-db-subnet-group-${Date.now()}`, // Add timestamp
       subnetIds,
-      description: `Database subnet group for ${project} ${environment}`, 
+      description: `Database subnet group for ${project} ${environment}`,
       tags: {
         Name: `${project}-${environment}-db-subnet-group`,
         Project: project,
         Environment: environment,
-        VpcId: vpcId, 
+        VpcId: vpcId,
       },
     });
 
