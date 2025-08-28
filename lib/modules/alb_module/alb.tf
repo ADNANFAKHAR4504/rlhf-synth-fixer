@@ -70,13 +70,11 @@ resource "aws_lb_target_group" "web" {
   }
 }
 
-# HTTP Listener (redirect to HTTPS if SSL is enabled)
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
-  # If no SSL certificate, forward to target group
   default_action {
       type             = "forward"
       target_group_arn = aws_lb_target_group.web.arn
@@ -89,27 +87,6 @@ resource "aws_lb_listener" "http" {
   })
 }
 
-# HTTPS Listener (only if SSL certificate is provided)
-resource "aws_lb_listener" "https" {
-  count = var.ssl_certificate_arn != "" ? 1 : 0
-
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = var.ssl_policy
-  certificate_arn   = var.ssl_certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web.arn
-  }
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-${var.project_name}-https-listener"
-    Type = "alb-listener"
-    Component = "alb"
-  })
-}
 
 # CloudWatch Alarms for ALB
 resource "aws_cloudwatch_metric_alarm" "alb_target_response_time" {
