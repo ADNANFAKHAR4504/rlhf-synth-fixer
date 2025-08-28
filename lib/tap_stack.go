@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudtrail"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
