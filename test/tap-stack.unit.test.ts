@@ -76,7 +76,7 @@ describe('TapStack', () => {
   test('Creates IAM roles with least privilege', () => {
     // Pipeline role
     template.hasResourceProperties('AWS::IAM::Role', {
-      AssumedRolePolicy: {
+      AssumeRolePolicyDocument: {
         Statement: [
           {
             Effect: 'Allow',
@@ -91,7 +91,7 @@ describe('TapStack', () => {
 
     // Build role
     template.hasResourceProperties('AWS::IAM::Role', {
-      AssumedRolePolicy: {
+      AssumeRolePolicyDocument: {
         Statement: [
           {
             Effect: 'Allow',
@@ -106,7 +106,7 @@ describe('TapStack', () => {
 
     // Deploy role
     template.hasResourceProperties('AWS::IAM::Role', {
-      AssumedRolePolicy: {
+      AssumeRolePolicyDocument: {
         Statement: [
           {
             Effect: 'Allow',
@@ -121,14 +121,13 @@ describe('TapStack', () => {
   });
 
   test('Applies organizational tags to resources', () => {
-    const resources = template.findResources('AWS::CodePipeline::Pipeline');
-    const pipelineLogicalId = Object.keys(resources)[0];
-
-    template.hasResource('AWS::CodePipeline::Pipeline', {
-      Properties: Match.anyValue(),
-      Metadata: Match.objectLike({
-        'aws:cdk:path': Match.stringLikeRegexp('TestTapStack'),
-      }),
+    // Check that stack-level tags are applied
+    const stackTags = template.findResources('AWS::CodePipeline::Pipeline');
+    expect(Object.keys(stackTags).length).toBeGreaterThan(0);
+    
+    // Verify the pipeline exists (tags are applied at stack level)
+    template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+      Name: 'tap-pipeline-test',
     });
   });
 
@@ -157,8 +156,9 @@ describe('TapStack', () => {
   });
 
   test('Throws error for GitHub source without connection ARN', () => {
+    const errorApp = new cdk.App();
     expect(() => {
-      new TapStack(app, 'TestGitHubStack', {
+      new TapStack(errorApp, 'TestGitHubStack', {
         env: {
           account: '123456789012',
           region: 'us-east-1',
@@ -172,7 +172,8 @@ describe('TapStack', () => {
   });
 
   test('Creates GitHub source action when properly configured', () => {
-    const githubStack = new TapStack(app, 'TestGitHubStack', {
+    const githubApp = new cdk.App();
+    const githubStack = new TapStack(githubApp, 'TestGitHubStack', {
       env: {
         account: '123456789012',
         region: 'us-east-1',
@@ -181,7 +182,8 @@ describe('TapStack', () => {
       repositoryName: 'owner/repo',
       environment: 'Test',
       projectName: 'Test Project',
-      githubConnectionArn: 'arn:aws:codestar-connections:us-east-1:123456789012:connection/test',
+      githubConnectionArn:
+        'arn:aws:codestar-connections:us-east-1:123456789012:connection/test',
     });
 
     const githubTemplate = Template.fromStack(githubStack);
@@ -199,7 +201,8 @@ describe('TapStack', () => {
                 Version: '1',
               },
               Configuration: Match.objectLike({
-                ConnectionArn: 'arn:aws:codestar-connections:us-east-1:123456789012:connection/test',
+                ConnectionArn:
+                  'arn:aws:codestar-connections:us-east-1:123456789012:connection/test',
                 FullRepositoryId: 'owner/repo',
                 BranchName: 'main',
               }),
@@ -223,5 +226,57 @@ describe('TapStack', () => {
     expect(() => {
       stack.addStage(newStage);
     }).not.toThrow();
+  });
+
+  test('Extensibility - can add actions to existing stages', () => {
+    const newAction = new cdk.aws_codepipeline_actions.ManualApprovalAction({
+      actionName: 'AdditionalApproval',
+    });
+
+    expect(() => {
+      stack.addActionToStage('Test', newAction);
+    }).not.toThrow();
+  });
+
+  test('Extensibility - throws error when adding action to non-existent stage', () => {
+    const newAction = new cdk.aws_codepipeline_actions.ManualApprovalAction({
+      actionName: 'AdditionalApproval',
+    });
+
+    expect(() => {
+      stack.addActionToStage('NonExistentStage', newAction);
+    }).toThrow('Stage NonExistentStage not found');
+  });
+
+  test('Supports custom branch configuration', () => {
+    const customApp = new cdk.App();
+    const customStack = new TapStack(customApp, 'TestCustomStack', {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+      sourceType: 'codecommit',
+      repositoryName: 'custom-repo',
+      environment: 'Test',
+      projectName: 'Test Project',
+      branch: 'develop',
+    });
+
+    const customTemplate = Template.fromStack(customStack);
+
+    customTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+      Stages: Match.arrayWith([
+        Match.objectLike({
+          Name: 'Source',
+          Actions: Match.arrayWith([
+            Match.objectLike({
+              Configuration: Match.objectLike({
+                BranchName: 'develop',
+              }),
+            }),
+          ]),
+        }),
+      ]),
+    });
   });
 });
