@@ -646,8 +646,8 @@ export class RdsModule extends Construct {
       kmsKey,
     } = props;
 
-    const vpcShortId = vpcId.substring(4, 12);
-    const subnetGroupName = `${project}-${environment}-${vpcShortId}-db-sg`;
+    // const vpcShortId = vpcId.substring(4, 12);
+    const subnetGroupName = 'dev-db-sg';
 
     // Create DB subnet group
     this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
