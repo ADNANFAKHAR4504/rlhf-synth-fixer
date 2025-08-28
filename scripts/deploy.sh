@@ -100,6 +100,12 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   cd lib
   
+
+  # Always remove any stale Terraform plan to avoid cross-run reuse
+  rm -f tfplan
+  
+  # Check if plan file exists
+
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
     npm run tf:deploy
