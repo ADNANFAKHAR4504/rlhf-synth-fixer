@@ -36,7 +36,7 @@ describe('TapStack', () => {
 
     test('Secrets Manager secret is created', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Description: 'Application secrets for tap dev',
+        Description: `Application secrets for tap ${environmentSuffix}`,
       });
     });
 
@@ -463,6 +463,41 @@ describe('TapStack', () => {
           WriteCapacityUnits: 2000
         }
       });
+    });
+  });
+
+  describe('TapApp', () => {
+    test('TapApp creates stack correctly', () => {
+      const tapApp = new TapApp();
+      expect(tapApp).toBeInstanceOf(cdk.App);
+      
+      // Check that the app has the expected stack
+      const stacks = tapApp.node.children;
+      expect(stacks.length).toBeGreaterThan(0);
+    });
+
+    test('TapApp synth method works', () => {
+      const tapApp = new TapApp();
+      const synthResult = tapApp.synth();
+      expect(synthResult).toBeDefined();
+      expect(synthResult.stacks.length).toBeGreaterThan(0);
+    });
+
+    test('Direct execution scenario coverage', () => {
+      // This test covers the direct execution logic by simulating it
+      // The actual lines 741-742 cannot be covered in a normal test environment
+      // since they only execute when the file is run directly (require.main === module)
+      
+      // We'll test the equivalent logic to ensure the behavior is correct
+      const tapApp = new TapApp();
+      expect(() => {
+        tapApp.synth();
+      }).not.toThrow();
+      
+      // Verify the synth result contains the expected stack
+      const synthResult = tapApp.synth();
+      expect(synthResult.stacks).toHaveLength(1);
+      expect(synthResult.stacks[0].stackName).toMatch(/TapStack/);
     });
   });
 });
