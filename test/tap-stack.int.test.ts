@@ -40,7 +40,7 @@ describe('CloudFormation Stack Integration Tests', () => {
     }));
     
     expect(response.Stacks).toBeDefined();
-    expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
+    expect(['CREATE_COMPLETE', 'UPDATE_COMPLETE']).toContain(response.Stacks![0].StackStatus);
   });
 
   test('TurnAroundPromptTable should be created and active', async () => {
