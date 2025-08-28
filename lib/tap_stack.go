@@ -42,7 +42,7 @@ type TapStackConfig struct {
 	AllowedIpRanges []*string
 }
 
-func NewTapStack(scope constructs.Construct, id *string, config *TapStackConfig) cdktf.TerraformStack {
+func NewTapStack(scope cdktf.App, id *string, config *TapStackConfig) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, id)
 
 	// Get environment suffix

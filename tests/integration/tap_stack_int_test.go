@@ -813,7 +813,7 @@ func TestSecurityGroupRules(t *testing.T) {
 	}
 
 	bastionSG := bastionSGResult.SecurityGroups[0]
-	
+
 	// Check SSH ingress rule
 	sshIngressFound := false
 	for _, rule := range bastionSG.IpPermissions {
@@ -959,7 +959,7 @@ func TestComplianceAndSecurity(t *testing.T) {
 
 			if len(sgResult.SecurityGroups) > 0 {
 				sg := sgResult.SecurityGroups[0]
-				
+
 				// Check for overly permissive rules
 				for _, rule := range sg.IpPermissions {
 					for _, ipRange := range rule.IpRanges {
@@ -1002,4 +1002,3 @@ func TestComplianceAndSecurity(t *testing.T) {
 
 	t.Log("Compliance and security checks completed")
 }
-		
