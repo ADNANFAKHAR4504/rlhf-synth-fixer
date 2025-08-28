@@ -8,6 +8,7 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import { randomBytes } from 'crypto';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -18,6 +19,8 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
+    const randomId = randomBytes(4).toString('hex');
+    const uniqueSuffix = `${environmentSuffix}-${randomId}`;
 
     // ======================
     // VPC AND NETWORKING
@@ -25,7 +28,7 @@ export class TapStack extends cdk.Stack {
 
     const vpc = new ec2.Vpc(this, `TapVpc${environmentSuffix}`, {
       maxAzs: 2,
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       natGateways: 2,
       subnetConfiguration: [
         {
@@ -53,14 +56,14 @@ export class TapStack extends cdk.Stack {
       this,
       `VpcFlowLogGroup${environmentSuffix}`,
       {
-        logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        logGroupName: `/aws/vpc/flowlogs-${uniqueSuffix}`,
         retention: logs.RetentionDays.ONE_WEEK,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
     const flowLogRole = new iam.Role(this, `FlowLogRole${environmentSuffix}`, {
-      roleName: `tap-flowlog-role-${environmentSuffix}`,
+      roleName: `tap-flowlog-role-${uniqueSuffix}`,
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
       inlinePolicies: {
         FlowLogPolicy: new iam.PolicyDocument({
@@ -97,7 +100,7 @@ export class TapStack extends cdk.Stack {
       this,
       `LambdaSecurityGroup${environmentSuffix}`,
       {
-        securityGroupName: `tap-lambda-sg-${environmentSuffix}`,
+        securityGroupName: `tap-lambda-sg-${uniqueSuffix}`,
         vpc,
         description: 'Security group for Lambda functions',
         allowAllOutbound: true,
@@ -108,7 +111,7 @@ export class TapStack extends cdk.Stack {
       this,
       `RdsSecurityGroup${environmentSuffix}`,
       {
-        securityGroupName: `tap-rds-sg-${environmentSuffix}`,
+        securityGroupName: `tap-rds-sg-${uniqueSuffix}`,
         vpc,
         description: 'Security group for RDS database',
         allowAllOutbound: false,
@@ -129,7 +132,7 @@ export class TapStack extends cdk.Stack {
       this,
       `TapDbSubnetGroup${environmentSuffix}`,
       {
-        subnetGroupName: `tap-db-subnet-group-${environmentSuffix}`,
+        subnetGroupName: `tap-db-subnet-group-${uniqueSuffix}`,
         vpc,
         description: 'Subnet group for RDS database',
         vpcSubnets: {
@@ -142,7 +145,7 @@ export class TapStack extends cdk.Stack {
       this,
       `TapDbCredentials${environmentSuffix}`,
       {
-        secretName: `tap-db-credentials-${environmentSuffix}`,
+        secretName: `tap-db-credentials-${uniqueSuffix}`,
         description: 'RDS database credentials',
         generateSecretString: {
           secretStringTemplate: JSON.stringify({ username: 'admin' }),
@@ -158,7 +161,7 @@ export class TapStack extends cdk.Stack {
       this,
       `TapDatabase${environmentSuffix}`,
       {
-        instanceIdentifier: `tap-database-${environmentSuffix}`,
+        instanceIdentifier: `tap-database-${uniqueSuffix}`,
         engine: rds.DatabaseInstanceEngine.mysql({
           version: rds.MysqlEngineVersion.VER_8_0_35,
         }),
@@ -193,7 +196,7 @@ export class TapStack extends cdk.Stack {
       this,
       `TapBackupBucket${environmentSuffix}`,
       {
-        bucketName: `tap-backup-bucket-${environmentSuffix.toLowerCase()}`,
+        bucketName: `tap-backup-bucket-${uniqueSuffix.toLowerCase()}`,
         versioned: true,
         encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -223,7 +226,7 @@ export class TapStack extends cdk.Stack {
     // ======================
 
     const lambdaRole = new iam.Role(this, `TapLambdaRole${environmentSuffix}`, {
-      roleName: `tap-lambda-role-${environmentSuffix}`,
+      roleName: `tap-lambda-role-${uniqueSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -271,7 +274,7 @@ export class TapStack extends cdk.Stack {
       this,
       `TapApiLambda${environmentSuffix}`,
       {
-        functionName: `tap-api-lambda-${environmentSuffix}`,
+        functionName: `tap-api-lambda-${uniqueSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.handler',
         code: lambda.Code.fromInline(`
@@ -335,7 +338,7 @@ export class TapStack extends cdk.Stack {
       this,
       `TapDbLambda${environmentSuffix}`,
       {
-        functionName: `tap-db-lambda-${environmentSuffix}`,
+        functionName: `tap-db-lambda-${uniqueSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.handler',
         code: lambda.Code.fromInline(`

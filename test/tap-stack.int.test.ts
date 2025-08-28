@@ -98,4 +98,97 @@ describe('TAP Infrastructure Integration Tests', () => {
       );
     });
   });
+
+  describe('S3 Bucket Integration', () => {
+    test('should have accessible backup bucket', () => {
+      if (!hasOutputs) {
+        console.log('Skipping integration tests - no deployment outputs found');
+        return;
+      }
+
+      // Verify bucket name follows naming convention
+      expect(outputs.BackupBucketName).toMatch(
+        /^tap-backup-bucket-.+$/
+      );
+      expect(outputs.BackupBucketName.length).toBeLessThanOrEqual(63); // S3 bucket name limit
+    });
+  });
+
+  describe('Lambda Functions Integration', () => {
+    test('should have valid Lambda function ARN', () => {
+      if (!hasOutputs) {
+        console.log('Skipping integration tests - no deployment outputs found');
+        return;
+      }
+
+      // Verify Lambda function ARN format
+      expect(outputs.LambdaFunctionArn).toMatch(
+        /^arn:aws:lambda:.+:function:tap-api-lambda-.+$/
+      );
+    });
+  });
+
+  describe('VPC Integration', () => {
+    test('should have valid VPC configuration', () => {
+      if (!hasOutputs) {
+        console.log('Skipping integration tests - no deployment outputs found');
+        return;
+      }
+
+      // Verify VPC ID format
+      expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
+    });
+  });
+
+  describe('End-to-End Workflow Validation', () => {
+    test('should have all components properly connected', () => {
+      if (!hasOutputs) {
+        console.log('Skipping integration tests - no deployment outputs found');
+        return;
+      }
+
+      // Verify all components exist for a complete workflow
+      const requiredComponents = [
+        'VpcId',
+        'DatabaseEndpoint', 
+        'DatabaseSecretArn',
+        'ApiGatewayUrl',
+        'BackupBucketName',
+        'LambdaFunctionArn'
+      ];
+
+      requiredComponents.forEach(component => {
+        expect(outputs).toHaveProperty(component);
+        expect(outputs[component]).toBeTruthy();
+        expect(typeof outputs[component]).toBe('string');
+      });
+    });
+
+    test('should have consistent resource naming across components', () => {
+      if (!hasOutputs) {
+        console.log('Skipping integration tests - no deployment outputs found');
+        return;
+      }
+
+      // Extract suffix from one resource and verify it's consistent across others
+      const bucketNameMatch = outputs.BackupBucketName.match(/tap-backup-bucket-(.+)$/);
+      if (bucketNameMatch) {
+        const extractedSuffix = bucketNameMatch[1];
+        
+        // Verify other resources use similar suffix pattern
+        expect(outputs.DatabaseEndpoint).toContain(`tap-database-${extractedSuffix.split('-')[0]}`);
+        expect(outputs.DatabaseSecretArn).toContain(`tap-db-credentials-${extractedSuffix.split('-')[0]}`);
+      }
+    });
+  });
 });
+
+// Additional test helper functions for integration testing
+export function validateAwsResourceNaming(resourceName: string, expectedPrefix: string): boolean {
+  return resourceName.startsWith(expectedPrefix) && resourceName.length > expectedPrefix.length;
+}
+
+export function extractEnvironmentSuffix(resourceName: string, prefix: string): string | null {
+  const match = resourceName.match(new RegExp(`^${prefix}-(.+)$`));
+  return match ? match[1] : null;
+}

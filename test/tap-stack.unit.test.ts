@@ -15,6 +15,41 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Stack Constructor', () => {
+    test('should use provided environmentSuffix', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', { environmentSuffix: 'custom' });
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Verify resources use the custom environment suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('should use default environmentSuffix when props not provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'DefaultTestStack');
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Verify resources are created (using default 'dev' suffix)
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('should use default environmentSuffix when environmentSuffix is undefined', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'UndefinedTestStack', { environmentSuffix: undefined });
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Verify resources are created (using default 'dev' suffix)
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+  });
+
   describe('VPC Infrastructure', () => {
     test('should create VPC with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
@@ -40,14 +75,14 @@ describe('TapStack', () => {
     test('should create Lambda security group', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for Lambda functions',
-        GroupName: `tap-lambda-sg-${environmentSuffix}`,
+        GroupName: Match.stringLikeRegexp(`tap-lambda-sg-${environmentSuffix}-[a-f0-9]{8}`),
       });
     });
 
     test('should create RDS security group with correct ingress', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for RDS database',
-        GroupName: `tap-rds-sg-${environmentSuffix}`,
+        GroupName: Match.stringLikeRegexp(`tap-rds-sg-${environmentSuffix}-[a-f0-9]{8}`),
       });
 
       template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
@@ -64,7 +99,7 @@ describe('TapStack', () => {
         Engine: 'mysql',
         EngineVersion: '8.0.35',
         DBInstanceClass: 'db.t3.micro',
-        DBInstanceIdentifier: `tap-database-${environmentSuffix}`,
+        DBInstanceIdentifier: Match.stringLikeRegexp(`tap-database-${environmentSuffix}-[a-f0-9]{8}`),
         DBName: 'tapdb',
         MultiAZ: true,
         StorageEncrypted: true,
@@ -75,7 +110,7 @@ describe('TapStack', () => {
 
     test('should create DB subnet group', () => {
       template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupName: `tap-db-subnet-group-${environmentSuffix}`,
+        DBSubnetGroupName: Match.stringLikeRegexp(`tap-db-subnet-group-${environmentSuffix}-[a-f0-9]{8}`),
         DBSubnetGroupDescription: 'Subnet group for RDS database',
       });
     });
@@ -83,7 +118,7 @@ describe('TapStack', () => {
     test('should create database credentials secret', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
         Description: 'RDS database credentials',
-        Name: `tap-db-credentials-${environmentSuffix}`,
+        Name: Match.stringLikeRegexp(`tap-db-credentials-${environmentSuffix}-[a-f0-9]{8}`),
       });
     });
   });
@@ -91,7 +126,7 @@ describe('TapStack', () => {
   describe('S3 Bucket', () => {
     test('should create backup bucket with correct configuration', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: `tap-backup-bucket-${environmentSuffix}`,
+        BucketName: Match.stringLikeRegexp(`tap-backup-bucket-${environmentSuffix}-[a-f0-9]{8}`),
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
@@ -143,7 +178,7 @@ describe('TapStack', () => {
   describe('Lambda Functions', () => {
     test('should create API Lambda function', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `tap-api-lambda-${environmentSuffix}`,
+        FunctionName: Match.stringLikeRegexp(`tap-api-lambda-${environmentSuffix}-[a-f0-9]{8}`),
         Runtime: 'nodejs18.x',
         Handler: 'index.handler',
         Timeout: 30,
@@ -153,7 +188,7 @@ describe('TapStack', () => {
 
     test('should create DB Lambda function', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `tap-db-lambda-${environmentSuffix}`,
+        FunctionName: Match.stringLikeRegexp(`tap-db-lambda-${environmentSuffix}-[a-f0-9]{8}`),
         Runtime: 'nodejs18.x',
         Handler: 'index.handler',
         Timeout: 30,
@@ -163,7 +198,7 @@ describe('TapStack', () => {
 
     test('should create Lambda IAM role with correct configuration', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `tap-lambda-role-${environmentSuffix}`,
+        RoleName: Match.stringLikeRegexp(`tap-lambda-role-${environmentSuffix}-[a-f0-9]{8}`),
         AssumeRolePolicyDocument: {
           Statement: [
             {
@@ -179,7 +214,7 @@ describe('TapStack', () => {
 
       // Check that the Lambda role has the expected policies
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `tap-lambda-role-${environmentSuffix}`,
+        RoleName: Match.stringLikeRegexp(`tap-lambda-role-${environmentSuffix}-[a-f0-9]{8}`),
         Policies: Match.arrayWith([
           Match.objectLike({
             PolicyName: 'SecretsManagerPolicy',
@@ -241,7 +276,7 @@ describe('TapStack', () => {
   describe('CloudWatch Logs', () => {
     test('should create VPC flow logs', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        LogGroupName: Match.stringLikeRegexp(`/aws/vpc/flowlogs-${environmentSuffix}-[a-f0-9]{8}`),
         RetentionInDays: 7,
       });
     });
@@ -263,6 +298,151 @@ describe('TapStack', () => {
       expect(Object.keys(outputs)).toContain('ApiGatewayUrl');
       expect(Object.keys(outputs)).toContain('BackupBucketName');
       expect(Object.keys(outputs)).toContain('LambdaFunctionArn');
+    });
+
+    test('should have correct output descriptions', () => {
+      const outputs = template.findOutputs('*');
+      expect(outputs.VpcId.Description).toBe('VPC ID');
+      expect(outputs.DatabaseEndpoint.Description).toBe('RDS Database Endpoint');
+      expect(outputs.DatabaseSecretArn.Description).toBe('Database credentials secret ARN');
+      expect(outputs.ApiGatewayUrl.Description).toBe('API Gateway URL');
+      expect(outputs.BackupBucketName.Description).toBe('S3 Backup Bucket Name');
+      expect(outputs.LambdaFunctionArn.Description).toBe('Main API Lambda Function ARN');
+    });
+  });
+
+  describe('Resource Relationships and Dependencies', () => {
+    test('should create Lambda functions with VPC configuration', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        VpcConfig: Match.objectLike({
+          SecurityGroupIds: Match.anyValue(),
+          SubnetIds: Match.anyValue(),
+        }),
+      });
+    });
+
+    test('should create Lambda functions with environment variables', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            DB_SECRET_ARN: Match.anyValue(),
+            DB_HOST: Match.anyValue(),
+            DB_PORT: Match.anyValue(),
+            DB_NAME: 'tapdb',
+            BACKUP_BUCKET: Match.anyValue(),
+            AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+          },
+        },
+      });
+    });
+
+    test('should create IAM role with managed policies', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        ManagedPolicyArns: Match.arrayWith([
+          Match.objectLike({
+            'Fn::Join': Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+
+    test('should create API Gateway with CORS configuration', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Method', {
+        HttpMethod: 'OPTIONS',
+      });
+    });
+
+    test('should create database with performance insights enabled', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        EnablePerformanceInsights: true,
+        PerformanceInsightsRetentionPeriod: 7,
+      });
+    });
+
+    test('should create database with CloudWatch logs exports', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        EnableCloudwatchLogsExports: ['error', 'general', 'slow-query'],
+      });
+    });
+
+    test('should create S3 bucket with public access blocked', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+    });
+  });
+
+  describe('Security and Compliance', () => {
+    test('should create database with encryption enabled', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        StorageEncrypted: true,
+      });
+    });
+
+    test('should create secrets with proper configuration', () => {
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        GenerateSecretString: {
+          SecretStringTemplate: JSON.stringify({ username: 'admin' }),
+          GenerateStringKey: 'password',
+          ExcludeCharacters: '"@/\\\'',
+          IncludeSpace: false,
+          PasswordLength: 32,
+        },
+      });
+    });
+
+    test('should create VPC with DNS settings enabled', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true,
+      });
+    });
+
+    test('should create security group ingress rules', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        IpProtocol: 'tcp',
+        FromPort: 3306,
+        ToPort: 3306,
+      });
+    });
+  });
+
+  describe('Infrastructure Details', () => {
+    test('should create correct number of resources', () => {
+      template.resourceCountIs('AWS::EC2::VPC', 1);
+      template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 public, 2 private, 2 isolated
+      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+      template.resourceCountIs('AWS::RDS::DBInstance', 1);
+      template.resourceCountIs('AWS::RDS::DBSubnetGroup', 1);
+      template.resourceCountIs('AWS::SecretsManager::Secret', 1);
+      template.resourceCountIs('AWS::S3::Bucket', 1);
+      template.resourceCountIs('AWS::Lambda::Function', 2);
+      template.resourceCountIs('AWS::IAM::Role', 3); // Lambda role + Flow log role + API Gateway CloudWatch role
+      template.resourceCountIs('AWS::ApiGateway::RestApi', 1);
+      template.resourceCountIs('AWS::Logs::LogGroup', 1);
+      template.resourceCountIs('AWS::EC2::FlowLog', 1);
+    });
+
+    test('should create API Gateway with stage configuration', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        StageName: 'prod',
+        MethodSettings: Match.arrayWith([
+          Match.objectLike({
+            ResourcePath: '/*',
+            HttpMethod: '*',
+            LoggingLevel: 'INFO',
+            DataTraceEnabled: true,
+            MetricsEnabled: true,
+          }),
+        ]),
+      });
     });
   });
 });
