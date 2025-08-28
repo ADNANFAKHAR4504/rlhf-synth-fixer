@@ -430,7 +430,7 @@ Resources:
       ApplicationName: !Ref ElasticBeanstalkApplication
       EnvironmentName: !Sub "cicd-dev-${EnvironmentSuffix}"
       Description: "Development environment for CI/CD pipeline"
-      SolutionStackName: "64bit Amazon Linux 2023 v4.3.0 running Python 3.11"
+      SolutionStackName: "64bit Amazon Linux 2023 v6.1.0 running Python 3.12"
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -464,7 +464,7 @@ Resources:
       ApplicationName: !Ref ElasticBeanstalkApplication
       EnvironmentName: !Sub "cicd-test-${EnvironmentSuffix}"
       Description: "Testing environment for CI/CD pipeline"
-      SolutionStackName: "64bit Amazon Linux 2023 v4.3.0 running Python 3.11"
+      SolutionStackName: "64bit Amazon Linux 2023 v6.1.0 running Python 3.12"
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -498,7 +498,7 @@ Resources:
       ApplicationName: !Ref ElasticBeanstalkApplication
       EnvironmentName: !Sub "cicd-prod-${EnvironmentSuffix}"
       Description: "Production environment for CI/CD pipeline"
-      SolutionStackName: "64bit Amazon Linux 2023 v4.3.0 running Python 3.11"
+      SolutionStackName: "64bit Amazon Linux 2023 v6.1.0 running Python 3.12"
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
