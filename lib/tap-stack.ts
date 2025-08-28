@@ -9,15 +9,21 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // ======================
     // VPC AND NETWORKING
     // ======================
 
-    const vpc = new ec2.Vpc(this, 'TapVpc', {
+    const vpc = new ec2.Vpc(this, `TapVpc${environmentSuffix}`, {
       maxAzs: 2,
       cidr: '10.0.0.0/16',
       natGateways: 2,
@@ -43,12 +49,18 @@ export class TapStack extends cdk.Stack {
     });
 
     // VPC Flow Logs
-    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const flowLogGroup = new logs.LogGroup(
+      this,
+      `VpcFlowLogGroup${environmentSuffix}`,
+      {
+        logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
-    const flowLogRole = new iam.Role(this, 'FlowLogRole', {
+    const flowLogRole = new iam.Role(this, `FlowLogRole${environmentSuffix}`, {
+      roleName: `tap-flowlog-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
       inlinePolicies: {
         FlowLogPolicy: new iam.PolicyDocument({
@@ -69,7 +81,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    new ec2.FlowLog(this, 'TapVpcFlowLog', {
+    new ec2.FlowLog(this, `TapVpcFlowLog${environmentSuffix}`, {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
       destination: ec2.FlowLogDestination.toCloudWatchLogs(
         flowLogGroup,
@@ -83,19 +95,25 @@ export class TapStack extends cdk.Stack {
 
     const lambdaSecurityGroup = new ec2.SecurityGroup(
       this,
-      'LambdaSecurityGroup',
+      `LambdaSecurityGroup${environmentSuffix}`,
       {
+        securityGroupName: `tap-lambda-sg-${environmentSuffix}`,
         vpc,
         description: 'Security group for Lambda functions',
         allowAllOutbound: true,
       }
     );
 
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
-      vpc,
-      description: 'Security group for RDS database',
-      allowAllOutbound: false,
-    });
+    const rdsSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `RdsSecurityGroup${environmentSuffix}`,
+      {
+        securityGroupName: `tap-rds-sg-${environmentSuffix}`,
+        vpc,
+        description: 'Security group for RDS database',
+        allowAllOutbound: false,
+      }
+    );
 
     rdsSecurityGroup.addIngressRule(
       lambdaSecurityGroup,
@@ -107,84 +125,105 @@ export class TapStack extends cdk.Stack {
     // RDS DATABASE
     // ======================
 
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'TapDbSubnetGroup', {
-      vpc,
-      description: 'Subnet group for RDS database',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
+    const dbSubnetGroup = new rds.SubnetGroup(
+      this,
+      `TapDbSubnetGroup${environmentSuffix}`,
+      {
+        subnetGroupName: `tap-db-subnet-group-${environmentSuffix}`,
+        vpc,
+        description: 'Subnet group for RDS database',
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+        },
+      }
+    );
 
-    const dbCredentials = new secretsmanager.Secret(this, 'TapDbCredentials', {
-      description: 'RDS database credentials',
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'admin' }),
-        generateStringKey: 'password',
-        excludeCharacters: '"@/\\\'',
-        includeSpace: false,
-        passwordLength: 32,
-      },
-    });
+    const dbCredentials = new secretsmanager.Secret(
+      this,
+      `TapDbCredentials${environmentSuffix}`,
+      {
+        secretName: `tap-db-credentials-${environmentSuffix}`,
+        description: 'RDS database credentials',
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({ username: 'admin' }),
+          generateStringKey: 'password',
+          excludeCharacters: '"@/\\\'',
+          includeSpace: false,
+          passwordLength: 32,
+        },
+      }
+    );
 
-    const database = new rds.DatabaseInstance(this, 'TapDatabase', {
-      engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      credentials: rds.Credentials.fromSecret(dbCredentials),
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [rdsSecurityGroup],
-      multiAz: true,
-      storageEncrypted: true,
-      backupRetention: cdk.Duration.days(7),
-      deletionProtection: false,
-      deleteAutomatedBackups: false,
-      databaseName: 'tapdb',
-      allocatedStorage: 20,
-      maxAllocatedStorage: 100,
-      enablePerformanceInsights: true,
-      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-      cloudwatchLogsExports: ['error', 'general', 'slow-query'],
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const database = new rds.DatabaseInstance(
+      this,
+      `TapDatabase${environmentSuffix}`,
+      {
+        instanceIdentifier: `tap-database-${environmentSuffix}`,
+        engine: rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0_35,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        credentials: rds.Credentials.fromSecret(dbCredentials),
+        vpc,
+        subnetGroup: dbSubnetGroup,
+        securityGroups: [rdsSecurityGroup],
+        multiAz: true,
+        storageEncrypted: true,
+        backupRetention: cdk.Duration.days(7),
+        deletionProtection: false,
+        deleteAutomatedBackups: false,
+        databaseName: 'tapdb',
+        allocatedStorage: 20,
+        maxAllocatedStorage: 100,
+        enablePerformanceInsights: true,
+        performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+        cloudwatchLogsExports: ['error', 'general', 'slow-query'],
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // ======================
     // S3 BUCKET FOR BACKUPS
     // ======================
 
-    const backupBucket = new s3.Bucket(this, 'TapBackupBucket', {
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      lifecycleRules: [
-        {
-          id: 'backup-lifecycle',
-          enabled: true,
-          noncurrentVersionExpiration: cdk.Duration.days(90),
-          transitions: [
-            {
-              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30),
-            },
-            {
-              storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: cdk.Duration.days(90),
-            },
-          ],
-        },
-      ],
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const backupBucket = new s3.Bucket(
+      this,
+      `TapBackupBucket${environmentSuffix}`,
+      {
+        bucketName: `tap-backup-bucket-${environmentSuffix.toLowerCase()}`,
+        versioned: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        lifecycleRules: [
+          {
+            id: 'backup-lifecycle',
+            enabled: true,
+            noncurrentVersionExpiration: cdk.Duration.days(90),
+            transitions: [
+              {
+                storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+                transitionAfter: cdk.Duration.days(30),
+              },
+              {
+                storageClass: s3.StorageClass.GLACIER,
+                transitionAfter: cdk.Duration.days(90),
+              },
+            ],
+          },
+        ],
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // ======================
     // IAM ROLES AND POLICIES
     // ======================
 
-    const lambdaRole = new iam.Role(this, 'TapLambdaRole', {
+    const lambdaRole = new iam.Role(this, `TapLambdaRole${environmentSuffix}`, {
+      roleName: `tap-lambda-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -228,10 +267,14 @@ export class TapStack extends cdk.Stack {
     // LAMBDA FUNCTIONS
     // ======================
 
-    const apiLambda = new lambda.Function(this, 'TapApiLambda', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const apiLambda = new lambda.Function(
+      this,
+      `TapApiLambda${environmentSuffix}`,
+      {
+        functionName: `tap-api-lambda-${environmentSuffix}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
         exports.handler = async (event) => {
           console.log('Event:', JSON.stringify(event, null, 2));
           
@@ -269,28 +312,33 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      role: lambdaRole,
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
-      environment: {
-        DB_SECRET_ARN: dbCredentials.secretArn,
-        DB_HOST: database.instanceEndpoint.hostname,
-        DB_PORT: database.instanceEndpoint.port.toString(),
-        DB_NAME: 'tapdb',
-        BACKUP_BUCKET: backupBucket.bucketName,
-        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-      },
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-    });
+        role: lambdaRole,
+        vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        securityGroups: [lambdaSecurityGroup],
+        environment: {
+          DB_SECRET_ARN: dbCredentials.secretArn,
+          DB_HOST: database.instanceEndpoint.hostname,
+          DB_PORT: database.instanceEndpoint.port.toString(),
+          DB_NAME: 'tapdb',
+          BACKUP_BUCKET: backupBucket.bucketName,
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+        },
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 256,
+      }
+    );
 
-    const dbLambda = new lambda.Function(this, 'TapDbLambda', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const dbLambda = new lambda.Function(
+      this,
+      `TapDbLambda${environmentSuffix}`,
+      {
+        functionName: `tap-db-lambda-${environmentSuffix}`,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
         const { SecretsManagerClient, GetSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
         
         const secretsManager = new SecretsManagerClient({ region: process.env.AWS_REGION });
@@ -335,30 +383,31 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      role: lambdaRole,
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      securityGroups: [lambdaSecurityGroup],
-      environment: {
-        DB_SECRET_ARN: dbCredentials.secretArn,
-        DB_HOST: database.instanceEndpoint.hostname,
-        DB_PORT: database.instanceEndpoint.port.toString(),
-        DB_NAME: 'tapdb',
-        BACKUP_BUCKET: backupBucket.bucketName,
-        AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
-      },
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 256,
-    });
+        role: lambdaRole,
+        vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        securityGroups: [lambdaSecurityGroup],
+        environment: {
+          DB_SECRET_ARN: dbCredentials.secretArn,
+          DB_HOST: database.instanceEndpoint.hostname,
+          DB_PORT: database.instanceEndpoint.port.toString(),
+          DB_NAME: 'tapdb',
+          BACKUP_BUCKET: backupBucket.bucketName,
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
+        },
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 256,
+      }
+    );
 
     // ======================
     // API GATEWAY
     // ======================
 
-    const api = new apigateway.RestApi(this, 'TapApi', {
-      restApiName: 'Tap Application API',
+    const api = new apigateway.RestApi(this, `TapApi${environmentSuffix}`, {
+      restApiName: `Tap Application API ${environmentSuffix}`,
       description: 'API Gateway for Tap application backend',
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
