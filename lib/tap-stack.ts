@@ -194,7 +194,7 @@ export class TapStack extends TerraformStack {
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       username: 'admin',
-      password: dbPasswordSecret.secretString,
+      password: `\${jsondecode(${dbPasswordSecret.secretString}).password}`,
       vpcId: vpc.vpcIdOutput,
       privateSubnetIds: vpc.privateSubnetIdsOutput,
       dbSecurityGroupId: dbSecurityGroup.id,
