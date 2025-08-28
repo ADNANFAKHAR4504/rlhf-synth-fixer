@@ -25,11 +25,6 @@ Metadata:
         Parameters:
           - TrustedIpRange
           - ComplianceRetentionDays
-      - Label:
-          default: "Monitoring Configuration"
-        Parameters:
-          - EnableDetailedMonitoring
-          - NotificationEmail
 
 Parameters:
   Environment:
@@ -67,17 +62,6 @@ Parameters:
     MaxValue: 3653
     Description: Log retention period in days for compliance (minimum 1 year, maximum 10 years)
 
-  EnableDetailedMonitoring:
-    Type: String
-    Default: "true"
-    AllowedValues: ["true", "false"]
-    Description: Enable detailed CloudWatch monitoring for enhanced observability
-
-  NotificationEmail:
-    Type: String
-    Description: Email address for security notifications and alerts
-    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
-
 Resources:
   # ================================
   # KMS ENCRYPTION KEYS
@@ -110,7 +94,7 @@ Resources:
             Condition:
               StringEquals:
                 "kms:ViaService": !Sub "s3.${AWS::Region}.amazonaws.com"
-      KeyRotationStatus: true
+      EnableKeyRotation: true
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-s3-encryption-key-${Environment}"
@@ -155,7 +139,7 @@ Resources:
             Condition:
               StringEquals:
                 "kms:ViaService": !Sub "cloudtrail.${AWS::Region}.amazonaws.com"
-      KeyRotationStatus: true
+      EnableKeyRotation: true
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-cloudtrail-encryption-key-${Environment}"
@@ -300,11 +284,11 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
           Description: "HTTP outbound for package updates"
-        # Database access to data tier
+        # Database access to data tier (will be configured after data tier is created)
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          DestinationSecurityGroupId: !Ref DataTierSecurityGroup
+          CidrIp: 0.0.0.0/0
           Description: "MySQL access to data tier"
       Tags:
         - Key: Name
@@ -653,11 +637,7 @@ Resources:
                 StorageClass: GLACIER
               - TransitionInDays: 365
                 StorageClass: DEEP_ARCHIVE
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3AccessLogGroup
+
       LoggingConfiguration:
         DestinationBucketName: !Ref S3AccessLogsBucket
         LogFilePrefix: access-logs/
