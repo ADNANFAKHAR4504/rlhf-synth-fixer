@@ -686,7 +686,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -708,6 +708,7 @@ Resources:
   # S3 Bucket
   # ============================================================================
   S3Bucket:
+    DeletionPolicy: Delete
     Type: AWS::S3::Bucket
     Properties:
       BucketEncryption:
@@ -739,6 +740,7 @@ Resources:
   
   # S3 Bucket for CloudTrail Logs
   CloudTrailLogsBucket:
+    DeletionPolicy: Delete
     Type: AWS::S3::Bucket
     Properties:
       BucketEncryption:
@@ -783,6 +785,7 @@ Resources:
   # CloudTrail for API Monitoring
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailLogsBucket
     Properties:
       TrailName: !Sub '${AWS::StackName}-api-trail-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailLogsBucket
@@ -791,15 +794,11 @@ Resources:
       IsMultiRegionTrail: true
       IsLogging: true
       EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values: 
-                - !Sub '${S3Bucket}/*'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-api-trail-${EnvironmentSuffix}'
@@ -848,23 +847,23 @@ Resources:
     Properties:
       Bucket: !Ref CloudTrailLogsBucket
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailLogsBucket.Arn
+            Resource: !Sub "arn:aws:s3:::${CloudTrailLogsBucket}"
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailLogsBucket.Arn}/cloudtrail-logs/*'
+            Resource: !Sub "arn:aws:s3:::${CloudTrailLogsBucket}/cloudtrail-logs/*"
             Condition:
               StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
+                "s3:x-amz-acl": bucket-owner-full-control
 
   # ============================================================================
   # Secrets Manager for Database Password
@@ -1032,7 +1031,7 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-mysql-${EnvironmentSuffix}'
-      DBInstanceClass: db.t3.medium
+      DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.37'
       AllocatedStorage: 100
@@ -1049,8 +1048,7 @@ Resources:
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       MultiAZ: !If [CreateMultiAZ, true, false]
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref KMSKey
+      EnablePerformanceInsights: false
       DeletionProtection: !If [IsProduction, true, false]
       Tags:
         - Key: Name
