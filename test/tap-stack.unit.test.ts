@@ -396,7 +396,6 @@ describe('TapStack', () => {
         'public-ec2',
         expect.objectContaining({
           instanceType: 't3.micro',
-          keyName: 'turing-key',
           userData: expect.stringContaining('#!/bin/bash'),
         })
       );
@@ -407,7 +406,6 @@ describe('TapStack', () => {
         'private-ec2',
         expect.objectContaining({
           instanceType: 't3.micro',
-          keyName: 'turing-key',
         })
       );
     });
@@ -450,14 +448,14 @@ describe('TapStack', () => {
       expect(synthesized).toContain('"current"');
     });
 
-    it('should create DataAwsSecretsmanagerSecretVersion resource', () => {
+    it('should create DataAwsCallerIdentity resource correctly', () => {
       const stack = new TapStack(app, 'test-stack');
       const synthesized = Testing.synth(stack);
       
-      // Should contain secrets manager data source - check for the actual JSON structure
-      expect(synthesized).toContain('"aws_secretsmanager_secret_version"');
-      expect(synthesized).toContain('"db-password-secret"');
-      expect(synthesized).toContain('"my-db-password"');
+      // Should contain caller identity data source and not secrets manager (removed)
+      expect(synthesized).toContain('"aws_caller_identity"');
+      expect(synthesized).toContain('"current"');
+      expect(synthesized).not.toContain('"aws_secretsmanager_secret_version"');
     });
   });
 

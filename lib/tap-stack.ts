@@ -4,7 +4,6 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 
 import { Construct } from 'constructs';
 
@@ -81,15 +80,9 @@ export class TapStack extends TerraformStack {
       kmsKey: kmsModule.key,
     });
 
-    // Get database credentials from AWS Secrets Manager (optional - you might want to handle this differently)
-    // Configuration parameters
-    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
-      this,
-      'db-password-secret',
-      {
-        secretId: 'my-db-password',
-      }
-    );
+    // Generate a random password for RDS - in production, use AWS Secrets Manager
+    // For testing, we'll create a simple password that meets RDS requirements
+    const dbPassword = `TempPass${environmentSuffix}123!`;
 
     // Create CloudTrail for auditing
     // const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail', {
@@ -217,7 +210,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.publicSubnets[0].id,
       securityGroupIds: [publicEc2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: 'turing-key', // Replace with your key pair name
+      // keyName: 'turing-key', // Optional: Replace with your key pair name if needed
       userData: `#!/bin/bash
         yum update -y
         # Add your initialization scripts here
@@ -232,7 +225,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.privateSubnets[0].id,
       securityGroupIds: [privateEc2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: 'turing-key', // Replace with your key pair name
+      // keyName: 'turing-key', // Optional: Replace with your key pair name if needed
     });
 
     // Create RDS instance
@@ -244,8 +237,8 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       dbName: 'appdb',
       username: 'dbadmin',
-      password: dbPasswordSecret.secretString,
-      vpcId: 'string',
+      password: dbPassword,
+      vpcId: vpcModule.vpc.id,
       subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
       securityGroupIds: [rdsSecurityGroup.securityGroup.id],
       kmsKey: kmsModule.key,
