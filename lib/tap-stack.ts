@@ -52,7 +52,8 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     // Create the production infrastructure
-    const infrastructure = ProductionInfrastructure.create();
+    const environment = args.environmentSuffix || 'dev';
+    const infrastructure = ProductionInfrastructure.create(environment);
     const outputs = infrastructure.getOutputs();
 
     // Expose outputs from the infrastructure

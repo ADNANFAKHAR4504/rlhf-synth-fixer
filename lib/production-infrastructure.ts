@@ -3,7 +3,6 @@ import * as pulumi from '@pulumi/pulumi';
 
 // Configuration
 const config = new pulumi.Config();
-const environment = 'production';
 const region = 'ap-south-1';
 const allowedSshCidr = config.get('allowedSshCidr') || '0.0.0.0/0';
 
@@ -43,12 +42,14 @@ export class ProductionInfrastructure {
   public cpuAlarmHigh!: aws.cloudwatch.MetricAlarm;
   public cpuAlarmLow!: aws.cloudwatch.MetricAlarm;
 
-  private constructor() {
-    // Private constructor - use create() method instead
+  private environment: string;
+
+  private constructor(environment: string) {
+    this.environment = environment;
   }
 
-  public static create(): ProductionInfrastructure {
-    const instance = new ProductionInfrastructure();
+  public static create(environment: string): ProductionInfrastructure {
+    const instance = new ProductionInfrastructure(environment);
     instance.createNetworking();
     instance.createSecurity();
     instance.createStorage();
@@ -61,14 +62,14 @@ export class ProductionInfrastructure {
   private createNetworking() {
     // VPC
     this.vpc = new aws.ec2.Vpc(
-      `${environment}-vpc`,
+      `${this.environment}-vpc`,
       {
         cidrBlock: '10.0.0.0/16',
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: {
-          Name: `${environment}-vpc`,
-          environment: environment,
+          Name: `${this.environment}-vpc`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -87,15 +88,15 @@ export class ProductionInfrastructure {
     for (let i = 0; i < 2; i++) {
       this.publicSubnets.push(
         new aws.ec2.Subnet(
-          `${environment}-public-subnet-${i + 1}`,
+          `${this.environment}-public-subnet-${i + 1}`,
           {
             vpcId: this.vpc.id,
             cidrBlock: `10.0.${i + 1}.0/24`,
             availabilityZone: azs.then(azs => azs.names[i]),
             mapPublicIpOnLaunch: true,
             tags: {
-              Name: `${environment}-public-subnet-${i + 1}`,
-              environment: environment,
+              Name: `${this.environment}-public-subnet-${i + 1}`,
+              environment: this.environment,
               Type: 'Public',
             },
           },
@@ -109,14 +110,14 @@ export class ProductionInfrastructure {
     for (let i = 0; i < 2; i++) {
       this.privateSubnets.push(
         new aws.ec2.Subnet(
-          `${environment}-private-subnet-${i + 1}`,
+          `${this.environment}-private-subnet-${i + 1}`,
           {
             vpcId: this.vpc.id,
             cidrBlock: `10.0.${i + 10}.0/24`,
             availabilityZone: azs.then(azs => azs.names[i]),
             tags: {
-              Name: `${environment}-private-subnet-${i + 1}`,
-              environment: environment,
+              Name: `${this.environment}-private-subnet-${i + 1}`,
+              environment: this.environment,
               Type: 'Private',
             },
           },
@@ -127,12 +128,12 @@ export class ProductionInfrastructure {
 
     // Internet Gateway
     this.internetGateway = new aws.ec2.InternetGateway(
-      `${environment}-igw`,
+      `${this.environment}-igw`,
       {
         vpcId: this.vpc.id,
         tags: {
-          Name: `${environment}-igw`,
-          environment: environment,
+          Name: `${this.environment}-igw`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -140,12 +141,12 @@ export class ProductionInfrastructure {
 
     // Elastic IP for NAT Gateway
     this.elasticIp = new aws.ec2.Eip(
-      `${environment}-nat-eip`,
+      `${this.environment}-nat-eip`,
       {
         domain: 'vpc',
         tags: {
-          Name: `${environment}-nat-eip`,
-          environment: environment,
+          Name: `${this.environment}-nat-eip`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -153,13 +154,13 @@ export class ProductionInfrastructure {
 
     // NAT Gateway
     this.natGateway = new aws.ec2.NatGateway(
-      `${environment}-nat-gateway`,
+      `${this.environment}-nat-gateway`,
       {
         allocationId: this.elasticIp.id,
         subnetId: this.publicSubnets[0].id,
         tags: {
-          Name: `${environment}-nat-gateway`,
-          environment: environment,
+          Name: `${this.environment}-nat-gateway`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -167,7 +168,7 @@ export class ProductionInfrastructure {
 
     // Public Route Table
     this.publicRouteTable = new aws.ec2.RouteTable(
-      `${environment}-public-rt`,
+      `${this.environment}-public-rt`,
       {
         vpcId: this.vpc.id,
         routes: [
@@ -177,8 +178,8 @@ export class ProductionInfrastructure {
           },
         ],
         tags: {
-          Name: `${environment}-public-rt`,
-          environment: environment,
+          Name: `${this.environment}-public-rt`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -187,7 +188,7 @@ export class ProductionInfrastructure {
     // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
       new aws.ec2.RouteTableAssociation(
-        `${environment}-public-rta-${index + 1}`,
+        `${this.environment}-public-rta-${index + 1}`,
         {
           subnetId: subnet.id,
           routeTableId: this.publicRouteTable.id,
@@ -198,7 +199,7 @@ export class ProductionInfrastructure {
 
     // Private Route Table
     this.privateRouteTable = new aws.ec2.RouteTable(
-      `${environment}-private-rt`,
+      `${this.environment}-private-rt`,
       {
         vpcId: this.vpc.id,
         routes: [
@@ -208,8 +209,8 @@ export class ProductionInfrastructure {
           },
         ],
         tags: {
-          Name: `${environment}-private-rt`,
-          environment: environment,
+          Name: `${this.environment}-private-rt`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -218,7 +219,7 @@ export class ProductionInfrastructure {
     // Associate private subnets with private route table
     this.privateSubnets.forEach((subnet, index) => {
       new aws.ec2.RouteTableAssociation(
-        `${environment}-private-rta-${index + 1}`,
+        `${this.environment}-private-rta-${index + 1}`,
         {
           subnetId: subnet.id,
           routeTableId: this.privateRouteTable.id,
@@ -229,19 +230,19 @@ export class ProductionInfrastructure {
 
     // VPC Flow Logs
     this.vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
-      `${environment}-vpc-flow-logs`,
+      `${this.environment}-vpc-flow-logs`,
       {
         retentionInDays: 14,
         tags: {
-          Name: `${environment}-vpc-flow-logs`,
-          environment: environment,
+          Name: `${this.environment}-vpc-flow-logs`,
+          environment: this.environment,
         },
       },
       { provider }
     );
 
     this.vpcFlowLogRole = new aws.iam.Role(
-      `${environment}-vpc-flow-log-role`,
+      `${this.environment}-vpc-flow-log-role`,
       {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
@@ -256,15 +257,15 @@ export class ProductionInfrastructure {
           ],
         }),
         tags: {
-          Name: `${environment}-vpc-flow-log-role`,
-          environment: environment,
+          Name: `${this.environment}-vpc-flow-log-role`,
+          environment: this.environment,
         },
       },
       { provider }
     );
 
     new aws.iam.RolePolicy(
-      `${environment}-vpc-flow-log-policy`,
+      `${this.environment}-vpc-flow-log-policy`,
       {
         role: this.vpcFlowLogRole.id,
         policy: JSON.stringify({
@@ -288,15 +289,15 @@ export class ProductionInfrastructure {
     );
 
     this.vpcFlowLog = new aws.ec2.FlowLog(
-      `${environment}-vpc-flow-log`,
+      `${this.environment}-vpc-flow-log`,
       {
         iamRoleArn: this.vpcFlowLogRole.arn,
         logDestination: this.vpcFlowLogGroup.arn,
         vpcId: this.vpc.id,
         trafficType: 'ALL',
         tags: {
-          Name: `${environment}-vpc-flow-log`,
-          environment: environment,
+          Name: `${this.environment}-vpc-flow-log`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -306,9 +307,9 @@ export class ProductionInfrastructure {
   private createSecurity() {
     // ALB Security Group
     this.albSecurityGroup = new aws.ec2.SecurityGroup(
-      `${environment}-alb-sg`,
+      `${this.environment}-alb-sg`,
       {
-        name: `${environment}-alb-sg`,
+        name: `${this.environment}-alb-sg`,
         description: 'Security group for Application Load Balancer',
         vpcId: this.vpc.id,
         ingress: [
@@ -336,8 +337,8 @@ export class ProductionInfrastructure {
           },
         ],
         tags: {
-          Name: `${environment}-alb-sg`,
-          environment: environment,
+          Name: `${this.environment}-alb-sg`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -345,9 +346,9 @@ export class ProductionInfrastructure {
 
     // EC2 Security Group
     this.ec2SecurityGroup = new aws.ec2.SecurityGroup(
-      `${environment}-ec2-sg`,
+      `${this.environment}-ec2-sg`,
       {
-        name: `${environment}-ec2-sg`,
+        name: `${this.environment}-ec2-sg`,
         description: 'Security group for EC2 instances',
         vpcId: this.vpc.id,
         ingress: [
@@ -375,8 +376,8 @@ export class ProductionInfrastructure {
           },
         ],
         tags: {
-          Name: `${environment}-ec2-sg`,
-          environment: environment,
+          Name: `${this.environment}-ec2-sg`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -384,9 +385,9 @@ export class ProductionInfrastructure {
 
     // RDS Security Group
     this.rdsSecurityGroup = new aws.ec2.SecurityGroup(
-      `${environment}-rds-sg`,
+      `${this.environment}-rds-sg`,
       {
-        name: `${environment}-rds-sg`,
+        name: `${this.environment}-rds-sg`,
         description: 'Security group for RDS database',
         vpcId: this.vpc.id,
         ingress: [
@@ -407,8 +408,8 @@ export class ProductionInfrastructure {
           },
         ],
         tags: {
-          Name: `${environment}-rds-sg`,
-          environment: environment,
+          Name: `${this.environment}-rds-sg`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -418,7 +419,7 @@ export class ProductionInfrastructure {
   private createStorage() {
     // KMS Key with proper policy and rotation
     this.kmsKey = new aws.kms.Key(
-      `${environment}-kms-key`,
+      `${this.environment}-kms-key`,
       {
         description: 'KMS key for encryption at rest',
         enableKeyRotation: true,
@@ -454,17 +455,17 @@ export class ProductionInfrastructure {
             })
           ),
         tags: {
-          Name: `${environment}-kms-key`,
-          environment: environment,
+          Name: `${this.environment}-kms-key`,
+          environment: this.environment,
         },
       },
       { provider }
     );
 
     new aws.kms.Alias(
-      `${environment}-kms-alias`,
+      `${this.environment}-kms-alias`,
       {
-        name: `alias/${environment}-key`,
+        name: `alias/${this.environment}-key`,
         targetKeyId: this.kmsKey.keyId,
       },
       { provider }
@@ -472,12 +473,12 @@ export class ProductionInfrastructure {
 
     // S3 Bucket
     this.s3Bucket = new aws.s3.Bucket(
-      `${environment}-s3-bucket`,
+      `${this.environment}-s3-bucket`,
       {
-        bucket: `${environment}-app-data-${Date.now()}`,
+        bucket: `${this.environment}-app-data-${Date.now()}`,
         tags: {
-          Name: `${environment}-s3-bucket`,
-          environment: environment,
+          Name: `${this.environment}-s3-bucket`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -485,7 +486,7 @@ export class ProductionInfrastructure {
 
     // S3 Bucket Encryption
     new aws.s3.BucketServerSideEncryptionConfiguration(
-      `${environment}-s3-encryption`,
+      `${this.environment}-s3-encryption`,
       {
         bucket: this.s3Bucket.id,
         rules: [
@@ -503,7 +504,7 @@ export class ProductionInfrastructure {
 
     // S3 Bucket Versioning
     new aws.s3.BucketVersioning(
-      `${environment}-s3-versioning`,
+      `${this.environment}-s3-versioning`,
       {
         bucket: this.s3Bucket.id,
         versioningConfiguration: {
@@ -515,7 +516,7 @@ export class ProductionInfrastructure {
 
     // S3 Public Access Block
     new aws.s3.BucketPublicAccessBlock(
-      `${environment}-s3-pab`,
+      `${this.environment}-s3-pab`,
       {
         bucket: this.s3Bucket.id,
         blockPublicAcls: true,
@@ -528,7 +529,7 @@ export class ProductionInfrastructure {
 
     // S3 Lifecycle Policy
     new aws.s3.BucketLifecycleConfiguration(
-      `${environment}-s3-lifecycle`,
+      `${this.environment}-s3-lifecycle`,
       {
         bucket: this.s3Bucket.id,
         rules: [
@@ -548,7 +549,7 @@ export class ProductionInfrastructure {
   private createDatabase() {
     // RDS Enhanced Monitoring Role
     const rdsMonitoringRole = new aws.iam.Role(
-      `${environment}-rds-monitoring-role`,
+      `${this.environment}-rds-monitoring-role`,
       {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
@@ -561,15 +562,15 @@ export class ProductionInfrastructure {
           ],
         }),
         tags: {
-          Name: `${environment}-rds-monitoring-role`,
-          environment: environment,
+          Name: `${this.environment}-rds-monitoring-role`,
+          environment: this.environment,
         },
       },
       { provider }
     );
 
     new aws.iam.RolePolicyAttachment(
-      `${environment}-rds-monitoring-attach`,
+      `${this.environment}-rds-monitoring-attach`,
       {
         role: rdsMonitoringRole.name,
         policyArn:
@@ -580,13 +581,13 @@ export class ProductionInfrastructure {
 
     // RDS Subnet Group
     this.rdsSubnetGroup = new aws.rds.SubnetGroup(
-      `${environment}-rds-subnet-group`,
+      `${this.environment}-rds-subnet-group`,
       {
-        name: `${environment}-rds-subnet-group`,
+        name: `${this.environment}-rds-subnet-group`,
         subnetIds: this.privateSubnets.map(subnet => subnet.id),
         tags: {
-          Name: `${environment}-rds-subnet-group`,
-          environment: environment,
+          Name: `${this.environment}-rds-subnet-group`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -594,9 +595,9 @@ export class ProductionInfrastructure {
 
     // RDS Instance with managed password and enhanced monitoring
     this.rdsInstance = new aws.rds.Instance(
-      `${environment}-rds-mysql`,
+      `${this.environment}-rds-mysql`,
       {
-        identifier: `${environment}-mysql-db`,
+        identifier: `${this.environment}-mysql-db-${Date.now()}`,
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
         storageType: 'gp2',
@@ -614,15 +615,15 @@ export class ProductionInfrastructure {
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'sun:04:00-sun:05:00',
         skipFinalSnapshot: false,
-        finalSnapshotIdentifier: `${environment}-final-snapshot`,
+        finalSnapshotIdentifier: `${this.environment}-final-snapshot`,
         deletionProtection: true,
         monitoringRoleArn: rdsMonitoringRole.arn,
         monitoringInterval: 60,
         performanceInsightsEnabled: true,
         performanceInsightsKmsKeyId: this.kmsKey.arn,
         tags: {
-          Name: `${environment}-rds-mysql`,
-          environment: environment,
+          Name: `${this.environment}-rds-mysql`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -632,7 +633,7 @@ export class ProductionInfrastructure {
   private createCompute() {
     // EC2 IAM Role with least privilege
     this.ec2Role = new aws.iam.Role(
-      `${environment}-ec2-role`,
+      `${this.environment}-ec2-role`,
       {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
@@ -647,8 +648,8 @@ export class ProductionInfrastructure {
           ],
         }),
         tags: {
-          Name: `${environment}-ec2-role`,
-          environment: environment,
+          Name: `${this.environment}-ec2-role`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -656,7 +657,7 @@ export class ProductionInfrastructure {
 
     // SSM Managed Instance Core Policy
     new aws.iam.RolePolicyAttachment(
-      `${environment}-ec2-ssm-policy`,
+      `${this.environment}-ec2-ssm-policy`,
       {
         role: this.ec2Role.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
@@ -666,7 +667,7 @@ export class ProductionInfrastructure {
 
     // EC2 Role Policy with least privilege
     new aws.iam.RolePolicy(
-      `${environment}-ec2-policy`,
+      `${this.environment}-ec2-policy`,
       {
         role: this.ec2Role.id,
         policy: pulumi
@@ -708,12 +709,12 @@ export class ProductionInfrastructure {
     );
 
     this.ec2InstanceProfile = new aws.iam.InstanceProfile(
-      `${environment}-ec2-profile`,
+      `${this.environment}-ec2-profile`,
       {
         role: this.ec2Role.name,
         tags: {
-          Name: `${environment}-ec2-profile`,
-          environment: environment,
+          Name: `${this.environment}-ec2-profile`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -736,9 +737,9 @@ export class ProductionInfrastructure {
 
     // Launch Template
     this.launchTemplate = new aws.ec2.LaunchTemplate(
-      `${environment}-launch-template`,
+      `${this.environment}-launch-template`,
       {
-        name: `${environment}-launch-template`,
+        name: `${this.environment}-launch-template`,
         imageId: ami.then(ami => ami.id),
         instanceType: 't3.micro',
         keyName: 'my-key-pair',
@@ -750,15 +751,15 @@ export class ProductionInfrastructure {
           .all([this.s3Bucket.bucket, this.rdsInstance.endpoint])
           .apply(([bucketName, rdsEndpoint]) =>
             Buffer.from(
-              `#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${environment} environment</h1>\" > /var/www/html/index.html\necho \"S3 Bucket: ${bucketName}\" >> /var/www/html/index.html\necho \"RDS Endpoint: ${rdsEndpoint}\" >> /var/www/html/index.html\n`
+              `#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${this.environment} environment</h1>\" > /var/www/html/index.html\necho \"S3 Bucket: ${bucketName}\" >> /var/www/html/index.html\necho \"RDS Endpoint: ${rdsEndpoint}\" >> /var/www/html/index.html\n`
             ).toString('base64')
           ),
         tagSpecifications: [
           {
             resourceType: 'instance',
             tags: {
-              Name: `${environment}-web-server`,
-              environment: environment,
+              Name: `${this.environment}-web-server`,
+              environment: this.environment,
             },
           },
         ],
@@ -768,9 +769,9 @@ export class ProductionInfrastructure {
 
     // Target Group
     this.targetGroup = new aws.lb.TargetGroup(
-      `${environment}-tg`,
+      `${this.environment}-tg`,
       {
-        name: `${environment}-tg`,
+        name: `${this.environment}-tg`,
         port: 80,
         protocol: 'HTTP',
         vpcId: this.vpc.id,
@@ -786,8 +787,8 @@ export class ProductionInfrastructure {
           unhealthyThreshold: 2,
         },
         tags: {
-          Name: `${environment}-tg`,
-          environment: environment,
+          Name: `${this.environment}-tg`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -795,17 +796,17 @@ export class ProductionInfrastructure {
 
     // Application Load Balancer
     this.applicationLoadBalancer = new aws.lb.LoadBalancer(
-      `${environment}-alb`,
+      `${this.environment}-alb`,
       {
-        name: `${environment}-alb`,
+        name: `${this.environment}-alb`,
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [this.albSecurityGroup.id],
         subnets: this.publicSubnets.map(subnet => subnet.id),
         enableDeletionProtection: false,
         tags: {
-          Name: `${environment}-alb`,
-          environment: environment,
+          Name: `${this.environment}-alb`,
+          environment: this.environment,
         },
       },
       { provider }
@@ -813,7 +814,7 @@ export class ProductionInfrastructure {
 
     // ALB HTTP Listener
     this.albListener = new aws.lb.Listener(
-      `${environment}-alb-listener-http`,
+      `${this.environment}-alb-listener-http`,
       {
         loadBalancerArn: this.applicationLoadBalancer.arn,
         port: 80,
@@ -830,9 +831,9 @@ export class ProductionInfrastructure {
 
     // Auto Scaling Group
     this.autoScalingGroup = new aws.autoscaling.Group(
-      `${environment}-asg`,
+      `${this.environment}-asg`,
       {
-        name: `${environment}-asg`,
+        name: `${this.environment}-asg`,
         vpcZoneIdentifiers: this.privateSubnets.map(subnet => subnet.id),
         targetGroupArns: [this.targetGroup.arn],
         healthCheckType: 'ELB',
@@ -847,12 +848,12 @@ export class ProductionInfrastructure {
         tags: [
           {
             key: 'Name',
-            value: `${environment}-asg`,
+            value: `${this.environment}-asg`,
             propagateAtLaunch: true,
           },
           {
             key: 'environment',
-            value: environment,
+            value: this.environment,
             propagateAtLaunch: true,
           },
         ],
@@ -864,9 +865,9 @@ export class ProductionInfrastructure {
   private createMonitoring() {
     // Auto Scaling Policies
     this.scaleUpPolicy = new aws.autoscaling.Policy(
-      `${environment}-scale-up`,
+      `${this.environment}-scale-up`,
       {
-        name: `${environment}-scale-up`,
+        name: `${this.environment}-scale-up`,
         scalingAdjustment: 1,
         adjustmentType: 'ChangeInCapacity',
         cooldown: 300,
@@ -876,9 +877,9 @@ export class ProductionInfrastructure {
     );
 
     this.scaleDownPolicy = new aws.autoscaling.Policy(
-      `${environment}-scale-down`,
+      `${this.environment}-scale-down`,
       {
-        name: `${environment}-scale-down`,
+        name: `${this.environment}-scale-down`,
         scalingAdjustment: -1,
         adjustmentType: 'ChangeInCapacity',
         cooldown: 300,
@@ -889,9 +890,9 @@ export class ProductionInfrastructure {
 
     // CloudWatch Alarms
     this.cpuAlarmHigh = new aws.cloudwatch.MetricAlarm(
-      `${environment}-cpu-high`,
+      `${this.environment}-cpu-high`,
       {
-        name: `${environment}-cpu-high`,
+        name: `${this.environment}-cpu-high`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -905,17 +906,17 @@ export class ProductionInfrastructure {
           AutoScalingGroupName: this.autoScalingGroup.name,
         },
         tags: {
-          Name: `${environment}-cpu-high`,
-          environment: environment,
+          Name: `${this.environment}-cpu-high`,
+          environment: this.environment,
         },
       },
       { provider }
     );
 
     this.cpuAlarmLow = new aws.cloudwatch.MetricAlarm(
-      `${environment}-cpu-low`,
+      `${this.environment}-cpu-low`,
       {
-        name: `${environment}-cpu-low`,
+        name: `${this.environment}-cpu-low`,
         comparisonOperator: 'LessThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -929,8 +930,8 @@ export class ProductionInfrastructure {
           AutoScalingGroupName: this.autoScalingGroup.name,
         },
         tags: {
-          Name: `${environment}-cpu-low`,
-          environment: environment,
+          Name: `${this.environment}-cpu-low`,
+          environment: this.environment,
         },
       },
       { provider }
