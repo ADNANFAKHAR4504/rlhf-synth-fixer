@@ -229,22 +229,13 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
-    // Create Security Group for EC2
+    // Create Security Group for EC2 (removed SSH, using Session Manager)
     const ec2SecurityGroup = new aws.ec2.SecurityGroup(
       `${environment}-ec2-sg`,
       {
         name: `${environment}-ec2-sg`,
         description: 'Security group for EC2 instance',
         vpcId: this.vpc.id,
-        ingress: [
-          {
-            description: 'SSH from specific IP',
-            fromPort: 22,
-            toPort: 22,
-            protocol: 'tcp',
-            cidrBlocks: ['193.10.210.0/24'],
-          },
-        ],
         egress: [
           {
             description: 'All outbound traffic',
@@ -300,6 +291,39 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
+    // Get latest MySQL engine version
+    const engineVersion = aws.rds.getEngineVersion(
+      {
+        engine: 'mysql',
+        defaultOnly: true,
+      },
+      { provider }
+    );
+
+    // Create CloudWatch Log Group
+    this.cloudWatchLogGroup = new aws.cloudwatch.LogGroup(
+      `${environment}-log-group`,
+      {
+        name: `/aws/ec2/${environment}`,
+        retentionInDays: 14,
+        tags: {
+          Name: `${environment}-log-group`,
+          Environment: environment,
+        },
+      },
+      { provider }
+    );
+
+    // Create CloudWatch Log Stream
+    new aws.cloudwatch.LogStream(
+      `${environment}-log-stream`,
+      {
+        name: `${environment}-log-stream`,
+        logGroupName: this.cloudWatchLogGroup.name,
+      },
+      { provider }
+    );
+
     // Create IAM Role for EC2
     this.iamRole = new aws.iam.Role(
       `${environment}-ec2-role`,
@@ -350,7 +374,7 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
-    // Enable S3 bucket encryption - Fixed to use non-deprecated version
+    // Enable S3 bucket encryption
     new aws.s3.BucketServerSideEncryptionConfiguration(
       `${environment}-s3-encryption`,
       {
@@ -367,7 +391,20 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
-    // Create IAM policy for S3 access
+    // Block S3 public access
+    new aws.s3.BucketPublicAccessBlock(
+      `${environment}-block-public-access`,
+      {
+        bucket: this.s3Bucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { provider }
+    );
+
+    // Create IAM policy for S3 access (scoped to PutObject only)
     const s3Policy = new aws.iam.Policy(
       `${environment}-s3-policy`,
       {
@@ -379,13 +416,8 @@ export class SecureCloudEnvironment {
             Statement: [
               {
                 Effect: 'Allow',
-                Action: [
-                  's3:GetObject',
-                  's3:PutObject',
-                  's3:DeleteObject',
-                  's3:ListBucket',
-                ],
-                Resource: [bucketArn, `${bucketArn}/*`],
+                Action: ['s3:PutObject'],
+                Resource: `${bucketArn}/*`,
               },
             ],
           })
@@ -394,12 +426,56 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
+    // Create IAM policy for CloudWatch Logs
+    const cloudWatchPolicy = new aws.iam.Policy(
+      `${environment}-cloudwatch-policy`,
+      {
+        name: `${environment}-cloudwatch-policy`,
+        description: 'Policy for CloudWatch Logs access',
+        policy: pulumi
+          .all([this.cloudWatchLogGroup.arn])
+          .apply(([logGroupArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                  Resource: `${logGroupArn}:*`,
+                },
+              ],
+            })
+          ),
+      },
+      { provider }
+    );
+
     // Attach S3 policy to IAM role
     new aws.iam.RolePolicyAttachment(
-      `${environment}-role-policy-attachment`,
+      `${environment}-s3-policy-attachment`,
       {
         role: this.iamRole.name,
         policyArn: s3Policy.arn,
+      },
+      { provider }
+    );
+
+    // Attach CloudWatch policy to IAM role
+    new aws.iam.RolePolicyAttachment(
+      `${environment}-cloudwatch-policy-attachment`,
+      {
+        role: this.iamRole.name,
+        policyArn: cloudWatchPolicy.arn,
+      },
+      { provider }
+    );
+
+    // Attach Session Manager policy to IAM role
+    new aws.iam.RolePolicyAttachment(
+      `${environment}-ssm-policy-attachment`,
+      {
+        role: this.iamRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
       },
       { provider }
     );
@@ -429,7 +505,7 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
-    // Create EC2 instance
+    // Create EC2 instance with CloudWatch agent user data
     this.ec2Instance = new aws.ec2.Instance(
       `${environment}-ec2-instance`,
       {
@@ -439,6 +515,32 @@ export class SecureCloudEnvironment {
         vpcSecurityGroupIds: [ec2SecurityGroup.id],
         iamInstanceProfile: instanceProfile.name,
         associatePublicIpAddress: true,
+        userData: pulumi
+          .all([this.cloudWatchLogGroup.name])
+          .apply(([logGroupName]) =>
+            Buffer.from(
+              `#!/bin/bash
+yum update -y
+yum install -y amazon-cloudwatch-agent
+echo '{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/messages",
+            "log_group_name": "${logGroupName}",
+            "log_stream_name": "{instance_id}"
+          }
+        ]
+      }
+    }
+  }
+}' > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+`
+            ).toString('base64')
+          ),
         tags: {
           Name: `${environment}-ec2-instance`,
           Environment: environment,
@@ -447,13 +549,13 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
-    // Create RDS instance with hardcoded MySQL version - Fixed MySQL version issue
+    // Create RDS instance with managed password and CloudWatch logs
     this.rdsInstance = new aws.rds.Instance(
       `${environment}-rds-instance`,
       {
         identifier: `${environment}-mysql-db`,
         engine: 'mysql',
-        engineVersion: '8.0',
+        engineVersion: engineVersion.then(e => e.version),
         instanceClass: 'db.t3.micro',
         allocatedStorage: 20,
         storageType: 'gp2',
@@ -461,39 +563,16 @@ export class SecureCloudEnvironment {
         kmsKeyId: kmsKey.arn,
         dbName: 'appdb',
         username: 'admin',
-        password: 'SecurePassword123!',
+        manageMasterUserPassword: true,
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
         multiAz: false,
         skipFinalSnapshot: true,
+        enabledCloudwatchLogsExports: ['error', 'slowquery'],
         tags: {
           Name: `${environment}-rds-instance`,
           Environment: environment,
         },
-      },
-      { provider }
-    );
-
-    // Create CloudWatch Log Group
-    this.cloudWatchLogGroup = new aws.cloudwatch.LogGroup(
-      `${environment}-log-group`,
-      {
-        name: `/aws/ec2/${environment}`,
-        retentionInDays: 14,
-        tags: {
-          Name: `${environment}-log-group`,
-          Environment: environment,
-        },
-      },
-      { provider }
-    );
-
-    // Create CloudWatch Log Stream
-    new aws.cloudwatch.LogStream(
-      `${environment}-log-stream`,
-      {
-        name: `${environment}-log-stream`,
-        logGroupName: this.cloudWatchLogGroup.name,
       },
       { provider }
     );
