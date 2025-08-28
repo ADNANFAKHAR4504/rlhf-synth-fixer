@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export class WebAppStack extends cdk.Stack {
@@ -238,15 +238,15 @@ EOF
       minCapacity: 2, // Minimum instances for high availability
       maxCapacity: 10, // Maximum instances for scalability
       desiredCapacity: 2, // Initial desired capacity
-      healthCheckType: autoscaling.HealthCheckType.ELB,
-      healthCheckGracePeriod: cdk.Duration.minutes(5),
+      healthCheck: autoscaling.HealthCheck.elb({
+        grace: cdk.Duration.minutes(5),
+      }),
     });
 
     // Add scaling policies
     autoScalingGroup.scaleOnCpuUtilization('CPUScaling', {
       targetUtilizationPercent: 70,
-      scaleInCooldown: cdk.Duration.minutes(5),
-      scaleOutCooldown: cdk.Duration.minutes(3),
+      cooldown: cdk.Duration.minutes(5),
     });
 
     // 7. Create Application Load Balancer
@@ -268,11 +268,13 @@ EOF
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [autoScalingGroup],
-      healthCheckPath: '/health',
-      healthCheckIntervalSeconds: 30,
-      healthCheckTimeoutSeconds: 5,
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 3,
+      healthCheck: {
+        path: '/health',
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
       targetType: elbv2.TargetType.INSTANCE,
     });
 
