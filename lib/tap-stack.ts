@@ -211,7 +211,7 @@ export class TapStack extends cdk.Stack {
 
     // Fixed: Use S3_MANAGED instead of AES256
     const logsBucket = new s3.Bucket(this, 'CloudTrailLogsBucket', {
-      bucketName: `cloudtrail-secureapp-${this.account}-${this.region}-${environmentSuffix}`,
+      bucketName: `cloudtrail-secure-${this.account}-${this.region}-${environmentSuffix}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
