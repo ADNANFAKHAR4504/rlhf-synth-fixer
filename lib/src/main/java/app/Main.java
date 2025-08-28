@@ -72,14 +72,16 @@ public class Main {
                             .build())
                     .build());
 
-            // --- 4. Ensure IAM Role exists ---
+            // --- 4. Ensure IAM Role exists (suppress 409) ---
             String roleName = "tap-" + envSuffix + "-ec2-role";
             String roleArn;
             try {
+                // Check if role already exists
                 GetRoleResponse getRoleResponse = iam.getRole(GetRoleRequest.builder().roleName(roleName).build());
                 roleArn = getRoleResponse.role().arn();
                 System.out.println("ℹ️ IAM Role already exists: " + roleArn);
             } catch (NoSuchEntityException e) {
+                // Create only if it does not exist
                 String assumeRolePolicy = "{\n" +
                         "  \"Version\": \"2012-10-17\",\n" +
                         "  \"Statement\": [\n" +
@@ -129,7 +131,7 @@ public class Main {
             String instanceId = runResponse.instances().get(0).instanceId();
             System.out.println("✅ Launched EC2 Instance: " + instanceId);
 
-            // --- 7. Tag resources (fully qualified Tag to avoid ambiguity) ---
+            // --- 7. Tag resources (disambiguated Tag class) ---
             ec2.createTags(CreateTagsRequest.builder()
                     .resources(instanceId, vpcId, subnetId, sgId)
                     .tags(
@@ -145,7 +147,6 @@ public class Main {
                     .build());
 
         } catch (Exception e) {
-            e.printStackTrace();
             System.err.println("❌ Error provisioning TapStack: " + e.getMessage());
         }
     }
