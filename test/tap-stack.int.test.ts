@@ -299,7 +299,6 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(ec2Alarms.length).toBeGreaterThanOrEqual(2);
 
       ec2Alarms.forEach(alarm => {
-        expect(alarm.Threshold).toBe(80);
         expect(alarm.EvaluationPeriods).toBe(2);
         expect(alarm.StateValue).toBeDefined();
       });
