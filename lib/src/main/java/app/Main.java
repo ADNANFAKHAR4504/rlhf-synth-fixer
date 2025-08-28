@@ -259,7 +259,7 @@ class EcommerceStack extends Stack {
         DatabaseInstanceProps.builder()
             .engine(DatabaseInstanceEngine.postgres(
                 software.amazon.awscdk.services.rds.PostgresInstanceEngineProps.builder()
-                    .version(PostgresEngineVersion.VER_15_4)
+                    .version(PostgresEngineVersion.VER_15_10)
                     .build()))
             // FIX: use EC2 InstanceType.of(...)
             .instanceType(InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
