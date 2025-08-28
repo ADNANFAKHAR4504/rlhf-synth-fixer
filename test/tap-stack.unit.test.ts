@@ -285,9 +285,12 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('vpc-flow-logs.amazonaws.com');
     });
 
-    test('VPCFlowLogsRole should have VPCFlowLogsDeliveryRolePolicy', () => {
+    test('VPCFlowLogsRole should have custom VPCFlowLogsDeliveryPolicy', () => {
       const role = template.Resources.VPCFlowLogsRole;
-      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy');
+      expect(role.Properties.Policies).toBeDefined();
+      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'VPCFlowLogsDeliveryPolicy');
+      expect(policy).toBeDefined();
+      expect(policy.PolicyDocument.Statement[0].Action).toContain('logs:PutLogEvents');
     });
 
     test('should have VPCFlowLogs', () => {
