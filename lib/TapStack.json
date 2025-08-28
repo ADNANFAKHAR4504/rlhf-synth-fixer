@@ -1288,6 +1288,11 @@
     },
     "VPCFlowLogs": {
       "Type": "AWS::EC2::FlowLog",
+      "DependsOn": [
+        "VPCFlowLogsGroup",
+        "VPCFlowLogsRole",
+        "SecureVPC"
+      ],
       "Properties": {
         "ResourceType": "VPC",
         "ResourceId": "SecureVPC",
