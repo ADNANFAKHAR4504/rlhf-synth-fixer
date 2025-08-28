@@ -87,7 +87,7 @@ elif [ "$LANGUAGE" = "py" ]; then
 elif [ "$LANGUAGE" = "java" ]; then
     echo "✅ Java project detected, running Checkstyle..."
     chmod +x ./gradlew
-    ./gradlew check --build-cache --no-daemon
+    ./gradlew lint --build-cache --no-daemon
     echo "✅ Java linting completed successfully"
 
 elif [ "$PLATFORM" = "cfn" ]; then
