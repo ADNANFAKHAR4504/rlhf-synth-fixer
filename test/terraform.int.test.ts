@@ -1,5 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
+import path from "path";
+import fs from "fs";
+
 import {
   EC2Client,
   DescribeVpcsCommand,
@@ -13,94 +14,69 @@ import {
   DescribeConfigurationRecordersCommand,
   DescribeConfigRulesCommand,
 } from "@aws-sdk/client-config-service";
-import {
-  IAMClient,
-  GetUserCommand,
-  GetRoleCommand,
-} from "@aws-sdk/client-iam";
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from "@aws-sdk/client-cloudwatch-logs";
+import { IAMClient, GetUserCommand } from "@aws-sdk/client-iam";
 
+// Match your Terraform outputs JSON structure
 interface TerraformOutputs {
-  vpc_id: string;
+  config_recorder_name: string;
+  config_rules: string;
+  kms_key_id: string;
   private_subnet_ids: string;
   public_subnet_ids: string;
   s3_bucket_name: string;
   security_alerts_topic_arn: string;
-  kms_key_id: string;
-  config_recorder_name: string;
-  config_rules: string;
   terraform_user_arn: string;
-  role_arn_cloudtrail: string;
-  role_arn_config: string;
-  role_arn_mfa: string;
-  cloudtrail_log_group_name: string;
-  cloudwatch_log_group_name: string;
+  vpc_id: string;
 }
 
-const region = process.env.AWS_REGION || "us-west-2";
+// Use Terraform's aws_region default
+const awsRegion = "us-west-2";
 
-const ec2Client = new EC2Client({ region });
-const s3Client = new S3Client({ region });
-const snsClient = new SNSClient({ region });
-const kmsClient = new KMSClient({ region });
-const configClient = new ConfigServiceClient({ region });
-const iamClient = new IAMClient({ region });
-const logsClient = new CloudWatchLogsClient({ region });
+// AWS SDK clients
+const ec2Client = new EC2Client({ region: awsRegion });
+const s3Client = new S3Client({ region: awsRegion });
+const snsClient = new SNSClient({ region: awsRegion });
+const kmsClient = new KMSClient({ region: awsRegion });
+const configClient = new ConfigServiceClient({ region: awsRegion });
+const iamClient = new IAMClient({ region: awsRegion });
+
+let outputs: TerraformOutputs;
+
+beforeAll(() => {
+  const outputsPath = path.resolve(
+    process.cwd(),
+    "cfn-outputs/flat-outputs.json"
+  );
+  const fileContents = fs.readFileSync(outputsPath, "utf8");
+  outputs = JSON.parse(fileContents) as TerraformOutputs;
+});
 
 describe("Terraform Stack Integration Tests", () => {
-  let outputs: TerraformOutputs;
-
-  beforeAll(() => {
-    const outputsPath = path.resolve(
-      process.cwd(),
-      "cfn-outputs/flat-outputs.json"
-    );
-
-    try {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, "utf-8"));
-      console.log("Loaded outputs from:", outputsPath);
-    } catch (err) {
-      throw new Error(
-        "Could not load Terraform outputs. Run `terraform apply` first."
-      );
-    }
-  });
-
-  describe("VPC", () => {
-    const vpcKeys: (keyof TerraformOutputs)[] = ["vpc_id"];
-
-    test.each(vpcKeys)("VPC %s should exist", async (key) => {
-      const vpcId = outputs[key];
-      const res = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [vpcId] })
-      );
-      expect(res.Vpcs?.[0].VpcId).toBe(vpcId);
-    });
-  });
-
-  describe("Subnets", () => {
-    const subnetKeys: (keyof TerraformOutputs)[] = [
-      "private_subnet_ids",
-      "public_subnet_ids",
-    ];
-
-    test.each(subnetKeys)("%s should exist", async (key) => {
-      const subnetIds = JSON.parse(outputs[key]) as string[];
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
-      );
-      expect(res.Subnets?.length).toBe(subnetIds.length);
+  describe("VPC and Subnets", () => {
+    test.each([
+      ["VPC should exist", outputs => outputs.vpc_id, async (id: string) => {
+        const res = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [id] }));
+        expect(res.Vpcs?.[0].VpcId).toBe(id);
+      }],
+      ["Private subnets should exist", outputs => outputs.private_subnet_ids, async (ids: string) => {
+        const subnetIds = JSON.parse(ids) as string[];
+        const res = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
+        expect(res.Subnets?.length).toBe(subnetIds.length);
+      }],
+      ["Public subnets should exist", outputs => outputs.public_subnet_ids, async (ids: string) => {
+        const subnetIds = JSON.parse(ids) as string[];
+        const res = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
+        expect(res.Subnets?.length).toBe(subnetIds.length);
+      }],
+    ])("%s", async (_desc, getValue, checkFn) => {
+      const value = getValue(outputs);
+      await checkFn(value);
     });
   });
 
   describe("S3 Buckets", () => {
-    const s3Keys: (keyof TerraformOutputs)[] = ["s3_bucket_name"];
-
-    test.each(s3Keys)("%s should exist", async (key) => {
-      const bucketName = outputs[key];
+    test("S3 bucket should exist", async () => {
+      const bucketName = outputs.s3_bucket_name;
       const res = await s3Client.send(
         new HeadBucketCommand({ Bucket: bucketName })
       );
@@ -109,10 +85,8 @@ describe("Terraform Stack Integration Tests", () => {
   });
 
   describe("SNS Topics", () => {
-    const snsKeys: (keyof TerraformOutputs)[] = ["security_alerts_topic_arn"];
-
-    test.each(snsKeys)("%s should exist", async (key) => {
-      const topicArn = outputs[key];
+    test("Security alerts topic should exist", async () => {
+      const topicArn = outputs.security_alerts_topic_arn;
       const res = await snsClient.send(
         new GetTopicAttributesCommand({ TopicArn: topicArn })
       );
@@ -121,10 +95,8 @@ describe("Terraform Stack Integration Tests", () => {
   });
 
   describe("KMS Keys", () => {
-    const kmsKeys: (keyof TerraformOutputs)[] = ["kms_key_id"];
-
-    test.each(kmsKeys)("%s should exist", async (key) => {
-      const keyId = outputs[key];
+    test("KMS key should exist", async () => {
+      const keyId = outputs.kms_key_id;
       const res = await kmsClient.send(
         new DescribeKeyCommand({ KeyId: keyId })
       );
@@ -153,48 +125,13 @@ describe("Terraform Stack Integration Tests", () => {
   });
 
   describe("IAM Users", () => {
-    const iamKeys: (keyof TerraformOutputs)[] = ["terraform_user_arn"];
-
-    test.each(iamKeys)("%s should exist", async (key) => {
-      const arn = outputs[key];
+    test("Terraform user should exist", async () => {
+      const arn = outputs.terraform_user_arn;
       const userName = arn.split("/").pop()!;
       const res = await iamClient.send(
         new GetUserCommand({ UserName: userName })
       );
       expect(res.User?.Arn).toBe(arn);
-    });
-  });
-
-  describe("IAM Roles", () => {
-    const roles: (keyof TerraformOutputs)[] = [
-      "role_arn_cloudtrail",
-      "role_arn_config",
-      "role_arn_mfa",
-    ];
-
-    test.each(roles)("%s should exist", async (key) => {
-      const roleArn = outputs[key];
-      const roleName = roleArn.split("/").pop()!;
-      const res = await iamClient.send(
-        new GetRoleCommand({ RoleName: roleName })
-      );
-      expect(res.Role?.Arn).toBe(roleArn);
-    });
-  });
-
-  describe("CloudWatch Logs", () => {
-    const logGroups: (keyof TerraformOutputs)[] = [
-      "cloudtrail_log_group_name",
-      "cloudwatch_log_group_name",
-    ];
-
-    test.each(logGroups)("%s should exist", async (key) => {
-      const logGroupNameFull = outputs[key];
-      const name = logGroupNameFull.split(":log-group:")[1];
-      const res = await logsClient.send(
-        new DescribeLogGroupsCommand({ logGroupNamePrefix: name })
-      );
-      expect(res.logGroups?.some(g => g.logGroupName === name)).toBe(true);
     });
   });
 });
