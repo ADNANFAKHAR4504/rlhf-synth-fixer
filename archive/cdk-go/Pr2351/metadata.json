@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "291489",
+  "team": "1",
+  "startedAt": "2025-08-26T23:09:26.758Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "IAM",
+    "SecurityGroup",
+    "Subnet"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ngwakoleslieelijah",
+  "dockerS3Location": ""
+}
