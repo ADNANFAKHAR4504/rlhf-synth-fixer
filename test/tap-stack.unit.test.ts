@@ -45,10 +45,13 @@ describe('WebAppStack Unit Tests', () => {
 
   describe('Load Balancer Configuration', () => {
     test('should create Application Load Balancer', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Type: 'application',
-        Scheme: 'internet-facing',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Type: 'application',
+          Scheme: 'internet-facing',
+        }
+      );
     });
 
     test('should create HTTP listener', () => {
@@ -64,15 +67,18 @@ describe('WebAppStack Unit Tests', () => {
     });
 
     test('should create target group with health check', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 80,
-        Protocol: 'HTTP',
-        HealthCheckPath: '/health',
-        HealthCheckIntervalSeconds: 30,
-        HealthCheckTimeoutSeconds: 5,
-        HealthyThresholdCount: 2,
-        UnhealthyThresholdCount: 3,
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        {
+          Port: 80,
+          Protocol: 'HTTP',
+          HealthCheckPath: '/health',
+          HealthCheckIntervalSeconds: 30,
+          HealthCheckTimeoutSeconds: 5,
+          HealthyThresholdCount: 2,
+          UnhealthyThresholdCount: 3,
+        }
+      );
     });
   });
 

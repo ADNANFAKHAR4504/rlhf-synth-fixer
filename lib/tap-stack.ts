@@ -51,9 +51,7 @@ export class WebAppStack extends cdk.Stack {
       new iam.PolicyStatement({
         sid: 'AWSLogDeliveryWrite',
         effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.ServicePrincipal('delivery.logs.amazonaws.com'),
-        ],
+        principals: [new iam.ServicePrincipal('delivery.logs.amazonaws.com')],
         actions: ['s3:PutObject'],
         resources: [`${albLogsBucket.bucketArn}/*`],
         conditions: {
@@ -125,7 +123,9 @@ export class WebAppStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances with least privilege access',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // For Systems Manager
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // For Systems Manager
       ],
     });
 
@@ -145,12 +145,18 @@ export class WebAppStack extends cdk.Stack {
     );
 
     // 5. Create Launch Template for EC2 instances
-    const launchTemplate = new ec2.LaunchTemplate(this, 'WebAppLaunchTemplate', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      securityGroup: ec2SecurityGroup,
-      role: ec2Role,
-      userData: ec2.UserData.custom(`#!/bin/bash
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'WebAppLaunchTemplate',
+      {
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        securityGroup: ec2SecurityGroup,
+        role: ec2Role,
+        userData: ec2.UserData.custom(`#!/bin/bash
         yum update -y
         yum install -y httpd
         systemctl start httpd
@@ -219,23 +225,28 @@ EOF
 OK
 EOF
       `),
-      requireImdsv2: true, // Enforce IMDSv2 for security
-    });
+        requireImdsv2: true, // Enforce IMDSv2 for security
+      }
+    );
 
     // 6. Create Auto Scaling Group
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'WebAppASG', {
-      vpc,
-      launchTemplate,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, // Deploy in private subnets only
-      },
-      minCapacity: 2, // Minimum instances for high availability
-      maxCapacity: 10, // Maximum instances for scalability
-      desiredCapacity: 2, // Initial desired capacity
-      healthCheck: autoscaling.HealthCheck.elb({
-        grace: cdk.Duration.minutes(5),
-      }),
-    });
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'WebAppASG',
+      {
+        vpc,
+        launchTemplate,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, // Deploy in private subnets only
+        },
+        minCapacity: 2, // Minimum instances for high availability
+        maxCapacity: 10, // Maximum instances for scalability
+        desiredCapacity: 2, // Initial desired capacity
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.minutes(5),
+        }),
+      }
+    );
 
     // Add scaling policies
     autoScalingGroup.scaleOnCpuUtilization('CPUScaling', {
@@ -257,20 +268,24 @@ EOF
     alb.logAccessLogs(albLogsBucket, 'access-logs');
 
     // 8. Create Target Group
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebAppTargetGroup', {
-      vpc,
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      targets: [autoScalingGroup],
-      healthCheck: {
-        path: '/health',
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        healthyThresholdCount: 2,
-        unhealthyThresholdCount: 3,
-      },
-      targetType: elbv2.TargetType.INSTANCE,
-    });
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'WebAppTargetGroup',
+      {
+        vpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targets: [autoScalingGroup],
+        healthCheck: {
+          path: '/health',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+        targetType: elbv2.TargetType.INSTANCE,
+      }
+    );
 
     // 9. Add HTTP Listener (for demo - in production, add HTTPS with valid certificate)
     alb.addListener('HTTPListener', {
