@@ -19,7 +19,7 @@ func CreateTapStack(ctx *pulumi.Context) error {
 	if environment == "" {
 		environment = "dev"
 	}
-	
+
 	// For PR environments, also check stack name if environment doesn't start with "pr"
 	stackName := ctx.Stack()
 	isPREnv := strings.HasPrefix(environment, "pr") || strings.Contains(stackName, "pr")

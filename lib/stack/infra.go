@@ -235,7 +235,7 @@ systemctl restart httpd`))),
 		return nil, err
 	}
 
-	rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("rds-%s", region), &rds.InstanceArgs{AllocatedStorage: pulumi.Int(20), StorageType: pulumi.String("gp2"), Engine: pulumi.String("mysql"), EngineVersion: pulumi.String("8.0"), InstanceClass: pulumi.String(dbInstanceClass), DbName: pulumi.String("appdb"), Username: pulumi.String("admin"), Password: pulumi.String("ChangeMe-StrongP@ssw0rd"), DbSubnetGroupName: rdsSubnetGroup.Name, VpcSecurityGroupIds: pulumi.StringArray{rdsSg.ID()}, BackupRetentionPeriod: pulumi.Int(7), MultiAz: pulumi.Bool(true), StorageEncrypted: pulumi.Bool(true), SkipFinalSnapshot: pulumi.Bool(true), Tags: tags}, pulumi.Provider(provider))
+	rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("rds-%s", region), &rds.InstanceArgs{AllocatedStorage: pulumi.Int(20), StorageType: pulumi.String("gp2"), Engine: pulumi.String("mysql"), EngineVersion: pulumi.String("8.0"), InstanceClass: pulumi.String(dbInstanceClass), DbName: pulumi.String("appdb"), Username: pulumi.String("admin"), Password: pulumi.String("ChangeMe-StrongP#ssw0rd1!"), DbSubnetGroupName: rdsSubnetGroup.Name, VpcSecurityGroupIds: pulumi.StringArray{rdsSg.ID()}, BackupRetentionPeriod: pulumi.Int(7), MultiAz: pulumi.Bool(true), StorageEncrypted: pulumi.Bool(true), SkipFinalSnapshot: pulumi.Bool(true), Tags: tags}, pulumi.Provider(provider))
 	if err != nil {
 		return nil, err
 	}
