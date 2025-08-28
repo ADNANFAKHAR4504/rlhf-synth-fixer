@@ -1,22 +1,22 @@
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 // Import your modules
 import {
-  KmsModule,
-  S3Module,
   CloudTrailModule,
-  IamModule,
-  VpcModule,
-  SecurityGroupModule,
   Ec2Module,
+  IamModule,
+  KmsModule,
   RdsModule,
+  S3Module,
+  SecurityGroupModule,
+  VpcModule,
 } from './modules';
 
 interface TapStackProps {
@@ -50,7 +50,8 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'us-west-2';
 
     const stateBucketRegion = props?.stateBucketRegion || 'us-west-2';
-    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const stateBucket =
+      props?.stateBucket || 'prod-config-logs-us-west-2-a8e48bba';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
@@ -176,7 +177,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.privateSubnets[0].id, // Deploy in private subnet
       securityGroupIds: [ec2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: 'compute-secure-key', // Uncomment and set if you have a key pair
+      keyName: 'my-key-pair', // Uncomment and set if you have a key pair
     });
 
     // Create RDS instance
