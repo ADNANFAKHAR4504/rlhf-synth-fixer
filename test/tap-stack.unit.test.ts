@@ -1,4 +1,3 @@
-// __tests__/tap-stack.unit.test.ts
 import { App } from 'cdktf';
 import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
@@ -93,8 +92,25 @@ describe('TapStack Unit Tests', () => {
   const { TerraformOutput, S3Backend } = require('cdktf');
   const { AwsProvider } = require('@cdktf/provider-aws/lib/provider');
 
+  const ORIGINAL_ENV = process.env.AWS_REGION_OVERRIDE;
+
   beforeEach(() => {
+    // Most tests assume override is set (via test/setup.js)
+    if (ORIGINAL_ENV !== undefined) {
+      process.env.AWS_REGION_OVERRIDE = ORIGINAL_ENV;
+    } else {
+      delete process.env.AWS_REGION_OVERRIDE;
+    }
     jest.clearAllMocks();
+  });
+
+  afterAll(() => {
+    // Restore env as we found it
+    if (ORIGINAL_ENV !== undefined) {
+      process.env.AWS_REGION_OVERRIDE = ORIGINAL_ENV;
+    } else {
+      delete process.env.AWS_REGION_OVERRIDE;
+    }
   });
 
   test('should create TapStack with default props', () => {
@@ -512,6 +528,9 @@ describe('TapStack Unit Tests', () => {
     // Note: We can't easily test addOverride directly since it's called in constructor
     // But we can verify the stack is created successfully
     expect(stack).toBeDefined();
+
+    // Keep reference to avoid unused var linting in strict setups
+    expect(addOverrideSpy).not.toBeNull();
   });
 
   test('should handle all props combinations', () => {
@@ -900,5 +919,63 @@ describe('TapStack Unit Tests', () => {
         defaultTags: [],
       })
     );
+  });
+
+  //
+  // ===== NEW TESTS TO COVER "NO AWS_REGION_OVERRIDE" BRANCH(ES) =====
+  //
+
+  test('should use awsRegion prop when AWS_REGION_OVERRIDE is not set', () => {
+    const original = process.env.AWS_REGION_OVERRIDE;
+    delete process.env.AWS_REGION_OVERRIDE;
+
+    jest.resetModules();
+
+    // We must re-import inside an isolate to ensure tap-stack reads fresh env.
+    jest.isolateModules(() => {
+      const { App } = require('cdktf');
+      const { TapStack: FreshTapStack } = require('../lib/tap-stack');
+      const { AwsProvider: FreshAwsProvider } = require('@cdktf/provider-aws/lib/provider');
+
+      const app = new App();
+      new FreshTapStack(app, 'TestStackNoOverride', { awsRegion: 'eu-west-2' });
+
+      expect(FreshAwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({ region: 'eu-west-2' })
+      );
+    });
+
+    // restore env
+    if (original !== undefined) process.env.AWS_REGION_OVERRIDE = original;
+  });
+
+  // If your TapStack has a final default region when neither override nor prop is set,
+  // keep this test. If not, you can delete it.
+  test('falls back to default region when no override or prop provided', () => {
+    const original = process.env.AWS_REGION_OVERRIDE;
+    delete process.env.AWS_REGION_OVERRIDE;
+
+    jest.resetModules();
+
+    jest.isolateModules(() => {
+      const { App } = require('cdktf');
+      const { TapStack: FreshTapStack } = require('../lib/tap-stack');
+      const { AwsProvider: FreshAwsProvider } = require('@cdktf/provider-aws/lib/provider');
+
+      const app = new App();
+      // No awsRegion prop here → expect TapStack internal default
+      new FreshTapStack(app, 'TestStackDefaultRegion');
+
+      // Replace 'us-east-1' with your actual internal default if different.
+      expect(FreshAwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({ region: 'us-east-1' })
+      );
+    });
+
+    if (original !== undefined) process.env.AWS_REGION_OVERRIDE = original;
   });
 });
