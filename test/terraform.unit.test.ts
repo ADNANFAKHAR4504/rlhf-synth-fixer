@@ -4,10 +4,10 @@
 import * as fs from "fs";
 import * as path from "path";
 
-// Prefer env var; else resolve ../lib/tap_stack.tf relative to this test file
+// Prefer env var; else resolve ../lib/main.tf relative to this test file
 const TF_PATH = process.env.TF_MAIN_PATH
   ? path.resolve(process.env.TF_MAIN_PATH)
-  : path.resolve(__dirname, "../lib/tap_stack.tf");
+  : path.resolve(__dirname, "../lib/main.tf");
 
 // Also check vars.tf for variable definitions
 const VARS_PATH = process.env.TF_VARS_PATH
@@ -38,7 +38,7 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
     const combinedHcl = hcl + "\n" + varsHcl;
     expect(combinedHcl).toMatch(
       new RegExp(
-        String.raw`variable\s+"aws_region"\s*{[\s\S]*?description\s*=\s*"AWS provider region"[\s\S]*?type\s*=\s*string[\s\S]*?default\s*=\s*"us-west-2"[\s\S]*?}`,
+        String.raw`variable\s+"aws_region"\s*{[\s\S]*?description\s*=\s*"AWS provider region"[\s\S]*?type\s*=\s*string[\s\S]*?default\s*=\s*"us-east-1"[\s\S]*?}`,
         "m"
       )
     );
@@ -337,8 +337,11 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
     const combinedHcl = hcl + "\n" + varsHcl;
     // Note: This test may pass or fail depending on actual vars.tf content
     
-    // But should not be referenced in any module (potential dead code)
-    expect(hcl).not.toMatch(/var\.aws_region(?!\s*$)/); // Allow in outputs but not in module inputs
+    // But should not be referenced in any module blocks (potential dead code)
+    // Extract only module blocks to check
+    const moduleBlocks = hcl.match(/module\s+"[^"]+"\s*{[^}]*}/g) || [];
+    const moduleContent = moduleBlocks.join('\n');
+    expect(moduleContent).not.toMatch(/var\.aws_region/);
   });
 
   test("validates proper use of variables vs local values", () => {

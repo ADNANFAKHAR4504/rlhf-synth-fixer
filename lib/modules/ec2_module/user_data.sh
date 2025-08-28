@@ -1,6 +1,6 @@
 #!/bin/bash
 yum update -y
-yum install -y httpd mysql
+yum install -y httpd
 
 # Start and enable Apache
 systemctl start httpd

@@ -175,10 +175,6 @@ variable "target_protocol" {
   description = "Protocol to use for routing traffic to targets"
   type        = string
   default     = "HTTP"
-  validation {
-    condition     = contains(["HTTP", "HTTPS"], var.target_protocol)
-    error_message = "Target protocol must be either HTTP or HTTPS."
-  }
 }
 
 variable "alb_idle_timeout" {

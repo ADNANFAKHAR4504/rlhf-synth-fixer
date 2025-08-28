@@ -68,7 +68,7 @@ variable "target_protocol" {
 variable "enable_deletion_protection" {
   description = "Enable deletion protection for ALB"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "idle_timeout" {
@@ -135,7 +135,7 @@ variable "health_check_matcher" {
 variable "health_check_timeout" {
   description = "Amount of time to wait when receiving a response from the health check"
   type        = number
-  default     = 5
+  default     = 10
   validation {
     condition     = var.health_check_timeout >= 2 && var.health_check_timeout <= 120
     error_message = "Health check timeout must be between 2 and 120 seconds."
@@ -145,7 +145,7 @@ variable "health_check_timeout" {
 variable "health_check_unhealthy_threshold" {
   description = "Number of consecutive health check failures required"
   type        = number
-  default     = 2
+  default     = 3
   validation {
     condition     = var.health_check_unhealthy_threshold >= 2 && var.health_check_unhealthy_threshold <= 10
     error_message = "Health check unhealthy threshold must be between 2 and 10."
