@@ -49,12 +49,12 @@ resource "aws_security_group" "web" {
   name_prefix = "${var.environment}-${var.project_name}-web-"
   vpc_id      = var.vpc_id
   description = "Security group for web servers"
-
-  # HTTP access from ALB
+  
+  # Custom application port from ALB
   ingress {
     description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
+    from_port       = var.app_port
+    to_port         = var.app_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
@@ -64,15 +64,6 @@ resource "aws_security_group" "web" {
     description     = "HTTPS from ALB"
     from_port       = 443
     to_port         = 443
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  # Custom application port from ALB
-  ingress {
-    description     = "Application port from ALB"
-    from_port       = var.app_port
-    to_port         = var.app_port
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }

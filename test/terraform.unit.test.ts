@@ -7,7 +7,7 @@ import * as path from "path";
 // Prefer env var; else resolve ../lib/main.tf relative to this test file
 const TF_PATH = process.env.TF_MAIN_PATH
   ? path.resolve(process.env.TF_MAIN_PATH)
-  : path.resolve(__dirname, "../lib/main.tf");
+  : path.resolve(__dirname, "../lib/tap_stack.tf");
 
 // Also check vars.tf for variable definitions
 const VARS_PATH = process.env.TF_VARS_PATH
@@ -38,7 +38,7 @@ describe("Terraform Modular Infrastructure (static checks)", () => {
     const combinedHcl = hcl + "\n" + varsHcl;
     expect(combinedHcl).toMatch(
       new RegExp(
-        String.raw`variable\s+"aws_region"\s*{[\s\S]*?description\s*=\s*"AWS provider region"[\s\S]*?type\s*=\s*string[\s\S]*?default\s*=\s*"us-east-1"[\s\S]*?}`,
+        String.raw`variable\s+"aws_region"\s*{[\s\S]*?description\s*=\s*"AWS provider region"[\s\S]*?type\s*=\s*string[\s\S]*?default\s*=\s*"us-west-2"[\s\S]*?}`,
         "m"
       )
     );
