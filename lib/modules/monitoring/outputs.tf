@@ -1,18 +1,3 @@
-#output "cloudtrail_arn" {
-#  description = "ARN of the CloudTrail"
-#  value       = aws_cloudtrail.main.arn
-#}
-#
-#output "cloudtrail_name" {
-#  description = "Name of the CloudTrail"
-#  value       = aws_cloudtrail.main.name
-#}
-
-#output "guardduty_detector_id" {
-#  description = "ID of the GuardDuty detector"
-#  value       = aws_guardduty_detector.main.id
-#}
-
 output "config_recorder_name" {
   description = "Name of the Config recorder"
   value       = aws_config_configuration_recorder.main.name

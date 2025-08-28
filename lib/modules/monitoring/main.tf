@@ -74,29 +74,6 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   })
 }
 
-# CloudTrail
-#resource "aws_cloudtrail" "main" {
-#  name           = "${var.project_name}-CloudTrail-${var.environment}"
-#  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
-#
-#  event_selector {
-#    read_write_type           = "All"
-#    include_management_events = true
-#
-#    data_resource {
-#      type   = "AWS::S3::Object"
-#      values = ["arn:aws:s3:::*/*"] # Logs all object-level operations in all buckets
-#    }
-#  }
-#
-#  tags = {
-#    Name = "${var.project_name}-CloudTrail-${var.environment}"
-#  }
-#
-#  depends_on = [aws_s3_bucket_policy.cloudtrail]
-#}
-
-
 # CloudWatch Log Group for security logs
 resource "aws_cloudwatch_log_group" "security_logs" {
   name              = "/aws/security/login-attempts-${var.environment}"
@@ -197,33 +174,6 @@ resource "aws_sns_topic" "security_alerts" {
     Name = "${var.project_name}-Security-Alerts-${var.environment}"
   }
 }
-
-# GuardDuty
-#resource "aws_guardduty_detector" "main" {
-#  enable = true
-#
-#  datasources {
-#    s3_logs {
-#      enable = true
-#    }
-#    kubernetes {
-#      audit_logs {
-#        enable = true
-#      }
-#    }
-#    malware_protection {
-#      scan_ec2_instance_with_findings {
-#        ebs_volumes {
-#          enable = true
-#        }
-#      }
-#    }
-#  }
-#
-#  tags = {
-#    Name = "${var.project_name}-GuardDuty-${var.environment}"
-#  }
-#}
 
 # AWS Config S3 Bucket
 resource "aws_s3_bucket" "config" {
