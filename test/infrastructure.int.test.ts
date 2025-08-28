@@ -1,6 +1,6 @@
+import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as AWS from 'aws-sdk';
 
 // Integration Tests
 describe('Infrastructure Integration Tests', () => {
@@ -63,7 +63,7 @@ describe('Infrastructure Integration Tests', () => {
   });
 
   describe('Compute Resources', () => {
-    it('EC2 instance is running', async () => {
+    it('EC2 instance is running with correct configuration', async () => {
       if (!outputs.ec2InstanceId) {
         console.log('Skipping EC2 test - no EC2 instance ID in outputs');
         return;
@@ -71,18 +71,26 @@ describe('Infrastructure Integration Tests', () => {
 
       const response = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
       expect(response.Reservations).toHaveLength(1);
+
       const instance = response.Reservations![0].Instances![0];
       expect(instance.State!.Name).toBe('running');
       expect(instance.InstanceType).toBe('t3.micro');
+      expect(instance.Placement!.AvailabilityZone).toContain('ap-south-1');
+      expect(instance.IamInstanceProfile).toBeDefined();
     });
 
-    it('EC2 instance has public IP', async () => {
-      if (!outputs.ec2PublicIp) {
-        console.log('Skipping public IP test - no public IP in outputs');
+    it('EC2 instance has public IP and is in public subnet', async () => {
+      if (!outputs.ec2PublicIp || !outputs.ec2InstanceId) {
+        console.log('Skipping public IP test - missing outputs');
         return;
       }
 
       expect(outputs.ec2PublicIp).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+
+      const response = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+      const instance = response.Reservations![0].Instances![0];
+      expect(instance.PublicIpAddress).toBeDefined();
+      expect(instance.SubnetId).toBe(outputs.publicSubnetId);
     });
 
     it('EC2 instance is accessible via Session Manager', async () => {
@@ -105,7 +113,7 @@ describe('Infrastructure Integration Tests', () => {
   });
 
   describe('Database', () => {
-    it('RDS instance is available', async () => {
+    it('RDS instance is available with correct configuration', async () => {
       if (!outputs.rdsEndpoint) {
         console.log('Skipping RDS test - no RDS endpoint in outputs');
         return;
@@ -114,8 +122,27 @@ describe('Infrastructure Integration Tests', () => {
       const dbId = outputs.rdsEndpoint.split('.')[0];
       const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
       expect(response.DBInstances).toHaveLength(1);
-      expect(response.DBInstances![0].DBInstanceStatus).toBe('available');
-      expect(response.DBInstances![0].Engine).toBe('mysql');
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.Engine).toBe('mysql');
+      expect(dbInstance.DBInstanceClass).toBe('db.t3.micro');
+      expect(dbInstance.AllocatedStorage).toBe(20);
+      expect(dbInstance.StorageType).toBe('gp2');
+    });
+
+    it('RDS instance has KMS encryption enabled', async () => {
+      if (!outputs.rdsEndpoint) {
+        console.log('Skipping RDS encryption test - no RDS endpoint in outputs');
+        return;
+      }
+
+      const dbId = outputs.rdsEndpoint.split('.')[0];
+      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.KmsKeyId).toBeDefined();
     });
 
     it('RDS instance is not publicly accessible', async () => {
@@ -126,11 +153,11 @@ describe('Infrastructure Integration Tests', () => {
 
       const dbId = outputs.rdsEndpoint.split('.')[0];
       const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-      
+
       expect(response.DBInstances![0].PubliclyAccessible).toBe(false);
     });
 
-    it('RDS instance has managed master password', async () => {
+    it('RDS instance has managed master password and CloudWatch logs', async () => {
       if (!outputs.rdsEndpoint) {
         console.log('Skipping RDS password test - no RDS endpoint in outputs');
         return;
@@ -138,8 +165,21 @@ describe('Infrastructure Integration Tests', () => {
 
       const dbId = outputs.rdsEndpoint.split('.')[0];
       const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-      
-      expect(response.DBInstances![0].MasterUserSecret).toBeDefined();
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.MasterUserSecret).toBeDefined();
+      expect(dbInstance.EnabledCloudwatchLogsExports).toContain('error');
+      expect(dbInstance.EnabledCloudwatchLogsExports).toContain('slowquery');
+      expect(dbInstance.MultiAZ).toBe(false);
+    });
+
+    it('RDS instance is in ap-south-1 region', async () => {
+      if (!outputs.rdsEndpoint) {
+        console.log('Skipping RDS region test - no RDS endpoint in outputs');
+        return;
+      }
+
+      expect(outputs.rdsEndpoint).toContain('ap-south-1.rds.amazonaws.com');
     });
   });
 
@@ -157,7 +197,7 @@ describe('Infrastructure Integration Tests', () => {
       expect(versioningResponse.Status).toBe('Enabled');
     });
 
-    it('S3 bucket has encryption enabled', async () => {
+    it('S3 bucket has KMS encryption enabled', async () => {
       if (!outputs.s3BucketName) {
         console.log('Skipping S3 encryption test - no S3 bucket name in outputs');
         return;
@@ -166,6 +206,20 @@ describe('Infrastructure Integration Tests', () => {
       const encryptionResponse = await s3.getBucketEncryption({ Bucket: outputs.s3BucketName }).promise();
       expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
       expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules).toHaveLength(1);
+
+      const rule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules[0];
+      expect(rule.ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
+      expect(rule.ApplyServerSideEncryptionByDefault!.KMSMasterKeyID).toBeDefined();
+    });
+
+    it('S3 bucket is in ap-south-1 region', async () => {
+      if (!outputs.s3BucketName) {
+        console.log('Skipping S3 region test - no S3 bucket name in outputs');
+        return;
+      }
+
+      const locationResponse = await s3.getBucketLocation({ Bucket: outputs.s3BucketName }).promise();
+      expect(locationResponse.LocationConstraint).toBe('ap-south-1');
     });
 
     it('S3 bucket has public access blocked', async () => {
@@ -196,7 +250,7 @@ describe('Infrastructure Integration Tests', () => {
 
       const policiesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
       expect(policiesResponse.AttachedPolicies!.length).toBeGreaterThanOrEqual(1);
-      
+
       const hasSSMPolicy = policiesResponse.AttachedPolicies!.some(
         policy => policy.PolicyArn === 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       );
@@ -210,19 +264,19 @@ describe('Infrastructure Integration Tests', () => {
       }
 
       const roleName = outputs.iamRoleArn.split('/').pop();
-      
+
       const policiesResponse = await iam.listRolePolicies({ RoleName: roleName }).promise();
       const attachedPoliciesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
-      
+
       const hasS3Policy = policiesResponse.PolicyNames.some(name => name.includes('s3')) ||
-                         attachedPoliciesResponse.AttachedPolicies!.some(policy => policy.PolicyName!.includes('s3'));
-      
+        attachedPoliciesResponse.AttachedPolicies!.some(policy => policy.PolicyName!.includes('s3'));
+
       expect(hasS3Policy).toBe(true);
     });
   });
 
   describe('Monitoring', () => {
-    it('CloudWatch log group exists', async () => {
+    it('CloudWatch log group exists with correct retention', async () => {
       if (!outputs.cloudWatchLogGroup) {
         console.log('Skipping CloudWatch test - no log group in outputs');
         return;
@@ -232,6 +286,18 @@ describe('Infrastructure Integration Tests', () => {
       expect(response.logGroups).toHaveLength(1);
       expect(response.logGroups![0].logGroupName).toBe(outputs.cloudWatchLogGroup);
       expect(response.logGroups![0].retentionInDays).toBe(14);
+    });
+
+    it('CloudWatch log group is in ap-south-1 region', async () => {
+      if (!outputs.cloudWatchLogGroup) {
+        console.log('Skipping CloudWatch region test - no log group in outputs');
+        return;
+      }
+
+      const response = await logs.describeLogGroups({ logGroupNamePrefix: outputs.cloudWatchLogGroup }).promise();
+      expect(response.logGroups).toHaveLength(1);
+      // Log group ARN should contain ap-south-1 region
+      expect(response.logGroups![0].arn).toContain('ap-south-1');
     });
 
     it('EC2 instance can write to CloudWatch Logs', async () => {
@@ -255,7 +321,7 @@ describe('Infrastructure Integration Tests', () => {
   });
 
   describe('Security Groups', () => {
-    it('EC2 security group has no SSH access', async () => {
+    it('EC2 security group has SSH access from 193.10.210.0/32', async () => {
       if (!outputs.ec2InstanceId) {
         console.log('Skipping security group test - no EC2 instance ID in outputs');
         return;
@@ -264,15 +330,44 @@ describe('Infrastructure Integration Tests', () => {
       const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
       const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
 
+      let hasCorrectSSHRule = false;
       for (const sg of securityGroups) {
         const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
         const ingressRules = sgResponse.SecurityGroups![0].IpPermissions!;
-        
-        const hasSSHRule = ingressRules.some(rule => 
+
+        const sshRule = ingressRules.find(rule =>
           rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
         );
-        expect(hasSSHRule).toBe(false);
+
+        if (sshRule && sshRule.IpRanges) {
+          hasCorrectSSHRule = sshRule.IpRanges.some(range => range.CidrIp === '193.10.210.0/32');
+          if (hasCorrectSSHRule) break;
+        }
       }
+      expect(hasCorrectSSHRule).toBe(true);
+    });
+
+    it('EC2 security group allows outbound traffic to anywhere', async () => {
+      if (!outputs.ec2InstanceId) {
+        console.log('Skipping outbound security group test - no EC2 instance ID in outputs');
+        return;
+      }
+
+      const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+      const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
+
+      let hasAllOutboundRule = false;
+      for (const sg of securityGroups) {
+        const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
+        const egressRules = sgResponse.SecurityGroups![0].IpPermissionsEgress!;
+
+        hasAllOutboundRule = egressRules.some(rule =>
+          rule.IpProtocol === '-1' &&
+          rule.IpRanges!.some(range => range.CidrIp === '0.0.0.0/0')
+        );
+        if (hasAllOutboundRule) break;
+      }
+      expect(hasAllOutboundRule).toBe(true);
     });
   });
 
@@ -292,8 +387,8 @@ describe('Infrastructure Integration Tests', () => {
 
       expect(routeTablesResponse.RouteTables).toHaveLength(1);
       const routes = routeTablesResponse.RouteTables![0].Routes!;
-      
-      const hasIGWRoute = routes.some(route => 
+
+      const hasIGWRoute = routes.some(route =>
         route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId
       );
       expect(hasIGWRoute).toBe(true);
@@ -332,7 +427,7 @@ describe('Infrastructure Integration Tests', () => {
   });
 
   describe('Resource Tagging and Compliance', () => {
-    it('resources have proper environment tags', async () => {
+    it('resources have proper environment and department tags', async () => {
       if (!outputs.vpcId) {
         console.log('Skipping tagging test - no VPC ID in outputs');
         return;
@@ -340,10 +435,32 @@ describe('Infrastructure Integration Tests', () => {
 
       const response = await ec2.describeVpcs({ VpcIds: [outputs.vpcId] }).promise();
       const vpc = response.Vpcs![0];
-      
+
       expect(vpc.Tags).toBeDefined();
       const environmentTag = vpc.Tags!.find(tag => tag.Key === 'Environment');
+      const departmentTag = vpc.Tags!.find(tag => tag.Key === 'Department');
       expect(environmentTag).toBeDefined();
+      expect(departmentTag).toBeDefined();
+      expect(departmentTag!.Value).toBe('IT');
+    });
+
+    it('all resources are in ap-south-1 region', async () => {
+      // Check VPC region
+      if (outputs.vpcId) {
+        const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.vpcId] }).promise();
+        expect(vpcResponse.$response.request.region).toBe(region);
+      }
+
+      // Check EC2 region
+      if (outputs.ec2InstanceId) {
+        const ec2Response = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+        expect(ec2Response.Reservations![0].Instances![0].Placement!.AvailabilityZone).toContain('ap-south-1');
+      }
+
+      // Check RDS region
+      if (outputs.rdsEndpoint) {
+        expect(outputs.rdsEndpoint).toContain('ap-south-1');
+      }
     });
 
     it('resources are optimized for cost and performance', async () => {
@@ -358,7 +475,7 @@ describe('Infrastructure Integration Tests', () => {
         const instance = ec2Response.Reservations![0].Instances![0];
         expect(instance.InstanceType).toBe('t3.micro');
       }
-      
+
       // Check RDS instance class
       if (outputs.rdsEndpoint) {
         const dbId = outputs.rdsEndpoint.split('.')[0];
@@ -384,21 +501,54 @@ describe('Infrastructure Integration Tests', () => {
           check: 'RDS Encryption',
           secure: rdsResponse.DBInstances![0].StorageEncrypted === true
         });
+        securityChecks.push({
+          check: 'RDS Multi-AZ Disabled',
+          secure: rdsResponse.DBInstances![0].MultiAZ === false
+        });
       }
 
       // Check S3 bucket security
       if (outputs.s3BucketName) {
         try {
-          const publicAccessResponse = await s3.getPublicAccessBlock({ 
-            Bucket: outputs.s3BucketName 
+          const publicAccessResponse = await s3.getPublicAccessBlock({
+            Bucket: outputs.s3BucketName
           }).promise();
           securityChecks.push({
             check: 'S3 Public Access Block',
-            secure: publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicAcls === true
+            secure: publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicAcls === true &&
+              publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicPolicy === true &&
+              publicAccessResponse.PublicAccessBlockConfiguration!.IgnorePublicAcls === true &&
+              publicAccessResponse.PublicAccessBlockConfiguration!.RestrictPublicBuckets === true
           });
         } catch (error) {
           securityChecks.push({ check: 'S3 Public Access Block', secure: false });
         }
+      }
+
+      // Check EC2 security group for SSH access
+      if (outputs.ec2InstanceId) {
+        const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+        const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
+
+        let hasCorrectSSHRule = false;
+        for (const sg of securityGroups) {
+          const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
+          const ingressRules = sgResponse.SecurityGroups![0].IpPermissions!;
+
+          const sshRule = ingressRules.find(rule =>
+            rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
+          );
+
+          if (sshRule && sshRule.IpRanges) {
+            hasCorrectSSHRule = sshRule.IpRanges.some(range => range.CidrIp === '193.10.210.0/32');
+            if (hasCorrectSSHRule) break;
+          }
+        }
+
+        securityChecks.push({
+          check: 'SSH Access from 193.10.210.0/32',
+          secure: hasCorrectSSHRule
+        });
       }
 
       if (securityChecks.length === 0) {
@@ -419,7 +569,7 @@ describe('Infrastructure Integration Tests', () => {
         const dbId = outputs.rdsEndpoint.split('.')[0];
         const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
         const dbInstance = response.DBInstances![0];
-        
+
         // RDS may not have backup retention configured, so just check it exists
         expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(0);
         hasBackupChecks = true;
@@ -485,7 +635,7 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     describe('e2e: Security Group Configuration', () => {
-      it('e2e: EC2 security group has no SSH access', async () => {
+      it('e2e: EC2 security group has SSH access from 193.10.210.0/32', async () => {
         if (!outputs.ec2InstanceId) {
           console.log('Skipping security group test - no EC2 instance ID in outputs');
           return;
@@ -494,15 +644,21 @@ describe('Infrastructure Integration Tests', () => {
         const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
         const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
 
+        let hasCorrectSSHRule = false;
         for (const sg of securityGroups) {
           const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
           const ingressRules = sgResponse.SecurityGroups![0].IpPermissions!;
-          
-          const hasSSHRule = ingressRules.some(rule => 
+
+          const sshRule = ingressRules.find(rule =>
             rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
           );
-          expect(hasSSHRule).toBe(false);
+
+          if (sshRule && sshRule.IpRanges) {
+            hasCorrectSSHRule = sshRule.IpRanges.some(range => range.CidrIp === '193.10.210.0/32');
+            if (hasCorrectSSHRule) break;
+          }
         }
+        expect(hasCorrectSSHRule).toBe(true);
       });
 
       it('e2e: EC2 security group allows all outbound traffic', async () => {
@@ -514,16 +670,18 @@ describe('Infrastructure Integration Tests', () => {
         const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
         const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
 
+        let hasAllOutboundRule = false;
         for (const sg of securityGroups) {
           const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
           const egressRules = sgResponse.SecurityGroups![0].IpPermissionsEgress!;
-          
-          const hasAllOutboundRule = egressRules.some(rule => 
-            rule.IpProtocol === '-1' && 
+
+          hasAllOutboundRule = egressRules.some(rule =>
+            rule.IpProtocol === '-1' &&
             rule.IpRanges!.some(range => range.CidrIp === '0.0.0.0/0')
           );
-          expect(hasAllOutboundRule).toBe(true);
+          if (hasAllOutboundRule) break;
         }
+        expect(hasAllOutboundRule).toBe(true);
       });
     });
 
@@ -543,8 +701,8 @@ describe('Infrastructure Integration Tests', () => {
 
         expect(routeTablesResponse.RouteTables).toHaveLength(1);
         const routes = routeTablesResponse.RouteTables![0].Routes!;
-        
-        const hasIGWRoute = routes.some(route => 
+
+        const hasIGWRoute = routes.some(route =>
           route.DestinationCidrBlock === '0.0.0.0/0' && route.GatewayId
         );
         expect(hasIGWRoute).toBe(true);
@@ -565,7 +723,7 @@ describe('Infrastructure Integration Tests', () => {
 
         expect(natGatewaysResponse.NatGateways).toBeDefined();
         expect(natGatewaysResponse.NatGateways!.length).toBeGreaterThanOrEqual(1);
-        
+
         natGatewaysResponse.NatGateways!.forEach(natGw => {
           expect(natGw.State).toBe('available');
           expect(natGw.SubnetId).toBe(outputs.publicSubnetId);
@@ -582,7 +740,7 @@ describe('Infrastructure Integration Tests', () => {
 
         const dbId = outputs.rdsEndpoint.split('.')[0];
         const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-        
+
         expect(response.DBInstances![0].PubliclyAccessible).toBe(false);
       });
 
@@ -594,7 +752,7 @@ describe('Infrastructure Integration Tests', () => {
 
         const dbId = outputs.rdsEndpoint.split('.')[0];
         const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-        
+
         expect(response.DBInstances![0].MasterUserSecret).toBeDefined();
       });
 
@@ -606,10 +764,10 @@ describe('Infrastructure Integration Tests', () => {
 
         const dbId = outputs.rdsEndpoint.split('.')[0];
         const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-        
+
         const dbSubnetGroup = response.DBInstances![0].DBSubnetGroup!;
         const subnetIds = dbSubnetGroup.Subnets!.map(subnet => subnet.SubnetIdentifier);
-        
+
         expect(subnetIds).toContain(outputs.privateSubnetId);
       });
 
@@ -621,7 +779,7 @@ describe('Infrastructure Integration Tests', () => {
 
         const dbId = outputs.rdsEndpoint.split('.')[0];
         const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-        
+
         const enabledLogs = response.DBInstances![0].EnabledCloudwatchLogsExports;
         expect(enabledLogs).toBeDefined();
         expect(enabledLogs).toContain('error');
@@ -655,10 +813,10 @@ describe('Infrastructure Integration Tests', () => {
           return;
         }
 
-        const response = await logs.describeLogGroups({ 
-          logGroupNamePrefix: outputs.cloudWatchLogGroup 
+        const response = await logs.describeLogGroups({
+          logGroupNamePrefix: outputs.cloudWatchLogGroup
         }).promise();
-        
+
         expect(response.logGroups).toHaveLength(1);
         expect(response.logGroups![0].retentionInDays).toBe(14);
       });
@@ -672,13 +830,13 @@ describe('Infrastructure Integration Tests', () => {
         }
 
         const roleName = outputs.iamRoleArn.split('/').pop();
-        
+
         const policiesResponse = await iam.listRolePolicies({ RoleName: roleName }).promise();
         const attachedPoliciesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
-        
+
         const hasS3Policy = policiesResponse.PolicyNames.some(name => name.includes('s3')) ||
-                           attachedPoliciesResponse.AttachedPolicies!.some(policy => policy.PolicyName!.includes('s3'));
-        
+          attachedPoliciesResponse.AttachedPolicies!.some(policy => policy.PolicyName!.includes('s3'));
+
         expect(hasS3Policy).toBe(true);
       });
 
@@ -690,19 +848,19 @@ describe('Infrastructure Integration Tests', () => {
 
         const roleName = outputs.iamRoleArn.split('/').pop();
         const policiesResponse = await iam.listRolePolicies({ RoleName: roleName }).promise();
-        
+
         for (const policyName of policiesResponse.PolicyNames) {
           if (policyName.includes('s3')) {
             const policyResponse = await iam.getRolePolicy({
               RoleName: roleName,
               PolicyName: policyName
             }).promise();
-            
+
             const policyDocument = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument));
-            const s3Statement = policyDocument.Statement.find((stmt: any) => 
+            const s3Statement = policyDocument.Statement.find((stmt: any) =>
               stmt.Action && stmt.Action.includes('s3:PutObject')
             );
-            
+
             expect(s3Statement).toBeDefined();
             expect(s3Statement.Action).toEqual(['s3:PutObject']);
           }

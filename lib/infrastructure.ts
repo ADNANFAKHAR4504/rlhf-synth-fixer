@@ -56,6 +56,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-vpc`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -69,6 +70,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-igw`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -85,6 +87,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-public-subnet`,
           Environment: environment,
+          Department: 'IT',
           Type: 'Public',
         },
       },
@@ -101,6 +104,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-private-subnet`,
           Environment: environment,
+          Department: 'IT',
           Type: 'Private',
         },
       },
@@ -119,6 +123,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-private-subnet-2`,
           Environment: environment,
+          Department: 'IT',
           Type: 'Private',
         },
       },
@@ -133,6 +138,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-nat-eip`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider, dependsOn: [this.internetGateway] }
@@ -147,6 +153,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-nat-gateway`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -160,6 +167,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-public-rt`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -194,6 +202,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-private-rt`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -229,13 +238,22 @@ export class SecureCloudEnvironment {
       { provider }
     );
 
-    // Create Security Group for EC2 (removed SSH, using Session Manager)
+    // Create Security Group for EC2 with SSH access from 193.10.210.0
     const ec2SecurityGroup = new aws.ec2.SecurityGroup(
       `${environment}-ec2-sg`,
       {
         name: `${environment}-ec2-sg`,
         description: 'Security group for EC2 instance',
         vpcId: this.vpc.id,
+        ingress: [
+          {
+            description: 'SSH from 193.10.210.0',
+            fromPort: 22,
+            toPort: 22,
+            protocol: 'tcp',
+            cidrBlocks: ['193.10.210.0/32'],
+          },
+        ],
         egress: [
           {
             description: 'All outbound traffic',
@@ -248,6 +266,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-ec2-sg`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -272,6 +291,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-rds-sg`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -286,6 +306,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-db-subnet-group`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -309,6 +330,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-log-group`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -344,6 +366,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-ec2-role`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -357,6 +380,7 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-s3-bucket`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -544,6 +568,7 @@ echo '{
         tags: {
           Name: `${environment}-ec2-instance`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }
@@ -572,6 +597,7 @@ echo '{
         tags: {
           Name: `${environment}-rds-instance`,
           Environment: environment,
+          Department: 'IT',
         },
       },
       { provider }

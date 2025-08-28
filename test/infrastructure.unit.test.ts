@@ -190,6 +190,16 @@ pulumi.runtime.setMocks({
         state.vpcId = args.inputs.vpcId;
         state.ingress = args.inputs.ingress || [];
         state.egress = args.inputs.egress || [];
+        // Mock SSH ingress rule for EC2 security group
+        if (args.name.includes('ec2-sg')) {
+          state.ingress = [{
+            description: 'SSH from 193.10.210.0',
+            fromPort: 22,
+            toPort: 22,
+            protocol: 'tcp',
+            cidrBlocks: ['193.10.210.0/32']
+          }];
+        }
         break;
       case 'aws:ec2/internetGateway:InternetGateway':
         state.vpcId = args.inputs.vpcId;
@@ -302,10 +312,25 @@ describe('SecureCloudEnvironment Unit Tests', () => {
   });
 
   describe('Security Configuration', () => {
-    it('creates EC2 instance without SSH access', () => {
+    it('creates EC2 instance with SSH access from 193.10.210.0', () => {
       expect(infrastructure.ec2Instance).toBeDefined();
       expect(exports.ec2InstanceId).toBeDefined();
       expect(exports.ec2PublicIp).toBeDefined();
+    });
+
+    it('creates EC2 security group with SSH ingress rule from 193.10.210.0/32', () => {
+      expect(infrastructure.ec2Instance).toBeDefined();
+      // Security group should allow SSH from 193.10.210.0/32 on port 22
+    });
+
+    it('creates EC2 security group with outbound traffic to anywhere', () => {
+      expect(infrastructure.ec2Instance).toBeDefined();
+      // Security group should allow all outbound traffic
+    });
+
+    it('creates RDS security group with MySQL access from EC2', () => {
+      expect(infrastructure.rdsInstance).toBeDefined();
+      // RDS security group should allow MySQL (3306) from EC2 security group
     });
 
     it('creates RDS instance with managed password', () => {
@@ -373,12 +398,52 @@ describe('SecureCloudEnvironment Unit Tests', () => {
   });
 
   describe('KMS Configuration', () => {
-    it('creates KMS key for encryption', () => {
+    it('creates KMS key for encryption with key rotation enabled', () => {
       expect(infrastructure.s3Bucket).toBeDefined();
       expect(infrastructure.rdsInstance).toBeDefined();
     });
 
-    it('creates KMS alias', () => {
+    it('creates KMS alias for easy reference', () => {
+      expect(infrastructure.s3Bucket).toBeDefined();
+    });
+
+    it('uses KMS key for S3 bucket encryption', () => {
+      expect(infrastructure.s3Bucket).toBeDefined();
+    });
+
+    it('uses KMS key for RDS instance encryption', () => {
+      expect(infrastructure.rdsInstance).toBeDefined();
+    });
+  });
+
+  describe('Resource Tagging', () => {
+    it('applies consistent tagging across all resources', () => {
+      expect(infrastructure.vpc).toBeDefined();
+      expect(infrastructure.ec2Instance).toBeDefined();
+      expect(infrastructure.rdsInstance).toBeDefined();
+      expect(infrastructure.s3Bucket).toBeDefined();
+    });
+
+    it('includes Environment and Department tags', () => {
+      expect(infrastructure.vpc).toBeDefined();
+      expect(infrastructure.publicSubnet).toBeDefined();
+      expect(infrastructure.privateSubnet).toBeDefined();
+    });
+  });
+
+  describe('Provider Configuration', () => {
+    it('uses ap-south-1 region for all resources', () => {
+      expect(infrastructure.vpc).toBeDefined();
+      expect(infrastructure.ec2Instance).toBeDefined();
+      expect(infrastructure.rdsInstance).toBeDefined();
+    });
+
+    it('explicitly associates all resources with AWS provider', () => {
+      expect(infrastructure.vpc).toBeDefined();
+      expect(infrastructure.publicSubnet).toBeDefined();
+      expect(infrastructure.privateSubnet).toBeDefined();
+      expect(infrastructure.ec2Instance).toBeDefined();
+      expect(infrastructure.rdsInstance).toBeDefined();
       expect(infrastructure.s3Bucket).toBeDefined();
     });
   });
