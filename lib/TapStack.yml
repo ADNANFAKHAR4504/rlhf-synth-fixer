@@ -563,6 +563,8 @@ Resources:
           Id: !GetAtt PipelineKMSKey.Arn
           Type: KMS
       Stages:
+        # Source stage - requires GitHub OAuth token in AWS Secrets Manager
+        # Create secret: aws secretsmanager create-secret --name github-oauth-token --secret-string "your-github-token"
         - Name: Source
           Actions:
             - Name: SourceAction
@@ -575,7 +577,7 @@ Resources:
                 Owner: !Ref GitHubOwner
                 Repo: !Ref GitHubRepository
                 Branch: !Ref GitHubBranch
-                OAuthToken: "{{resolve:secretsmanager:github-token:SecretString:token}}"
+                OAuthToken: "{{resolve:secretsmanager:github-oauth-token}}"
               OutputArtifacts:
                 - Name: SourceOutput
         - Name: Build
