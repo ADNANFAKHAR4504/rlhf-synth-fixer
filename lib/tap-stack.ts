@@ -195,7 +195,7 @@ export class TapStack extends cdk.Stack {
 
     // 5. S3 BUCKETS with encryption
     const appBucket = new s3.Bucket(this, 'SecureAppBucket', {
-      bucketName: `secureapp-bucket-${this.account}-${this.region}-${environmentSuffix}`,
+      bucketName: `secure-bucket-${this.account}-${this.region}-${environmentSuffix}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3KmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
