@@ -360,7 +360,7 @@ describe('TapStack', () => {
 
     test('should create database with CloudWatch logs exports', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        EnableCloudwatchLogsExports: ['error', 'general', 'slow-query'],
+        EnableCloudwatchLogsExports: ['error', 'general'],
       });
     });
 

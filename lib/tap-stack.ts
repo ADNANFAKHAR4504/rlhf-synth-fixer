@@ -182,7 +182,7 @@ export class TapStack extends cdk.Stack {
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
         enablePerformanceInsights: false,
-        cloudwatchLogsExports: ['error', 'general', 'slow-query'],
+        cloudwatchLogsExports: ['error', 'general'],
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
