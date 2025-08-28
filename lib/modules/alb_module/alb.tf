@@ -5,6 +5,12 @@ data "aws_acm_certificate" "ssl_cert" {
   count  = var.ssl_certificate_arn != "" ? 1 : 0
   arn    = var.ssl_certificate_arn
   statuses = ["ISSUED"]
+
+  tags = merge(var.common_tags, {
+    Name = "${var.environment}-${var.project_name}-alb"
+    Type = "application-load-balancer"
+    Component = "alb"
+  })
 }
 
 # Application Load Balancer

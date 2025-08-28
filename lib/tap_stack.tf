@@ -42,7 +42,7 @@ module "alb_module" {
     project_name              = var.project_name
     vpc_id                    = module.vpc_module.vpc_id
     public_subnet_ids         = module.vpc_module.public_subnet_ids
-    alb_security_group_id     = module.security_module.alb_module_security_group_id
+    alb_security_group_id     = module.security_module.alb_security_group_id
     target_port               = var.app_port
     target_protocol           = var.target_protocol
     ssl_certificate_arn       = var.ssl_certificate_arn
@@ -216,7 +216,7 @@ output "launch_template_id" {
 
 output "cloudwatch_log_group_name" {
     description = "Name of the CloudWatch log group"
-    value       = module.ec_module.cloudwatch_log_group_name
+    value       = module.ec2_module.cloudwatch_log_group_name
 }
 
 # Application URL
