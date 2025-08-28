@@ -325,44 +325,6 @@ variable "secrets_manager_secret_name" {
   default     = ""
 }
 
-variable "cloudwatch_config" {
-  description = "CloudWatch agent configuration"
-  type        = string
-  default     = jsonencode({
-    metrics = {
-      namespace = "CWAgent"
-      metrics_collected = {
-        cpu = {
-          measurement = ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"]
-          metrics_collection_interval = 60
-        }
-        disk = {
-          measurement = ["used_percent"]
-          metrics_collection_interval = 60
-          resources = ["*"]
-        }
-        mem = {
-          measurement = ["mem_used_percent"]
-          metrics_collection_interval = 60
-        }
-      }
-    }
-    logs = {
-      logs_collected = {
-        files = {
-          collect_list = [
-            {
-              file_path = "/var/log/messages"
-              log_group_name = "/aws/ec2/system"
-              log_stream_name = "{instance_id}"
-            }
-          ]
-        }
-      }
-    }
-  })
-}
-
 variable "additional_packages" {
   description = "Additional packages to install"
   type        = string
