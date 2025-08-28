@@ -26,5 +26,11 @@
     "SNS",
     "CloudWatch",
     "CloudWatch Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
