@@ -36,16 +36,16 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
     test('should have all required parameters', () => {
       const expectedParams = [
         'EnvironmentSuffix',
-        'Environment', 
+        'Environment',
         'Project',
         'Owner',
         'CostCenter',
         'GitHubRepository',
-        'GitHubBranch', 
+        'GitHubBranch',
         'GitHubOwner',
         'NotificationEmail'
       ];
-      
+
       expectedParams.forEach(param => {
         expect(template.Parameters[param]).toBeDefined();
       });
@@ -77,12 +77,12 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
     test('should have all required CI/CD pipeline resources', () => {
       const expectedResources = [
         'PipelineKMSKey',
-        'PipelineKMSKeyAlias', 
+        'PipelineKMSKeyAlias',
         'ArtifactsBucket',
         'PipelineNotificationTopic',
         'PipelineNotificationSubscription',
         'CodePipelineRole',
-        'CodeBuildRole', 
+        'CodeBuildRole',
         'CodeBuildProject',
         'ElasticBeanstalkApplication',
         'EBServiceRole',
@@ -94,7 +94,7 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
         'CodePipeline',
         'PipelineEventRule'
       ];
-      
+
       expectedResources.forEach(resource => {
         expect(template.Resources[resource]).toBeDefined();
       });
@@ -141,10 +141,10 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
       const pipeline = template.Resources.CodePipeline;
       expect(pipeline.Type).toBe('AWS::CodePipeline::Pipeline');
       expect(pipeline.DeletionPolicy).toBe('Delete');
-      
+
       const stages = pipeline.Properties.Stages;
       expect(stages).toHaveLength(5); // Source, Build, DeployToDev, DeployToTest, DeployToProd
-      
+
       const stageNames = stages.map((stage: any) => stage.Name);
       expect(stageNames).toEqual(['Source', 'Build', 'DeployToDev', 'DeployToTest', 'DeployToProd']);
     });
@@ -158,7 +158,7 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
 
     test('All resources should have DeletionPolicy Delete', () => {
       const resourcesWithDeletionPolicy = [
-        'PipelineKMSKey', 'PipelineKMSKeyAlias', 'ArtifactsBucket', 
+        'PipelineKMSKey', 'PipelineKMSKeyAlias', 'ArtifactsBucket',
         'PipelineNotificationTopic', 'CodePipelineRole', 'CodeBuildRole',
         'CodeBuildProject', 'ElasticBeanstalkApplication', 'EBServiceRole',
         'EBInstanceRole', 'EBInstanceProfile', 'DevelopmentEnvironment',
@@ -177,7 +177,7 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'PipelineName',
-        'ArtifactsBucketName', 
+        'ArtifactsBucketName',
         'KMSKeyId',
         'SNSTopicArn',
         'DevelopmentEnvironmentURL',
@@ -261,12 +261,12 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(9); // All required parameters
+      expect(parameterCount).toBe(10); // All required parameters
     });
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(11); // All pipeline outputs
+      expect(outputCount).toBe(12); // All pipeline outputs
     });
   });
 
@@ -302,17 +302,17 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
       const taggedResources = [
         'PipelineKMSKey', 'ArtifactsBucket', 'PipelineNotificationTopic',
         'CodePipelineRole', 'CodeBuildRole', 'CodeBuildProject',
-        'EBServiceRole', 'EBInstanceRole', 'DevelopmentEnvironment', 
+        'EBServiceRole', 'EBInstanceRole', 'DevelopmentEnvironment',
         'TestingEnvironment', 'ProductionEnvironment', 'CodePipeline'
       ];
 
       taggedResources.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        
+
         const tags = resource.Properties.Tags;
         const tagKeys = tags.map((tag: any) => tag.Key);
-        
+
         expect(tagKeys).toContain('Environment');
         expect(tagKeys).toContain('Project');
         expect(tagKeys).toContain('Owner');
@@ -327,9 +327,9 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
 
       expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
         .ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      
+
       expect(topic.Properties.KmsMasterKeyId).toEqual({ Ref: 'PipelineKMSKey' });
-      
+
       expect(pipeline.Properties.ArtifactStore.EncryptionKey).toEqual({
         Id: { 'Fn::GetAtt': ['PipelineKMSKey', 'Arn'] },
         Type: 'KMS'
