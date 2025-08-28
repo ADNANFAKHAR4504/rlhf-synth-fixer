@@ -1,13 +1,13 @@
 package app.constructs;
 
-import software.amazon.awscdk.services.cloudtrail.*;
+import software.amazon.awscdk.services.cloudtrail.Trail;
+import software.amazon.awscdk.services.cloudtrail.ReadWriteType;
 import software.amazon.awscdk.services.s3.IBucket;
 import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 import app.config.EnvironmentConfig;
-import java.util.List;
 
 /**
  * CloudTrail construct that implements comprehensive logging and monitoring.

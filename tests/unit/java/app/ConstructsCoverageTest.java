@@ -11,7 +11,7 @@ import app.constructs.IamConstruct;
 import app.constructs.SecurityConstruct;
 import app.constructs.S3Construct;
 import app.constructs.CloudTrailConstruct;
-import app.FinancialInfrastructureStack;
+// FinancialInfrastructureStack is in the same package; explicit import is redundant
 
 /**
  * Simple tests that instantiate infrastructure constructs to exercise code paths

@@ -1,6 +1,10 @@
 package app.constructs;
 
-import software.amazon.awscdk.services.iam.*;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.PolicyDocument;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Effect;
 import software.constructs.Construct;
 import app.config.EnvironmentConfig;
 import java.util.List;

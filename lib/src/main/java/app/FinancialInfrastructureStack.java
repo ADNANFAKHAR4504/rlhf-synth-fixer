@@ -3,7 +3,13 @@ package app;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.constructs.Construct;
-import app.constructs.*;
+import app.constructs.NetworkingConstruct;
+import app.constructs.IamConstruct;
+import app.constructs.SecurityConstruct;
+import app.constructs.S3Construct;
+import app.constructs.CloudTrailConstruct;
+import app.constructs.WebServerConstruct;
+import app.constructs.RdsConstruct;
 import app.config.EnvironmentConfig;
 
 /**
@@ -17,7 +23,7 @@ public class FinancialInfrastructureStack extends Stack {
         super(scope, id, props);
 
         // 1. Create networking infrastructure with security groups
-        NetworkingConstruct networking = new NetworkingConstruct(this, 
+        NetworkingConstruct networking = new NetworkingConstruct(this,
             EnvironmentConfig.getResourceName("networking", "construct"));
 
         // 2. Create IAM roles and policies with least privilege principle
@@ -39,8 +45,22 @@ public class FinancialInfrastructureStack extends Stack {
             s3.getCloudTrailBucket(),
             security.getKmsKey());
 
+        // 6. Create a web server in the public subnet
+        WebServerConstruct web = new WebServerConstruct(this,
+            EnvironmentConfig.getResourceName("web", "construct"),
+            networking.getVpc(),
+            networking.getWebSecurityGroup());
+
+        // 7. Create RDS Postgres in private subnets encrypted with the project's KMS key
+        RdsConstruct rds = new RdsConstruct(this,
+            EnvironmentConfig.getResourceName("rds", "construct"),
+            networking.getVpc(),
+            networking.getDatabaseSecurityGroup(),
+            security.getKmsKey());
+
         // Add stack-level tags for compliance and cost tracking
-        software.amazon.awscdk.Tags.of(this).add("Environment", EnvironmentConfig.ENVIRONMENT);
+        software.amazon.awscdk.Tags.of(this).add("Environment", "Production");
+        software.amazon.awscdk.Tags.of(this).add("Department", "IT");
         software.amazon.awscdk.Tags.of(this).add("Service", EnvironmentConfig.SERVICE_PREFIX);
         software.amazon.awscdk.Tags.of(this).add("Compliance", "Financial-Services");
         software.amazon.awscdk.Tags.of(this).add("DataClassification", "Confidential");

@@ -1,6 +1,11 @@
 package app.constructs;
 
-import software.amazon.awscdk.services.ec2.*;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.constructs.Construct;
 import app.config.EnvironmentConfig;
 import java.util.List;
@@ -82,11 +87,8 @@ public class NetworkingConstruct extends Construct {
         );
         
         // Allow HTTP from anywhere (will redirect to HTTPS)
-        sg.addIngressRule(
-            Peer.anyIpv4(),
-            Port.tcp(80),
-            "Allow HTTP from internet (redirect to HTTPS)"
-        );
+    // Do not allow plain HTTP from internet to comply with TLS 1.2+ requirement.
+    // Only HTTPS (443) is allowed for public web access.
         
         // Allow outbound HTTPS for API calls and updates
         sg.addEgressRule(
@@ -141,11 +143,13 @@ public class NetworkingConstruct extends Construct {
                 .allowAllOutbound(false)
                 .build();
         
-        // Allow internal communication on application ports
+        // Allow internal communication on application ports from the VPC CIDR
+        // Avoid self-referencing security group ingress to prevent CloudFormation
+        // circular dependency during deploy.
         sg.addIngressRule(
-            Peer.securityGroupId(sg.getSecurityGroupId()),
+            Peer.ipv4(vpc.getVpcCidrBlock()),
             Port.tcp(8080),
-            "Allow internal application communication"
+            "Allow internal application communication from VPC"
         );
         
         // Allow outbound traffic required for application components inside the VPC

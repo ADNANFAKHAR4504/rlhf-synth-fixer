@@ -235,7 +235,13 @@ package app;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.constructs.Construct;
-import app.constructs.*;
+import app.constructs.NetworkingConstruct;
+import app.constructs.IamConstruct;
+import app.constructs.SecurityConstruct;
+import app.constructs.S3Construct;
+import app.constructs.CloudTrailConstruct;
+import app.constructs.WebServerConstruct;
+import app.constructs.RdsConstruct;
 import app.config.EnvironmentConfig;
 
 /**
@@ -271,8 +277,22 @@ public class FinancialInfrastructureStack extends Stack {
             s3.getCloudTrailBucket(),
             security.getKmsKey());
 
+        // 6. Create a web server in the public subnet
+        WebServerConstruct web = new WebServerConstruct(this,
+            EnvironmentConfig.getResourceName("web", "construct"),
+            networking.getVpc(),
+            networking.getWebSecurityGroup());
+
+        // 7. Create RDS Postgres in private subnets encrypted with the project's KMS key
+        RdsConstruct rds = new RdsConstruct(this,
+            EnvironmentConfig.getResourceName("rds", "construct"),
+            networking.getVpc(),
+            networking.getDatabaseSecurityGroup(),
+            security.getKmsKey());
+
         // Add stack-level tags for compliance and cost tracking
-        software.amazon.awscdk.Tags.of(this).add("Environment", EnvironmentConfig.ENVIRONMENT);
+        software.amazon.awscdk.Tags.of(this).add("Environment", "Production");
+        software.amazon.awscdk.Tags.of(this).add("Department", "IT");
         software.amazon.awscdk.Tags.of(this).add("Service", EnvironmentConfig.SERVICE_PREFIX);
         software.amazon.awscdk.Tags.of(this).add("Compliance", "Financial-Services");
         software.amazon.awscdk.Tags.of(this).add("DataClassification", "Confidential");
@@ -359,7 +379,11 @@ public class SecurityConstruct extends Construct {
 ```java
 package app.constructs;
 
-import software.amazon.awscdk.services.iam.*;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.PolicyDocument;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Effect;
 import software.constructs.Construct;
 import app.config.EnvironmentConfig;
 import java.util.List;
@@ -460,7 +484,13 @@ public class IamConstruct extends Construct {
 ```java
 package app.constructs;
 
-import software.amazon.awscdk.services.s3.*;
+import software.amazon.awscdk.services.s3.Bucket;
+import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.services.s3.BucketEncryption;
+import software.amazon.awscdk.services.s3.LifecycleRule;
+import software.amazon.awscdk.services.s3.Transition;
+import software.amazon.awscdk.services.s3.StorageClass;
+import software.amazon.awscdk.services.s3.ObjectOwnership;
 import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
@@ -668,14 +698,14 @@ public class S3Construct extends Construct {
 ```java
 package app.constructs;
 
-import software.amazon.awscdk.services.cloudtrail.*;
+import software.amazon.awscdk.services.cloudtrail.Trail;
+import software.amazon.awscdk.services.cloudtrail.ReadWriteType;
 import software.amazon.awscdk.services.s3.IBucket;
 import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
 import app.config.EnvironmentConfig;
-import java.util.List;
 
 /**
  * CloudTrail construct that implements comprehensive logging and monitoring.
@@ -737,7 +767,12 @@ public class CloudTrailConstruct extends Construct {
 ```java
 package app.constructs;
 
-import software.amazon.awscdk.services.ec2.*;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
 import software.constructs.Construct;
 import app.config.EnvironmentConfig;
 import java.util.List;
@@ -819,11 +854,8 @@ public class NetworkingConstruct extends Construct {
         );
 
         // Allow HTTP from anywhere (will redirect to HTTPS)
-        sg.addIngressRule(
-            Peer.anyIpv4(),
-            Port.tcp(80),
-            "Allow HTTP from internet (redirect to HTTPS)"
-        );
+    // Do not allow plain HTTP from internet to comply with TLS 1.2+ requirement.
+    // Only HTTPS (443) is allowed for public web access.
 
         // Allow outbound HTTPS for API calls and updates
         sg.addEgressRule(
@@ -878,11 +910,13 @@ public class NetworkingConstruct extends Construct {
                 .allowAllOutbound(false)
                 .build();
 
-        // Allow internal communication on application ports
+        // Allow internal communication on application ports from the VPC CIDR
+        // Avoid self-referencing security group ingress to prevent CloudFormation
+        // circular dependency during deploy.
         sg.addIngressRule(
-            Peer.securityGroupId(sg.getSecurityGroupId()),
+            Peer.ipv4(vpc.getVpcCidrBlock()),
             Port.tcp(8080),
-            "Allow internal application communication"
+            "Allow internal application communication from VPC"
         );
 
         // Allow outbound traffic required for application components inside the VPC
@@ -926,4 +960,105 @@ public class NetworkingConstruct extends Construct {
     }
 
 }
+```
+
+**`lib/src/main/java/app/constructs/RdsConstruct.java`**
+
+```java
+package app.constructs;
+
+import software.amazon.awscdk.services.rds.DatabaseInstance;
+import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
+import software.amazon.awscdk.services.rds.PostgresEngineVersion;
+import software.amazon.awscdk.services.rds.PostgresInstanceEngineProps;
+import software.amazon.awscdk.services.rds.Credentials;
+import software.amazon.awscdk.services.rds.InstanceProps;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.kms.IKey;
+import software.constructs.Construct;
+import app.config.EnvironmentConfig;
+
+/**
+ * Minimal RDS Postgres construct creating an encrypted DB in private subnets.
+ * Uses generated credentials (for demo) and KMS key for storage encryption.
+ */
+public class RdsConstruct extends Construct {
+    private final DatabaseInstance instance;
+
+    public RdsConstruct(final Construct scope, final String id, final Vpc vpc, final SecurityGroup dbSecurityGroup, final IKey kmsKey) {
+        super(scope, id);
+
+    this.instance = DatabaseInstance.Builder.create(this, EnvironmentConfig.getResourceName("rds", "postgres"))
+        .engine(DatabaseInstanceEngine.postgres(PostgresInstanceEngineProps.builder().version(PostgresEngineVersion.VER_13).build()))
+                .vpc(vpc)
+                .securityGroups(java.util.List.of(dbSecurityGroup))
+                .vpcSubnets(SubnetSelection.builder().subnetType(SubnetType.PRIVATE_WITH_EGRESS).build())
+                .credentials(Credentials.fromGeneratedSecret("postgres"))
+        .storageEncrypted(true)
+        .storageEncryptionKey(kmsKey)
+                .multiAz(false)
+                .allocatedStorage(20)
+                .build();
+    }
+
+    public DatabaseInstance getInstance() { return instance; }
+}
+
+```
+
+**`lib/src/main/java/app/constructs/WebServerConstruct.java`**
+
+```java
+package app.constructs;
+
+import software.amazon.awscdk.services.ec2.Instance;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.constructs.Construct;
+import app.config.EnvironmentConfig;
+
+/**
+ * Minimal web server construct that creates a t3.micro EC2 instance in a public subnet
+ * and a lightweight instance role. Intended to satisfy prompt requirements for a
+ * web-facing host locked down to HTTPS.
+ */
+public class WebServerConstruct extends Construct {
+
+    private final Instance instance;
+    private final Role role;
+
+    public WebServerConstruct(final Construct scope, final String id, final Vpc vpc, final SecurityGroup webSecurityGroup) {
+        super(scope, id);
+
+        // Create a minimal role for the EC2 instance (least privilege placeholder)
+        this.role = Role.Builder.create(this, EnvironmentConfig.getResourceName("web", "instance-role"))
+                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+                .build();
+
+        // Create the EC2 instance in a public subnet using Amazon Linux (t3.micro)
+        this.instance = Instance.Builder.create(this, EnvironmentConfig.getResourceName("web", "instance"))
+                .instanceType(InstanceType.of(InstanceClass.BURSTABLE3, InstanceSize.MICRO))
+                .machineImage(MachineImage.latestAmazonLinux())
+                .vpc(vpc)
+                .vpcSubnets(SubnetSelection.builder().subnetType(SubnetType.PUBLIC).build())
+                .securityGroup(webSecurityGroup)
+                .role(this.role)
+                .build();
+    }
+
+    public Instance getInstance() { return instance; }
+    public Role getRole() { return role; }
+}
+
 ```
