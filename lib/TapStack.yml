@@ -158,6 +158,11 @@ Parameters:
     Description: 'If provided, use this existing KMS alias name (e.g., alias/production-encryption-key) and do not create a new alias.'
     Default: ''
 
+  ExistingGuardDutyCheckFunctionArn:
+    Type: String
+    Description: 'If provided, use this existing Lambda ARN for GuardDuty detector check and do not create a new function.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -174,6 +179,8 @@ Conditions:
   CreateDBSubnetGroup: !Equals [!Ref ExistingDBSubnetGroupName, '']
   CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
   CreateKMSKeyAlias: !Equals [!Ref ExistingKMSKeyAlias, '']
+  CreateGuardDutyCheckFunction:
+    !Equals [!Ref ExistingGuardDutyCheckFunctionArn, '']
 
 Resources:
   # VPC and Networking Resources
@@ -802,14 +809,19 @@ Resources:
     Type: Custom::GuardDutyDetectorCheck
     Condition: EnableGuardDutyCondition
     Properties:
-      ServiceToken: !GetAtt GuardDutyDetectorCheckFunction.Arn
+      ServiceToken:
+        !If [
+          CreateGuardDutyCheckFunction,
+          !GetAtt GuardDutyDetectorCheckFunction.Arn,
+          !Ref ExistingGuardDutyCheckFunctionArn,
+        ]
 
   # Lambda function to check for existing GuardDuty detectors
   GuardDutyDetectorCheckFunction:
     Type: AWS::Lambda::Function
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Condition: EnableGuardDutyCondition
+    Condition: CreateGuardDutyCheckFunction
     Properties:
       FunctionName: !Sub '${Environment}-guardduty-detector-check'
       Runtime: python3.9
@@ -847,7 +859,7 @@ Resources:
   # IAM Role for Lambda function
   GuardDutyDetectorCheckRole:
     Type: AWS::IAM::Role
-    Condition: EnableGuardDutyCondition
+    Condition: CreateGuardDutyCheckFunction
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
