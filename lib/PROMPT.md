@@ -1,4 +1,4 @@
-# AWS VPC Infrastructure with Pulumi Go 
+# AWS VPC Infrastructure with Pulumi Go
 
 Create a comprehensive Pulumi Go program that sets up a secure and scalable network infrastructure in AWS with the following specific requirements:
 
