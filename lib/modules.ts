@@ -644,11 +644,11 @@ export class RdsModule extends Construct {
       kmsKey,
     } = props;
 
-    const vpcShortId = vpcId.substring(4, 12); // Extract part of VPC ID
+    const vpcShortId = vpcId.substring(4, 12);
     const subnetGroupName = `${project}-${environment}-${vpcShortId}-db-sg`;
 
     // Create DB subnet group
-    this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
+   this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
       name: subnetGroupName,
       subnetIds,
       description: `Database subnet group for ${project} ${environment} in VPC ${vpcId}`,
@@ -665,7 +665,7 @@ export class RdsModule extends Construct {
       prevent_destroy: false,
     });
 
-    // Create RDS instance
+     // Create RDS instance SECOND, depending on subnet group
     this.dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `${project}-${environment}-db`,
       engine,
@@ -689,15 +689,17 @@ export class RdsModule extends Construct {
         Project: project,
         Environment: environment,
       },
-      dependsOn: [this.subnetGroup],
+      dependsOn: [this.subnetGroup], // RDS depends on subnet group
     });
 
+    // Add lifecycle management to RDS instance
     this.dbInstance.addOverride('lifecycle', {
       prevent_destroy: false,
     });
-  
-    this.subnetGroup.addOverride('depends_on', [
-      `aws_db_instance.${this.dbInstance.friendlyUniqueId}`,
-    ]);
+
+    // REMOVED: The circular dependency line that was causing the issue
+    // this.subnetGroup.addOverride('depends_on', [
+    //   `aws_db_instance.${this.dbInstance.friendlyUniqueId}`,
+    // ]);
   }
 }
