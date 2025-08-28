@@ -25,9 +25,9 @@ import {
   DescribeLogGroupsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 import {
-  ELBv2Client,
-  DescribeTargetGroupsCommand,
-  DescribeTargetHealthCommand
+  ElasticLoadBalancingV2Client,
+  DescribeTargetHealthCommand,
+  TargetHealthDescription
 } from "@aws-sdk/client-elastic-load-balancing-v2";
 import {
   SNSClient,
@@ -39,7 +39,7 @@ let ec2Client: EC2Client;
 let secretsClient: SecretsManagerClient;
 let iamClient: IAMClient;
 let logsClient: CloudWatchLogsClient;
-let elbv2Client: ELBv2Client;
+let elbv2Client: ElasticLoadBalancingV2Client;
 let snsClient: SNSClient;
 
 beforeAll(() => {
@@ -53,7 +53,7 @@ beforeAll(() => {
   secretsClient = new SecretsManagerClient({ region: "us-east-1" });
   iamClient = new IAMClient({ region: "us-east-1" });
   logsClient = new CloudWatchLogsClient({ region: "us-east-1" });
-  elbv2Client = new ELBv2Client({ region: "us-east-1" });
+  elbv2Client = new ElasticLoadBalancingV2Client({ region: "us-east-1" });
   snsClient = new SNSClient({ region: "us-east-1" });
 });
 
@@ -164,7 +164,7 @@ describe("Terraform Stack Integration Tests", () => {
       const addresses = await dns.lookup(outputs.load_balancer_dns);
       expect(addresses.address).toBeDefined();
     });
-
+  
     test("Target group should have healthy targets", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
       const tgArn = outputs.target_group_arn;
@@ -172,11 +172,12 @@ describe("Terraform Stack Integration Tests", () => {
         new DescribeTargetHealthCommand({ TargetGroupArn: tgArn })
       );
       expect(health.TargetHealthDescriptions?.length).toBeGreaterThan(0);
-      health.TargetHealthDescriptions?.forEach((t) => {
+      health.TargetHealthDescriptions?.forEach((t: TargetHealthDescription) => {
         expect(t.TargetHealth?.State).toBe("healthy");
       });
     });
   });
+
 
   describe("SNS", () => {
     test("SNS Topic should exist", async () => {
