@@ -46,11 +46,11 @@ module github.com/TuringGpt/iac-test-automations
 go 1.23
 
 require (
-github.com/aws/aws-cdk-go/awscdk/v2 v2.212.0
-github.com/aws/aws-sdk-go-v2 v1.38.1
-github.com/aws/constructs-go/constructs/v10 v10.4.2
-github.com/aws/jsii-runtime-go v1.113.0
-github.com/stretchr/testify v1.11.0
+	github.com/aws/aws-cdk-go/awscdk/v2 v2.212.0
+	github.com/aws/aws-sdk-go-v2 v1.38.1
+	github.com/aws/constructs-go/constructs/v10 v10.4.2
+	github.com/aws/jsii-runtime-go v1.113.0
+	github.com/stretchr/testify v1.11.0
 )
 ```
 
@@ -60,45 +60,46 @@ github.com/stretchr/testify v1.11.0
 package main
 
 import (
-"os"
+	"os"
 
-"github.com/TuringGpt/iac-test-automations/lib"
-"github.com/aws/aws-cdk-go/awscdk/v2"
-"github.com/aws/jsii-runtime-go"
+	"github.com/TuringGpt/iac-test-automations/lib"
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/jsii-runtime-go"
 )
 
 func main() {
-defer jsii.Close()
+	defer jsii.Close()
 
-app := awscdk.NewApp(nil)
+	app := awscdk.NewApp(nil)
 
-// Get environment suffix from context or use 'dev' as default
-var environmentSuffix string
-if suffix := app.Node().TryGetContext(jsii.String("environmentSuffix")); suffix != nil {
-ok := suffix.(string); ok {
-vironmentSuffix = suffixStr
-{
-vironmentSuffix = "dev"
-{
-vironmentSuffix = "dev"
-}
+	// Get environment suffix from context or use 'dev' as default
+	var environmentSuffix string
+	if suffix := app.Node().TryGetContext(jsii.String("environmentSuffix")); suffix != nil {
+		if suffixStr, ok := suffix.(string); ok {
+			environmentSuffix = suffixStr
+		} else {
+			environmentSuffix = "dev"
+		}
+	} else {
+		environmentSuffix = "dev"
+	}
 
-stackName := "TapStack" + environmentSuffix
+	stackName := "TapStack" + environmentSuffix
 
-// Apply global tags
-awscdk.Tags_Of(app).Add(jsii.String("Environment"), jsii.String(environmentSuffix), nil)
-awscdk.Tags_Of(app).Add(jsii.String("Project"), jsii.String("tap-infrastructure"), nil)
+	// Apply global tags
+	awscdk.Tags_Of(app).Add(jsii.String("Environment"), jsii.String(environmentSuffix), nil)
+	awscdk.Tags_Of(app).Add(jsii.String("Project"), jsii.String("tap-infrastructure"), nil)
 
-// Create TapStackProps
-props := &lib.TapStackProps{
-awscdk.StackProps{},
-vironment: environmentSuffix,
-}
+	// Create TapStackProps
+	props := &lib.TapStackProps{
+		StackProps:  awscdk.StackProps{},
+		Environment: environmentSuffix,
+	}
 
-// Initialize the stack
-lib.NewTapStack(app, jsii.String(stackName), props)
+	// Initialize the stack
+	lib.NewTapStack(app, jsii.String(stackName), props)
 
-app.Synth(nil)
+	app.Synth(nil)
 }
 ```
 
@@ -108,88 +109,93 @@ app.Synth(nil)
 package lib
 
 import (
-tapConstructs "github.com/TuringGpt/iac-test-automations/lib/constructs"
-"github.com/aws/aws-cdk-go/awscdk/v2"
-"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
-"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
-"github.com/aws/constructs-go/constructs/v10"
-"github.com/aws/jsii-runtime-go"
+	tapConstructs "github.com/TuringGpt/iac-test-automations/lib/constructs"
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
 )
 
 type TapStackProps struct {
-awscdk.StackProps
-Environment string
+	awscdk.StackProps
+	Environment string
 }
 
 type TapStack struct {
-awscdk.Stack
-Environment string
+	awscdk.Stack
+	Environment string
 }
 
 func NewTapStack(scope constructs.Construct, id *string, props *TapStackProps) *TapStack {
-var sprops awscdk.StackProps
-if props != nil {
-props.StackProps
-}
-stack := awscdk.NewStack(scope, id, &sprops)
+	var sprops awscdk.StackProps
+	if props != nil {
+		sprops = props.StackProps
+	}
+	stack := awscdk.NewStack(scope, id, &sprops)
 
-environment := "prod"
-if props != nil && props.Environment != "" {
-vironment = props.Environment
-}
+	environment := "prod"
+	if props != nil && props.Environment != "" {
+		environment = props.Environment
+	}
 
-// CloudTrail setup
-cloudTrailBucket := awss3.NewBucket(stack, jsii.String("CloudTrailBucket"), &awss3.BucketProps{
-ame:        jsii.String("proj-cloudtrail-" + environment),
-ed:         jsii.Bool(true),
-jsii.Bool(false),
-cryption:        awss3.BucketEncryption_S3_MANAGED,
-forceSSL:        jsii.Bool(true),
-&[]*awss3.LifecycleRule{
-       jsii.String("DeleteOldLogs"),
-abled:    jsii.Bool(true),
-: awscdk.Duration_Days(jsii.Number(90)),
-ewTrail(stack, jsii.String("AuditTrail"), &awscloudtrail.TrailProps{
-ame:                  jsii.String("proj-audit-trail-" + environment),
-                   cloudTrailBucket,
-cludeGlobalServiceEvents: jsii.Bool(true),
-Trail:         jsii.Bool(true),
-ableFileValidation:       jsii.Bool(true),
-dToCloudWatchLogs:       jsii.Bool(true),
-})
+	// CloudTrail setup
+	cloudTrailBucket := awss3.NewBucket(stack, jsii.String("CloudTrailBucket"), &awss3.BucketProps{
+		BucketName:        jsii.String("proj-cloudtrail-" + environment),
+		Versioned:         jsii.Bool(true),
+		PublicReadAccess:  jsii.Bool(false),
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		EnforceSSL:        jsii.Bool(true),
+		LifecycleRules: &[]*awss3.LifecycleRule{
+			{
+				Id:         jsii.String("DeleteOldLogs"),
+				Enabled:    jsii.Bool(true),
+				Expiration: awscdk.Duration_Days(jsii.Number(90)),
+			},
+		},
+	})
 
-// Create constructs
-securityConstruct := tapConstructs.NewSecurityConstruct(stack, "SecurityConstruct", &tapConstructs.SecurityConstructProps{
-vironment: environment,
-})
+	awscloudtrail.NewTrail(stack, jsii.String("AuditTrail"), &awscloudtrail.TrailProps{
+		TrailName:                  jsii.String("proj-audit-trail-" + environment),
+		Bucket:                     cloudTrailBucket,
+		IncludeGlobalServiceEvents: jsii.Bool(true),
+		IsMultiRegionTrail:         jsii.Bool(true),
+		EnableFileValidation:       jsii.Bool(true),
+		SendToCloudWatchLogs:       jsii.Bool(true),
+	})
 
-storageConstruct := tapConstructs.NewStorageConstruct(stack, "StorageConstruct", &tapConstructs.StorageConstructProps{
-vironment: environment,
-})
+	// Create constructs
+	securityConstruct := tapConstructs.NewSecurityConstruct(stack, "SecurityConstruct", &tapConstructs.SecurityConstructProps{
+		Environment: environment,
+	})
 
-databaseConstruct := tapConstructs.NewDatabaseConstruct(stack, "DatabaseConstruct", &tapConstructs.DatabaseConstructProps{
-vironment: environment,
-})
+	storageConstruct := tapConstructs.NewStorageConstruct(stack, "StorageConstruct", &tapConstructs.StorageConstructProps{
+		Environment: environment,
+	})
 
-tapConstructs.NewComputeConstruct(stack, "ComputeConstruct", &tapConstructs.ComputeConstructProps{
-vironment:   environment,
-  securityConstruct.LambdaRole,
-    storageConstruct.Bucket,
-amoDBTable: databaseConstruct.Table,
-gTopic: securityConstruct.AlertingTopic,
-         securityConstruct.VPC,
-})
+	databaseConstruct := tapConstructs.NewDatabaseConstruct(stack, "DatabaseConstruct", &tapConstructs.DatabaseConstructProps{
+		Environment: environment,
+	})
 
-// Stack outputs
-awscdk.NewCfnOutput(stack, jsii.String("AlertingTopicArn"), &awscdk.CfnOutputProps{
-     securityConstruct.AlertingTopic.TopicArn(),
-: jsii.String("SNS Topic ARN for infrastructure alerts"),
-})
+	tapConstructs.NewComputeConstruct(stack, "ComputeConstruct", &tapConstructs.ComputeConstructProps{
+		Environment:   environment,
+		LambdaRole:    securityConstruct.LambdaRole,
+		S3Bucket:      storageConstruct.Bucket,
+		DynamoDBTable: databaseConstruct.Table,
+		AlertingTopic: securityConstruct.AlertingTopic,
+		VPC:           securityConstruct.VPC,
+	})
 
-return &TapStack{
-     stack,
-vironment: environment,
-}
+	// Stack outputs
+	awscdk.NewCfnOutput(stack, jsii.String("AlertingTopicArn"), &awscdk.CfnOutputProps{
+		Value:       securityConstruct.AlertingTopic.TopicArn(),
+		Description: jsii.String("SNS Topic ARN for infrastructure alerts"),
+	})
+
+	return &TapStack{
+		Stack:       stack,
+		Environment: environment,
+	}
 }
 ```
 
@@ -199,119 +205,143 @@ vironment: environment,
 package constructs
 
 import (
-"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
-"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
-"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
-"github.com/aws/constructs-go/constructs/v10"
-"github.com/aws/jsii-runtime-go"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
 )
 
 type SecurityConstructProps struct {
-Environment string
+	Environment string
 }
 
 type SecurityConstruct struct {
-constructs.Construct
-LambdaRole    awsiam.IRole
-AlertingTopic awssns.ITopic
-VPC           awsec2.IVpc
-VPCEndpoints  map[string]awsec2.IVpcEndpoint
+	constructs.Construct
+	LambdaRole    awsiam.IRole
+	AlertingTopic awssns.ITopic
+	VPC           awsec2.IVpc
+	VPCEndpoints  map[string]awsec2.IVpcEndpoint
 }
 
 func NewSecurityConstruct(scope constructs.Construct, id string, props *SecurityConstructProps) *SecurityConstruct {
-construct := constructs.NewConstruct(scope, &id)
+	construct := constructs.NewConstruct(scope, &id)
 
-// Create SNS topic for alerting
-alertingTopic := awssns.NewTopic(construct, jsii.String("AlertingTopic"), &awssns.TopicProps{
-ame:   jsii.String("proj-alerts-" + props.Environment),
-ame: jsii.String("TAP Infrastructure Alerts"),
-})
+	// Create SNS topic for alerting
+	alertingTopic := awssns.NewTopic(construct, jsii.String("AlertingTopic"), &awssns.TopicProps{
+		TopicName:   jsii.String("proj-alerts-" + props.Environment),
+		DisplayName: jsii.String("TAP Infrastructure Alerts"),
+	})
 
-// Create VPC for private endpoints
-vpc := awsec2.NewVpc(construct, jsii.String("VPC"), &awsec2.VpcProps{
-ame:            jsii.String("proj-vpc-" + props.Environment),
-           jsii.Number(2),
-ableDnsHostnames: jsii.Bool(true),
-ableDnsSupport:   jsii.Bool(true),
-etConfiguration: &[]*awsec2.SubnetConfiguration{
-ame:       jsii.String("Private"),
-etType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
- jsii.Number(24),
-ame:       jsii.String("Public"),
-etType: awsec2.SubnetType_PUBLIC,
- jsii.Number(24),
-VPC endpoints for private service access
-vpcEndpoints := make(map[string]awsec2.IVpcEndpoint)
+	// Create VPC for private endpoints
+	vpc := awsec2.NewVpc(construct, jsii.String("VPC"), &awsec2.VpcProps{
+		VpcName:            jsii.String("proj-vpc-" + props.Environment),
+		MaxAzs:             jsii.Number(2),
+		EnableDnsHostnames: jsii.Bool(true),
+		EnableDnsSupport:   jsii.Bool(true),
+		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
+			{
+				Name:       jsii.String("Private"),
+				SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
+				CidrMask:   jsii.Number(24),
+			},
+			{
+				Name:       jsii.String("Public"),
+				SubnetType: awsec2.SubnetType_PUBLIC,
+				CidrMask:   jsii.Number(24),
+			},
+		},
+	})
 
-// S3 Gateway endpoint
-vpcEndpoints["s3"] = awsec2.NewGatewayVpcEndpoint(construct, jsii.String("S3Endpoint"), &awsec2.GatewayVpcEndpointProps{
-   vpc,
-VpcEndpointAwsService_S3(),
-})
+	// VPC endpoints for private service access
+	vpcEndpoints := make(map[string]awsec2.IVpcEndpoint)
 
-// DynamoDB Gateway endpoint
-vpcEndpoints["dynamodb"] = awsec2.NewGatewayVpcEndpoint(construct, jsii.String("DynamoDBEndpoint"), &awsec2.GatewayVpcEndpointProps{
-   vpc,
-VpcEndpointAwsService_DYNAMODB(),
-})
+	// S3 Gateway endpoint
+	vpcEndpoints["s3"] = awsec2.NewGatewayVpcEndpoint(construct, jsii.String("S3Endpoint"), &awsec2.GatewayVpcEndpointProps{
+		Vpc:     vpc,
+		Service: awsec2.GatewayVpcEndpointAwsService_S3(),
+	})
 
-// CloudWatch Logs Interface endpoint
-vpcEndpoints["logs"] = awsec2.NewInterfaceVpcEndpoint(construct, jsii.String("LogsEndpoint"), &awsec2.InterfaceVpcEndpointProps{
-             vpc,
-         awsec2.InterfaceVpcEndpointAwsService_CLOUDWATCH_LOGS(),
-sEnabled: jsii.Bool(true),
-})
+	// DynamoDB Gateway endpoint
+	vpcEndpoints["dynamodb"] = awsec2.NewGatewayVpcEndpoint(construct, jsii.String("DynamoDBEndpoint"), &awsec2.GatewayVpcEndpointProps{
+		Vpc:     vpc,
+		Service: awsec2.GatewayVpcEndpointAwsService_DYNAMODB(),
+	})
 
-// Enhanced Lambda role with VPC and X-Ray permissions
-lambdaRole := awsiam.NewRole(construct, jsii.String("LambdaExecutionRole"), &awsiam.RoleProps{
-ame:    jsii.String("proj-lambda-role-" + props.Environment),
-  awsiam.NewServicePrincipal(jsii.String("lambda.amazonaws.com"), nil),
-: jsii.String("Enhanced IAM role for Lambda with VPC and X-Ray access"),
-agedPolicies: &[]awsiam.IManagedPolicy{
-agedPolicy_FromAwsManagedPolicyName(jsii.String("service-role/AWSLambdaVPCAccessExecutionRole")),
-agedPolicy_FromAwsManagedPolicyName(jsii.String("AWSXRayDaemonWriteAccess")),
-hanced inline policies
-enhancedS3Policy := awsiam.NewPolicyDocument(&awsiam.PolicyDocumentProps{
-ts: &[]awsiam.PolicyStatement{
-ewPolicyStatement(&awsiam.PolicyStatementProps{
-s: &[]*string{
-g("s3:GetObject"),
-g("s3:GetObjectVersion"),
-g("s3:GetObjectAttributes"),
-g{
-g("arn:aws:s3:::proj-s3-" + props.Environment + "/*"),
-ditions: &map[string]interface{}{
-g]interface{}{
-sport": "true",
-hancedDynamoPolicy := awsiam.NewPolicyDocument(&awsiam.PolicyDocumentProps{
-ts: &[]awsiam.PolicyStatement{
-ewPolicyStatement(&awsiam.PolicyStatementProps{
-s: &[]*string{
-g("dynamodb:PutItem"),
-g("dynamodb:UpdateItem"),
-g("dynamodb:ConditionCheckItem"),
-g{
-g("arn:aws:dynamodb:us-east-1:*:table/proj-dynamodb-" + props.Environment),
-enhanced policies
-awsiam.NewPolicy(construct, jsii.String("EnhancedS3AccessPolicy"), &awsiam.PolicyProps{
-ame: jsii.String("proj-enhanced-s3-policy-" + props.Environment),
-t:   enhancedS3Policy,
-    &[]awsiam.IRole{lambdaRole},
-})
+	// CloudWatch Logs Interface endpoint
+	vpcEndpoints["logs"] = awsec2.NewInterfaceVpcEndpoint(construct, jsii.String("LogsEndpoint"), &awsec2.InterfaceVpcEndpointProps{
+		Vpc:             vpc,
+		Service:         awsec2.InterfaceVpcEndpointAwsService_CLOUDWATCH_LOGS(),
+		PrivateDnsEnabled: jsii.Bool(true),
+	})
 
-awsiam.NewPolicy(construct, jsii.String("EnhancedDynamoDBAccessPolicy"), &awsiam.PolicyProps{
-ame: jsii.String("proj-enhanced-dynamodb-policy-" + props.Environment),
-t:   enhancedDynamoPolicy,
-    &[]awsiam.IRole{lambdaRole},
-})
+	// Enhanced Lambda role with VPC and X-Ray permissions
+	lambdaRole := awsiam.NewRole(construct, jsii.String("LambdaExecutionRole"), &awsiam.RoleProps{
+		RoleName:    jsii.String("proj-lambda-role-" + props.Environment),
+		AssumedBy:   awsiam.NewServicePrincipal(jsii.String("lambda.amazonaws.com"), nil),
+		Description: jsii.String("Enhanced IAM role for Lambda with VPC and X-Ray access"),
+		ManagedPolicies: &[]awsiam.IManagedPolicy{
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("service-role/AWSLambdaVPCAccessExecutionRole")),
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("AWSXRayDaemonWriteAccess")),
+		},
+	})
 
-return &SecurityConstruct{
-struct:     construct,
-  lambdaRole,
-gTopic: alertingTopic,
-         vpc,
-dpoints:  vpcEndpoints,
-}
+	// Enhanced inline policies
+	enhancedS3Policy := awsiam.NewPolicyDocument(&awsiam.PolicyDocumentProps{
+		Statements: &[]awsiam.PolicyStatement{
+			awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+				Actions: &[]*string{
+					jsii.String("s3:GetObject"),
+					jsii.String("s3:GetObjectVersion"),
+					jsii.String("s3:GetObjectAttributes"),
+				},
+				Resources: &[]*string{
+					jsii.String("arn:aws:s3:::proj-s3-" + props.Environment + "/*"),
+				},
+				Conditions: &map[string]interface{}{
+					"Bool": map[string]interface{}{
+						"aws:SecureTransport": "true",
+					},
+				},
+			}),
+		},
+	})
+
+	enhancedDynamoPolicy := awsiam.NewPolicyDocument(&awsiam.PolicyDocumentProps{
+		Statements: &[]awsiam.PolicyStatement{
+			awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+				Actions: &[]*string{
+					jsii.String("dynamodb:PutItem"),
+					jsii.String("dynamodb:UpdateItem"),
+					jsii.String("dynamodb:ConditionCheckItem"),
+				},
+				Resources: &[]*string{
+					jsii.String("arn:aws:dynamodb:us-east-1:*:table/proj-dynamodb-" + props.Environment),
+				},
+			}),
+		},
+	})
+
+	// Apply enhanced policies
+	awsiam.NewPolicy(construct, jsii.String("EnhancedS3AccessPolicy"), &awsiam.PolicyProps{
+		PolicyName: jsii.String("proj-enhanced-s3-policy-" + props.Environment),
+		Document:   enhancedS3Policy,
+		Roles:      &[]awsiam.IRole{lambdaRole},
+	})
+
+	awsiam.NewPolicy(construct, jsii.String("EnhancedDynamoDBAccessPolicy"), &awsiam.PolicyProps{
+		PolicyName: jsii.String("proj-enhanced-dynamodb-policy-" + props.Environment),
+		Document:   enhancedDynamoPolicy,
+		Roles:      &[]awsiam.IRole{lambdaRole},
+	})
+
+	return &SecurityConstruct{
+		Construct:     construct,
+		LambdaRole:    lambdaRole,
+		AlertingTopic: alertingTopic,
+		VPC:           vpc,
+		VPCEndpoints:  vpcEndpoints,
+	}
 }
 ```
 
@@ -321,57 +351,65 @@ dpoints:  vpcEndpoints,
 package constructs
 
 import (
-"github.com/aws/aws-cdk-go/awscdk/v2"
-"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
-"github.com/aws/constructs-go/constructs/v10"
-"github.com/aws/jsii-runtime-go"
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
 )
 
 type StorageConstructProps struct {
-Environment string
+	Environment string
 }
 
 type StorageConstruct struct {
-constructs.Construct
-Bucket        awss3.IBucket
-LoggingBucket awss3.IBucket
+	constructs.Construct
+	Bucket        awss3.IBucket
+	LoggingBucket awss3.IBucket
 }
 
 func NewStorageConstruct(scope constructs.Construct, id string, props *StorageConstructProps) *StorageConstruct {
-construct := constructs.NewConstruct(scope, &id)
+	construct := constructs.NewConstruct(scope, &id)
 
-// Enhanced logging bucket
-loggingBucket := awss3.NewBucket(construct, jsii.String("AccessLogsBucket"), &awss3.BucketProps{
-ame:        jsii.String("proj-s3-logs-" + props.Environment),
-jsii.Bool(false),
-cryption:        awss3.BucketEncryption_S3_MANAGED,
-forceSSL:        jsii.Bool(true),
-&[]*awss3.LifecycleRule{
-       jsii.String("DeleteOldAccessLogs"),
-abled:    jsii.Bool(true),
-: awscdk.Duration_Days(jsii.Number(90)),
-sitions: &[]*awss3.Transition{
-  awss3.StorageClass_INFREQUENT_ACCESS(),
-sitionAfter: awscdk.Duration_Days(jsii.Number(30)),
-hanced main bucket with SSL-only policy and Transfer Acceleration
-bucket := awss3.NewBucket(construct, jsii.String("MainBucket"), &awss3.BucketProps{
-ame:             jsii.String("proj-s3-" + props.Environment),
-ed:              jsii.Bool(true),
-     jsii.Bool(false),
-    awss3.BlockPublicAccess_BLOCK_ALL(),
-cryption:             awss3.BucketEncryption_S3_MANAGED,
-forceSSL:             jsii.Bool(true),
-sferAcceleration:   jsii.Bool(true),
-gBucket,
-g("access-logs/"),
-tBridgeEnabled:     jsii.Bool(true),
-})
+	// Enhanced logging bucket
+	loggingBucket := awss3.NewBucket(construct, jsii.String("AccessLogsBucket"), &awss3.BucketProps{
+		BucketName:        jsii.String("proj-s3-logs-" + props.Environment),
+		PublicReadAccess:  jsii.Bool(false),
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		EnforceSSL:        jsii.Bool(true),
+		LifecycleRules: &[]*awss3.LifecycleRule{
+			{
+				Id:         jsii.String("DeleteOldAccessLogs"),
+				Enabled:    jsii.Bool(true),
+				Expiration: awscdk.Duration_Days(jsii.Number(90)),
+				Transitions: &[]*awss3.Transition{
+					{
+						StorageClass:     awss3.StorageClass_INFREQUENT_ACCESS(),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(30)),
+					},
+				},
+			},
+		},
+	})
 
-return &StorageConstruct{
-struct:     construct,
-      bucket,
-gBucket: loggingBucket,
-}
+	// Enhanced main bucket with SSL-only policy and Transfer Acceleration
+	bucket := awss3.NewBucket(construct, jsii.String("MainBucket"), &awss3.BucketProps{
+		BucketName:             jsii.String("proj-s3-" + props.Environment),
+		Versioned:              jsii.Bool(true),
+		PublicReadAccess:       jsii.Bool(false),
+		BlockPublicAccess:      awss3.BlockPublicAccess_BLOCK_ALL(),
+		Encryption:             awss3.BucketEncryption_S3_MANAGED,
+		EnforceSSL:             jsii.Bool(true),
+		TransferAcceleration:   jsii.Bool(true),
+		ServerAccessLogsBucket: loggingBucket,
+		ServerAccessLogsPrefix: jsii.String("access-logs/"),
+		EventBridgeEnabled:     jsii.Bool(true),
+	})
+
+	return &StorageConstruct{
+		Construct:     construct,
+		Bucket:        bucket,
+		LoggingBucket: loggingBucket,
+	}
 }
 ```
 
@@ -381,72 +419,79 @@ gBucket: loggingBucket,
 package constructs
 
 import (
-"github.com/aws/aws-cdk-go/awscdk/v2"
-"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
-"github.com/aws/constructs-go/constructs/v10"
-"github.com/aws/jsii-runtime-go"
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
 )
 
 type DatabaseConstructProps struct {
-Environment string
+	Environment string
 }
 
 type DatabaseConstruct struct {
-constructs.Construct
-Table awsdynamodb.ITable
+	constructs.Construct
+	Table awsdynamodb.ITable
 }
 
 func NewDatabaseConstruct(scope constructs.Construct, id string, props *DatabaseConstructProps) *DatabaseConstruct {
-construct := constructs.NewConstruct(scope, &id)
+	construct := constructs.NewConstruct(scope, &id)
 
-// Create DynamoDB table with partition key, sort key, encryption, and point-in-time recovery
-table := awsdynamodb.NewTable(construct, jsii.String("MainTable"), &awsdynamodb.TableProps{
-ame: jsii.String("proj-dynamodb-" + props.Environment),
- key
-Key: &awsdynamodb.Attribute{
-ame: jsii.String("pk"),
-awsdynamodb.AttributeType_STRING,
-key
-&awsdynamodb.Attribute{
-ame: jsii.String("sk"),
-awsdynamodb.AttributeType_STRING,
-able encryption at rest
-cryption: awsdynamodb.TableEncryption_AWS_MANAGED,
-able point-in-time recovery using new API
-tInTimeRecoverySpecification: &awsdynamodb.PointInTimeRecoverySpecification{
-tInTimeRecoveryEnabled: jsii.Bool(true),
-g mode
-gMode: awsdynamodb.BillingMode_PAY_PER_REQUEST,
-able deletion protection for production
-Protection: jsii.Bool(true),
-able CloudWatch Contributor Insights
-tributorInsightsEnabled: jsii.Bool(true),
-specification for change data capture
-namodb.StreamViewType_NEW_AND_OLD_IMAGES,
-class for cost optimization
-namodb.TableClass_STANDARD,
-old property
-awscdk.RemovalPolicy_RETAIN,
-})
+	// Create DynamoDB table with partition key, sort key, encryption, and point-in-time recovery
+	table := awsdynamodb.NewTable(construct, jsii.String("MainTable"), &awsdynamodb.TableProps{
+		TableName: jsii.String("proj-dynamodb-" + props.Environment),
+		// Partition key
+		PartitionKey: &awsdynamodb.Attribute{
+			Name: jsii.String("pk"),
+			Type: awsdynamodb.AttributeType_STRING,
+		},
+		// Sort key
+		SortKey: &awsdynamodb.Attribute{
+			Name: jsii.String("sk"),
+			Type: awsdynamodb.AttributeType_STRING,
+		},
+		// Enable encryption at rest
+		Encryption: awsdynamodb.TableEncryption_AWS_MANAGED,
+		// Enable point-in-time recovery using new API
+		PointInTimeRecoverySpecification: &awsdynamodb.PointInTimeRecoverySpecification{
+			PointInTimeRecoveryEnabled: jsii.Bool(true),
+		},
+		// Billing mode
+		BillingMode: awsdynamodb.BillingMode_PAY_PER_REQUEST,
+		// Enable deletion protection for production
+		DeletionProtection: jsii.Bool(true),
+		// Enable CloudWatch Contributor Insights
+		ContributorInsightsEnabled: jsii.Bool(true),
+		// Stream specification for change data capture
+		Stream: awsdynamodb.StreamViewType_NEW_AND_OLD_IMAGES,
+		// Table class for cost optimization
+		TableClass: awsdynamodb.TableClass_STANDARD,
+		// Removal policy - should be retained by default
+		RemovalPolicy: awscdk.RemovalPolicy_RETAIN,
+	})
 
-// Add Global Secondary Index for common query patterns
-table.AddGlobalSecondaryIndex(&awsdynamodb.GlobalSecondaryIndexProps{
-dexName: jsii.String("GSI1"),
-Key: &awsdynamodb.Attribute{
-ame: jsii.String("gsi1pk"),
-awsdynamodb.AttributeType_STRING,
-&awsdynamodb.Attribute{
-ame: jsii.String("gsi1sk"),
-awsdynamodb.AttributeType_STRING,
-tags for better resource management
-awscdk.Tags_Of(table).Add(jsii.String("Environment"), jsii.String(props.Environment), nil)
-awscdk.Tags_Of(table).Add(jsii.String("Project"), jsii.String("tap-infrastructure"), nil)
-awscdk.Tags_Of(table).Add(jsii.String("BackupEnabled"), jsii.String("true"), nil)
+	// Add Global Secondary Index for common query patterns
+	table.AddGlobalSecondaryIndex(&awsdynamodb.GlobalSecondaryIndexProps{
+		IndexName: jsii.String("GSI1"),
+		PartitionKey: &awsdynamodb.Attribute{
+			Name: jsii.String("gsi1pk"),
+			Type: awsdynamodb.AttributeType_STRING,
+		},
+		SortKey: &awsdynamodb.Attribute{
+			Name: jsii.String("gsi1sk"),
+			Type: awsdynamodb.AttributeType_STRING,
+		},
+	})
 
-return &DatabaseConstruct{
-struct: construct,
-   table,
-}
+	// Add tags for better resource management
+	awscdk.Tags_Of(table).Add(jsii.String("Environment"), jsii.String(props.Environment), nil)
+	awscdk.Tags_Of(table).Add(jsii.String("Project"), jsii.String("tap-infrastructure"), nil)
+	awscdk.Tags_Of(table).Add(jsii.String("BackupEnabled"), jsii.String("true"), nil)
+
+	return &DatabaseConstruct{
+		Construct: construct,
+		Table:     table,
+	}
 }
 ```
 
@@ -456,193 +501,213 @@ struct: construct,
 package constructs
 
 import (
-"os"
-"path/filepath"
+	"os"
+	"path/filepath"
 
-"github.com/aws/aws-cdk-go/awscdk/v2"
-"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
-"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatchactions"
-"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
-"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
-"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
-"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
-"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
-"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
-"github.com/aws/aws-cdk-go/awscdk/v2/awss3notifications"
-"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
-"github.com/aws/constructs-go/constructs/v10"
-"github.com/aws/jsii-runtime-go"
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatch"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudwatchactions"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslambda"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awss3notifications"
+	"github.com/aws/aws-cdk-go/awscdk/v2/awssns"
+	"github.com/aws/constructs-go/constructs/v10"
+	"github.com/aws/jsii-runtime-go"
 )
 
 type ComputeConstructProps struct {
-Environment   string
-LambdaRole    awsiam.IRole
-S3Bucket      awss3.IBucket
-DynamoDBTable awsdynamodb.ITable
-AlertingTopic awssns.ITopic
-VPC           awsec2.IVpc
+	Environment   string
+	LambdaRole    awsiam.IRole
+	S3Bucket      awss3.IBucket
+	DynamoDBTable awsdynamodb.ITable
+	AlertingTopic awssns.ITopic
+	VPC           awsec2.IVpc
 }
 
 type ComputeConstruct struct {
-constructs.Construct
-LambdaFunction awslambda.IFunction
-Alarms         []awscloudwatch.IAlarm
+	constructs.Construct
+	LambdaFunction awslambda.IFunction
+	Alarms         []awscloudwatch.IAlarm
 }
 
 func NewComputeConstruct(scope constructs.Construct, id string, props *ComputeConstructProps) *ComputeConstruct {
-construct := constructs.NewConstruct(scope, &id)
+	construct := constructs.NewConstruct(scope, &id)
 
-// Enhanced CloudWatch Log Group
-logGroup := awslogs.NewLogGroup(construct, jsii.String("LambdaLogGroup"), &awslogs.LogGroupProps{
-ame:  jsii.String("/aws/lambda/proj-lambda-" + props.Environment),
-tion:     awslogs.RetentionDays_ONE_MONTH,
-awscdk.RemovalPolicy_DESTROY,
-})
+	// Enhanced CloudWatch Log Group
+	logGroup := awslogs.NewLogGroup(construct, jsii.String("LambdaLogGroup"), &awslogs.LogGroupProps{
+		LogGroupName:  jsii.String("/aws/lambda/proj-lambda-" + props.Environment),
+		Retention:     awslogs.RetentionDays_ONE_MONTH,
+		RemovalPolicy: awscdk.RemovalPolicy_DESTROY,
+	})
 
-// Get private subnets for Lambda VPC configuration
-privateSubnets := props.VPC.PrivateSubnets()
+	// Get private subnets for Lambda VPC configuration
+	privateSubnets := props.VPC.PrivateSubnets()
 
-// Dynamically resolve Lambda code source
-lambdaCode := resolveLambdaCode()
+	// Dynamically resolve Lambda code source
+	lambdaCode := resolveLambdaCode()
 
-// Enhanced Lambda function with ARM64 and Python 3.12
-lambdaFunction := awslambda.NewFunction(construct, jsii.String("ProcessorFunction"), &awslambda.FunctionProps{
-ctionName:                 jsii.String("proj-lambda-" + props.Environment),
-time:                      awslambda.Runtime_PYTHON_3_12(),
-               awslambda.Architecture_ARM_64(),
-dler:                      jsii.String("handler.lambda_handler"),
-                       lambdaCode,
-                       props.LambdaRole,
-                   logGroup,
-                    awscdk.Duration_Minutes(jsii.Number(5)),
-                  jsii.Number(512),
-currentExecutions: jsii.Number(10),
-:                  jsii.String("Enhanced S3 processor with ARM64 and monitoring"),
-vironment: &map[string]*string{
-AMODB_TABLE_NAME": props.DynamoDBTable.TableName(),
-AME":      props.S3Bucket.BucketName(),
-VIRONMENT":         jsii.String(props.Environment),
-g: awslambda.Tracing_ACTIVE,
-   props.VPC,
-ets: &awsec2.SubnetSelection{
-ets: privateSubnets,
-ueueEnabled: jsii.Bool(true),
-         jsii.Number(2),
-})
+	// Enhanced Lambda function with ARM64 and Python 3.12
+	lambdaFunction := awslambda.NewFunction(construct, jsii.String("ProcessorFunction"), &awslambda.FunctionProps{
+		FunctionName:                 jsii.String("proj-lambda-" + props.Environment),
+		Runtime:                      awslambda.Runtime_PYTHON_3_12(),
+		Architecture:                 awslambda.Architecture_ARM_64(),
+		Handler:                      jsii.String("handler.lambda_handler"),
+		Code:                         lambdaCode,
+		Role:                         props.LambdaRole,
+		LogGroup:                     logGroup,
+		Timeout:                      awscdk.Duration_Minutes(jsii.Number(5)),
+		MemorySize:                   jsii.Number(512),
+		ReservedConcurrentExecutions: jsii.Number(10),
+		Description:                  jsii.String("Enhanced S3 processor with ARM64 and monitoring"),
+		Environment: &map[string]*string{
+			"DYNAMODB_TABLE_NAME": props.DynamoDBTable.TableName(),
+			"S3_BUCKET_NAME":      props.S3Bucket.BucketName(),
+			"ENVIRONMENT":         jsii.String(props.Environment),
+		},
+		Tracing: awslambda.Tracing_ACTIVE,
+		Vpc:     props.VPC,
+		VpcSubnets: &awsec2.SubnetSelection{
+			Subnets: privateSubnets,
+		},
+		DeadLetterQueueEnabled: jsii.Bool(true),
+		MaxEventAge:            awscdk.Duration_Hours(jsii.Number(2)),
+	})
 
-// Configure S3 trigger
-props.S3Bucket.AddEventNotification(
-tType_OBJECT_CREATED,
-otifications.NewLambdaDestination(lambdaFunction),
-)
+	// Configure S3 trigger
+	props.S3Bucket.AddEventNotification(
+		awss3.EventType_OBJECT_CREATED,
+		awss3notifications.NewLambdaDestination(lambdaFunction),
+	)
 
-// Create comprehensive CloudWatch alarms
-alarms := createLambdaAlarms(construct, lambdaFunction, props)
-createDynamoDBAlarms(construct, props.DynamoDBTable, props.AlertingTopic, props.Environment)
+	// Create comprehensive CloudWatch alarms
+	alarms := createLambdaAlarms(construct, lambdaFunction, props)
+	createDynamoDBAlarms(construct, props.DynamoDBTable, props.AlertingTopic, props.Environment)
 
-return &ComputeConstruct{
-struct:      construct,
-ction: lambdaFunction,
-       alarms,
-}
+	return &ComputeConstruct{
+		Construct:      construct,
+		LambdaFunction: lambdaFunction,
+		Alarms:         alarms,
+	}
 }
 
 func createLambdaAlarms(construct constructs.Construct, fn awslambda.IFunction, props *ComputeConstructProps) []awscloudwatch.IAlarm {
-var alarms []awscloudwatch.IAlarm
+	var alarms []awscloudwatch.IAlarm
 
-// Error Rate Alarm
-errorRateAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaErrorRateAlarm"), &awscloudwatch.AlarmProps{
-ame:        jsii.String("proj-lambda-error-rate-" + props.Environment),
-: jsii.String("Lambda function error rate exceeded 1%"),
-ewMathExpression(&awscloudwatch.MathExpressionProps{
-: jsii.String("(errors / invocations) * 100"),
-gMetrics: &map[string]awscloudwatch.IMetric{
-.MetricErrors(&awscloudwatch.MetricOptions{
-   awscdk.Duration_Minutes(jsii.Number(5)),
-vocations": fn.MetricInvocations(&awscloudwatch.MetricOptions{
-   awscdk.Duration_Minutes(jsii.Number(5)),
-_Minutes(jsii.Number(5)),
-       jsii.Number(1),
-Periods: jsii.Number(2),
-gData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
-})
-errorRateAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(props.AlertingTopic))
+	// Error Rate Alarm
+	errorRateAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaErrorRateAlarm"), &awscloudwatch.AlarmProps{
+		AlarmName:        jsii.String("proj-lambda-error-rate-" + props.Environment),
+		AlarmDescription: jsii.String("Lambda function error rate exceeded 1%"),
+		Metric: awscloudwatch.NewMathExpression(&awscloudwatch.MathExpressionProps{
+			Expression: jsii.String("(errors / invocations) * 100"),
+			UsingMetrics: &map[string]awscloudwatch.IMetric{
+				"errors": fn.MetricErrors(&awscloudwatch.MetricOptions{
+					Period: awscdk.Duration_Minutes(jsii.Number(5)),
+				}),
+				"invocations": fn.MetricInvocations(&awscloudwatch.MetricOptions{
+					Period: awscdk.Duration_Minutes(jsii.Number(5)),
+				}),
+			},
+		}),
+		EvaluationPeriods: jsii.Number(2),
+		Threshold:         jsii.Number(1),
+		TreatMissingData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
+	})
+	errorRateAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(props.AlertingTopic))
 
-// Duration Alarm
-durationAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaDurationAlarm"), &awscloudwatch.AlarmProps{
-ame:        jsii.String("proj-lambda-duration-" + props.Environment),
-: jsii.String("Lambda function duration exceeded 30 seconds"),
-.MetricDuration(&awscloudwatch.MetricOptions{
-   awscdk.Duration_Minutes(jsii.Number(5)),
-       jsii.Number(30000),
-Periods: jsii.Number(2),
-gData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
-})
-durationAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(props.AlertingTopic))
+	// Duration Alarm
+	durationAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaDurationAlarm"), &awscloudwatch.AlarmProps{
+		AlarmName:        jsii.String("proj-lambda-duration-" + props.Environment),
+		AlarmDescription: jsii.String("Lambda function duration exceeded 30 seconds"),
+		Metric: fn.MetricDuration(&awscloudwatch.MetricOptions{
+			Period: awscdk.Duration_Minutes(jsii.Number(5)),
+		}),
+		Threshold:         jsii.Number(30000),
+		EvaluationPeriods: jsii.Number(2),
+		TreatMissingData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
+	})
+	durationAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(props.AlertingTopic))
 
-// Throttling Alarm
-throttleAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaThrottleAlarm"), &awscloudwatch.AlarmProps{
-ame:        jsii.String("proj-lambda-throttles-" + props.Environment),
-: jsii.String("Lambda function is being throttled"),
-.MetricThrottles(&awscloudwatch.MetricOptions{
-   awscdk.Duration_Minutes(jsii.Number(5)),
-       jsii.Number(1),
-Periods: jsii.Number(1),
-gData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
-})
-throttleAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(props.AlertingTopic))
+	// Throttling Alarm
+	throttleAlarm := awscloudwatch.NewAlarm(construct, jsii.String("LambdaThrottleAlarm"), &awscloudwatch.AlarmProps{
+		AlarmName:        jsii.String("proj-lambda-throttles-" + props.Environment),
+		AlarmDescription: jsii.String("Lambda function is being throttled"),
+		Metric: fn.MetricThrottles(&awscloudwatch.MetricOptions{
+			Period: awscdk.Duration_Minutes(jsii.Number(5)),
+		}),
+		Threshold:         jsii.Number(1),
+		EvaluationPeriods: jsii.Number(1),
+		TreatMissingData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
+	})
+	throttleAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(props.AlertingTopic))
 
-alarms = append(alarms, errorRateAlarm, durationAlarm, throttleAlarm)
-return alarms
+	alarms = append(alarms, errorRateAlarm, durationAlarm, throttleAlarm)
+	return alarms
 }
 
 func createDynamoDBAlarms(construct constructs.Construct, table awsdynamodb.ITable, topic awssns.ITopic, env string) {
-// DynamoDB Read Throttling Alarm
-readThrottleAlarm := awscloudwatch.NewAlarm(construct, jsii.String("DynamoDBReadThrottleAlarm"), &awscloudwatch.AlarmProps{
-ame:        jsii.String("proj-dynamodb-read-throttles-" + env),
-: jsii.String("DynamoDB table experiencing read throttling"),
-ewMetric(&awscloudwatch.MetricProps{
-amespace:  jsii.String("AWS/DynamoDB"),
-ame: jsii.String("ReadThrottles"),
-sionsMap: &map[string]*string{
-ame": table.TableName(),
-   awscdk.Duration_Minutes(jsii.Number(5)),
-       jsii.Number(1),
-Periods: jsii.Number(2),
-gData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
-})
-readThrottleAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(topic))
+	// DynamoDB Read Throttling Alarm
+	readThrottleAlarm := awscloudwatch.NewAlarm(construct, jsii.String("DynamoDBReadThrottleAlarm"), &awscloudwatch.AlarmProps{
+		AlarmName:        jsii.String("proj-dynamodb-read-throttles-" + env),
+		AlarmDescription: jsii.String("DynamoDB table experiencing read throttling"),
+		Metric: awscloudwatch.NewMetric(&awscloudwatch.MetricProps{
+			Namespace:  jsii.String("AWS/DynamoDB"),
+			MetricName: jsii.String("ReadThrottles"),
+			DimensionsMap: &map[string]*string{
+				"TableName": table.TableName(),
+			},
+		}),
+		Period:            awscdk.Duration_Minutes(jsii.Number(5)),
+		Threshold:         jsii.Number(1),
+		EvaluationPeriods: jsii.Number(2),
+		TreatMissingData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
+	})
+	readThrottleAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(topic))
 
-// DynamoDB Write Throttling Alarm
-writeThrottleAlarm := awscloudwatch.NewAlarm(construct, jsii.String("DynamoDBWriteThrottleAlarm"), &awscloudwatch.AlarmProps{
-ame:        jsii.String("proj-dynamodb-write-throttles-" + env),
-: jsii.String("DynamoDB table experiencing write throttling"),
-ewMetric(&awscloudwatch.MetricProps{
-amespace:  jsii.String("AWS/DynamoDB"),
-ame: jsii.String("WriteThrottles"),
-sionsMap: &map[string]*string{
-ame": table.TableName(),
-   awscdk.Duration_Minutes(jsii.Number(5)),
-       jsii.Number(1),
-Periods: jsii.Number(2),
-gData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
-})
-writeThrottleAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(topic))
+	// DynamoDB Write Throttling Alarm
+	writeThrottleAlarm := awscloudwatch.NewAlarm(construct, jsii.String("DynamoDBWriteThrottleAlarm"), &awscloudwatch.AlarmProps{
+		AlarmName:        jsii.String("proj-dynamodb-write-throttles-" + env),
+		AlarmDescription: jsii.String("DynamoDB table experiencing write throttling"),
+		Metric: awscloudwatch.NewMetric(&awscloudwatch.MetricProps{
+			Namespace:  jsii.String("AWS/DynamoDB"),
+			MetricName: jsii.String("WriteThrottles"),
+			DimensionsMap: &map[string]*string{
+				"TableName": table.TableName(),
+			},
+		}),
+		Period:            awscdk.Duration_Minutes(jsii.Number(5)),
+		Threshold:         jsii.Number(1),
+		EvaluationPeriods: jsii.Number(2),
+		TreatMissingData:  awscloudwatch.TreatMissingData_NOT_BREACHING,
+	})
+	writeThrottleAlarm.AddAlarmAction(awscloudwatchactions.NewSnsAction(topic))
 }
 
 // resolveLambdaCode dynamically finds the Lambda source code or falls back to inline code
 func resolveLambdaCode() awslambda.Code {
-possiblePaths := []string{
-path := range possiblePaths {
-err := os.Stat(path); err == nil {
-dlerPath := filepath.Join(path, "handler.py")
-err := os.Stat(handlerPath); err == nil {
- awslambda.Code_FromAsset(jsii.String(path), nil)
- awslambda.Code_FromInline(jsii.String(getInlineLambdaCode()))
+	possiblePaths := []string{
+		"lib/lambda",
+		"lambda",
+		"src/lambda",
+	}
+
+	for _, path := range possiblePaths {
+		if _, err := os.Stat(path); err == nil {
+			handlerPath := filepath.Join(path, "handler.py")
+			if _, err := os.Stat(handlerPath); err == nil {
+				return awslambda.Code_FromAsset(jsii.String(path), nil)
+			}
+		}
+	}
+
+	return awslambda.Code_FromInline(jsii.String(getInlineLambdaCode()))
 }
 
 func getInlineLambdaCode() string {
-return `import json
+	return `import json
 import boto3
 import logging
 import os
