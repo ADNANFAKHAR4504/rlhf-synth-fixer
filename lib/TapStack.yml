@@ -137,6 +137,12 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
+  EnableNatGateway:
+    Type: String
+    Description: 'Enable creation of a new NAT Gateway when no ExistingNatGatewayId is provided'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
   ExistingKMSKeyArn:
     Type: String
     Description: 'If provided, use this KMS Key ARN instead of creating a new one.'
@@ -186,7 +192,12 @@ Conditions:
   CreateKMSKeyAlias: !Equals [!Ref ExistingKMSKeyAlias, '']
   CreateGuardDutyCheckFunction:
     !Equals [!Ref ExistingGuardDutyCheckFunctionArn, '']
-  CreateNatGateway: !Equals [!Ref ExistingNatGatewayId, '']
+  CreateNatGateway: !And
+    - !Equals [!Ref ExistingNatGatewayId, '']
+    - !Equals [!Ref EnableNatGateway, 'true']
+  UseExistingNatGateway: !Not [!Equals [!Ref ExistingNatGatewayId, '']]
+  CreatePrivateDefaultRoute:
+    !Or [!Condition CreateNatGateway, !Condition UseExistingNatGateway]
 
 Resources:
   # VPC and Networking Resources
@@ -337,6 +348,7 @@ Resources:
 
   ProdPrivateRoute:
     Type: AWS::EC2::Route
+    Condition: CreatePrivateDefaultRoute
     Properties:
       RouteTableId: !Ref ProdPrivateRouteTable
       DestinationCidrBlock: '0.0.0.0/0'
