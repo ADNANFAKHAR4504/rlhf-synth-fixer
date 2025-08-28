@@ -1396,9 +1396,17 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
-  KMSKeyArn:
-    Description: 'KMS Key ARN for encryption'
-    Value: !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn]
+  KMSKeyArnCreated:
+    Condition: CreateKMSKey
+    Description: 'KMS Key ARN for encryption (created)'
+    Value: !GetAtt ProdKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
+
+  KMSKeyArnExisting:
+    Condition: HasKmsKey
+    Description: 'KMS Key ARN for encryption (existing)'
+    Value: !Ref ExistingKMSKeyArn
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
 
