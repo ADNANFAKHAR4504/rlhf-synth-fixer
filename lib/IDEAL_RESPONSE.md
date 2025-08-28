@@ -1,5 +1,5 @@
 ```go
-package main
+package lib
 
 import (
 	"fmt"
@@ -21,22 +21,47 @@ type TapStackProps struct {
 	InstanceType      string
 }
 
+// getEnvOrDefault returns environment variable value or default if not set
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 // Self-contained TapStack using raw Terraform resources to minimize dependencies
-func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cdktf.TerraformStack {
+func NewTapStack(scope constructs.Construct, id string, props ...*TapStackProps) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, &id)
+
+	// If no props provided, create defaults from environment variables
+	var stackProps *TapStackProps
+	if len(props) == 0 || props[0] == nil {
+		stackProps = &TapStackProps{
+			EnvironmentSuffix: getEnvOrDefault("ENVIRONMENT_SUFFIX", "dev"),
+			StateBucket:       getEnvOrDefault("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states"),
+			StateBucketRegion: getEnvOrDefault("TERRAFORM_STATE_BUCKET_REGION", "us-east-1"),
+			AwsRegion:         getEnvOrDefault("AWS_DEFAULT_REGION", "us-east-1"),
+			RepositoryName:    getEnvOrDefault("GITHUB_REPOSITORY", "iac-test-automations"),
+			CommitAuthor:      getEnvOrDefault("COMMIT_AUTHOR", "TuringGpt"),
+			OfficeIP:          getEnvOrDefault("OFFICE_IP", "0.0.0.0/0"),
+			InstanceType:      getEnvOrDefault("INSTANCE_TYPE", "t3.micro"),
+		}
+	} else {
+		stackProps = props[0]
+	}
 
 	// Get environment prefix
 	envPrefix := os.Getenv("ENVIRONMENT_SUFFIX")
 	if envPrefix == "" {
-		envPrefix = props.EnvironmentSuffix
+		envPrefix = stackProps.EnvironmentSuffix
 	}
 	envPrefix = fmt.Sprintf("%s-webapp", envPrefix)
 
 	// Configure S3 Backend for remote state
 	cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
-		Bucket:  jsii.String(props.StateBucket),
-		Key:     jsii.String(fmt.Sprintf("prs/%s/terraform.tfstate", props.EnvironmentSuffix)),
-		Region:  jsii.String(props.StateBucketRegion),
+		Bucket:  jsii.String(stackProps.StateBucket),
+		Key:     jsii.String(fmt.Sprintf("prs/%s/terraform.tfstate", stackProps.EnvironmentSuffix)),
+		Region:  jsii.String(stackProps.StateBucketRegion),
 		Encrypt: jsii.Bool(true),
 	})
 
@@ -49,12 +74,12 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 	})
 
 	// Configure AWS provider using escape hatch
-	stack.AddOverride(jsii.String("provider.aws.region"), jsii.String(props.AwsRegion))
+	stack.AddOverride(jsii.String("provider.aws.region"), jsii.String(stackProps.AwsRegion))
 	stack.AddOverride(jsii.String("provider.aws.default_tags"), map[string]interface{}{
 		"tags": map[string]interface{}{
-			"Environment": props.EnvironmentSuffix,
-			"Repository":  props.RepositoryName,
-			"Author":      props.CommitAuthor,
+			"Environment": stackProps.EnvironmentSuffix,
+			"Repository":  stackProps.RepositoryName,
+			"Author":      stackProps.CommitAuthor,
 			"Project":     "webapp-foundation",
 			"ManagedBy":   "CDKTF",
 		},
@@ -72,7 +97,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		"enable_dns_support":   true,
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-vpc", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 			"Project":     "webapp-foundation",
 		},
 	})
@@ -82,7 +107,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		"vpc_id": "${aws_vpc.main.id}",
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-igw", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -95,7 +120,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-public-subnet", envPrefix),
 			"Type":        "Public",
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -107,7 +132,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-private-subnet-1", envPrefix),
 			"Type":        "Private",
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -119,7 +144,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-private-subnet-2", envPrefix),
 			"Type":        "Private",
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -128,7 +153,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		"vpc_id": "${aws_vpc.main.id}",
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-public-rt", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -155,7 +180,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 				"from_port":        22,
 				"to_port":          22,
 				"protocol":         "tcp",
-				"cidr_blocks":      []string{props.OfficeIP},
+				"cidr_blocks":      []string{stackProps.OfficeIP},
 				"ipv6_cidr_blocks": []string{},
 				"prefix_list_ids":  []string{},
 				"security_groups":  []string{},
@@ -178,7 +203,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		},
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-ec2-sg", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -203,7 +228,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 		"egress": []map[string]interface{}{},
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-rds-sg", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -226,13 +251,13 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) cd
 	// EC2 instance using escape hatch
 	stack.AddOverride(jsii.String("resource.aws_instance.web_server"), map[string]interface{}{
 		"ami":                         "${data.aws_ami.amazon_linux.id}",
-		"instance_type":               props.InstanceType,
+		"instance_type":               stackProps.InstanceType,
 		"subnet_id":                   "${aws_subnet.public.id}",
 		"vpc_security_group_ids":      []string{"${aws_security_group.ec2.id}"},
 		"associate_public_ip_address": true,
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-web-server", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 			"Role":        "WebServer",
 		},
 		"user_data": fmt.Sprintf(`#!/bin/bash
@@ -242,7 +267,7 @@ yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo "<h1>Web Application Server</h1>" > /var/www/html/index.html
-echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuffix),
+echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, stackProps.EnvironmentSuffix),
 	})
 
 	// DB subnet group using escape hatch
@@ -254,7 +279,7 @@ echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuf
 		},
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-db-subnet-group", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -264,7 +289,7 @@ echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuf
 		"family": "mysql8.0",
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-mysql-params", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 		},
 	})
 
@@ -301,17 +326,17 @@ echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuf
 		"skip_final_snapshot":     true,  // Set to false for production
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-mysql-db", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 			"Engine":      "MySQL",
 		},
 	})
 
 	// S3 bucket for state storage using escape hatch
 	stack.AddOverride(jsii.String("resource.aws_s3_bucket.terraform_state"), map[string]interface{}{
-		"bucket": fmt.Sprintf("%s-terraform-state-%s", envPrefix, props.EnvironmentSuffix),
+		"bucket": fmt.Sprintf("%s-terraform-state-%s", envPrefix, stackProps.EnvironmentSuffix),
 		"tags": map[string]interface{}{
 			"Name":        fmt.Sprintf("%s-terraform-state", envPrefix),
-			"Environment": props.EnvironmentSuffix,
+			"Environment": stackProps.EnvironmentSuffix,
 			"Purpose":     "TerraformState",
 		},
 	})
@@ -395,3 +420,4 @@ echo "<p>Environment: %s</p>" >> /var/www/html/index.html`, props.EnvironmentSuf
 	return stack
 }
 ```
+
