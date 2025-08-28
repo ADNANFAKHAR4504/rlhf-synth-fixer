@@ -823,7 +823,6 @@ Resources:
     UpdateReplacePolicy: Retain
     Condition: CreateGuardDutyCheckFunction
     Properties:
-      FunctionName: !Sub '${Environment}-guardduty-detector-check'
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt GuardDutyDetectorCheckRole.Arn
