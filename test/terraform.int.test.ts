@@ -26,12 +26,12 @@ import {
 } from '@aws-sdk/client-cloudtrail';
 import { 
   CloudWatchClient, 
-  DescribeAlarmsCommand,
-  DescribeMetricFiltersCommand 
+  DescribeAlarmsCommand
 } from '@aws-sdk/client-cloudwatch';
 import { 
   CloudWatchLogsClient, 
-  DescribeLogGroupsCommand 
+  DescribeLogGroupsCommand,
+  DescribeMetricFiltersCommand 
 } from '@aws-sdk/client-cloudwatch-logs';
 import { 
   SNSClient, 
@@ -294,7 +294,7 @@ describe('Terraform Secure AWS Infrastructure Integration Tests', () => {
         KeyId: outputs.kms_key_id
       });
       
-      const response = await s3Client.send(command);
+      const response = await kmsClient.send(command);
       expect(response.KeyMetadata?.KeyState).toBe('Enabled');
       expect(response.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
       expect(response.KeyMetadata?.KeySpec).toBe('SYMMETRIC_DEFAULT');
@@ -395,10 +395,10 @@ describe('Terraform Secure AWS Infrastructure Integration Tests', () => {
         logGroupName: '/aws/cloudtrail/web-app-trail-274802'
       });
       
-      const response = await cloudWatchClient.send(command);
+      const response = await cloudWatchLogsClient.send(command);
       expect(response.metricFilters?.length).toBeGreaterThanOrEqual(2);
       
-      const filterNames = response.metricFilters?.map(f => f.filterName) || [];
+      const filterNames = response.metricFilters?.map((f: any) => f.filterName) || [];
       expect(filterNames).toContain('unauthorized-api-calls-274802');
       expect(filterNames).toContain('iam-policy-violations-274802');
     });
