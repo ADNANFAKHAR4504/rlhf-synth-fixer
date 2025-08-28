@@ -23,6 +23,9 @@ export class TapStack extends cdk.Stack {
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
+    // Generate random suffix for unique resource naming
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+
     // ============================================================================
     // KMS Keys for Encryption
     // ============================================================================
@@ -134,7 +137,7 @@ export class TapStack extends cdk.Stack {
 
     // VPC Flow Logs
     const vpcFlowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
-      logGroupName: '/aws/vpc/flowlogs',
+      logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}-${randomSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: cloudWatchKmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -212,7 +215,7 @@ export class TapStack extends cdk.Stack {
     // ============================================================================
 
     const applicationBucket = new s3.Bucket(this, 'ApplicationBucket', {
-      bucketName: `secure-app-bucket-${environmentSuffix}-${this.account}-${this.region}`,
+      bucketName: `secure-app-bucket-${environmentSuffix}-${randomSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3KmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -230,7 +233,7 @@ export class TapStack extends cdk.Stack {
     });
 
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
-      bucketName: `secure-logs-bucket-${environmentSuffix}-${this.account}-${this.region}`,
+      bucketName: `secure-logs-bucket-${environmentSuffix}-${randomSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: s3KmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -362,7 +365,7 @@ export class TapStack extends cdk.Stack {
 
     // IAM User with MFA requirement
     const applicationUser = new iam.User(this, 'ApplicationUser', {
-      userName: 'secure-app-user',
+      userName: `secure-app-user-${environmentSuffix}-${randomSuffix}`,
       managedPolicies: [
         new iam.ManagedPolicy(this, 'MFARequiredPolicy', {
           statements: [
@@ -496,14 +499,14 @@ export class TapStack extends cdk.Stack {
     // ============================================================================
 
     const applicationLogGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
-      logGroupName: '/aws/lambda/secure-application',
+      logGroupName: `/aws/lambda/secure-application-${environmentSuffix}-${randomSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: cloudWatchKmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const apiGatewayLogGroup = new logs.LogGroup(this, 'APIGatewayLogGroup', {
-      logGroupName: '/aws/apigateway/secure-api',
+      logGroupName: `/aws/apigateway/secure-api-${environmentSuffix}-${randomSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       encryptionKey: cloudWatchKmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -521,7 +524,7 @@ export class TapStack extends cdk.Stack {
       enableFileValidation: true,
       encryptionKey: s3KmsKey,
       cloudWatchLogGroup: new logs.LogGroup(this, 'CloudTrailLogGroup', {
-        logGroupName: '/aws/cloudtrail/secure-trail',
+        logGroupName: `/aws/cloudtrail/secure-trail-${environmentSuffix}-${randomSuffix}`,
         retention: logs.RetentionDays.THREE_MONTHS,
         encryptionKey: cloudWatchKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -536,7 +539,7 @@ export class TapStack extends cdk.Stack {
       this,
       'PrivateHostedZone',
       {
-        zoneName: 'internal.secure-app.local',
+        zoneName: `internal.secure-app-${randomSuffix}.local`,
         vpc,
       }
     );
