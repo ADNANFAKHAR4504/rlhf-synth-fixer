@@ -1,6 +1,7 @@
 Develop a Terraform file that establishes secure and compliant infrastructure configurations as code, adhering to rigorous security standards. The terraform code must be reusable, modularized.
 
-## Requirements (must-haves based on constraints):
+Please produce the terraform templates that fulfills all the requirements
+## Requirements
 
 ### IAM with least privilege
 Definition of IAM policies granting least privilege necessary, such as read-only access to specific services like S3.  

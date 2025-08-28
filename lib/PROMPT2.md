@@ -1,15 +1,15 @@
-## Turn2 promt
 Your previous for the below requirement is not correct. Following are errors
 
-## Monitoring module was incomplete
-## Error, the argument "project_name" is required, but no definition was found in monitoring module
-## Error, an argument named "environment" is not expected here in monitoring module
+## Errors
+Monitoring module was incomplete
+Error, the argument "project_name" is required, but no definition was found in monitoring module
+Error, an argument named "environment" is not expected here in monitoring module
 
 Please generate the correct response for the following
 
 Develop a Terraform file that establishes secure and compliant infrastructure configurations as code, adhering to rigorous security standards. The terraform code must be reusable, modularized.
 
-## Requirements (must-haves based on constraints):
+## Requirements:
 
 ### IAM with least privilege
 Definition of IAM policies granting least privilege necessary, such as read-only access to specific services like S3.  

@@ -1,14 +1,13 @@
-## Turn3 promt
-Your previous for the below requirement is not correct. Following are errors
-
-## Monitoring module was incomplete. Resources like config delivery channel, aws_config_configuration_recorder_status, aws_config_config_rule for s3 and encrypted volumes are missing
-## Error, an argument named "environment" is not expected here in monitoring module
+Your previous response for the below requirement is not correct. Following are errors
+## Erros
+Monitoring module was incomplete. Resources like config delivery channel, aws_config_configuration_recorder_status, aws_config_config_rule for s3 and encrypted volumes are missing
+Error, an argument named "environment" is not expected here in monitoring module
 
 Please generate the correct and complete response for the following
 
 Develop a Terraform file that establishes secure and compliant infrastructure configurations as code, adhering to rigorous security standards. The terraform code must be reusable, modularized.
 
-## Requirements (must-haves based on constraints):
+## Requirements:
 
 ### IAM with least privilege
 Definition of IAM policies granting least privilege necessary, such as read-only access to specific services like S3.  
