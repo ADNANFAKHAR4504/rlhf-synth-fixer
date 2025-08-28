@@ -1,4 +1,7 @@
 {
+  "files.watcherExclude": {
+    "**/archive/**": true
+  },
   "jest.runMode": "on-demand",
   "jest.jestCommandLine": "npm test --",
   "jest.rootPath": ".",

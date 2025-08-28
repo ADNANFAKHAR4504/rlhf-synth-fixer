@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "400103",
+  "team": "4",
+  "startedAt": "2025-08-25T23:13:37.715Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "karosi12",
+  "dockerS3Location": ""
+}
