@@ -52,4 +52,4 @@ Design and implement an **AWS CloudFormation template** to orchestrate a secure,
 - Ability to validate and deploy the stack in **us-east-1** and **us-west-2**.
 - Documentation on parameter usage, security practices, and rollback behavior.
 
----
+--- 
