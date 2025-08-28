@@ -100,7 +100,6 @@ tasks-status.md
 worktree/
 bin/.terraform.lock.hcl
 bin/tfplan
-lib/tfplan
 
 build
 tasks.csv
