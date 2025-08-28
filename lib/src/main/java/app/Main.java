@@ -348,65 +348,56 @@ class EcommerceStack extends Stack {
   }
 
   private void createIamRoles() {
-        // Create RDS access role with least privilege
-        rdsAccessRole = new Role(this, "RdsAccessRole", RoleProps.builder()
-                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-                .description("Role for accessing RDS database secrets and metadata")
-                .inlinePolicies(Map.of(
-                        "RdsSecretsAccess", PolicyDocument.Builder.create()
-                                .statements(Arrays.asList(
-                                        new PolicyStatement(PolicyStatementProps.builder()
-                                                .effect(Effect.ALLOW)
-                                                .actions(Arrays.asList(
-                                                        "secretsmanager:GetSecretValue",
-                                                        "secretsmanager:DescribeSecret"
-                                                ))
-                                                .resources(Arrays.asList(dbSecret.getSecretArn()))
-                                                .conditions(Map.of(
-                                                        "Bool", Map.of("aws:SecureTransport", "true")
-                                                ))
-                                                .build(),
-                                        new PolicyStatement(PolicyStatementProps.builder()
-                                                .effect(Effect.ALLOW)
-                                                .actions(Arrays.asList("rds:DescribeDBInstances"))
-                                                .resources(Arrays.asList(rdsInstance.getInstanceArn()))
-                                                .conditions(Map.of(
-                                                        "Bool", Map.of("aws:SecureTransport", "true")
-                                                ))
-                                                .build()
-                                ))
-                                .build()
-                ))
-                .build());
+    // Create RDS access role with least privilege
+    rdsAccessRole = new Role(this, "RdsAccessRole", RoleProps.builder()
+        .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+        .description("Role for accessing RDS database secrets and metadata")
+        .inlinePolicies(Map.of(
+            "RdsSecretsAccess", PolicyDocument.Builder.create()
+                .statements(Arrays.asList(
+                    PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(Arrays.asList(
+                            "secretsmanager:GetSecretValue",
+                            "secretsmanager:DescribeSecret"))
+                        .resources(Arrays.asList(dbSecret.getSecretArn()))
+                        .conditions(Map.of(
+                            "Bool", Map.of("aws:SecureTransport", "true")))
+                        .build(),
+                    PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(Arrays.asList("rds:DescribeDBInstances"))
+                        .resources(Arrays.asList(rdsInstance.getInstanceArn()))
+                        .conditions(Map.of(
+                            "Bool", Map.of("aws:SecureTransport", "true")))
+                        .build()))
+                .build()))
+        .build());
 
-        // Create S3 read-only role with least privilege
-        s3ReadOnlyRole = new Role(this, "S3ReadOnlyRole", RoleProps.builder()
-                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-                .description("Role for read-only access to ecommerce assets bucket")
-                .inlinePolicies(Map.of(
-                        "S3ReadOnlyAccess", PolicyDocument.Builder.create()
-                                .statements(Arrays.asList(
-                                        new PolicyStatement(PolicyStatementProps.builder()
-                                                .effect(Effect.ALLOW)
-                                                .actions(Arrays.asList("s3:ListBucket"))
-                                                .resources(Arrays.asList(s3Bucket.getBucketArn()))
-                                                .conditions(Map.of(
-                                                        "Bool", Map.of("aws:SecureTransport", "true")
-                                                ))
-                                                .build(),
-                                        new PolicyStatement(PolicyStatementProps.builder()
-                                                .effect(Effect.ALLOW)
-                                                .actions(Arrays.asList("s3:GetObject"))
-                                                .resources(Arrays.asList(s3Bucket.getBucketArn() + "/*"))
-                                                .conditions(Map.of(
-                                                        "Bool", Map.of("aws:SecureTransport", "true")
-                                                ))
-                                                .build()
-                                ))
-                                .build()
-                ))
-                .build());
-    }
+    // Create S3 read-only role with least privilege
+    s3ReadOnlyRole = new Role(this, "S3ReadOnlyRole", RoleProps.builder()
+        .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+        .description("Role for read-only access to ecommerce assets bucket")
+        .inlinePolicies(Map.of(
+            "S3ReadOnlyAccess", PolicyDocument.Builder.create()
+                .statements(Arrays.asList(
+                    PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(Arrays.asList("s3:ListBucket"))
+                        .resources(Arrays.asList(s3Bucket.getBucketArn()))
+                        .conditions(Map.of(
+                            "Bool", Map.of("aws:SecureTransport", "true")))
+                        .build(),
+                    PolicyStatement.Builder.create()
+                        .effect(Effect.ALLOW)
+                        .actions(Arrays.asList("s3:GetObject"))
+                        .resources(Arrays.asList(s3Bucket.getBucketArn() + "/*"))
+                        .conditions(Map.of(
+                            "Bool", Map.of("aws:SecureTransport", "true")))
+                        .build()))
+                .build()))
+        .build());
+  }
 
   private void createOutputs() {
     new CfnOutput(this, "VpcId", CfnOutputProps.builder()
@@ -479,6 +470,14 @@ class EcommerceStack extends Stack {
 
   public Secret getDbSecret() {
     return dbSecret;
+  }
+
+  public SecurityGroup getRdsSecurityGroup() {
+    return rdsSecurityGroup;
+  }
+
+  public SecurityGroup getAppTierSecurityGroup() {
+    return appTierSecurityGroup;
   }
 }
 
