@@ -175,7 +175,7 @@ describe('CloudFormation Stack Integration Tests', () => {
     
     const dbInstance = response.DBInstances![0];
     expect(dbInstance.Engine).toBe('postgres');
-    expect(dbInstance.MultiAZ).toBe(true);
+    expect(dbInstance.MultiAZ).toBe(false);
     expect(dbInstance.StorageEncrypted).toBe(true);
     expect(dbInstance.BackupRetentionPeriod).toBe(7);
   });

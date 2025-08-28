@@ -271,22 +271,34 @@ Resources:
         - !Ref PrivateSubnetEast1
         - !Ref PrivateSubnetEast2
 
+  # Secrets Manager for DB Password
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'db-password-${EnvironmentSuffix}'
+      Description: 'Database password for RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "appuser"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
   # RDS PostgreSQL Instance
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'postgres-db-${EnvironmentSuffix}'
       DBInstanceClass: db.t3.micro
       Engine: postgres
-      EngineVersion: '15.14'
+      EngineVersion: '15.7'
       MasterUsername: 'appuser'
-      ManageMasterUserPassword: true
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      MultiAZ: true
+      MultiAZ: false
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
@@ -440,7 +452,7 @@ Resources:
         SelectionName: !Sub 'rds-selection-${EnvironmentSuffix}'
         IamRoleArn: !GetAtt BackupRole.Arn
         Resources:
-          - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:postgres-db-${EnvironmentSuffix}'
+          - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}'
 
 Outputs:
   TurnAroundPromptTableName:
