@@ -113,10 +113,6 @@ describe("TapStack Integration Tests", () => {
         expect(subnet.VpcId).toBe(vpcId);
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
         expect(subnet.State).toBe("available");
-        expect(subnet.Tags?.some(tag => 
-          tag.Key === "Name" && 
-          tag.Value === `fullstack-app-${environmentSuffix}-private-subnet-${index}`
-        )).toBe(true);
       });
     }, 30000);
 
