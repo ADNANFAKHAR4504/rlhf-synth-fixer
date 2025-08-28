@@ -1,16 +1,16 @@
-Here's a prompt for developing a TypeScript-based CloudFormation stack for a secure serverless infrastructure.
+Here's a prompt for developing a TypeScript-based CDK stack for a secure serverless infrastructure.
 
 ---
 
-## TypeScript CloudFormation: Secure Serverless Deployment
+## TypeScript CDK: Secure Serverless Deployment
 
 Hey team,
 
-We need your help to develop a **TypeScript-based CloudFormation stack** for deploying a new, secure serverless infrastructure. This setup is for a critical application and needs to meet some pretty strict requirements.
+We need your help to develop a **TypeScript-based CDK stack** for deploying a new, secure serverless infrastructure. This setup is for a critical application and needs to meet some pretty strict requirements.
 
 The entire deployment will take place in the **`us-west-2` region**. We'll use a VPC with the **`10.0.0.0/16` CIDR block**, specifically configured with a **private subnet (`10.0.0.0/24`)** and a **public subnet (`10.0.1.0/24`)**.
 
-Here's what needs to be included in the CloudFormation stack:
+Here's what needs to be included in the CDK stack:
 
 - **Serverless Application Layer**: Use **AWS Lambda** functions, triggered by an **API Gateway**.
 - **Data Storage**: Implement **DynamoDB** for data persistence. It needs to be configured with specific **read/write capacity units** (plan for around 500 RCU/WCU, but make it easily configurable). All sensitive data in DynamoDB must be secured with **KMS encryption**. Also, **automate DynamoDB backups**.
@@ -25,7 +25,7 @@ Here's what needs to be included in the CloudFormation stack:
 - **Lambda Resilience**: Ensure the Lambda function has **proper retry logic** for failed invocations.
 - **Tagging**: Apply a consistent **tagging strategy** across all resources for better cost management and organization. Resource names should follow the pattern `'projectname-environment-resourcename'` (e.g., 'myproject-dev-lambda').
 
-The expected output is a **cohesive CloudFormation stack in TypeScript**.
+The expected output is a **cohesive CDK stack in TypeScript**.
 
 My directory structure looks like this
 ├── MODEL_RESPONSE.md
