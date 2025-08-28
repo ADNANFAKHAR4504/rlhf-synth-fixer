@@ -54,7 +54,7 @@ resource "aws_launch_template" "web" {
   user_data = local.user_data
 
   # EBS optimization
-  ebs_optimized = var.ebs_optimized
+  # ebs_optimized = var.ebs_optimized
 
   # Monitoring
   monitoring {
@@ -100,7 +100,7 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                = "${var.environment}-${var.project_name}-web-asg-hcl"
+  name                = "${var.environment}-${var.project_name}-web-asg-hcltf"
   vpc_zone_identifier = var.private_subnet_ids
   target_group_arns   = [var.target_group_arn]
   health_check_type   = var.health_check_type
