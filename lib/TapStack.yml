@@ -290,6 +290,8 @@ Conditions:
     ]
   CreateDBInstanceEffective:
     !And [!Condition CreateDBInstance, !Condition CanUseDBSubnetGroup]
+  HasExistingRDSEndpointAddress:
+    !Not [!Equals [!Ref ExistingRDSEndpointAddress, '']]
 
 Resources:
   # VPC and Networking Resources
@@ -1457,14 +1459,17 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-ALB-DNS-Name'
 
-  RDSEndpoint:
-    Description: 'RDS endpoint address'
-    Value:
-      !If [
-        CreateDBInstanceEffective,
-        !GetAtt ProdRDSInstance.Endpoint.Address,
-        !Ref ExistingRDSEndpointAddress,
-      ]
+  RDSEndpointCreated:
+    Condition: CreateDBInstanceEffective
+    Description: 'RDS endpoint address (created)'
+    Value: !GetAtt ProdRDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
+
+  RDSEndpointExisting:
+    Condition: HasExistingRDSEndpointAddress
+    Description: 'RDS endpoint address (existing)'
+    Value: !Ref ExistingRDSEndpointAddress
     Export:
       Name: !Sub '${AWS::StackName}-RDS-Endpoint'
 
