@@ -1,4 +1,4 @@
-This document contains the ideal implementation of the TAP infrastructure stack that meets all requirements from PROMPT.md.
+This document contains the ideal implementation of the TAP infrastructure stack that meets all requirements.
 
 ## Complete tap-stack.ts Implementation
 
