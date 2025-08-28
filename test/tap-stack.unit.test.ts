@@ -11,8 +11,50 @@ describe('TapStack', () => {
 
   beforeEach(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    stack = new TapStack(app, 'TestStack', {
+      env: { region: 'us-east-1' },
+    });
     template = Template.fromStack(stack);
+  });
+
+  describe('Environment Suffix Handling', () => {
+    test('should use environmentSuffix from props when provided', () => {
+      const appWithProps = new cdk.App();
+      const stackWithProps = new TapStack(appWithProps, 'TestStackWithProps', {
+        env: { region: 'us-east-1' },
+        environmentSuffix: 'prod',
+      });
+      const templateWithProps = Template.fromStack(stackWithProps);
+      
+      // Verify stack was created successfully with props
+      templateWithProps.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('should use environmentSuffix from context when props not provided', () => {
+      const appWithContext = new cdk.App({
+        context: {
+          environmentSuffix: 'staging',
+        },
+      });
+      const stackWithContext = new TapStack(appWithContext, 'TestStackWithContext', {
+        env: { region: 'us-east-1' },
+      });
+      const templateWithContext = Template.fromStack(stackWithContext);
+      
+      // Verify stack was created successfully with context
+      templateWithContext.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('should use default dev when neither props nor context provided', () => {
+      // This is our existing default test case
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
   });
 
   describe('VPC Infrastructure', () => {

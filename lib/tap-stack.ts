@@ -71,15 +71,11 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(ec2SecurityGroup).add('project', commonTags.project);
     cdk.Tags.of(ec2SecurityGroup).add('owner', commonTags.owner);
 
-    const rdsSecurityGroup = new ec2.SecurityGroup(
-      this,
-      'RdsSecurityGroup',
-      {
-        vpc,
-        description: 'Security group for RDS',
-        allowAllOutbound: true,
-      }
-    );
+    const rdsSecurityGroup = new ec2.SecurityGroup(this, 'RdsSecurityGroup', {
+      vpc,
+      description: 'Security group for RDS',
+      allowAllOutbound: true,
+    });
     cdk.Tags.of(rdsSecurityGroup).add('project', commonTags.project);
     cdk.Tags.of(rdsSecurityGroup).add('owner', commonTags.owner);
 
@@ -115,6 +111,7 @@ export class TapStack extends cdk.Stack {
     const kmsKey = new kms.Key(this, 'TapKmsKey', {
       description: 'KMS key for encryption',
       enableKeyRotation: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     cdk.Tags.of(kmsKey).add('project', commonTags.project);
     cdk.Tags.of(kmsKey).add('owner', commonTags.owner);
@@ -207,8 +204,9 @@ export class TapStack extends cdk.Stack {
       storageEncrypted: true,
       storageEncryptionKey: kmsKey,
       backupRetention: cdk.Duration.days(7),
-      deleteAutomatedBackups: false,
+      deleteAutomatedBackups: true,
       deletionProtection: false,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     cdk.Tags.of(rdsInstance).add('project', commonTags.project);
     cdk.Tags.of(rdsInstance).add('owner', commonTags.owner);
@@ -218,6 +216,8 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
     cdk.Tags.of(s3Bucket).add('project', commonTags.project);
     cdk.Tags.of(s3Bucket).add('owner', commonTags.owner);
@@ -225,6 +225,7 @@ export class TapStack extends cdk.Stack {
     const logGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
       logGroupName: '/aws/lambda/tap-function',
       retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     cdk.Tags.of(logGroup).add('project', commonTags.project);
     cdk.Tags.of(logGroup).add('owner', commonTags.owner);
@@ -259,7 +260,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(cpuAlarm).add('project', commonTags.project);
     cdk.Tags.of(cpuAlarm).add('owner', commonTags.owner);
 
-    const scaleUpPolicy = new autoscaling.StepScalingPolicy(this, 'ScaleUpPolicy', {
+    new autoscaling.StepScalingPolicy(this, 'ScaleUpPolicy', {
       autoScalingGroup: asg,
       metric: cpuMetric,
       scalingSteps: [
@@ -269,7 +270,7 @@ export class TapStack extends cdk.Stack {
       adjustmentType: autoscaling.AdjustmentType.CHANGE_IN_CAPACITY,
     });
 
-    const scaleDownPolicy = new autoscaling.StepScalingPolicy(this, 'ScaleDownPolicy', {
+    new autoscaling.StepScalingPolicy(this, 'ScaleDownPolicy', {
       autoScalingGroup: asg,
       metric: cpuMetric,
       scalingSteps: [
@@ -280,14 +281,14 @@ export class TapStack extends cdk.Stack {
     });
 
     // Create additional scaling policies for high and low CPU alarms
-    const highCpuAlarm = new cloudwatch.Alarm(this, 'HighCpuAlarm', {
+    new cloudwatch.Alarm(this, 'HighCpuAlarm', {
       metric: cpuMetric,
       threshold: 80,
       evaluationPeriods: 2,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
-    
-    const lowCpuAlarm = new cloudwatch.Alarm(this, 'LowCpuAlarm', {
+
+    new cloudwatch.Alarm(this, 'LowCpuAlarm', {
       metric: cpuMetric,
       threshold: 20,
       evaluationPeriods: 2,
