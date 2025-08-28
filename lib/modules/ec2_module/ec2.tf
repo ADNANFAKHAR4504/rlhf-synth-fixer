@@ -33,7 +33,6 @@ locals {
     project_name        = var.project_name
     app_port           = var.app_port
     secrets_arn        = var.secrets_manager_secret_name != "" ? data.aws_secretsmanager_secret.app_secrets[0].arn : ""
-    cloudwatch_config  = var.cloudwatch_config
     additional_packages = var.additional_packages
   }))
 }

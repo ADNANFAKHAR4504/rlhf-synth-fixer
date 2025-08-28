@@ -59,6 +59,7 @@ variable "environment" {
     condition     = contains(["staging", "production"], var.environment)
     error_message = "Environment must be either 'staging' or 'production'."
   }
+  default = "staging"
 }
 
 variable "project_name" {
@@ -68,18 +69,19 @@ variable "project_name" {
     condition     = can(regex("^[a-zA-Z0-9-]+$", var.project_name))
     error_message = "Project name must contain only alphanumeric characters and hyphens."
   }
+  default = "TFMULTITURN"
 }
 
 variable "owner" {
   description = "Owner of the resources"
   type        = string
-  default     = ""
+  default     = "Turing"
 }
 
 variable "cost_center" {
   description = "Cost center for resource billing"
   type        = string
-  default     = ""
+  default     = "Turing"
 }
 
 variable "repository_url" {
