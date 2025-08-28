@@ -13,43 +13,49 @@ const provider = new aws.Provider('production-provider', {
 });
 
 export class ProductionInfrastructure {
-  public vpc: aws.ec2.Vpc;
-  public publicSubnets: aws.ec2.Subnet[];
-  public privateSubnets: aws.ec2.Subnet[];
-  public internetGateway: aws.ec2.InternetGateway;
-  public natGateway: aws.ec2.NatGateway;
-  public elasticIp: aws.ec2.Eip;
-  public publicRouteTable: aws.ec2.RouteTable;
-  public privateRouteTable: aws.ec2.RouteTable;
-  public vpcFlowLogGroup: aws.cloudwatch.LogGroup;
-  public vpcFlowLogRole: aws.iam.Role;
-  public vpcFlowLog: aws.ec2.FlowLog;
-  public ec2SecurityGroup: aws.ec2.SecurityGroup;
-  public rdsSecurityGroup: aws.ec2.SecurityGroup;
-  public albSecurityGroup: aws.ec2.SecurityGroup;
-  public ec2Role: aws.iam.Role;
-  public ec2InstanceProfile: aws.iam.InstanceProfile;
-  public kmsKey: aws.kms.Key;
-  public s3Bucket: aws.s3.Bucket;
-  public rdsSubnetGroup: aws.rds.SubnetGroup;
-  public rdsInstance: aws.rds.Instance;
-  public launchTemplate: aws.ec2.LaunchTemplate;
-  public targetGroup: aws.lb.TargetGroup;
-  public applicationLoadBalancer: aws.lb.LoadBalancer;
-  public albListener: aws.lb.Listener;
-  public autoScalingGroup: aws.autoscaling.Group;
-  public scaleUpPolicy: aws.autoscaling.Policy;
-  public scaleDownPolicy: aws.autoscaling.Policy;
-  public cpuAlarmHigh: aws.cloudwatch.MetricAlarm;
-  public cpuAlarmLow: aws.cloudwatch.MetricAlarm;
+  public vpc!: aws.ec2.Vpc;
+  public publicSubnets!: aws.ec2.Subnet[];
+  public privateSubnets!: aws.ec2.Subnet[];
+  public internetGateway!: aws.ec2.InternetGateway;
+  public natGateway!: aws.ec2.NatGateway;
+  public elasticIp!: aws.ec2.Eip;
+  public publicRouteTable!: aws.ec2.RouteTable;
+  public privateRouteTable!: aws.ec2.RouteTable;
+  public vpcFlowLogGroup!: aws.cloudwatch.LogGroup;
+  public vpcFlowLogRole!: aws.iam.Role;
+  public vpcFlowLog!: aws.ec2.FlowLog;
+  public ec2SecurityGroup!: aws.ec2.SecurityGroup;
+  public rdsSecurityGroup!: aws.ec2.SecurityGroup;
+  public albSecurityGroup!: aws.ec2.SecurityGroup;
+  public ec2Role!: aws.iam.Role;
+  public ec2InstanceProfile!: aws.iam.InstanceProfile;
+  public kmsKey!: aws.kms.Key;
+  public s3Bucket!: aws.s3.Bucket;
+  public rdsSubnetGroup!: aws.rds.SubnetGroup;
+  public rdsInstance!: aws.rds.Instance;
+  public launchTemplate!: aws.ec2.LaunchTemplate;
+  public targetGroup!: aws.lb.TargetGroup;
+  public applicationLoadBalancer!: aws.lb.LoadBalancer;
+  public albListener!: aws.lb.Listener;
+  public autoScalingGroup!: aws.autoscaling.Group;
+  public scaleUpPolicy!: aws.autoscaling.Policy;
+  public scaleDownPolicy!: aws.autoscaling.Policy;
+  public cpuAlarmHigh!: aws.cloudwatch.MetricAlarm;
+  public cpuAlarmLow!: aws.cloudwatch.MetricAlarm;
 
-  constructor() {
-    this.createNetworking();
-    this.createSecurity();
-    this.createStorage();
-    this.createDatabase();
-    this.createCompute();
-    this.createMonitoring();
+  private constructor() {
+    // Private constructor - use create() method instead
+  }
+
+  public static create(): ProductionInfrastructure {
+    const instance = new ProductionInfrastructure();
+    instance.createNetworking();
+    instance.createSecurity();
+    instance.createStorage();
+    instance.createDatabase();
+    instance.createCompute();
+    instance.createMonitoring();
+    return instance;
   }
 
   private createNetworking() {
