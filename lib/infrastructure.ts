@@ -590,6 +590,8 @@ echo '{
       s3BucketName: this.s3Bucket.bucket,
       iamRoleArn: this.iamRole.arn,
       cloudWatchLogGroup: this.cloudWatchLogGroup.name,
+      internetGatewayId: this.internetGateway.id,
+      natGatewayId: this.natGateway.id,
     };
   }
 }

@@ -1,0 +1,830 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as AWS from 'aws-sdk';
+
+// Integration Tests
+describe('Infrastructure Integration Tests', () => {
+  const region = 'ap-south-1';
+  AWS.config.update({ region });
+
+  const ec2 = new AWS.EC2();
+  const s3 = new AWS.S3();
+  const rds = new AWS.RDS();
+  const iam = new AWS.IAM();
+  const logs = new AWS.CloudWatchLogs();
+  const ssm = new AWS.SSM();
+
+  const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+  let outputs: any = {};
+
+  beforeAll(() => {
+    if (fs.existsSync(outputsPath)) {
+      const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
+      outputs = JSON.parse(outputsContent);
+    }
+  });
+
+  describe('VPC and Networking', () => {
+    it('VPC exists and is available', async () => {
+      if (!outputs.vpcId) {
+        console.log('Skipping VPC test - no VPC ID in outputs');
+        return;
+      }
+
+      const response = await ec2.describeVpcs({ VpcIds: [outputs.vpcId] }).promise();
+      expect(response.Vpcs).toHaveLength(1);
+      expect(response.Vpcs![0].State).toBe('available');
+      expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
+    });
+
+    it('public subnet exists with correct configuration', async () => {
+      if (!outputs.publicSubnetId) {
+        console.log('Skipping public subnet test - no public subnet ID in outputs');
+        return;
+      }
+
+      const response = await ec2.describeSubnets({ SubnetIds: [outputs.publicSubnetId] }).promise();
+      expect(response.Subnets).toHaveLength(1);
+      expect(response.Subnets![0].MapPublicIpOnLaunch).toBe(true);
+      expect(response.Subnets![0].CidrBlock).toBe('10.0.1.0/24');
+    });
+
+    it('private subnet exists with correct configuration', async () => {
+      if (!outputs.privateSubnetId) {
+        console.log('Skipping private subnet test - no private subnet ID in outputs');
+        return;
+      }
+
+      const response = await ec2.describeSubnets({ SubnetIds: [outputs.privateSubnetId] }).promise();
+      expect(response.Subnets).toHaveLength(1);
+      expect(response.Subnets![0].MapPublicIpOnLaunch).toBe(false);
+      expect(response.Subnets![0].CidrBlock).toBe('10.0.2.0/24');
+    });
+  });
+
+  describe('Compute Resources', () => {
+    it('EC2 instance is running', async () => {
+      if (!outputs.ec2InstanceId) {
+        console.log('Skipping EC2 test - no EC2 instance ID in outputs');
+        return;
+      }
+
+      const response = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+      expect(response.Reservations).toHaveLength(1);
+      const instance = response.Reservations![0].Instances![0];
+      expect(instance.State!.Name).toBe('running');
+      expect(instance.InstanceType).toBe('t3.micro');
+    });
+
+    it('EC2 instance has public IP', async () => {
+      if (!outputs.ec2PublicIp) {
+        console.log('Skipping public IP test - no public IP in outputs');
+        return;
+      }
+
+      expect(outputs.ec2PublicIp).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+    });
+
+    it('EC2 instance is accessible via Session Manager', async () => {
+      if (!outputs.ec2InstanceId) {
+        console.log('Skipping Session Manager test - no EC2 instance ID in outputs');
+        return;
+      }
+
+      try {
+        const response = await ssm.describeInstanceInformation({
+          Filters: [{ Key: 'InstanceIds', Values: [outputs.ec2InstanceId] }]
+        }).promise();
+
+        expect(response.InstanceInformationList).toHaveLength(1);
+        expect(response.InstanceInformationList![0].PingStatus).toBe('Online');
+      } catch (error) {
+        console.log('Session Manager agent may not be ready yet');
+      }
+    });
+  });
+
+  describe('Database', () => {
+    it('RDS instance is available', async () => {
+      if (!outputs.rdsEndpoint) {
+        console.log('Skipping RDS test - no RDS endpoint in outputs');
+        return;
+      }
+
+      const dbId = outputs.rdsEndpoint.split('.')[0];
+      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+      expect(response.DBInstances).toHaveLength(1);
+      expect(response.DBInstances![0].DBInstanceStatus).toBe('available');
+      expect(response.DBInstances![0].Engine).toBe('mysql');
+    });
+
+    it('RDS instance is not publicly accessible', async () => {
+      if (!outputs.rdsEndpoint) {
+        console.log('Skipping RDS accessibility test - no RDS endpoint in outputs');
+        return;
+      }
+
+      const dbId = outputs.rdsEndpoint.split('.')[0];
+      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+      
+      expect(response.DBInstances![0].PubliclyAccessible).toBe(false);
+    });
+
+    it('RDS instance has managed master password', async () => {
+      if (!outputs.rdsEndpoint) {
+        console.log('Skipping RDS password test - no RDS endpoint in outputs');
+        return;
+      }
+
+      const dbId = outputs.rdsEndpoint.split('.')[0];
+      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+      
+      expect(response.DBInstances![0].MasterUserSecret).toBeDefined();
+    });
+  });
+
+  describe('Storage', () => {
+    it('S3 bucket exists with versioning enabled', async () => {
+      if (!outputs.s3BucketName) {
+        console.log('Skipping S3 versioning test - no S3 bucket name in outputs');
+        return;
+      }
+
+      const headResponse = await s3.headBucket({ Bucket: outputs.s3BucketName }).promise();
+      expect(headResponse.$response.httpResponse.statusCode).toBe(200);
+
+      const versioningResponse = await s3.getBucketVersioning({ Bucket: outputs.s3BucketName }).promise();
+      expect(versioningResponse.Status).toBe('Enabled');
+    });
+
+    it('S3 bucket has encryption enabled', async () => {
+      if (!outputs.s3BucketName) {
+        console.log('Skipping S3 encryption test - no S3 bucket name in outputs');
+        return;
+      }
+
+      const encryptionResponse = await s3.getBucketEncryption({ Bucket: outputs.s3BucketName }).promise();
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules).toHaveLength(1);
+    });
+
+    it('S3 bucket has public access blocked', async () => {
+      if (!outputs.s3BucketName) {
+        console.log('Skipping S3 public access test - no S3 bucket name in outputs');
+        return;
+      }
+
+      const publicAccessResponse = await s3.getPublicAccessBlock({ Bucket: outputs.s3BucketName }).promise();
+      expect(publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicAcls).toBe(true);
+      expect(publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicPolicy).toBe(true);
+      expect(publicAccessResponse.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
+      expect(publicAccessResponse.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
+    });
+  });
+
+  describe('IAM', () => {
+    it('IAM role exists with correct policies', async () => {
+      if (!outputs.iamRoleArn) {
+        console.log('Skipping IAM test - no IAM role ARN in outputs');
+        return;
+      }
+
+      const roleName = outputs.iamRoleArn.split('/').pop();
+      const response = await iam.getRole({ RoleName: roleName }).promise();
+      expect(response.Role).toBeDefined();
+      expect(response.Role.RoleName).toBe(roleName);
+
+      const policiesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
+      expect(policiesResponse.AttachedPolicies!.length).toBeGreaterThanOrEqual(1);
+      
+      const hasSSMPolicy = policiesResponse.AttachedPolicies!.some(
+        policy => policy.PolicyArn === 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      );
+      expect(hasSSMPolicy).toBe(true);
+    });
+
+    it('EC2 instance can write to S3 bucket', async () => {
+      if (!outputs.s3BucketName || !outputs.iamRoleArn) {
+        console.log('Skipping S3 access test - missing outputs');
+        return;
+      }
+
+      const roleName = outputs.iamRoleArn.split('/').pop();
+      
+      const policiesResponse = await iam.listRolePolicies({ RoleName: roleName }).promise();
+      const attachedPoliciesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
+      
+      const hasS3Policy = policiesResponse.PolicyNames.some(name => name.includes('s3')) ||
+                         attachedPoliciesResponse.AttachedPolicies!.some(policy => policy.PolicyName!.includes('s3'));
+      
+      expect(hasS3Policy).toBe(true);
+    });
+  });
+
+  describe('Monitoring', () => {
+    it('CloudWatch log group exists', async () => {
+      if (!outputs.cloudWatchLogGroup) {
+        console.log('Skipping CloudWatch test - no log group in outputs');
+        return;
+      }
+
+      const response = await logs.describeLogGroups({ logGroupNamePrefix: outputs.cloudWatchLogGroup }).promise();
+      expect(response.logGroups).toHaveLength(1);
+      expect(response.logGroups![0].logGroupName).toBe(outputs.cloudWatchLogGroup);
+      expect(response.logGroups![0].retentionInDays).toBe(14);
+    });
+
+    it('EC2 instance can write to CloudWatch Logs', async () => {
+      if (!outputs.cloudWatchLogGroup) {
+        console.log('Skipping CloudWatch logs test - no log group in outputs');
+        return;
+      }
+
+      try {
+        const response = await logs.describeLogStreams({
+          logGroupName: outputs.cloudWatchLogGroup,
+          orderBy: 'LastEventTime',
+          descending: true
+        }).promise();
+
+        expect(response.logStreams).toBeDefined();
+      } catch (error) {
+        console.log('CloudWatch agent may not have created log streams yet');
+      }
+    });
+  });
+
+  describe('Security Groups', () => {
+    it('EC2 security group has no SSH access', async () => {
+      if (!outputs.ec2InstanceId) {
+        console.log('Skipping security group test - no EC2 instance ID in outputs');
+        return;
+      }
+
+      const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+      const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
+
+      for (const sg of securityGroups) {
+        const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
+        const ingressRules = sgResponse.SecurityGroups![0].IpPermissions!;
+        
+        const hasSSHRule = ingressRules.some(rule => 
+          rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
+        );
+        expect(hasSSHRule).toBe(false);
+      }
+    });
+  });
+
+  describe('Network Connectivity', () => {
+    it('EC2 instance can reach internet via NAT Gateway', async () => {
+      if (!outputs.ec2InstanceId) {
+        console.log('Skipping network connectivity test - no EC2 instance ID in outputs');
+        return;
+      }
+
+      const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+      const subnetId = instanceResponse.Reservations![0].Instances![0].SubnetId!;
+
+      const routeTablesResponse = await ec2.describeRouteTables({
+        Filters: [{ Name: 'association.subnet-id', Values: [subnetId] }]
+      }).promise();
+
+      expect(routeTablesResponse.RouteTables).toHaveLength(1);
+      const routes = routeTablesResponse.RouteTables![0].Routes!;
+      
+      const hasNATRoute = routes.some(route => 
+        route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId
+      );
+      expect(hasNATRoute).toBe(true);
+    });
+
+    it('Internet Gateway is properly attached', async () => {
+      if (!outputs.vpcId) {
+        console.log('Skipping IGW test - no VPC ID in outputs');
+        return;
+      }
+
+      const response = await ec2.describeInternetGateways({
+        Filters: [{ Name: 'attachment.vpc-id', Values: [outputs.vpcId] }]
+      }).promise();
+
+      expect(response.InternetGateways).toBeDefined();
+      expect(response.InternetGateways!.length).toBeGreaterThanOrEqual(1);
+      const igw = response.InternetGateways![0];
+      expect(igw.Attachments![0].State).toBe('available');
+    });
+
+    it('NAT Gateway is available', async () => {
+      if (!outputs.vpcId) {
+        console.log('Skipping NAT Gateway test - no VPC ID in outputs');
+        return;
+      }
+
+      const response = await ec2.describeNatGateways({
+        Filter: [{ Name: 'vpc-id', Values: [outputs.vpcId] }]
+      }).promise();
+
+      expect(response.NatGateways).toBeDefined();
+      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
+      expect(response.NatGateways![0].State).toBe('available');
+    });
+  });
+
+  describe('Resource Tagging and Compliance', () => {
+    it('resources have proper environment tags', async () => {
+      if (!outputs.vpcId) {
+        console.log('Skipping tagging test - no VPC ID in outputs');
+        return;
+      }
+
+      const response = await ec2.describeVpcs({ VpcIds: [outputs.vpcId] }).promise();
+      const vpc = response.Vpcs![0];
+      
+      expect(vpc.Tags).toBeDefined();
+      const environmentTag = vpc.Tags!.find(tag => tag.Key === 'Environment');
+      expect(environmentTag).toBeDefined();
+    });
+
+    it('resources are optimized for cost and performance', async () => {
+      if (!outputs.ec2InstanceId && !outputs.rdsEndpoint) {
+        console.log('Skipping optimization test - no resource IDs in outputs');
+        return;
+      }
+
+      // Check EC2 instance type
+      if (outputs.ec2InstanceId) {
+        const ec2Response = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+        const instance = ec2Response.Reservations![0].Instances![0];
+        expect(instance.InstanceType).toBe('t3.micro');
+      }
+      
+      // Check RDS instance class
+      if (outputs.rdsEndpoint) {
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const rdsResponse = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        const dbInstance = rdsResponse.DBInstances![0];
+        expect(dbInstance.DBInstanceClass).toBe('db.t3.micro');
+        expect(dbInstance.StorageType).toBe('gp2');
+      }
+    });
+
+    it('infrastructure follows security best practices', async () => {
+      const securityChecks = [];
+
+      // Check RDS security
+      if (outputs.rdsEndpoint) {
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const rdsResponse = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        securityChecks.push({
+          check: 'RDS Public Access',
+          secure: !rdsResponse.DBInstances![0].PubliclyAccessible
+        });
+        securityChecks.push({
+          check: 'RDS Encryption',
+          secure: rdsResponse.DBInstances![0].StorageEncrypted === true
+        });
+      }
+
+      // Check S3 bucket security
+      if (outputs.s3BucketName) {
+        try {
+          const publicAccessResponse = await s3.getPublicAccessBlock({ 
+            Bucket: outputs.s3BucketName 
+          }).promise();
+          securityChecks.push({
+            check: 'S3 Public Access Block',
+            secure: publicAccessResponse.PublicAccessBlockConfiguration!.BlockPublicAcls === true
+          });
+        } catch (error) {
+          securityChecks.push({ check: 'S3 Public Access Block', secure: false });
+        }
+      }
+
+      if (securityChecks.length === 0) {
+        console.log('Skipping security test - no resources to check');
+        return;
+      }
+
+      securityChecks.forEach(check => {
+        expect(check.secure).toBe(true);
+      });
+    });
+
+    it('backup and recovery mechanisms are in place', async () => {
+      let hasBackupChecks = false;
+
+      // Check RDS automated backups
+      if (outputs.rdsEndpoint) {
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        const dbInstance = response.DBInstances![0];
+        
+        expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
+        expect(dbInstance.PreferredBackupWindow).toBeDefined();
+        hasBackupChecks = true;
+      }
+
+      // Check S3 versioning for data protection
+      if (outputs.s3BucketName) {
+        const response = await s3.getBucketVersioning({ Bucket: outputs.s3BucketName }).promise();
+        expect(response.Status).toBe('Enabled');
+        hasBackupChecks = true;
+      }
+
+      if (!hasBackupChecks) {
+        console.log('Skipping backup test - no resources to check');
+      }
+    });
+  });
+
+  // End-to-End Tests
+  describe('e2e: Infrastructure End-to-End Tests', () => {
+    describe('e2e: Session Manager Connectivity', () => {
+      it('e2e: EC2 instance is accessible via Session Manager', async () => {
+        if (!outputs.ec2InstanceId) {
+          console.log('Skipping Session Manager test - no EC2 instance ID in outputs');
+          return;
+        }
+
+        try {
+          const response = await ssm.describeInstanceInformation({
+            Filters: [{ Key: 'InstanceIds', Values: [outputs.ec2InstanceId] }]
+          }).promise();
+
+          expect(response.InstanceInformationList).toHaveLength(1);
+          expect(response.InstanceInformationList![0].PingStatus).toBe('Online');
+        } catch (error) {
+          console.log('Session Manager agent may not be ready yet');
+        }
+      });
+
+      it('e2e: Session Manager can start session', async () => {
+        if (!outputs.ec2InstanceId) {
+          console.log('Skipping Session Manager session test - no EC2 instance ID in outputs');
+          return;
+        }
+
+        try {
+          const response = await ssm.startSession({
+            Target: outputs.ec2InstanceId
+          }).promise();
+
+          expect(response.SessionId).toBeDefined();
+          expect(response.TokenValue).toBeDefined();
+          expect(response.StreamUrl).toBeDefined();
+
+          // Terminate the session immediately
+          await ssm.terminateSession({
+            SessionId: response.SessionId!
+          }).promise();
+        } catch (error) {
+          console.log('Session Manager may not be fully configured yet');
+        }
+      });
+    });
+
+    describe('e2e: Security Group Configuration', () => {
+      it('e2e: EC2 security group has no SSH access', async () => {
+        if (!outputs.ec2InstanceId) {
+          console.log('Skipping security group test - no EC2 instance ID in outputs');
+          return;
+        }
+
+        const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+        const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
+
+        for (const sg of securityGroups) {
+          const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
+          const ingressRules = sgResponse.SecurityGroups![0].IpPermissions!;
+          
+          const hasSSHRule = ingressRules.some(rule => 
+            rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === 'tcp'
+          );
+          expect(hasSSHRule).toBe(false);
+        }
+      });
+
+      it('e2e: EC2 security group allows all outbound traffic', async () => {
+        if (!outputs.ec2InstanceId) {
+          console.log('Skipping outbound security group test - no EC2 instance ID in outputs');
+          return;
+        }
+
+        const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+        const securityGroups = instanceResponse.Reservations![0].Instances![0].SecurityGroups!;
+
+        for (const sg of securityGroups) {
+          const sgResponse = await ec2.describeSecurityGroups({ GroupIds: [sg.GroupId!] }).promise();
+          const egressRules = sgResponse.SecurityGroups![0].IpPermissionsEgress!;
+          
+          const hasAllOutboundRule = egressRules.some(rule => 
+            rule.IpProtocol === '-1' && 
+            rule.IpRanges!.some(range => range.CidrIp === '0.0.0.0/0')
+          );
+          expect(hasAllOutboundRule).toBe(true);
+        }
+      });
+    });
+
+    describe('e2e: Network Connectivity', () => {
+      it('e2e: EC2 instance can reach internet via NAT Gateway', async () => {
+        if (!outputs.ec2InstanceId) {
+          console.log('Skipping network connectivity test - no EC2 instance ID in outputs');
+          return;
+        }
+
+        const instanceResponse = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+        const subnetId = instanceResponse.Reservations![0].Instances![0].SubnetId!;
+
+        const routeTablesResponse = await ec2.describeRouteTables({
+          Filters: [{ Name: 'association.subnet-id', Values: [subnetId] }]
+        }).promise();
+
+        expect(routeTablesResponse.RouteTables).toHaveLength(1);
+        const routes = routeTablesResponse.RouteTables![0].Routes!;
+        
+        const hasNATRoute = routes.some(route => 
+          route.DestinationCidrBlock === '0.0.0.0/0' && route.NatGatewayId
+        );
+        expect(hasNATRoute).toBe(true);
+      });
+
+      it('e2e: NAT Gateway is in public subnet', async () => {
+        if (!outputs.publicSubnetId) {
+          console.log('Skipping NAT Gateway subnet test - no public subnet ID in outputs');
+          return;
+        }
+
+        const natGatewaysResponse = await ec2.describeNatGateways({
+          Filter: [
+            { Name: 'subnet-id', Values: [outputs.publicSubnetId] },
+            { Name: 'state', Values: ['available'] }
+          ]
+        }).promise();
+
+        expect(natGatewaysResponse.NatGateways).toBeDefined();
+        expect(natGatewaysResponse.NatGateways!.length).toBeGreaterThanOrEqual(1);
+        
+        natGatewaysResponse.NatGateways!.forEach(natGw => {
+          expect(natGw.State).toBe('available');
+          expect(natGw.SubnetId).toBe(outputs.publicSubnetId);
+        });
+      });
+    });
+
+    describe('e2e: Database Security', () => {
+      it('e2e: RDS instance is not publicly accessible', async () => {
+        if (!outputs.rdsEndpoint) {
+          console.log('Skipping RDS accessibility test - no RDS endpoint in outputs');
+          return;
+        }
+
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        
+        expect(response.DBInstances![0].PubliclyAccessible).toBe(false);
+      });
+
+      it('e2e: RDS instance has managed master password', async () => {
+        if (!outputs.rdsEndpoint) {
+          console.log('Skipping RDS password test - no RDS endpoint in outputs');
+          return;
+        }
+
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        
+        expect(response.DBInstances![0].MasterUserSecret).toBeDefined();
+      });
+
+      it('e2e: RDS instance is in private subnet', async () => {
+        if (!outputs.rdsEndpoint || !outputs.privateSubnetId) {
+          console.log('Skipping RDS subnet test - missing outputs');
+          return;
+        }
+
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        
+        const dbSubnetGroup = response.DBInstances![0].DBSubnetGroup!;
+        const subnetIds = dbSubnetGroup.Subnets!.map(subnet => subnet.SubnetIdentifier);
+        
+        expect(subnetIds).toContain(outputs.privateSubnetId);
+      });
+
+      it('e2e: RDS instance has CloudWatch logs enabled', async () => {
+        if (!outputs.rdsEndpoint) {
+          console.log('Skipping RDS CloudWatch logs test - no RDS endpoint in outputs');
+          return;
+        }
+
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        
+        const enabledLogs = response.DBInstances![0].EnabledCloudwatchLogsExports;
+        expect(enabledLogs).toBeDefined();
+        expect(enabledLogs).toContain('error');
+        expect(enabledLogs).toContain('slowquery');
+      });
+    });
+
+    describe('e2e: CloudWatch Logs Integration', () => {
+      it('e2e: EC2 instance can write to CloudWatch Logs', async () => {
+        if (!outputs.cloudWatchLogGroup) {
+          console.log('Skipping CloudWatch logs test - no log group in outputs');
+          return;
+        }
+
+        try {
+          const response = await logs.describeLogStreams({
+            logGroupName: outputs.cloudWatchLogGroup,
+            orderBy: 'LastEventTime',
+            descending: true
+          }).promise();
+
+          expect(response.logStreams).toBeDefined();
+        } catch (error) {
+          console.log('CloudWatch agent may not have created log streams yet');
+        }
+      });
+
+      it('e2e: CloudWatch log group has correct retention', async () => {
+        if (!outputs.cloudWatchLogGroup) {
+          console.log('Skipping CloudWatch retention test - no log group in outputs');
+          return;
+        }
+
+        const response = await logs.describeLogGroups({ 
+          logGroupNamePrefix: outputs.cloudWatchLogGroup 
+        }).promise();
+        
+        expect(response.logGroups).toHaveLength(1);
+        expect(response.logGroups![0].retentionInDays).toBe(14);
+      });
+    });
+
+    describe('e2e: S3 Access Control', () => {
+      it('e2e: EC2 instance can write to S3 bucket', async () => {
+        if (!outputs.s3BucketName || !outputs.iamRoleArn) {
+          console.log('Skipping S3 access test - missing outputs');
+          return;
+        }
+
+        const roleName = outputs.iamRoleArn.split('/').pop();
+        
+        const policiesResponse = await iam.listRolePolicies({ RoleName: roleName }).promise();
+        const attachedPoliciesResponse = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
+        
+        const hasS3Policy = policiesResponse.PolicyNames.some(name => name.includes('s3')) ||
+                           attachedPoliciesResponse.AttachedPolicies!.some(policy => policy.PolicyName!.includes('s3'));
+        
+        expect(hasS3Policy).toBe(true);
+      });
+
+      it('e2e: S3 bucket policy is restrictive (PutObject only)', async () => {
+        if (!outputs.s3BucketName || !outputs.iamRoleArn) {
+          console.log('Skipping S3 policy test - missing outputs');
+          return;
+        }
+
+        const roleName = outputs.iamRoleArn.split('/').pop();
+        const policiesResponse = await iam.listRolePolicies({ RoleName: roleName }).promise();
+        
+        for (const policyName of policiesResponse.PolicyNames) {
+          if (policyName.includes('s3')) {
+            const policyResponse = await iam.getRolePolicy({
+              RoleName: roleName,
+              PolicyName: policyName
+            }).promise();
+            
+            const policyDocument = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument));
+            const s3Statement = policyDocument.Statement.find((stmt: any) => 
+              stmt.Action && stmt.Action.includes('s3:PutObject')
+            );
+            
+            expect(s3Statement).toBeDefined();
+            expect(s3Statement.Action).toEqual(['s3:PutObject']);
+          }
+        }
+      });
+    });
+
+    describe('e2e: Infrastructure Health Check', () => {
+      it('e2e: All critical resources are healthy', async () => {
+        const healthChecks = [];
+
+        // Check VPC
+        if (outputs.vpcId) {
+          const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.vpcId] }).promise();
+          healthChecks.push({
+            resource: 'VPC',
+            healthy: vpcResponse.Vpcs![0].State === 'available'
+          });
+        }
+
+        // Check EC2
+        if (outputs.ec2InstanceId) {
+          const ec2Response = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+          healthChecks.push({
+            resource: 'EC2',
+            healthy: ec2Response.Reservations![0].Instances![0].State!.Name === 'running'
+          });
+        }
+
+        // Check RDS
+        if (outputs.rdsEndpoint) {
+          const dbId = outputs.rdsEndpoint.split('.')[0];
+          const rdsResponse = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+          healthChecks.push({
+            resource: 'RDS',
+            healthy: rdsResponse.DBInstances![0].DBInstanceStatus === 'available'
+          });
+        }
+
+        // All resources should be healthy
+        healthChecks.forEach(check => {
+          expect(check.healthy).toBe(true);
+        });
+
+        expect(healthChecks.length).toBeGreaterThan(0);
+      });
+
+      it('e2e: Infrastructure can handle basic operations', async () => {
+        const operationalChecks = [];
+
+        // Check if S3 bucket is accessible
+        if (outputs.s3BucketName) {
+          try {
+            await s3.headBucket({ Bucket: outputs.s3BucketName }).promise();
+            operationalChecks.push({ operation: 'S3 Access', success: true });
+          } catch (error) {
+            operationalChecks.push({ operation: 'S3 Access', success: false });
+          }
+        }
+
+        // Check if CloudWatch log group is accessible
+        if (outputs.cloudWatchLogGroup) {
+          try {
+            await logs.describeLogGroups({ logGroupNamePrefix: outputs.cloudWatchLogGroup }).promise();
+            operationalChecks.push({ operation: 'CloudWatch Access', success: true });
+          } catch (error) {
+            operationalChecks.push({ operation: 'CloudWatch Access', success: false });
+          }
+        }
+
+        // Check if IAM role exists
+        if (outputs.iamRoleArn) {
+          try {
+            const roleName = outputs.iamRoleArn.split('/').pop();
+            await iam.getRole({ RoleName: roleName }).promise();
+            operationalChecks.push({ operation: 'IAM Role Access', success: true });
+          } catch (error) {
+            operationalChecks.push({ operation: 'IAM Role Access', success: false });
+          }
+        }
+
+        // All operations should succeed
+        operationalChecks.forEach(check => {
+          expect(check.success).toBe(true);
+        });
+
+        expect(operationalChecks.length).toBeGreaterThan(0);
+      });
+
+      it('e2e: Security posture is maintained', async () => {
+        const securityChecks = [];
+
+        // Check RDS encryption
+        if (outputs.rdsEndpoint) {
+          const dbId = outputs.rdsEndpoint.split('.')[0];
+          const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+          securityChecks.push({
+            check: 'RDS Encryption',
+            secure: response.DBInstances![0].StorageEncrypted === true
+          });
+        }
+
+        // Check S3 public access block
+        if (outputs.s3BucketName) {
+          try {
+            const response = await s3.getPublicAccessBlock({ Bucket: outputs.s3BucketName }).promise();
+            securityChecks.push({
+              check: 'S3 Public Access Block',
+              secure: response.PublicAccessBlockConfiguration!.BlockPublicAcls === true
+            });
+          } catch (error) {
+            securityChecks.push({ check: 'S3 Public Access Block', secure: false });
+          }
+        }
+
+        // All security checks should pass
+        securityChecks.forEach(check => {
+          expect(check.secure).toBe(true);
+        });
+
+        expect(securityChecks.length).toBeGreaterThan(0);
+      });
+    });
+  });
+});

@@ -52,3 +52,5 @@ export const rdsEndpoint = infraExports.rdsEndpoint;
 export const s3BucketName = infraExports.s3BucketName;
 export const iamRoleArn = infraExports.iamRoleArn;
 export const cloudWatchLogGroup = infraExports.cloudWatchLogGroup;
+export const internetGatewayId = infraExports.internetGatewayId;
+export const natGatewayId = infraExports.natGatewayId;
