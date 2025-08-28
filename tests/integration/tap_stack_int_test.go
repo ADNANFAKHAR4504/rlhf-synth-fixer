@@ -14,7 +14,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudformation"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go-v2/service/elbv2"
+	elbv2 "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
@@ -64,7 +65,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Describe VPC
 		vpcResp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{
-			VpcIds: []string{outputs.VpcId},
+			VpcIds: []string{outputs.VPCId},
 		})
 		require.NoError(t, err, "Failed to describe VPC")
 		require.Len(t, vpcResp.Vpcs, 1, "Expected exactly one VPC")
@@ -76,14 +77,14 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// Check DNS attributes separately using DescribeVpcAttribute
 		dnsSupport, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
-			VpcId:     &outputs.VpcId,
+			VpcId:     &outputs.VPCId,
 			Attribute: ec2types.VpcAttributeNameEnableDnsSupport,
 		})
 		require.NoError(t, err, "Failed to get DNS support attribute")
 		assert.True(t, *dnsSupport.EnableDnsSupport.Value, "VPC should have DNS support enabled")
 
 		dnsHostnames, err := ec2Client.DescribeVpcAttribute(ctx, &ec2.DescribeVpcAttributeInput{
-			VpcId:     &outputs.VpcId,
+			VpcId:     &outputs.VPCId,
 			Attribute: ec2types.VpcAttributeNameEnableDnsHostnames,
 		})
 		require.NoError(t, err, "Failed to get DNS hostnames attribute")
@@ -106,7 +107,7 @@ func TestTapStackIntegration(t *testing.T) {
 			Filters: []ec2types.Filter{
 				{
 					Name:   aws.String("vpc-id"),
-					Values: []string{outputs.VpcId},
+					Values: []string{outputs.VPCId},
 				},
 			},
 		})
@@ -120,7 +121,7 @@ func TestTapStackIntegration(t *testing.T) {
 			Filters: []ec2types.Filter{
 				{
 					Name:   aws.String("attachment.vpc-id"),
-					Values: []string{outputs.VpcId},
+					Values: []string{outputs.VPCId},
 				},
 			},
 		})
@@ -129,7 +130,7 @@ func TestTapStackIntegration(t *testing.T) {
 		// ASSERT - Should have one Internet Gateway attached
 		assert.Len(t, igwResp.InternetGateways, 1, "VPC should have exactly one Internet Gateway")
 		assert.Len(t, igwResp.InternetGateways[0].Attachments, 1, "Internet Gateway should be attached to VPC")
-		assert.Equal(t, outputs.VpcId, *igwResp.InternetGateways[0].Attachments[0].VpcId, "Internet Gateway should be attached to correct VPC")
+		assert.Equal(t, outputs.VPCId, *igwResp.InternetGateways[0].Attachments[0].VpcId, "Internet Gateway should be attached to correct VPC")
 	})
 
 	t.Run("Application Load Balancer is accessible", func(t *testing.T) {
@@ -148,7 +149,7 @@ func TestTapStackIntegration(t *testing.T) {
 		require.NoError(t, err, "Failed to describe load balancers")
 
 		// Find our load balancer by DNS name
-		var foundLB *elbv2.LoadBalancer
+		var foundLB *elbv2types.LoadBalancer
 		for _, lb := range lbResp.LoadBalancers {
 			if *lb.DNSName == outputs.LoadBalancerDNS {
 				foundLB = &lb
@@ -238,7 +239,7 @@ func TestTapStackIntegration(t *testing.T) {
 		outputs := loadOutputs(t)
 
 		// ASSERT - All required outputs should be present
-		assert.NotEmpty(t, outputs.VpcId, "VPCId should be exported")
+		assert.NotEmpty(t, outputs.VPCId, "VPCId should be exported")
 		assert.NotEmpty(t, outputs.LoadBalancerDNS, "LoadBalancerDNS should be exported")
 		assert.NotEmpty(t, outputs.CloudFrontDomainName, "CloudFrontDomainName should be exported")
 		assert.NotEmpty(t, outputs.S3BucketName, "S3BucketName should be exported")
@@ -246,7 +247,7 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.NotEmpty(t, outputs.DynamoDBTableName, "DynamoDBTableName should be exported")
 
 		// ASSERT - IDs should follow AWS format
-		assert.Regexp(t, "^vpc-[a-f0-9]+$", outputs.VpcId, "VPCId should follow AWS VPC ID format")
+		assert.Regexp(t, "^vpc-[a-f0-9]+$", outputs.VPCId, "VPCId should follow AWS VPC ID format")
 		assert.Contains(t, outputs.LoadBalancerDNS, ".elb.", "LoadBalancerDNS should be ELB DNS format")
 		assert.Contains(t, outputs.CloudFrontDomainName, "cloudfront.net", "CloudFrontDomainName should be CloudFront format")
 		assert.Contains(t, outputs.S3BucketName, "tap-storage-bucket", "S3BucketName should contain expected prefix")
