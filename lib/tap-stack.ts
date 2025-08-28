@@ -139,7 +139,8 @@ export class TapStack extends cdk.Stack {
 
     if (sourceRepository && props.createNewRepo) {
       new cdk.CfnOutput(this, 'RepositoryCloneUrl', {
-        value: (sourceRepository as codecommit.Repository).repositoryCloneUrlHttp,
+        value: (sourceRepository as codecommit.Repository)
+          .repositoryCloneUrlHttp,
         description: 'HTTP clone URL of the source repository',
       });
     }
@@ -213,7 +214,8 @@ export class TapStack extends cdk.Stack {
   private createBuildRole(): iam.Role {
     const role = new iam.Role(this, 'BuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description: 'IAM role for CodeBuild projects with least privilege access',
+      description:
+        'IAM role for CodeBuild projects with least privilege access',
     });
 
     role.addToPolicy(
@@ -277,26 +279,32 @@ export class TapStack extends cdk.Stack {
   ): codebuild.Project {
     const buildSpec = buildspecFile.includes('test')
       ? codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          pre_build: { commands: ['echo "Installing dependencies"', 'npm install'] },
-          build: { commands: ['echo "Running tests"', 'npm run test:unit'] },
-        },
-        reports: {
-          'test-results': {
-            files: 'test-results.xml',
-            'file-format': 'JUNITXML',
+          version: '0.2',
+          phases: {
+            pre_build: {
+              commands: ['echo "Installing dependencies"', 'npm install'],
+            },
+            build: { commands: ['echo "Running tests"', 'npm run test:unit'] },
           },
-        },
-      })
+          reports: {
+            'test-results': {
+              files: 'test-results.xml',
+              'file-format': 'JUNITXML',
+            },
+          },
+        })
       : codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          pre_build: { commands: ['echo "Installing dependencies"', 'npm install'] },
-          build: { commands: ['echo "Building the application"', 'npm run build'] },
-        },
-        artifacts: { files: ['**/*'], 'base-directory': '.' },
-      });
+          version: '0.2',
+          phases: {
+            pre_build: {
+              commands: ['echo "Installing dependencies"', 'npm install'],
+            },
+            build: {
+              commands: ['echo "Building the application"', 'npm run build'],
+            },
+          },
+          artifacts: { files: ['**/*'], 'base-directory': '.' },
+        });
 
     return new codebuild.Project(this, id, {
       projectName: `tap-${id.toLowerCase()}-${this.stackName}`,
@@ -323,7 +331,9 @@ export class TapStack extends cdk.Stack {
     return [
       {
         stageName: 'Source',
-        actions: [this.createSourceAction(props, sourceRepository, sourceOutput)],
+        actions: [
+          this.createSourceAction(props, sourceRepository, sourceOutput),
+        ],
       },
       {
         stageName: 'Build',
