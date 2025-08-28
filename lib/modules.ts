@@ -8,6 +8,7 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
+import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 
 /**
  * Configuration interface for all modules
@@ -42,7 +43,7 @@ export class S3Module extends Construct {
 
     // Enable versioning
     new S3BucketVersioningA(this, 'bucket-versioning', {
-      bucket: this.bucket.bucket, // <-- use .bucket (bucket name), not .id
+      bucket: this.bucket.bucket, // use .bucket (bucket name), not .id
       versioningConfiguration: {
         status: 'Enabled',
       },
@@ -214,18 +215,22 @@ export class IamRoleModule extends Construct {
 }
 
 /**
- * VPC Module - Creates a minimal VPC for demonstration
- * In production, you might want to use existing VPC or more complex setup
+ * VPC Module - Retrieves the default VPC or creates a new one
+ * Fixed to properly retrieve the actual default VPC ID
  */
 export class VpcModule extends Construct {
   public readonly vpcId: string;
+  public readonly defaultVpc: DataAwsVpc;
 
   constructor(scope: Construct, id: string, _config: ModuleConfig) {
     super(scope, id);
 
-    // For this example, we'll use the default VPC
-    // In production, you'd typically create a custom VPC
-    // This is a simplified approach for demonstration
-    this.vpcId = 'vpc-default'; // This should be replaced with actual VPC creation or data source
+    // Get the actual default VPC using data source
+    this.defaultVpc = new DataAwsVpc(this, 'default-vpc', {
+      default: true,
+    });
+
+    // Use the actual VPC ID from the data source
+    this.vpcId = this.defaultVpc.id;
   }
 }

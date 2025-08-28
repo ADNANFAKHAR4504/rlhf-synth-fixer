@@ -26,7 +26,6 @@ interface TapStackProps {
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
 // you can set it here. Otherwise, it will default to 'us-east-1'.
-
 const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
@@ -55,6 +54,7 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
+
     // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
     // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
     this.addOverride('terraform.backend.s3.use_lockfile', true);
@@ -74,23 +74,19 @@ export class TapStack extends TerraformStack {
       },
     };
 
-    // Add your stack instantiations here
-    // Do NOT create resources directly in this stack.
-    // Instead, create separate stacks for each resource type.
-
-    // Create VPC module (simplified - uses default VPC concept)
+    // Create VPC module (now properly retrieves default VPC)
     const vpcModule = new VpcModule(this, 'vpc', moduleConfig);
 
     // Create S3 module
     const s3Module = new S3Module(this, 's3', moduleConfig);
 
-    // Create Security Group module
+    // Create Security Group module (now uses actual VPC ID)
     const securityGroupModule = new SecurityGroupModule(
       this,
       'security-group',
       {
         ...moduleConfig,
-        vpcId: vpcModule.vpcId,
+        vpcId: vpcModule.vpcId, // This now contains the actual VPC ID
       }
     );
 
@@ -103,7 +99,7 @@ export class TapStack extends TerraformStack {
     // Terraform Outputs for reference
     new TerraformOutput(this, 'vpc-id', {
       value: vpcModule.vpcId,
-      description: 'VPC ID',
+      description: 'Default VPC ID',
     });
 
     new TerraformOutput(this, 's3-bucket-name', {

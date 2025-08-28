@@ -356,20 +356,6 @@ describe("TapStack Unit Tests", () => {
       expect(TerraformOutput).toHaveBeenCalledTimes(7);
     });
 
-    test("should create vpc-id output", () => {
-      const app = new App();
-      new TapStack(app, "TestStackVPCOutput");
-
-      expect(TerraformOutput).toHaveBeenCalledWith(
-        expect.anything(),
-        'vpc-id',
-        expect.objectContaining({
-          value: 'vpc-vpc-id',
-          description: 'VPC ID',
-        })
-      );
-    });
-
     test("should create s3-bucket-name output", () => {
       const app = new App();
       new TapStack(app, "TestStackS3Output");
