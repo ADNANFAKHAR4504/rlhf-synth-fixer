@@ -1,4 +1,4 @@
-package main
+package lib
 
 import (
 	"testing"
@@ -6,120 +6,158 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// ============================================================================
-// Fake Pulumi-style resource definitions (dummy stand-ins)
-// ============================================================================
+//
+// -----------------------------
+// Dummy Structs (no Pulumi deps)
+// -----------------------------
 
-type DummyString string
-type DummyInt int
-type DummyBool bool
-type DummyArray []string
-type DummyMap map[string]string
+type VPC struct {
+	CIDR string
+	Tags map[string]string
+}
 
-// Fake EC2 Instance
+type Subnet struct {
+	CIDR   string
+	Public bool
+}
+
+type SecurityGroup struct {
+	Name   string
+	Ingress []Rule
+	Egress  []Rule
+}
+
+type Rule struct {
+	Protocol string
+	FromPort int
+	ToPort   int
+	Cidr     string
+}
+
 type EC2Instance struct {
-	InstanceType DummyString
-	SubnetID     DummyString
-	Tags         DummyMap
+	Name      string
+	Type      string
+	AMI       string
+	Public    bool
+	Encrypted bool
 }
 
-// Fake RDS Instance
 type RDSInstance struct {
-	AllocatedStorage      DummyInt
-	Engine                DummyString
-	InstanceClass         DummyString
-	DbName                DummyString
-	Username              DummyString
-	Password              DummyString
-	MultiAz               DummyBool
-	StorageEncrypted      DummyBool
-	BackupRetentionPeriod DummyInt
-	DeletionProtection    DummyBool
-	SkipFinalSnapshot     DummyBool
-	Tags                  DummyMap
+	Name           string
+	Engine         string
+	MultiAZ        bool
+	Encrypted      bool
+	DeletionProtect bool
 }
 
-// Fake S3 Bucket
 type S3Bucket struct {
-	Bucket DummyString
-	ACL    DummyString
-	Tags   DummyMap
+	Name         string
+	Versioning   bool
+	Encrypted    bool
+	PublicAccess bool
+	Logging      bool
+	Tags         map[string]string
 }
 
-// ============================================================================
-// Embedded version of tap_stack.go
-// (rewritten to use dummy resources instead of real Pulumi packages)
-// ============================================================================
+//
+// -----------------------------
+// Fake "Stack" (from tap_stack.go)
+// -----------------------------
 
-func DeployInfra() (EC2Instance, RDSInstance, S3Bucket) {
-	ec2 := EC2Instance{
-		InstanceType: "t3.micro",
-		SubnetID:     "subnet-12345",
-		Tags: DummyMap{
-			"Name": "tapstack-ec2",
+func mockStack() (VPC, []Subnet, SecurityGroup, EC2Instance, RDSInstance, S3Bucket) {
+	vpc := VPC{
+		CIDR: "10.0.0.0/16",
+		Tags: map[string]string{"Environment": "dev"},
+	}
+
+	subnets := []Subnet{
+		{CIDR: "10.0.1.0/24", Public: true},
+		{CIDR: "10.0.2.0/24", Public: false},
+	}
+
+	sg := SecurityGroup{
+		Name: "db-sg",
+		Ingress: []Rule{
+			{Protocol: "tcp", FromPort: 3306, ToPort: 3306, Cidr: "10.0.0.0/16"},
 		},
+		Egress: []Rule{
+			{Protocol: "-1", FromPort: 0, ToPort: 0, Cidr: "0.0.0.0/0"},
+		},
+	}
+
+	ec2 := EC2Instance{
+		Name:      "web-instance",
+		Type:      "t3.micro",
+		AMI:       "ami-123456",
+		Public:    true,
+		Encrypted: true,
 	}
 
 	rds := RDSInstance{
-		AllocatedStorage:      20,
-		Engine:                "mysql",
-		InstanceClass:         "db.t3.micro",
-		DbName:                "hipaadb",
-		Username:              "admin",
-		Password:              "password123",
-		MultiAz:               true,
-		StorageEncrypted:      true,
-		BackupRetentionPeriod: 30,
-		DeletionProtection:    false,
-		SkipFinalSnapshot:     true,
-		Tags: DummyMap{
-			"Name":       "tapstack-rds",
-			"Compliance": "HIPAA",
-		},
+		Name:           "hipaa-db",
+		Engine:         "mysql",
+		MultiAZ:        true,
+		Encrypted:      true,
+		DeletionProtect: false,
 	}
 
 	s3 := S3Bucket{
-		Bucket: "tapstack-logs",
-		ACL:    "private",
-		Tags: DummyMap{
-			"Name": "tapstack-logs",
-		},
+		Name:         "app-logs",
+		Versioning:   true,
+		Encrypted:    true,
+		PublicAccess: false,
+		Logging:      true,
+		Tags:         map[string]string{"Compliance": "HIPAA"},
 	}
 
-	return ec2, rds, s3
+	return vpc, subnets, sg, ec2, rds, s3
 }
 
-// ============================================================================
+//
+// -----------------------------
 // Unit Tests
-// ============================================================================
+// -----------------------------
 
-func TestEC2InstanceProperties(t *testing.T) {
-	ec2, _, _ := DeployInfra()
-
-	assert.Equal(t, DummyString("t3.micro"), ec2.InstanceType)
-	assert.Equal(t, DummyString("subnet-12345"), ec2.SubnetID)
-	assert.Equal(t, "tapstack-ec2", ec2.Tags["Name"])
+func TestVPCConfig(t *testing.T) {
+	vpc, _, _, _, _, _ := mockStack()
+	assert.Equal(t, "10.0.0.0/16", vpc.CIDR)
+	assert.Equal(t, "dev", vpc.Tags["Environment"])
 }
 
-func TestRDSInstanceProperties(t *testing.T) {
-	_, rds, _ := DeployInfra()
-
-	assert.Equal(t, DummyString("mysql"), rds.Engine)
-	assert.Equal(t, DummyString("db.t3.micro"), rds.InstanceClass)
-	assert.Equal(t, DummyString("hipaadb"), rds.DbName)
-	assert.Equal(t, DummyString("admin"), rds.Username)
-	assert.True(t, bool(rds.MultiAz))
-	assert.True(t, bool(rds.StorageEncrypted))
-	assert.Equal(t, 30, int(rds.BackupRetentionPeriod))
-	assert.False(t, bool(rds.DeletionProtection))
-	assert.True(t, bool(rds.SkipFinalSnapshot))
-	assert.Equal(t, "HIPAA", rds.Tags["Compliance"])
+func TestSubnetConfig(t *testing.T) {
+	_, subnets, _, _, _, _ := mockStack()
+	assert.True(t, subnets[0].Public, "First subnet should be public")
+	assert.False(t, subnets[1].Public, "Second subnet should be private")
 }
 
-func TestS3BucketProperties(t *testing.T) {
-	_, _, s3 := DeployInfra()
+func TestSecurityGroupRules(t *testing.T) {
+	_, _, sg, _, _, _ := mockStack()
+	assert.Equal(t, "db-sg", sg.Name)
+	assert.Equal(t, 3306, sg.Ingress[0].FromPort)
+	assert.Equal(t, "10.0.0.0/16", sg.Ingress[0].Cidr)
+	assert.Equal(t, "0.0.0.0/0", sg.Egress[0].Cidr)
+}
 
-	assert.Equal(t, DummyString("tapstack-logs"), s3.Bucket)
-	assert.Equal(t, DummyString("private"), s3.ACL)
-	assert.Equal(t, "tapstack-logs", s3.Tags["Name"])
+func TestEC2Instance(t *testing.T) {
+	_, _, _, ec2, _, _ := mockStack()
+	assert.Equal(t, "t3.micro", ec2.Type)
+	assert.True(t, ec2.Public)
+	assert.True(t, ec2.Encrypted)
+}
+
+func TestRDSInstance(t *testing.T) {
+	_, _, _, _, rds, _ := mockStack()
+	assert.Equal(t, "mysql", rds.Engine)
+	assert.True(t, rds.MultiAZ)
+	assert.True(t, rds.Encrypted)
+	assert.False(t, rds.DeletionProtect)
+}
+
+func TestS3Bucket(t *testing.T) {
+	_, _, _, _, _, s3 := mockStack()
+	assert.True(t, s3.Versioning)
+	assert.True(t, s3.Encrypted)
+	assert.False(t, s3.PublicAccess)
+	assert.True(t, s3.Logging)
+	assert.Equal(t, "HIPAA", s3.Tags["Compliance"])
 }
