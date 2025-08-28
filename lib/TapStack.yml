@@ -206,8 +206,9 @@ Conditions:
   CreatePrivateDefaultRoute:
     !Or [!Condition CreateNatGateway, !Condition UseExistingNatGateway]
   CreateALB: !Equals [!Ref ExistingALBDNSName, '']
-  CreateCertificate: !Equals [!Ref ExistingCertificateArn, '']
-  HaveHostedZone: !Not [!Equals [!Ref HostedZoneId, '']]
+  CreateCertificate: !And
+    - !Equals [!Ref ExistingCertificateArn, '']
+    - !Not [!Equals [!Ref HostedZoneId, '']]
   CreateGuardDuty:
     !And [!Equals [!Ref CreateDetector, 'true'], !Condition IsPrimaryRegion]
 
@@ -1150,11 +1151,9 @@ Resources:
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
-      DomainValidationOptions: !If
-        - HaveHostedZone
-        - - DomainName: !Ref DomainName
-            HostedZoneId: !Ref HostedZoneId
-        - !Ref 'AWS::NoValue'
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-ssl-certificate'
