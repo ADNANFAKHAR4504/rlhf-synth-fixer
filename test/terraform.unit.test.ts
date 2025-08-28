@@ -330,7 +330,7 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
     });
 
     test("Sensible default values provided", () => {
-      expect(content).toMatch(/default.*=.*"us-west-2"/);
+      expect(content).toMatch(/default.*=.*"us-east-1"/);
       expect(content).toMatch(/default.*=.*"myapp"/);
       expect(content).toMatch(/default.*=.*"10\.0\.0\.0\/16"/);
       expect(content).toMatch(/default.*=.*"t3\.micro"/);

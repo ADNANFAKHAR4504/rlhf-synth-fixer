@@ -14,6 +14,7 @@
 variable "env" {
   description = "Environment name (staging or production)"
   type        = string
+  default     = "staging"
   validation {
     condition     = contains(["staging", "production"], var.env)
     error_message = "Environment must be either 'staging' or 'production'."
@@ -23,7 +24,7 @@ variable "env" {
 variable "region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "proj_name" {
