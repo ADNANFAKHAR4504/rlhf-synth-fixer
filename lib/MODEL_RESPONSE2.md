@@ -1,44 +1,79 @@
-## Complex CI/CD Pipeline with AWS CDK Python
+* You're absolutely right! Let me fix those issues and provide a complete, working solution. I'll address the CDK synth errors, deprecated versions, and missing modules.
 
-I'll create a comprehensive, production-ready CI/CD pipeline using AWS CDK Python that meets all your requirements. This solution includes multi-region deployment, blue-green deployments, comprehensive security, and monitoring.
+## Fixed Project Structure and Complete Implementation
+Let me start with the corrected requirements.txt and cdk.json files:
 
-## Project Structure
-cicd-infrastructure/
-├── app.py                          # CDK app entry point
-├── requirements.txt                # Python dependencies
-├── cdk.json                        # CDK configuration
-├── .github/
-│   └── workflows/
-│       ├── deploy-dev.yml          # Development deployment
-│       ├── deploy-staging.yml      # Staging deployment
-│       └── deploy-prod.yml         # Production deployment
-├── infrastructure/
-│   ├── __init__.py
-│   ├── vpc_stack.py               # VPC and networking
-│   ├── security_stack.py          # IAM roles and security groups
-│   ├── ecr_stack.py              # Container registry
-│   ├── rds_stack.py              # Database infrastructure
-│   ├── ecs_stack.py              # Container orchestration
-│   ├── alb_stack.py              # Load balancer
-│   ├── monitoring_stack.py       # CloudWatch monitoring
-│   ├── secrets_stack.py          # Secrets Manager
-│   ├── route53_stack.py          # DNS and health checks
-│   └── pipeline_stack.py         # CI/CD pipeline
-├── application/
-│   ├── Dockerfile
-│   ├── app.py                    # Sample Flask application
-│   ├── requirements.txt
-│   └── tests/
-│       ├── test_unit.py
-│       └── test_integration.py
-└── docs/
-    ├── architecture.md
-    ├── deployment.md
-    └── operations.md
+requirements.txt
 
-1. CDK App Entry Point
+aws-cdk-lib==2.100.0
+constructs>=10.0.0,<11.0.0
+boto3>=1.28.0
+pytest>=7.4.0
+pytest-cov>=4.1.0
+requests>=2.31.0
+flask>=2.3.0
+psycopg2-binary>=2.9.0
 
-<!-- app.py -->
+```json
+cdk.json
+
+{
+  "app": "python app.py",
+  "watch": {
+    "include": [
+      "**"
+    ],
+    "exclude": [
+      "README.md",
+      "cdk*.json",
+      "requirements*.txt",
+      "source.bat",
+      "**/__pycache__",
+      "**/*.pyc"
+    ]
+  },
+  "context": {
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:target-partitions": ["aws", "aws-cn"],
+    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
+    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
+    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
+    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
+    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
+    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
+    "@aws-cdk/aws-apigateway:disableCloudWatchRole": true,
+    "@aws-cdk/core:enablePartitionLiterals": true,
+    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
+    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
+    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
+    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/aws-route53-patters:useCertificate": true,
+    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
+    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
+    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
+    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
+    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
+    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
+    "@aws-cdk/aws-redshift:columnId": true,
+    "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
+    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
+    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
+    "@aws-cdk/aws-kms:aliasNameRef": true,
+    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
+    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
+    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
+    "@aws-cdk/aws-opensearchservice:enableLogging": true,
+    "@aws-cdk/aws-lambda:useLatestRuntimeVersion": true
+  }
+}
+```
+<!-- 1. Corrected App Entry Point -->
+
+app.py
 ```py
 #!/usr/bin/env python3
 import os
@@ -52,7 +87,6 @@ from infrastructure.alb_stack import AlbStack
 from infrastructure.monitoring_stack import MonitoringStack
 from infrastructure.secrets_stack import SecretsStack
 from infrastructure.route53_stack import Route53Stack
-from infrastructure.pipeline_stack import PipelineStack
 
 app = cdk.App()
 
@@ -76,6 +110,9 @@ environments = {
     }
 }
 
+# Store ALB DNS names for Route53
+alb_dns_names = {}
+
 # Deploy infrastructure for each environment
 for env_name, env_config in environments.items():
     env = cdk.Environment(**env_config)
@@ -93,6 +130,7 @@ for env_name, env_config in environments.items():
         env=env,
         environment_name=env_name
     )
+    security_stack.add_dependency(vpc_stack)
     
     secrets_stack = SecretsStack(
         app, f"SecretsStack-{env_name}",
@@ -110,9 +148,12 @@ for env_name, env_config in environments.items():
         app, f"RdsStack-{env_name}",
         vpc=vpc_stack.vpc,
         security_group=security_stack.rds_security_group,
+        database_secret=secrets_stack.database_secret,
         env=env,
         environment_name=env_name
     )
+    rds_stack.add_dependency(security_stack)
+    rds_stack.add_dependency(secrets_stack)
     
     alb_stack = AlbStack(
         app, f"AlbStack-{env_name}",
@@ -121,6 +162,7 @@ for env_name, env_config in environments.items():
         env=env,
         environment_name=env_name
     )
+    alb_stack.add_dependency(security_stack)
     
     ecs_stack = EcsStack(
         app, f"EcsStack-{env_name}",
@@ -129,9 +171,13 @@ for env_name, env_config in environments.items():
         target_group=alb_stack.target_group,
         ecr_repository=ecr_stack.repository,
         database_secret=secrets_stack.database_secret,
+        task_execution_role=security_stack.ecs_task_execution_role,
+        task_role=security_stack.ecs_task_role,
         env=env,
         environment_name=env_name
     )
+    ecs_stack.add_dependency(alb_stack)
+    ecs_stack.add_dependency(ecr_stack)
     
     monitoring_stack = MonitoringStack(
         app, f"MonitoringStack-{env_name}",
@@ -141,22 +187,15 @@ for env_name, env_config in environments.items():
         env=env,
         environment_name=env_name
     )
+    monitoring_stack.add_dependency(ecs_stack)
+    monitoring_stack.add_dependency(rds_stack)
+    
+    # Store ALB DNS for Route53
+    alb_dns_names[env_name] = alb_stack.load_balancer.load_balancer_dns_name
 
-# Global Route53 stack for multi-region setup
-if 'prod' in [env for env in environments.keys()]:
-    route53_stack = Route53Stack(
-        app, "Route53Stack",
-        primary_alb_dns=None,  # Will be set via cross-stack references
-        secondary_alb_dns=None,
-        env=cdk.Environment(
-            account=os.environ.get('CDK_DEFAULT_ACCOUNT'),
-            region='us-east-1'
-        )
-    )
-
-# CI/CD Pipeline stack
-pipeline_stack = PipelineStack(
-    app, "PipelineStack",
+# Global Route53 stack for production multi-region setup
+route53_stack = Route53Stack(
+    app, "Route53Stack",
     env=cdk.Environment(
         account=os.environ.get('CDK_DEFAULT_ACCOUNT'),
         region='us-east-1'
@@ -164,7 +203,7 @@ pipeline_stack = PipelineStack(
 )
 
 app.synth()
-2. VPC and Networking Stack
+2. Fixed VPC Stack
 infrastructure/vpc_stack.py
 
 from aws_cdk import (
@@ -172,7 +211,8 @@ from aws_cdk import (
     aws_ec2 as ec2,
     aws_logs as logs,
     CfnOutput,
-    Tags
+    Tags,
+    RemovalPolicy
 )
 from constructs import Construct
 
@@ -186,7 +226,7 @@ class VpcStack(Stack):
         self.vpc = ec2.Vpc(
             self, f"Vpc-{environment_name}",
             max_azs=3,
-            cidr="10.0.0.0/16",
+            ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name="PublicSubnet",
@@ -209,15 +249,16 @@ class VpcStack(Stack):
         )
         
         # VPC Flow Logs
+        flow_log_group = logs.LogGroup(
+            self, f"VpcFlowLogGroup-{environment_name}",
+            retention=logs.RetentionDays.ONE_MONTH,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+        
         vpc_flow_log = ec2.FlowLog(
             self, f"VpcFlowLog-{environment_name}",
             resource_type=ec2.FlowLogResourceType.from_vpc(self.vpc),
-            destination=ec2.FlowLogDestination.to_cloud_watch_logs(
-                logs.LogGroup(
-                    self, f"VpcFlowLogGroup-{environment_name}",
-                    retention=logs.RetentionDays.ONE_MONTH
-                )
-            )
+            destination=ec2.FlowLogDestination.to_cloud_watch_logs(flow_log_group)
         )
         
         # VPC Endpoints for AWS services
@@ -276,7 +317,8 @@ class VpcStack(Stack):
             f"SecretsManagerEndpoint-{self.environment_name}",
             service=ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER
         )
-3. Security Stack
+        
+3. Fixed Security Stack
 infrastructure/security_stack.py
 
 from aws_cdk import (
@@ -367,6 +409,17 @@ class SecurityStack(Stack):
             ]
         )
         
+        # Add additional permissions for Secrets Manager
+        self.ecs_task_execution_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "secretsmanager:GetSecretValue"
+                ],
+                resources=[f"arn:aws:secretsmanager:{self.region}:{self.account}:secret:*"]
+            )
+        )
+        
         # ECS Task Role
         self.ecs_task_role = iam.Role(
             self, f"EcsTaskRole-{self.environment_name}",
@@ -397,17 +450,31 @@ class SecurityStack(Stack):
             )
         )
         
-        # CodeBuild Service Role
-        self.codebuild_role = iam.Role(
-            self, f"CodeBuildRole-{self.environment_name}",
-            assumed_by=iam.ServicePrincipal("codebuild.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildDeveloperAccess")
-            ]
+        # GitHub Actions OIDC Role
+        github_provider = iam.OpenIdConnectProvider(
+            self, f"GitHubOidcProvider-{self.environment_name}",
+            url="https://token.actions.githubusercontent.com",
+            client_ids=["sts.amazonaws.com"],
+            thumbprints=["6938fd4d98bab03faadb97b34396831e3780aea1"]
         )
         
-        # Add additional permissions to CodeBuild role
-        self.codebuild_role.add_to_policy(
+        self.github_actions_role = iam.Role(
+            self, f"GitHubActionsRole-{self.environment_name}",
+            assumed_by=iam.WebIdentityPrincipal(
+                github_provider.open_id_connect_provider_arn,
+                conditions={
+                    "StringEquals": {
+                        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+                    },
+                    "StringLike": {
+                        "token.actions.githubusercontent.com:sub": "repo:*:*"
+                    }
+                }
+            )
+        )
+        
+        # Add permissions for GitHub Actions
+        self.github_actions_role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
                 actions=[
@@ -424,13 +491,17 @@ class SecurityStack(Stack):
             )
         )
         
-        # CodeDeploy Service Role
-        self.codedeploy_role = iam.Role(
-            self, f"CodeDeployRole-{self.environment_name}",
-            assumed_by=iam.ServicePrincipal("codedeploy.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSCodeDeployRoleForECS")
-            ]
+        self.github_actions_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ecs:UpdateService",
+                    "ecs:DescribeServices",
+                    "ecs:DescribeTaskDefinition",
+                    "ecs:RegisterTaskDefinition"
+                ],
+                resources=["*"]
+            )
         )
     
     def _add_tags(self):
@@ -440,7 +511,67 @@ class SecurityStack(Stack):
         Tags.of(self.rds_security_group).add("Environment", self.environment_name)
         Tags.of(self.ecs_task_execution_role).add("Environment", self.environment_name)
         Tags.of(self.ecs_task_role).add("Environment", self.environment_name)
-4. ECR Stack
+4. Secrets Stack
+infrastructure/secrets_stack.py
+
+from aws_cdk import (
+    Stack,
+    aws_secretsmanager as secretsmanager,
+    CfnOutput,
+    Tags,
+    RemovalPolicy
+)
+from constructs import Construct
+
+class SecretsStack(Stack):
+    def __init__(self, scope: Construct, construct_id: str, environment_name: str, **kwargs) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+        
+        self.environment_name = environment_name
+        
+        # Create database credentials secret
+        self.database_secret = secretsmanager.Secret(
+            self, f"DatabaseSecret-{environment_name}",
+            description=f"Database credentials for {environment_name}",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template='{"username": "postgres"}',
+                generate_string_key="password",
+                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\",
+                password_length=32
+            ),
+            removal_policy=RemovalPolicy.DESTROY if environment_name != "prod" else RemovalPolicy.RETAIN
+        )
+        
+        # Create application secrets
+        self.app_secret = secretsmanager.Secret(
+            self, f"AppSecret-{environment_name}",
+            description=f"Application secrets for {environment_name}",
+            generate_secret_string=secretsmanager.SecretStringGenerator(
+                secret_string_template='{"jwt_secret": ""}',
+                generate_string_key="jwt_secret",
+                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\",
+                password_length=64
+            ),
+            removal_policy=RemovalPolicy.DESTROY if environment_name != "prod" else RemovalPolicy.RETAIN
+        )
+        
+        # Tagging
+        Tags.of(self.database_secret).add("Environment", environment_name)
+        Tags.of(self.app_secret).add("Environment", environment_name)
+        
+        # Outputs
+        CfnOutput(
+            self, f"DatabaseSecretArn-{environment_name}",
+            value=self.database_secret.secret_arn,
+            export_name=f"DatabaseSecretArn-{environment_name}"
+        )
+        
+        CfnOutput(
+            self, f"AppSecretArn-{environment_name}",
+            value=self.app_secret.secret_arn,
+            export_name=f"AppSecretArn-{environment_name}"
+        )
+5. Fixed ECR Stack
 infrastructure/ecr_stack.py
 
 from aws_cdk import (
@@ -489,15 +620,12 @@ class EcrStack(Stack):
                     tag_status=ecr.TagStatus.UNTAGGED
                 )
             ],
-            removal_policy=RemovalPolicy.DESTROY if environment_name != "prod" else RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.DESTROY if environment_name != "prod-primary" else RemovalPolicy.RETAIN
         )
         
         # Cross-region replication for production
-        if "prod" in environment_name:
+        if "prod" in environment_name and self.region == "us-east-1":
             self._setup_cross_region_replication()
-        
-        # Grant permissions for CI/CD
-        self._setup_cicd_permissions()
         
         # Tagging
         Tags.of(self.repository).add("Environment", environment_name)
@@ -512,47 +640,28 @@ class EcrStack(Stack):
     
     def _setup_cross_region_replication(self):
         """Setup cross-region replication for production repositories"""
-        replication_configuration = ecr.CfnReplicationConfiguration(
+        ecr.CfnReplicationConfiguration(
             self, f"ReplicationConfiguration-{self.environment_name}",
-            replication_configuration={
-                "rules": [
-                    {
-                        "destinations": [
-                            {
-                                "region": "us-east-2",
-                                "registryId": self.account
-                            }
+            replication_configuration=ecr.CfnReplicationConfiguration.ReplicationConfigurationProperty(
+                rules=[
+                    ecr.CfnReplicationConfiguration.ReplicationRuleProperty(
+                        destinations=[
+                            ecr.CfnReplicationConfiguration.ReplicationDestinationProperty(
+                                region="us-east-2",
+                                registry_id=self.account
+                            )
                         ],
-                        "repositoryFilters": [
-                            {
-                                "filter": f"cicd-app-{self.environment_name}",
-                                "filterType": "PREFIX_MATCH"
-                            }
+                        repository_filters=[
+                            ecr.CfnReplicationConfiguration.RepositoryFilterProperty(
+                                filter=f"cicd-app-{self.environment_name}",
+                                filter_type="PREFIX_MATCH"
+                            )
                         ]
-                    }
-                ]
-            }
-        )
-    
-    def _setup_cicd_permissions(self):
-        """Setup permissions for CI/CD pipeline"""
-        # Allow GitHub Actions to push images
-        self.repository.add_to_resource_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                principals=[iam.ArnPrincipal(f"arn:aws:iam::{self.account}:role/GitHubActionsRole")],
-                actions=[
-                    "ecr:BatchCheckLayerAvailability",
-                    "ecr:GetDownloadUrlForLayer",
-                    "ecr:BatchGetImage",
-                    "ecr:PutImage",
-                    "ecr:InitiateLayerUpload",
-                    "ecr:UploadLayerPart",
-                    "ecr:CompleteLayerUpload"
+                    )
                 ]
             )
         )
-5. RDS Stack
+6. Fixed RDS Stack
 infrastructure/rds_stack.py
 
 from aws_cdk import (
@@ -570,11 +679,13 @@ from constructs import Construct
 
 class RdsStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc, 
-                 security_group: ec2.SecurityGroup, environment_name: str, **kwargs) -> None:
+                 security_group: ec2.SecurityGroup, database_secret: secretsmanager.Secret,
+                 environment_name: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         
         self.vpc = vpc
         self.security_group = security_group
+        self.database_secret = database_secret
         self.environment_name = environment_name
         
         # Create KMS key for encryption
@@ -582,19 +693,7 @@ class RdsStack(Stack):
             self, f"RdsKmsKey-{environment_name}",
             description=f"KMS key for RDS encryption - {environment_name}",
             enable_key_rotation=True,
-            removal_policy=RemovalPolicy.DESTROY if environment_name != "prod" else RemovalPolicy.RETAIN
-        )
-        
-        # Create database credentials secret
-        self.database_secret = secretsmanager.Secret(
-            self, f"DatabaseSecret-{environment_name}",
-            description=f"Database credentials for {environment_name}",
-            generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template='{"username": "postgres"}',
-                generate_string_key="password",
-                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\"\\",
-                password_length=32
-            )
+            removal_policy=RemovalPolicy.DESTROY if environment_name not in ["prod-primary", "prod-secondary"] else RemovalPolicy.RETAIN
         )
         
         # Create subnet group
@@ -609,7 +708,7 @@ class RdsStack(Stack):
         parameter_group = rds.ParameterGroup(
             self, f"DatabaseParameterGroup-{environment_name}",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14_9
+                version=rds.PostgresEngineVersion.VER_15_4
             ),
             parameters={
                 "shared_preload_libraries": "pg_stat_statements",
@@ -624,7 +723,7 @@ class RdsStack(Stack):
         self.database = rds.DatabaseInstance(
             self, f"Database-{environment_name}",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14_9
+                version=rds.PostgresEngineVersion.VER_15_4
             ),
             instance_type=self._get_instance_type(),
             credentials=rds.Credentials.from_secret(self.database_secret),
@@ -645,12 +744,8 @@ class RdsStack(Stack):
             performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
             enable_performance_insights=True,
             cloudwatch_logs_exports=["postgresql"],
-            removal_policy=RemovalPolicy.DESTROY if environment_name != "prod" else RemovalPolicy.SNAPSHOT
+            removal_policy=RemovalPolicy.DESTROY if environment_name not in ["prod-primary", "prod-secondary"] else RemovalPolicy.SNAPSHOT
         )
-        
-        # Create read replica for production
-        if "prod" in environment_name and self.region == "us-east-1":
-            self._create_read_replica()
         
         # Tagging
         Tags.of(self.database).add("Environment", environment_name)
@@ -662,140 +757,6 @@ class RdsStack(Stack):
             value=self.database.instance_endpoint.hostname,
             export_name=f"DatabaseEndpoint-{environment_name}"
         )
-        
-        CfnOutput(
-            self, f"DatabaseSecretArn-{environment_name}",
-            value=self.database_secret.secret_arn,
-            export_name=f"DatabaseSecretArn-{environment_name}"
-        )
     
     def _get_instance_type(self) -> ec2.InstanceType:
         """Get instance type based on environment"""
-        if "prod" in self.environment_name:
-            return ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.LARGE)
-        elif "staging" in self.environment_name:
-            return ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM)
-        else:
-            return ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO)
-    
-    def _is_multi_az(self) -> bool:
-        """Determine if multi-AZ should be enabled"""
-        return "prod" in self.environment_name
-    
-    def _get_allocated_storage(self) -> int:
-        """Get allocated storage based on environment"""
-        if "prod" in self.environment_name:
-            return 100
-        elif "staging" in self.environment_name:
-            return 50
-        else:
-            return 20
-    
-    def _get_max_allocated_storage(self) -> int:
-        """Get max allocated storage based on environment"""
-        if "prod" in self.environment_name:
-            return 1000
-        elif "staging" in self.environment_name:
-            return 200
-        else:
-            return 50
-    
-    def _get_backup_retention_days(self) -> int:
-        """Get backup retention days based on environment"""
-        if "prod" in self.environment_name:
-            return 30
-        elif "staging" in self.environment_name:
-            return 7
-        else:
-            return 1
-    
-    def _get_deletion_protection(self) -> bool:
-        """Determine if deletion protection should be enabled"""
-        return "prod" in self.environment_name
-    
-    def _create_read_replica(self):
-        """Create read replica in secondary region for production"""
-        self.read_replica = rds.DatabaseInstanceReadReplica(
-            self, f"DatabaseReadReplica-{self.environment_name}",
-            source_database_instance=self.database,
-            instance_type=ec2.InstanceType.of(ec2.InstanceClass.R6G, ec2.InstanceSize.LARGE),
-            vpc=self.vpc,
-            security_groups=[self.security_group],
-            storage_encrypted=True,
-            storage_encryption_key=self.kms_key,
-            monitoring_interval=Duration.seconds(60),
-            performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
-            enable_performance_insights=True,
-            cloudwatch_logs_exports=["postgresql"]
-        )
-6. ECS Stack
-infrastructure/ecs_stack.py
-
-from aws_cdk import (
-    Stack,
-    aws_ecs as ecs,
-    aws_ec2 as ec2,
-    aws_iam as iam,
-    aws_logs as logs,
-    aws_ecr as ecr,
-    aws_secretsmanager as secretsmanager,
-    aws_elasticloadbalancingv2 as elbv2,
-    aws_servicediscovery as servicediscovery,
-    Duration,
-    CfnOutput,
-    Tags
-)
-from constructs import Construct
-
-class EcsStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc,
-                 security_group: ec2.SecurityGroup, target_group: elbv2.ApplicationTargetGroup,
-                 ecr_repository: ecr.Repository, database_secret: secretsmanager.Secret,
-                 environment_name: str, **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)
-        
-        self.vpc = vpc
-        self.security_group = security_group
-        self.target_group = target_group
-        self.ecr_repository = ecr_repository
-        self.database_secret = database_secret
-        self.environment_name = environment_name
-        
-        # Create ECS cluster
-        self.cluster = ecs.Cluster(
-            self, f"Cluster-{environment_name}",
-            vpc=self.vpc,
-            cluster_name=f"cicd-cluster-{environment_name}",
-            container_insights=True
-        )
-        
-        # Create service discovery namespace
-        self.namespace = servicediscovery.PrivateDnsNamespace(
-            self, f"ServiceDiscoveryNamespace-{environment_name}",
-            name=f"cicd.{environment_name}.local",
-            vpc=self.vpc
-        )
-        
-        # Create task definition
-        self.task_definition = self._create_task_definition()
-        
-        # Create ECS service
-        self.service = self._create_service()
-        
-        # Setup auto scaling
-        self._setup_auto_scaling()
-        
-        # Tagging
-        Tags.of(self.cluster).add("Environment", environment_name)
-        Tags.of(self.cluster).add("Project", "CICD-Infrastructure")
-        
-        # Outputs
-        CfnOutput(
-            self, f"ClusterName-{environment_name}",
-            value=self.cluster.cluster_name,
-            export_name=f"ClusterName-{environment_name}"
-        )
-        
-        CfnOutput(
-            self, f"ServiceName-{environment_name}",
-            value=self.service

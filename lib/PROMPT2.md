@@ -1,0 +1,1 @@
+Your code stopped at ECS stack generation and did not complete. and also, it resulted to multiple synth errors as cdk synth command return multiple build errors, deprecated versions and no module code deploy, elasticloadbalancing found.
