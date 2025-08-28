@@ -321,7 +321,7 @@ describe('TAP Stack Integration Tests', () => {
           console.log('No targets registered yet - targets may still be registering');
         }
       }
-    });
+    }, 60000); // Increase timeout to 60 seconds for ALB target registration
   });
 
   describe('End-to-End Connectivity', () => {
