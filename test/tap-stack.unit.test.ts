@@ -490,17 +490,17 @@ describe('Extended Template Validation', () => {
   // Exhaustive Tags verification for known resources
   describe('Exhaustive Tags Verification', () => {
     test('resources with tags contain environment tag', () => {
-      const withTags = Object.entries(template.Resources || {}).filter(([, r]: [string, any]) => !!r?.Properties?.Tags);
+      const withTags = Object.entries(template.Resources || {}).filter(([, r]: [string, any]) => !!(r as any)?.Properties?.Tags);
       withTags.forEach(([, resource]) => {
-        const tags = resource.Properties.Tags as any[];
+        const tags = (resource as any).Properties.Tags as any[];
         expect(tags.some((t) => t.Key === 'environment')).toBe(true);
       });
     });
 
     test('resources with tags contain Name tag', () => {
-      const withTags = Object.entries(template.Resources || {}).filter(([, r]: [string, any]) => !!r?.Properties?.Tags);
+      const withTags = Object.entries(template.Resources || {}).filter(([, r]: [string, any]) => !!(r as any)?.Properties?.Tags);
       withTags.forEach(([, resource]) => {
-        const tags = resource.Properties.Tags as any[];
+        const tags = (resource as any).Properties.Tags as any[];
         expect(tags.some((t) => t.Key === 'Name')).toBe(true);
       });
     });
