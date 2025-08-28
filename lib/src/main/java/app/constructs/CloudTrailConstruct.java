@@ -7,6 +7,7 @@ import software.amazon.awscdk.services.kms.IKey;
 import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.logs.RetentionDays;
 import software.constructs.Construct;
+import java.util.UUID;
 import app.config.EnvironmentConfig;
 
 /**
@@ -34,11 +35,16 @@ public class CloudTrailConstruct extends Construct {
      * Creates a CloudWatch log group for CloudTrail logs with encryption.
      */
     private LogGroup createLogGroup(final IKey kmsKey) {
-        return LogGroup.Builder.create(this, EnvironmentConfig.getResourceName("cloudtrail", "log-group"))
-                .logGroupName(String.format("/aws/cloudtrail/%s", EnvironmentConfig.getResourceName("cloudtrail", "logs")))
-                .retention(RetentionDays.ONE_YEAR) // Retain logs for compliance
-                .encryptionKey(kmsKey)
-                .build();
+    // Use a short random suffix on the physical log group name to avoid
+    // collisions with existing global log group names in other accounts/environments.
+    final String randomSuffix = UUID.randomUUID().toString().substring(0, 8);
+    final String physicalName = EnvironmentConfig.getResourceName("cloudtrail", "log-group") + "-" + randomSuffix;
+
+    return LogGroup.Builder.create(this, EnvironmentConfig.getResourceName("cloudtrail", "log-group"))
+        .logGroupName(physicalName)
+        .retention(RetentionDays.ONE_YEAR) // Retain logs for compliance
+        .encryptionKey(kmsKey)
+        .build();
     }
     
     /**
