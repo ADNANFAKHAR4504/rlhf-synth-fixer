@@ -31,7 +31,7 @@ resource "aws_lb" "main" {
 
 # Target Group for web servers
 resource "aws_lb_target_group" "web" {
-  name     = "${var.environment}-${var.project_name}-web-tg"
+  name     = "${var.environment}-${var.project_name}-web-tg-tf"
   port     = var.target_port
   protocol = var.target_protocol
   vpc_id   = var.vpc_id
