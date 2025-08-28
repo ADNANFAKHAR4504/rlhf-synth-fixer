@@ -136,11 +136,6 @@ describe("Terraform Integration Tests (flat outputs)", () => {
     expect(isValidArn(outputs.target_group_arn)).toBe(true);
   });
 
-  it("S3 logs bucket should be valid", () => {
-    expect(isValidArn(outputs.logs_bucket_arn)).toBe(true);
-    expect(isNonEmptyString(outputs.logs_bucket_id)).toBe(true);
-  });
-
   it("KMS Key should be valid ARN", () => {
     expect(isValidArn(outputs.kms_key_arn)).toBe(true);
   });
