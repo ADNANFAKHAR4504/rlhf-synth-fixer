@@ -19,7 +19,7 @@ Test (unit tests run automatically via CodeBuild)
 Deploy (CloudFormation deploy action or CDK Pipelines)
 The setup must be extensible so I can add new stages in the future.
 
-AWS CodeBuild should handle both build and test phases, executing unit tests automatically.
+AWS CodeBuild should handle both build & test phases, executing unit tests automatically.
 
 Use AWS IAM roles with least privilege access for CodePipeline, CodeBuild, and deployment.
 
