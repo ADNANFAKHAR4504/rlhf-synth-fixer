@@ -3,7 +3,7 @@ import path from 'path';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack CloudFormation Template', () => {
+describe('AWS CI/CD Pipeline CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,7 +22,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'AWS CI/CD Pipeline Infrastructure with CodePipeline, CodeBuild, CodeDeploy and Elastic Beanstalk across multiple environments'
       );
     });
 
@@ -39,77 +33,160 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have all required parameters', () => {
+      const expectedParams = [
+        'EnvironmentSuffix',
+        'Environment', 
+        'Project',
+        'Owner',
+        'CostCenter',
+        'GitHubRepository',
+        'GitHubBranch', 
+        'GitHubOwner',
+        'NotificationEmail'
+      ];
+      
+      expectedParams.forEach(param => {
+        expect(template.Parameters[param]).toBeDefined();
+      });
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
-      );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+      const param = template.Parameters.EnvironmentSuffix;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('dev');
+      expect(param.Description).toBe('Environment suffix for resource naming to avoid conflicts');
+      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
+      expect(param.ConstraintDescription).toBe('Must contain only alphanumeric characters');
+    });
+
+    test('Environment parameter should have allowed values', () => {
+      const param = template.Parameters.Environment;
+      expect(param.Type).toBe('String');
+      expect(param.AllowedValues).toEqual(['Development', 'Testing', 'Production']);
+    });
+
+    test('NotificationEmail parameter should have email pattern', () => {
+      const param = template.Parameters.NotificationEmail;
+      expect(param.Type).toBe('String');
+      expect(param.AllowedPattern).toBe('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
-    });
-
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
-    });
-
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('should have all required CI/CD pipeline resources', () => {
+      const expectedResources = [
+        'PipelineKMSKey',
+        'PipelineKMSKeyAlias', 
+        'ArtifactsBucket',
+        'PipelineNotificationTopic',
+        'PipelineNotificationSubscription',
+        'CodePipelineRole',
+        'CodeBuildRole', 
+        'CodeBuildProject',
+        'ElasticBeanstalkApplication',
+        'EBServiceRole',
+        'EBInstanceRole',
+        'EBInstanceProfile',
+        'DevelopmentEnvironment',
+        'TestingEnvironment',
+        'ProductionEnvironment',
+        'CodePipeline',
+        'PipelineEventRule'
+      ];
+      
+      expectedResources.forEach(resource => {
+        expect(template.Resources[resource]).toBeDefined();
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('KMS Key should have correct properties', () => {
+      const kmsKey = template.Resources.PipelineKMSKey;
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      expect(kmsKey.DeletionPolicy).toBe('Delete');
+      expect(kmsKey.Properties.Description).toBe('KMS Key for CI/CD Pipeline encryption');
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('S3 Artifacts Bucket should be encrypted', () => {
+      const bucket = template.Resources.ArtifactsBucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      expect(bucket.DeletionPolicy).toBe('Delete');
+      expect(bucket.Properties.BucketEncryption).toBeDefined();
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('CodeBuild Project should have correct properties', () => {
+      const codeBuild = template.Resources.CodeBuildProject;
+      expect(codeBuild.Type).toBe('AWS::CodeBuild::Project');
+      expect(codeBuild.DeletionPolicy).toBe('Delete');
+      expect(codeBuild.Properties.Environment.Image).toBe('aws/codebuild/amazonlinux2-x86_64-standard:5.0');
+      expect(codeBuild.Properties.Source.Type).toBe('CODEPIPELINE');
+    });
+
+    test('Elastic Beanstalk environments should exist for all stages', () => {
+      const devEnv = template.Resources.DevelopmentEnvironment;
+      const testEnv = template.Resources.TestingEnvironment;
+      const prodEnv = template.Resources.ProductionEnvironment;
+
+      expect(devEnv.Type).toBe('AWS::ElasticBeanstalk::Environment');
+      expect(testEnv.Type).toBe('AWS::ElasticBeanstalk::Environment');
+      expect(prodEnv.Type).toBe('AWS::ElasticBeanstalk::Environment');
+
+      expect(devEnv.DeletionPolicy).toBe('Delete');
+      expect(testEnv.DeletionPolicy).toBe('Delete');
+      expect(prodEnv.DeletionPolicy).toBe('Delete');
+    });
+
+    test('CodePipeline should have correct stages', () => {
+      const pipeline = template.Resources.CodePipeline;
+      expect(pipeline.Type).toBe('AWS::CodePipeline::Pipeline');
+      expect(pipeline.DeletionPolicy).toBe('Delete');
+      
+      const stages = pipeline.Properties.Stages;
+      expect(stages).toHaveLength(5); // Source, Build, DeployToDev, DeployToTest, DeployToProd
+      
+      const stageNames = stages.map((stage: any) => stage.Name);
+      expect(stageNames).toEqual(['Source', 'Build', 'DeployToDev', 'DeployToTest', 'DeployToProd']);
+    });
+
+    test('SNS Topic should be encrypted', () => {
+      const topic = template.Resources.PipelineNotificationTopic;
+      expect(topic.Type).toBe('AWS::SNS::Topic');
+      expect(topic.DeletionPolicy).toBe('Delete');
+      expect(topic.Properties.KmsMasterKeyId).toEqual({ Ref: 'PipelineKMSKey' });
+    });
+
+    test('All resources should have DeletionPolicy Delete', () => {
+      const resourcesWithDeletionPolicy = [
+        'PipelineKMSKey', 'PipelineKMSKeyAlias', 'ArtifactsBucket', 
+        'PipelineNotificationTopic', 'CodePipelineRole', 'CodeBuildRole',
+        'CodeBuildProject', 'ElasticBeanstalkApplication', 'EBServiceRole',
+        'EBInstanceRole', 'EBInstanceProfile', 'DevelopmentEnvironment',
+        'TestingEnvironment', 'ProductionEnvironment', 'CodePipeline',
+        'PipelineEventRule'
+      ];
+
+      resourcesWithDeletionPolicy.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.DeletionPolicy).toBe('Delete');
+      });
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
+        'PipelineName',
+        'ArtifactsBucketName', 
+        'KMSKeyId',
+        'SNSTopicArn',
+        'DevelopmentEnvironmentURL',
+        'TestingEnvironmentURL',
+        'ProductionEnvironmentURL',
+        'CodeBuildProjectName',
+        'ElasticBeanstalkApplicationName',
         'StackName',
-        'EnvironmentSuffix',
+        'EnvironmentSuffix'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,23 +194,28 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
+    test('PipelineName output should be correct', () => {
+      const output = template.Outputs.PipelineName;
+      expect(output.Description).toBe('Name of the CodePipeline');
+      expect(output.Value).toEqual({ Ref: 'CodePipeline' });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
+        'Fn::Sub': '${AWS::StackName}-PipelineName',
       });
     });
 
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
+    test('Environment URLs should be correct', () => {
+      const devOutput = template.Outputs.DevelopmentEnvironmentURL;
+      const testOutput = template.Outputs.TestingEnvironmentURL;
+      const prodOutput = template.Outputs.ProductionEnvironmentURL;
+
+      expect(devOutput.Value).toEqual({
+        'Fn::GetAtt': ['DevelopmentEnvironment', 'EndpointURL']
       });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
+      expect(testOutput.Value).toEqual({
+        'Fn::GetAtt': ['TestingEnvironment', 'EndpointURL']
+      });
+      expect(prodOutput.Value).toEqual({
+        'Fn::GetAtt': ['ProductionEnvironment', 'EndpointURL']
       });
     });
 
@@ -172,29 +254,36 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have correct number of resources for CI/CD pipeline', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(17); // All CI/CD resources
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(9); // All required parameters
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBe(11); // All pipeline outputs
     });
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('resources should follow naming convention with environment suffix', () => {
+      const bucket = template.Resources.ArtifactsBucket;
+      const pipeline = template.Resources.CodePipeline;
+      const buildProject = template.Resources.CodeBuildProject;
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      expect(bucket.Properties.BucketName).toEqual({
+        'Fn::Sub': 'cicd-artifacts-${EnvironmentSuffix}-${AWS::Region}-${AWS::AccountId}'
+      });
+      expect(pipeline.Properties.Name).toEqual({
+        'Fn::Sub': 'cicd-pipeline-${EnvironmentSuffix}'
+      });
+      expect(buildProject.Properties.Name).toEqual({
+        'Fn::Sub': 'cicd-build-${EnvironmentSuffix}'
       });
     });
 
@@ -205,6 +294,56 @@ describe('TapStack CloudFormation Template', () => {
           'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
         });
       });
+    });
+  });
+
+  describe('Security and Compliance', () => {
+    test('all resources should have proper tagging', () => {
+      const taggedResources = [
+        'PipelineKMSKey', 'ArtifactsBucket', 'PipelineNotificationTopic',
+        'CodePipelineRole', 'CodeBuildRole', 'CodeBuildProject',
+        'EBServiceRole', 'EBInstanceRole', 'DevelopmentEnvironment', 
+        'TestingEnvironment', 'ProductionEnvironment', 'CodePipeline'
+      ];
+
+      taggedResources.forEach(resourceName => {
+        const resource = template.Resources[resourceName];
+        expect(resource.Properties.Tags).toBeDefined();
+        
+        const tags = resource.Properties.Tags;
+        const tagKeys = tags.map((tag: any) => tag.Key);
+        
+        expect(tagKeys).toContain('Environment');
+        expect(tagKeys).toContain('Project');
+        expect(tagKeys).toContain('Owner');
+        expect(tagKeys).toContain('CostCenter');
+      });
+    });
+
+    test('encryption should be enforced', () => {
+      const bucket = template.Resources.ArtifactsBucket;
+      const topic = template.Resources.PipelineNotificationTopic;
+      const pipeline = template.Resources.CodePipeline;
+
+      expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+        .ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      
+      expect(topic.Properties.KmsMasterKeyId).toEqual({ Ref: 'PipelineKMSKey' });
+      
+      expect(pipeline.Properties.ArtifactStore.EncryptionKey).toEqual({
+        Id: { 'Fn::GetAtt': ['PipelineKMSKey', 'Arn'] },
+        Type: 'KMS'
+      });
+    });
+
+    test('S3 bucket should block public access', () => {
+      const bucket = template.Resources.ArtifactsBucket;
+      const publicAccessConfig = bucket.Properties.PublicAccessBlockConfiguration;
+
+      expect(publicAccessConfig.BlockPublicAcls).toBe(true);
+      expect(publicAccessConfig.BlockPublicPolicy).toBe(true);
+      expect(publicAccessConfig.IgnorePublicAcls).toBe(true);
+      expect(publicAccessConfig.RestrictPublicBuckets).toBe(true);
     });
   });
 });
