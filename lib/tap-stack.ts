@@ -23,8 +23,9 @@ import * as xray from 'aws-cdk-lib/aws-xray';
 import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
-  projectName: string;
-  environment: string;
+  environmentSuffix: string;
+  projectName?: string;
+  environment?: string;
   domainName?: string;
   hostedZoneId?: string;
   dynamoDbReadCapacity?: number;
@@ -45,8 +46,9 @@ export class TapStack extends cdk.Stack {
     });
 
     const {
-      projectName,
-      environment,
+      environmentSuffix,
+      projectName = 'tap',
+      environment = environmentSuffix,
       domainName,
       hostedZoneId,
       dynamoDbReadCapacity = 500,
@@ -63,7 +65,7 @@ export class TapStack extends cdk.Stack {
 
     // Helper function to generate resource names
     const getResourceName = (resourceType: string): string => {
-      return `${projectName}-${environment}-${resourceType}`;
+      return `${projectName}-${environmentSuffix}-${resourceType}`;
     };
 
     // VPC Configuration
@@ -530,41 +532,29 @@ export class TapStack extends cdk.Stack {
     });
 
     // CloudWatch Alarms and Monitoring
-    const apiGatewayErrorAlarm = new cloudwatch.Alarm(
-      this,
-      getResourceName('api-error-alarm'),
-      {
-        alarmName: getResourceName('api-gateway-errors'),
-        metric: api.metricServerError(),
-        threshold: 10,
-        evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      }
-    );
+    new cloudwatch.Alarm(this, getResourceName('api-error-alarm'), {
+      alarmName: getResourceName('api-gateway-errors'),
+      metric: api.metricServerError(),
+      threshold: 10,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
-    const lambdaErrorAlarm = new cloudwatch.Alarm(
-      this,
-      getResourceName('lambda-error-alarm'),
-      {
-        alarmName: getResourceName('lambda-errors'),
-        metric: lambdaFunction.metricErrors(),
-        threshold: 5,
-        evaluationPeriods: 2,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      }
-    );
+    new cloudwatch.Alarm(this, getResourceName('lambda-error-alarm'), {
+      alarmName: getResourceName('lambda-errors'),
+      metric: lambdaFunction.metricErrors(),
+      threshold: 5,
+      evaluationPeriods: 2,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
-    const dynamoDbThrottleAlarm = new cloudwatch.Alarm(
-      this,
-      getResourceName('dynamodb-throttle-alarm'),
-      {
-        alarmName: getResourceName('dynamodb-throttles'),
-        metric: dynamoTable.metricThrottledRequests(),
-        threshold: 1,
-        evaluationPeriods: 1,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      }
-    );
+    new cloudwatch.Alarm(this, getResourceName('dynamodb-throttle-alarm'), {
+      alarmName: getResourceName('dynamodb-throttles'),
+      metric: dynamoTable.metricThrottledRequests(),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
     // CI/CD Pipeline
     if (githubOwner && githubRepo) {
@@ -633,37 +623,33 @@ export class TapStack extends cdk.Stack {
       const sourceOutput = new codepipeline.Artifact();
       const buildOutput = new codepipeline.Artifact();
 
-      const pipeline = new codepipeline.Pipeline(
-        this,
-        getResourceName('pipeline'),
-        {
-          pipelineName: getResourceName('deployment-pipeline'),
-          stages: [
-            {
-              stageName: 'Source',
-              actions: [
-                new codepipelineActions.CodeCommitSourceAction({
-                  actionName: 'CodeCommit',
-                  repository: codeRepo,
-                  branch: githubBranch,
-                  output: sourceOutput,
-                }),
-              ],
-            },
-            {
-              stageName: 'Build',
-              actions: [
-                new codepipelineActions.CodeBuildAction({
-                  actionName: 'CodeBuild',
-                  project: buildProject,
-                  input: sourceOutput,
-                  outputs: [buildOutput],
-                }),
-              ],
-            },
-          ],
-        }
-      );
+      new codepipeline.Pipeline(this, getResourceName('pipeline'), {
+        pipelineName: getResourceName('deployment-pipeline'),
+        stages: [
+          {
+            stageName: 'Source',
+            actions: [
+              new codepipelineActions.CodeCommitSourceAction({
+                actionName: 'CodeCommit',
+                repository: codeRepo,
+                branch: githubBranch,
+                output: sourceOutput,
+              }),
+            ],
+          },
+          {
+            stageName: 'Build',
+            actions: [
+              new codepipelineActions.CodeBuildAction({
+                actionName: 'CodeBuild',
+                project: buildProject,
+                input: sourceOutput,
+                outputs: [buildOutput],
+              }),
+            ],
+          },
+        ],
+      });
     }
 
     // Outputs
@@ -719,6 +705,7 @@ export class TapApp extends cdk.App {
     super();
 
     new TapStack(this, 'TapStack', {
+      environmentSuffix: 'dev',
       projectName: 'myproject',
       environment: 'dev',
       // domainName: 'example.com', // Uncomment and provide your domain
