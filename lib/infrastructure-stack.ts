@@ -50,6 +50,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
   public readonly cloudFrontLogsBucketName: pulumi.Output<string>;
   public readonly albArn: pulumi.Output<string>;
   public readonly targetGroupArn: pulumi.Output<string>;
+  public readonly secondaryTargetGroupArn: pulumi.Output<string>;
   public readonly autoScalingGroupName: pulumi.Output<string>;
   public readonly secondaryAutoScalingGroupName: pulumi.Output<string>;
   public readonly launchTemplateName: pulumi.Output<string>;
@@ -547,11 +548,11 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Target Group
+    // Primary Target Group
     const targetGroup = new aws.lb.TargetGroup(
-      `${sanitizedName}-main-target-group`,
+      `${sanitizedName}-primary-target-group`,
       {
-        name: `${sanitizedName}-tg`,
+        name: `${sanitizedName}-primary-tg`,
         port: 80,
         protocol: 'HTTP',
         vpcId: vpc.id,
@@ -565,14 +566,39 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           matcher: '200',
         },
         tags: {
-          Name: `${sanitizedName}-tg`,
+          Name: `${sanitizedName}-primary-tg`,
           Environment: environment,
         },
       },
       { parent: this }
     );
 
-    // ALB Listener
+    // Secondary Target Group
+    const secondaryTargetGroup = new aws.lb.TargetGroup(
+      `${sanitizedName}-secondary-target-group`,
+      {
+        name: `${sanitizedName}-secondary-tg`,
+        port: 80,
+        protocol: 'HTTP',
+        vpcId: vpc.id,
+        healthCheck: {
+          enabled: true,
+          healthyThreshold: 2,
+          unhealthyThreshold: 2,
+          timeout: 5,
+          interval: 30,
+          path: '/health',
+          matcher: '200',
+        },
+        tags: {
+          Name: `${sanitizedName}-secondary-tg`,
+          Environment: environment,
+        },
+      },
+      { parent: this }
+    );
+
+    // ALB Listener with weighted routing
     new aws.lb.Listener(
       `${sanitizedName}-main-alb-listener`,
       {
@@ -582,7 +608,18 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         defaultActions: [
           {
             type: 'forward',
-            targetGroupArn: targetGroup.arn,
+            forward: {
+              targetGroups: [
+                {
+                  arn: targetGroup.arn,
+                  weight: 50,
+                },
+                {
+                  arn: secondaryTargetGroup.arn,
+                  weight: 50,
+                },
+              ],
+            },
           },
         ],
       },
@@ -731,11 +768,11 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // DynamoDB Table
+    // Primary DynamoDB Table
     const dynamoTable = new aws.dynamodb.Table(
-      `${sanitizedName}-main-table`,
+      `${sanitizedName}-primary-table`,
       {
-        name: `${sanitizedName}-table`,
+        name: `${sanitizedName}-primary-table`,
         billingMode: 'PROVISIONED',
         readCapacity: 5,
         writeCapacity: 5,
@@ -754,7 +791,37 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           enabled: true,
         },
         tags: {
-          Name: `${sanitizedName}-dynamodb`,
+          Name: `${sanitizedName}-primary-dynamodb`,
+          Environment: environment,
+        },
+      },
+      { parent: this }
+    );
+
+    // Secondary DynamoDB Table
+    new aws.dynamodb.Table(
+      `${sanitizedName}-secondary-table`,
+      {
+        name: `${sanitizedName}-secondary-table`,
+        billingMode: 'PROVISIONED',
+        readCapacity: 5,
+        writeCapacity: 5,
+        hashKey: 'id',
+        attributes: [
+          {
+            name: 'id',
+            type: 'S',
+          },
+        ],
+        serverSideEncryption: {
+          enabled: true,
+          kmsKeyArn: kmsKey.arn,
+        },
+        pointInTimeRecovery: {
+          enabled: true,
+        },
+        tags: {
+          Name: `${sanitizedName}-secondary-dynamodb`,
           Environment: environment,
         },
       },
@@ -1115,7 +1182,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       {
         name: `${sanitizedName}-secondary-asg`,
         vpcZoneIdentifiers: privateSubnets.map(subnet => subnet.id),
-        targetGroupArns: [targetGroup.arn],
+        targetGroupArns: [secondaryTargetGroup.arn],
         healthCheckType: 'ELB',
         healthCheckGracePeriod: 300,
         minSize: 2,
@@ -1168,6 +1235,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     // Additional outputs for testing
     this.albArn = alb.arn;
     this.targetGroupArn = targetGroup.arn;
+    this.secondaryTargetGroupArn = secondaryTargetGroup.arn;
     this.autoScalingGroupName = autoScalingGroup.name;
     this.secondaryAutoScalingGroupName = secondaryAutoScalingGroup.name;
     this.launchTemplateName = launchTemplate.name;
@@ -1196,6 +1264,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       // Additional outputs for testing
       albArn: alb.arn,
       targetGroupArn: targetGroup.arn,
+      secondaryTargetGroupArn: secondaryTargetGroup.arn,
       autoScalingGroupName: autoScalingGroup.name,
       secondaryAutoScalingGroupName: secondaryAutoScalingGroup.name,
       launchTemplateName: launchTemplate.name,
