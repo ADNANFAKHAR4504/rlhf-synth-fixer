@@ -80,18 +80,12 @@ resource "aws_cloudtrail" "main" {
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
-    exclude_management_event_sources = []
+    read_write_type           = "All"
+    include_management_events = true
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
-    }
-
-    data_resource {
-      type   = "AWS::S3::Bucket"
-      values = ["arn:aws:s3:::*"]
+      values = ["arn:aws:s3:::*/*"] # Logs all object-level operations in all buckets
     }
   }
 
@@ -101,6 +95,7 @@ resource "aws_cloudtrail" "main" {
 
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
+
 
 # CloudWatch Log Group for security logs
 resource "aws_cloudwatch_log_group" "security_logs" {
@@ -366,10 +361,7 @@ resource "aws_iam_role_policy" "config_s3" {
 resource "aws_config_delivery_channel" "main" {
   name           = "${var.project_name}-Config-DeliveryChannel-${var.environment}"
   s3_bucket_name = aws_s3_bucket.config.bucket
-
-  snapshot_delivery_properties {
-    delivery_frequency = "Daily"
-  }
+  s3_key_prefix  = "config"
 
   depends_on = [aws_config_configuration_recorder.main]
 }
