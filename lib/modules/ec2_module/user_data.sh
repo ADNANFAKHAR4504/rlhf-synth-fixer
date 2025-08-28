@@ -162,6 +162,6 @@ systemctl enable health-server
 systemctl start health-server
 
 # Signal completion
-/opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region} || true
+/opt/aws/bin/cfn-signal -e $? --stack $${AWS::StackName} --resource AutoScalingGroup --region $${AWS::Region} || true
 
 echo "User data script completed successfully"
