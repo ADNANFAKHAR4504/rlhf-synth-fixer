@@ -30,8 +30,6 @@ func main() {
 			"Owner":       pulumi.String("DevOps"),
 		}
 
-
-
 		// Get availability zones
 		availabilityZones, err := aws.GetAvailabilityZones(ctx, &aws.GetAvailabilityZonesArgs{
 			State: pulumi.StringRef("available"),
@@ -179,19 +177,19 @@ func main() {
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
-					FromPort:   pulumi.Int(5432),
-					ToPort:     pulumi.Int(5432),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
+					FromPort:    pulumi.Int(5432),
+					ToPort:      pulumi.Int(5432),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("10.0.0.0/16")},
 					Description: pulumi.String("PostgreSQL access from VPC"),
 				},
 			},
 			Egress: ec2.SecurityGroupEgressArray{
 				&ec2.SecurityGroupEgressArgs{
-					FromPort:   pulumi.Int(0),
-					ToPort:     pulumi.Int(0),
-					Protocol:   pulumi.String("-1"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					FromPort:    pulumi.Int(0),
+					ToPort:      pulumi.Int(0),
+					Protocol:    pulumi.String("-1"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("All outbound traffic"),
 				},
 			},
@@ -208,33 +206,33 @@ func main() {
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
 				&ec2.SecurityGroupIngressArgs{
-					FromPort:   pulumi.Int(80),
-					ToPort:     pulumi.Int(80),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					FromPort:    pulumi.Int(80),
+					ToPort:      pulumi.Int(80),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("HTTP access"),
 				},
 				&ec2.SecurityGroupIngressArgs{
-					FromPort:   pulumi.Int(443),
-					ToPort:     pulumi.Int(443),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					FromPort:    pulumi.Int(443),
+					ToPort:      pulumi.Int(443),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("HTTPS access"),
 				},
 				&ec2.SecurityGroupIngressArgs{
-					FromPort:   pulumi.Int(22),
-					ToPort:     pulumi.Int(22),
-					Protocol:   pulumi.String("tcp"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")},
+					FromPort:    pulumi.Int(22),
+					ToPort:      pulumi.Int(22),
+					Protocol:    pulumi.String("tcp"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("10.0.0.0/16")},
 					Description: pulumi.String("SSH access from VPC"),
 				},
 			},
 			Egress: ec2.SecurityGroupEgressArray{
 				&ec2.SecurityGroupEgressArgs{
-					FromPort:   pulumi.Int(0),
-					ToPort:     pulumi.Int(0),
-					Protocol:   pulumi.String("-1"),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					FromPort:    pulumi.Int(0),
+					ToPort:      pulumi.Int(0),
+					Protocol:    pulumi.String("-1"),
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 					Description: pulumi.String("All outbound traffic"),
 				},
 			},
@@ -366,7 +364,7 @@ func main() {
 
 		// Configure server access logging for all buckets
 		_, err = s3.NewBucketLoggingV2(ctx, "app-data-logging", &s3.BucketLoggingV2Args{
-			Bucket: appDataBucket.ID(),
+			Bucket:       appDataBucket.ID(),
 			TargetBucket: logsBucket.ID(),
 			TargetPrefix: pulumi.Sprintf("app-data/"),
 		})
@@ -375,7 +373,7 @@ func main() {
 		}
 
 		_, err = s3.NewBucketLoggingV2(ctx, "backup-logging", &s3.BucketLoggingV2Args{
-			Bucket: backupBucket.ID(),
+			Bucket:       backupBucket.ID(),
 			TargetBucket: logsBucket.ID(),
 			TargetPrefix: pulumi.Sprintf("backup/"),
 		})
@@ -385,9 +383,9 @@ func main() {
 
 		// Create RDS subnet group
 		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, "main", &rds.SubnetGroupArgs{
-			Name:       pulumi.Sprintf("%s-%s-db-subnet-group", projectName, environment),
-			SubnetIds:  pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
-			Tags:       commonTags,
+			Name:      pulumi.Sprintf("%s-%s-db-subnet-group", projectName, environment),
+			SubnetIds: pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
+			Tags:      commonTags,
 		})
 		if err != nil {
 			return err
@@ -424,7 +422,7 @@ func main() {
 			EngineVersion:         pulumi.String("17.6"),
 			InstanceClass:         pulumi.String("db.t3.micro"),
 			MaintenanceWindow:     pulumi.String("sun:04:00-sun:05:00"),
-			Username:              pulumi.String("admin"),
+			Username:              pulumi.String("dbadmin"),
 			Password:              pulumi.String("SecurePassword123!"),
 			MultiAz:               pulumi.Bool(false),
 			ParameterGroupName:    dbParameterGroup.Name,
@@ -506,7 +504,7 @@ func main() {
 		// Create CloudWatch monitoring
 		// RDS monitoring
 		rdsCpuAlarm, err := cloudwatch.NewMetricAlarm(ctx, "rds-cpu-alarm", &cloudwatch.MetricAlarmArgs{
-			Name:          pulumi.Sprintf("%s-%s-rds-cpu-alarm", projectName, environment),
+			Name:               pulumi.Sprintf("%s-%s-rds-cpu-alarm", projectName, environment),
 			ComparisonOperator: pulumi.String("GreaterThanThreshold"),
 			EvaluationPeriods:  pulumi.Int(2),
 			MetricName:         pulumi.String("CPUUtilization"),
@@ -525,7 +523,7 @@ func main() {
 		}
 
 		rdsConnectionsAlarm, err := cloudwatch.NewMetricAlarm(ctx, "rds-connections-alarm", &cloudwatch.MetricAlarmArgs{
-			Name:          pulumi.Sprintf("%s-%s-rds-connections-alarm", projectName, environment),
+			Name:               pulumi.Sprintf("%s-%s-rds-connections-alarm", projectName, environment),
 			ComparisonOperator: pulumi.String("GreaterThanThreshold"),
 			EvaluationPeriods:  pulumi.Int(2),
 			MetricName:         pulumi.String("DatabaseConnections"),
