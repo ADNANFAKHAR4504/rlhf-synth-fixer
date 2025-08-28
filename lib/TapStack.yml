@@ -785,7 +785,6 @@ Resources:
   # CloudTrail for API Monitoring
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailLogsBucket
     Properties:
       TrailName: !Sub '${AWS::StackName}-api-trail-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailLogsBucket

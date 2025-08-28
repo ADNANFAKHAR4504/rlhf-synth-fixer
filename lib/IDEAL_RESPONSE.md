@@ -5,6 +5,7 @@ This is the complete, production-ready CloudFormation template that fulfills all
 ## Key Features Implemented
 
 ### All Original Requirements
+
 - **Multi-Region Support**: us-east-1, us-west-1, us-west-2 with proper AMI mappings
 - **Network Infrastructure**: VPC (10.0.0.0/16), subnets, security groups, routing tables
 - **Database Layer**: RDS MySQL with Multi-AZ, encrypted with Secrets Manager
@@ -15,6 +16,7 @@ This is the complete, production-ready CloudFormation template that fulfills all
 - **Security**: KMS encryption, IAM roles, restrictive security groups
 
 ### Enhanced Features Added
+
 - **Network ACLs**: Additional security layer for public, private, and database subnets
 - **Parameter Store**: 5 configuration parameters for app, database, ALB, scaling, and monitoring
 - **HTTPS/SSL Support**: Conditional SSL termination with HTTP redirect capability
@@ -23,6 +25,7 @@ This is the complete, production-ready CloudFormation template that fulfills all
 - **Trusted Advisor Integration**: Complete framework with SNS notifications, CloudWatch dashboard, and EventBridge rules
 
 ### Validation & Quality Assurance
+
 - **Lint Validated**: All CloudFormation lint errors resolved
 - **Unit Tested**: 77 comprehensive unit tests covering all resources and configurations
 - **Integration Ready**: Full integration test suite for deployed infrastructure validation
@@ -95,7 +98,8 @@ Parameters:
   InstanceType:
     Type: String
     Default: 't3.medium'
-    AllowedValues: ['t3.micro', 't3.small', 't3.medium', 't3.large', 'm5.large', 'm5.xlarge']
+    AllowedValues:
+      ['t3.micro', 't3.small', 't3.medium', 't3.large', 'm5.large', 'm5.xlarge']
     Description: 'EC2 instance type for application servers'
 
   KeyPairName:
@@ -117,17 +121,17 @@ Parameters:
 Mappings:
   RegionMap:
     us-east-1:
-      AMI: 'ami-0c02fb55956c7d316'  # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
+      AMI: 'ami-0c02fb55956c7d316' # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
       AZ1: 'us-east-1a'
       AZ2: 'us-east-1b'
       AZ3: 'us-east-1c'
     us-west-1:
-      AMI: 'ami-0827b6c5b977c020e'  # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
+      AMI: 'ami-0827b6c5b977c020e' # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
       AZ1: 'us-west-1a'
       AZ2: 'us-west-1c'
       AZ3: 'us-west-1a'
     us-west-2:
-      AMI: 'ami-0c2d3e23602d8ba5d'  # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
+      AMI: 'ami-0c2d3e23602d8ba5d' # Amazon Linux 2 AMI (HVM) - Kernel 5.10, SSD Volume Type
       AZ1: 'us-west-2a'
       AZ2: 'us-west-2b'
       AZ3: 'us-west-2c'
@@ -719,7 +723,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -741,6 +745,7 @@ Resources:
   # S3 Bucket
   # ============================================================================
   S3Bucket:
+    DeletionPolicy: Delete
     Type: AWS::S3::Bucket
     Properties:
       BucketEncryption:
@@ -769,9 +774,10 @@ Resources:
   # ============================================================================
   # CloudTrail for API Activity Monitoring
   # ============================================================================
-  
+
   # S3 Bucket for CloudTrail Logs
   CloudTrailLogsBucket:
+    DeletionPolicy: Delete
     Type: AWS::S3::Bucket
     Properties:
       BucketEncryption:
@@ -816,6 +822,7 @@ Resources:
   # CloudTrail for API Monitoring
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailLogsBucket
     Properties:
       TrailName: !Sub '${AWS::StackName}-api-trail-${EnvironmentSuffix}'
       S3BucketName: !Ref CloudTrailLogsBucket
@@ -824,15 +831,11 @@ Resources:
       IsMultiRegionTrail: true
       IsLogging: true
       EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
-          DataResources:
-            - Type: 'AWS::S3::Object'
-              Values: 
-                - !Sub '${S3Bucket}/*'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-api-trail-${EnvironmentSuffix}'
@@ -888,13 +891,13 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailLogsBucket.Arn
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${CloudTrailLogsBucket.Arn}/cloudtrail-logs/*'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailLogsBucket}/cloudtrail-logs/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
@@ -926,7 +929,7 @@ Resources:
   # ============================================================================
   # Parameter Store for Configuration Management
   # ============================================================================
-  
+
   # Application Configuration Parameters
   AppConfigParameter:
     Type: AWS::SSM::Parameter
@@ -977,8 +980,7 @@ Resources:
           "scheme": "internet-facing",
           "type": "application",
           "health_check_path": "/health",
-          "health_check_interval": 30,
-          "health_check_timeout": 5
+          "health_check_interval": 30
         }
       Description: 'Application Load Balancer configuration'
       Tags:
@@ -998,8 +1000,7 @@ Resources:
           "max_size": 10,
           "desired_capacity": 2,
           "scale_up_threshold": 70,
-          "scale_down_threshold": 30,
-          "health_check_grace_period": 300
+          "scale_down_threshold": 30
         }
       Description: 'Auto Scaling Group configuration'
       Tags:
@@ -1067,7 +1068,7 @@ Resources:
     UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-mysql-${EnvironmentSuffix}'
-      DBInstanceClass: db.t3.medium
+      DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.37'
       AllocatedStorage: 100
@@ -1084,8 +1085,7 @@ Resources:
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       MultiAZ: !If [CreateMultiAZ, true, false]
-      EnablePerformanceInsights: true
-      PerformanceInsightsKMSKeyId: !Ref KMSKey
+      EnablePerformanceInsights: false
       DeletionProtection: !If [IsProduction, true, false]
       Tags:
         - Key: Name
@@ -1411,7 +1411,7 @@ Resources:
   # ============================================================================
   # AWS Trusted Advisor Integration
   # ============================================================================
-  
+
   # Parameter Store Configuration for Trusted Advisor
   TrustedAdvisorConfigParameter:
     Type: AWS::SSM::Parameter
@@ -1547,7 +1547,7 @@ Resources:
     Properties:
       Name: !Sub '${AWS::StackName}-trusted-advisor-schedule-${EnvironmentSuffix}'
       Description: 'Schedule Trusted Advisor checks'
-      ScheduleExpression: 'cron(0 9 ? * MON *)'  # Weekly on Mondays at 9 AM
+      ScheduleExpression: 'cron(0 9 ? * MON *)' # Weekly on Mondays at 9 AM
       State: ENABLED
       Targets:
         - Arn: !GetAtt TrustedAdvisorAlertsTopic.TopicArn
@@ -1640,10 +1640,7 @@ Outputs:
 
   WebsiteURL:
     Description: 'Website URL'
-    Value: !If
-      - HasSSLCertificate
-      - !Sub 'https://www.${DomainName}'
-      - !Sub 'http://www.${DomainName}'
+    Value: !Sub 'http://www.${DomainName}'
     Export:
       Name: !Sub '${AWS::StackName}-WebsiteURL-${EnvironmentSuffix}'
 
@@ -1663,17 +1660,21 @@ Outputs:
 ## Deployment Notes
 
 ### Prerequisites
+
 1. **SSL Certificate**: For HTTPS support, create an SSL certificate in AWS Certificate Manager and provide the ARN
 2. **Domain**: Ensure you own the domain specified in the `DomainName` parameter
 3. **Key Pair**: Create an EC2 Key Pair for SSH access to instances
 
 ### Multi-Region Deployment
+
 This template supports deployment in:
+
 - **us-east-1**: Primary region with full feature set
 - **us-west-1**: Secondary region (note: only 2 AZs available)
 - **us-west-2**: Secondary region with full AZ support
 
 ### Resource Counts
+
 - **70+ AWS Resources**: Comprehensive infrastructure covering all requirements
 - **Network ACLs**: 3 ACLs with 6 rules and 6 subnet associations
 - **Parameter Store**: 5 configuration parameters
@@ -1683,6 +1684,7 @@ This template supports deployment in:
 - **Trusted Advisor**: Complete integration framework with monitoring
 
 ### Testing & Validation
+
 - **77 Unit Tests**: Comprehensive coverage of all resources and configurations
 - **32 Integration Tests**: Full deployment validation (requires AWS credentials)
 - **CloudFormation Linting**: All errors resolved, production-ready
