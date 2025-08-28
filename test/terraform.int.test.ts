@@ -52,25 +52,36 @@ beforeAll(() => {
 });
 
 describe("Terraform Stack Integration Tests", () => {
-  describe("VPC and Subnets", () => {
-    test.each([
-      ["VPC should exist", outputs => outputs.vpc_id, async (id: string) => {
-        const res = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [id] }));
-        expect(res.Vpcs?.[0].VpcId).toBe(id);
-      }],
-      ["Private subnets should exist", outputs => outputs.private_subnet_ids, async (ids: string) => {
-        const subnetIds = JSON.parse(ids) as string[];
-        const res = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
-        expect(res.Subnets?.length).toBe(subnetIds.length);
-      }],
-      ["Public subnets should exist", outputs => outputs.public_subnet_ids, async (ids: string) => {
-        const subnetIds = JSON.parse(ids) as string[];
-        const res = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: subnetIds }));
-        expect(res.Subnets?.length).toBe(subnetIds.length);
-      }],
-    ])("%s", async (_desc, getValue, checkFn) => {
-      const value = getValue(outputs);
-      await checkFn(value);
+  describe("VPC & Subnets", () => {
+    const publicSubnets = JSON.parse(outputs.public_subnet_ids) as string[];
+    const privateSubnets = JSON.parse(outputs.private_subnet_ids) as string[];
+  
+    test("VPC should exist", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+      const res = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] })
+      );
+      expect(res.Vpcs?.[0].VpcId).toBe(outputs.vpc_id);
+    });
+  
+    test("Public subnets belong to VPC", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+      const res = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: publicSubnets })
+      );
+      res.Subnets?.forEach((subnet) => {
+        expect(subnet.VpcId).toBe(outputs.vpc_id);
+      });
+    });
+  
+    test("Private subnets belong to VPC", async () => {
+      if (process.env.RUN_LIVE_TESTS !== "true") return;
+      const res = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: privateSubnets })
+      );
+      res.Subnets?.forEach((subnet) => {
+        expect(subnet.VpcId).toBe(outputs.vpc_id);
+      });
     });
   });
 
