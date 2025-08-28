@@ -217,7 +217,7 @@ variable "alb_access_logs_prefix" {
 variable "health_check_path" {
   description = "Health check path"
   type        = string
-  default     = "/health"
+  default     = "/"
 }
 
 variable "health_check_healthy_threshold" {
