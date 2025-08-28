@@ -20,7 +20,7 @@ repositories {
 }
 
 dependencies {
-    // AWS SDK v2 - BOM ensures all AWS SDK services use consistent versions
+    // AWS SDK v2 - BOM ensures consistent versions
     implementation platform("software.amazon.awssdk:bom:2.25.16")
 
     // AWS services used in Main.java
@@ -46,7 +46,21 @@ application {
     mainClass = 'app.Main'
 }
 
-// Override run task to handle path issues
+// Force guava to avoid checkstyle/google-collections conflicts
+configurations.all {
+    resolutionStrategy {
+        force 'com.google.guava:guava:33.0.0-jre'
+        eachDependency { details ->
+            if (details.requested.group == 'com.google.collections' &&
+                details.requested.name == 'google-collections') {
+                details.useTarget 'com.google.guava:guava:33.0.0-jre'
+                details.because 'google-collections is replaced by guava'
+            }
+        }
+    }
+}
+
+// Override run task
 tasks.named('run') {
     standardInput = System.in
     workingDir = projectDir
@@ -54,7 +68,7 @@ tasks.named('run') {
     environment = System.getenv()
 }
 
-// Configure source directories
+// Source dirs
 sourceSets {
     main.java {
         srcDirs = ['src/main/java', 'lib/src/main/java']
@@ -98,24 +112,20 @@ dependencies {
     integrationTestImplementation "software.amazon.awssdk:autoscaling"
     integrationTestImplementation "software.amazon.awssdk:elasticloadbalancingv2"
 
-    // JSON parsing for outputs
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.17.1'
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-core:2.17.1'
 }
 
-// Configure JAR with main class
+// Jar
 jar {
     manifest {
         attributes(
                 'Main-Class': 'app.Main'
         )
     }
-
-    // Create fat JAR with all dependencies
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
-
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     archiveFileName = 'app.jar'
     zip64 = true
@@ -168,9 +178,7 @@ jacocoTestReport {
         xml.required = true
         html.required = true
     }
-
     executionData fileTree(project.buildDir.absolutePath).include("jacoco/*.exec")
-
     finalizedBy jacocoTestCoverageVerification
 }
 
@@ -179,7 +187,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.0 // ✅ No coverage threshold enforced
+                minimum = 0.0 // no coverage threshold
             }
         }
         rule {
