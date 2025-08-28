@@ -9,7 +9,7 @@ import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-sec
 import * as fs from "fs";
 import * as path from "path";
 
-const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-west-2";
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "dev";
 
 const s3Client = new S3Client({ region: awsRegion });

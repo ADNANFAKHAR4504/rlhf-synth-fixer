@@ -102,14 +102,14 @@ describe('AWS Provider and Backend Configuration', () => {
 
     test('should configure the AWS provider with the correct region', () => {
         const parsed = JSON.parse(synthesized);
-        expect(parsed.provider.aws[0].region).toBe('us-east-1');
+        expect(parsed.provider.aws[0].region).toBe('us-west-2');
     });
 
     test('should configure the S3 backend with default values', () => {
         const parsed = JSON.parse(synthesized);
         expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
         expect(parsed.terraform.backend.s3.key).toBe('dev/TestConfig.tfstate');
-        expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
+        expect(parsed.terraform.backend.s3.region).toBe('us-west-2');
         expect(parsed.terraform.backend.s3.encrypt).toBe(true);
         expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
     });
