@@ -181,6 +181,14 @@ resource "aws_route_table_association" "us_east_1_public" {
 
   subnet_id      = aws_subnet.us_east_1_public[count.index].id
   route_table_id = aws_route_table.us_east_1_public.id
+
+  tags = merge(var.common_tags, {
+    Name        = "${var.environment}-public-rta-${var.aws_regions["us-east-1"].short_name}-${count.index + 1}"
+    Environment = var.environment
+    Region      = var.aws_regions["us-east-1"].name
+    Type        = "public"
+    Association = "route-table"
+  })
 }
 
 # Private Route Table Associations for us-east-1
@@ -190,6 +198,14 @@ resource "aws_route_table_association" "us_east_1_private" {
 
   subnet_id      = aws_subnet.us_east_1_private[count.index].id
   route_table_id = aws_route_table.us_east_1_private.id
+
+  tags = merge(var.common_tags, {
+    Name        = "${var.environment}-private-rta-${var.aws_regions["us-east-1"].short_name}-${count.index + 1}"
+    Environment = var.environment
+    Region      = var.aws_regions["us-east-1"].name
+    Type        = "private"
+    Association = "route-table"
+  })
 }
 
 # Public Security Group for us-east-1
@@ -381,6 +397,14 @@ resource "aws_route_table_association" "eu_central_1_public" {
 
   subnet_id      = aws_subnet.eu_central_1_public[count.index].id
   route_table_id = aws_route_table.eu_central_1_public.id
+
+  tags = merge(var.common_tags, {
+    Name        = "${var.environment}-public-rta-${var.aws_regions["eu-central-1"].short_name}-${count.index + 1}"
+    Environment = var.environment
+    Region      = var.aws_regions["eu-central-1"].name
+    Type        = "public"
+    Association = "route-table"
+  })
 }
 
 # Private Route Table Associations for eu-central-1
@@ -390,6 +414,14 @@ resource "aws_route_table_association" "eu_central_1_private" {
 
   subnet_id      = aws_subnet.eu_central_1_private[count.index].id
   route_table_id = aws_route_table.eu_central_1_private.id
+
+  tags = merge(var.common_tags, {
+    Name        = "${var.environment}-private-rta-${var.aws_regions["eu-central-1"].short_name}-${count.index + 1}"
+    Environment = var.environment
+    Region      = var.aws_regions["eu-central-1"].name
+    Type        = "private"
+    Association = "route-table"
+  })
 }
 
 # Public Security Group for eu-central-1
@@ -581,6 +613,14 @@ resource "aws_route_table_association" "ap_southeast_2_public" {
 
   subnet_id      = aws_subnet.ap_southeast_2_public[count.index].id
   route_table_id = aws_route_table.ap_southeast_2_public.id
+
+  tags = merge(var.common_tags, {
+    Name        = "${var.environment}-public-rta-${var.aws_regions["ap-southeast-2"].short_name}-${count.index + 1}"
+    Environment = var.environment
+    Region      = var.aws_regions["ap-southeast-2"].name
+    Type        = "public"
+    Association = "route-table"
+  })
 }
 
 # Private Route Table Associations for ap-southeast-2
@@ -590,6 +630,14 @@ resource "aws_route_table_association" "ap_southeast_2_private" {
 
   subnet_id      = aws_subnet.ap_southeast_2_private[count.index].id
   route_table_id = aws_route_table.ap_southeast_2_private.id
+
+  tags = merge(var.common_tags, {
+    Name        = "${var.environment}-private-rta-${var.aws_regions["ap-southeast-2"].short_name}-${count.index + 1}"
+    Environment = var.environment
+    Region      = var.aws_regions["ap-southeast-2"].name
+    Type        = "private"
+    Association = "route-table"
+  })
 }
 
 # Public Security Group for ap-southeast-2
