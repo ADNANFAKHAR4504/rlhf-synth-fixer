@@ -655,7 +655,7 @@ export class RdsModule extends Construct {
       subnetIds,
       description: `Database subnet group for ${project} ${environment} in VPC ${vpcId}`,
       tags: {
-        Name: `dev-db-subnet-group`,
+        Name: 'dev-db-subnet-group',
         Project: project,
         Environment: environment,
         VpcId: vpcId,
