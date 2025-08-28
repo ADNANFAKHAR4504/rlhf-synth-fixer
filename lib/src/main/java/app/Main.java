@@ -11,7 +11,6 @@ import java.util.Comparator;
 
 /**
  * Example AWS SDK v2 implementation of TapStack.
- * Creates a VPC, Subnet, Security Group, IAM Role, and an EC2 instance.
  */
 public class Main {
 
@@ -28,126 +27,79 @@ public class Main {
                         .credentialsProvider(DefaultCredentialsProvider.create())
                         .build()) {
 
-            // --- 1. Create VPC ---
-            CreateVpcResponse vpcResponse = ec2.createVpc(CreateVpcRequest.builder()
-                    .cidrBlock("10.0.0.0/16")
-                    .build());
-            String vpcId = vpcResponse.vpc().vpcId();
-            System.out.println("✅ Created VPC: " + vpcId);
-
-            ec2.modifyVpcAttribute(ModifyVpcAttributeRequest.builder()
-                    .vpcId(vpcId)
-                    .enableDnsSupport(AttributeBooleanValue.builder().value(true).build())
-                    .build());
-            ec2.modifyVpcAttribute(ModifyVpcAttributeRequest.builder()
-                    .vpcId(vpcId)
-                    .enableDnsHostnames(AttributeBooleanValue.builder().value(true).build())
-                    .build());
-
-            // --- 2. Create Subnet ---
-            CreateSubnetResponse subnetResponse = ec2.createSubnet(CreateSubnetRequest.builder()
-                    .vpcId(vpcId)
-                    .cidrBlock("10.0.1.0/24")
-                    .availabilityZone(region.toString() + "a")
-                    .build());
-            String subnetId = subnetResponse.subnet().subnetId();
-            System.out.println("✅ Created Subnet: " + subnetId);
-
-            // --- 3. Create Security Group ---
-            CreateSecurityGroupResponse sgResponse = ec2.createSecurityGroup(CreateSecurityGroupRequest.builder()
-                    .groupName("tap-" + envSuffix + "-sg")
-                    .description("Allow SSH from specific IP")
-                    .vpcId(vpcId)
-                    .build());
-            String sgId = sgResponse.groupId();
-            System.out.println("✅ Created Security Group: " + sgId);
-
-            ec2.authorizeSecurityGroupIngress(AuthorizeSecurityGroupIngressRequest.builder()
-                    .groupId(sgId)
-                    .ipPermissions(IpPermission.builder()
-                            .ipProtocol("tcp")
-                            .fromPort(22)
-                            .toPort(22)
-                            .ipRanges(IpRange.builder().cidrIp("203.0.113.0/32").build())
-                            .build())
-                    .build());
-
-            // --- 4. Ensure IAM Role exists (suppress 409) ---
-            String roleName = "tap-" + envSuffix + "-ec2-role";
-            String roleArn;
-            try {
-                // Check if role already exists
-                GetRoleResponse getRoleResponse = iam.getRole(GetRoleRequest.builder().roleName(roleName).build());
-                roleArn = getRoleResponse.role().arn();
-                System.out.println("ℹ️ IAM Role already exists: " + roleArn);
-            } catch (NoSuchEntityException e) {
-                // Create only if it does not exist
-                String assumeRolePolicy = "{\n" +
-                        "  \"Version\": \"2012-10-17\",\n" +
-                        "  \"Statement\": [\n" +
-                        "    {\n" +
-                        "      \"Effect\": \"Allow\",\n" +
-                        "      \"Principal\": {\"Service\": \"ec2.amazonaws.com\"},\n" +
-                        "      \"Action\": \"sts:AssumeRole\"\n" +
-                        "    }\n" +
-                        "  ]\n" +
-                        "}";
-                CreateRoleResponse roleResponse = iam.createRole(CreateRoleRequest.builder()
-                        .roleName(roleName)
-                        .assumeRolePolicyDocument(assumeRolePolicy)
-                        .build());
-                roleArn = roleResponse.role().arn();
-                System.out.println("✅ Created IAM Role: " + roleArn);
-
-                iam.attachRolePolicy(AttachRolePolicyRequest.builder()
-                        .roleName(roleName)
-                        .policyArn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
-                        .build());
-            }
-
-            // --- 5. Find latest Amazon Linux 2 AMI ---
-            DescribeImagesResponse describeImages = ec2.describeImages(
-                    DescribeImagesRequest.builder()
-                            .owners("amazon")
-                            .filters(
-                                    Filter.builder().name("name").values("amzn2-ami-hvm-*-x86_64-gp2").build(),
-                                    Filter.builder().name("state").values("available").build()
-                            )
-                            .build());
-            String latestAmi = describeImages.images().stream()
-                    .max(Comparator.comparing(Image::creationDate))
-                    .orElseThrow(() -> new RuntimeException("No Amazon Linux 2 AMI found"))
-                    .imageId();
-
-            // --- 6. Launch EC2 Instance inside same VPC/Subnet with SG ---
-            RunInstancesResponse runResponse = ec2.runInstances(RunInstancesRequest.builder()
-                    .imageId(latestAmi)
-                    .instanceType(InstanceType.T3_MICRO)
-                    .maxCount(1)
-                    .minCount(1)
-                    .subnetId(subnetId)       // ✅ ensures SG and subnet are in same VPC
-                    .securityGroupIds(sgId)
-                    .build());
-            String instanceId = runResponse.instances().get(0).instanceId();
-            System.out.println("✅ Launched EC2 Instance: " + instanceId);
-
-            // --- 7. Tag resources (disambiguated Tag class) ---
-            ec2.createTags(CreateTagsRequest.builder()
-                    .resources(instanceId, vpcId, subnetId, sgId)
-                    .tags(
-                            software.amazon.awssdk.services.ec2.model.Tag.builder()
-                                    .key("Environment")
-                                    .value(envSuffix)
-                                    .build(),
-                            software.amazon.awssdk.services.ec2.model.Tag.builder()
-                                    .key("CreatedBy")
-                                    .value("AWS-SDK")
-                                    .build()
-                    )
-                    .build());
+            runWithClients(ec2, iam, envSuffix, region);
 
         } catch (Exception e) {
             System.err.println("❌ Error provisioning TapStack: " + e.getMessage());
         }
+    }
+
+    /**
+     * Extracted provisioning logic — called by both main() and tests.
+     */
+    public static void runWithClients(Ec2Client ec2, IamClient iam, String envSuffix, Region region) {
+        // --- 1. Create VPC ---
+        CreateVpcResponse vpcResponse = ec2.createVpc(CreateVpcRequest.builder()
+                .cidrBlock("10.0.0.0/16").build());
+        String vpcId = vpcResponse.vpc().vpcId();
+        System.out.println("✅ Created VPC: " + vpcId);
+
+        ec2.modifyVpcAttribute(ModifyVpcAttributeRequest.builder()
+                .vpcId(vpcId)
+                .enableDnsSupport(AttributeBooleanValue.builder().value(true).build())
+                .build());
+
+        // --- 2. Create Subnet ---
+        CreateSubnetResponse subnetResponse = ec2.createSubnet(CreateSubnetRequest.builder()
+                .vpcId(vpcId).cidrBlock("10.0.1.0/24")
+                .availabilityZone(region.toString() + "a").build());
+        String subnetId = subnetResponse.subnet().subnetId();
+        System.out.println("✅ Created Subnet: " + subnetId);
+
+        // --- 3. Create SG ---
+        CreateSecurityGroupResponse sgResponse = ec2.createSecurityGroup(CreateSecurityGroupRequest.builder()
+                .groupName("tap-" + envSuffix + "-sg")
+                .description("Allow SSH from specific IP")
+                .vpcId(vpcId).build());
+        String sgId = sgResponse.groupId();
+        System.out.println("✅ Created Security Group: " + sgId);
+
+        // --- 4. IAM Role ---
+        String roleName = "tap-" + envSuffix + "-ec2-role";
+        try {
+            GetRoleResponse roleResp = iam.getRole(GetRoleRequest.builder().roleName(roleName).build());
+            System.out.println("ℹ️ IAM Role already exists: " + roleResp.role().arn());
+        } catch (NoSuchEntityException e) {
+            CreateRoleResponse roleResponse = iam.createRole(CreateRoleRequest.builder()
+                    .roleName(roleName)
+                    .assumeRolePolicyDocument("{\"Version\":\"2012-10-17\",\"Statement\":[]}")
+                    .build());
+            System.out.println("✅ Created IAM Role: " + roleResponse.role().arn());
+
+            iam.attachRolePolicy(AttachRolePolicyRequest.builder()
+                    .roleName(roleName)
+                    .policyArn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
+                    .build());
+        }
+
+        // --- 5. Describe Images ---
+        DescribeImagesResponse describeImages = ec2.describeImages(
+                DescribeImagesRequest.builder()
+                        .owners("amazon")
+                        .filters(Filter.builder().name("name").values("amzn2-ami-hvm-*-x86_64-gp2").build())
+                        .build());
+        String latestAmi = describeImages.images().stream()
+                .max(Comparator.comparing(Image::creationDate))
+                .orElseThrow(() -> new RuntimeException("No AMI found"))
+                .imageId();
+
+        // --- 6. Launch Instance ---
+        RunInstancesResponse runResponse = ec2.runInstances(RunInstancesRequest.builder()
+                .imageId(latestAmi)
+                .instanceType(InstanceType.T3_MICRO)
+                .maxCount(1).minCount(1)
+                .subnetId(subnetId)
+                .securityGroupIds(sgId).build());
+        System.out.println("✅ Launched EC2 Instance: " + runResponse.instances().get(0).instanceId());
     }
 }

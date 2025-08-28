@@ -1,7 +1,7 @@
 IDEAL_RESPONSE.md
 Project: IaC – AWS Nova Model Breaking
 
-The following code implements a multi-region fault-tolerant infrastructure using AWS CDK (Java).
+The following code implements a multi-region fault-tolerant infrastructure using AWS SDK (Java).
 It provisions two stacks (us-east-1 and us-west-2) for high availability and disaster recovery.
 
 All code resides in the lib/ folder.
