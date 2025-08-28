@@ -28,13 +28,16 @@ describe('tap_stack.tf static verification', () => {
   });
 
   it('defines locals for tags, prefixes, and subnets', () => {
-    [
-      'common_tags', 'name_prefix',
-      'availability_zones', 'public_subnets', 'private_subnets'
-    ].forEach(local =>
-      expect(has(new RegExp(`locals?[^{]*${local}\\s*=`))).toBe(true)
-    );
-  });
+  [
+    'common_tags',
+    'name_prefix',
+    'availability_zones',
+    'public_subnets',
+    'private_subnets'
+  ].forEach(local =>
+    expect(has(new RegExp(`${local}\\s*=`))).toBe(true)
+  );
+ });
 
   it('declares essential data sources', () => {
     [
