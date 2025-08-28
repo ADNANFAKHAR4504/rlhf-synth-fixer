@@ -253,7 +253,7 @@ export class TapStack extends cdk.Stack {
       }),
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: true,
-      cloudwatchLogsExports: ['error', 'general', 'slow-query'],
+      cloudwatchLogsExports: ['error', 'general', 'audit'],
     });
 
     // 7. EC2 INSTANCES with IMDSv2
