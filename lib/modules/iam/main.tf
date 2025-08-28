@@ -29,24 +29,23 @@ resource "aws_iam_policy" "ec2_policy" {
       {
         Effect = "Allow"
         Action = [
-          "secretsmanager:GetSecretValue"
-        ]
-        Resource = "arn:aws:secretsmanager:*:*:secret:prod/*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
-          "logs:DescribeLogStreams"
+          "logs:DescribeLogStreams",
+          "logs:DescribeLogGroups"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:*:*:log-group:/aws/ec2/*",
+          "arn:aws:logs:*:*:log-group:/aws/ec2/*:*"
+        ]
       },
       {
         Effect = "Allow"
         Action = [
-          "cloudwatch:PutMetricData"
+          "cloudwatch:PutMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics"
         ]
         Resource = "*"
       }
@@ -56,7 +55,13 @@ resource "aws_iam_policy" "ec2_policy" {
   tags = var.common_tags
 }
 
-# Attach policy to role
+# CloudWatch Agent Policy
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# Attach custom policy to role
 resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = aws_iam_policy.ec2_policy.arn
@@ -94,4 +99,16 @@ resource "aws_iam_role" "lambda_role" {
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Data source to attach secrets policy
+data "aws_iam_policy" "secrets_access" {
+  count = var.secrets_policy_arn != "" ? 1 : 0
+  arn   = var.secrets_policy_arn
+}
+
+resource "aws_iam_role_policy_attachment" "secrets_policy_attachment" {
+  count      = var.secrets_policy_arn != "" ? 1 : 0
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = var.secrets_policy_arn
 }

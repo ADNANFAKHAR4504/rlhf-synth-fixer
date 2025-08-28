@@ -13,9 +13,9 @@ output "private_subnet_ids" {
   value       = module.vpc.private_subnet_ids
 }
 
-output "ec2_instance_ids" {
-  description = "IDs of the EC2 instances"
-  value       = module.ec2.instance_ids
+output "load_balancer_dns" {
+  description = "DNS name of the load balancer"
+  value       = module.ec2.load_balancer_dns
 }
 
 output "iam_role_arn" {
@@ -26,4 +26,9 @@ output "iam_role_arn" {
 output "secrets_arns" {
   description = "ARNs of the secrets in Secrets Manager"
   value       = module.secrets.secret_arns
+}
+
+output "cloudwatch_dashboard_url" {
+  description = "URL of the CloudWatch dashboard"
+  value       = module.monitoring.dashboard_url
 }

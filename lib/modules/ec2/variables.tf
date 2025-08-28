@@ -23,6 +23,16 @@ variable "ec2_instance_profile" {
   type        = string
 }
 
+variable "web_security_group_id" {
+  description = "Security group ID for web servers"
+  type        = string
+}
+
+variable "log_group_name" {
+  description = "CloudWatch log group name"
+  type        = string
+}
+
 variable "common_tags" {
   description = "Common tags to apply to all resources"
   type        = map(string)

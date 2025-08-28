@@ -20,14 +20,15 @@ resource "aws_launch_template" "web" {
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
   
-  vpc_security_group_ids = [data.aws_security_group.web.id]
+  vpc_security_group_ids = [var.web_security_group_id]
   
   iam_instance_profile {
     name = var.ec2_instance_profile
   }
   
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    region = data.aws_region.current.name
+    region         = data.aws_region.current.name
+    log_group_name = var.log_group_name
   }))
   
   tag_specifications {
@@ -78,7 +79,7 @@ resource "aws_lb" "web" {
   name               = "web-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [data.aws_security_group.web.id]
+  security_groups    = [var.web_security_group_id]
   subnets            = var.public_subnet_ids
   
   enable_deletion_protection = false
@@ -125,13 +126,4 @@ resource "aws_lb_listener" "web" {
 }
 
 # Data sources
-data "aws_security_group" "web" {
-  filter {
-    name   = "group-name"
-    values = ["web-sg*"]
-  }
-  
-  vpc_id = var.vpc_id
-}
-
 data "aws_region" "current" {}

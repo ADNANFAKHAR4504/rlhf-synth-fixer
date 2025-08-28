@@ -29,6 +29,14 @@ module "secrets" {
   common_tags   = var.common_tags
 }
 
+# Monitoring Module
+module "monitoring" {
+  source = "./modules/monitoring"
+  common_tags           = var.common_tags
+  vpc_id            = module.vpc.vpc_id
+  log_retention_days = var.log_retention_days
+}
+
 # EC2 Module
 module "ec2" {
   source = "./modules/ec2"
@@ -38,7 +46,9 @@ module "ec2" {
   public_subnet_ids      = module.vpc.public_subnet_ids
   private_subnet_ids     = module.vpc.private_subnet_ids
   ec2_instance_profile   = module.iam.ec2_instance_profile_name
+  web_security_group_id  = module.vpc.web_security_group_id
+  log_group_name        = module.monitoring.log_group_name
   common_tags           = var.common_tags
   
-  depends_on = [module.vpc, module.iam]
+  depends_on = [module.vpc, module.iam, module.monitoring]
 }

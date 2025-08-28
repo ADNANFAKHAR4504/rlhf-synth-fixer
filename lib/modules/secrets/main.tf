@@ -17,22 +17,28 @@ resource "aws_secretsmanager_secret_version" "secret_versions" {
   secret_string = jsonencode(each.value.secret_data)
 }
 
-# Create a policy for accessing secrets
-resource "aws_secretsmanager_resource_policy" "secret_policy" {
-  for_each = var.secrets_config
-  
-  secret_arn = aws_secretsmanager_secret.secrets[each.key].arn
+# Data source for current AWS account ID and region
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+# IAM policy for accessing specific secrets (attached to EC2 role)
+resource "aws_iam_policy" "secrets_access" {
+  name        = "secrets-manager-access-policy"
+  description = "Policy for accessing production secrets"
   
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "secretsmanager:GetSecretValue"
-        Resource = "*"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          for secret in aws_secretsmanager_secret.secrets :
+          secret.arn
+        ]
         Condition = {
           StringEquals = {
             "secretsmanager:ResourceTag/Environment" = "Production"
@@ -41,7 +47,6 @@ resource "aws_secretsmanager_resource_policy" "secret_policy" {
       }
     ]
   })
+  
+  tags = var.common_tags
 }
-
-# Data source for current AWS account ID
-data "aws_caller_identity" "current" {}
