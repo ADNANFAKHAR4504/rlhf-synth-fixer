@@ -177,7 +177,7 @@ describe('TapStack Unit Tests', () => {
       DBInstanceClass: 'db.t3.micro',
       Engine: 'postgres',
       StorageEncrypted: true,
-      DeletionProtection: true,
+      DeletionProtection: false,
       BackupRetentionPeriod: 7,
     });
   });
@@ -261,5 +261,46 @@ describe('TapStack Unit Tests', () => {
     template.hasOutput('ApiGatewayUrl', {});
     template.hasOutput('BucketName', {});
     template.hasOutput('DatabaseEndpoint', {});
+  });
+
+  // Additional tests to improve branch coverage
+  describe('Environment Suffix Scenarios', () => {
+    test('Stack with no environment suffix uses default', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStackNoSuffix');
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Should use 'dev' as default suffix - check logical ID
+      const resources = testTemplate.findResources('AWS::S3::Bucket');
+      const bucketLogicalIds = Object.keys(resources);
+      expect(bucketLogicalIds.some(id => id.includes('dev'))).toBe(true);
+    });
+
+    test('Stack with context environment suffix', () => {
+      const testApp = new cdk.App();
+      testApp.node.setContext('environmentSuffix', 'prod');
+      const testStack = new TapStack(testApp, 'TestStackContext');
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Should use 'prod' from context - check logical ID
+      const resources = testTemplate.findResources('AWS::S3::Bucket');
+      const bucketLogicalIds = Object.keys(resources);
+      expect(bucketLogicalIds.some(id => id.includes('prod'))).toBe(true);
+    });
+
+    test('Props environment suffix overrides context', () => {
+      const testApp = new cdk.App();
+      testApp.node.setContext('environmentSuffix', 'context');
+      const testStack = new TapStack(testApp, 'TestStackPropsOverride', { 
+        environmentSuffix: 'props' 
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Should use 'props' from props, not 'context' - check logical ID
+      const resources = testTemplate.findResources('AWS::S3::Bucket');
+      const bucketLogicalIds = Object.keys(resources);
+      expect(bucketLogicalIds.some(id => id.includes('props'))).toBe(true);
+      expect(bucketLogicalIds.some(id => id.includes('context'))).toBe(false);
+    });
   });
 });

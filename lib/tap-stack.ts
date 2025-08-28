@@ -17,8 +17,11 @@ export interface TapStackProps extends cdk.StackProps {
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
-    
-    const environmentSuffix = props?.environmentSuffix || this.node.tryGetContext('environmentSuffix') || 'dev';
+
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
     const defaultTags = {
       Environment: 'production',
@@ -73,9 +76,14 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    const flowLogGroup = new logs.LogGroup(this, `VpcFlowLogGroup${environmentSuffix}`, {
-      retention: logs.RetentionDays.ONE_MONTH,
-    });
+    const flowLogGroup = new logs.LogGroup(
+      this,
+      `VpcFlowLogGroup${environmentSuffix}`,
+      {
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     new ec2.FlowLog(this, `VpcFlowLog${environmentSuffix}`, {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
@@ -88,13 +96,18 @@ export class TapStack extends cdk.Stack {
     const kmsKey = new kms.Key(this, `TapKmsKey${environmentSuffix}`, {
       enableKeyRotation: true,
       description: 'KMS key for TAP resources',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const webSg = new ec2.SecurityGroup(this, `WebSecurityGroup${environmentSuffix}`, {
-      vpc,
-      description: 'Security group for web servers',
-      allowAllOutbound: false,
-    });
+    const webSg = new ec2.SecurityGroup(
+      this,
+      `WebSecurityGroup${environmentSuffix}`,
+      {
+        vpc,
+        description: 'Security group for web servers',
+        allowAllOutbound: false,
+      }
+    );
 
     webSg.addIngressRule(
       ec2.Peer.anyIpv4(),
@@ -113,11 +126,15 @@ export class TapStack extends cdk.Stack {
     );
     webSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP outbound');
 
-    const dbSg = new ec2.SecurityGroup(this, `DatabaseSecurityGroup${environmentSuffix}`, {
-      vpc,
-      description: 'Security group for database',
-      allowAllOutbound: false,
-    });
+    const dbSg = new ec2.SecurityGroup(
+      this,
+      `DatabaseSecurityGroup${environmentSuffix}`,
+      {
+        vpc,
+        description: 'Security group for database',
+        allowAllOutbound: false,
+      }
+    );
 
     dbSg.addIngressRule(
       webSg,
@@ -194,32 +211,43 @@ export class TapStack extends cdk.Stack {
       versioned: true,
       enforceSSL: true,
       serverAccessLogsPrefix: 'access-logs/',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
-    const dbSubnetGroup = new rds.SubnetGroup(this, `DbSubnetGroup${environmentSuffix}`, {
-      vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-      description: 'Subnet group for RDS database',
-    });
+    const dbSubnetGroup = new rds.SubnetGroup(
+      this,
+      `DbSubnetGroup${environmentSuffix}`,
+      {
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+        description: 'Subnet group for RDS database',
+      }
+    );
 
-    const database = new rds.DatabaseInstance(this, `Database${environmentSuffix}`, {
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_10,
-      }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      vpc,
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [dbSg],
-      storageEncrypted: true,
-      storageEncryptionKey: kmsKey,
-      backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
-      cloudwatchLogsExports: ['postgresql'],
-      credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
-    });
+    const database = new rds.DatabaseInstance(
+      this,
+      `Database${environmentSuffix}`,
+      {
+        engine: rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_15_10,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        vpc,
+        subnetGroup: dbSubnetGroup,
+        securityGroups: [dbSg],
+        storageEncrypted: true,
+        storageEncryptionKey: kmsKey,
+        backupRetention: cdk.Duration.days(7),
+        deletionProtection: false,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        cloudwatchLogsExports: ['postgresql'],
+        credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
+      }
+    );
 
     const api = new apigateway.RestApi(this, `TapApi${environmentSuffix}`, {
       restApiName: `TAP API ${environmentSuffix}`,
@@ -307,10 +335,14 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    new wafv2.CfnWebACLAssociation(this, `WebAclAssociation${environmentSuffix}`, {
-      resourceArn: api.deploymentStage.stageArn,
-      webAclArn: webAcl.attrArn,
-    });
+    new wafv2.CfnWebACLAssociation(
+      this,
+      `WebAclAssociation${environmentSuffix}`,
+      {
+        resourceArn: api.deploymentStage.stageArn,
+        webAclArn: webAcl.attrArn,
+      }
+    );
 
     const adminGroup = new iam.Group(this, `AdminGroup${environmentSuffix}`, {
       groupName: `TapAdmins${environmentSuffix}`,
@@ -319,32 +351,40 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    const mfaPolicy = new iam.ManagedPolicy(this, `MfaPolicy${environmentSuffix}`, {
-      statements: [
-        new iam.PolicyStatement({
-          effect: iam.Effect.DENY,
-          actions: ['*'],
-          resources: ['*'],
-          conditions: {
-            BoolIfExists: {
-              'aws:MultiFactorAuthPresent': 'false',
+    const mfaPolicy = new iam.ManagedPolicy(
+      this,
+      `MfaPolicy${environmentSuffix}`,
+      {
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.DENY,
+            actions: ['*'],
+            resources: ['*'],
+            conditions: {
+              BoolIfExists: {
+                'aws:MultiFactorAuthPresent': 'false',
+              },
+              NumericLessThan: {
+                'aws:MultiFactorAuthAge': '3600',
+              },
             },
-            NumericLessThan: {
-              'aws:MultiFactorAuthAge': '3600',
-            },
-          },
-        }),
-      ],
-    });
+          }),
+        ],
+      }
+    );
 
     adminGroup.addManagedPolicy(mfaPolicy);
 
-    const readOnlyGroup = new iam.Group(this, `ReadOnlyGroup${environmentSuffix}`, {
-      groupName: `TapReadOnly${environmentSuffix}`,
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
-      ],
-    });
+    const readOnlyGroup = new iam.Group(
+      this,
+      `ReadOnlyGroup${environmentSuffix}`,
+      {
+        groupName: `TapReadOnly${environmentSuffix}`,
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
+        ],
+      }
+    );
 
     readOnlyGroup.addManagedPolicy(mfaPolicy);
 
