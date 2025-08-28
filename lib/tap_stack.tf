@@ -119,7 +119,7 @@ module "ec2_module" {
     notification_emails       = var.notification_emails
     common_tags               = local.common_tags
 
-    depends_on = [module.vpc, module.security, module.alb]
+    depends_on = [module.vpc_module, module.security_module, module.alb_module]
 }
 
 
