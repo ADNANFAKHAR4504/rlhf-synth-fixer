@@ -28,6 +28,7 @@ import {
 import fs from "fs";
 import path from "path";
 
+
 // Load infrastructure outputs
 const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
