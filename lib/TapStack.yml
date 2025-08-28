@@ -292,6 +292,8 @@ Conditions:
     !And [!Condition CreateDBInstance, !Condition CanUseDBSubnetGroup]
   HasExistingRDSEndpointAddress:
     !Not [!Equals [!Ref ExistingRDSEndpointAddress, '']]
+  HasExistingConfigRecorderName:
+    !Not [!Equals [!Ref ExistingConfigRecorderName, '']]
 
 Resources:
   # VPC and Networking Resources
@@ -1418,14 +1420,17 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-Name'
 
-  ConfigRecorderName:
-    Description: 'AWS Config recorder name'
-    Value:
-      !If [
-        CreateConfigRecorder,
-        !Ref ProdConfigRecorder,
-        !Ref ExistingConfigRecorderName,
-      ]
+  ConfigRecorderNameCreated:
+    Condition: CreateConfigRecorder
+    Description: 'AWS Config recorder name (created)'
+    Value: !Ref ProdConfigRecorder
+    Export:
+      Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
+
+  ConfigRecorderNameExisting:
+    Condition: HasExistingConfigRecorderName
+    Description: 'AWS Config recorder name (existing)'
+    Value: !Ref ExistingConfigRecorderName
     Export:
       Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
 
