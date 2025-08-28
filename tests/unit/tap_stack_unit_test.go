@@ -22,7 +22,7 @@ type Subnet struct {
 }
 
 type SecurityGroup struct {
-	Name   string
+	Name    string
 	Ingress []Rule
 	Egress  []Rule
 }
@@ -43,10 +43,10 @@ type EC2Instance struct {
 }
 
 type RDSInstance struct {
-	Name           string
-	Engine         string
-	MultiAZ        bool
-	Encrypted      bool
+	Name            string
+	Engine          string
+	MultiAZ         bool
+	Encrypted       bool
 	DeletionProtect bool
 }
 
@@ -94,10 +94,10 @@ func mockStack() (VPC, []Subnet, SecurityGroup, EC2Instance, RDSInstance, S3Buck
 	}
 
 	rds := RDSInstance{
-		Name:           "hipaa-db",
-		Engine:         "mysql",
-		MultiAZ:        true,
-		Encrypted:      true,
+		Name:            "hipaa-db",
+		Engine:          "mysql",
+		MultiAZ:         true,
+		Encrypted:       true,
 		DeletionProtect: false,
 	}
 
