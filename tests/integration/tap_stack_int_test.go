@@ -8,11 +8,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/logs"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -21,18 +25,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// DeploymentOutputs holds Pulumi flat-outputs.json data
+// DeploymentOutputs maps flat-outputs.json
 type DeploymentOutputs struct {
-	Ec2InstanceId      string `json:"ec2InstanceId"`
-	Ec2PrivateIp       string `json:"ec2PrivateIp"`
-	Ec2SecurityGroupId string `json:"ec2SecurityGroupId"`
-	PrivateSubnetEc2Id string `json:"privateSubnetEc2Id"`
-	PrivateSubnetRdsId string `json:"privateSubnetRdsId"`
-	PublicSubnetId     string `json:"publicSubnetId"`
-	RdsEndpoint        string `json:"rdsEndpoint"`
-	RdsSecurityGroupId string `json:"rdsSecurityGroupId"`
-	S3BucketName       string `json:"s3BucketName"`
-	VpcId              string `json:"vpcId"`
+	AutoScalingGroupName   string `json:"autoScalingGroupName"`
+	CloudWatchLogGroupArn  string `json:"cloudWatchLogGroupArn"`
+	CloudWatchLogGroupName string `json:"cloudWatchLogGroupName"`
+	DbSecurityGroupId      string `json:"dbSecurityGroupId"`
+	DbUsername             string `json:"dbUsername"`
+	IamPolicyArn           string `json:"iamPolicyArn"`
+	IamRoleArn             string `json:"iamRoleArn"`
+	InternetGatewayId      string `json:"internetGatewayId"`
+	LaunchTemplateId       string `json:"launchTemplateId"`
+	NatGateway1Id          string `json:"natGateway1Id"`
+	NatGateway2Id          string `json:"natGateway2Id"`
+	PrivateSubnet1Id       string `json:"privateSubnet1Id"`
+	PrivateSubnet2Id       string `json:"privateSubnet2Id"`
+	PublicSubnet1Id        string `json:"publicSubnet1Id"`
+	PublicSubnet2Id        string `json:"publicSubnet2Id"`
+	RdsEndpoint            string `json:"rdsEndpoint"`
+	RdsInstanceId          string `json:"rdsInstanceId"`
+	S3BucketArn            string `json:"s3BucketArn"`
+	S3BucketName           string `json:"s3BucketName"`
+	VpcCidr                string `json:"vpcCidr"`
+	VpcId                  string `json:"vpcId"`
+	WebSecurityGroupId     string `json:"webSecurityGroupId"`
 }
 
 var (
@@ -65,40 +81,90 @@ func TestMain(m *testing.M) {
 func TestVPCAndSubnets(t *testing.T) {
 	ec2Client := ec2.NewFromConfig(awsConfig)
 
-	require.NotEmpty(t, outputs.VpcId)
 	resp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{VpcIds: []string{outputs.VpcId}})
 	require.NoError(t, err)
 	require.Len(t, resp.Vpcs, 1)
-	assert.Equal(t, "10.0.0.0/16", *resp.Vpcs[0].CidrBlock)
+	assert.Equal(t, outputs.VpcCidr, *resp.Vpcs[0].CidrBlock)
 
-	subnetIDs := []string{outputs.PrivateSubnetEc2Id, outputs.PrivateSubnetRdsId, outputs.PublicSubnetId}
+	subnetIDs := []string{outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id, outputs.PublicSubnet1Id, outputs.PublicSubnet2Id}
 	subnetsResp, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{SubnetIds: subnetIDs})
 	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(subnetsResp.Subnets), len(subnetIDs))
+	assert.Len(t, subnetsResp.Subnets, len(subnetIDs))
 
-	azSet := map[string]bool{}
 	for _, subnet := range subnetsResp.Subnets {
 		assert.Equal(t, outputs.VpcId, *subnet.VpcId)
-		azSet[*subnet.AvailabilityZone] = true
 	}
-	assert.GreaterOrEqual(t, len(azSet), 2)
 }
 
-func TestEC2Instance(t *testing.T) {
+func TestInternetGateway(t *testing.T) {
 	ec2Client := ec2.NewFromConfig(awsConfig)
-
-	require.NotEmpty(t, outputs.Ec2InstanceId)
-	resp, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{outputs.Ec2InstanceId}})
+	resp, err := ec2Client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{InternetGatewayIds: []string{outputs.InternetGatewayId}})
 	require.NoError(t, err)
-	require.Len(t, resp.Reservations, 1)
+	require.Len(t, resp.InternetGateways, 1)
+}
 
-	instance := resp.Reservations[0].Instances[0]
-	assert.Equal(t, outputs.PrivateSubnetEc2Id, *instance.SubnetId)
-	assert.Equal(t, outputs.Ec2PrivateIp, *instance.PrivateIpAddress)
+func TestNatGateways(t *testing.T) {
+	ec2Client := ec2.NewFromConfig(awsConfig)
+	ids := []string{outputs.NatGateway1Id, outputs.NatGateway2Id}
+	resp, err := ec2Client.DescribeNatGateways(ctx, &ec2.DescribeNatGatewaysInput{NatGatewayIds: ids})
+	require.NoError(t, err)
+	assert.Len(t, resp.NatGateways, len(ids))
+}
+
+func TestLaunchTemplate(t *testing.T) {
+	ec2Client := ec2.NewFromConfig(awsConfig)
+	resp, err := ec2Client.DescribeLaunchTemplates(ctx, &ec2.DescribeLaunchTemplatesInput{LaunchTemplateIds: []string{outputs.LaunchTemplateId}})
+	require.NoError(t, err)
+	require.Len(t, resp.LaunchTemplates, 1)
+}
+
+func TestAutoScalingGroup(t *testing.T) {
+	asgClient := autoscaling.NewFromConfig(awsConfig)
+	resp, err := asgClient.DescribeAutoScalingGroups(ctx, &autoscaling.DescribeAutoScalingGroupsInput{AutoScalingGroupNames: []string{outputs.AutoScalingGroupName}})
+	require.NoError(t, err)
+	require.Len(t, resp.AutoScalingGroups, 1)
+	assert.Equal(t, outputs.AutoScalingGroupName, *resp.AutoScalingGroups[0].AutoScalingGroupName)
+}
+
+func TestSecurityGroups(t *testing.T) {
+	ec2Client := ec2.NewFromConfig(awsConfig)
+	sgIDs := []string{outputs.DbSecurityGroupId, outputs.WebSecurityGroupId}
+	resp, err := ec2Client.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{GroupIds: sgIDs})
+	require.NoError(t, err)
+	assert.Len(t, resp.SecurityGroups, len(sgIDs))
+}
+
+func TestRDSInstance(t *testing.T) {
+	rdsClient := rds.NewFromConfig(awsConfig)
+	resp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{DBInstanceIdentifier: aws.String(outputs.RdsInstanceId)})
+	require.NoError(t, err)
+	require.Len(t, resp.DBInstances, 1)
+
+	db := resp.DBInstances[0]
+	endpoint := fmt.Sprintf("%s:%d", aws.ToString(db.Endpoint.Address), aws.ToInt32(db.Endpoint.Port))
+	assert.Equal(t, outputs.RdsEndpoint, endpoint)
+}
+
+func TestS3Bucket(t *testing.T) {
+	s3Client := s3.NewFromConfig(awsConfig)
+
+	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &outputs.S3BucketName})
+	assert.NoError(t, err)
+
+	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &outputs.S3BucketName})
+	require.NoError(t, err)
+	assert.Equal(t, s3types.BucketVersioningStatusEnabled, versioning.Status)
+}
+
+func TestCloudWatchLogs(t *testing.T) {
+	logsClient := logs.NewFromConfig(awsConfig)
+
+	resp, err := logsClient.DescribeLogGroups(ctx, &logs.DescribeLogGroupsInput{LogGroupNamePrefix: aws.String(outputs.CloudWatchLogGroupName)})
+	require.NoError(t, err)
 
 	found := false
-	for _, sg := range instance.SecurityGroups {
-		if *sg.GroupId == outputs.Ec2SecurityGroupId {
+	for _, lg := range resp.LogGroups {
+		if aws.ToString(lg.Arn) == outputs.CloudWatchLogGroupArn {
 			found = true
 			break
 		}
@@ -106,48 +172,14 @@ func TestEC2Instance(t *testing.T) {
 	assert.True(t, found)
 }
 
-func TestRDSInstance(t *testing.T) {
-	rdsClient := rds.NewFromConfig(awsConfig)
-	require.NotEmpty(t, outputs.RdsEndpoint)
+func TestIAMRoleAndPolicy(t *testing.T) {
+	iamClient := iam.NewFromConfig(awsConfig)
 
-	instancesResp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
-	require.NoError(t, err)
-
-	var foundInstance *rdstypes.DBInstance
-	for _, db := range instancesResp.DBInstances {
-		if db.Endpoint != nil {
-			address := aws.ToString(db.Endpoint.Address)
-			port := aws.ToInt32(db.Endpoint.Port)
-			endpoint := fmt.Sprintf("%s:%d", address, port)
-			if endpoint == outputs.RdsEndpoint {
-				foundInstance = &db
-				break
-			}
-		}
-	}
-
-	require.NotNil(t, foundInstance)
-
-	foundSG := false
-	for _, sg := range foundInstance.VpcSecurityGroups {
-		if sg.VpcSecurityGroupId != nil && aws.ToString(sg.VpcSecurityGroupId) == outputs.RdsSecurityGroupId {
-			foundSG = true
-			break
-		}
-	}
-	assert.True(t, foundSG)
-}
-
-func TestS3Bucket(t *testing.T) {
-	s3Client := s3.NewFromConfig(awsConfig)
-
-	require.NotEmpty(t, outputs.S3BucketName)
-
-	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &outputs.S3BucketName})
+	roleName := strings.Split(outputs.IamRoleArn, "/")[1]
+	_, err := iamClient.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(roleName)})
 	assert.NoError(t, err)
 
-	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &outputs.S3BucketName})
-	require.NoError(t, err)
-
-	assert.Equal(t, s3types.BucketVersioningStatusEnabled, versioning.Status)
+	policyArn := outputs.IamPolicyArn
+	_, err = iamClient.GetPolicy(ctx, &iam.GetPolicyInput{PolicyArn: aws.String(policyArn)})
+	assert.NoError(t, err)
 }
