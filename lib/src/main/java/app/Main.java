@@ -14,7 +14,6 @@ import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
 import software.amazon.awscdk.services.cloudfront.BehaviorOptions;
 import software.amazon.awscdk.services.cloudfront.CachePolicy;
-import software.amazon.awscdk.services.cloudfront.CfnDistribution;
 import software.amazon.awscdk.services.cloudfront.CfnOriginAccessControl;
 import software.amazon.awscdk.services.cloudfront.CfnOriginAccessControlProps;
 import software.amazon.awscdk.services.cloudfront.Distribution;
@@ -24,8 +23,6 @@ import software.amazon.awscdk.services.cloudfront.origins.S3Origin;
 import software.amazon.awscdk.services.ec2.IVpc;
 import software.amazon.awscdk.services.ec2.InstanceClass;
 import software.amazon.awscdk.services.ec2.InstanceSize;
-import software.amazon.awscdk.services.ec2.Peer;
-import software.amazon.awscdk.services.ec2.Port;
 import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.SecurityGroupProps;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
@@ -33,7 +30,6 @@ import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.ec2.VpcProps;
-import software.amazon.awscdk.services.iam.AnyPrincipal;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.PolicyDocument;
 import software.amazon.awscdk.services.iam.PolicyStatement;
@@ -55,7 +51,6 @@ import software.amazon.awscdk.services.s3.BucketEncryption;
 import software.amazon.awscdk.services.s3.BucketProps;
 import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.secretsmanager.SecretProps;
-import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
 
 /**
@@ -159,21 +154,32 @@ class EcommerceStack extends Stack {
   private Role rdsAccessRole;
   private Role s3ReadOnlyRole;
 
-  public EcommerceStack(final Construct scope, final String id) {
+  public EcommerceStack(final software.constructs.Construct scope, final String id) {
     this(scope, id, null);
   }
 
-  public EcommerceStack(final Construct scope, final String id, final StackProps props) {
+  public EcommerceStack(final software.constructs.Construct scope, final String id, final StackProps props) {
     super(scope, id, props);
 
     // Apply common tags to all resources in this stack
     commonTags.forEach((key, value) -> Tags.of(this).add(key, value));
 
+    // Create networking infrastructure
     createNetworking();
+
+    // Create security groups
     createSecurityGroups();
+
+    // Create RDS database
     createRdsDatabase();
+
+    // Create S3 bucket and CloudFront distribution
     createS3AndCloudFront();
+
+    // Create IAM roles with least privilege
     createIamRoles();
+
+    // Create outputs
     createOutputs();
   }
 
@@ -196,6 +202,7 @@ class EcommerceStack extends Stack {
   }
 
   private void createSecurityGroups() {
+    // Create security group for application tier
     appTierSecurityGroup = new SecurityGroup(this, "AppTierSecurityGroup",
         SecurityGroupProps.builder()
             .vpc(vpc)
@@ -203,24 +210,29 @@ class EcommerceStack extends Stack {
             .allowAllOutbound(false)
             .build());
 
+    // Create security group for RDS
     rdsSecurityGroup = new SecurityGroup(this, "RdsSecurityGroup",
         SecurityGroupProps.builder()
-            ..vpc(vpc)
+            .vpc(vpc)
             .description("Security group for RDS database")
             .allowAllOutbound(false)
             .build());
 
     // Allow app tier to connect to RDS on PostgreSQL port
-    rdsSecurityGroup.addIngressRule(appTierSecurityGroup, Port.tcp(5432),
+    rdsSecurityGroup.addIngressRule(
+        appTierSecurityGroup,
+        software.amazon.awscdk.services.ec2.Port.tcp(5432),
         "Allow app tier to connect to PostgreSQL");
 
-    // Allow RDS to reach AWS endpoints (e.g., for patching) over HTTPS
-    rdsSecurityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(443),
+    // Allow RDS to connect to AWS endpoints for maintenance
+    rdsSecurityGroup.addEgressRule(
+        software.amazon.awscdk.services.ec2.Peer.anyIpv4(),
+        software.amazon.awscdk.services.ec2.Port.tcp(443),
         "Allow HTTPS to AWS endpoints");
   }
 
   private void createRdsDatabase() {
-    // Private subnet group
+    // Create DB subnet group for private subnets
     SubnetGroup dbSubnetGroup = new SubnetGroup(this, "DbSubnetGroup",
         SubnetGroupProps.builder()
             .description("Subnet group for RDS database")
@@ -230,10 +242,10 @@ class EcommerceStack extends Stack {
                 .build())
             .build());
 
-    // Secret for DB credentials
+    // Create secret for database credentials
     dbSecret = new Secret(this, "DbSecret", SecretProps.builder()
         .description("Database credentials for ecommerce application")
-        .generateSecretString(SecretStringGenerator.builder()
+        .generateSecretString(software.amazon.awscdk.services.secretsmanager.SecretStringGenerator.builder()
             .secretStringTemplate("{\"username\": \"ecommerceuser\"}")
             .generateStringKey("password")
             .excludeCharacters("\"@/\\")
@@ -241,7 +253,7 @@ class EcommerceStack extends Stack {
             .build())
         .build());
 
-    // RDS PostgreSQL in private subnets, not publicly accessible
+    // Create RDS PostgreSQL instance
     rdsInstance = new DatabaseInstance(this, "EcommerceDatabase",
         DatabaseInstanceProps.builder()
             .engine(DatabaseInstanceEngine.postgres(
@@ -259,13 +271,13 @@ class EcommerceStack extends Stack {
             .publiclyAccessible(false)
             .storageEncrypted(true)
             .backupRetention(Duration.days(7))
-            .deletionProtection(false) // Consider true for prod
+            .deletionProtection(false) // Set to true for production
             .databaseName("ecommercedb")
             .build());
   }
 
   private void createS3AndCloudFront() {
-    // Private S3 bucket (no public access)
+    // Create S3 bucket with strict security settings
     s3Bucket = new Bucket(this, "EcommerceAssetsBucket", BucketProps.builder()
         .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
         .encryption(BucketEncryption.S3_MANAGED)
@@ -273,7 +285,7 @@ class EcommerceStack extends Stack {
         .enforceSSL(true)
         .build());
 
-    // Origin Access Control (OAC) for CloudFront → S3
+    // Create Origin Access Control for CloudFront
     originAccessControl = new CfnOriginAccessControl(this, "OriginAccessControl",
         CfnOriginAccessControlProps.builder()
             .originAccessControlConfig(CfnOriginAccessControl.OriginAccessControlConfigProperty.builder()
@@ -285,29 +297,29 @@ class EcommerceStack extends Stack {
                 .build())
             .build());
 
-    // CloudFront distribution using S3 origin (OAC wired in via L1 override)
+    // Create CloudFront distribution
     cloudFrontDistribution = new Distribution(this, "EcommerceDistribution",
         DistributionProps.builder()
             .defaultBehavior(BehaviorOptions.builder()
-                .origin(S3Origin.Builder.create(s3Bucket).build())
+                .origin(S3Origin.Builder.create(s3Bucket)
+                    .build())
                 .viewerProtocolPolicy(ViewerProtocolPolicy.REDIRECT_TO_HTTPS)
                 .cachePolicy(CachePolicy.CACHING_OPTIMIZED)
                 .build())
             .comment("CloudFront distribution for ecommerce assets")
             .build());
 
-    // Patch the L2 Distribution with OAC via the underlying L1
-    CfnDistribution cfnDistribution = (CfnDistribution) cloudFrontDistribution.getNode().getDefaultChild();
+    // Update the CloudFront distribution to use OAC
+    software.amazon.awscdk.services.cloudfront.CfnDistribution cfnDistribution = (software.amazon.awscdk.services.cloudfront.CfnDistribution) cloudFrontDistribution
+        .getNode().getDefaultChild();
 
-    cfnDistribution.addPropertyOverride(
-        "DistributionConfig.Origins.0.OriginAccessControlId",
+    // Update the origin to use OAC
+    cfnDistribution.addPropertyOverride("DistributionConfig.Origins.0.OriginAccessControlId",
         originAccessControl.getAttrId());
-    cfnDistribution.addPropertyOverride(
-        "DistributionConfig.Origins.0.S3OriginConfig.OriginAccessIdentity",
-        "");
+    cfnDistribution.addPropertyOverride("DistributionConfig.Origins.0.S3OriginConfig.OriginAccessIdentity", "");
 
-    // Bucket policy: only allow GetObject from this CloudFront distribution (OAC)
-    PolicyStatement allowFromCloudFront = new PolicyStatement(PolicyStatementProps.builder()
+    // Create bucket policy that only allows CloudFront OAC access
+    PolicyStatement bucketPolicyStatement = new PolicyStatement(PolicyStatementProps.builder()
         .sid("AllowCloudFrontServicePrincipal")
         .effect(Effect.ALLOW)
         .principals(Arrays.asList(new ServicePrincipal("cloudfront.amazonaws.com")))
@@ -319,65 +331,82 @@ class EcommerceStack extends Stack {
                     this.getAccount(), cloudFrontDistribution.getDistributionId()))))
         .build());
 
-    // Deny insecure (non-SSL) access to the bucket
-    PolicyStatement denyInsecure = new PolicyStatement(PolicyStatementProps.builder()
+    PolicyStatement denyInsecureConnections = new PolicyStatement(PolicyStatementProps.builder()
         .sid("DenyInsecureConnections")
         .effect(Effect.DENY)
-        .principals(Arrays.asList(new AnyPrincipal()))
+        .principals(Arrays.asList(new software.amazon.awscdk.services.iam.AnyPrincipal()))
         .actions(Arrays.asList("s3:*"))
-        .resources(Arrays.asList(s3Bucket.getBucketArn(), s3Bucket.getBucketArn() + "/*"))
-        .conditions(Map.of("Bool", Map.of("aws:SecureTransport", "false")))
+        .resources(Arrays.asList(
+            s3Bucket.getBucketArn(),
+            s3Bucket.getBucketArn() + "/*"))
+        .conditions(Map.of(
+            "Bool", Map.of("aws:SecureTransport", "false")))
         .build());
 
-    s3Bucket.addToResourcePolicy(allowFromCloudFront);
-    s3Bucket.addToResourcePolicy(denyInsecure);
+    s3Bucket.addToResourcePolicy(bucketPolicyStatement);
+    s3Bucket.addToResourcePolicy(denyInsecureConnections);
   }
 
   private void createIamRoles() {
-    // Role that can read THIS DB secret and describe THIS DB instance
-    rdsAccessRole = new Role(this, "RdsAccessRole", RoleProps.builder()
-        .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-        .description("Role for accessing RDS database secrets and metadata")
-        .inlinePolicies(Map.of(
-            "RdsSecretsAccess", PolicyDocument.Builder.create()
-                .statements(Arrays.asList(
-                    new PolicyStatement(PolicyStatementProps.builder()
-                        .effect(Effect.ALLOW)
-                        .actions(Arrays.asList("secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"))
-                        .resources(Arrays.asList(dbSecret.getSecretArn()))
-                        .conditions(Map.of("Bool", Map.of("aws:SecureTransport", "true")))
-                        .build(),
-                    new PolicyStatement(PolicyStatementProps.builder()
-                        .effect(Effect.ALLOW)
-                        .actions(Arrays.asList("rds:DescribeDBInstances"))
-                        .resources(Arrays.asList(rdsInstance.getInstanceArn()))
-                        .conditions(Map.of("Bool", Map.of("aws:SecureTransport", "true")))
-                        .build())))
-                .build()))
-        .build());
+        // Create RDS access role with least privilege
+        rdsAccessRole = new Role(this, "RdsAccessRole", RoleProps.builder()
+                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+                .description("Role for accessing RDS database secrets and metadata")
+                .inlinePolicies(Map.of(
+                        "RdsSecretsAccess", PolicyDocument.Builder.create()
+                                .statements(Arrays.asList(
+                                        new PolicyStatement(PolicyStatementProps.builder()
+                                                .effect(Effect.ALLOW)
+                                                .actions(Arrays.asList(
+                                                        "secretsmanager:GetSecretValue",
+                                                        "secretsmanager:DescribeSecret"
+                                                ))
+                                                .resources(Arrays.asList(dbSecret.getSecretArn()))
+                                                .conditions(Map.of(
+                                                        "Bool", Map.of("aws:SecureTransport", "true")
+                                                ))
+                                                .build(),
+                                        new PolicyStatement(PolicyStatementProps.builder()
+                                                .effect(Effect.ALLOW)
+                                                .actions(Arrays.asList("rds:DescribeDBInstances"))
+                                                .resources(Arrays.asList(rdsInstance.getInstanceArn()))
+                                                .conditions(Map.of(
+                                                        "Bool", Map.of("aws:SecureTransport", "true")
+                                                ))
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build());
 
-    // Read-only access to THIS bucket (for app/CI if needed)
-    s3ReadOnlyRole = new Role(this, "S3ReadOnlyRole", RoleProps.builder()
-        .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
-        .description("Role for read-only access to ecommerce assets bucket")
-        .inlinePolicies(Map.of(
-            "S3ReadOnlyAccess", PolicyDocument.Builder.create()
-                .statements(Arrays.asList(
-                    new PolicyStatement(PolicyStatementProps.builder()
-                        .effect(Effect.ALLOW)
-                        .actions(Arrays.asList("s3:ListBucket"))
-                        .resources(Arrays.asList(s3Bucket.getBucketArn()))
-                        .conditions(Map.of("Bool", Map.of("aws:SecureTransport", "true")))
-                        .build(),
-                    new PolicyStatement(PolicyStatementProps.builder()
-                        .effect(Effect.ALLOW)
-                        .actions(Arrays.asList("s3:GetObject"))
-                        .resources(Arrays.asList(s3Bucket.getBucketArn() + "/*"))
-                        .conditions(Map.of("Bool", Map.of("aws:SecureTransport", "true")))
-                        .build())))
-                .build()))
-        .build());
-  }
+        // Create S3 read-only role with least privilege
+        s3ReadOnlyRole = new Role(this, "S3ReadOnlyRole", RoleProps.builder()
+                .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
+                .description("Role for read-only access to ecommerce assets bucket")
+                .inlinePolicies(Map.of(
+                        "S3ReadOnlyAccess", PolicyDocument.Builder.create()
+                                .statements(Arrays.asList(
+                                        new PolicyStatement(PolicyStatementProps.builder()
+                                                .effect(Effect.ALLOW)
+                                                .actions(Arrays.asList("s3:ListBucket"))
+                                                .resources(Arrays.asList(s3Bucket.getBucketArn()))
+                                                .conditions(Map.of(
+                                                        "Bool", Map.of("aws:SecureTransport", "true")
+                                                ))
+                                                .build(),
+                                        new PolicyStatement(PolicyStatementProps.builder()
+                                                .effect(Effect.ALLOW)
+                                                .actions(Arrays.asList("s3:GetObject"))
+                                                .resources(Arrays.asList(s3Bucket.getBucketArn() + "/*"))
+                                                .conditions(Map.of(
+                                                        "Bool", Map.of("aws:SecureTransport", "true")
+                                                ))
+                                                .build()
+                                ))
+                                .build()
+                ))
+                .build());
+    }
 
   private void createOutputs() {
     new CfnOutput(this, "VpcId", CfnOutputProps.builder()
@@ -388,7 +417,7 @@ class EcommerceStack extends Stack {
     new CfnOutput(this, "PrivateSubnetIds", CfnOutputProps.builder()
         .description("Private subnet IDs")
         .value(String.join(",", vpc.getPrivateSubnets().stream()
-            .map(sn -> sn.getSubnetId())
+            .map(subnet -> subnet.getSubnetId())
             .toArray(String[]::new)))
         .build());
 
@@ -423,7 +452,7 @@ class EcommerceStack extends Stack {
         .build());
   }
 
-  // Getters for tests
+  // Getters for testing
   public IVpc getVpc() {
     return vpc;
   }
@@ -450,14 +479,6 @@ class EcommerceStack extends Stack {
 
   public Secret getDbSecret() {
     return dbSecret;
-  }
-
-  public SecurityGroup getRdsSecurityGroup() {
-    return rdsSecurityGroup;
-  }
-
-  public SecurityGroup getAppTierSecurityGroup() {
-    return appTierSecurityGroup;
   }
 }
 
