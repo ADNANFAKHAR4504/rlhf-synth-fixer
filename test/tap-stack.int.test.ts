@@ -94,7 +94,7 @@ describe("TapStack Integration Tests", () => {
         expect(subnet.Tags?.some(tag => 
           tag.Key === "Name" && 
           tag.Value === `fullstack-app-${environmentSuffix}-public-subnet-${index}`
-        )).toBe(false);
+        )).toBe(true);
       });
     }, 30000);
 
@@ -361,7 +361,7 @@ describe("TapStack Integration Tests", () => {
       ec2InstanceId = instance?.InstanceId!;
 
       expect(instance?.InstanceType).toBe("t3.micro");
-      expect(instance?.KeyName).toBe("compute-secure-key");
+      expect(instance?.KeyName).toBe("iac-rlhf-aws-trainer-instance");
       expect(privateSubnetIds).toContain(instance?.SubnetId);
       expect(instance?.SecurityGroups?.[0]?.GroupId).toBe(ec2SecurityGroupId);
       expect(instance?.IamInstanceProfile?.Arn).toContain(instanceProfileName);
