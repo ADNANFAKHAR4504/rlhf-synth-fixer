@@ -57,8 +57,12 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Expose outputs from the infrastructure
     this.vpcId = outputs.vpcId;
-    this.publicSubnetIds = pulumi.all(outputs.publicSubnetIds);
-    this.privateSubnetIds = pulumi.all(outputs.privateSubnetIds);
+    this.publicSubnetIds = pulumi
+      .all(outputs.publicSubnetIds)
+      .apply(ids => ids);
+    this.privateSubnetIds = pulumi
+      .all(outputs.privateSubnetIds)
+      .apply(ids => ids);
     this.albDnsName = outputs.albDnsName;
     this.s3BucketName = outputs.s3BucketName;
     this.rdsEndpoint = outputs.rdsEndpoint;
