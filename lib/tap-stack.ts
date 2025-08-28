@@ -1,6 +1,7 @@
 // tapstack.ts
 
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -9,16 +10,15 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import {
+  AlbModule,
   CloudwatchModule,
   Ec2Module,
   IamModule,
-  RdsModule,
+  RdsModule, // Added missing import
+  Route53Module,
   S3Module,
   VpcModule,
-  AlbModule, // Added missing import
-  Route53Module, // Added missing import
 } from './module';
 
 interface TapStackProps {
@@ -173,7 +173,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpc.privateSubnetIdsOutput[0],
       instanceType: 't3.micro',
       ami: ami.id,
-      keyName: 'compute-secure-key',
+      keyName: 'iac-rlhf-aws-trainer-instance',
       instanceProfileName: iam.instanceProfileName,
       ec2SecurityGroupId: ec2SecurityGroup.id,
     });
