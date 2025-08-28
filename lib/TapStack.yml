@@ -747,6 +747,6 @@ Outputs:
 
   SelectedSolutionStack:
     Description: "Selected Solution Stack for the platform"
-    Value: !FindInMap [PlatformMapping, !Ref PlatformType, SolutionStack]
+    Value: !FindInMap [PlatformMap, !Ref PlatformType, SolutionStack]
     Export:
       Name: !Sub "${AWS::StackName}-SelectedSolutionStack"
