@@ -238,7 +238,7 @@ export class TapStack extends cdk.Stack {
         {
           statusCode: '200',
           responseTemplates: {
-            'application/json': '{"message": "Hello from TAP API"}',
+            'application/json': '{"message": "hello world"}',
           },
         },
       ],
@@ -248,6 +248,12 @@ export class TapStack extends cdk.Stack {
     });
 
     api.root.addMethod('GET', integration, {
+      methodResponses: [{ statusCode: '200' }],
+    });
+
+    // Add hello endpoint for integration tests
+    const helloResource = api.root.addResource('hello');
+    helloResource.addMethod('GET', integration, {
       methodResponses: [{ statusCode: '200' }],
     });
 
@@ -354,6 +360,26 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: 'RDS Database Endpoint',
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseIdentifier', {
+      value: database.instanceIdentifier,
+      description: 'RDS Database Instance Identifier',
+    });
+
+    new cdk.CfnOutput(this, 'InstanceId', {
+      value: instance.instanceId,
+      description: 'EC2 Instance ID',
+    });
+
+    new cdk.CfnOutput(this, 'KmsKeyId', {
+      value: kmsKey.keyId,
+      description: 'KMS Key ID',
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayResourceArn', {
+      value: api.deploymentStage.stageArn,
+      description: 'API Gateway Stage ARN for WAF association',
     });
   }
 }
