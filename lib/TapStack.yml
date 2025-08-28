@@ -194,7 +194,7 @@ Resources:
               Service: codepipeline.amazonaws.com
             Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AWSCodePipelineFullAccess"
+        - "arn:aws:iam::aws:policy/AWSCodePipelineServiceRole"
       Policies:
         - PolicyName: PipelinePolicy
           PolicyDocument:
@@ -573,15 +573,6 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
-              OnFailure:
-                ActionTypeId:
-                  Category: Invoke
-                  Owner: SNS
-                  Provider: SNS
-                  Version: "1"
-                Configuration:
-                  TopicArn: !Ref PipelineNotificationTopic
-                  Message: "Build failed in CI/CD Pipeline"
         - Name: DeployToDev
           Actions:
             - Name: DeployToDevAction
