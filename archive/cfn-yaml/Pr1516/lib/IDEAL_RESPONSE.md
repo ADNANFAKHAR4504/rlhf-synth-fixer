@@ -1,0 +1,574 @@
+```yaml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "prod- secure baseline in us-west-2: VPC, subnets, S3 (SSE), IAM (least privilege + MFA), KMS CMK, WAFv2 (regional), VPC Flow Logs, RDS (encrypted)."
+
+Conditions:
+  IsUsWest2: !Equals [ !Ref "AWS::Region", "us-west-2" ]
+
+Resources:
+  ############################
+  # Networking (VPC & Subnets)
+  ############################
+  ProdVPC:
+    Type: AWS::EC2::VPC
+    Condition: IsUsWest2
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - { Key: Name, Value: prod-vpc }
+        - { Key: Environment, Value: Production }
+
+  ProdSubnetPublicAZ1:
+    Type: AWS::EC2::Subnet
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: prod-public-subnet-az1 }
+        - { Key: Environment, Value: Production }
+
+  ProdSubnetPublicAZ2:
+    Type: AWS::EC2::Subnet
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: prod-public-subnet-az2 }
+        - { Key: Environment, Value: Production }
+
+  ProdSubnetPrivateAZ1:
+    Type: AWS::EC2::Subnet
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: prod-private-subnet-az1 }
+        - { Key: Environment, Value: Production }
+
+  ProdSubnetPrivateAZ2:
+    Type: AWS::EC2::Subnet
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: prod-private-subnet-az2 }
+        - { Key: Environment, Value: Production }
+
+  ProdInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: IsUsWest2
+    Properties:
+      Tags:
+        - { Key: Name, Value: prod-igw }
+        - { Key: Environment, Value: Production }
+
+  ProdVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      InternetGatewayId: !Ref ProdInternetGateway
+
+  ProdPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      Tags:
+        - { Key: Name, Value: prod-public-rt }
+        - { Key: Environment, Value: Production }
+
+  ProdPublicRoute:
+    Type: AWS::EC2::Route
+    Condition: IsUsWest2
+    DependsOn: ProdVPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref ProdPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ProdInternetGateway
+
+  ProdPrivateRouteTableAZ1:
+    Type: AWS::EC2::RouteTable
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      Tags:
+        - { Key: Name, Value: prod-private-rt-az1 }
+        - { Key: Environment, Value: Production }
+
+  ProdPrivateRouteTableAZ2:
+    Type: AWS::EC2::RouteTable
+    Condition: IsUsWest2
+    Properties:
+      VpcId: !Ref ProdVPC
+      Tags:
+        - { Key: Name, Value: prod-private-rt-az2 }
+        - { Key: Environment, Value: Production }
+
+  PublicSubnetRouteAssocAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsUsWest2
+    Properties:
+      SubnetId: !Ref ProdSubnetPublicAZ1
+      RouteTableId: !Ref ProdPublicRouteTable
+
+  PublicSubnetRouteAssocAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsUsWest2
+    Properties:
+      SubnetId: !Ref ProdSubnetPublicAZ2
+      RouteTableId: !Ref ProdPublicRouteTable
+
+  PrivateSubnetRouteAssocAZ1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsUsWest2
+    Properties:
+      SubnetId: !Ref ProdSubnetPrivateAZ1
+      RouteTableId: !Ref ProdPrivateRouteTableAZ1
+
+  PrivateSubnetRouteAssocAZ2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: IsUsWest2
+    Properties:
+      SubnetId: !Ref ProdSubnetPrivateAZ2
+      RouteTableId: !Ref ProdPrivateRouteTableAZ2
+
+  #####################################
+  # S3 (default encryption) for logs
+  #####################################
+  ProdLogsBucket:
+    Type: AWS::S3::Bucket
+    Condition: IsUsWest2
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: prod-trail-retention-90d
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: Name, Value: prod-logs-bucket }
+        - { Key: Environment, Value: Production }
+
+  ProdLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsUsWest2
+    Properties:
+      Bucket: !Ref ProdLogsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowCloudTrailBucketACLCheck
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: s3:GetBucketAcl
+            Resource: !Sub arn:${AWS::Partition}:s3:::${ProdLogsBucket}
+          - Sid: AllowCloudTrailPutObject
+            Effect: Allow
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: s3:PutObject
+            Resource: !Sub arn:${AWS::Partition}:s3:::${ProdLogsBucket}/AWSLogs/${AWS::AccountId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  ############################
+  # KMS CMK for logs encryption
+  ############################
+  ProdLogsKey:
+    Type: AWS::KMS::Key
+    Condition: IsUsWest2
+    Properties:
+      Description: "prod- CMK for logs"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowAccountAdmin
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AllowCWLogsUse
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: "*"
+          - Sid: AllowCloudTrailServiceToEncryptIfUsed
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: "*"
+      Tags:
+        - { Key: Name, Value: prod-logs-key }
+        - { Key: Environment, Value: Production }
+
+  ProdLogsKeyAlias:
+    Type: AWS::KMS::Alias
+    Condition: IsUsWest2
+    Properties:
+      AliasName: !Sub alias/prod-logs-key-${AWS::AccountId}-${AWS::Region}
+      TargetKeyId: !Ref ProdLogsKey
+
+  #############################################
+  # CloudWatch (log groups for metrics & flow)
+  #############################################
+  ProdTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsUsWest2
+    Properties:
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt ProdLogsKey.Arn
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  #############################
+  # VPC Flow Logs -> CloudWatch Logs
+  #############################
+  ProdFlowLogsRole:
+    Type: AWS::IAM::Role
+    Condition: IsUsWest2
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: vpc-flow-logs.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: prod-flowlogs-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags:
+        - { Key: Name, Value: prod-flowlogs-role }
+        - { Key: Environment, Value: Production }
+
+  ProdFlowLogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsUsWest2
+    Properties:
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt ProdLogsKey.Arn
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  ProdVPCFlowLogs:
+    Type: AWS::EC2::FlowLog
+    Condition: IsUsWest2
+    Properties:
+      ResourceId: !Ref ProdVPC
+      ResourceType: VPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref ProdFlowLogsLogGroup
+      DeliverLogsPermissionArn: !GetAtt ProdFlowLogsRole.Arn
+      Tags:
+        - { Key: Name, Value: prod-vpc-flowlogs }
+        - { Key: Environment, Value: Production }
+
+  #####################################################
+  # CloudWatch Metric Filters & Alarms (root/MFA logins)
+  #####################################################
+  ProdSecurityAlertsTopic:
+    Type: AWS::SNS::Topic
+    Condition: IsUsWest2
+    Properties:
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  RootUsageMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Condition: IsUsWest2
+    Properties:
+      LogGroupName: !Ref ProdTrailLogGroup
+      FilterPattern: |-
+        { ($.userIdentity.type = "Root") && ($.userIdentity.invokedBy NOT EXISTS) && ($.eventType != "AwsServiceEvent") }
+      MetricTransformations:
+        - MetricNamespace: prod-security
+          MetricName: RootUsageCount
+          MetricValue: "1"
+
+  RootUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsUsWest2
+    Properties:
+      AlarmDescription: "Alert on any root account usage"
+      Namespace: prod-security
+      MetricName: RootUsageCount
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref ProdSecurityAlertsTopic ]
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  ConsoleLoginFailureFilter:
+    Type: AWS::Logs::MetricFilter
+    Condition: IsUsWest2
+    Properties:
+      LogGroupName: !Ref ProdTrailLogGroup
+      FilterPattern: |-
+        { ($.eventName = "ConsoleLogin") && ($.errorMessage = "Failed authentication") }
+      MetricTransformations:
+        - MetricNamespace: prod-security
+          MetricName: ConsoleLoginFailed
+          MetricValue: "1"
+
+  ConsoleLoginFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsUsWest2
+    Properties:
+      AlarmDescription: "Alert on failed console logins"
+      Namespace: prod-security
+      MetricName: ConsoleLoginFailed
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref ProdSecurityAlertsTopic ]
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  ConsoleLoginNoMFAFilter:
+    Type: AWS::Logs::MetricFilter
+    Condition: IsUsWest2
+    Properties:
+      LogGroupName: !Ref ProdTrailLogGroup
+      FilterPattern: |-
+        { ($.eventName = "ConsoleLogin") && ($.additionalEventData.MFAUsed != "Yes") && ($.responseElements.ConsoleLogin = "Success") }
+      MetricTransformations:
+        - MetricNamespace: prod-security
+          MetricName: ConsoleLoginNoMFA
+          MetricValue: "1"
+
+  ConsoleLoginNoMFAAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsUsWest2
+    Properties:
+      AlarmDescription: "Alert on successful console login without MFA"
+      Namespace: prod-security
+      MetricName: ConsoleLoginNoMFA
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [ !Ref ProdSecurityAlertsTopic ]
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  #################################################
+  # IAM: least-privilege + mandatory MFA for users
+  #################################################
+  ProdMFAGroup:
+    Type: AWS::IAM::Group
+    Condition: IsUsWest2
+
+  DenyUnlessMFA:
+    Type: AWS::IAM::Policy
+    Condition: IsUsWest2
+    Properties:
+      PolicyName: prod-deny-unless-mfa
+      Groups: [ !Ref ProdMFAGroup ]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyAllIfNoMFA
+            Effect: Deny
+            NotAction:
+              - iam:CreateVirtualMFADevice
+              - iam:EnableMFADevice
+              - iam:GetUser
+              - iam:ListMFADevices
+              - iam:ListVirtualMFADevices
+              - iam:ResyncMFADevice
+              - iam:ChangePassword
+              - sts:GetSessionToken
+            Resource: "*"
+            Condition:
+              Bool:
+                aws:MultiFactorAuthPresent: "false"
+
+  ProdReadOnlyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: IsUsWest2
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ec2:DescribeInstances
+              - ec2:DescribeTags
+              - ec2:DescribeVolumes
+            Resource: "*"
+
+  ProdUser:
+    Type: AWS::IAM::User
+    Condition: IsUsWest2
+    Properties:
+      Groups: [ !Ref ProdMFAGroup ]
+      ManagedPolicyArns: [ !Ref ProdReadOnlyPolicy ]
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  #############################
+  # AWS WAFv2 (REGIONAL WebACL)
+  #############################
+  ProdWebACL:
+    Type: AWS::WAFv2::WebACL
+    Condition: IsUsWest2
+    Properties:
+      Name: prod-webacl
+      Scope: REGIONAL
+      DefaultAction: { Allow: {} }
+      Rules:
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction: { None: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: prodWebACLCommon
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: prodWebACL
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  #########################################
+  # RDS PostgreSQL (encrypted, private SG)
+  #########################################
+  ProdRDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: IsUsWest2
+    Properties:
+      GroupDescription: "prod- RDS ingress restricted to specific IP"
+      VpcId: !Ref ProdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 203.0.113.10/32
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - { Key: Name, Value: prod-rds-sg }
+        - { Key: Environment, Value: Production }
+
+  ProdDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: IsUsWest2
+    Properties:
+      DBSubnetGroupDescription: "prod- RDS private subnets"
+      SubnetIds:
+        - !Ref ProdSubnetPrivateAZ1
+        - !Ref ProdSubnetPrivateAZ2
+      Tags:
+        - { Key: Environment, Value: Production }
+
+  ProdRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: IsUsWest2
+    Properties:
+      Engine: postgres
+      DBInstanceClass: db.t3.medium
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      PubliclyAccessible: false
+      MultiAZ: false
+      VPCSecurityGroups: [ !Ref ProdRDSSecurityGroup ]
+      DBSubnetGroupName: !Ref ProdDBSubnetGroup
+      MasterUsername: prodadmin
+      ManageMasterUserPassword: true
+      BackupRetentionPeriod: 7
+      Tags:
+        - { Key: Environment, Value: Production }
+
+Outputs:
+  VPCId:
+    Condition: IsUsWest2
+    Description: prod- VPC ID
+    Value: !Ref ProdVPC
+  PrivateSubnetIds:
+    Condition: IsUsWest2
+    Description: prod- private subnet IDs
+    Value: !Join [ ",", [ !Ref ProdSubnetPrivateAZ1, !Ref ProdSubnetPrivateAZ2 ] ]
+  LogsBucketName:
+    Condition: IsUsWest2
+    Description: prod- S3 bucket name (SSE enabled)
+    Value: !Ref ProdLogsBucket
+  FlowLogsLogGroup:
+    Condition: IsUsWest2
+    Description: prod- VPC Flow Logs log group
+    Value: !Ref ProdFlowLogsLogGroup
+  WebACLArn:
+    Condition: IsUsWest2
+    Description: prod- WAFv2 Web ACL ARN
+    Value: !GetAtt ProdWebACL.Arn
+  RDSId:
+    Condition: IsUsWest2
+    Description: prod- RDS instance resource ID
+    Value: !Ref ProdRDSInstance
+
+
+
+
+```

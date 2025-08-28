@@ -1,0 +1,45 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291757",
+  "team": "1",
+  "startedAt": "2025-08-20T12:37:46.425Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Resource Scaling",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling Group",
+    "RDS",
+    "KMS",
+    "SSM Parameter Store",
+    "IAM",
+    "CloudWatch",
+    "EBS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Elastic IP",
+    "EFS",
+    "EventBridge"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "alexstan89",
+  "dockerS3Location": ""
+}

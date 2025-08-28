@@ -27,7 +27,7 @@ variable "aws_region" {
   description = "AWS region where resources will be deployed. Used by provider configuration."
   type        = string
   default     = "us-west-2"
-  
+
   validation {
     condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.aws_region))
     error_message = "AWS region must be in valid format (e.g., us-west-2, eu-central-1)."
@@ -37,8 +37,8 @@ variable "aws_region" {
 variable "vpc_id" {
   description = "VPC ID where the security group will be created. Leave empty to create a new VPC."
   type        = string
-  default     = ""  # Empty means create new VPC
-  
+  default     = "" # Empty means create new VPC
+
   validation {
     condition     = var.vpc_id == "" || can(regex("^vpc-[a-z0-9]{8,17}$", var.vpc_id))
     error_message = "VPC ID must be empty (to create new VPC) or a valid AWS VPC identifier (vpc-xxxxxxxx)."
@@ -49,7 +49,7 @@ variable "vpc_cidr" {
   description = "CIDR block for the VPC (only used when creating a new VPC)."
   type        = string
   default     = "10.0.0.0/16"
-  
+
   validation {
     condition     = can(cidrhost(var.vpc_cidr, 0))
     error_message = "VPC CIDR must be a valid CIDR notation (e.g., 10.0.0.0/16)."
@@ -59,8 +59,8 @@ variable "vpc_cidr" {
 variable "allowed_ipv4_cidrs" {
   description = "List of IPv4 CIDR blocks allowed for HTTP/HTTPS inbound traffic. Use specific networks, avoid 0.0.0.0/0 in production."
   type        = list(string)
-  default     = ["0.0.0.0/0"]  # Default for testing - override in production
-  
+  default     = ["0.0.0.0/0"] # Default for testing - override in production
+
   validation {
     condition = length(var.allowed_ipv4_cidrs) > 0 && alltrue([
       for cidr in var.allowed_ipv4_cidrs : can(cidrhost(cidr, 0))
@@ -73,7 +73,7 @@ variable "allowed_ipv6_cidrs" {
   description = "List of IPv6 CIDR blocks allowed for HTTP/HTTPS inbound traffic. Use specific networks for security."
   type        = list(string)
   default     = []
-  
+
   validation {
     condition = alltrue([
       for cidr in var.allowed_ipv6_cidrs : can(cidrhost(cidr, 0))
@@ -92,7 +92,7 @@ variable "security_group_name_prefix" {
   description = "Prefix for the security group name. A random suffix will be added to ensure uniqueness."
   type        = string
   default     = "app-http-https-sg"
-  
+
   validation {
     condition     = length(var.security_group_name_prefix) > 0 && length(var.security_group_name_prefix) <= 240
     error_message = "Security group name prefix must be between 1 and 240 characters to allow for suffix."
@@ -103,7 +103,7 @@ variable "security_group_description" {
   description = "Description for the security group explaining its purpose and allowed traffic."
   type        = string
   default     = "Security group allowing only HTTP/HTTPS inbound traffic from specified CIDRs"
-  
+
   validation {
     condition     = length(var.security_group_description) > 0 && length(var.security_group_description) <= 255
     error_message = "Security group description must be between 1 and 255 characters."
@@ -136,13 +136,13 @@ resource "random_id" "suffix" {
 locals {
   # Determine whether to create VPC (when vpc_id is empty)
   should_create_vpc = var.vpc_id == ""
-  
+
   # Determine which VPC to use
   vpc_id = local.should_create_vpc ? aws_vpc.main[0].id : var.vpc_id
-  
+
   # Dynamic security group name with random suffix
   security_group_name = "${var.security_group_name_prefix}-${random_id.suffix.hex}"
-  
+
   # Validation: fail if both IPv4 and IPv6 CIDR lists are empty
   has_cidrs = length(var.allowed_ipv4_cidrs) > 0 || length(var.allowed_ipv6_cidrs) > 0
 }
@@ -154,14 +154,14 @@ locals {
 # Create VPC when vpc_id is not provided
 resource "aws_vpc" "main" {
   count = local.should_create_vpc ? 1 : 0
-  
+
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(var.tags, {
-    Name = "vpc-${random_id.suffix.hex}"
-    Purpose = "Created for security group testing"
+    Name      = "vpc-${random_id.suffix.hex}"
+    Purpose   = "Created for security group testing"
     CreatedBy = "terraform-${random_id.suffix.hex}"
   })
 }
@@ -169,11 +169,11 @@ resource "aws_vpc" "main" {
 # Internet Gateway for the VPC
 resource "aws_internet_gateway" "main" {
   count = local.should_create_vpc ? 1 : 0
-  
+
   vpc_id = aws_vpc.main[0].id
-  
+
   tags = merge(var.tags, {
-    Name = "igw-${random_id.suffix.hex}"
+    Name    = "igw-${random_id.suffix.hex}"
     Purpose = "Internet access for VPC"
   })
 }
@@ -181,16 +181,16 @@ resource "aws_internet_gateway" "main" {
 # Default route table with internet access
 resource "aws_route_table" "main" {
   count = local.should_create_vpc ? 1 : 0
-  
+
   vpc_id = aws_vpc.main[0].id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main[0].id
   }
-  
+
   tags = merge(var.tags, {
-    Name = "rt-main-${random_id.suffix.hex}"
+    Name    = "rt-main-${random_id.suffix.hex}"
     Purpose = "Main route table with internet access"
   })
 }
@@ -198,12 +198,12 @@ resource "aws_route_table" "main" {
 # Public subnet (optional, for completeness)
 resource "aws_subnet" "public" {
   count = local.should_create_vpc ? 1 : 0
-  
+
   vpc_id                  = aws_vpc.main[0].id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
-  
+
   tags = merge(var.tags, {
     Name = "subnet-public-${random_id.suffix.hex}"
     Type = "Public"
@@ -213,7 +213,7 @@ resource "aws_subnet" "public" {
 # Associate route table with subnet
 resource "aws_route_table_association" "public" {
   count = local.should_create_vpc ? 1 : 0
-  
+
   subnet_id      = aws_subnet.public[0].id
   route_table_id = aws_route_table.main[0].id
 }
@@ -240,7 +240,7 @@ data "aws_vpc" "selected" {
 # Custom validation to ensure at least one CIDR list is provided
 resource "null_resource" "validate_cidrs" {
   count = local.has_cidrs ? 0 : 1
-  
+
   lifecycle {
     precondition {
       condition     = local.has_cidrs
@@ -257,8 +257,8 @@ resource "aws_security_group" "app_sg" {
   name        = local.security_group_name
   description = var.security_group_description
   vpc_id      = local.vpc_id
-  tags        = merge(var.tags, { 
-    Name = local.security_group_name
+  tags = merge(var.tags, {
+    Name      = local.security_group_name
     CreatedBy = "terraform-${random_id.suffix.hex}"
   })
 

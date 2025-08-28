@@ -54,12 +54,12 @@ locals {
     Project     = "tap-stack"
     ManagedBy   = "terraform"
   }
-  primary_azs            = ["${var.primary_region}a", "${var.primary_region}b"]
-  secondary_azs          = ["${var.secondary_region}a", "${var.secondary_region}c"]
-  primary_public_subnets = ["10.0.1.0/24", "10.0.2.0/24"]
-  primary_private_subnets= ["10.0.10.0/24", "10.0.11.0/24"]
-  secondary_public_subnets = ["10.1.1.0/24", "10.1.2.0/24"]
-  secondary_private_subnets= ["10.1.10.0/24", "10.1.11.0/24"]
+  primary_azs               = ["${var.primary_region}a", "${var.primary_region}b"]
+  secondary_azs             = ["${var.secondary_region}a", "${var.secondary_region}c"]
+  primary_public_subnets    = ["10.0.1.0/24", "10.0.2.0/24"]
+  primary_private_subnets   = ["10.0.10.0/24", "10.0.11.0/24"]
+  secondary_public_subnets  = ["10.1.1.0/24", "10.1.2.0/24"]
+  secondary_private_subnets = ["10.1.10.0/24", "10.1.11.0/24"]
 }
 
 # = DATA SOURCES =
@@ -107,11 +107,11 @@ resource "aws_internet_gateway" "primary" {
   })
 }
 resource "aws_subnet" "primary_public" {
-  provider          = aws.us_east_2
-  count             = 2
-  vpc_id            = aws_vpc.primary.id
-  cidr_block        = local.primary_public_subnets[count.index]
-  availability_zone = local.primary_azs[count.index]
+  provider                = aws.us_east_2
+  count                   = 2
+  vpc_id                  = aws_vpc.primary.id
+  cidr_block              = local.primary_public_subnets[count.index]
+  availability_zone       = local.primary_azs[count.index]
   map_public_ip_on_launch = true
   tags = merge(local.common_tags, {
     Name = "${var.environment}-primary-public-${count.index + 1}"
@@ -131,8 +131,8 @@ resource "aws_subnet" "primary_private" {
 }
 resource "aws_eip" "primary_nat" {
   provider = aws.us_east_2
-  count  = 2
-  domain = "vpc"
+  count    = 2
+  domain   = "vpc"
   tags = merge(local.common_tags, {
     Name = "${var.environment}-primary-nat-eip-${count.index + 1}"
   })
@@ -171,16 +171,16 @@ resource "aws_route_table" "primary_private" {
   })
 }
 resource "aws_route_table_association" "primary_public" {
-  provider        = aws.us_east_2
-  count           = 2
-  subnet_id       = aws_subnet.primary_public[count.index].id
-  route_table_id  = aws_route_table.primary_public.id
+  provider       = aws.us_east_2
+  count          = 2
+  subnet_id      = aws_subnet.primary_public[count.index].id
+  route_table_id = aws_route_table.primary_public.id
 }
 resource "aws_route_table_association" "primary_private" {
-  provider        = aws.us_east_2
-  count           = 2
-  subnet_id       = aws_subnet.primary_private[count.index].id
-  route_table_id  = aws_route_table.primary_private[count.index].id
+  provider       = aws.us_east_2
+  count          = 2
+  subnet_id      = aws_subnet.primary_private[count.index].id
+  route_table_id = aws_route_table.primary_private[count.index].id
 }
 
 # = SECONDARY REGION RESOURCES =
@@ -202,11 +202,11 @@ resource "aws_internet_gateway" "secondary" {
   })
 }
 resource "aws_subnet" "secondary_public" {
-  provider          = aws.us_west_1
-  count             = 2
-  vpc_id            = aws_vpc.secondary.id
-  cidr_block        = local.secondary_public_subnets[count.index]
-  availability_zone = local.secondary_azs[count.index]
+  provider                = aws.us_west_1
+  count                   = 2
+  vpc_id                  = aws_vpc.secondary.id
+  cidr_block              = local.secondary_public_subnets[count.index]
+  availability_zone       = local.secondary_azs[count.index]
   map_public_ip_on_launch = true
   tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-public-${count.index + 1}"
@@ -280,18 +280,18 @@ resource "aws_route_table_association" "secondary_private" {
 
 # = VPC PEERING =
 resource "aws_vpc_peering_connection" "primary_to_secondary" {
-  provider        = aws.us_east_2
-  vpc_id          = aws_vpc.primary.id
-  peer_vpc_id     = aws_vpc.secondary.id
-  peer_region     = var.secondary_region
-  auto_accept     = false
+  provider    = aws.us_east_2
+  vpc_id      = aws_vpc.primary.id
+  peer_vpc_id = aws_vpc.secondary.id
+  peer_region = var.secondary_region
+  auto_accept = false
   tags = merge(local.common_tags, {
     Name = "${var.environment}-vpc-peering"
   })
 }
 resource "aws_vpc_peering_connection_accepter" "secondary" {
-  provider                   = aws.us_west_1
-  vpc_peering_connection_id  = aws_vpc_peering_connection.primary_to_secondary.id
+  provider                  = aws.us_west_1
+  vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
   auto_accept               = true
   tags = merge(local.common_tags, {
     Name = "${var.environment}-vpc-peering-accepter"
@@ -423,8 +423,8 @@ resource "aws_iam_policy" "ec2_cloudwatch_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = [
+      Effect = "Allow"
+      Action = [
         "cloudwatch:PutMetricData",
         "ec2:DescribeVolumes",
         "ec2:DescribeTags",
@@ -490,7 +490,7 @@ resource "aws_s3_bucket" "primary" {
 resource "aws_s3_bucket" "secondary" {
   provider = aws.us_west_1
   bucket   = "${var.environment}-tap-stack-secondary-${random_string.bucket_suffix.result}"
-  tags     = merge(local.common_tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.environment}-secondary-bucket"
   })
 }
@@ -529,16 +529,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
   }
 }
 resource "aws_s3_bucket_public_access_block" "primary" {
-  provider = aws.us_east_2
-  bucket   = aws_s3_bucket.primary.id
+  provider                = aws.us_east_2
+  bucket                  = aws_s3_bucket.primary.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
 resource "aws_s3_bucket_public_access_block" "secondary" {
-  provider = aws.us_west_1
-  bucket   = aws_s3_bucket.secondary.id
+  provider                = aws.us_west_1
+  bucket                  = aws_s3_bucket.secondary.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -563,8 +563,8 @@ resource "aws_iam_policy" "s3_replication" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "s3:GetObjectVersionForReplication",
           "s3:GetObjectVersionAcl",
           "s3:GetObjectVersionTagging"
@@ -577,8 +577,8 @@ resource "aws_iam_policy" "s3_replication" {
         Resource = aws_s3_bucket.primary.arn
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "s3:ReplicateObject",
           "s3:ReplicateDelete",
           "s3:ReplicateTags"
@@ -586,8 +586,8 @@ resource "aws_iam_policy" "s3_replication" {
         Resource = "${aws_s3_bucket.secondary.arn}/*"
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]
@@ -612,8 +612,8 @@ resource "aws_s3_bucket_replication_configuration" "primary" {
     id     = "ReplicateToSecondary"
     status = "Enabled"
     destination {
-      bucket         = aws_s3_bucket.secondary.arn
-      storage_class  = "STANDARD"
+      bucket        = aws_s3_bucket.secondary.arn
+      storage_class = "STANDARD"
       encryption_configuration {
         replica_kms_key_id = aws_kms_key.secondary.arn
       }
@@ -785,22 +785,22 @@ resource "aws_route53_zone" "secondary" {
 
 # = ROUTE 53 FAILOVER DNS CONFIGURATION =
 resource "aws_route53_health_check" "primary_ec2" {
-  type                            = "HTTP"
-  resource_path                   = "/"
-  ip_address                      = aws_eip.primary_ec2.public_ip
-  port                            = 80
-  request_interval                = 30
-  failure_threshold               = 3
+  type              = "HTTP"
+  resource_path     = "/"
+  ip_address        = aws_eip.primary_ec2.public_ip
+  port              = 80
+  request_interval  = 30
+  failure_threshold = 3
   tags = merge(local.common_tags, {
     Name = "${var.environment}-primary-health-check"
   })
 }
 
 resource "aws_route53_record" "primary_failover" {
-  zone_id         = aws_route53_zone.primary.zone_id
-  name            = "${var.subdomain}.${var.domain_name}"
-  type            = "A"
-  set_identifier  = "primary"
+  zone_id        = aws_route53_zone.primary.zone_id
+  name           = "${var.subdomain}.${var.domain_name}"
+  type           = "A"
+  set_identifier = "primary"
   failover_routing_policy {
     type = "PRIMARY"
   }
@@ -810,15 +810,15 @@ resource "aws_route53_record" "primary_failover" {
 }
 
 resource "aws_route53_record" "secondary_failover" {
-  zone_id         = aws_route53_zone.primary.zone_id
-  name            = "${var.subdomain}.${var.domain_name}"
-  type            = "A"
-  set_identifier  = "secondary"
+  zone_id        = aws_route53_zone.primary.zone_id
+  name           = "${var.subdomain}.${var.domain_name}"
+  type           = "A"
+  set_identifier = "secondary"
   failover_routing_policy {
     type = "SECONDARY"
   }
-  records         = [aws_eip.secondary_ec2.public_ip]
-  ttl             = 60
+  records = [aws_eip.secondary_ec2.public_ip]
+  ttl     = 60
 }
 
 # = OUTPUTS =

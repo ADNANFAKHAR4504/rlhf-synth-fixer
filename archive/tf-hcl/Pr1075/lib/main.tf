@@ -72,7 +72,7 @@ resource "aws_subnet" "private" {
 
 # Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = {
@@ -208,14 +208,14 @@ resource "aws_rds_cluster" "main" {
   master_password         = var.db_password != null ? var.db_password : random_password.db_password.result
   backup_retention_period = 7
   preferred_backup_window = "07:00-09:00"
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  
+
   skip_final_snapshot = true
   deletion_protection = false
   storage_encrypted   = true
-  kms_key_id         = aws_kms_key.rds.arn
+  kms_key_id          = aws_kms_key.rds.arn
 
   serverlessv2_scaling_configuration {
     max_capacity = 1
@@ -313,12 +313,12 @@ resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
 
 # Lambda Function 1 - Health Check
 resource "aws_lambda_function" "health_check" {
-  filename         = "health_check.zip"
-  function_name    = "${var.project_name}-health-check-${random_id.suffix.hex}"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
-  runtime         = "python3.9"
-  timeout         = 30
+  filename      = "health_check.zip"
+  function_name = "${var.project_name}-health-check-${random_id.suffix.hex}"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.9"
+  timeout       = 30
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -345,12 +345,12 @@ resource "aws_lambda_function" "health_check" {
 
 # Lambda Function 2 - Data Processor
 resource "aws_lambda_function" "data_processor" {
-  filename         = "data_processor.zip"
-  function_name    = "${var.project_name}-data-processor-${random_id.suffix.hex}"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
-  runtime         = "python3.9"
-  timeout         = 30
+  filename      = "data_processor.zip"
+  function_name = "${var.project_name}-data-processor-${random_id.suffix.hex}"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "index.handler"
+  runtime       = "python3.9"
+  timeout       = 30
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -380,7 +380,7 @@ data "archive_file" "health_check_zip" {
   type        = "zip"
   output_path = "health_check.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import json
 import os
 
@@ -402,7 +402,7 @@ data "archive_file" "data_processor_zip" {
   type        = "zip"
   output_path = "data_processor.zip"
   source {
-    content = <<EOF
+    content  = <<EOF
 import json
 import os
 
@@ -476,8 +476,8 @@ resource "aws_api_gateway_integration" "health_integration" {
   http_method = aws_api_gateway_method.health_get.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.health_check.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.health_check.invoke_arn
 }
 
 # API Gateway Resource - Process
@@ -502,8 +502,8 @@ resource "aws_api_gateway_integration" "process_integration" {
   http_method = aws_api_gateway_method.process_post.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.data_processor.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.data_processor.invoke_arn
 }
 
 # API Gateway Deployment

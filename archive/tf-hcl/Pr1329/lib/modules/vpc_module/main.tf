@@ -56,7 +56,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = length(var.public_subnet_cidrs)
 
-  domain = "vpc"
+  domain     = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(var.tags, {
@@ -184,7 +184,7 @@ resource "aws_iam_role_policy" "flow_log" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Effect = "Allow"
+        Effect   = "Allow"
         Resource = "*"
       }
     ]

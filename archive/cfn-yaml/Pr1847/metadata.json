@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291541",
+  "team": "5",
+  "startedAt": "2025-08-21T06:51:07.108Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Access Control"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "CloudFormation",
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Subnets",
+    "Elastic IP"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "waqara-turing",
+  "dockerS3Location": ""
+}

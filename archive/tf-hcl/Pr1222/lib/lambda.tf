@@ -2,11 +2,11 @@
 resource "aws_lambda_function" "example" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "${local.project_prefix}-example-lambda"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.9"
-  timeout         = 30
+  runtime          = "python3.9"
+  timeout          = 30
 
   vpc_config {
     subnet_ids         = [aws_subnet.public["dev-${var.availability_zones[0]}"].id]
@@ -25,7 +25,7 @@ resource "aws_lambda_function" "example" {
 
 # Lambda function code
 resource "local_file" "lambda_code" {
-  content = <<-EOT
+  content  = <<-EOT
 def handler(event, context):
     return {
         'statusCode': 200,

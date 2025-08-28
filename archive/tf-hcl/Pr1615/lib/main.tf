@@ -57,8 +57,8 @@ variable "db_username" {
 }
 
 resource "random_password" "db" {
-  length  = 20
-  special = true
+  length           = 20
+  special          = true
   override_special = "!#$%&*()-_=+[]{}?"
 }
 
@@ -1244,7 +1244,7 @@ resource "aws_acm_certificate" "main" {
 locals {
   # Only create validation records if certificate exists
   cert_validation_options = var.create_ssl_certificate && var.domain_name != "" ? aws_acm_certificate.main[0].domain_validation_options : []
-  
+
   validation_records = var.create_ssl_certificate && var.domain_name != "" ? {
     for dvo in local.cert_validation_options :
     dvo.domain_name => {
@@ -1273,7 +1273,7 @@ resource "aws_acm_certificate_validation" "main" {
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 
   timeouts {
-    create = "15m"  # Extended timeout for CI/CD environments
+    create = "15m" # Extended timeout for CI/CD environments
   }
 
   depends_on = [
