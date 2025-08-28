@@ -205,6 +205,16 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
 
+  ExistingDBInstanceIdentifier:
+    Type: String
+    Description: 'If provided, use this existing RDS DB instance and do not create a new one.'
+    Default: ''
+
+  ExistingRDSEndpointAddress:
+    Type: String
+    Description: 'Endpoint address of the existing RDS instance (used when not creating a new one).'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -249,6 +259,7 @@ Conditions:
       !Equals [!Ref CreateAWSConfigResources, 'true'],
       !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
     ]
+  CreateDBInstance: !Equals [!Ref ExistingDBInstanceIdentifier, '']
 
 Resources:
   # VPC and Networking Resources
@@ -1134,6 +1145,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateDBInstance
     Properties:
       DBInstanceIdentifier: !Sub '${Environment}-database'
       DBInstanceClass: db.t3.micro
@@ -1362,7 +1374,12 @@ Outputs:
 
   RDSEndpoint:
     Description: 'RDS endpoint address'
-    Value: !GetAtt ProdRDSInstance.Endpoint.Address
+    Value:
+      !If [
+        CreateDBInstance,
+        !GetAtt ProdRDSInstance.Endpoint.Address,
+        !Ref ExistingRDSEndpointAddress,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-RDS-Endpoint'
 
