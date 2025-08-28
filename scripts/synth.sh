@@ -31,6 +31,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       echo "❌ .gen not found; generating..."
       npx --yes cdktf get
     fi
+
     # --- FIX: Check for the new path OR the old path for backward compatibility ---
     if [ ! -d ".gen/aws" ] && [ ! -d ".gen/providers/aws" ]; then
       echo "❌ Neither .gen/aws nor .gen/providers/aws directory found after cdktf get."
@@ -53,3 +54,12 @@ else
 fi
 
 echo "Synth completed successfully"
+
+
+
+
+
+
+
+
+
