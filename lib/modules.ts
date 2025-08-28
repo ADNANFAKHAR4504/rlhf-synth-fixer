@@ -648,7 +648,7 @@ export class RdsModule extends Construct {
     const subnetGroupName = `${project}-${environment}-${vpcShortId}-db-sg`;
 
     // Create DB subnet group
-   this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
+    this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
       name: subnetGroupName,
       subnetIds,
       description: `Database subnet group for ${project} ${environment} in VPC ${vpcId}`,
@@ -665,7 +665,7 @@ export class RdsModule extends Construct {
       prevent_destroy: false,
     });
 
-     // Create RDS instance SECOND, depending on subnet group
+    // Create RDS instance SECOND, depending on subnet group
     this.dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `${project}-${environment}-db`,
       engine,
