@@ -137,21 +137,21 @@ func TestSecurityGroups(t *testing.T) {
 	})
 
 	t.Run("has proper database ingress rules", func(t *testing.T) {
-		assert.Contains(t, contentStr, `FromPort:   pulumi.Int(5432)`)
-		assert.Contains(t, contentStr, `ToPort:     pulumi.Int(5432)`)
-		assert.Contains(t, contentStr, `Protocol:   pulumi.String("tcp")`)
-		assert.Contains(t, contentStr, `CidrBlocks: pulumi.StringArray{pulumi.String("10.0.0.0/16")}`)
+		assert.Contains(t, contentStr, `FromPort:    pulumi.Int(5432)`)
+		assert.Contains(t, contentStr, `ToPort:      pulumi.Int(5432)`)
+		assert.Contains(t, contentStr, `Protocol:    pulumi.String("tcp")`)
+		assert.Contains(t, contentStr, `CidrBlocks:  pulumi.StringArray{pulumi.String("10.0.0.0/16")}`)
 	})
 
 	t.Run("has proper application ingress rules", func(t *testing.T) {
-		assert.Contains(t, contentStr, `FromPort:   pulumi.Int(80)`)
-		assert.Contains(t, contentStr, `FromPort:   pulumi.Int(443)`)
-		assert.Contains(t, contentStr, `FromPort:   pulumi.Int(22)`)
+		assert.Contains(t, contentStr, `FromPort:    pulumi.Int(80)`)
+		assert.Contains(t, contentStr, `FromPort:    pulumi.Int(443)`)
+		assert.Contains(t, contentStr, `FromPort:    pulumi.Int(22)`)
 	})
 
 	t.Run("has proper egress rules", func(t *testing.T) {
-		assert.Contains(t, contentStr, `Protocol:   pulumi.String("-1")`)
-		assert.Contains(t, contentStr, `CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}`)
+		assert.Contains(t, contentStr, `Protocol:    pulumi.String("-1")`)
+		assert.Contains(t, contentStr, `CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")}`)
 	})
 }
 

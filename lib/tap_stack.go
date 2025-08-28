@@ -544,7 +544,7 @@ func main() {
 		dashboard, err := cloudwatch.NewDashboard(ctx, "main", &cloudwatch.DashboardArgs{
 			DashboardName: pulumi.Sprintf("%s-%s-dashboard", projectName, environment),
 			DashboardBody: pulumi.All(dbInstance.ID(), appDataBucket.Bucket, backupBucket.Bucket).ApplyT(func(args []interface{}) string {
-				dbId := args[0].(string)
+				dbId := string(args[0].(pulumi.ID))
 				appDataBucketName := args[1].(string)
 				backupBucketName := args[2].(string)
 				return fmt.Sprintf(`{
