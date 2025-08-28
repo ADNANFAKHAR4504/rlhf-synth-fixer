@@ -193,6 +193,12 @@ Parameters:
     Description: 'If provided, use this existing AWS Config delivery channel name and do not create a new one.'
     Default: ''
 
+  CreateAWSConfigResources:
+    Type: String
+    Description: 'Set to true to create AWS Config recorder and delivery channel; false to skip.'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -224,11 +230,13 @@ Conditions:
   CreateConfigRecorder:
     !And [
       !Condition EnableAWSConfigCondition,
+      !Equals [!Ref CreateAWSConfigResources, 'true'],
       !Equals [!Ref ExistingConfigRecorderName, ''],
     ]
   CreateConfigDeliveryChannel:
     !And [
       !Condition EnableAWSConfigCondition,
+      !Equals [!Ref CreateAWSConfigResources, 'true'],
       !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
     ]
 
