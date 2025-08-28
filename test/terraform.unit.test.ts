@@ -21,37 +21,23 @@ describe('tap_stack.tf static verification', () => {
   });
 
   it('declares required input variables', () => {
-    [
-      'aws_region', 'environment', 'project_name', 'allowed_ssh_cidr'
-    ].forEach(variable =>
-      expect(has(new RegExp(`variable\\s+"${variable}"`))).toBe(true)
-    );
-    // Optional: check for default values
-    expect(has(/default\s+=\s+"production"/)).toBe(true);
-    expect(has(/default\s+=\s+"tap-stack"/)).toBe(true);
+    ['aws_region', 'allowed_cidr_blocks']
+      .forEach(variable =>
+        expect(has(new RegExp(`variable\\s+"${variable}"`))).toBe(true)
+      );
   });
 
   it('defines locals for tags, prefixes, vpc cidrs, and subnets', () => {
     [
-      'common_tags', 'name_prefix', 'vpc_cidr', 
-      'public_subnet_cidrs', 'private_subnet_cidrs', 'availability_zones'
+      'common_tags', 'name_prefix', 'vpc_cidr',
+      'availability_zones', 'public_subnet_cidrs', 'private_subnet_cidrs'
     ].forEach(local =>
       expect(has(new RegExp(`${local}\\s*=`))).toBe(true)
     );
   });
 
-  it('declares essential data sources for AZs, AMIs, and caller identity', () => {
-    [
-      /data\s+"aws_ami"\s+"amazon_linux"/,
-      /data\s+"aws_caller_identity"\s+"current"/
-    ].forEach(rx => expect(has(rx)).toBe(true));
-  });
-
-  it('creates random resource for password and username', () => {
-    [
-      /resource\s+"random_password"\s+"rds_password"/,
-      /resource\s+"random_password"\s+"rds_username"/
-    ].forEach(rx => expect(has(rx)).toBe(true));
+  it('declares essential data sources for AMIs', () => {
+    expect(has(/data\s+"aws_ami"\s+"amazon_linux"/)).toBe(true);
   });
 
   it('declares VPC, subnets, IGW, NAT, and route tables', () => {
@@ -67,88 +53,78 @@ describe('tap_stack.tf static verification', () => {
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it('creates security groups for EC2 and RDS', () => {
+  it('creates security groups for ALB and EC2', () => {
     [
-      /resource\s+"aws_security_group"\s+"ec2"/,
-      /resource\s+"aws_security_group"\s+"rds"/
+      /resource\s+"aws_security_group"\s+"alb"/,
+      /resource\s+"aws_security_group"\s+"ec2"/
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it('manages S3 buckets, versioning, encryption, and public access block', () => {
+  it('defines IAM stack for EC2', () => {
     [
-      'main', 'cloudtrail'
-    ].forEach(bucket => {
-      [
-        'aws_s3_bucket',
-        'aws_s3_bucket_public_access_block',
-      ].forEach(typ =>
-        expect(has(new RegExp(`resource\\s+"${typ}"\\s+"${bucket}`))).toBe(true)
-      );
-    });
-    expect(has(/aws_s3_bucket_server_side_encryption_configuration/)).toBe(true);
-    expect(has(/aws_s3_bucket_versioning/)).toBe(true);
-  });
-
-  it('defines IAM stack for EC2 and RDS', () => {
-    [
-      /resource\s+"aws_iam_role"\s+"rds_access"/,
-      /resource\s+"aws_iam_role_policy"\s+"rds_access"/,
-      /resource\s+"aws_iam_role"\s+"user_least_privilege"/,
-      /resource\s+"aws_iam_role_policy"\s+"user_least_privilege"/,
-      /resource\s+"aws_iam_instance_profile"\s+"ec2"/
+      /resource\s+"aws_iam_role"\s+"ec2_role"/,
+      /resource\s+"aws_iam_role_policy"\s+"ec2_policy"/,
+      /resource\s+"aws_iam_role_policy_attachment"\s+"ssm_managed_instance"/,
+      /resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it('declares EC2 instances and RDS', () => {
+  it('defines load balancer and listener', () => {
     [
-      /resource\s+"aws_instance"\s+"main"/,
-      /resource\s+"aws_db_instance"\s+"main"/
+      /resource\s+"aws_lb"\s+"main"/,
+      /resource\s+"aws_lb_target_group"\s+"main"/,
+      /resource\s+"aws_lb_listener"\s+"main"/
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it('declares subnet group for RDS and SSM parameters', () => {
+  it('defines launch template and autoscaling group', () => {
     [
-      /resource\s+"aws_db_subnet_group"\s+"main"/,
-      /resource\s+"aws_ssm_parameter"\s+"rds_username"/,
-      /resource\s+"aws_ssm_parameter"\s+"rds_password"/
+      /resource\s+"aws_launch_template"\s+"main"/,
+      /resource\s+"aws_autoscaling_group"\s+"main"/
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it('defines outputs for all major resources, excludes sensitive values', () => {
+  it('creates scaling policies and alarms', () => {
     [
+      /resource\s+"aws_autoscaling_policy"\s+"scale_up"/,
+      /resource\s+"aws_autoscaling_policy"\s+"scale_down"/,
+      /resource\s+"aws_cloudwatch_metric_alarm"\s+"high_cpu"/,
+      /resource\s+"aws_cloudwatch_metric_alarm"\s+"low_cpu"/
+    ].forEach(rx => expect(has(rx)).toBe(true));
+  });
+
+  it('creates a standalone EC2 instance', () => {
+    expect(has(/resource\s+"aws_instance"\s+"standalone"/)).toBe(true);
+  });
+
+  it('defines outputs for major resources', () => {
+    [
+      "load_balancer_dns",
+      "load_balancer_zone_id",
       "vpc_id",
       "vpc_cidr_block",
       "public_subnet_ids",
       "private_subnet_ids",
-      "ec2_instance_id",
-      "ec2_public_ip",
-      "ec2_private_ip",
-      "ami_id",
-      "rds_endpoint",
-      "rds_instance_id",
-      "rds_db_name",
-      "s3_bucket_name",
-      "s3_bucket_arn",
-      "rds_access_role_arn",
-      "user_role_arn",
-      "ec2_instance_profile_name",
+      "alb_security_group_id",
       "ec2_security_group_id",
-      "rds_security_group_id",
-      "cloudtrail_s3_bucket_name",
-      "cloudtrail_arn",
-      "rds_username_parameter_name",
-      "rds_password_parameter_name",
+      "ec2_iam_role_arn",
+      "ec2_instance_profile_name",
+      "amazon_linux_ami_id",
+      "amazon_linux_ami_name",
+      "autoscaling_group_name",
+      "launch_template_id",
+      "target_group_arn",
+      "standalone_instance_id",
+      "standalone_instance_public_ip",
+      "standalone_instance_public_dns",
+      "nat_gateway_ids",
+      "elastic_ip_addresses",
       "internet_gateway_id",
-      "nat_gateway_id",
-      "nat_gateway_eip"
+      "public_route_table_id",
+      "private_route_table_ids"
     ].forEach(output =>
       expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true)
     );
-    // Exclude sensitive data: like 'db password actual value'
-    expect(
-      /output\s+".*password.*"\s*{[^}]*value\s*=\s*(random_password\.rds_password\.result|var\.db_password)[^}]*}/
-        .test(tf)
-    ).toBe(false);
   });
 
 });
