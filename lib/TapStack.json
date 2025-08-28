@@ -1200,7 +1200,726 @@
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": "/aws/vpc/flowlogs/${ProjectName}-${Environment}",
-        "RetentionInDays": "ComplianceRetentionDays"
+        "RetentionInDays": "ComplianceRetentionDays",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-vpc-flowlogs-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "VPC-Flow-Logging"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "VPCFlowLogsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "${ProjectName}-vpc-flowlogs-role-${Environment}",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "vpc-flow-logs.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy"
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-vpc-flowlogs-role-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "VPC-Flow-Logs-Delivery"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "VPCFlowLogs": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "ResourceType": "VPC",
+        "ResourceId": "SecureVPC",
+        "TrafficType": "ALL",
+        "LogDestinationType": "cloud-watch-logs",
+        "LogGroupName": "VPCFlowLogsGroup",
+        "DeliverLogsPermissionArn": "VPCFlowLogsRole.Arn",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-vpc-flowlogs-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "VPC-Flow-Logging"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": [
+          0,
+          ""
+        ],
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-public-subnet-1-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Tier",
+            "Value": "Public"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Public-Network-Access"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": [
+          1,
+          ""
+        ],
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-public-subnet-2-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Tier",
+            "Value": "Public"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Public-Network-Access"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "CidrBlock": "10.0.10.0/24",
+        "AvailabilityZone": [
+          0,
+          ""
+        ],
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-private-subnet-1-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Tier",
+            "Value": "Private"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Application-Tier-Network"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "CidrBlock": "10.0.11.0/24",
+        "AvailabilityZone": [
+          1,
+          ""
+        ],
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-private-subnet-2-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Tier",
+            "Value": "Private"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Application-Tier-Network"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "DataSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "CidrBlock": "10.0.20.0/24",
+        "AvailabilityZone": [
+          0,
+          ""
+        ],
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-data-subnet-1-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Tier",
+            "Value": "Data"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Database-Network"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "DataSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "CidrBlock": "10.0.21.0/24",
+        "AvailabilityZone": [
+          1,
+          ""
+        ],
+        "MapPublicIpOnLaunch": false,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-data-subnet-2-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Tier",
+            "Value": "Data"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Database-Network"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-public-routes-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Public-Network-Routing"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": "PublicRouteTable",
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": "InternetGateway"
+      },
+      "DependsOn": "VPCGatewayAttachment"
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": "SecureVPC",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-private-routes-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Private-Network-Routing"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "NATGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": "NATGatewayEIP.AllocationId",
+        "SubnetId": "PublicSubnet1",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-nat-gateway-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "NAT-Gateway"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "NATGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-nat-eip-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "NAT-Gateway-IP"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": "PrivateRouteTable",
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": "NATGateway"
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "PublicSubnet1",
+        "RouteTableId": "PublicRouteTable"
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "PublicSubnet2",
+        "RouteTableId": "PublicRouteTable"
+      }
+    },
+    "PrivateSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "PrivateSubnet1",
+        "RouteTableId": "PrivateRouteTable"
+      }
+    },
+    "PrivateSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "PrivateSubnet2",
+        "RouteTableId": "PrivateRouteTable"
+      }
+    },
+    "DataSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "DataSubnet1",
+        "RouteTableId": "PrivateRouteTable"
+      }
+    },
+    "DataSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": "DataSubnet2",
+        "RouteTableId": "PrivateRouteTable"
+      }
+    },
+    "CloudTrailTrail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Properties": {
+        "TrailName": "${ProjectName}-cloudtrail-${Environment}",
+        "S3BucketName": "CloudTrailS3Bucket",
+        "S3KeyPrefix": "cloudtrail-logs/",
+        "IncludeGlobalServiceEvents": true,
+        "IsMultiRegionTrail": true,
+        "EnableLogFileValidation": true,
+        "IsLogging": true,
+        "KMSKeyId": "CloudTrailEncryptionKey",
+        "CloudWatchLogsLogGroupArn": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*",
+        "CloudWatchLogsRoleArn": "CloudTrailRole.Arn",
+        "EventSelectors": [
+          {
+            "ReadWriteType": "All",
+            "IncludeManagementEvents": true,
+            "DataResources": [
+              {
+                "Type": "AWS::S3::Object",
+                "Values": [
+                  "arn:aws:s3:::${SecureS3Bucket}/*"
+                ]
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-cloudtrail-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "API-Activity-Logging"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "ConfigRecorder": {
+      "Type": "AWS::Config::ConfigurationRecorder",
+      "Properties": {
+        "Name": "${ProjectName}-config-recorder-${Environment}",
+        "RoleARN": "ConfigRole.Arn",
+        "RecordingGroup": {
+          "AllSupported": true,
+          "IncludeGlobalResourceTypes": true
+        }
+      }
+    },
+    "ConfigDeliveryChannel": {
+      "Type": "AWS::Config::DeliveryChannel",
+      "Properties": {
+        "Name": "${ProjectName}-config-delivery-${Environment}",
+        "S3BucketName": "ConfigS3Bucket",
+        "S3KeyPrefix": "config-logs/",
+        "SnsTopicARN": "ConfigSNSTopic"
+      },
+      "DependsOn": "ConfigRecorder"
+    },
+    "ConfigSNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "${ProjectName}-config-notifications-${Environment}",
+        "DisplayName": "${ProjectName} Config Notifications ${Environment}",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-config-notifications-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "Config-Notifications"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "SecurityDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": "${ProjectName}-security-dashboard-${Environment}",
+        "DashboardBody": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/VPC\", \"FlowLogs\" ]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"VPC Flow Logs\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12,\n      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/S3\", \"NumberOfObjects\" ]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Object Count\"\n      }\n    }\n  ]\n}\n"
+      }
+    },
+    "VPCFlowLogsAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "${ProjectName}-vpc-flowlogs-alarm-${Environment}",
+        "AlarmDescription": "Alert when VPC Flow Logs are not being delivered",
+        "MetricName": "FlowLogs",
+        "Namespace": "AWS/VPC",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 0,
+        "ComparisonOperator": "LessThanThreshold",
+        "TreatMissingData": "breaching",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "${ProjectName}-vpc-flowlogs-alarm-${Environment}"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Environment"
+          },
+          {
+            "Key": "Project",
+            "Value": "ProjectName"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "VPC-Flow-Logs-Monitoring"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "ID of the Secure VPC",
+      "Value": "SecureVPC",
+      "Export": {
+        "Name": "${ProjectName}-vpc-id-${Environment}"
+      }
+    },
+    "PublicSubnetIds": {
+      "Description": "IDs of the public subnets",
+      "Value": [
+        ",",
+        [
+          "PublicSubnet1",
+          "PublicSubnet2"
+        ]
+      ],
+      "Export": {
+        "Name": "${ProjectName}-public-subnet-ids-${Environment}"
+      }
+    },
+    "PrivateSubnetIds": {
+      "Description": "IDs of the private subnets",
+      "Value": [
+        ",",
+        [
+          "PrivateSubnet1",
+          "PrivateSubnet2"
+        ]
+      ],
+      "Export": {
+        "Name": "${ProjectName}-private-subnet-ids-${Environment}"
+      }
+    },
+    "DataSubnetIds": {
+      "Description": "IDs of the data tier subnets",
+      "Value": [
+        ",",
+        [
+          "DataSubnet1",
+          "DataSubnet2"
+        ]
+      ],
+      "Export": {
+        "Name": "${ProjectName}-data-subnet-ids-${Environment}"
+      }
+    },
+    "S3EncryptionKeyArn": {
+      "Description": "ARN of the S3 encryption KMS key",
+      "Value": "S3EncryptionKey.Arn",
+      "Export": {
+        "Name": "${ProjectName}-s3-encryption-key-arn-${Environment}"
+      }
+    },
+    "CloudTrailTrailName": {
+      "Description": "Name of the CloudTrail trail",
+      "Value": "CloudTrailTrail",
+      "Export": {
+        "Name": "${ProjectName}-cloudtrail-name-${Environment}"
+      }
+    },
+    "ConfigRecorderName": {
+      "Description": "Name of the AWS Config recorder",
+      "Value": "ConfigRecorder",
+      "Export": {
+        "Name": "${ProjectName}-config-recorder-name-${Environment}"
+      }
+    },
+    "SecurityDashboardName": {
+      "Description": "Name of the CloudWatch security dashboard",
+      "Value": "SecurityDashboard",
+      "Export": {
+        "Name": "${ProjectName}-security-dashboard-name-${Environment}"
       }
     }
   }

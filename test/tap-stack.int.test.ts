@@ -304,6 +304,14 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
         // Check for specific log groups
         const logGroupNames = response.logGroups!.map((lg: any) => lg.logGroupName);
         console.log('📝 Log Groups:', logGroupNames.slice(0, 5)); // Show first 5
+
+        // Check for VPC Flow Logs log group specifically
+        const vpcFlowLogsGroup = response.logGroups!.find((lg: any) =>
+          lg.logGroupName.includes('flowlogs')
+        );
+        if (vpcFlowLogsGroup) {
+          console.log('✅ VPC Flow Logs log group found:', vpcFlowLogsGroup.logGroupName);
+        }
       } catch (error) {
         console.log('❌ CloudWatch logs access failed:', error);
         throw error;
@@ -377,10 +385,19 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
         console.log('   - S3 buckets with encryption and lifecycle policies');
         console.log('   - IAM roles and instance profiles');
         console.log('   - CloudWatch log groups');
+        console.log('   - VPC Flow Logs for network monitoring');
+        console.log('   - CloudWatch dashboard and alarms');
+        console.log('   - CloudTrail API activity logging');
+        console.log('   - AWS Config compliance monitoring');
+        console.log('   - Multi-tier network architecture (public/private/data)');
         console.log('\n🔒 Security Features:');
         console.log('   - Customer-managed KMS keys with rotation enabled');
         console.log('   - S3 bucket encryption and public access blocking');
         console.log('   - Tiered security groups with least privilege access');
+        console.log('   - VPC Flow Logs for comprehensive network visibility');
+        console.log('   - CloudTrail API activity logging');
+        console.log('   - AWS Config compliance monitoring');
+        console.log('   - Multi-tier network architecture (public/private/data)');
         console.log('   - Comprehensive resource tagging');
       }
       expect(true).toBe(true);

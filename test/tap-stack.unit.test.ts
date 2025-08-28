@@ -263,6 +263,120 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       const logGroup = template.Resources.VPCFlowLogsGroup;
       expect(logGroup.Properties.RetentionInDays).toBeDefined();
     });
+
+    test('VPCFlowLogsGroup should have proper tags', () => {
+      const logGroup = template.Resources.VPCFlowLogsGroup;
+      expect(logGroup.Properties.Tags).toBeDefined();
+      const tagKeys = logGroup.Properties.Tags.map((tag: any) => tag.Key);
+      expect(tagKeys).toContain('Environment');
+      expect(tagKeys).toContain('Project');
+      expect(tagKeys).toContain('Purpose');
+    });
+  });
+
+  describe('VPC Flow Logs', () => {
+    test('should have VPCFlowLogsRole', () => {
+      expect(template.Resources.VPCFlowLogsRole).toBeDefined();
+      expect(template.Resources.VPCFlowLogsRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('VPCFlowLogsRole should have correct assume role policy', () => {
+      const role = template.Resources.VPCFlowLogsRole;
+      expect(role.Properties.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('vpc-flow-logs.amazonaws.com');
+    });
+
+    test('VPCFlowLogsRole should have VPCFlowLogsDeliveryRolePolicy', () => {
+      const role = template.Resources.VPCFlowLogsRole;
+      expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy');
+    });
+
+    test('should have VPCFlowLogs', () => {
+      expect(template.Resources.VPCFlowLogs).toBeDefined();
+      expect(template.Resources.VPCFlowLogs.Type).toBe('AWS::EC2::FlowLog');
+    });
+
+    test('VPCFlowLogs should have correct properties', () => {
+      const flowLog = template.Resources.VPCFlowLogs;
+      expect(flowLog.Properties.ResourceType).toBe('VPC');
+      expect(flowLog.Properties.TrafficType).toBe('ALL');
+      expect(flowLog.Properties.LogDestinationType).toBe('cloud-watch-logs');
+      expect(flowLog.Properties.LogGroupName).toBeDefined();
+      expect(flowLog.Properties.DeliverLogsPermissionArn).toBeDefined();
+    });
+
+    test('VPCFlowLogs should reference SecureVPC', () => {
+      const flowLog = template.Resources.VPCFlowLogs;
+      // Check if ResourceId references SecureVPC (could be string or Ref object)
+      const resourceId = flowLog.Properties.ResourceId;
+      if (typeof resourceId === 'string') {
+        expect(resourceId).toBe('SecureVPC');
+      } else if (resourceId.Ref) {
+        expect(resourceId.Ref).toBe('SecureVPC');
+      } else {
+        fail('ResourceId should be either a string or Ref object');
+      }
+    });
+  });
+
+  describe('Subnets and Routing', () => {
+    test('should have public subnets', () => {
+      expect(template.Resources.PublicSubnet1).toBeDefined();
+      expect(template.Resources.PublicSubnet2).toBeDefined();
+      expect(template.Resources.PublicSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PublicSubnet2.Type).toBe('AWS::EC2::Subnet');
+    });
+
+    test('should have private subnets', () => {
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PrivateSubnet2.Type).toBe('AWS::EC2::Subnet');
+    });
+
+    test('should have data tier subnets', () => {
+      expect(template.Resources.DataSubnet1).toBeDefined();
+      expect(template.Resources.DataSubnet2).toBeDefined();
+      expect(template.Resources.DataSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.DataSubnet2.Type).toBe('AWS::EC2::Subnet');
+    });
+
+    test('should have route tables', () => {
+      expect(template.Resources.PublicRouteTable).toBeDefined();
+      expect(template.Resources.PrivateRouteTable).toBeDefined();
+      expect(template.Resources.PublicRouteTable.Type).toBe('AWS::EC2::RouteTable');
+      expect(template.Resources.PrivateRouteTable.Type).toBe('AWS::EC2::RouteTable');
+    });
+
+    test('should have NAT Gateway', () => {
+      expect(template.Resources.NATGateway).toBeDefined();
+      expect(template.Resources.NATGateway.Type).toBe('AWS::EC2::NatGateway');
+      expect(template.Resources.NATGatewayEIP).toBeDefined();
+      expect(template.Resources.NATGatewayEIP.Type).toBe('AWS::EC2::EIP');
+    });
+  });
+
+  describe('CloudTrail and Monitoring', () => {
+    test('should have CloudTrail trail', () => {
+      expect(template.Resources.CloudTrailTrail).toBeDefined();
+      expect(template.Resources.CloudTrailTrail.Type).toBe('AWS::CloudTrail::Trail');
+    });
+
+    test('should have AWS Config resources', () => {
+      expect(template.Resources.ConfigRecorder).toBeDefined();
+      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
+      expect(template.Resources.ConfigRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+      expect(template.Resources.ConfigDeliveryChannel.Type).toBe('AWS::Config::DeliveryChannel');
+    });
+
+    test('should have CloudWatch dashboard', () => {
+      expect(template.Resources.SecurityDashboard).toBeDefined();
+      expect(template.Resources.SecurityDashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+    });
+
+    test('should have CloudWatch alarms', () => {
+      expect(template.Resources.VPCFlowLogsAlarm).toBeDefined();
+      expect(template.Resources.VPCFlowLogsAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+    });
   });
 
   describe('Template Validation', () => {
@@ -280,7 +394,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(20); // Should have many resources
+      expect(resourceCount).toBeGreaterThan(40); // Should have many resources including subnets, CloudTrail, Config, etc.
     });
 
     test('should have expected number of parameters', () => {
