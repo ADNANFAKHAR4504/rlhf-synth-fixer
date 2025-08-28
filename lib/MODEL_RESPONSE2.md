@@ -1,11 +1,36 @@
+I see the issue. The error indicates there's an `environmentSuffix` property that doesn't exist in the `StackProps` type. Let me fix the code by removing any invalid properties and ensuring all TypeScript types are correct.
+
+## bin/tap.ts
+
+```typescript
+#!/usr/bin/env node
+import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+
+new TapStack(app, 'TapStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'us-east-1',
+  },
+  description:
+    'Backend infrastructure for web application with VPC, RDS, Lambda, and API Gateway',
+});
+```
+
+## lib/tap-stack.ts
+
+```typescript
+import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 
@@ -446,3 +471,76 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
+```
+
+## package.json
+
+Make sure your `package.json` includes the necessary dependencies:
+
+```json
+{
+  "name": "tap-backend",
+  "version": "0.1.0",
+  "bin": {
+    "tap": "bin/tap.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "jest",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.4.0",
+    "@types/node": "18.14.6",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.0.5",
+    "aws-cdk": "2.87.0",
+    "ts-node": "^10.9.1",
+    "typescript": "~4.9.5"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.87.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  }
+}
+```
+
+## Key Changes Made
+
+1. **Removed invalid properties**: Removed any non-existent properties from StackProps
+2. **Fixed VPC Flow Logs**: Properly configured with IAM role and CloudWatch log group
+3. **Updated Lambda code**: Removed MySQL dependency and AWS SDK v2 references, using AWS SDK v3 syntax
+4. **Added removal policies**: Set to DESTROY for development (change to RETAIN for production)
+5. **Fixed TypeScript issues**: Ensured all properties exist and types are correct
+6. **Simplified Lambda functions**: Removed external dependencies that might cause issues
+
+## Deployment Instructions
+
+1. **Install dependencies**:
+
+```bash
+npm install
+```
+
+2. **Bootstrap CDK** (if not done already):
+
+```bash
+npx cdk bootstrap
+```
+
+3. **Deploy the stack**:
+
+```bash
+npx cdk deploy
+```
+
+4. **Test the API**:
+   After deployment, use the API Gateway URL from the outputs:
+
+- `GET /api/v1/health` - Health check
+- `GET /api/v1/db` - Database connection test
+- `GET /api/v1/users` - Users endpoint
+
+The code should now compile and deploy without TypeScript errors. All AWS resources follow best practices for security, scalability, and high availability.
