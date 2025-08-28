@@ -339,9 +339,9 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         )
     );
 
-    // Generate bucket names without timestamps
-    const albBucketName = `${sanitizedName}-alb-logs`;
-    const cloudFrontBucketName = `${sanitizedName}-cf-logs`;
+    // Generate bucket names based on purpose with environment suffix
+    const albBucketName = `${sanitizedName}-alb-access-logs`;
+    const cloudFrontBucketName = `${sanitizedName}-cloudfront-logs`;
 
     // S3 Bucket for ALB Access Logs
     const albLogsBucket = new aws.s3.Bucket(
@@ -360,7 +360,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     // ALB access logs use SSE-S3 by default (KMS not supported)
 
     // S3 Bucket Versioning for ALB logs
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `${sanitizedName}-alb-logs-versioning`,
       {
         bucket: albLogsBucket.id,
@@ -372,7 +372,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     );
 
     // S3 Bucket Lifecycle for ALB logs with Glacier transition
-    new aws.s3.BucketLifecycleConfigurationV2(
+    new aws.s3.BucketLifecycleConfiguration(
       `${sanitizedName}-alb-logs-lifecycle`,
       {
         bucket: albLogsBucket.id,
@@ -832,7 +832,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const cloudFrontLogsBucketAcl = new aws.s3.BucketAclV2(
+    const cloudFrontLogsBucketAcl = new aws.s3.BucketAcl(
       `${sanitizedName}-cloudfront-logs-acl`,
       {
         bucket: cloudFrontLogsBucket.id,
@@ -873,7 +873,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     );
 
     // S3 Bucket Versioning for CloudFront logs
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `${sanitizedName}-cloudfront-logs-versioning`,
       {
         bucket: cloudFrontLogsBucket.id,
@@ -913,7 +913,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     );
 
     // S3 Bucket Lifecycle for CloudFront logs with Glacier transition
-    new aws.s3.BucketLifecycleConfigurationV2(
+    new aws.s3.BucketLifecycleConfiguration(
       `${sanitizedName}-cloudfront-logs-lifecycle`,
       {
         bucket: cloudFrontLogsBucket.id,
@@ -989,7 +989,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     const webAcl = new aws.wafv2.WebAcl(
       `${sanitizedName}-main-web-acl`,
       {
-        name: `${sanitizedName}-web-acl`,
+        name: `${sanitizedName}-cloudfront-web-acl`,
         description: 'Web ACL for DDoS protection',
         scope: 'CLOUDFRONT',
         defaultAction: {
