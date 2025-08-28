@@ -828,7 +828,7 @@ func TestVPCEndpointsExist(t *testing.T) {
 	if len(s3Endpoints.VpcEndpoints) > 0 {
 		endpoint := s3Endpoints.VpcEndpoints[0]
 		t.Logf("✅ S3 VPC Endpoint exists: %s", *endpoint.VpcEndpointId)
-		assert.Equal(t, "Available", string(endpoint.State), "S3 VPC Endpoint should be in Available state")
+		assert.True(t, strings.EqualFold("Available", string(endpoint.State)), "S3 VPC Endpoint should be in Available state")
 	}
 
 	// Test Secrets Manager VPC Endpoint
@@ -851,7 +851,7 @@ func TestVPCEndpointsExist(t *testing.T) {
 	if len(secretsEndpoints.VpcEndpoints) > 0 {
 		endpoint := secretsEndpoints.VpcEndpoints[0]
 		t.Logf("✅ Secrets Manager VPC Endpoint exists: %s", *endpoint.VpcEndpointId)
-		assert.Equal(t, "Available", string(endpoint.State), "Secrets Manager VPC Endpoint should be in Available state")
+		assert.True(t, strings.EqualFold("Available", string(endpoint.State)), "Secrets Manager VPC Endpoint should be in Available state")
 	}
 }
 
