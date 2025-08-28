@@ -644,17 +644,25 @@ export class RdsModule extends Construct {
       kmsKey,
     } = props;
 
+    const vpcShortId = vpcId.substring(4, 12); // Extract part of VPC ID
+    const subnetGroupName = `${project}-${environment}-${vpcShortId}-db-sg`;
+
     // Create DB subnet group
     this.subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
-      name: `${project}-${environment}-db-subnet-group-${Date.now()}`, // Add timestamp
+      name: subnetGroupName,
       subnetIds,
-      description: `Database subnet group for ${project} ${environment}`,
+      description: `Database subnet group for ${project} ${environment} in VPC ${vpcId}`,
       tags: {
         Name: `${project}-${environment}-db-subnet-group`,
         Project: project,
         Environment: environment,
         VpcId: vpcId,
       },
+    });
+
+    this.subnetGroup.addOverride('lifecycle', {
+      create_before_destroy: true,
+      prevent_destroy: false,
     });
 
     // Create RDS instance
@@ -683,5 +691,13 @@ export class RdsModule extends Construct {
       },
       dependsOn: [this.subnetGroup],
     });
+
+    this.dbInstance.addOverride('lifecycle', {
+      prevent_destroy: false,
+    });
+  
+    this.subnetGroup.addOverride('depends_on', [
+      `aws_db_instance.${this.dbInstance.friendlyUniqueId}`,
+    ]);
   }
 }
