@@ -50,17 +50,17 @@ output "ec2_role_arn" {
 
 output "ec2_instance_profile_name" {
   description = "Name of the EC2 instance profile"
-  value       = module.iam.ec2_profile.name
+  value       = module.iam.ec2_instance_profile_name
 }
 
 output "lambda_role_arn" {
   description = "ARN of the Lambda IAM role"
-  value       = module.iam.lambda_role.arn
+  value       = module.iam.lambda_role_arn
 }
 
 output "ec2_role_name" {
   description = "Name of the EC2 IAM role"
-  value       = module.iam.ec2_role.name
+  value       = module.iam.ec2_role_name
 }
 
 output "secrets_arns" {
