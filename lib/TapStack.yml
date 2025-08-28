@@ -179,6 +179,11 @@ Parameters:
     Description: 'If provided, use this existing ALB DNS name and do not create a new ALB.'
     Default: ''
 
+  ExistingCertificateArn:
+    Type: String
+    Description: 'If provided, use this existing ACM certificate ARN and do not create a new certificate.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -204,6 +209,7 @@ Conditions:
   CreatePrivateDefaultRoute:
     !Or [!Condition CreateNatGateway, !Condition UseExistingNatGateway]
   CreateALB: !Equals [!Ref ExistingALBDNSName, '']
+  CreateCertificate: !Equals [!Ref ExistingCertificateArn, '']
 
 Resources:
   # VPC and Networking Resources
@@ -1140,6 +1146,7 @@ Resources:
   # ACM Certificate
   ProdSSLCertificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: CreateCertificate
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
@@ -1237,7 +1244,12 @@ Resources:
           MaxTTL: 86400
         PriceClass: PriceClass_All
         ViewerCertificate:
-          AcmCertificateArn: !Ref ProdSSLCertificate
+          AcmCertificateArn:
+            !If [
+              CreateCertificate,
+              !Ref ProdSSLCertificate,
+              !Ref ExistingCertificateArn,
+            ]
           SslSupportMethod: 'sni-only'
         WebACLId: !Ref ProdWAFWebACL
       Tags:
