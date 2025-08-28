@@ -163,6 +163,11 @@ Parameters:
     Description: 'If provided, use this existing Lambda ARN for GuardDuty detector check and do not create a new function.'
     Default: ''
 
+  ExistingNatGatewayId:
+    Type: String
+    Description: 'If provided, use this existing NAT Gateway ID and do not create a new one.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -181,6 +186,7 @@ Conditions:
   CreateKMSKeyAlias: !Equals [!Ref ExistingKMSKeyAlias, '']
   CreateGuardDutyCheckFunction:
     !Equals [!Ref ExistingGuardDutyCheckFunctionArn, '']
+  CreateNatGateway: !Equals [!Ref ExistingNatGatewayId, '']
 
 Resources:
   # VPC and Networking Resources
@@ -280,6 +286,7 @@ Resources:
   ProdEIPForNAT:
     Type: AWS::EC2::EIP
     DependsOn: ProdVPCGatewayAttachment
+    Condition: CreateNatGateway
     Properties:
       Domain: vpc
       Tags:
@@ -290,8 +297,7 @@ Resources:
 
   ProdNATGateway:
     Type: AWS::EC2::NatGateway
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
+    Condition: CreateNatGateway
     Properties:
       AllocationId: !GetAtt ProdEIPForNAT.AllocationId
       SubnetId: !Ref ProdPublicSubnet1
@@ -334,7 +340,8 @@ Resources:
     Properties:
       RouteTableId: !Ref ProdPrivateRouteTable
       DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref ProdNATGateway
+      NatGatewayId:
+        !If [CreateNatGateway, !Ref ProdNATGateway, !Ref ExistingNatGatewayId]
 
   ProdPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -1030,7 +1037,6 @@ Resources:
     UpdateReplacePolicy: Retain
     Condition: CreateDBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${Environment}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS instances'
       SubnetIds:
         - !Ref ProdPrivateSubnet1
