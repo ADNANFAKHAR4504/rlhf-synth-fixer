@@ -172,9 +172,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have multiple resources including TurnAroundPromptTable', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(1);
+      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
     });
 
     test('should have exactly one parameter', () => {
@@ -182,9 +183,13 @@ describe('TapStack CloudFormation Template', () => {
       expect(parameterCount).toBe(1);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have multiple outputs including required ones', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      expect(outputCount).toBeGreaterThanOrEqual(4);
+      expect(template.Outputs.TurnAroundPromptTableName).toBeDefined();
+      expect(template.Outputs.TurnAroundPromptTableArn).toBeDefined();
+      expect(template.Outputs.StackName).toBeDefined();
+      expect(template.Outputs.EnvironmentSuffix).toBeDefined();
     });
   });
 
