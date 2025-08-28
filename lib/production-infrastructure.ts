@@ -477,7 +477,7 @@ export class ProductionInfrastructure {
     this.s3Bucket = new aws.s3.Bucket(
       `${this.environment}-s3-bucket`,
       {
-        bucket: `${this.environment}-app-data-${Date.now()}`,
+        bucket: `${this.environment}-app-data-bucket`,
         tags: {
           Name: `${this.environment}-s3-bucket`,
           environment: this.environment,
@@ -599,7 +599,7 @@ export class ProductionInfrastructure {
     this.rdsInstance = new aws.rds.Instance(
       `${this.environment}-rds-mysql`,
       {
-        identifier: `${this.environment}-mysql-db-${Date.now()}`,
+        identifier: `${this.environment}-mysql-db`,
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
         storageType: 'gp2',
@@ -748,6 +748,14 @@ export class ProductionInfrastructure {
                   Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
                   Resource: kmsKeyArn,
                 },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'secretsmanager:GetSecretValue',
+                    'secretsmanager:DescribeSecret',
+                  ],
+                  Resource: '*',
+                },
               ],
             })
           ),
@@ -789,7 +797,7 @@ export class ProductionInfrastructure {
         name: `${this.environment}-launch-template`,
         imageId: ami.then(ami => ami.id),
         instanceType: 't3.micro',
-        keyName: 'my-key-pair',
+
         vpcSecurityGroupIds: [this.ec2SecurityGroup.id],
         iamInstanceProfile: {
           name: this.ec2InstanceProfile.name,
@@ -881,7 +889,7 @@ export class ProductionInfrastructure {
       `${this.environment}-asg`,
       {
         name: `${this.environment}-asg`,
-        vpcZoneIdentifiers: this.privateSubnets.map(subnet => subnet.id),
+        vpcZoneIdentifiers: this.publicSubnets.map(subnet => subnet.id),
         targetGroupArns: [this.targetGroup.arn],
         healthCheckType: 'ELB',
         healthCheckGracePeriod: 300,
