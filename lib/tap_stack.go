@@ -1111,8 +1111,8 @@ func buildApplicationComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc 
 			Id:      launchTemplate.ID(),
 			Version: pulumi.String("$Latest"),
 		},
-		AvailabilityZones: pulumi.StringArray{pulumi.String("us-east-1a"), pulumi.String("us-east-1b"), pulumi.String("us-east-1c")},
-		TargetGroupArns:   pulumi.StringArray{targetGroup.Arn},
+		VpcZoneIdentifiers: pulumi.StringArray{vpc.PrivateSubnets[0].ID(), vpc.PrivateSubnets[1].ID(), vpc.PrivateSubnets[2].ID()},
+		TargetGroupArns:    pulumi.StringArray{targetGroup.Arn},
 		Tags: autoscaling.GroupTagArray{
 			&autoscaling.GroupTagArgs{
 				Key:               pulumi.String("Name"),
@@ -1182,7 +1182,7 @@ func buildDatabaseComponent(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VP
 		AllocatedStorage:         pulumi.Int(20),
 		StorageType:              pulumi.String("gp2"),
 		Engine:                   pulumi.String("postgres"),
-		EngineVersion:            pulumi.String("15.5"),
+		EngineVersion:            pulumi.String("17.5"),
 		InstanceClass:            pulumi.String("db.t3.micro"),
 		DbName:                   pulumi.String("appdb"),
 		Username:                 pulumi.String("postgres"),
