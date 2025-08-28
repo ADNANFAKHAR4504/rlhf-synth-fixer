@@ -552,7 +552,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
+              SSEAlgorithm: !If [HasKmsKey, 'aws:kms', 'AES256']
               KMSMasterKeyID:
                 !If [
                   HasKmsKey,
@@ -583,7 +583,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
+              SSEAlgorithm: !If [HasKmsKey, 'aws:kms', 'AES256']
               KMSMasterKeyID:
                 !If [
                   CreateKMSKey,
@@ -610,7 +610,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
+              SSEAlgorithm: !If [HasKmsKey, 'aws:kms', 'AES256']
               KMSMasterKeyID:
                 !If [
                   CreateKMSKey,
