@@ -64,17 +64,6 @@ variable "target_protocol" {
   }
 }
 
-variable "ssl_certificate_arn" {
-  description = "ARN of SSL certificate for HTTPS listener"
-  type        = string
-  default     = ""
-}
-
-variable "ssl_policy" {
-  description = "SSL policy for HTTPS listener"
-  type        = string
-  default     = "ELBSecurityPolicy-TLS-1-2-2017-01"
-}
 
 variable "enable_deletion_protection" {
   description = "Enable deletion protection for ALB"

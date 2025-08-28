@@ -45,8 +45,6 @@ module "alb_module" {
     alb_security_group_id     = module.security_module.alb_security_group_id
     target_port               = var.app_port
     target_protocol           = var.target_protocol
-    ssl_certificate_arn       = var.ssl_certificate_arn
-    ssl_policy                = var.ssl_policy
     enable_deletion_protection = local.current_config.enable_deletion_protection
     idle_timeout              = var.alb_idle_timeout
     enable_access_logs        = var.enable_alb_access_logs

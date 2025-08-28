@@ -185,18 +185,6 @@ variable "target_protocol" {
   }
 }
 
-variable "ssl_certificate_arn" {
-  description = "ARN of SSL certificate for HTTPS listener"
-  type        = string
-  default     = ""
-}
-
-variable "ssl_policy" {
-  description = "SSL policy for HTTPS listener"
-  type        = string
-  default     = "ELBSecurityPolicy-TLS-1-2-2017-01"
-}
-
 variable "alb_idle_timeout" {
   description = "Time in seconds that connections are allowed to be idle"
   type        = number

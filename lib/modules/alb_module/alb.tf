@@ -1,18 +1,5 @@
 # ALB Module - Application Load Balancer
 
-# Data source for SSL certificate (if provided)
-data "aws_acm_certificate" "ssl_cert" {
-  count  = var.ssl_certificate_arn != "" ? 1 : 0
-  arn    = var.ssl_certificate_arn
-  statuses = ["ISSUED"]
-
-  tags = merge(var.common_tags, {
-    Name = "${var.environment}-${var.project_name}-alb"
-    Type = "application-load-balancer"
-    Component = "alb"
-  })
-}
-
 # Application Load Balancer
 resource "aws_lb" "main" {
   name               = "${var.environment}-${var.project_name}-alb"
@@ -89,27 +76,11 @@ resource "aws_lb_listener" "http" {
   port              = "80"
   protocol          = "HTTP"
 
-  # If SSL certificate is provided, redirect HTTP to HTTPS
-  dynamic "default_action" {
-    for_each = var.ssl_certificate_arn != "" ? [1] : []
-    content {
-      type = "redirect"
-      redirect {
-        port        = "443"
-        protocol    = "HTTPS"
-        status_code = "HTTP_301"
-      }
-    }
-  }
-
   # If no SSL certificate, forward to target group
-  dynamic "default_action" {
-    for_each = var.ssl_certificate_arn == "" ? [1] : []
-    content {
+  default_action {
       type             = "forward"
       target_group_arn = aws_lb_target_group.web.arn
     }
-  }
 
   tags = merge(var.common_tags, {
     Name = "${var.environment}-${var.project_name}-http-listener"
