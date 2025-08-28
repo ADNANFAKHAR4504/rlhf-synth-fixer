@@ -1,4 +1,4 @@
-package lib
+package main
 
 import (
 	"fmt"
@@ -1431,4 +1431,28 @@ func buildVPCEndpoints(ctx *pulumi.Context, cfg *EnvironmentConfig, vpc *VPCComp
 	endpoints = append(endpoints, kmsEndpoint)
 
 	return endpoints, nil
+}
+
+func main() {
+	pulumi.Run(func(ctx *pulumi.Context) error {
+		// Get environment from env var or default to dev
+		environment := os.Getenv("ENVIRONMENT")
+		if environment == "" {
+			environment = "dev"
+		}
+
+		// Get configuration for the environment
+		cfg, err := GetConfig(environment)
+		if err != nil {
+			return fmt.Errorf("error getting config: %v", err)
+		}
+
+		// Build the infrastructure stack
+		_, err = BuildInfrastructureStack(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("error building infrastructure: %v", err)
+		}
+
+		return nil
+	})
 }
