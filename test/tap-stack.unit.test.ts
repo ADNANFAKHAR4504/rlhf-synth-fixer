@@ -51,27 +51,15 @@ describe('WebAppStack Unit Tests', () => {
       });
     });
 
-    test('should create HTTP listener with redirect to HTTPS', () => {
+    test('should create HTTP listener', () => {
       template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
         Port: 80,
         Protocol: 'HTTP',
         DefaultActions: [
           {
-            Type: 'redirect',
-            RedirectConfig: {
-              Protocol: 'HTTPS',
-              Port: '443',
-              StatusCode: 'HTTP_301',
-            },
+            Type: 'forward',
           },
         ],
-      });
-    });
-
-    test('should create HTTPS listener', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-        Port: 443,
-        Protocol: 'HTTPS',
       });
     });
 
@@ -115,7 +103,7 @@ describe('WebAppStack Unit Tests', () => {
   });
 
   describe('Security Groups', () => {
-    test('should create ALB security group with HTTP/HTTPS ingress', () => {
+    test('should create ALB security group with HTTP ingress', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for Application Load Balancer',
         SecurityGroupIngress: Match.arrayWith([
@@ -123,12 +111,6 @@ describe('WebAppStack Unit Tests', () => {
             IpProtocol: 'tcp',
             FromPort: 80,
             ToPort: 80,
-            CidrIp: '0.0.0.0/0',
-          }),
-          Match.objectLike({
-            IpProtocol: 'tcp',
-            FromPort: 443,
-            ToPort: 443,
             CidrIp: '0.0.0.0/0',
           }),
         ]),
@@ -216,12 +198,6 @@ describe('WebAppStack Unit Tests', () => {
 
     test('should create instance profile', () => {
       template.resourceCountIs('AWS::IAM::InstanceProfile', 1);
-    });
-  });
-
-  describe('SSL Certificate', () => {
-    test('should create ACM certificate', () => {
-      template.resourceCountIs('AWS::CertificateManager::Certificate', 1);
     });
   });
 

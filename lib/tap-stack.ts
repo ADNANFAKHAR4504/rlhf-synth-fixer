@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -94,16 +93,11 @@ export class WebAppStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    // Allow HTTP and HTTPS inbound traffic
+    // Allow HTTP inbound traffic (for demo - in production, add HTTPS)
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'Allow HTTP traffic'
-    );
-    albSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'Allow HTTPS traffic'
     );
 
     // Allow outbound to EC2 instances
@@ -186,7 +180,7 @@ export class WebAppStack extends cdk.Stack {
             <h2>Infrastructure Features:</h2>
             <ul>
                 <li>✅ Multi-AZ VPC with public/private subnets</li>
-                <li>✅ Application Load Balancer with SSL/TLS</li>
+                <li>✅ Application Load Balancer with HTTP (HTTPS ready)</li>
                 <li>✅ Auto Scaling Group for high availability</li>
                 <li>✅ NAT Gateways for secure outbound connectivity</li>
                 <li>✅ S3 bucket for ALB access logs</li>
@@ -278,28 +272,10 @@ EOF
       targetType: elbv2.TargetType.INSTANCE,
     });
 
-    // 9. Create SSL Certificate (self-signed for demo - in production, use a real domain)
-    const certificate = new certificatemanager.Certificate(this, 'WebAppCertificate', {
-      domainName: `webapp-${this.account}.${this.region}.elb.amazonaws.com`, // Placeholder domain
-      validation: certificatemanager.CertificateValidation.fromDns(),
-    });
-
-    // 10. Add HTTP Listener (redirects to HTTPS)
+    // 9. Add HTTP Listener (for demo - in production, add HTTPS with valid certificate)
     alb.addListener('HTTPListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: 'HTTPS',
-        port: '443',
-        permanent: true,
-      }),
-    });
-
-    // 11. Add HTTPS Listener
-    const httpsListener = alb.addListener('HTTPSListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [certificate],
       defaultAction: elbv2.ListenerAction.forward([targetGroup]),
     });
 
