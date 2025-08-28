@@ -164,6 +164,7 @@ Resources:
       Engine: mysql
       MasterUsername: admin
       MasterUserPassword: !Ref DBMasterUserPassword
+      AllocatedStorage: 20
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !Ref SecurityGroup
