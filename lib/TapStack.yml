@@ -707,19 +707,19 @@ Outputs:
 
   DevelopmentEnvironmentURL:
     Description: "URL of the Development environment"
-    Value: !Sub "http://${DevelopmentEnvironment.CNAME}"
+    Value: !GetAtt DevelopmentEnvironment.EndpointURL
     Export:
       Name: !Sub "${AWS::StackName}-DevelopmentEnvironmentURL"
 
   TestingEnvironmentURL:
     Description: "URL of the Testing environment"
-    Value: !Sub "http://${TestingEnvironment.CNAME}"
+    Value: !GetAtt TestingEnvironment.EndpointURL
     Export:
       Name: !Sub "${AWS::StackName}-TestingEnvironmentURL"
 
   ProductionEnvironmentURL:
     Description: "URL of the Production environment"
-    Value: !Sub "http://${ProductionEnvironment.CNAME}"
+    Value: !GetAtt ProductionEnvironment.EndpointURL
     Export:
       Name: !Sub "${AWS::StackName}-ProductionEnvironmentURL"
 
