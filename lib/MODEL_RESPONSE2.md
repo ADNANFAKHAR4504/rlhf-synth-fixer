@@ -1,13 +1,21 @@
+I'll fix those TypeScript errors for you. The issues are related to incorrect property names and import references. Here's the corrected code:
+
+## Fixed Implementation
+
+### lib/tap-stack.ts
+
+```typescript
 import * as cdk from 'aws-cdk-lib';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
+import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 
 export class TapStack extends cdk.Stack {
@@ -387,3 +395,67 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
+```
+
+### bin/tap.ts (Example of how it should look)
+
+```typescript
+#!/usr/bin/env node
+import 'source-map-support/register';
+import * as cdk from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+
+new TapStack(app, 'TapStack', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'us-west-2',
+  },
+  description: 'Secure AWS Infrastructure with CDK',
+});
+```
+
+## Key Fixes Applied:
+
+### 1. **Fixed InstanceTarget Import Error**
+
+- **Problem**: `elbv2.InstanceTarget` doesn't exist in the main ELB v2 module
+- **Solution**: Added proper import for targets: `import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets'`
+- **Usage**: Changed to `new targets.InstanceTarget(ec2Instance1)`
+
+### 2. **Removed environmentSuffix Property**
+
+- **Problem**: `environmentSuffix` is not a valid property in `StackProps`
+- **Solution**: Removed this property from the bin file and handled environment naming within the stack
+
+### 3. **Enhanced Security Groups**
+
+- Added proper egress rules for SSH security group to allow package updates
+- Added HTTP server installation to EC2 user data for load balancer health checks
+
+### 4. **Additional Improvements**
+
+- Added Apache HTTP server installation in user data
+- Created a simple index.html for health check testing
+- Added SSH security group to both EC2 instances
+- Improved security group configurations
+
+## Dependencies Required
+
+Make sure your `package.json` includes these dependencies:
+
+```json
+{
+  "dependencies": {
+    "aws-cdk-lib": "^2.100.0",
+    "constructs": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "typescript": "^4.9.0"
+  }
+}
+```
+
+The code should now compile and deploy successfully without TypeScript errors. All security requirements are maintained while fixing the compilation issues.
