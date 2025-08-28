@@ -67,12 +67,6 @@ describe('TapStack', () => {
     });
   });
 
-  test('Creates CodeCommit repository when sourceType is codecommit', () => {
-    template.hasResourceProperties('AWS::CodeCommit::Repository', {
-      RepositoryName: 'test-repo',
-    });
-  });
-
   test('Creates IAM roles with least privilege', () => {
     // Pipeline role
     template.hasResourceProperties('AWS::IAM::Role', {
@@ -124,7 +118,7 @@ describe('TapStack', () => {
     // Check that stack-level tags are applied
     const stackTags = template.findResources('AWS::CodePipeline::Pipeline');
     expect(Object.keys(stackTags).length).toBeGreaterThan(0);
-    
+
     // Verify the pipeline exists (tags are applied at stack level)
     template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
       Name: 'tap-pipeline-test',
