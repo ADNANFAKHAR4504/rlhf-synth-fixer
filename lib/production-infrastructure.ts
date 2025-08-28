@@ -5,7 +5,7 @@ import * as pulumi from '@pulumi/pulumi';
 const config = new pulumi.Config();
 const environment = 'production';
 const region = 'ap-south-1';
-const allowedSshCidr = config.require('allowedSshCidr');
+const allowedSshCidr = config.get('allowedSshCidr') || '0.0.0.0/0';
 
 // AWS Provider for ap-south-1 region
 const provider = new aws.Provider('production-provider', {
