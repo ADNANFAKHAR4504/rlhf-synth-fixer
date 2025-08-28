@@ -41,6 +41,8 @@ export class ProductionInfrastructure {
   public scaleDownPolicy!: aws.autoscaling.Policy;
   public cpuAlarmHigh!: aws.cloudwatch.MetricAlarm;
   public cpuAlarmLow!: aws.cloudwatch.MetricAlarm;
+  public rdsConnectionsAlarm!: aws.cloudwatch.MetricAlarm;
+  public rdsCpuAlarm!: aws.cloudwatch.MetricAlarm;
 
   private environment: string;
 
@@ -619,10 +621,55 @@ export class ProductionInfrastructure {
         deletionProtection: true,
         monitoringRoleArn: rdsMonitoringRole.arn,
         monitoringInterval: 60,
-        performanceInsightsEnabled: true,
-        performanceInsightsKmsKeyId: this.kmsKey.arn,
         tags: {
           Name: `${this.environment}-rds-mysql`,
+          environment: this.environment,
+        },
+      },
+      { provider }
+    );
+
+    // RDS CloudWatch Alarms
+    this.rdsConnectionsAlarm = new aws.cloudwatch.MetricAlarm(
+      `${this.environment}-rds-connections`,
+      {
+        name: `${this.environment}-rds-connections`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'DatabaseConnections',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 80,
+        alarmDescription: 'RDS database connections are high',
+        dimensions: {
+          DBInstanceIdentifier: this.rdsInstance.id,
+        },
+        tags: {
+          Name: `${this.environment}-rds-connections`,
+          environment: this.environment,
+        },
+      },
+      { provider }
+    );
+
+    this.rdsCpuAlarm = new aws.cloudwatch.MetricAlarm(
+      `${this.environment}-rds-cpu`,
+      {
+        name: `${this.environment}-rds-cpu`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 75,
+        alarmDescription: 'RDS CPU utilization is high',
+        dimensions: {
+          DBInstanceIdentifier: this.rdsInstance.id,
+        },
+        tags: {
+          Name: `${this.environment}-rds-cpu`,
           environment: this.environment,
         },
       },
