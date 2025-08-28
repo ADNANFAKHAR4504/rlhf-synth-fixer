@@ -823,7 +823,7 @@ Resources:
   # AWS Config Rules
   ProdConfigRuleMFA:
     Type: AWS::Config::ConfigRule
-    Condition: EnableAWSConfigCondition
+    Condition: CreateConfigRecorder
     Properties:
       ConfigRuleName: !Sub '${Environment}-iam-user-mfa-enabled'
       Description: 'Checks whether the AWS Identity and Access Management users have multi-factor authentication (MFA) enabled'
@@ -833,7 +833,7 @@ Resources:
 
   ProdConfigRuleEncryptedVolumes:
     Type: AWS::Config::ConfigRule
-    Condition: EnableAWSConfigCondition
+    Condition: CreateConfigRecorder
     Properties:
       ConfigRuleName: !Sub '${Environment}-encrypted-volumes'
       Description: 'Checks whether EBS volumes are encrypted'
@@ -917,7 +917,7 @@ Resources:
   # CloudWatch Events Rule for Config Compliance
   ProdConfigComplianceRule:
     Type: AWS::Events::Rule
-    Condition: EnableAWSConfigCondition
+    Condition: CreateConfigRecorder
     Properties:
       Name: !Sub '${Environment}-config-compliance-rule'
       Description: 'Trigger SNS notification for non-compliant resources'
