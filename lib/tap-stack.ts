@@ -10,9 +10,6 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -214,7 +211,7 @@ export class TapStack extends cdk.Stack {
 
     // Fixed: Use S3_MANAGED instead of AES256
     const logsBucket = new s3.Bucket(this, 'CloudTrailLogsBucket', {
-      bucketName: `cloudtraillogs-${this.account}-${this.region}-${environmentSuffix}`,
+      bucketName: `cloudtrail-log-${this.account}-${this.region}-${environmentSuffix}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
