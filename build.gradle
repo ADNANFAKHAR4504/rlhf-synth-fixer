@@ -82,6 +82,7 @@ tasks.named('run') {
               "environment": "aws://${accountId}/${region}",
               "properties": {
                 "templateFile": "TapStack.template.json"
+                "terminationProtection": true
               }
             }
           }
