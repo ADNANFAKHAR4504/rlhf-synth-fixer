@@ -183,7 +183,7 @@ export class TapStack extends TerraformStack {
       this,
       'db-password-secret',
       {
-        secretId: 'my-db-password',
+        secretId: 'three-tier-db-credentials-dev',
       }
     );
 

@@ -426,7 +426,7 @@ describe("TapStack Integration Tests", () => {
     test("Database password is stored in Secrets Manager", async () => {
       try {
         const { SecretString } = await secretsClient.send(
-          new GetSecretValueCommand({ SecretId: "my-db-password" })
+          new GetSecretValueCommand({ SecretId: "three-tier-db-credentials-dev" })
         );
         expect(SecretString).toBeDefined();
         expect(SecretString?.length).toBeGreaterThan(0);
