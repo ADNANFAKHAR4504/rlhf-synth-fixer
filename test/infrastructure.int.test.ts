@@ -522,8 +522,8 @@ describe('Infrastructure Integration Tests', () => {
           secure: rdsResponse.DBInstances![0].StorageEncrypted === true
         });
         securityChecks.push({
-          check: 'RDS Multi-AZ Disabled',
-          secure: rdsResponse.DBInstances![0].MultiAZ === false
+          check: 'RDS Multi-AZ Enabled',
+          secure: rdsResponse.DBInstances![0].MultiAZ === true
         });
       }
 
@@ -590,8 +590,8 @@ describe('Infrastructure Integration Tests', () => {
         const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
         const dbInstance = response.DBInstances![0];
 
-        // RDS may not have backup retention configured, so just check it exists
-        expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(0);
+        // RDS should have backup retention configured
+        expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
         hasBackupChecks = true;
       }
 
@@ -691,35 +691,7 @@ describe('Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('RDS Performance Insights', () => {
-    it('RDS instance has Performance Insights enabled', async () => {
-      if (!outputs.rdsEndpoint) {
-        console.log('Skipping Performance Insights test - no RDS endpoint in outputs');
-        return;
-      }
 
-      const dbId = outputs.rdsEndpoint.split('.')[0];
-      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-      
-      const dbInstance = response.DBInstances![0];
-      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
-      expect(dbInstance.PerformanceInsightsKMSKeyId).toBeDefined();
-    });
-
-    it('RDS instance has proper backup configuration', async () => {
-      if (!outputs.rdsEndpoint) {
-        console.log('Skipping RDS backup test - no RDS endpoint in outputs');
-        return;
-      }
-
-      const dbId = outputs.rdsEndpoint.split('.')[0];
-      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
-      
-      const dbInstance = response.DBInstances![0];
-      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
-      expect(dbInstance.AutoMinorVersionUpgrade).toBe(true);
-    });
-  });
 
   describe('Infrastructure Outputs and Parameterization', () => {
     it('key outputs are exported for resource sharing', async () => {

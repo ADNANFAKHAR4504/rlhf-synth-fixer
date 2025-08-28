@@ -56,6 +56,8 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-vpc`,
           Environment: environment,
+          environment: environment,
+          purpose: 'networking',
           Department: 'IT',
         },
       },
@@ -70,6 +72,8 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-igw`,
           Environment: environment,
+          environment: environment,
+          purpose: 'networking',
           Department: 'IT',
         },
       },
@@ -87,6 +91,8 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-public-subnet`,
           Environment: environment,
+          environment: environment,
+          purpose: 'networking',
           Department: 'IT',
           Type: 'Public',
         },
@@ -104,6 +110,8 @@ export class SecureCloudEnvironment {
         tags: {
           Name: `${environment}-private-subnet`,
           Environment: environment,
+          environment: environment,
+          purpose: 'networking',
           Department: 'IT',
           Type: 'Private',
         },
@@ -376,10 +384,12 @@ export class SecureCloudEnvironment {
     this.s3Bucket = new aws.s3.Bucket(
       `${environment}-s3-bucket`,
       {
-        bucket: `${environment}-secure-bucket-${Date.now()}`,
+        bucket: `${environment}-secure-bucket`,
         tags: {
           Name: `${environment}-s3-bucket`,
           Environment: environment,
+          environment: environment,
+          purpose: 'storage',
           Department: 'IT',
         },
       },
@@ -591,7 +601,9 @@ echo '{
         manageMasterUserPassword: true,
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
-        multiAz: false,
+        multiAz: true,
+        backupRetentionPeriod: 7,
+        autoMinorVersionUpgrade: true,
         skipFinalSnapshot: true,
         enabledCloudwatchLogsExports: ['error', 'slowquery'],
         tags: {

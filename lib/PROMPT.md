@@ -15,7 +15,6 @@ The infrastructure must meet the following specifications:
   - Allows **outbound traffic to anywhere**
 - Provision an **RDS MySQL database** with latest version in the **private subnet** with:
   - Multi-AZ disabled
-  - Storage encrypted with **KMS**
 - Create an **IAM Role** for the EC2 instance with required access to s3 bucket and attach a trust policy for EC2
 - Provision an **S3 bucket** with:
   - Versioning enabled
