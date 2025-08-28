@@ -403,7 +403,7 @@ func main() {
 			return err
 		}
 
-		rdsInstance, err := rds.NewInstance(ctx, "hipaa-db", &rds.InstanceArgs{
+		rdsInstance, err := rds.NewInstance(ctx, "hipaa-db-new", &rds.InstanceArgs{
 			AllocatedStorage:      pulumi.Int(20),
 			StorageType:           pulumi.String("gp2"),
 			Engine:                pulumi.String("mysql"),
