@@ -272,6 +272,17 @@ Conditions:
     ]
   CreateDBInstance: !Equals [!Ref ExistingDBInstanceIdentifier, '']
 
+  # Ensure we only create a DB instance when a subnet group will be available
+  HasExistingDBSubnetGroupName:
+    !Not [!Equals [!Ref ExistingDBSubnetGroupName, '']]
+  CanUseDBSubnetGroup:
+    !Or [
+      !Condition CreateDBSubnetGroup,
+      !Condition HasExistingDBSubnetGroupName,
+    ]
+  CreateDBInstanceEffective:
+    !And [!Condition CreateDBInstance, !Condition CanUseDBSubnetGroup]
+
 Resources:
   # VPC and Networking Resources
   ProdVPC:
@@ -1180,7 +1191,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    Condition: CreateDBInstance
+    Condition: CreateDBInstanceEffective
     Properties:
       DBInstanceIdentifier: !Join
         - '-'
