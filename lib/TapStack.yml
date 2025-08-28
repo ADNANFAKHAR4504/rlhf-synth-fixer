@@ -687,7 +687,7 @@ Resources:
       IsMultiRegionTrail: true
       IsLogging: true
       EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !Sub '${ProdCloudTrailLogGroup.Arn}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt ProdCloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt ProdCloudTrailRole.Arn
       Tags:
         - Key: Name
