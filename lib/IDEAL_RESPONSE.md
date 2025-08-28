@@ -4,14 +4,13 @@ Here's a comprehensive CloudFormation YAML template that creates a highly availa
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AcmeWeb Highly Available Web Application Infrastructure - Production Ready'
+Description: 'AcmeWeb Highly Available Web Application Infrastructure - Production Ready - v1.0'
 
 Parameters:
   Environment:
     Type: String
     Default: prod
-    AllowedValues: [dev, staging, prod]
-    Description: Environment name for resource tagging
+    Description: Environment suffix for resource tagging and naming
 
   CreateKeyPair:
     Type: String

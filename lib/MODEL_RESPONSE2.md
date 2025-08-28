@@ -468,7 +468,7 @@ Resources:
             </head>
             <body>
                 <div class="container">
-                    <h1>🚀 AcmeWeb Application Server</h1>
+                    <h1>AcmeWeb Application Server</h1>
                     <div class="info">
                         <strong>Environment:</strong> ${Environment}
                     </div>
@@ -749,7 +749,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-Region'
 ```
 
-## 🎯 **Key Improvements Made**
+## Key Improvements Made
 
 ### ✅ **1. Dynamic Availability Zone Selection**
 

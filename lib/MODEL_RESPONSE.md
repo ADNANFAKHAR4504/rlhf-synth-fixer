@@ -495,7 +495,7 @@ Outputs:
 
 ## Key Features of This Template:
 
-### 🏗️ **Infrastructure Components**
+### Infrastructure Components
 
 - **VPC**: 10.0.0.0/16 CIDR block with DNS support
 - **Subnets**: 2 public (10.0.1.0/24, 10.0.2.0/24) and 2 private (10.0.3.0/24, 10.0.4.0/24) across us-west-2a and us-west-2b
@@ -509,27 +509,27 @@ Outputs:
 - **Launch Template**: t3.micro instances with Apache web server
 - **CloudWatch Alarms**: Scale up at 70% CPU, scale down at 30% CPU
 
-### 🗄️ **Database Layer**
+### Database Layer
 
 - **RDS MySQL 8.0**: db.t3.micro in private subnets
 - **Multi-AZ**: Disabled for cost optimization (can be enabled)
 - **Security**: Only accessible from web servers
 
-### 🔒 **Security Implementation**
+### Security Implementation
 
 - **Load Balancer SG**: Allows HTTP/HTTPS from internet
 - **Web Server SG**: Allows traffic only from load balancer + SSH from VPC
 - **Database SG**: Allows MySQL traffic only from web servers
 - **Least Privilege**: Each component has minimal required access
 
-### 📊 **High Availability Features**
+### High Availability Features
 
 - **Multi-AZ Deployment**: All components across 2 availability zones
 - **Auto Scaling**: Automatic instance replacement and scaling
 - **Health Checks**: ELB health checks with 30-second intervals
 - **Redundancy**: NAT Gateways in each AZ for fault tolerance
 
-### 🏷️ **Naming & Tagging**
+### Naming & Tagging
 
 - All resources prefixed with "AcmeWeb"
 - Consistent naming convention
