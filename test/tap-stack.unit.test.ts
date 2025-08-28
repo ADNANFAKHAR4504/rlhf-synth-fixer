@@ -1,9 +1,16 @@
-import { App, TerraformStack, S3Backend, TerraformOutput } from 'cdktf';
-import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { NetworkingModule, SecurityModule, StorageModule, ComputeModule } from '../lib/modules';
+import { App, S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { Construct } from 'constructs';
+import {
+  ComputeModule,
+  NetworkingModule,
+  SecurityModule,
+  StorageModule,
+} from '../lib/modules';
 
-export interface DefaultTags { tags: Record<string, string>; }
+export interface DefaultTags {
+  tags: Record<string, string>;
+}
 export interface TapStackProps {
   environmentSuffix?: string | null | undefined;
   stateBucket?: string | null | undefined;
@@ -20,7 +27,10 @@ function normalizeDefaultTags(tags?: DefaultTags | null): DefaultTags[] {
   if (!tags) return [];
   return [tags];
 }
-function resolveRegion(overrideEnv: string | undefined, propsRegion?: string | null): string {
+function resolveRegion(
+  overrideEnv: string | undefined,
+  propsRegion?: string | null
+): string {
   const env = (overrideEnv ?? '').trim();
   if (env) return env;
   const pr = (propsRegion ?? '').trim();
@@ -69,7 +79,9 @@ export class TapStack extends TerraformStack {
       projectName,
     });
 
-    const storage = new StorageModule(this, 'tap-storage-stack', { projectName });
+    const storage = new StorageModule(this, 'tap-storage-stack', {
+      projectName,
+    });
 
     const compute = new ComputeModule(this, 'tap-compute-stack', {
       subnetId: 'tap-networking-stack-public-subnet-1-id',
@@ -83,11 +95,17 @@ export class TapStack extends TerraformStack {
       description: 'VPC ID',
     });
     new TerraformOutput(this, 'tap-public-subnet-ids', {
-      value: ['tap-networking-stack-public-subnet-1-id', 'tap-networking-stack-public-subnet-2-id'],
+      value: [
+        'tap-networking-stack-public-subnet-1-id',
+        'tap-networking-stack-public-subnet-2-id',
+      ],
       description: 'Public subnet IDs',
     });
     new TerraformOutput(this, 'tap-private-subnet-ids', {
-      value: ['tap-networking-stack-private-subnet-1-id', 'tap-networking-stack-private-subnet-2-id'],
+      value: [
+        'tap-networking-stack-private-subnet-1-id',
+        'tap-networking-stack-private-subnet-2-id',
+      ],
       description: 'Private subnet IDs',
     });
     new TerraformOutput(this, 'tap-internet-gateway-id', {
@@ -127,7 +145,10 @@ export class TapStack extends TerraformStack {
       description: 'EC2 IAM Role ARN',
     });
 
-    void networking; void security; void storage; void compute;
+    void networking;
+    void security;
+    void storage;
+    void compute;
   }
 }
 
@@ -153,7 +174,7 @@ describe('TapStack', () => {
 
     test('should create TapStack with custom environment suffix', () => {
       const stack = new TapStack(app, 'test-stack', {
-        environmentSuffix: 'prod'
+        environmentSuffix: 'prod',
       });
 
       expect(stack).toBeDefined();
@@ -161,7 +182,7 @@ describe('TapStack', () => {
 
     test('should create TapStack with null environment suffix', () => {
       const stack = new TapStack(app, 'test-stack', {
-        environmentSuffix: null
+        environmentSuffix: null,
       });
 
       expect(stack).toBeDefined();
@@ -169,7 +190,7 @@ describe('TapStack', () => {
 
     test('should create TapStack with undefined environment suffix', () => {
       const stack = new TapStack(app, 'test-stack', {
-        environmentSuffix: undefined
+        environmentSuffix: undefined,
       });
 
       expect(stack).toBeDefined();
@@ -177,7 +198,7 @@ describe('TapStack', () => {
 
     test('should create TapStack with custom AWS region', () => {
       const stack = new TapStack(app, 'test-stack', {
-        awsRegion: 'us-west-2'
+        awsRegion: 'us-west-2',
       });
 
       expect(stack).toBeDefined();
@@ -185,7 +206,7 @@ describe('TapStack', () => {
 
     test('should create TapStack with custom state bucket', () => {
       const stack = new TapStack(app, 'test-stack', {
-        stateBucket: 'custom-state-bucket'
+        stateBucket: 'custom-state-bucket',
       });
 
       expect(stack).toBeDefined();
@@ -193,7 +214,7 @@ describe('TapStack', () => {
 
     test('should create TapStack with custom state bucket region', () => {
       const stack = new TapStack(app, 'test-stack', {
-        stateBucketRegion: 'us-west-2'
+        stateBucketRegion: 'us-west-2',
       });
 
       expect(stack).toBeDefined();
@@ -204,9 +225,9 @@ describe('TapStack', () => {
         defaultTags: {
           tags: {
             Environment: 'test',
-            Project: 'tap'
-          }
-        }
+            Project: 'tap',
+          },
+        },
       });
 
       expect(stack).toBeDefined();
