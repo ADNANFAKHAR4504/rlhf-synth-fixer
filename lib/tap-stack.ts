@@ -10,9 +10,15 @@ import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
+    
+    const environmentSuffix = props?.environmentSuffix || this.node.tryGetContext('environmentSuffix') || 'dev';
 
     const defaultTags = {
       Environment: 'production',
@@ -24,7 +30,7 @@ export class TapStack extends cdk.Stack {
       cdk.Tags.of(this).add(key, value);
     });
 
-    const vpc = new ec2.Vpc(this, 'TapVpc', {
+    const vpc = new ec2.Vpc(this, `TapVpc${environmentSuffix}`, {
       maxAzs: 2,
       natGateways: 1,
       subnetConfiguration: [
@@ -46,7 +52,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    const flowLogRole = new iam.Role(this, 'FlowLogRole', {
+    const flowLogRole = new iam.Role(this, `FlowLogRole${environmentSuffix}`, {
       assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
       inlinePolicies: {
         FlowLogDeliveryRolePolicy: new iam.PolicyDocument({
@@ -67,11 +73,11 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+    const flowLogGroup = new logs.LogGroup(this, `VpcFlowLogGroup${environmentSuffix}`, {
       retention: logs.RetentionDays.ONE_MONTH,
     });
 
-    new ec2.FlowLog(this, 'VpcFlowLog', {
+    new ec2.FlowLog(this, `VpcFlowLog${environmentSuffix}`, {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
       destination: ec2.FlowLogDestination.toCloudWatchLogs(
         flowLogGroup,
@@ -79,12 +85,12 @@ export class TapStack extends cdk.Stack {
       ),
     });
 
-    const kmsKey = new kms.Key(this, 'TapKmsKey', {
+    const kmsKey = new kms.Key(this, `TapKmsKey${environmentSuffix}`, {
       enableKeyRotation: true,
       description: 'KMS key for TAP resources',
     });
 
-    const webSg = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
+    const webSg = new ec2.SecurityGroup(this, `WebSecurityGroup${environmentSuffix}`, {
       vpc,
       description: 'Security group for web servers',
       allowAllOutbound: false,
@@ -107,7 +113,7 @@ export class TapStack extends cdk.Stack {
     );
     webSg.addEgressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'HTTP outbound');
 
-    const dbSg = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
+    const dbSg = new ec2.SecurityGroup(this, `DatabaseSecurityGroup${environmentSuffix}`, {
       vpc,
       description: 'Security group for database',
       allowAllOutbound: false,
@@ -119,7 +125,7 @@ export class TapStack extends cdk.Stack {
       'PostgreSQL from web servers'
     );
 
-    const ec2Role = new iam.Role(this, 'Ec2Role', {
+    const ec2Role = new iam.Role(this, `Ec2Role${environmentSuffix}`, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -136,7 +142,7 @@ export class TapStack extends cdk.Stack {
       'systemctl start amazon-cloudwatch-agent'
     );
 
-    const instance = new ec2.Instance(this, 'WebInstance', {
+    const instance = new ec2.Instance(this, `WebInstance${environmentSuffix}`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       instanceType: ec2.InstanceType.of(
@@ -158,7 +164,7 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    new cloudwatch.Alarm(this, 'InstanceCpuAlarm', {
+    new cloudwatch.Alarm(this, `InstanceCpuAlarm${environmentSuffix}`, {
       metric: new cloudwatch.Metric({
         namespace: 'AWS/EC2',
         metricName: 'CPUUtilization',
@@ -170,7 +176,7 @@ export class TapStack extends cdk.Stack {
       evaluationPeriods: 2,
     });
 
-    new cloudwatch.Alarm(this, 'InstanceMemoryAlarm', {
+    new cloudwatch.Alarm(this, `InstanceMemoryAlarm${environmentSuffix}`, {
       metric: new cloudwatch.Metric({
         namespace: 'CWAgent',
         metricName: 'mem_used_percent',
@@ -182,7 +188,7 @@ export class TapStack extends cdk.Stack {
       evaluationPeriods: 2,
     });
 
-    const bucket = new s3.Bucket(this, 'TapBucket', {
+    const bucket = new s3.Bucket(this, `TapBucket${environmentSuffix}`, {
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
@@ -190,13 +196,13 @@ export class TapStack extends cdk.Stack {
       serverAccessLogsPrefix: 'access-logs/',
     });
 
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DbSubnetGroup', {
+    const dbSubnetGroup = new rds.SubnetGroup(this, `DbSubnetGroup${environmentSuffix}`, {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       description: 'Subnet group for RDS database',
     });
 
-    const database = new rds.DatabaseInstance(this, 'Database', {
+    const database = new rds.DatabaseInstance(this, `Database${environmentSuffix}`, {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_10,
       }),
@@ -215,8 +221,8 @@ export class TapStack extends cdk.Stack {
       credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
     });
 
-    const api = new apigateway.RestApi(this, 'TapApi', {
-      restApiName: 'TAP API',
+    const api = new apigateway.RestApi(this, `TapApi${environmentSuffix}`, {
+      restApiName: `TAP API ${environmentSuffix}`,
       description: 'TAP REST API',
       endpointConfiguration: {
         types: [apigateway.EndpointType.REGIONAL],
@@ -257,7 +263,7 @@ export class TapStack extends cdk.Stack {
       methodResponses: [{ statusCode: '200' }],
     });
 
-    const webAcl = new wafv2.CfnWebACL(this, 'TapWebAcl', {
+    const webAcl = new wafv2.CfnWebACL(this, `TapWebAcl${environmentSuffix}`, {
       scope: 'REGIONAL',
       defaultAction: { allow: {} },
       rules: [
@@ -301,19 +307,19 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+    new wafv2.CfnWebACLAssociation(this, `WebAclAssociation${environmentSuffix}`, {
       resourceArn: api.deploymentStage.stageArn,
       webAclArn: webAcl.attrArn,
     });
 
-    const adminGroup = new iam.Group(this, 'AdminGroup', {
-      groupName: 'TapAdmins',
+    const adminGroup = new iam.Group(this, `AdminGroup${environmentSuffix}`, {
+      groupName: `TapAdmins${environmentSuffix}`,
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
       ],
     });
 
-    const mfaPolicy = new iam.ManagedPolicy(this, 'MfaPolicy', {
+    const mfaPolicy = new iam.ManagedPolicy(this, `MfaPolicy${environmentSuffix}`, {
       statements: [
         new iam.PolicyStatement({
           effect: iam.Effect.DENY,
@@ -333,8 +339,8 @@ export class TapStack extends cdk.Stack {
 
     adminGroup.addManagedPolicy(mfaPolicy);
 
-    const readOnlyGroup = new iam.Group(this, 'ReadOnlyGroup', {
-      groupName: 'TapReadOnly',
+    const readOnlyGroup = new iam.Group(this, `ReadOnlyGroup${environmentSuffix}`, {
+      groupName: `TapReadOnly${environmentSuffix}`,
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
       ],

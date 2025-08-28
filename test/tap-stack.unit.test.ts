@@ -6,10 +6,11 @@ describe('TapStack Unit Tests', () => {
   let app: cdk.App;
   let stack: TapStack;
   let template: Template;
+  const environmentSuffix = 'test';
 
   beforeAll(() => {
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack');
+    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
     template = Template.fromStack(stack);
   });
 
@@ -198,11 +199,11 @@ describe('TapStack Unit Tests', () => {
   test('IAM Groups and MFA Policy Created', () => {
     template.resourceCountIs('AWS::IAM::Group', 2);
     template.hasResourceProperties('AWS::IAM::Group', {
-      GroupName: 'TapAdmins',
+      GroupName: `TapAdmins${environmentSuffix}`,
       ManagedPolicyArns: [ Match.anyValue(), Match.anyValue() ],
     });
     template.hasResourceProperties('AWS::IAM::Group', {
-      GroupName: 'TapReadOnly',
+      GroupName: `TapReadOnly${environmentSuffix}`,
       ManagedPolicyArns: [ Match.anyValue(), Match.anyValue() ],
     });
     template.resourceCountIs('AWS::IAM::ManagedPolicy', 1);
