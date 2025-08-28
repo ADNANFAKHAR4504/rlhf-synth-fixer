@@ -181,8 +181,7 @@ export class TapStack extends cdk.Stack {
         databaseName: 'tapdb',
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
-        enablePerformanceInsights: true,
-        performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+        enablePerformanceInsights: false,
         cloudwatchLogsExports: ['error', 'general', 'slow-query'],
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }

@@ -352,10 +352,9 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create database with performance insights enabled', () => {
+    test('should create database with performance insights disabled', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        EnablePerformanceInsights: true,
-        PerformanceInsightsRetentionPeriod: 7,
+        EnablePerformanceInsights: false,
       });
     });
 
