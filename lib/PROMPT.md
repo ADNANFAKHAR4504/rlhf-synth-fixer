@@ -1,62 +1,48 @@
-You are a senior AWS Cloud Architect and expert infrastructure engineer.
+# AWS CDK Infrastructure Project
 
-Your task is to generate a fully functional AWS CDK program using **Go** that defines and deploys a secure, auditable cloud environment in the **us-east-1** AWS region.
+I need to build a secure cloud infrastructure using AWS CDK with Go. The project should deploy to us-east-1 and include proper audit logging throughout.
 
-### Infrastructure Requirements:
+## What I'm Building
 
-1. **S3 Bucket**
+**S3 Bucket Setup:**
+- Need versioning turned on
+- Should trigger a Lambda when files get uploaded
+- Want server access logs for compliance
+- Name it like: proj-<resource>-<env>
 
-- Must have **versioning enabled**.
-- Must be configured to **trigger a Lambda function** when a new object is created.
-- Enable **server access logging** for audit purposes.
-- Bucket name must follow the naming convention: `proj-<resource>-<env>`.
+**DynamoDB Table:**
+- Needs both partition and sort keys
+- Turn on point-in-time recovery and encryption
+- Enable CloudWatch Contributor Insights for monitoring
+- Follow same naming pattern
 
-2. **DynamoDB Table**
+**Lambda Function:**
+- Python 3.x runtime
+- Gets triggered by S3 uploads
+- Basic CloudWatch logging
+- IAM role with minimal permissions (just S3 read, DynamoDB write, CloudWatch logs)
+- Use env vars for table and bucket names
 
-- Must include both a **partition key** and a **sort key**.
-- Must have **point-in-time recovery** and **encryption at rest** enabled.
-- Enable **CloudWatch Contributor Insights** for access pattern logging.
-- Table name must follow the same naming convention.
+**Security & IAM:**
+- Keep permissions tight - least privilege approach
+- Lambda role should only access what it needs
+- Use inline policies where it makes sense
 
-3. **Lambda Function**
+**Audit Requirements:**
+- CloudTrail or native logging on everything
+- Make sure we can track:
+  - Lambda executions
+  - S3 access
+  - DynamoDB operations
 
-- Written in Python 3.x.
-- Triggered by **S3 object creation events**.
-- Must include basic logging to **CloudWatch Logs**.
-- Define an **IAM role** for the Lambda with **least privilege**: only access the S3 bucket and DynamoDB table.
-- Use environment variables for the table name and bucket name.
+## Project Structure
 
-4. **IAM Roles and Policies**
+Want clean separation using CDK constructs and stacks. Everything should deploy with just `cdk deploy`.
 
-- All IAM policies must follow the **principle of least privilege**.
-- Create a **role for Lambda** with the necessary permissions to:
-- Read from the S3 bucket
-- Write to the DynamoDB table
-- Log to CloudWatch
-- Use **inline IAM policies** where appropriate.
+Need these files:
+- bin/tap.go (main app)
+- lib/tap_stack.go plus modular constructs
+- lambda/handler.py (sample function)
+- README.md with setup steps
 
-5. **Audit Logging**
-
-- Enable **CloudTrail** (or ensure all AWS-native logging features are enabled for each resource).
-- Ensure **logging is configured** for:
-- Lambda (via CloudWatch Logs)
-- S3 (via access logs or CloudTrail)
-- DynamoDB (Contributor Insights + access logging if available)
-
-### Project Requirements:
-
-- The CDK app should use **constructs and stacks** cleanly separated by function.
-- All resources should follow the naming convention: `proj-<resource>-<env>` (e.g., `proj-s3-prod`).
-- Deployment should default to the AWS region `us-east-1`.
-- All code should be clean, readable, and **well-commented**, demonstrating **best practices**.
-- Ensure it can be deployed with a single command: `cdk deploy`.
-
-### Output Format:
-
-- Provide a complete CDK project in Go:
-- `bin/tap.go` (main CDK app)
-- `lib/tap_stack.go` and modular construct files
-- Sample `lambda/handler.py` for Lambda logic
-- README.md with deployment instructions
-
-Generate the **complete working code**, not just snippets. Include any supporting resources (e.g., sample lambda code) and ensure it adheres to **production-grade standards**.
+The code should be production-ready with good comments and follow Go/CDK best practices.
