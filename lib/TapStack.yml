@@ -215,6 +215,12 @@ Parameters:
     Description: 'Endpoint address of the existing RDS instance (used when not creating a new one).'
     Default: ''
 
+  CreateKMSResources:
+    Type: String
+    Description: 'Set to true to allow creating new KMS Key and Alias; set false to always use existing.'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -224,6 +230,7 @@ Conditions:
     !And [!Equals [!Ref EnableAWSConfig, 'true'], !Condition IsPrimaryRegion]
   EnableCloudFrontCondition: !Equals [!Ref EnableCloudFront, 'true']
   CreateKMSKey: !And
+    - !Equals [!Ref CreateKMSResources, 'true']
     - !Equals [!Ref ExistingKMSKeyArn, '']
     - !Equals [!Ref ExistingKMSKeyAlias, '']
   CreateDBSubnetGroup:
@@ -232,7 +239,9 @@ Conditions:
       !Equals [!Ref EnableDBSubnetGroupCreation, 'true'],
     ]
   CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
-  CreateKMSKeyAlias: !Equals [!Ref ExistingKMSKeyAlias, '']
+  CreateKMSKeyAlias: !And
+    - !Equals [!Ref CreateKMSResources, 'true']
+    - !Equals [!Ref ExistingKMSKeyAlias, '']
   CreateGuardDutyCheckFunction:
     !Equals [!Ref ExistingGuardDutyCheckFunctionArn, '']
   CreateNatGateway: !And
