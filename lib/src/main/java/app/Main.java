@@ -8,7 +8,7 @@ import software.amazon.awssdk.services.ec2.model.*;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.*;
 
-import java.util.List;
+import java.util.Comparator;
 
 /**
  * Example AWS SDK v2 implementation of TapStack.
@@ -90,9 +90,24 @@ public class Main {
                     .policyArn("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore")
                     .build());
 
-            // 4. Launch EC2 Instance (Amazon Linux 2 AMI ID must be region-specific!)
+            // 4. Launch EC2 Instance with dynamic latest Amazon Linux 2 AMI
+            DescribeImagesResponse describeImages = ec2.describeImages(
+                    DescribeImagesRequest.builder()
+                            .owners("amazon")
+                            .filters(
+                                    Filter.builder().name("name").values("amzn2-ami-hvm-*-x86_64-gp2").build(),
+                                    Filter.builder().name("state").values("available").build()
+                            )
+                            .build()
+            );
+
+            String latestAmi = describeImages.images().stream()
+                    .max(Comparator.comparing(Image::creationDate))
+                    .orElseThrow(() -> new RuntimeException("No Amazon Linux 2 AMI found"))
+                    .imageId();
+
             RunInstancesResponse runResponse = ec2.runInstances(RunInstancesRequest.builder()
-                    .imageId("ami-0c02fb55956c7d316") // Replace with latest AL2 AMI for region
+                    .imageId(latestAmi)
                     .instanceType(InstanceType.T3_MICRO)
                     .maxCount(1)
                     .minCount(1)
@@ -104,7 +119,7 @@ public class Main {
 
             // Tag resources
             ec2.createTags(CreateTagsRequest.builder()
-                    .resources(runResponse.instances().get(0).instanceId())
+                    .resources(instanceId)
                     .tags(software.amazon.awssdk.services.ec2.model.Tag.builder()
                             .key("Environment")
                             .value(envSuffix)
@@ -114,7 +129,6 @@ public class Main {
                             .value("AWS-SDK")
                             .build())
                     .build());
-
 
         } catch (Exception e) {
             e.printStackTrace();
