@@ -1,5 +1,3 @@
-// test/terraform.int.test.ts
-
 import path from "path";
 import fs from "fs";
 import dns from "dns/promises";
@@ -9,7 +7,6 @@ import {
   DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand
 } from "@aws-sdk/client-ec2";
 import {
   SecretsManagerClient,
@@ -27,11 +24,11 @@ import {
 import {
   ElasticLoadBalancingV2Client,
   DescribeTargetHealthCommand,
-  TargetHealthDescription
+  TargetHealthDescription,
 } from "@aws-sdk/client-elastic-load-balancing-v2";
 import {
   SNSClient,
-  GetTopicAttributesCommand
+  GetTopicAttributesCommand,
 } from "@aws-sdk/client-sns";
 
 let outputs: Record<string, string>;
@@ -41,6 +38,21 @@ let iamClient: IAMClient;
 let logsClient: CloudWatchLogsClient;
 let elbv2Client: ElasticLoadBalancingV2Client;
 let snsClient: SNSClient;
+
+// Parsed variables
+let publicSubnets: string[];
+let privateSubnets: string[];
+let natGateways: string[];
+let secrets: Record<string, string>;
+let vpcId: string;
+let igwId: string;
+let ec2RoleName: string;
+let ec2RoleArn: string;
+let ec2InstanceProfileName: string;
+let logGroupName: string;
+let lbDns: string;
+let tgArn: string;
+let snsTopicArn: string;
 
 beforeAll(() => {
   const outputsPath = path.resolve(
@@ -55,73 +67,65 @@ beforeAll(() => {
   logsClient = new CloudWatchLogsClient({ region: "us-east-1" });
   elbv2Client = new ElasticLoadBalancingV2Client({ region: "us-east-1" });
   snsClient = new SNSClient({ region: "us-east-1" });
+
+  // Parse all outputs here
+  publicSubnets = JSON.parse(outputs.public_subnet_ids) as string[];
+  privateSubnets = JSON.parse(outputs.private_subnet_ids) as string[];
+  natGateways = JSON.parse(outputs.nat_gateway_ids) as string[];
+  secrets = JSON.parse(outputs.secret_ids) as Record<string, string>;
+  vpcId = outputs.vpc_id;
+  igwId = outputs.internet_gateway_id;
+  ec2RoleName = outputs.ec2_role_name;
+  ec2RoleArn = outputs.ec2_role_arn;
+  ec2InstanceProfileName = outputs.ec2_instance_profile_name;
+  logGroupName = outputs.log_group_name;
+  lbDns = outputs.load_balancer_dns;
+  tgArn = outputs.target_group_arn;
+  snsTopicArn = outputs.sns_topic_arn;
 });
 
 describe("Terraform Stack Integration Tests", () => {
   describe("VPC & Subnets", () => {
-    const publicSubnets = JSON.parse(outputs.public_subnet_ids) as string[];
-    const privateSubnets = JSON.parse(outputs.private_subnet_ids) as string[];
-
     test("VPC should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const res = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] })
-      );
-      expect(res.Vpcs?.[0].VpcId).toBe(outputs.vpc_id);
+      const res = await ec2Client.send(new DescribeVpcsCommand({ VpcIds: [vpcId] }));
+      expect(res.Vpcs?.[0].VpcId).toBe(vpcId);
     });
 
     test("Public subnets belong to VPC", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: publicSubnets })
-      );
-      res.Subnets?.forEach((subnet) => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-      });
+      const res = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: publicSubnets }));
+      res.Subnets?.forEach((subnet) => expect(subnet.VpcId).toBe(vpcId));
     });
 
     test("Private subnets belong to VPC", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const res = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: privateSubnets })
-      );
-      res.Subnets?.forEach((subnet) => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-      });
+      const res = await ec2Client.send(new DescribeSubnetsCommand({ SubnetIds: privateSubnets }));
+      res.Subnets?.forEach((subnet) => expect(subnet.VpcId).toBe(vpcId));
     });
   });
 
   describe("Internet Gateway", () => {
     test("Internet Gateway should be attached to VPC", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const res = await ec2Client.send(
-        new DescribeInternetGatewaysCommand({ InternetGatewayIds: [outputs.internet_gateway_id] })
-      );
-      expect(res.InternetGateways?.[0].Attachments?.some(att => att.VpcId === outputs.vpc_id)).toBe(true);
+      const res = await ec2Client.send(new DescribeInternetGatewaysCommand({ InternetGatewayIds: [igwId] }));
+      expect(res.InternetGateways?.[0].Attachments?.some(att => att.VpcId === vpcId)).toBe(true);
     });
   });
 
   describe("NAT Gateways", () => {
-    const natGateways = JSON.parse(outputs.nat_gateway_ids) as string[];
-
     test("NAT Gateways should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const res = await ec2Client.send(
-        new DescribeNatGatewaysCommand({ NatGatewayIds: natGateways })
-      );
+      const res = await ec2Client.send(new DescribeNatGatewaysCommand({ NatGatewayIds: natGateways }));
       expect(res.NatGateways?.length).toBe(natGateways.length);
     });
   });
 
   describe("Secrets Manager", () => {
-    const secrets = JSON.parse(outputs.secret_ids) as Record<string, string>;
-
     test("Secrets should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
       for (const [name, arn] of Object.entries(secrets)) {
-        const res = await secretsClient.send(
-          new DescribeSecretCommand({ SecretId: arn })
-        );
+        const res = await secretsClient.send(new DescribeSecretCommand({ SecretId: arn }));
         expect(res.ARN).toBe(arn);
         expect(res.Name).toBe(name);
       }
@@ -131,29 +135,22 @@ describe("Terraform Stack Integration Tests", () => {
   describe("IAM", () => {
     test("EC2 Role should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const roleName = outputs.ec2_role_name;
-      const res = await iamClient.send(new GetRoleCommand({ RoleName: roleName }));
-      expect(res.Role?.RoleName).toBe(roleName);
-      expect(res.Role?.Arn).toBe(outputs.ec2_role_arn);
+      const res = await iamClient.send(new GetRoleCommand({ RoleName: ec2RoleName }));
+      expect(res.Role?.RoleName).toBe(ec2RoleName);
+      expect(res.Role?.Arn).toBe(ec2RoleArn);
     });
 
     test("EC2 Instance Profile should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const profileName = outputs.ec2_instance_profile_name;
-      const res = await iamClient.send(
-        new GetInstanceProfileCommand({ InstanceProfileName: profileName })
-      );
-      expect(res.InstanceProfile?.InstanceProfileName).toBe(profileName);
+      const res = await iamClient.send(new GetInstanceProfileCommand({ InstanceProfileName: ec2InstanceProfileName }));
+      expect(res.InstanceProfile?.InstanceProfileName).toBe(ec2InstanceProfileName);
     });
   });
 
   describe("Monitoring", () => {
     test("Log group should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const logGroupName = outputs.log_group_name;
-      const res = await logsClient.send(
-        new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName })
-      );
+      const res = await logsClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName }));
       expect(res.logGroups?.some((lg) => lg.logGroupName === logGroupName)).toBe(true);
     });
   });
@@ -161,16 +158,13 @@ describe("Terraform Stack Integration Tests", () => {
   describe("Load Balancer", () => {
     test("DNS should resolve", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const addresses = await dns.lookup(outputs.load_balancer_dns);
+      const addresses = await dns.lookup(lbDns);
       expect(addresses.address).toBeDefined();
     });
-  
+
     test("Target group should have healthy targets", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const tgArn = outputs.target_group_arn;
-      const health = await elbv2Client.send(
-        new DescribeTargetHealthCommand({ TargetGroupArn: tgArn })
-      );
+      const health = await elbv2Client.send(new DescribeTargetHealthCommand({ TargetGroupArn: tgArn }));
       expect(health.TargetHealthDescriptions?.length).toBeGreaterThan(0);
       health.TargetHealthDescriptions?.forEach((t: TargetHealthDescription) => {
         expect(t.TargetHealth?.State).toBe("healthy");
@@ -178,15 +172,11 @@ describe("Terraform Stack Integration Tests", () => {
     });
   });
 
-
   describe("SNS", () => {
     test("SNS Topic should exist", async () => {
       if (process.env.RUN_LIVE_TESTS !== "true") return;
-      const topicArn = outputs.sns_topic_arn;
-      const res = await snsClient.send(
-        new GetTopicAttributesCommand({ TopicArn: topicArn })
-      );
-      expect(res.Attributes?.TopicArn).toBe(topicArn);
+      const res = await snsClient.send(new GetTopicAttributesCommand({ TopicArn: snsTopicArn }));
+      expect(res.Attributes?.TopicArn).toBe(snsTopicArn);
     });
   });
 });
