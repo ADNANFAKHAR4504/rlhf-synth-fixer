@@ -219,7 +219,7 @@ describe('TapStack Unit Tests', () => {
   describe('S3 Buckets', () => {
     test('should create application bucket with KMS encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'secureapp-bucket-123456789012-us-east-1-test',
+        BucketName: 'secure-appbucket-123456789012-us-east-1-test',
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
@@ -243,7 +243,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create CloudTrail logs bucket with S3 managed encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'cloudtrail-log-123456789012-us-east-1-test',
+        BucketName: 'secure-trailbucket-123456789012-us-east-1-test',
         BucketEncryption: {
           ServerSideEncryptionConfiguration: [
             {
@@ -541,7 +541,7 @@ describe('TapStack Unit Tests', () => {
       const devTemplate = Template.fromStack(devStack);
 
       devTemplate.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: 'secureapp-bucket-111111111111-us-west-2-dev',
+        BucketName: 'secure-trailbucket-111111111111-us-west-2-dev',
       });
     });
 
