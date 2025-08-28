@@ -6,7 +6,6 @@ locals {
     Owner       = var.owner
     CostCenter  = var.cost_center
     ManagedBy   = "Terraform"
-    Repository  = var.repository_url
   }
 
   # Environment-specific configurations
@@ -84,11 +83,6 @@ variable "cost_center" {
   default     = "Turing"
 }
 
-variable "repository_url" {
-  description = "Repository URL for the infrastructure code"
-  type        = string
-  default     = ""
-}
 
 # VPC Configuration
 variable "vpc_cidr" {
@@ -548,12 +542,6 @@ variable "block_device_mappings" {
 # Secrets and Configuration
 variable "secrets_manager_secret_name" {
   description = "Name of the Secrets Manager secret"
-  type        = string
-  default     = ""
-}
-
-variable "cloudwatch_config" {
-  description = "CloudWatch agent configuration"
   type        = string
   default     = ""
 }

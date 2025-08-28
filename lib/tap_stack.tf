@@ -113,7 +113,6 @@ module "ec2_module" {
     detailed_monitoring       = var.detailed_monitoring
     block_device_mappings     = var.block_device_mappings
     secrets_manager_secret_name = var.secrets_manager_secret_name
-    cloudwatch_config         = var.cloudwatch_config
     additional_packages       = var.additional_packages
     log_retention_days        = var.log_retention_days
     enable_notifications      = var.enable_notifications
