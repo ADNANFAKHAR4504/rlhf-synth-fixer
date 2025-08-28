@@ -7,15 +7,34 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.38.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.3
 	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.64.2
+	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.58.0
+	github.com/aws/aws-sdk-go-v2/service/cloudformation v1.65.0
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0
+	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.49.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.57.0
+	github.com/aws/aws-sdk-go-v2/service/configservice v1.57.0
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.247.0
+	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.50.0
+	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1
+	github.com/aws/aws-sdk-go-v2/service/kms v1.44.2
+	github.com/aws/aws-sdk-go-v2/service/lambda v1.77.0
+	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.1
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.0
+	github.com/aws/aws-sdk-go-v2/service/securityhub v1.63.0
 	github.com/aws/constructs-go/constructs/v10 v10.4.2
 	github.com/aws/jsii-runtime-go v1.113.0
 	github.com/cdklabs/cloud-assembly-schema-go/awscdkcloudassemblyschema/v48 v48.3.0 // indirect
 	github.com/hashicorp/terraform-cdk-go/cdktf v0.21.0
-	github.com/stretchr/testify v1.11.0
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
+	github.com/pulumi/pulumi/sdk/v3 v3.191.0
+	github.com/stretchr/testify v1.11.1
 )
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.7 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.4 // indirect
@@ -54,26 +73,10 @@ require (
 require (
 	github.com/aws/aws-sdk-go v1.55.8
 	github.com/aws/aws-sdk-go-v2/service/accessanalyzer v1.44.0
-	github.com/aws/aws-sdk-go-v2/service/autoscaling v1.58.0
-	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.53.0
-	github.com/aws/aws-sdk-go-v2/service/cloudtrail v1.53.0
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.49.0
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.57.0
-	github.com/aws/aws-sdk-go-v2/service/configservice v1.57.0
+	github.com/aws/aws-sdk-go-v2/service/apigateway v1.35.0
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.49.1
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.247.0
-	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.50.0
-	github.com/aws/aws-sdk-go-v2/service/iam v1.47.1
-	github.com/aws/aws-sdk-go-v2/service/kms v1.44.2
-	github.com/aws/aws-sdk-go-v2/service/lambda v1.77.0
-	github.com/aws/aws-sdk-go-v2/service/rds v1.103.3
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.87.1
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.39.0
-	github.com/aws/aws-sdk-go-v2/service/securityhub v1.63.0
 	github.com/aws/aws-sdk-go-v2/service/sns v1.37.2
 	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
-	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
-	github.com/pulumi/pulumi/sdk/v3 v3.191.0
 )
 
 require (
@@ -90,6 +93,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/wafv2 v1.67.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.8.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/charmbracelet/bubbles v0.16.1 // indirect
