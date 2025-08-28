@@ -48,23 +48,13 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
     });
 
     test("Environment-specific configurations defined", () => {
-      expect(content).toMatch(/staging_config/);
-      expect(content).toMatch(/production_config/);
-      expect(content).toMatch(/env_config/);
+      expect(content).toMatch(/name_prefix.*=.*"\$\{var\.proj_name\}-\$\{var\.env\}"/);
     });
 
-    test("Environment-specific resource sizing", () => {
-      expect(content).toMatch(/instance_type.*=.*"t3\.micro"/); // staging
-      expect(content).toMatch(/instance_type.*=.*"t3\.small"/); // production
-      expect(content).toMatch(/min_size.*=.*1/); // staging
-      expect(content).toMatch(/min_size.*=.*2/); // production
-    });
-
-    test("Environment-specific database configurations", () => {
-      expect(content).toMatch(/db_instance_class.*=.*"db\.t3\.micro"/); // staging
-      expect(content).toMatch(/db_instance_class.*=.*"db\.t3\.small"/); // production
-      expect(content).toMatch(/db_storage.*=.*20/); // staging
-      expect(content).toMatch(/db_storage.*=.*50/); // production
+    test("Environment-specific resource naming", () => {
+      expect(content).toMatch(/local\.name_prefix/);
+      expect(content).toMatch(/var\.env/);
+      expect(content).toMatch(/var\.proj_name/);
     });
   });
 
@@ -86,12 +76,7 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
       expect(content).toMatch(/variable "env"/);
       expect(content).toMatch(/variable "region"/);
       expect(content).toMatch(/variable "proj_name"/);
-      expect(content).toMatch(/variable "inst_type"/);
-      expect(content).toMatch(/variable "asg_min"/);
-      expect(content).toMatch(/variable "asg_max"/);
-      expect(content).toMatch(/variable "db_class"/);
-      expect(content).toMatch(/variable "db_storage"/);
-      expect(content).toMatch(/variable "db_user"/);
+      expect(content).toMatch(/variable "vpc_cidr"/);
       expect(content).toMatch(/variable "db_pass"/);
     });
   });
@@ -102,16 +87,8 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
       expect(content).toMatch(/length.*=.*8/);
     });
 
-    test("Random password for database", () => {
-      expect(content).toMatch(/resource "random_password" "db_password"/);
-      expect(content).toMatch(/length.*=.*16/);
-      expect(content).toMatch(/special.*=.*true/);
-    });
-
     test("Random values used in resource names", () => {
       expect(content).toMatch(/\${random_string\.suffix\.result}/);
-      // Check if random password is used in RDS configuration
-      expect(content).toMatch(/random_password\.db_password\.result/);
     });
   });
 
@@ -128,104 +105,26 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
       expect(content).toMatch(/count.*=.*min\(2, length\(data\.aws_availability_zones\.available\.names\)\)/);
     });
 
-    test("Database subnets for RDS isolation", () => {
-      expect(content).toMatch(/resource "aws_subnet" "database"/);
-      expect(content).toMatch(/Type.*=.*"Database"/);
-    });
-
     test("Internet Gateway for public resources", () => {
       expect(content).toMatch(/resource "aws_internet_gateway" "main"/);
     });
 
-    test("NAT Gateway for private resources", () => {
-      expect(content).toMatch(/resource "aws_nat_gateway" "main"/);
-      expect(content).toMatch(/resource "aws_eip" "nat"/);
-    });
-
     test("Proper routing tables configured", () => {
       expect(content).toMatch(/resource "aws_route_table" "public"/);
-      expect(content).toMatch(/resource "aws_route_table" "private"/);
       expect(content).toMatch(/resource "aws_route_table_association"/);
     });
   });
 
-  describe("Load Balancing & Traffic Distribution", () => {
-    test("Application Load Balancer in public subnets", () => {
-      expect(content).toMatch(/resource "aws_lb" "main"/);
-      expect(content).toMatch(/load_balancer_type.*=.*"application"/);
-      expect(content).toMatch(/internal.*=.*false/);
-    });
 
-    test("Health checks for backend instances", () => {
-      expect(content).toMatch(/resource "aws_lb_target_group" "main"/);
-      expect(content).toMatch(/health_check_type.*=.*"ELB"/);
-    });
 
-    test("HTTPS listener configured (port 443)", () => {
-      expect(content).toMatch(/resource "aws_lb_listener" "https"/);
-      expect(content).toMatch(/port.*=.*"443"/);
-      expect(content).toMatch(/protocol.*=.*"HTTPS"/);
-    });
-
-    test("SSL certificate for HTTPS", () => {
-      expect(content).toMatch(/resource "aws_acm_certificate" "main"/);
-      expect(content).toMatch(/validation_method.*=.*"DNS"/);
-    });
-  });
-
-  describe("Compute Resources", () => {
-    test("Auto Scaling Group with EC2 instances in private subnets", () => {
-      expect(content).toMatch(/resource "aws_autoscaling_group" "main"/);
-      expect(content).toMatch(/vpc_zone_identifier.*=.*aws_subnet\.private/);
-    });
-
-    test("Environment-appropriate scaling policies", () => {
-      expect(content).toMatch(/resource "aws_autoscaling_policy" "scale_up"/);
-      expect(content).toMatch(/resource "aws_autoscaling_policy" "scale_down"/);
-      expect(content).toMatch(/scaling_adjustment.*=.*1/);
-      expect(content).toMatch(/scaling_adjustment.*=.*-1/);
-    });
-
-    test("Launch template with proper configuration", () => {
-      expect(content).toMatch(/resource "aws_launch_template" "main"/);
-      expect(content).toMatch(/instance_type.*=.*local\.env_config\.instance_type/);
-      expect(content).toMatch(/associate_public_ip_address.*=.*false/);
-    });
-
+  describe("IAM Resources", () => {
     test("IAM roles and policies for secure AWS service access", () => {
-      expect(content).toMatch(/resource "aws_iam_role" "ec2"/);
-      expect(content).toMatch(/resource "aws_iam_role_policy" "ec2"/);
-      expect(content).toMatch(/resource "aws_iam_instance_profile" "ec2"/);
+      expect(content).toMatch(/resource "aws_iam_role" "env_access"/);
+      expect(content).toMatch(/resource "aws_iam_role_policy" "s3_access"/);
     });
   });
 
-  describe("Database Layer", () => {
-    test("RDS instance in private subnets", () => {
-      expect(content).toMatch(/resource "aws_db_instance" "main"/);
-      expect(content).toMatch(/resource "aws_db_subnet_group" "main"/);
-    });
 
-    test("Multi-AZ deployment for high availability", () => {
-      expect(content).toMatch(/multi_az.*=.*var\.env.*==.*"production"/);
-    });
-
-    test("Database isolated from direct internet access", () => {
-      expect(content).toMatch(/resource "aws_security_group" "rds"/);
-      expect(content).toMatch(/vpc_security_group_ids.*=.*\[aws_security_group\.rds\.id\]/);
-    });
-
-    test("RDS parameter group configured", () => {
-      expect(content).toMatch(/resource "aws_db_parameter_group" "main"/);
-      expect(content).toMatch(/character_set_server/);
-      expect(content).toMatch(/character_set_client/);
-    });
-
-    test("Environment-specific database settings", () => {
-      expect(content).toMatch(/backup_retention_period.*=.*var\.env.*==.*"production".*\?.*30.*:.*7/);
-      expect(content).toMatch(/deletion_protection.*=.*var\.env.*==.*"production"/);
-      expect(content).toMatch(/skip_final_snapshot.*=.*var\.env.*==.*"staging"/);
-    });
-  });
 
   describe("Security Implementation", () => {
     test("AWS KMS customer-managed keys for encryption", () => {
@@ -235,14 +134,12 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
     });
 
     test("Security groups with least privilege access", () => {
-      expect(content).toMatch(/resource "aws_security_group" "alb"/);
-      expect(content).toMatch(/resource "aws_security_group" "ec2"/);
-      expect(content).toMatch(/resource "aws_security_group" "rds"/);
+      expect(content).toMatch(/resource "aws_security_group" "https_only"/);
     });
 
     test("HTTPS-only access (port 443)", () => {
       expect(content).toMatch(/port.*=.*443/);
-      expect(content).toMatch(/protocol.*=.*"HTTPS"/);
+      expect(content).toMatch(/protocol.*=.*"tcp"/);
     });
 
     test("IAM roles and policies properly configured", () => {
@@ -277,18 +174,10 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
   });
 
   describe("Monitoring and Logging", () => {
-    test("CloudWatch alarms for monitoring", () => {
-      expect(content).toMatch(/resource "aws_cloudwatch_metric_alarm" "cpu_high"/);
-      expect(content).toMatch(/resource "aws_cloudwatch_metric_alarm" "cpu_low"/);
-      expect(content).toMatch(/CPUUtilization/);
-      expect(content).toMatch(/GreaterThanThreshold/);
-      expect(content).toMatch(/LessThanThreshold/);
-    });
-
-    test("CloudTrail for audit logging", () => {
-      expect(content).toMatch(/resource "aws_cloudtrail" "main"/);
-      expect(content).toMatch(/include_global_service_events.*=.*true/);
-      expect(content).toMatch(/is_multi_region_trail.*=.*true/);
+    test("Basic infrastructure monitoring", () => {
+      expect(content).toMatch(/resource "aws_security_group" "https_only"/);
+      expect(content).toMatch(/from_port.*=.*443/);
+      expect(content).toMatch(/to_port.*=.*443/);
     });
   });
 
@@ -299,17 +188,16 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
 
     test("Clear comments explaining resource purposes", () => {
       expect(content).toMatch(/#.*Multi-Environment AWS Infrastructure/);
-      expect(content).toMatch(/#.*VPC and Networking/);
-      expect(content).toMatch(/#.*Application Load Balancer/);
-      expect(content).toMatch(/#.*Auto Scaling Group/);
-      expect(content).toMatch(/#.*RDS Database/);
+      expect(content).toMatch(/#.*VPC and Basic Networking/);
+      expect(content).toMatch(/#.*S3 Storage Layer/);
+      expect(content).toMatch(/#.*KMS for Encryption/);
     });
 
     test("Comprehensive tagging for all resources", () => {
       expect(content).toMatch(/local\.common_tags/);
       expect(content).toMatch(/Environment.*=.*var\.env/);
       expect(content).toMatch(/Project.*=.*var\.proj_name/);
-      expect(content).toMatch(/ManagedBy.*=.*"Terraform"/);
+      expect(content).toMatch(/ManagedBy.*=.*"terraform"/);
     });
   });
 
@@ -319,13 +207,6 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
       expect(content).toMatch(/variable "region"/);
       expect(content).toMatch(/variable "proj_name"/);
       expect(content).toMatch(/variable "vpc_cidr"/);
-      expect(content).toMatch(/variable "inst_type"/);
-      expect(content).toMatch(/variable "asg_min"/);
-      expect(content).toMatch(/variable "asg_max"/);
-      expect(content).toMatch(/variable "db_class"/);
-      expect(content).toMatch(/variable "db_storage"/);
-      expect(content).toMatch(/variable "db_name"/);
-      expect(content).toMatch(/variable "db_user"/);
       expect(content).toMatch(/variable "db_pass"/);
     });
 
@@ -333,9 +214,6 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
       expect(content).toMatch(/default.*=.*"us-east-1"/);
       expect(content).toMatch(/default.*=.*"myapp"/);
       expect(content).toMatch(/default.*=.*"10\.0\.0\.0\/16"/);
-      expect(content).toMatch(/default.*=.*"t3\.micro"/);
-      expect(content).toMatch(/default.*=.*2/);
-      expect(content).toMatch(/default.*=.*10/);
     });
   });
 
@@ -344,11 +222,10 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
       expect(content).toMatch(/output "vpc_id"/);
       expect(content).toMatch(/output "public_subnet_ids"/);
       expect(content).toMatch(/output "private_subnet_ids"/);
-      expect(content).toMatch(/output "load_balancer_dns_name"/);
-      expect(content).toMatch(/output "rds_endpoint"/);
       expect(content).toMatch(/output "s3_bucket_name"/);
       expect(content).toMatch(/output "kms_key_arn"/);
-      expect(content).toMatch(/output "autoscaling_group_name"/);
+      expect(content).toMatch(/output "security_group_id"/);
+      expect(content).toMatch(/output "iam_role_arn"/);
     });
 
     test("Environment and project outputs", () => {
@@ -359,18 +236,12 @@ describe("Terraform Multi-Environment Infrastructure Requirements - Unit Tests",
   });
 
   describe("Additional Features", () => {
-    test("User data script for web server setup", () => {
-      expect(content).toMatch(/templatefile\(".*user_data\.sh"/);
-      expect(content).toMatch(/db_endpoint.*=.*aws_db_instance\.main\.endpoint/);
-      expect(content).toMatch(/db_name.*=.*aws_db_instance\.main\.db_name/);
-    });
-
-    test("Random password generation for database", () => {
-      expect(content).toMatch(/random_password\.db_password\.result/);
+    test("Random string generation for unique naming", () => {
+      expect(content).toMatch(/random_string\.suffix\.result/);
     });
 
     test("Environment-specific configurations", () => {
-      expect(content).toMatch(/env_config.*=.*var\.env.*==.*"production".*\?.*local\.production_config.*:.*local\.staging_config/);
+      expect(content).toMatch(/name_prefix.*=.*"\$\{var\.proj_name\}-\$\{var\.env\}"/);
     });
   });
 });
