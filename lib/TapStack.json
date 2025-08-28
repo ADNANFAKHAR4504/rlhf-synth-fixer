@@ -1280,10 +1280,7 @@
     "DevelopmentEnvironmentURL": {
       "Description": "URL of the Development environment",
       "Value": {
-        "Fn::GetAtt": [
-          "DevelopmentEnvironment",
-          "EndpointURL"
-        ]
+        "Fn::Sub": "http://${DevelopmentEnvironment}.${AWS::Region}.elasticbeanstalk.com"
       },
       "Export": {
         "Name": {
@@ -1294,10 +1291,7 @@
     "TestingEnvironmentURL": {
       "Description": "URL of the Testing environment",
       "Value": {
-        "Fn::GetAtt": [
-          "TestingEnvironment",
-          "EndpointURL"
-        ]
+        "Fn::Sub": "http://${TestingEnvironment}.${AWS::Region}.elasticbeanstalk.com"
       },
       "Export": {
         "Name": {
@@ -1308,10 +1302,7 @@
     "ProductionEnvironmentURL": {
       "Description": "URL of the Production environment",
       "Value": {
-        "Fn::GetAtt": [
-          "ProductionEnvironment",
-          "EndpointURL"
-        ]
+        "Fn::Sub": "http://${ProductionEnvironment}.${AWS::Region}.elasticbeanstalk.com"
       },
       "Export": {
         "Name": {

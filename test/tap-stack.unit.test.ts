@@ -209,13 +209,13 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
       const prodOutput = template.Outputs.ProductionEnvironmentURL;
 
       expect(devOutput.Value).toEqual({
-        'Fn::GetAtt': ['DevelopmentEnvironment', 'EndpointURL']
+        'Fn::Sub': 'http://${DevelopmentEnvironment}.${AWS::Region}.elasticbeanstalk.com'
       });
       expect(testOutput.Value).toEqual({
-        'Fn::GetAtt': ['TestingEnvironment', 'EndpointURL']
+        'Fn::Sub': 'http://${TestingEnvironment}.${AWS::Region}.elasticbeanstalk.com'
       });
       expect(prodOutput.Value).toEqual({
-        'Fn::GetAtt': ['ProductionEnvironment', 'EndpointURL']
+        'Fn::Sub': 'http://${ProductionEnvironment}.${AWS::Region}.elasticbeanstalk.com'
       });
     });
 
