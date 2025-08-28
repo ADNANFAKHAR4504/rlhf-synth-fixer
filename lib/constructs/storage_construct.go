@@ -54,11 +54,55 @@ func NewStorageConstruct(scope constructs.Construct, id string, props *StorageCo
 		ServerAccessLogsBucket: loggingBucket,
 		ServerAccessLogsPrefix: jsii.String("access-logs/"),
 		EventBridgeEnabled:     jsii.Bool(true),
-		// Note: IntelligentTiering configuration removed for CDK Go compatibility
+		// Enhanced lifecycle rules for cost optimization
+		LifecycleRules: &[]*awss3.LifecycleRule{
+			{
+				Id:      jsii.String("CostOptimizationRule"),
+				Enabled: jsii.Bool(true),
+				Transitions: &[]*awss3.Transition{
+					{
+						StorageClass:    awss3.StorageClass_INFREQUENT_ACCESS(),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(30)),
+					},
+					{
+						StorageClass:    awss3.StorageClass_GLACIER(),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(90)),
+					},
+					{
+						StorageClass:    awss3.StorageClass_DEEP_ARCHIVE(),
+						TransitionAfter: awscdk.Duration_Days(jsii.Number(365)),
+					},
+				},
+				// Clean up old versions and incomplete multipart uploads
+				NoncurrentVersionTransitions: &[]*awss3.NoncurrentVersionTransition{
+					{
+						StorageClass:               awss3.StorageClass_INFREQUENT_ACCESS(),
+						TransitionAfter:            awscdk.Duration_Days(jsii.Number(30)),
+						NoncurrentVersionsToRetain: jsii.Number(3),
+					},
+				},
+				NoncurrentVersionExpiration:         awscdk.Duration_Days(jsii.Number(100)),
+				AbortIncompleteMultipartUploadAfter: awscdk.Duration_Days(jsii.Number(7)),
+			},
+		},
 	})
 
 	// Note: SSL-only policy configuration simplified for CDK Go compatibility
 	// The EnforceSSL: true property above provides the same security benefit
+
+	// Note: IntelligentTiering configuration is not directly supported in CDK Go
+	// Consider using lifecycle rules above for cost optimization or configure
+	// IntelligentTiering manually in the AWS Console after deployment
+
+	// Add resource tags for better management
+	awscdk.Tags_Of(bucket).Add(jsii.String("Environment"), jsii.String(props.Environment), nil)
+	awscdk.Tags_Of(bucket).Add(jsii.String("Project"), jsii.String("tap-infrastructure"), nil)
+	awscdk.Tags_Of(bucket).Add(jsii.String("BackupEnabled"), jsii.String("true"), nil)
+	awscdk.Tags_Of(bucket).Add(jsii.String("CostOptimized"), jsii.String("true"), nil)
+
+	awscdk.Tags_Of(loggingBucket).Add(jsii.String("Environment"), jsii.String(props.Environment), nil)
+	awscdk.Tags_Of(loggingBucket).Add(jsii.String("Project"), jsii.String("tap-infrastructure"), nil)
+	awscdk.Tags_Of(loggingBucket).Add(jsii.String("Purpose"), jsii.String("access-logs"), nil)
 
 	return &StorageConstruct{
 		Construct:     construct,
