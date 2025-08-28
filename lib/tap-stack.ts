@@ -516,6 +516,13 @@ export class TapStack extends cdk.Stack {
     // CloudTrail for Audit Logging
     // ============================================================================
 
+    const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
+      logGroupName: `/aws/cloudtrail/secure-trail-${environmentSuffix}-${randomSuffix}`,
+      retention: logs.RetentionDays.THREE_MONTHS,
+      encryptionKey: cloudWatchKmsKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const cloudTrail = new cloudtrail.Trail(this, 'SecureCloudTrail', {
       bucket: logsBucket,
       s3KeyPrefix: 'cloudtrail-logs/',
@@ -523,12 +530,7 @@ export class TapStack extends cdk.Stack {
       isMultiRegionTrail: true,
       enableFileValidation: true,
       encryptionKey: s3KmsKey,
-      cloudWatchLogGroup: new logs.LogGroup(this, 'CloudTrailLogGroup', {
-        logGroupName: `/aws/cloudtrail/secure-trail-${environmentSuffix}-${randomSuffix}`,
-        retention: logs.RetentionDays.THREE_MONTHS,
-        encryptionKey: cloudWatchKmsKey,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      }),
+      cloudWatchLogGroup: cloudTrailLogGroup,
     });
 
     // ============================================================================
@@ -658,14 +660,44 @@ export class TapStack extends cdk.Stack {
       description: 'Application User Name',
     });
 
+    new cdk.CfnOutput(this, 'VPCFlowLogGroupArn', {
+      value: vpcFlowLogGroup.logGroupArn,
+      description: 'VPC Flow Log Group ARN',
+    });
+
+    new cdk.CfnOutput(this, 'VPCFlowLogGroupName', {
+      value: vpcFlowLogGroup.logGroupName,
+      description: 'VPC Flow Log Group Name',
+    });
+
     new cdk.CfnOutput(this, 'ApplicationLogGroupArn', {
       value: applicationLogGroup.logGroupArn,
       description: 'Application Log Group ARN',
     });
 
+    new cdk.CfnOutput(this, 'ApplicationLogGroupName', {
+      value: applicationLogGroup.logGroupName,
+      description: 'Application Log Group Name',
+    });
+
     new cdk.CfnOutput(this, 'APIGatewayLogGroupArn', {
       value: apiGatewayLogGroup.logGroupArn,
       description: 'API Gateway Log Group ARN',
+    });
+
+    new cdk.CfnOutput(this, 'APIGatewayLogGroupName', {
+      value: apiGatewayLogGroup.logGroupName,
+      description: 'API Gateway Log Group Name',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailLogGroupArn', {
+      value: cloudTrailLogGroup.logGroupArn,
+      description: 'CloudTrail Log Group ARN',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailLogGroupName', {
+      value: cloudTrailLogGroup.logGroupName,
+      description: 'CloudTrail Log Group Name',
     });
 
     new cdk.CfnOutput(this, 'LambdaErrorAlarmArn', {
