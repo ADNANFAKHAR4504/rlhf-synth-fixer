@@ -18,8 +18,9 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from props
-    const environmentSuffix = props.environmentSuffix;
+    // Get environment suffix from props and add randomness for uniqueness
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    const environmentSuffix = `${props.environmentSuffix}-${randomSuffix}`;
 
     // Create VPC with specified CIDR block
     const vpc = new ec2.Vpc(this, `vpc-main-${environmentSuffix}`, {
@@ -292,8 +293,8 @@ export class TapStack extends cdk.Stack {
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
         encryption: dynamodb.TableEncryption.AWS_MANAGED,
         pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      }, // Enable point-in-time recovery
+          pointInTimeRecoveryEnabled: true,
+        }, // Enable point-in-time recovery
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );

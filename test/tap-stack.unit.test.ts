@@ -239,20 +239,26 @@ describe('TapStack', () => {
 
   describe('Application Load Balancer', () => {
     test('should create ALB in public subnets', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
-        Scheme: 'internet-facing',
-        Type: 'application',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer',
+        {
+          Scheme: 'internet-facing',
+          Type: 'application',
+        }
+      );
     });
 
     test('should create target group for EC2 instances', () => {
-      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
-        Port: 80,
-        Protocol: 'HTTP',
-        HealthCheckEnabled: true,
-        HealthCheckPath: '/',
-        HealthCheckProtocol: 'HTTP',
-      });
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::TargetGroup',
+        {
+          Port: 80,
+          Protocol: 'HTTP',
+          HealthCheckEnabled: true,
+          HealthCheckPath: '/',
+          HealthCheckProtocol: 'HTTP',
+        }
+      );
     });
 
     test('should create HTTP listener', () => {
@@ -280,10 +286,10 @@ describe('TapStack', () => {
       // Check that resources are named with environment suffix
       const resources = template.toJSON().Resources;
       const resourceNames = Object.keys(resources);
-      
+
       // Find VPC resource and verify naming pattern
-      const vpcResource = resourceNames.find((name) =>
-        name.includes('vpcmain') && name.includes(environmentSuffix)
+      const vpcResource = resourceNames.find(
+        name => name.includes('vpcmain') && name.includes(environmentSuffix)
       );
       expect(vpcResource).toBeDefined();
     });
@@ -307,12 +313,13 @@ describe('TapStack', () => {
         DeletionProtection: false,
       });
 
-      // Check the metadata for removal policy  
+      // Check the metadata for removal policy
       const template_json = template.toJSON();
-      const dynamoResources = Object.entries(template_json.Resources)
-        .filter(([key, value]: [string, any]) => value.Type === 'AWS::DynamoDB::Table');
+      const dynamoResources = Object.entries(template_json.Resources).filter(
+        ([key, value]: [string, any]) => value.Type === 'AWS::DynamoDB::Table'
+      );
       expect(dynamoResources.length).toBeGreaterThan(0);
-      expect(dynamoResources[0][1].DeletionPolicy).toBe('Delete');
+      expect((dynamoResources[0][1] as any).DeletionPolicy).toBe('Delete');
     });
   });
 });

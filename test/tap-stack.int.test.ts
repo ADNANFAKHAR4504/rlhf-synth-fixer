@@ -16,7 +16,9 @@ const mockOutputs = {
 let outputs: any;
 
 try {
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+  outputs = JSON.parse(
+    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  );
 } catch (error) {
   console.log('Using mock outputs for integration tests');
   outputs = mockOutputs;
@@ -50,7 +52,9 @@ describe('TAP Stack Integration Tests', () => {
         return;
       }
 
-      const vpcs = await ec2.describeVpcs({ VpcIds: [outputs.VpcId] }).promise();
+      const vpcs = await ec2
+        .describeVpcs({ VpcIds: [outputs.VpcId] })
+        .promise();
       expect(vpcs.Vpcs).toHaveLength(1);
       expect(vpcs.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(vpcs.Vpcs![0].State).toBe('available');
@@ -69,7 +73,7 @@ describe('TAP Stack Integration Tests', () => {
         .promise();
 
       expect(natGateways.NatGateways!.length).toBeGreaterThanOrEqual(2);
-      natGateways.NatGateways!.forEach((natGateway) => {
+      natGateways.NatGateways!.forEach(natGateway => {
         expect(natGateway.State).toBe('available');
       });
     });
@@ -85,7 +89,7 @@ describe('TAP Stack Integration Tests', () => {
       // Check if bucket exists
       const buckets = await s3.listBuckets().promise();
       const logsBucket = buckets.Buckets!.find(
-        (bucket) => bucket.Name === outputs.S3LogsBucket
+        bucket => bucket.Name === outputs.S3LogsBucket
       );
       expect(logsBucket).toBeDefined();
 
@@ -111,7 +115,7 @@ describe('TAP Stack Integration Tests', () => {
       // Check if bucket exists
       const buckets = await s3.listBuckets().promise();
       const dataBucket = buckets.Buckets!.find(
-        (bucket) => bucket.Name === outputs.S3DataBucket
+        bucket => bucket.Name === outputs.S3DataBucket
       );
       expect(dataBucket).toBeDefined();
 
@@ -130,10 +134,12 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should block public access on both buckets', async () => {
       const buckets = [outputs.S3LogsBucket, outputs.S3DataBucket];
-      
+
       for (const bucketName of buckets) {
         if (!bucketName || bucketName.includes('mock')) {
-          console.log(`Skipping public access test for ${bucketName} - mock bucket`);
+          console.log(
+            `Skipping public access test for ${bucketName} - mock bucket`
+          );
           continue;
         }
 
@@ -163,7 +169,9 @@ describe('TAP Stack Integration Tests', () => {
         .promise();
 
       expect(table.Table!.TableStatus).toBe('ACTIVE');
-      expect(table.Table!.BillingModeSummary!.BillingMode).toBe('PAY_PER_REQUEST');
+      expect(table.Table!.BillingModeSummary!.BillingMode).toBe(
+        'PAY_PER_REQUEST'
+      );
       expect(table.Table!.SSEDescription!.Status).toBe('ENABLED');
 
       // Check key schema
@@ -175,7 +183,10 @@ describe('TAP Stack Integration Tests', () => {
       const pitr = await dynamodb
         .describeContinuousBackups({ TableName: outputs.DynamoDBTable })
         .promise();
-      expect(pitr.ContinuousBackupsDescription!.PointInTimeRecoveryDescription!.PointInTimeRecoveryStatus).toBe('ENABLED');
+      expect(
+        pitr.ContinuousBackupsDescription!.PointInTimeRecoveryDescription!
+          .PointInTimeRecoveryStatus
+      ).toBe('ENABLED');
     });
   });
 
@@ -195,7 +206,9 @@ describe('TAP Stack Integration Tests', () => {
       expect(func.Configuration!.State).toBe('Active');
 
       // Check environment variables
-      expect(func.Configuration!.Environment!.Variables).toHaveProperty('ENVIRONMENT');
+      expect(func.Configuration!.Environment!.Variables).toHaveProperty(
+        'ENVIRONMENT'
+      );
     });
 
     test('should be able to invoke Lambda function', async () => {
@@ -219,14 +232,17 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('RDS Database', () => {
     test('should have database with correct configuration', async () => {
-      if (!outputs.DatabaseEndpoint || outputs.DatabaseEndpoint.includes('mock')) {
+      if (
+        !outputs.DatabaseEndpoint ||
+        outputs.DatabaseEndpoint.includes('mock')
+      ) {
         console.log('Skipping RDS test - no real database available');
         return;
       }
 
       // Extract DB identifier from endpoint
       const dbIdentifier = outputs.DatabaseEndpoint.split('.')[0];
-      
+
       const db = await rds
         .describeDBInstances({ DBInstanceIdentifier: dbIdentifier })
         .promise();
@@ -242,15 +258,18 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Application Load Balancer', () => {
     test('should have ALB with correct configuration', async () => {
-      if (!outputs.LoadBalancerDNS || outputs.LoadBalancerDNS.includes('mock')) {
+      if (
+        !outputs.LoadBalancerDNS ||
+        outputs.LoadBalancerDNS.includes('mock')
+      ) {
         console.log('Skipping ALB test - no real load balancer available');
         return;
       }
 
       // Get load balancer ARN from DNS name
       const loadBalancers = await elbv2.describeLoadBalancers().promise();
-      const alb = loadBalancers.LoadBalancers!.find((lb) =>
-        lb.DNSName === outputs.LoadBalancerDNS
+      const alb = loadBalancers.LoadBalancers!.find(
+        lb => lb.DNSName === outputs.LoadBalancerDNS
       );
 
       expect(alb).toBeDefined();
@@ -260,8 +279,13 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have target groups with healthy targets', async () => {
-      if (!outputs.LoadBalancerDNS || outputs.LoadBalancerDNS.includes('mock')) {
-        console.log('Skipping target group test - no real load balancer available');
+      if (
+        !outputs.LoadBalancerDNS ||
+        outputs.LoadBalancerDNS.includes('mock')
+      ) {
+        console.log(
+          'Skipping target group test - no real load balancer available'
+        );
         return;
       }
 
@@ -270,11 +294,14 @@ describe('TAP Stack Integration Tests', () => {
 
       // Check target health for each target group
       for (const targetGroup of targetGroups.TargetGroups!) {
+        if (!targetGroup.TargetGroupArn) continue;
         const targetHealth = await elbv2
           .describeTargetHealth({ TargetGroupArn: targetGroup.TargetGroupArn })
           .promise();
 
-        expect(targetHealth.TargetHealthDescriptions!.length).toBeGreaterThan(0);
+        expect(targetHealth.TargetHealthDescriptions!.length).toBeGreaterThan(
+          0
+        );
         // Note: Targets might still be registering, so we'll just check they exist
       }
     });
@@ -282,23 +309,35 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('End-to-End Connectivity', () => {
     test('should be able to reach load balancer endpoint', async () => {
-      if (!outputs.LoadBalancerDNS || outputs.LoadBalancerDNS.includes('mock')) {
-        console.log('Skipping connectivity test - no real load balancer available');
+      if (
+        !outputs.LoadBalancerDNS ||
+        outputs.LoadBalancerDNS.includes('mock')
+      ) {
+        console.log(
+          'Skipping connectivity test - no real load balancer available'
+        );
         return;
       }
 
       // Try to reach the load balancer (with a reasonable timeout)
       // Note: This might fail if instances are still starting up
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         const response = await fetch(`http://${outputs.LoadBalancerDNS}`, {
           method: 'GET',
-          timeout: 10000,
+          signal: controller.signal,
         });
-        
+
+        clearTimeout(timeoutId);
+
         // If we get any response, the infrastructure is working
         expect(response).toBeDefined();
       } catch (error) {
-        console.log('Load balancer not yet ready, but infrastructure is deployed');
+        console.log(
+          'Load balancer not yet ready, but infrastructure is deployed'
+        );
         // This is acceptable as instances might still be starting
       }
     });
