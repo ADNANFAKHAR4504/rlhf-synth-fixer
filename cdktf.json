@@ -1,10 +1,11 @@
 {
   "language": "typescript",
   "app": "npx ts-node bin/tap.ts",
-  "projectId": "tap-stack",
+  "projectId": "a1f0fa63-a084-47eb-b26e-817cf3972bae",
+  "sendCrashReports": "false",
   "terraformProviders": [
-    "hashicorp/aws@~> 5.0"
+    "aws@~> 6.0"
   ],
   "terraformModules": [],
-  "codeMakerOutput": ".gen"
+  "context": {}
 }

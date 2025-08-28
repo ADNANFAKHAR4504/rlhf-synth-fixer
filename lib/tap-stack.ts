@@ -1,17 +1,25 @@
+// tapstack.ts
+
+import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { S3Backend, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-
-// Import your stacks here
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import {
-  ComputeModule,
-  NetworkingModule,
-  SecurityModule,
-  StorageModule,
-} from './modules';
+  CloudwatchModule,
+  Ec2Module,
+  IamModule,
+  RdsModule,
+  S3Module,
+  VpcModule,
+  AlbModule, // Added missing import
+  Route53Module, // Added missing import
+} from './module';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -19,12 +27,12 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
+  // Added Route53 configuration
+  domainName?: string;
+  recordName?: string;
 }
 
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-
-const AWS_REGION_OVERRIDE = 'us-west-2';
+const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -33,124 +41,185 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+      : props?.awsRegion || 'us-west-2';
+    const stateBucketRegion = props?.stateBucketRegion || 'us-west-2';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // ✅ Added Route53 configuration with defaults
+    const domainName = props?.domainName || 'tr-example.com';
+    const recordName = props?.recordName || `app-${environmentSuffix}`;
+
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
     });
 
-    // Configure S3 Backend with native state locking
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
+
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
-    // Add your stack instantiations here
-    // Do NOT create resources directly in this stack.
-    // Instead, create separate stacks for each resource type.
+    const vpc = new VpcModule(this, 'main-vpc', {
+      name: `fullstack-app-${environmentSuffix}`,
+      cidrBlock: '10.0.0.0/16',
+    });
 
-    const projectName = `tap-${environmentSuffix}`;
+    new S3Module(this, 's3-buckets', {
+      bucketName: `fullstack-app-bucket-${environmentSuffix}`,
+      logBucketName: `fullstack-app-log-bucket-${environmentSuffix}`,
+    });
 
-    // Create Networking Module
-    const networkingModule = new NetworkingModule(
+    const iam = new IamModule(this, 'ec2-iam-role', {
+      name: `ec2-role-${environmentSuffix}`,
+    });
+
+    const albSecurityGroup = new SecurityGroup(this, 'alb-sg', {
+      name: `alb-sg-${environmentSuffix}`,
+      vpcId: vpc.vpcIdOutput,
+      description: 'Allow all inbound HTTP/S traffic',
+      ingress: [
+        {
+          fromPort: 80,
+          toPort: 80,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+        // ✅ Added HTTPS support for future SSL implementation
+        {
+          fromPort: 443,
+          toPort: 443,
+          protocol: 'tcp',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      tags: { Name: `alb-sg-${environmentSuffix}` },
+    });
+
+    const dbSecurityGroup = new SecurityGroup(this, 'db-sg', {
+      name: `db-sg-${environmentSuffix}`,
+      vpcId: vpc.vpcIdOutput,
+      description: 'Allow inbound traffic to RDS from EC2 instances',
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      tags: { Name: `db-sg-${environmentSuffix}` },
+    });
+
+    const ec2SecurityGroup = new SecurityGroup(this, 'ec2-sg', {
+      name: `ec2-sg-${environmentSuffix}`,
+      vpcId: vpc.vpcIdOutput,
+      description: 'Allow inbound HTTP traffic from ALB',
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      tags: { Name: `ec2-sg-${environmentSuffix}` },
+    });
+
+    new SecurityGroupRule(this, 'ec2-ingress-rule', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      sourceSecurityGroupId: albSecurityGroup.id,
+      securityGroupId: ec2SecurityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'db-ingress-rule', {
+      type: 'ingress',
+      fromPort: 3306,
+      toPort: 3306,
+      protocol: 'tcp',
+      sourceSecurityGroupId: ec2SecurityGroup.id,
+      securityGroupId: dbSecurityGroup.id,
+    });
+
+    const ami = new DataAwsAmi(this, 'ubuntu-ami', {
+      mostRecent: true,
+      owners: ['099720109477'],
+      filter: [
+        {
+          name: 'name',
+          values: ['ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*'],
+        },
+      ],
+    });
+
+    const ec2 = new Ec2Module(this, 'ec2-instance', {
+      name: `web-server-${environmentSuffix}`,
+      vpcId: vpc.vpcIdOutput,
+      subnetId: vpc.privateSubnetIdsOutput[0],
+      instanceType: 't3.micro',
+      ami: ami.id,
+      keyName: 'compute-secure-key',
+      instanceProfileName: iam.instanceProfileName,
+      ec2SecurityGroupId: ec2SecurityGroup.id,
+    });
+
+    // Configuration parameters
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
       this,
-      'tap-networking-stack',
+      'db-password-secret',
       {
-        vpcCidr: '10.0.0.0/16',
-        publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
-        privateSubnetCidrs: ['10.0.10.0/24', '10.0.20.0/24'],
-        projectName: projectName,
+        secretId: 'my-db-password',
       }
     );
 
-    // Create Security Module
-    const securityModule = new SecurityModule(this, 'tap-security-stack', {
-      vpcId: networkingModule.vpc.id,
-      projectName: projectName,
+    const rds = new RdsModule(this, 'db-instance', {
+      name: `mysql-db-${environmentSuffix}`,
+      engine: 'mysql',
+      engineVersion: '8.0',
+      instanceClass: 'db.t3.micro',
+      allocatedStorage: 20,
+      username: 'admin',
+      password: dbPasswordSecret.secretString,
+      vpcId: vpc.vpcIdOutput,
+      privateSubnetIds: vpc.privateSubnetIdsOutput,
+      dbSecurityGroupId: dbSecurityGroup.id,
     });
 
-    // Create Storage Module
-    const storageModule = new StorageModule(this, 'tap-storage-stack', {
-      projectName: projectName,
+    // SOLUTION 1: Add ALB Module instantiation
+    const alb = new AlbModule(this, 'application-load-balancer', {
+      name: `fullstack-alb-${environmentSuffix}`,
+      vpcId: vpc.vpcIdOutput,
+      publicSubnetIds: vpc.publicSubnetIdsOutput,
+      targetGroupArn: ec2.targetGroupArnOutput, //
+      albSecurityGroupId: albSecurityGroup.id,
     });
 
-    // Create Compute Module
-    const computeModule = new ComputeModule(this, 'tap-compute-stack', {
-      subnetId: networkingModule.publicSubnets[0].id, // Deploy in first public subnet
-      securityGroupIds: [securityModule.ec2SecurityGroup.id],
-      s3BucketArn: storageModule.s3Bucket.arn,
-      projectName: projectName,
+    // ✅ SOLUTION 2: Add Route53 Module instantiation
+    new Route53Module(this, 'dns-record', {
+      zoneName: domainName,
+      recordName: recordName,
+      albZoneId: alb.albZoneIdOutput, //
+      albDnsName: alb.albDnsNameOutput, //
     });
 
-    // Terraform Outputs for reference
-    new TerraformOutput(this, 'tap-vpc-id', {
-      value: networkingModule.vpc.id,
-      description: 'VPC ID',
-    });
-
-    new TerraformOutput(this, 'tap-public-subnet-ids', {
-      value: networkingModule.publicSubnets.map(subnet => subnet.id),
-      description: 'Public subnet IDs',
-    });
-
-    new TerraformOutput(this, 'tap-private-subnet-ids', {
-      value: networkingModule.privateSubnets.map(subnet => subnet.id),
-      description: 'Private subnet IDs',
-    });
-
-    new TerraformOutput(this, 'tap-internet-gateway-id', {
-      value: networkingModule.internetGateway.id,
-      description: 'Internet Gateway ID',
-    });
-
-    new TerraformOutput(this, 'tap-nat-gateway-id', {
-      value: networkingModule.natGateway.id,
-      description: 'NAT Gateway ID',
-    });
-
-    new TerraformOutput(this, 'tap-ec2-instance-id', {
-      value: computeModule.ec2Instance.id,
-      description: 'EC2 instance ID',
-    });
-
-    new TerraformOutput(this, 'tap-ec2-public-ip', {
-      value: computeModule.ec2Instance.publicIp,
-      description: 'EC2 instance public IP address',
-    });
-
-    new TerraformOutput(this, 'tap-ec2-private-ip', {
-      value: computeModule.ec2Instance.privateIp,
-      description: 'EC2 instance private IP address',
-    });
-
-    new TerraformOutput(this, 'tap-s3-bucket-name', {
-      value: storageModule.s3Bucket.bucket,
-      description: 'S3 bucket name for application data',
-    });
-
-    new TerraformOutput(this, 'tap-s3-bucket-arn', {
-      value: storageModule.s3Bucket.arn,
-      description: 'S3 bucket ARN',
-    });
-
-    new TerraformOutput(this, 'tap-ec2-security-group-id', {
-      value: securityModule.ec2SecurityGroup.id,
-      description: 'EC2 Security Group ID',
-    });
-
-    new TerraformOutput(this, 'tap-ec2-iam-role-arn', {
-      value: computeModule.iamRole.arn,
-      description: 'EC2 IAM Role ARN',
+    new CloudwatchModule(this, 'alarms', {
+      instanceId: ec2.instanceIdOutput,
+      dbInstanceId: rds.dbInstanceIdOutput,
     });
   }
 }

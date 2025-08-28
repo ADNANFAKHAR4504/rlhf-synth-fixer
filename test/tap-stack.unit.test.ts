@@ -1,313 +1,169 @@
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { App, S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
-import { Construct } from 'constructs';
-import {
-  ComputeModule,
-  NetworkingModule,
-  SecurityModule,
-  StorageModule,
-} from '../lib/modules';
+import { App, Testing } from 'cdktf';
+import { TapStack } from '../lib/tap-stack';
+import { VpcModule, AlbModule, Route53Module, } from '../lib/module';
 
-export interface DefaultTags {
-  tags: Record<string, string>;
-}
-export interface TapStackProps {
-  environmentSuffix?: string | null | undefined;
-  stateBucket?: string | null | undefined;
-  stateBucketRegion?: string | null | undefined;
-  awsRegion?: string | null | undefined;
-  defaultTags?: DefaultTags | null | undefined;
-}
 
-function coerceEnvSuffix(env?: string | null): string {
-  const val = (env ?? '').trim();
-  return val.length === 0 ? 'dev' : val;
-}
-function normalizeDefaultTags(tags?: DefaultTags | null): DefaultTags[] {
-  if (!tags) return [];
-  return [tags];
-}
-function resolveRegion(
-  overrideEnv: string | undefined,
-  propsRegion?: string | null
-): string {
-  const env = (overrideEnv ?? '').trim();
-  if (env) return env;
-  const pr = (propsRegion ?? '').trim();
-  if (pr) return pr;
-  return 'us-east-1'; // final fallback; align with your expectations/tests
-}
+// Mock all the modules to isolate the TapStack for unit testing.
+jest.mock('../lib/module', () => {
+    return {
+        VpcModule: jest.fn(() => ({
+            vpcIdOutput: 'mock-vpc-id',
+            publicSubnetIdsOutput: ['mock-public-subnet-0'],
+            privateSubnetIdsOutput: ['mock-private-subnet-0'],
+            cidrBlockOutput: '10.0.0.0/16',
+        })),
+        S3Module: jest.fn(),
+        IamModule: jest.fn(() => ({
+            instanceProfileName: 'mock-iam-profile-name',
+        })),
+        Ec2Module: jest.fn(() => ({
+            instanceIdOutput: 'mock-instance-id',
+            targetGroupArnOutput: 'mock-target-group-arn',
+        })),
+        AlbModule: jest.fn(() => ({
+            albDnsNameOutput: 'mock-alb-dns-name',
+            albZoneIdOutput: 'mock-alb-zone-id',
+            albSecurityGroupIdOutput: 'mock-alb-security-group-id',
+        })),
+        RdsModule: jest.fn(() => ({
+            dbInstanceIdOutput: 'mock-db-instance-id',
+            dbEndpointOutput: 'mock-db-endpoint',
+        })),
+        Route53Module: jest.fn(),
+        CloudwatchModule: jest.fn(),
+    };
+});
 
-export class TapStack extends TerraformStack {
-  constructor(scope: Construct, id: string, props?: TapStackProps | null) {
-    super(scope as unknown as App, id);
+// Mocking AWS resources to prevent real API calls
+jest.mock('@cdktf/provider-aws/lib/security-group', () => {
+    return {
+        SecurityGroup: jest.fn(() => ({
+            id: 'mock-security-group-id',
+        })),
+    };
+});
+jest.mock('@cdktf/provider-aws/lib/security-group-rule', () => {
+    return {
+        SecurityGroupRule: jest.fn(),
+    };
+});
+jest.mock('@cdktf/provider-aws/lib/data-aws-ami', () => {
+    return {
+        DataAwsAmi: jest.fn(() => ({
+            id: 'mock-ami-id',
+        })),
+    };
+});
 
-    const p = props ?? {};
-    const environment = coerceEnvSuffix(p.environmentSuffix);
-    const bucket = (p.stateBucket ?? 'iac-rlhf-tf-states').trim();
-    const bucketRegion = (p.stateBucketRegion ?? 'us-east-1').trim();
+describe('Stack Structure', () => {
+    let app: App;
+    let stack: TapStack;
+    let synthesized: string;
 
-    // Resolve region at runtime so tests that toggle env can cover both branches
-    const region = resolveRegion(process.env.AWS_REGION_OVERRIDE, p.awsRegion);
-
-    new AwsProvider(this, 'aws', {
-      region,
-      defaultTags: normalizeDefaultTags(p.defaultTags),
+    beforeEach(() => {
+        jest.clearAllMocks();
     });
 
-    new S3Backend(this, {
-      bucket,
-      key: `${environment}/${id}.tfstate`,
-      region: bucketRegion,
-      encrypt: true,
+    test('TapStack instantiates successfully via props', () => {
+        app = new App();
+        stack = new TapStack(app, 'TestTapStackWithProps', {
+            environmentSuffix: 'prod',
+            stateBucket: 'custom-state-bucket',
+            stateBucketRegion: 'us-west-2',
+            awsRegion: 'us-west-2',
+            defaultTags: { tags: { Project: 'MyApp' } },
+        });
+        synthesized = Testing.synth(stack);
+        expect(stack).toBeDefined();
+        expect(synthesized).toBeDefined();
     });
 
-    // Backend locking toggle (your test just verifies addOverride is used)
-    this.addOverride('terraform.backend.s3.use_lockfile', true);
+    test('TapStack uses default values when no props provided', () => {
+        app = new App();
+        stack = new TapStack(app, 'TestTapStackDefault');
+        synthesized = Testing.synth(stack);
+        expect(stack).toBeDefined();
+        expect(synthesized).toBeDefined();
+    });
+});
 
-    const projectName = `tap-${environment}`;
+describe('AWS Provider and Backend Configuration', () => {
+    let app: App;
+    let stack: TapStack;
+    let synthesized: string;
 
-    const networking = new NetworkingModule(this, 'tap-networking-stack', {
-      vpcCidr: '10.0.0.0/16',
-      publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
-      privateSubnetCidrs: ['10.0.10.0/24', '10.0.20.0/24'],
-      projectName,
+    beforeEach(() => {
+        app = new App();
+        stack = new TapStack(app, 'TestConfig', {
+            defaultTags: { tags: { Project: 'TAP', Environment: 'dev', ManagedBy: 'CDKTF' } },
+        });
+        synthesized = Testing.synth(stack);
     });
 
-    const security = new SecurityModule(this, 'tap-security-stack', {
-      vpcId: 'tap-networking-stack-vpc-id',
-      projectName,
+    test('should configure the AWS provider with the correct region', () => {
+        const parsed = JSON.parse(synthesized);
+        expect(parsed.provider.aws[0].region).toBe('us-east-1');
     });
 
-    const storage = new StorageModule(this, 'tap-storage-stack', {
-      projectName,
+    test('should configure the S3 backend with default values', () => {
+        const parsed = JSON.parse(synthesized);
+        expect(parsed.terraform.backend.s3.bucket).toBe('iac-rlhf-tf-states');
+        expect(parsed.terraform.backend.s3.key).toBe('dev/TestConfig.tfstate');
+        expect(parsed.terraform.backend.s3.region).toBe('us-east-1');
+        expect(parsed.terraform.backend.s3.encrypt).toBe(true);
+        expect(parsed.terraform.backend.s3.use_lockfile).toBe(true);
     });
 
-    const compute = new ComputeModule(this, 'tap-compute-stack', {
-      subnetId: 'tap-networking-stack-public-subnet-1-id',
-      securityGroupIds: ['tap-security-stack-sg-id'],
-      s3BucketArn: 'arn:aws:s3:::tap-storage-stack-bucket-name',
-      projectName,
+    test('should use custom state bucket and region when provided', () => {
+        app = new App();
+        stack = new TapStack(app, 'TestCustomBackend', {
+            stateBucket: 'my-custom-bucket',
+            stateBucketRegion: 'eu-west-1',
+            environmentSuffix: 'staging',
+        });
+        synthesized = Testing.synth(stack);
+        const parsed = JSON.parse(synthesized);
+        expect(parsed.terraform.backend.s3.bucket).toBe('my-custom-bucket');
+        expect(parsed.terraform.backend.s3.key).toBe('staging/TestCustomBackend.tfstate');
+        expect(parsed.terraform.backend.s3.region).toBe('eu-west-1');
     });
 
-    new TerraformOutput(this, 'tap-vpc-id', {
-      value: 'tap-networking-stack-vpc-id',
-      description: 'VPC ID',
+    test('should set default tags on the provider', () => {
+        const parsed = JSON.parse(synthesized);
+        expect(parsed.provider.aws[0].default_tags).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    tags: {
+                        Project: 'TAP',
+                        Environment: 'dev',
+                        ManagedBy: 'CDKTF',
+                    },
+                }),
+            ]),
+        );
     });
-    new TerraformOutput(this, 'tap-public-subnet-ids', {
-      value: [
-        'tap-networking-stack-public-subnet-1-id',
-        'tap-networking-stack-public-subnet-2-id',
-      ],
-      description: 'Public subnet IDs',
-    });
-    new TerraformOutput(this, 'tap-private-subnet-ids', {
-      value: [
-        'tap-networking-stack-private-subnet-1-id',
-        'tap-networking-stack-private-subnet-2-id',
-      ],
-      description: 'Private subnet IDs',
-    });
-    new TerraformOutput(this, 'tap-internet-gateway-id', {
-      value: 'tap-networking-stack-igw-id',
-      description: 'Internet Gateway ID',
-    });
-    new TerraformOutput(this, 'tap-nat-gateway-id', {
-      value: 'tap-networking-stack-nat-id',
-      description: 'NAT Gateway ID',
-    });
-    new TerraformOutput(this, 'tap-ec2-instance-id', {
-      value: 'tap-compute-stack-instance-id',
-      description: 'EC2 instance ID',
-    });
-    new TerraformOutput(this, 'tap-ec2-public-ip', {
-      value: '54.123.45.67',
-      description: 'EC2 instance public IP address',
-    });
-    new TerraformOutput(this, 'tap-ec2-private-ip', {
-      value: '10.0.1.10',
-      description: 'EC2 instance private IP address',
-    });
-    new TerraformOutput(this, 'tap-s3-bucket-name', {
-      value: 'tap-storage-stack-bucket-name',
-      description: 'S3 bucket name for application data',
-    });
-    new TerraformOutput(this, 'tap-s3-bucket-arn', {
-      value: 'arn:aws:s3:::tap-storage-stack-bucket-name',
-      description: 'S3 bucket ARN',
-    });
-    new TerraformOutput(this, 'tap-ec2-security-group-id', {
-      value: 'tap-security-stack-sg-id',
-      description: 'EC2 Security Group ID',
-    });
-    new TerraformOutput(this, 'tap-ec2-iam-role-arn', {
-      value: 'arn:aws:iam::123456789012:role/secure-app-ec2-role-tap-dev',
-      description: 'EC2 IAM Role ARN',
+});
+
+describe('Module Instantiation and Wiring', () => {
+    let app: App;
+    let stack: TapStack;
+    beforeEach(() => {
+        jest.clearAllMocks();
+        app = new App();
+        stack = new TapStack(app, 'TestModule');
+        Testing.synth(stack);
     });
 
-    void networking;
-    void security;
-    void storage;
-    void compute;
-  }
-}
-
-// Unit Tests
-describe('TapStack', () => {
-  let app: App;
-
-  beforeEach(() => {
-    app = new App();
-  });
-
-  afterEach(() => {
-    // Clean up after each test
-  });
-
-  describe('constructor', () => {
-    test('should create TapStack with default props', () => {
-      const stack = new TapStack(app, 'test-stack');
-
-      expect(stack).toBeDefined();
-      // Verify the stack was created successfully
+    test('should instantiate VpcModule once', () => {
+        expect(VpcModule).toHaveBeenCalledTimes(1);
+        expect(VpcModule).toHaveBeenCalledWith(
+            expect.anything(),
+            'main-vpc',
+            expect.objectContaining({ name: 'fullstack-app-dev' }),
+        );
     });
 
-    test('should create TapStack with custom environment suffix', () => {
-      const stack = new TapStack(app, 'test-stack', {
-        environmentSuffix: 'prod',
-      });
 
-      expect(stack).toBeDefined();
-    });
 
-    test('should create TapStack with null environment suffix', () => {
-      const stack = new TapStack(app, 'test-stack', {
-        environmentSuffix: null,
-      });
 
-      expect(stack).toBeDefined();
-    });
-
-    test('should create TapStack with undefined environment suffix', () => {
-      const stack = new TapStack(app, 'test-stack', {
-        environmentSuffix: undefined,
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    test('should create TapStack with custom AWS region', () => {
-      const stack = new TapStack(app, 'test-stack', {
-        awsRegion: 'us-west-2',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    test('should create TapStack with custom state bucket', () => {
-      const stack = new TapStack(app, 'test-stack', {
-        stateBucket: 'custom-state-bucket',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    test('should create TapStack with custom state bucket region', () => {
-      const stack = new TapStack(app, 'test-stack', {
-        stateBucketRegion: 'us-west-2',
-      });
-
-      expect(stack).toBeDefined();
-    });
-
-    test('should create TapStack with default tags', () => {
-      const stack = new TapStack(app, 'test-stack', {
-        defaultTags: {
-          tags: {
-            Environment: 'test',
-            Project: 'tap',
-          },
-        },
-      });
-
-      expect(stack).toBeDefined();
-    });
-  });
-
-  describe('coerceEnvSuffix', () => {
-    test('should return "dev" for null input', () => {
-      const result = coerceEnvSuffix(null);
-      expect(result).toBe('dev');
-    });
-
-    test('should return "dev" for undefined input', () => {
-      const result = coerceEnvSuffix(undefined);
-      expect(result).toBe('dev');
-    });
-
-    test('should return "dev" for empty string', () => {
-      const result = coerceEnvSuffix('');
-      expect(result).toBe('dev');
-    });
-
-    test('should return "dev" for whitespace string', () => {
-      const result = coerceEnvSuffix('   ');
-      expect(result).toBe('dev');
-    });
-
-    test('should return trimmed value for non-empty string', () => {
-      const result = coerceEnvSuffix('  prod  ');
-      expect(result).toBe('prod');
-    });
-
-    test('should return original value for valid string', () => {
-      const result = coerceEnvSuffix('staging');
-      expect(result).toBe('staging');
-    });
-  });
-
-  describe('normalizeDefaultTags', () => {
-    test('should return empty array for null input', () => {
-      const result = normalizeDefaultTags(null);
-      expect(result).toEqual([]);
-    });
-
-    test('should return empty array for undefined input', () => {
-      const result = normalizeDefaultTags(undefined);
-      expect(result).toEqual([]);
-    });
-
-    test('should return array with tags object', () => {
-      const tags = { tags: { Environment: 'test' } };
-      const result = normalizeDefaultTags(tags);
-      expect(result).toEqual([tags]);
-    });
-  });
-
-  describe('resolveRegion', () => {
-    test('should return override env when provided', () => {
-      const result = resolveRegion('us-west-2', 'us-east-1');
-      expect(result).toBe('us-west-2');
-    });
-
-    test('should return props region when override env is empty', () => {
-      const result = resolveRegion('', 'us-west-2');
-      expect(result).toBe('us-west-2');
-    });
-
-    test('should return props region when override env is whitespace', () => {
-      const result = resolveRegion('   ', 'us-west-2');
-      expect(result).toBe('us-west-2');
-    });
-
-    test('should return default region when both are empty', () => {
-      const result = resolveRegion('', '');
-      expect(result).toBe('us-east-1');
-    });
-
-    test('should return default region when both are null', () => {
-      const result = resolveRegion(undefined, null);
-      expect(result).toBe('us-east-1');
-    });
-  });
 });
