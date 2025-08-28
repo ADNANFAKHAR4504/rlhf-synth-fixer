@@ -39,6 +39,19 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:*'],
             resources: ['*'],
           }),
+          new iam.PolicyStatement({
+            sid: 'Allow CloudTrail to encrypt logs',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+            actions: [
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:Encrypt',
+              'kms:ReEncrypt*',
+              'kms:Decrypt',
+            ],
+            resources: ['*'],
+          }),
         ],
       }),
     });
@@ -232,6 +245,32 @@ export class TapStack extends cdk.Stack {
       ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
+    // Add bucket policy for CloudTrail
+    logsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailAclCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketAcl', 's3:GetBucketLocation'],
+        resources: [logsBucket.bucketArn],
+      })
+    );
+
+    logsBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailWrite',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${logsBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-acl': 'bucket-owner-full-control',
+          },
+        },
+      })
+    );
 
     // ============================================================================
     // RDS Database with Encryption
