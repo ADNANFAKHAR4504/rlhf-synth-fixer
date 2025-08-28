@@ -19,5 +19,10 @@
     "IAM",
     "CloudFormation"
   ],
-  "author": "shreyaspturing"
+  "author": "Ashwin-DevAsh",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
