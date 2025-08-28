@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291706",
+  "team": "1",
+  "startedAt": "2025-08-21T17:43:54.398Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Access Control",
+    "Resource Scaling",
+    "Container Orchestration",
+    "IaC Optimization",
+    "Web Application Deployment"
+  ],
+  "training_quality": 5,
+  "training_quality_justification": "Prompt is prescriptive and AI-styled; MODEL_RESPONSE deviates from prompt (uses CDKTF not HCL) and contains multiple validation errors documented in MODEL_FAILURES.md. IDEAL_RESPONSE.md is incomplete. Useful for highlighting common failure modes, but needs stronger ground-truth.",
+  "aws_services": [
+    "VPC",
+    "EC2 (EIP, NAT Gateway, EBS encryption-by-default)",
+    "Elastic Load Balancing (ALB)",
+    "ECS Fargate",
+    "AWS CodeDeploy",
+    "Amazon RDS",
+    "AWS CloudWatch (Logs, Alarms)",
+    "AWS Secrets Manager",
+    "AWS IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}
