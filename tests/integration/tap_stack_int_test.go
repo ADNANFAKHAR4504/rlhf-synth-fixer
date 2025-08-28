@@ -672,7 +672,7 @@ func discoverAWSResources(t *testing.T) *PulumiOutputs {
 				subnetId := aws.ToString(subnet.SubnetId)
 				az := aws.ToString(subnet.AvailabilityZone)
 				isPublic := aws.ToBool(subnet.MapPublicIpOnLaunch)
-				
+
 				// More robust matching based on AZ and public/private nature
 				if isPublic && az == "us-east-1a" {
 					outputs.PublicSubnetAID = subnetId
@@ -697,7 +697,7 @@ func discoverAWSResources(t *testing.T) *PulumiOutputs {
 			for _, nat := range nats.NatGateways {
 				natId := aws.ToString(nat.NatGatewayId)
 				subnetId := aws.ToString(nat.SubnetId)
-				
+
 				// Determine AZ based on subnet location
 				if subnetId == outputs.PublicSubnetAID {
 					outputs.NatGatewayAID = natId
@@ -738,7 +738,7 @@ func discoverAWSResources(t *testing.T) *PulumiOutputs {
 				sgName := aws.ToString(sg.GroupName)
 				sgId := aws.ToString(sg.GroupId)
 				sgDesc := aws.ToString(sg.Description)
-				
+
 				// Match based on description for more accuracy
 				switch {
 				case strings.Contains(sgDesc, "web servers"):
