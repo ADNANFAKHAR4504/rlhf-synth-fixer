@@ -37,14 +37,6 @@ Parameters:
     Default: 'appuser'
     Description: 'Database username'
   
-  DBPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    Default: 'TempPassword123!'
-    Description: 'Database password'
-
-
 
 Resources:
   # VPC Infrastructure - US-East-1
@@ -325,6 +317,23 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # Secrets Manager for DB Password
+  DBPasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-db-password-${EnvironmentSuffix}'
+      Description: 'Database password for RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
   # S3 Bucket for application assets
   S3Bucket:
     Type: AWS::S3::Bucket
@@ -457,7 +466,7 @@ Resources:
       Engine: postgres
       EngineVersion: '15.14'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -504,7 +513,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${Environment}-web-server-template'
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: t3.micro
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
