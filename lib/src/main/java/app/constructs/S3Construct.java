@@ -43,8 +43,7 @@ public class S3Construct extends Construct {
      * Creates a bucket for storing access logs from other S3 buckets.
      */
     private Bucket createAccessLogsBucket(final IKey kmsKey) {
-        Bucket bucket = Bucket.Builder.create(this, EnvironmentConfig.getResourceName("s3", "access-logs"))
-                .bucketName(EnvironmentConfig.getResourceName("s3", "access-logs"))
+    Bucket bucket = Bucket.Builder.create(this, EnvironmentConfig.getResourceName("s3", "access-logs"))
                 .encryption(BucketEncryption.KMS)
                 .encryptionKey(kmsKey)
                 .versioned(true)
@@ -90,8 +89,7 @@ public class S3Construct extends Construct {
      * Creates the main data bucket with comprehensive security settings.
      */
     private Bucket createDataBucket(final IKey kmsKey) {
-        Bucket bucket = Bucket.Builder.create(this, EnvironmentConfig.getResourceName("s3", "data"))
-                .bucketName(EnvironmentConfig.getResourceName("s3", "data"))
+    Bucket bucket = Bucket.Builder.create(this, EnvironmentConfig.getResourceName("s3", "data"))
                 .encryption(BucketEncryption.KMS)
                 .encryptionKey(kmsKey)
                 .versioned(true)
@@ -133,8 +131,7 @@ public class S3Construct extends Construct {
      * Creates a dedicated bucket for CloudTrail logs with appropriate permissions.
      */
     private Bucket createCloudTrailBucket(final IKey kmsKey) {
-        Bucket bucket = Bucket.Builder.create(this, EnvironmentConfig.getResourceName("s3", "cloudtrail"))
-                .bucketName(EnvironmentConfig.getResourceName("s3", "cloudtrail"))
+    Bucket bucket = Bucket.Builder.create(this, EnvironmentConfig.getResourceName("s3", "cloudtrail"))
                 .encryption(BucketEncryption.KMS)
                 .encryptionKey(kmsKey)
                 .versioned(true)
