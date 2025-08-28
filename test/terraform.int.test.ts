@@ -66,7 +66,7 @@ function runTerraformInit() {
     const libPath = path.resolve(process.cwd(), 'lib');
 
     // Run terraform init with backend=false to avoid interactive prompts
-    execSync('terraform init -backend=false', {
+    execSync('terraform init ', {
       stdio: 'pipe',
       timeout: 60000, // 60 second timeout
       cwd: libPath // Set working directory without changing process.cwd()
@@ -109,7 +109,7 @@ function runTerraformPlan() {
     const libPath = path.resolve(process.cwd(), 'lib');
 
     // Run terraform plan from the lib directory
-    const result = execSync('terraform plan -out=tfplan', {
+    const result = execSync('terraform plan ', {
       stdio: 'pipe',
       timeout: 120000, // 2 minute timeout
       cwd: libPath // Set working directory without changing process.cwd()

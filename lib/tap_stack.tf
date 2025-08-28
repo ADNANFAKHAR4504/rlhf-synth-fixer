@@ -81,9 +81,10 @@ variable "db_user" {
 }
 
 variable "db_pass" {
-  description = "Database master password"
+  description = "Database master password (optional - will use random password if not provided)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 
