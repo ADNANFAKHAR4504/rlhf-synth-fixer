@@ -29,7 +29,7 @@ func Test_TapStack_Integration(t *testing.T) {
 	// 3. Run these validation tests against the deployed resources
 
 	t.Log("Integration test placeholder - validates deployed infrastructure")
-	
+
 	// Example validation that would run against deployed stack outputs
 	validateDeployedInfrastructure(t)
 }
@@ -37,14 +37,14 @@ func Test_TapStack_Integration(t *testing.T) {
 func validateDeployedInfrastructure(t *testing.T) {
 	// Mock validation - in real scenario, get these from `pulumi stack output`
 	mockOutputs := map[string]string{
-		"usEast1AlbDnsName":   "test-alb-123456789.us-east-1.elb.amazonaws.com",
-		"euWest1AlbDnsName":   "test-alb-987654321.eu-west-1.elb.amazonaws.com", 
-		"cloudfrontDomain":    "d123456789abcdef.cloudfront.net",
-		"usEast1DataBucket":   "tap-prod-data-bucket-us-east-1-123456",
-		"euWest1DataBucket":   "tap-prod-data-bucket-eu-west-1-654321",
-		"dynamoTableName":     "tap-prod-global",
-		"usEast1RdsEndpoint":  "tap-rds-us-east-1.cluster-xyz.us-east-1.rds.amazonaws.com:3306",
-		"euWest1RdsEndpoint":  "tap-rds-eu-west-1.cluster-abc.eu-west-1.rds.amazonaws.com:3306",
+		"usEast1AlbDnsName":  "test-alb-123456789.us-east-1.elb.amazonaws.com",
+		"euWest1AlbDnsName":  "test-alb-987654321.eu-west-1.elb.amazonaws.com",
+		"cloudfrontDomain":   "d123456789abcdef.cloudfront.net",
+		"usEast1DataBucket":  "tap-prod-data-bucket-us-east-1-123456",
+		"euWest1DataBucket":  "tap-prod-data-bucket-eu-west-1-654321",
+		"dynamoTableName":    "tap-prod-global",
+		"usEast1RdsEndpoint": "tap-rds-us-east-1.cluster-xyz.us-east-1.rds.amazonaws.com:3306",
+		"euWest1RdsEndpoint": "tap-rds-eu-west-1.cluster-abc.eu-west-1.rds.amazonaws.com:3306",
 	}
 
 	// Validate outputs exist and have expected format
