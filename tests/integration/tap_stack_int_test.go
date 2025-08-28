@@ -1,6 +1,6 @@
 //go:build integration
 
-package integration
+package lib_test
 
 import (
 	"encoding/json"
