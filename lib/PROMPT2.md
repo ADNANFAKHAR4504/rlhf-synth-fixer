@@ -1,4 +1,4 @@
-The deployment is failing because of an incomplete alb module, as well as missing ec2 module
+The deployment is failing because of an **incomplete alb module**, as well as missing ec2 module
 Also the root main.tf configuration as well as root variables is missing 
 
 Identify gaps in the your current configuration, and recommend steps on how to restructure the Terraform code to:  

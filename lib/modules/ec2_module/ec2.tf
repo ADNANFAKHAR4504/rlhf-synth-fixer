@@ -41,9 +41,9 @@ locals {
 resource "aws_launch_template" "web" {
   name_prefix   = "${var.environment}-${var.project_name}-web-"
   description   = "Launch template for ${var.environment} ${var.project_name} web servers"
-  image_id      = var.ami_id != "" ? var.ami_id : data.aws_ami.amazon_linux.id
+  image_id      = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
-  key_name      = var.key_pair_name
+  # key_name      = var.key_pair_name
 
   vpc_security_group_ids = [var.web_security_group_id]
 
@@ -59,23 +59,6 @@ resource "aws_launch_template" "web" {
   # Monitoring
   monitoring {
     enabled = var.detailed_monitoring
-  }
-
-  # Block device mappings
-  dynamic "block_device_mappings" {
-    for_each = var.block_device_mappings
-    content {
-      device_name = block_device_mappings.value.device_name
-      ebs {
-        volume_size           = block_device_mappings.value.volume_size
-        volume_type           = block_device_mappings.value.volume_type
-        iops                  = block_device_mappings.value.iops
-        throughput            = block_device_mappings.value.throughput
-        encrypted             = block_device_mappings.value.encrypted
-        kms_key_id           = block_device_mappings.value.kms_key_id
-        delete_on_termination = block_device_mappings.value.delete_on_termination
-      }
-    }
   }
 
   # Instance metadata options
