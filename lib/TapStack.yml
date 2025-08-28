@@ -551,18 +551,18 @@ Resources:
       BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: !If [HasKmsKey, 'aws:kms', 'AES256']
-              KMSMasterKeyID:
-                !If [
-                  HasKmsKey,
+          - !If
+            - HasKmsKey
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: aws:kms
+                KMSMasterKeyID:
                   !If [
                     CreateKMSKey,
                     !GetAtt ProdKMSKey.Arn,
                     !Ref ExistingKMSKeyArn,
-                  ],
-                  !Ref 'AWS::NoValue',
-                ]
+                  ]
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -582,14 +582,18 @@ Resources:
       BucketName: !Sub '${Environment}-config-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: !If [HasKmsKey, 'aws:kms', 'AES256']
-              KMSMasterKeyID:
-                !If [
-                  CreateKMSKey,
-                  !GetAtt ProdKMSKey.Arn,
-                  !Ref ExistingKMSKeyArn,
-                ]
+          - !If
+            - HasKmsKey
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: aws:kms
+                KMSMasterKeyID:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt ProdKMSKey.Arn,
+                    !Ref ExistingKMSKeyArn,
+                  ]
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -609,14 +613,18 @@ Resources:
       BucketName: !Sub '${Environment}-application-data-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: !If [HasKmsKey, 'aws:kms', 'AES256']
-              KMSMasterKeyID:
-                !If [
-                  CreateKMSKey,
-                  !GetAtt ProdKMSKey.Arn,
-                  !Ref ExistingKMSKeyArn,
-                ]
+          - !If
+            - HasKmsKey
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: aws:kms
+                KMSMasterKeyID:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt ProdKMSKey.Arn,
+                    !Ref ExistingKMSKeyArn,
+                  ]
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
