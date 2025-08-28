@@ -45,7 +45,9 @@ resource "aws_iam_policy" "ec2_policy" {
         Action = [
           "cloudwatch:PutMetricData",
           "cloudwatch:GetMetricStatistics",
-          "cloudwatch:ListMetrics"
+          "cloudwatch:ListMetrics",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeTags"
         ]
         Resource = "*"
       }
@@ -65,6 +67,12 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
 resource "aws_iam_role_policy_attachment" "ec2_policy_attachment" {
   role       = aws_iam_role.ec2_role.name
   policy_arn = aws_iam_policy.ec2_policy.arn
+}
+
+# Attach secrets policy to role
+resource "aws_iam_role_policy_attachment" "secrets_policy_attachment" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = var.secrets_policy_arn
 }
 
 # Instance profile for EC2
@@ -99,16 +107,4 @@ resource "aws_iam_role" "lambda_role" {
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Data source to attach secrets policy
-data "aws_iam_policy" "secrets_access" {
-  count = var.secrets_policy_arn != "" ? 1 : 0
-  arn   = var.secrets_policy_arn
-}
-
-resource "aws_iam_role_policy_attachment" "secrets_policy_attachment" {
-  count      = var.secrets_policy_arn != "" ? 1 : 0
-  role       = aws_iam_role.ec2_role.name
-  policy_arn = var.secrets_policy_arn
 }

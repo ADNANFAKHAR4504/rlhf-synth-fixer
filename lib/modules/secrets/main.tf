@@ -1,3 +1,27 @@
+# Random passwords for database credentials
+resource "random_password" "db_password" {
+  for_each = var.secrets_config
+  
+  length  = 16
+  special = true
+}
+
+# Random API keys
+resource "random_password" "api_key" {
+  for_each = var.secrets_config
+  
+  length  = 32
+  special = false
+}
+
+# Random service tokens
+resource "random_password" "service_token" {
+  for_each = var.secrets_config
+  
+  length  = 24
+  special = false
+}
+
 # Create secrets in AWS Secrets Manager
 resource "aws_secretsmanager_secret" "secrets" {
   for_each = var.secrets_config
@@ -9,12 +33,20 @@ resource "aws_secretsmanager_secret" "secrets" {
   tags = var.common_tags
 }
 
-# Store secret values
+# Store secret values with dynamic passwords
 resource "aws_secretsmanager_secret_version" "secret_versions" {
   for_each = var.secrets_config
   
-  secret_id     = aws_secretsmanager_secret.secrets[each.key].id
-  secret_string = jsonencode(each.value.secret_data)
+  secret_id = aws_secretsmanager_secret.secrets[each.key].id
+  
+  secret_string = jsonencode({
+    username      = "admin"
+    password      = random_password.db_password[each.key].result
+    api_key       = random_password.api_key[each.key].result
+    service_token = random_password.service_token[each.key].result
+    host          = each.key == "prod/database" ? "prod-db.internal" : "api.service.internal"
+    port          = each.key == "prod/database" ? "5432" : "443"
+  })
 }
 
 # Data source for current AWS account ID and region

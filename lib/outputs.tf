@@ -32,3 +32,8 @@ output "cloudwatch_dashboard_url" {
   description = "URL of the CloudWatch dashboard"
   value       = module.monitoring.dashboard_url
 }
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for alerts"
+  value       = module.monitoring.sns_topic_arn
+}

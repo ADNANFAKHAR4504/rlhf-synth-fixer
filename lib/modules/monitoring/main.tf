@@ -18,6 +18,26 @@ resource "aws_cloudwatch_log_group" "system_logs" {
   })
 }
 
+# CloudWatch Log Metric Filter for errors
+resource "aws_cloudwatch_log_metric_filter" "error_logs" {
+  name           = "error-count"
+  log_group_name = aws_cloudwatch_log_group.app_logs.name
+  pattern        = "ERROR"
+  
+  metric_transformation {
+    name      = "ErrorCount"
+    namespace = "Production/Application"
+    value     = "1"
+  }
+}
+
+# SNS Topic for alerts
+resource "aws_sns_topic" "alerts" {
+  name = "production-infrastructure-alerts"
+  
+  tags = var.common_tags
+}
+
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "Production-Infrastructure-Dashboard"
@@ -46,14 +66,14 @@ resource "aws_cloudwatch_dashboard" "main" {
       },
       {
         type   = "metric"
-        x      = 0
-        y      = 6
+        x      = 12
+        y      = 0
         width  = 12
         height = 6
         
         properties = {
           metrics = [
-            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", aws_cloudwatch_metric_filter.error_logs.name],
+            ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "app/web-alb/*"],
             [".", "TargetResponseTime", ".", "."],
             [".", "HTTPCode_Target_2XX_Count", ".", "."],
             [".", "HTTPCode_Target_4XX_Count", ".", "."],
@@ -67,10 +87,29 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
       {
-        type   = "log"
+        type   = "metric"
         x      = 0
-        y      = 12
-        width  = 24
+        y      = 6
+        width  = 12
+        height = 6
+        
+        properties = {
+          metrics = [
+            ["CWAgent", "mem_used_percent", "AutoScalingGroupName", "web-asg"],
+            [".", "disk_used_percent", ".", ".", "device", "/dev/xvda1", "fstype", "xfs", "path", "/"]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Memory and Disk Usage"
+          period  = 300
+        }
+      },
+      {
+        type   = "log"
+        x      = 12
+        y      = 6
+        width  = 12
         height = 6
         
         properties = {
@@ -83,7 +122,6 @@ resource "aws_cloudwatch_dashboard" "main" {
     ]
   })
   
-    tags = var.common_tags
 }
 
 # CloudWatch Alarms
@@ -110,7 +148,7 @@ resource "aws_cloudwatch_metric_alarm" "high_memory" {
   alarm_name          = "production-high-memory-utilization"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "MemoryUtilization"
+  metric_name         = "mem_used_percent"
   namespace           = "CWAgent"
   period              = "300"
   statistic           = "Average"
@@ -125,26 +163,6 @@ resource "aws_cloudwatch_metric_alarm" "high_memory" {
   tags = var.common_tags
 }
 
-# SNS Topic for alerts
-resource "aws_sns_topic" "alerts" {
-  name = "production-infrastructure-alerts"
-  
-  tags = var.common_tags
-}
-
-# CloudWatch Log Metric Filter for errors
-resource "aws_cloudwatch_log_metric_filter" "error_logs" {
-  name           = "error-count"
-  log_group_name = aws_cloudwatch_log_group.app_logs.name
-  pattern        = "ERROR"
-  
-  metric_transformation {
-    name      = "ErrorCount"
-    namespace = "Production/Application"
-    value     = "1"
-  }
-}
-
 # CloudWatch Alarm for error logs
 resource "aws_cloudwatch_metric_alarm" "error_rate" {
   alarm_name          = "production-high-error-rate"
@@ -156,6 +174,23 @@ resource "aws_cloudwatch_metric_alarm" "error_rate" {
   statistic           = "Sum"
   threshold           = "10"
   alarm_description   = "This metric monitors application error rate"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  treat_missing_data  = "notBreaching"
+  
+  tags = var.common_tags
+}
+
+# CloudWatch Alarm for Load Balancer 5XX errors
+resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
+  alarm_name          = "production-alb-5xx-errors"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  namespace           = "AWS/ApplicationELB"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "5"
+  alarm_description   = "This metric monitors ALB 5XX errors"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
   

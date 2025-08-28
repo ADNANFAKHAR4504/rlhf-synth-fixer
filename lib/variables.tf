@@ -56,22 +56,13 @@ variable "secrets_config" {
   description = "Configuration for secrets in AWS Secrets Manager"
   type = map(object({
     description = string
-    secret_data = map(string)
   }))
   default = {
     "prod/database" = {
       description = "Database credentials for production"
-      secret_data = {
-        username = "admin"
-        password = "change-me-in-production"
-      }
     }
     "prod/api-keys" = {
       description = "API keys for production services"
-      secret_data = {
-        external_api_key = "your-api-key-here"
-        service_token   = "your-service-token-here"
-      }
     }
   }
 }

@@ -6,5 +6,4 @@ variable "common_tags" {
 variable "secrets_policy_arn" {
   description = "ARN of the secrets access policy"
   type        = string
-  default     = ""
 }

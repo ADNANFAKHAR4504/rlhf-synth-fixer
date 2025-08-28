@@ -14,13 +14,6 @@ module "vpc" {
   common_tags         = var.common_tags
 }
 
-# IAM Module
-module "iam" {
-  source = "./modules/iam"
-  
-  common_tags = var.common_tags
-}
-
 # Secrets Manager Module
 module "secrets" {
   source = "./modules/secrets"
@@ -29,12 +22,25 @@ module "secrets" {
   common_tags   = var.common_tags
 }
 
+# IAM Module
+module "iam" {
+  source = "./modules/iam"
+  
+  secrets_policy_arn = module.secrets.secrets_access_policy_arn
+  common_tags       = var.common_tags
+  
+  depends_on = [module.secrets]
+}
+
 # Monitoring Module
 module "monitoring" {
   source = "./modules/monitoring"
-  common_tags           = var.common_tags
+  
   vpc_id            = module.vpc.vpc_id
+  common_tags       = var.common_tags
   log_retention_days = var.log_retention_days
+  
+  depends_on = [module.vpc]
 }
 
 # EC2 Module
