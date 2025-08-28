@@ -1382,7 +1382,7 @@ Resources:
             !If [HasCertificateArn, 'sni-only', !Ref 'AWS::NoValue']
           CloudFrontDefaultCertificate:
             !If [HasCertificateArn, !Ref 'AWS::NoValue', true]
-        WebACLId: !Ref ProdWAFWebACL
+        WebACLId: !GetAtt ProdWAFWebACL.Arn
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-cloudfront-distribution'
