@@ -109,29 +109,17 @@ class TapStackProps {
  * Represents the main CDK stack for the Tap project.
  *
  * This stack is responsible for orchestrating the instantiation of other
- * resource-specific stacks.
- * It determines the environment suffix from the provided properties,
- * CDK context, or defaults to 'dev'.
+ * resource-specific stacks. It determines the environment suffix from the
+ * provided properties, CDK context, or defaults to 'dev'.
  *
- * Note:
+ * NOTE:
  * - Do NOT create AWS resources directly in this stack.
  * - Instead, instantiate separate stacks for each resource type within this
  * stack.
- *
- * @version 1.0
- * @since 1.0
  */
 class TapStack extends Stack {
   private final String environmentSuffix;
 
-  /**
-   * Constructs a new TapStack.
-   *
-   * @param scope The parent construct
-   * @param id    The unique identifier for this stack
-   * @param props Optional properties for configuring the stack, including
-   *              environment suffix
-   */
   public TapStack(final Construct scope, final String id, final TapStackProps props) {
     super(scope, id, props != null ? props.getStackProps() : null);
 
@@ -142,15 +130,9 @@ class TapStack extends Stack {
             .map(Object::toString))
         .orElse("dev");
 
-    // ! DO NOT create resources directly in this stack.
-    // ! Use standalone stacks (e.g., EcommerceStack) instantiated from Main.
+    // Do not create resources here.
   }
 
-  /**
-   * Gets the environment suffix used by this stack.
-   *
-   * @return The environment suffix (e.g., 'dev', 'prod')
-   */
   public String getEnvironmentSuffix() {
     return environmentSuffix;
   }
@@ -187,22 +169,11 @@ class EcommerceStack extends Stack {
     // Apply common tags to all resources in this stack
     commonTags.forEach((key, value) -> Tags.of(this).add(key, value));
 
-    // Create networking infrastructure
     createNetworking();
-
-    // Create security groups
     createSecurityGroups();
-
-    // Create RDS database
     createRdsDatabase();
-
-    // Create S3 bucket and CloudFront distribution
     createS3AndCloudFront();
-
-    // Create IAM roles with least privilege
     createIamRoles();
-
-    // Create outputs
     createOutputs();
   }
 
@@ -225,7 +196,6 @@ class EcommerceStack extends Stack {
   }
 
   private void createSecurityGroups() {
-    // Create security group for application tier
     appTierSecurityGroup = new SecurityGroup(this, "AppTierSecurityGroup",
         SecurityGroupProps.builder()
             .vpc(vpc)
@@ -233,29 +203,24 @@ class EcommerceStack extends Stack {
             .allowAllOutbound(false)
             .build());
 
-    // Create security group for RDS
     rdsSecurityGroup = new SecurityGroup(this, "RdsSecurityGroup",
         SecurityGroupProps.builder()
-            .vpc(vpc)
+            ..vpc(vpc)
             .description("Security group for RDS database")
             .allowAllOutbound(false)
             .build());
 
     // Allow app tier to connect to RDS on PostgreSQL port
-    rdsSecurityGroup.addIngressRule(
-        appTierSecurityGroup,
-        Port.tcp(5432),
+    rdsSecurityGroup.addIngressRule(appTierSecurityGroup, Port.tcp(5432),
         "Allow app tier to connect to PostgreSQL");
 
-    // Allow RDS to connect to AWS endpoints for maintenance
-    rdsSecurityGroup.addEgressRule(
-        Peer.anyIpv4(),
-        Port.tcp(443),
+    // Allow RDS to reach AWS endpoints (e.g., for patching) over HTTPS
+    rdsSecurityGroup.addEgressRule(Peer.anyIpv4(), Port.tcp(443),
         "Allow HTTPS to AWS endpoints");
   }
 
   private void createRdsDatabase() {
-    // Create DB subnet group for private subnets
+    // Private subnet group
     SubnetGroup dbSubnetGroup = new SubnetGroup(this, "DbSubnetGroup",
         SubnetGroupProps.builder()
             .description("Subnet group for RDS database")
@@ -265,7 +230,7 @@ class EcommerceStack extends Stack {
                 .build())
             .build());
 
-    // Create secret for database credentials
+    // Secret for DB credentials
     dbSecret = new Secret(this, "DbSecret", SecretProps.builder()
         .description("Database credentials for ecommerce application")
         .generateSecretString(SecretStringGenerator.builder()
@@ -276,7 +241,7 @@ class EcommerceStack extends Stack {
             .build())
         .build());
 
-    // Create RDS PostgreSQL instance
+    // RDS PostgreSQL in private subnets, not publicly accessible
     rdsInstance = new DatabaseInstance(this, "EcommerceDatabase",
         DatabaseInstanceProps.builder()
             .engine(DatabaseInstanceEngine.postgres(
@@ -294,13 +259,13 @@ class EcommerceStack extends Stack {
             .publiclyAccessible(false)
             .storageEncrypted(true)
             .backupRetention(Duration.days(7))
-            .deletionProtection(false) // Set to true for production
+            .deletionProtection(false) // Consider true for prod
             .databaseName("ecommercedb")
             .build());
   }
 
   private void createS3AndCloudFront() {
-    // Create S3 bucket with strict security settings
+    // Private S3 bucket (no public access)
     s3Bucket = new Bucket(this, "EcommerceAssetsBucket", BucketProps.builder()
         .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
         .encryption(BucketEncryption.S3_MANAGED)
@@ -308,7 +273,7 @@ class EcommerceStack extends Stack {
         .enforceSSL(true)
         .build());
 
-    // Create Origin Access Control for CloudFront
+    // Origin Access Control (OAC) for CloudFront → S3
     originAccessControl = new CfnOriginAccessControl(this, "OriginAccessControl",
         CfnOriginAccessControlProps.builder()
             .originAccessControlConfig(CfnOriginAccessControl.OriginAccessControlConfigProperty.builder()
@@ -320,21 +285,20 @@ class EcommerceStack extends Stack {
                 .build())
             .build());
 
-    // Create CloudFront distribution
+    // CloudFront distribution using S3 origin (OAC wired in via L1 override)
     cloudFrontDistribution = new Distribution(this, "EcommerceDistribution",
         DistributionProps.builder()
             .defaultBehavior(BehaviorOptions.builder()
-                .origin(S3Origin.Builder.create(s3Bucket).build()) // OAC (no OAI)
+                .origin(S3Origin.Builder.create(s3Bucket).build())
                 .viewerProtocolPolicy(ViewerProtocolPolicy.REDIRECT_TO_HTTPS)
                 .cachePolicy(CachePolicy.CACHING_OPTIMIZED)
                 .build())
             .comment("CloudFront distribution for ecommerce assets")
             .build());
 
-    // Update the CloudFront distribution to use OAC
+    // Patch the L2 Distribution with OAC via the underlying L1
     CfnDistribution cfnDistribution = (CfnDistribution) cloudFrontDistribution.getNode().getDefaultChild();
 
-    // Update the origin to use OAC
     cfnDistribution.addPropertyOverride(
         "DistributionConfig.Origins.0.OriginAccessControlId",
         originAccessControl.getAttrId());
@@ -342,8 +306,8 @@ class EcommerceStack extends Stack {
         "DistributionConfig.Origins.0.S3OriginConfig.OriginAccessIdentity",
         "");
 
-    // Create bucket policy that only allows CloudFront OAC access
-    PolicyStatement bucketPolicyStatement = new PolicyStatement(PolicyStatementProps.builder()
+    // Bucket policy: only allow GetObject from this CloudFront distribution (OAC)
+    PolicyStatement allowFromCloudFront = new PolicyStatement(PolicyStatementProps.builder()
         .sid("AllowCloudFrontServicePrincipal")
         .effect(Effect.ALLOW)
         .principals(Arrays.asList(new ServicePrincipal("cloudfront.amazonaws.com")))
@@ -355,24 +319,22 @@ class EcommerceStack extends Stack {
                     this.getAccount(), cloudFrontDistribution.getDistributionId()))))
         .build());
 
-    PolicyStatement denyInsecureConnections = new PolicyStatement(PolicyStatementProps.builder()
+    // Deny insecure (non-SSL) access to the bucket
+    PolicyStatement denyInsecure = new PolicyStatement(PolicyStatementProps.builder()
         .sid("DenyInsecureConnections")
         .effect(Effect.DENY)
         .principals(Arrays.asList(new AnyPrincipal()))
         .actions(Arrays.asList("s3:*"))
-        .resources(Arrays.asList(
-            s3Bucket.getBucketArn(),
-            s3Bucket.getBucketArn() + "/*"))
-        .conditions(Map.of(
-            "Bool", Map.of("aws:SecureTransport", "false")))
+        .resources(Arrays.asList(s3Bucket.getBucketArn(), s3Bucket.getBucketArn() + "/*"))
+        .conditions(Map.of("Bool", Map.of("aws:SecureTransport", "false")))
         .build());
 
-    s3Bucket.addToResourcePolicy(bucketPolicyStatement);
-    s3Bucket.addToResourcePolicy(denyInsecureConnections);
+    s3Bucket.addToResourcePolicy(allowFromCloudFront);
+    s3Bucket.addToResourcePolicy(denyInsecure);
   }
 
   private void createIamRoles() {
-    // Create RDS access role with least privilege
+    // Role that can read THIS DB secret and describe THIS DB instance
     rdsAccessRole = new Role(this, "RdsAccessRole", RoleProps.builder()
         .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
         .description("Role for accessing RDS database secrets and metadata")
@@ -381,9 +343,7 @@ class EcommerceStack extends Stack {
                 .statements(Arrays.asList(
                     new PolicyStatement(PolicyStatementProps.builder()
                         .effect(Effect.ALLOW)
-                        .actions(Arrays.asList(
-                            "secretsmanager:GetSecretValue",
-                            "secretsmanager:DescribeSecret"))
+                        .actions(Arrays.asList("secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"))
                         .resources(Arrays.asList(dbSecret.getSecretArn()))
                         .conditions(Map.of("Bool", Map.of("aws:SecureTransport", "true")))
                         .build(),
@@ -396,7 +356,7 @@ class EcommerceStack extends Stack {
                 .build()))
         .build());
 
-    // Create S3 read-only role with least privilege
+    // Read-only access to THIS bucket (for app/CI if needed)
     s3ReadOnlyRole = new Role(this, "S3ReadOnlyRole", RoleProps.builder()
         .assumedBy(new ServicePrincipal("ec2.amazonaws.com"))
         .description("Role for read-only access to ecommerce assets bucket")
@@ -428,7 +388,7 @@ class EcommerceStack extends Stack {
     new CfnOutput(this, "PrivateSubnetIds", CfnOutputProps.builder()
         .description("Private subnet IDs")
         .value(String.join(",", vpc.getPrivateSubnets().stream()
-            .map(subnet -> subnet.getSubnetId())
+            .map(sn -> sn.getSubnetId())
             .toArray(String[]::new)))
         .build());
 
@@ -463,7 +423,7 @@ class EcommerceStack extends Stack {
         .build());
   }
 
-  // Getters for testing
+  // Getters for tests
   public IVpc getVpc() {
     return vpc;
   }
@@ -503,44 +463,19 @@ class EcommerceStack extends Stack {
 
 /**
  * Main entry point for the TAP CDK Java application.
- *
- * This class serves as the entry point for the CDK application and is
- * responsible
- * for initializing the CDK app and instantiating the main TapStack.
- *
- * The application supports environment-specific deployments through the
- * environmentSuffix context parameter.
- *
- * @version 1.0
- * @since 1.0
  */
 public final class Main {
-
-  /**
-   * Private constructor to prevent instantiation of utility class.
-   */
   private Main() {
-    // Utility class should not be instantiated
   }
 
-  /**
-   * Main entry point for the CDK application.
-   *
-   * This method creates a CDK App instance and instantiates the TapStack
-   * with appropriate configuration based on environment variables and context.
-   *
-   * @param args Command line arguments (not used in this application)
-   */
   public static void main(final String[] args) {
     App app = new App();
 
     // Get environment suffix from context or default to 'dev'
     String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
-    if (environmentSuffix == null) {
+    if (environmentSuffix == null)
       environmentSuffix = "dev";
-    }
 
-    // Shared env config
     StackProps sharedProps = StackProps.builder()
         .env(Environment.builder()
             .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
@@ -548,17 +483,16 @@ public final class Main {
             .build())
         .build();
 
-    // Create the main TAP stack (orchestrator)
-    TapStack tap = new TapStack(app, "TapStack" + environmentSuffix,
+    // Orchestrator (no resources here)
+    new TapStack(app, "TapStack" + environmentSuffix,
         TapStackProps.builder()
             .environmentSuffix(environmentSuffix)
             .stackProps(sharedProps)
             .build());
 
-    // Instantiate the Ecommerce infrastructure as a separate stack
+    // E-commerce infra
     new EcommerceStack(app, "EcommerceStack" + environmentSuffix, sharedProps);
 
-    // Synthesize the CDK app
     app.synth();
   }
 }
