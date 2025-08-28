@@ -174,7 +174,7 @@ describe('Production Infrastructure Integration Tests', () => {
       );
 
       const securityGroups = response.SecurityGroups || [];
-      const groupDescriptions = securityGroups.map(sg => sg.GroupDescription).filter(desc => desc);
+      const groupDescriptions = securityGroups.map(sg => sg.Description).filter(desc => desc);
 
       // Check that we have security groups (may have different descriptions than expected)
       expect(securityGroups.length).toBeGreaterThanOrEqual(3);
