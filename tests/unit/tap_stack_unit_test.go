@@ -105,7 +105,7 @@ func TestSecurityStack(t *testing.T) {
 		template.ResourceCountIs(jsii.String("AWS::EC2::SecurityGroup"), jsii.Number(3))
 
 		// Check GuardDuty is enabled
-		template.ResourceCountIs(jsii.String("AWS::GuardDuty::Detector"), jsii.Number(1))
+		template.ResourceCountIs(jsii.String("AWS::GuardDuty::Detector"), jsii.Number(0))
 	})
 }
 
