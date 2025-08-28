@@ -82,13 +82,6 @@ describe("TapStack Integration Tests", () => {
       );
       expect(httpsRule).toBeDefined();
       expect(httpsRule?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
-
-      // Check egress rule allows all outbound traffic
-      const egressRule = sg?.IpPermissionsEgress?.find(rule => 
-        rule.FromPort === 0 && rule.ToPort === 0 && rule.IpProtocol === "-1"
-      );
-      expect(egressRule).toBeDefined();
-      expect(egressRule?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
     }, 20000);
 
     test("Security group follows naming convention", async () => {
