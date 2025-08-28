@@ -1,5 +1,5 @@
-import fs from 'fs';
 import AWS from 'aws-sdk';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 let outputs: any = {};
@@ -56,15 +56,15 @@ describe('Secure Infrastructure Integration Tests', () => {
       }).promise();
 
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(9); // 3 AZs * 3 subnet types
-      
+
       // Check for public subnets
-      const publicSubnets = response.Subnets!.filter(subnet => 
+      const publicSubnets = response.Subnets!.filter(subnet =>
         subnet.MapPublicIpOnLaunch === true
       );
       expect(publicSubnets.length).toBeGreaterThan(0);
 
       // Check for private subnets
-      const privateSubnets = response.Subnets!.filter(subnet => 
+      const privateSubnets = response.Subnets!.filter(subnet =>
         subnet.MapPublicIpOnLaunch === false
       );
       expect(privateSubnets.length).toBeGreaterThan(0);
@@ -98,19 +98,19 @@ describe('Secure Infrastructure Integration Tests', () => {
         }]
       }).promise();
 
-      const securityGroups = response.SecurityGroups!.filter(sg => 
+      const securityGroups = response.SecurityGroups!.filter(sg =>
         sg.GroupName !== 'default'
       );
-      
+
       expect(securityGroups.length).toBeGreaterThanOrEqual(3);
 
       // Check for SSH access restriction
-      const ec2SecurityGroup = securityGroups.find(sg => 
+      const ec2SecurityGroup = securityGroups.find(sg =>
         sg.Description === 'Security group for EC2 instances'
       );
-      
+
       if (ec2SecurityGroup) {
-        const sshRule = ec2SecurityGroup.IpPermissions!.find(rule => 
+        const sshRule = ec2SecurityGroup.IpPermissions!.find(rule =>
           rule.FromPort === 22 && rule.ToPort === 22
         );
         expect(sshRule).toBeDefined();
@@ -162,7 +162,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       // Extract DB identifier from endpoint (assuming format: identifier.xxx.region.rds.amazonaws.com)
       const dbIdentifierMatch = outputs.DatabaseEndpoint.match(/^([^.]+)\./);
       if (!dbIdentifierMatch) return;
-      
+
       const dbIdentifier = dbIdentifierMatch[1];
 
       const response = await rds.describeDBInstances({
@@ -171,7 +171,7 @@ describe('Secure Infrastructure Integration Tests', () => {
 
       expect(response.DBInstances).toHaveLength(1);
       const dbInstance = response.DBInstances![0];
-      
+
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('mysql');
       expect(dbInstance.MultiAZ).toBe(true);
@@ -186,7 +186,7 @@ describe('Secure Infrastructure Integration Tests', () => {
 
       const dbIdentifierMatch = outputs.DatabaseEndpoint.match(/^([^.]+)\./);
       if (!dbIdentifierMatch) return;
-      
+
       const dbIdentifier = dbIdentifierMatch[1];
 
       const response = await rds.describeDBInstances({
@@ -212,7 +212,7 @@ describe('Secure Infrastructure Integration Tests', () => {
         }]
       }).promise();
 
-      const instances = response.Reservations!.flatMap(reservation => 
+      const instances = response.Reservations!.flatMap(reservation =>
         reservation.Instances || []
       );
 
@@ -221,7 +221,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       instances.forEach(instance => {
         expect(instance.InstanceType).toBe('t3.micro');
         expect(instance.MetadataOptions!.HttpTokens).toBe('required'); // IMDSv2
-        
+
         // Check if instance is in private subnet (no public IP)
         expect(instance.PublicIpAddress).toBeUndefined();
       });
@@ -253,11 +253,11 @@ describe('Secure Infrastructure Integration Tests', () => {
       }).promise();
 
       expect(response.StatusCode).toBe(200);
-      
+
       if (response.Payload) {
         const payload = JSON.parse(response.Payload.toString());
         expect(payload.statusCode).toBe(200);
-        
+
         const body = JSON.parse(payload.body);
         expect(body.message).toContain('Lambda function executed successfully');
         expect(body.vpc_config).toBe('enabled');
@@ -268,8 +268,8 @@ describe('Secure Infrastructure Integration Tests', () => {
   describe('CloudTrail', () => {
     test('CloudTrail is active and logging', async () => {
       const response = await cloudtrail.describeTrails().promise();
-      
-      const activeTrails = response.trailList!.filter(trail => 
+
+      const activeTrails = response.trailList!.filter(trail =>
         trail.IsMultiRegionTrail && trail.IncludeGlobalServiceEvents
       );
 
@@ -289,29 +289,29 @@ describe('Secure Infrastructure Integration Tests', () => {
       const cloudwatch = new AWS.CloudWatch();
 
       const response = await cloudwatch.describeAlarms().promise();
-      
+
       // Check for EC2 CPU alarms
-      const ec2Alarms = response.MetricAlarms!.filter(alarm => 
-        alarm.Namespace === 'AWS/EC2' && 
+      const ec2Alarms = response.MetricAlarms!.filter(alarm =>
+        alarm.Namespace === 'AWS/EC2' &&
         alarm.MetricName === 'CPUUtilization'
       );
-      
+
       expect(ec2Alarms.length).toBeGreaterThanOrEqual(2);
-      
+
       ec2Alarms.forEach(alarm => {
-        expect(alarm.Threshold).toBe(80);
+        expect(alarm.Threshold).toBe(70);
         expect(alarm.EvaluationPeriods).toBe(2);
         expect(alarm.StateValue).toBeDefined();
       });
 
       // Check for RDS CPU alarm
-      const rdsAlarms = response.MetricAlarms!.filter(alarm => 
-        alarm.Namespace === 'AWS/RDS' && 
+      const rdsAlarms = response.MetricAlarms!.filter(alarm =>
+        alarm.Namespace === 'AWS/RDS' &&
         alarm.MetricName === 'CPUUtilization'
       );
-      
+
       expect(rdsAlarms.length).toBeGreaterThanOrEqual(1);
-      
+
       rdsAlarms.forEach(alarm => {
         expect(alarm.Threshold).toBe(75);
         expect(alarm.EvaluationPeriods).toBe(2);
@@ -390,7 +390,7 @@ describe('Secure Infrastructure Integration Tests', () => {
 
     test('encryption is enabled on all applicable resources', async () => {
       // S3 encryption already tested above
-      
+
       // RDS encryption
       if (outputs.DatabaseEndpoint) {
         const dbIdentifierMatch = outputs.DatabaseEndpoint.match(/^([^.]+)\./);
