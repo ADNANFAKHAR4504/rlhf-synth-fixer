@@ -97,7 +97,7 @@ describe('TapStack', () => {
     test('should create RDS instance with correct configuration', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'mysql',
-        EngineVersion: '8.0.35',
+        EngineVersion: '8.0.42',
         DBInstanceClass: 'db.t3.micro',
         DBInstanceIdentifier: Match.stringLikeRegexp(`tap-database-${environmentSuffix}-[a-f0-9]{8}`),
         DBName: 'tapdb',
