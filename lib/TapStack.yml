@@ -1182,7 +1182,19 @@ Resources:
     UpdateReplacePolicy: Retain
     Condition: CreateDBInstance
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-database'
+      DBInstanceIdentifier: !Join
+        - '-'
+        - - !Ref Environment
+          - tapstack
+          - !Select
+            - 0
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - '/'
+                  - !Ref 'AWS::StackId'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
