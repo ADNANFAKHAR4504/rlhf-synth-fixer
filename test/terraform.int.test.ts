@@ -238,13 +238,13 @@ describe('AWS Infrastructure Integration Tests - Basic Validation', () => {
     test('Terraform configuration is ready for deployment', () => {
       // Check if main Terraform files exist
       const terraformFiles = [
-        '../lib/tap_stack.tf',
-        '../lib/provider.tf',
-        '../lib/user_data.sh'
+        'lib/tap_stack.tf',
+        'lib/provider.tf',
+        'lib/user_data.sh'
       ];
 
       terraformFiles.forEach(filePath => {
-        const fullPath = path.resolve(__dirname, filePath);
+        const fullPath = path.resolve(process.cwd(), filePath);
         const exists = fs.existsSync(fullPath);
         expect(exists).toBe(true);
         console.log(` ${filePath} exists`);
@@ -254,7 +254,7 @@ describe('AWS Infrastructure Integration Tests - Basic Validation', () => {
     });
 
     test('User data script is properly configured', () => {
-      const userDataPath = path.resolve(__dirname, '../lib/user_data.sh');
+      const userDataPath = path.resolve(process.cwd(), 'lib/user_data.sh');
       if (fs.existsSync(userDataPath)) {
         const userDataContent = fs.readFileSync(userDataPath, 'utf8');
 
