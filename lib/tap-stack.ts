@@ -69,7 +69,8 @@ export class TapStack extends cdk.Stack {
 
     // Artifact bucket
     this.artifactBucket = new s3.Bucket(this, 'PipelineArtifacts', {
-      bucketName: `${props.projectName.toLowerCase()}-${props.environment.toLowerCase()}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}-${cdk.Names.uniqueId(this)}`.toLowerCase(),
+      bucketName:
+        `${props.projectName.toLowerCase()}-${props.environment.toLowerCase()}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}-${cdk.Names.uniqueId(this)}`.toLowerCase(),
       autoDeleteObjects: true, // force delete objects with bucket
       versioned: false,
       encryption: s3.BucketEncryption.S3_MANAGED,
@@ -280,32 +281,32 @@ export class TapStack extends cdk.Stack {
   ): codebuild.Project {
     const buildSpec = buildspecFile.includes('test')
       ? codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          pre_build: {
-            commands: ['echo "Installing dependencies"', 'npm install'],
+          version: '0.2',
+          phases: {
+            pre_build: {
+              commands: ['echo "Installing dependencies"', 'npm install'],
+            },
+            build: { commands: ['echo "Running tests"', 'npm run test:unit'] },
           },
-          build: { commands: ['echo "Running tests"', 'npm run test:unit'] },
-        },
-        reports: {
-          'test-results': {
-            files: 'test-results.xml',
-            'file-format': 'JUNITXML',
+          reports: {
+            'test-results': {
+              files: 'test-results.xml',
+              'file-format': 'JUNITXML',
+            },
           },
-        },
-      })
+        })
       : codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          pre_build: {
-            commands: ['echo "Installing dependencies"', 'npm install'],
+          version: '0.2',
+          phases: {
+            pre_build: {
+              commands: ['echo "Installing dependencies"', 'npm install'],
+            },
+            build: {
+              commands: ['echo "Building the application"', 'npm run build'],
+            },
           },
-          build: {
-            commands: ['echo "Building the application"', 'npm run build'],
-          },
-        },
-        artifacts: { files: ['**/*'], 'base-directory': '.' },
-      });
+          artifacts: { files: ['**/*'], 'base-directory': '.' },
+        });
 
     return new codebuild.Project(this, id, {
       projectName: `tap-${id.toLowerCase()}-${this.stackName}`,
