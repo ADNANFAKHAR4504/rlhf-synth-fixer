@@ -1,11 +1,11 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'AWS CI/CD Pipeline Infrastructure with CodePipeline, CodeBuild, CodeDeploy and Elastic Beanstalk across multiple environments'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS CI/CD Pipeline Infrastructure with CodePipeline, CodeBuild, CodeDeploy and Elastic Beanstalk across multiple environments"
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Environment Configuration'
+          default: "Environment Configuration"
         Parameters:
           - EnvironmentSuffix
           - Environment
@@ -13,69 +13,69 @@ Metadata:
           - Owner
           - CostCenter
       - Label:
-          default: 'Repository Configuration'
+          default: "Repository Configuration"
         Parameters:
           - GitHubRepository
           - GitHubBranch
           - GitHubOwner
       - Label:
-          default: 'Notification Configuration'
+          default: "Notification Configuration"
         Parameters:
           - NotificationEmail
 
 Parameters:
   EnvironmentSuffix:
     Type: String
-    Default: 'dev'
-    Description: 'Environment suffix for resource naming to avoid conflicts'
-    AllowedPattern: '^[a-zA-Z0-9]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters'
+    Default: "dev"
+    Description: "Environment suffix for resource naming to avoid conflicts"
+    AllowedPattern: "^[a-zA-Z0-9]+$"
+    ConstraintDescription: "Must contain only alphanumeric characters"
 
   Environment:
     Type: String
-    Default: 'Development'
-    Description: 'Environment name for tagging'
+    Default: "Development"
+    Description: "Environment name for tagging"
     AllowedValues:
-      - 'Development'
-      - 'Testing'
-      - 'Production'
+      - "Development"
+      - "Testing"
+      - "Production"
 
   Project:
     Type: String
-    Default: 'CICD-Pipeline'
-    Description: 'Project name for tagging'
+    Default: "CICD-Pipeline"
+    Description: "Project name for tagging"
 
   Owner:
     Type: String
-    Default: 'DevOps-Team'
-    Description: 'Owner for tagging'
+    Default: "DevOps-Team"
+    Description: "Owner for tagging"
 
   CostCenter:
     Type: String
-    Default: 'Engineering'
-    Description: 'Cost center for tagging'
+    Default: "Engineering"
+    Description: "Cost center for tagging"
 
   GitHubRepository:
     Type: String
-    Default: 'my-application'
-    Description: 'GitHub repository name'
+    Default: "my-application"
+    Description: "GitHub repository name"
 
   GitHubBranch:
     Type: String
-    Default: 'main'
-    Description: 'GitHub branch to track'
+    Default: "main"
+    Description: "GitHub branch to track"
 
   GitHubOwner:
     Type: String
-    Default: 'my-organization'
-    Description: 'GitHub repository owner'
+    Default: "my-organization"
+    Description: "GitHub repository owner"
 
   NotificationEmail:
     Type: String
-    Default: 'devops@company.com'
-    Description: 'Email address for pipeline notifications'
+    Default: "devops@company.com"
+    Description: "Email address for pipeline notifications"
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    ConstraintDescription: 'Must be a valid email address'
+    ConstraintDescription: "Must be a valid email address"
 
 Resources:
   # KMS Key for encryption
@@ -83,14 +83,14 @@ Resources:
     Type: AWS::KMS::Key
     DeletionPolicy: Delete
     Properties:
-      Description: 'KMS Key for CI/CD Pipeline encryption'
+      Description: "KMS Key for CI/CD Pipeline encryption"
       KeyPolicy:
         Statement:
           - Effect: Allow
             Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
-            Resource: '*'
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
           - Effect: Allow
             Principal:
               Service:
@@ -98,13 +98,13 @@ Resources:
                 - codebuild.amazonaws.com
                 - s3.amazonaws.com
             Action:
-              - 'kms:Decrypt'
-              - 'kms:DescribeKey'
-              - 'kms:Encrypt'
-              - 'kms:GenerateDataKey'
-              - 'kms:GenerateDataKeyWithoutPlaintext'
-              - 'kms:ReEncrypt*'
-            Resource: '*'
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+              - "kms:Encrypt"
+              - "kms:GenerateDataKey"
+              - "kms:GenerateDataKeyWithoutPlaintext"
+              - "kms:ReEncrypt*"
+            Resource: "*"
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -119,7 +119,7 @@ Resources:
     Type: AWS::KMS::Alias
     DeletionPolicy: Delete
     Properties:
-      AliasName: !Sub 'alias/cicd-pipeline-${EnvironmentSuffix}'
+      AliasName: !Sub "alias/cicd-pipeline-${EnvironmentSuffix}"
       TargetKeyId: !Ref PipelineKMSKey
 
   # S3 Bucket for artifacts
@@ -127,7 +127,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'cicd-artifacts-${EnvironmentSuffix}-${AWS::Region}-${AWS::AccountId}'
+      BucketName: !Sub "cicd-artifacts-${EnvironmentSuffix}-${AWS::Region}-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -161,7 +161,7 @@ Resources:
     Type: AWS::SNS::Topic
     DeletionPolicy: Delete
     Properties:
-      TopicName: !Sub 'cicd-pipeline-notifications-${EnvironmentSuffix}'
+      TopicName: !Sub "cicd-pipeline-notifications-${EnvironmentSuffix}"
       KmsMasterKeyId: !Ref PipelineKMSKey
       Tags:
         - Key: Environment
@@ -185,54 +185,54 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub 'CodePipelineRole-${EnvironmentSuffix}'
+      RoleName: !Sub "CodePipelineRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: codepipeline.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AWSCodePipelineFullAccess'
+        - "arn:aws:iam::aws:policy/AWSCodePipelineFullAccess"
       Policies:
         - PolicyName: PipelinePolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:GetObject'
-                  - 's3:GetObjectVersion'
-                  - 's3:PutObject'
-                  - 's3:GetBucketVersioning'
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:PutObject"
+                  - "s3:GetBucketVersioning"
                 Resource:
-                  - !Sub '${ArtifactsBucket}/*'
+                  - !Sub "${ArtifactsBucket.Arn}/*"
                   - !GetAtt ArtifactsBucket.Arn
               - Effect: Allow
                 Action:
-                  - 'codebuild:BatchGetBuilds'
-                  - 'codebuild:StartBuild'
+                  - "codebuild:BatchGetBuilds"
+                  - "codebuild:StartBuild"
                 Resource: !GetAtt CodeBuildProject.Arn
               - Effect: Allow
                 Action:
-                  - 'elasticbeanstalk:CreateApplicationVersion'
-                  - 'elasticbeanstalk:DescribeApplicationVersions'
-                  - 'elasticbeanstalk:DescribeEnvironments'
-                  - 'elasticbeanstalk:DescribeApplications'
-                  - 'elasticbeanstalk:UpdateEnvironment'
-                Resource: '*'
+                  - "elasticbeanstalk:CreateApplicationVersion"
+                  - "elasticbeanstalk:DescribeApplicationVersions"
+                  - "elasticbeanstalk:DescribeEnvironments"
+                  - "elasticbeanstalk:DescribeApplications"
+                  - "elasticbeanstalk:UpdateEnvironment"
+                Resource: "*"
               - Effect: Allow
                 Action:
-                  - 'sns:Publish'
+                  - "sns:Publish"
                 Resource: !Ref PipelineNotificationTopic
               - Effect: Allow
                 Action:
-                  - 'kms:Decrypt'
-                  - 'kms:DescribeKey'
-                  - 'kms:Encrypt'
-                  - 'kms:GenerateDataKey'
-                  - 'kms:ReEncrypt*'
+                  - "kms:Decrypt"
+                  - "kms:DescribeKey"
+                  - "kms:Encrypt"
+                  - "kms:GenerateDataKey"
+                  - "kms:ReEncrypt*"
                 Resource: !GetAtt PipelineKMSKey.Arn
       Tags:
         - Key: Environment
@@ -249,40 +249,40 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub 'CodeBuildRole-${EnvironmentSuffix}'
+      RoleName: !Sub "CodeBuildRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: codebuild.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/CloudWatchLogsFullAccess'
+        - "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
       Policies:
         - PolicyName: BuildPolicy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:GetObject'
-                  - 's3:GetObjectVersion'
-                  - 's3:PutObject'
-                Resource: !Sub '${ArtifactsBucket}/*'
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:PutObject"
+                Resource: !Sub "${ArtifactsBucket.Arn}/*"
               - Effect: Allow
                 Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
               - Effect: Allow
                 Action:
-                  - 'kms:Decrypt'
-                  - 'kms:DescribeKey'
-                  - 'kms:Encrypt'
-                  - 'kms:GenerateDataKey'
-                  - 'kms:ReEncrypt*'
+                  - "kms:Decrypt"
+                  - "kms:DescribeKey"
+                  - "kms:Encrypt"
+                  - "kms:GenerateDataKey"
+                  - "kms:ReEncrypt*"
                 Resource: !GetAtt PipelineKMSKey.Arn
       Tags:
         - Key: Environment
@@ -299,8 +299,8 @@ Resources:
     Type: AWS::CodeBuild::Project
     DeletionPolicy: Delete
     Properties:
-      Name: !Sub 'cicd-build-${EnvironmentSuffix}'
-      Description: 'Build project for CI/CD pipeline'
+      Name: !Sub "cicd-build-${EnvironmentSuffix}"
+      Description: "Build project for CI/CD pipeline"
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Artifacts:
         Type: CODEPIPELINE
@@ -337,7 +337,7 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
-          GroupName: !Sub '/aws/codebuild/cicd-build-${EnvironmentSuffix}'
+          GroupName: !Sub "/aws/codebuild/cicd-build-${EnvironmentSuffix}"
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -353,8 +353,8 @@ Resources:
     Type: AWS::ElasticBeanstalk::Application
     DeletionPolicy: Delete
     Properties:
-      ApplicationName: !Sub 'cicd-app-${EnvironmentSuffix}'
-      Description: 'Application for CI/CD pipeline deployment'
+      ApplicationName: !Sub "cicd-app-${EnvironmentSuffix}"
+      Description: "Application for CI/CD pipeline deployment"
       ResourceLifecycleConfig:
         ServiceRole: !GetAtt EBServiceRole.Arn
         VersionLifecycleConfig:
@@ -368,17 +368,17 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub 'EBServiceRole-${EnvironmentSuffix}'
+      RoleName: !Sub "EBServiceRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: elasticbeanstalk.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth'
-        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy'
+        - "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth"
+        - "arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy"
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -394,18 +394,18 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub 'EBInstanceRole-${EnvironmentSuffix}'
+      RoleName: !Sub "EBInstanceRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier'
-        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker'
-        - 'arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier'
+        - "arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier"
+        - "arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker"
+        - "arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier"
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -420,7 +420,7 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     DeletionPolicy: Delete
     Properties:
-      InstanceProfileName: !Sub 'EBInstanceProfile-${EnvironmentSuffix}'
+      InstanceProfileName: !Sub "EBInstanceProfile-${EnvironmentSuffix}"
       Roles:
         - !Ref EBInstanceRole
 
@@ -430,9 +430,9 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       ApplicationName: !Ref ElasticBeanstalkApplication
-      EnvironmentName: !Sub 'cicd-dev-${EnvironmentSuffix}'
-      Description: 'Development environment for CI/CD pipeline'
-      SolutionStackName: '64bit Amazon Linux 2023 v4.3.0 running Python 3.11'
+      EnvironmentName: !Sub "cicd-dev-${EnvironmentSuffix}"
+      Description: "Development environment for CI/CD pipeline"
+      SolutionStackName: "64bit Amazon Linux 2023 v4.3.0 running Python 3.11"
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -445,10 +445,10 @@ Resources:
           Value: enhanced
         - Namespace: aws:autoscaling:asg
           OptionName: MinSize
-          Value: '1'
+          Value: "1"
         - Namespace: aws:autoscaling:asg
           OptionName: MaxSize
-          Value: '2'
+          Value: "2"
       Tags:
         - Key: Environment
           Value: Development
@@ -464,9 +464,9 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       ApplicationName: !Ref ElasticBeanstalkApplication
-      EnvironmentName: !Sub 'cicd-test-${EnvironmentSuffix}'
-      Description: 'Testing environment for CI/CD pipeline'
-      SolutionStackName: '64bit Amazon Linux 2023 v4.3.0 running Python 3.11'
+      EnvironmentName: !Sub "cicd-test-${EnvironmentSuffix}"
+      Description: "Testing environment for CI/CD pipeline"
+      SolutionStackName: "64bit Amazon Linux 2023 v4.3.0 running Python 3.11"
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -479,10 +479,10 @@ Resources:
           Value: enhanced
         - Namespace: aws:autoscaling:asg
           OptionName: MinSize
-          Value: '1'
+          Value: "1"
         - Namespace: aws:autoscaling:asg
           OptionName: MaxSize
-          Value: '2'
+          Value: "2"
       Tags:
         - Key: Environment
           Value: Testing
@@ -498,9 +498,9 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       ApplicationName: !Ref ElasticBeanstalkApplication
-      EnvironmentName: !Sub 'cicd-prod-${EnvironmentSuffix}'
-      Description: 'Production environment for CI/CD pipeline'
-      SolutionStackName: '64bit Amazon Linux 2023 v4.3.0 running Python 3.11'
+      EnvironmentName: !Sub "cicd-prod-${EnvironmentSuffix}"
+      Description: "Production environment for CI/CD pipeline"
+      SolutionStackName: "64bit Amazon Linux 2023 v4.3.0 running Python 3.11"
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -513,13 +513,13 @@ Resources:
           Value: enhanced
         - Namespace: aws:autoscaling:asg
           OptionName: MinSize
-          Value: '2'
+          Value: "2"
         - Namespace: aws:autoscaling:asg
           OptionName: MaxSize
-          Value: '4'
+          Value: "4"
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: InstanceType
-          Value: 't3.medium'
+          Value: "t3.medium"
       Tags:
         - Key: Environment
           Value: Production
@@ -535,7 +535,7 @@ Resources:
     Type: AWS::CodePipeline::Pipeline
     DeletionPolicy: Delete
     Properties:
-      Name: !Sub 'cicd-pipeline-${EnvironmentSuffix}'
+      Name: !Sub "cicd-pipeline-${EnvironmentSuffix}"
       RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:
         Type: S3
@@ -551,12 +551,12 @@ Resources:
                 Category: Source
                 Owner: ThirdParty
                 Provider: GitHub
-                Version: '1'
+                Version: "1"
               Configuration:
                 Owner: !Ref GitHubOwner
                 Repo: !Ref GitHubRepository
                 Branch: !Ref GitHubBranch
-                OAuthToken: '{{resolve:secretsmanager:github-token:SecretString:token}}'
+                OAuthToken: "{{resolve:secretsmanager:github-token:SecretString:token}}"
               OutputArtifacts:
                 - Name: SourceOutput
         - Name: Build
@@ -566,7 +566,7 @@ Resources:
                 Category: Build
                 Owner: AWS
                 Provider: CodeBuild
-                Version: '1'
+                Version: "1"
               Configuration:
                 ProjectName: !Ref CodeBuildProject
               InputArtifacts:
@@ -578,10 +578,10 @@ Resources:
                   Category: Invoke
                   Owner: SNS
                   Provider: SNS
-                  Version: '1'
+                  Version: "1"
                 Configuration:
                   TopicArn: !Ref PipelineNotificationTopic
-                  Message: 'Build failed in CI/CD Pipeline'
+                  Message: "Build failed in CI/CD Pipeline"
         - Name: DeployToDev
           Actions:
             - Name: DeployToDevAction
@@ -589,7 +589,7 @@ Resources:
                 Category: Deploy
                 Owner: AWS
                 Provider: ElasticBeanstalk
-                Version: '1'
+                Version: "1"
               Configuration:
                 ApplicationName: !Ref ElasticBeanstalkApplication
                 EnvironmentName: !Ref DevelopmentEnvironment
@@ -602,7 +602,7 @@ Resources:
                 Category: Deploy
                 Owner: AWS
                 Provider: ElasticBeanstalk
-                Version: '1'
+                Version: "1"
               Configuration:
                 ApplicationName: !Ref ElasticBeanstalkApplication
                 EnvironmentName: !Ref TestingEnvironment
@@ -615,16 +615,16 @@ Resources:
                 Category: Approval
                 Owner: AWS
                 Provider: Manual
-                Version: '1'
+                Version: "1"
               Configuration:
                 NotificationArn: !Ref PipelineNotificationTopic
-                CustomData: 'Please approve deployment to production environment'
+                CustomData: "Please approve deployment to production environment"
             - Name: DeployToProdAction
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
                 Provider: ElasticBeanstalk
-                Version: '1'
+                Version: "1"
               Configuration:
                 ApplicationName: !Ref ElasticBeanstalkApplication
                 EnvironmentName: !Ref ProductionEnvironment
@@ -646,8 +646,8 @@ Resources:
     Type: AWS::Events::Rule
     DeletionPolicy: Delete
     Properties:
-      Name: !Sub 'cicd-pipeline-events-${EnvironmentSuffix}'
-      Description: 'Capture pipeline state changes'
+      Name: !Sub "cicd-pipeline-events-${EnvironmentSuffix}"
+      Description: "Capture pipeline state changes"
       EventPattern:
         source:
           - aws.codepipeline
@@ -662,75 +662,75 @@ Resources:
           Id: PipelineNotificationTarget
           InputTransformer:
             InputPathsMap:
-              pipeline: '$.detail.pipeline'
-              state: '$.detail.state'
-              stage: '$.detail.stage'
+              pipeline: "$.detail.pipeline"
+              state: "$.detail.state"
+              stage: "$.detail.stage"
             InputTemplate: |
               "Pipeline '<pipeline>' stage '<stage>' has entered state '<state>'"
 
 Outputs:
   PipelineName:
-    Description: 'Name of the CodePipeline'
+    Description: "Name of the CodePipeline"
     Value: !Ref CodePipeline
     Export:
-      Name: !Sub '${AWS::StackName}-PipelineName'
+      Name: !Sub "${AWS::StackName}-PipelineName"
 
   ArtifactsBucketName:
-    Description: 'Name of the S3 bucket for artifacts'
+    Description: "Name of the S3 bucket for artifacts"
     Value: !Ref ArtifactsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-ArtifactsBucketName'
+      Name: !Sub "${AWS::StackName}-ArtifactsBucketName"
 
   KMSKeyId:
-    Description: 'KMS Key ID for encryption'
+    Description: "KMS Key ID for encryption"
     Value: !Ref PipelineKMSKey
     Export:
-      Name: !Sub '${AWS::StackName}-KMSKeyId'
+      Name: !Sub "${AWS::StackName}-KMSKeyId"
 
   SNSTopicArn:
-    Description: 'ARN of the SNS topic for notifications'
+    Description: "ARN of the SNS topic for notifications"
     Value: !Ref PipelineNotificationTopic
     Export:
-      Name: !Sub '${AWS::StackName}-SNSTopicArn'
+      Name: !Sub "${AWS::StackName}-SNSTopicArn"
 
   DevelopmentEnvironmentURL:
-    Description: 'URL of the Development environment'
+    Description: "URL of the Development environment"
     Value: !GetAtt DevelopmentEnvironment.EndpointURL
     Export:
-      Name: !Sub '${AWS::StackName}-DevelopmentEnvironmentURL'
+      Name: !Sub "${AWS::StackName}-DevelopmentEnvironmentURL"
 
   TestingEnvironmentURL:
-    Description: 'URL of the Testing environment'
+    Description: "URL of the Testing environment"
     Value: !GetAtt TestingEnvironment.EndpointURL
     Export:
-      Name: !Sub '${AWS::StackName}-TestingEnvironmentURL'
+      Name: !Sub "${AWS::StackName}-TestingEnvironmentURL"
 
   ProductionEnvironmentURL:
-    Description: 'URL of the Production environment'
+    Description: "URL of the Production environment"
     Value: !GetAtt ProductionEnvironment.EndpointURL
     Export:
-      Name: !Sub '${AWS::StackName}-ProductionEnvironmentURL'
+      Name: !Sub "${AWS::StackName}-ProductionEnvironmentURL"
 
   CodeBuildProjectName:
-    Description: 'Name of the CodeBuild project'
+    Description: "Name of the CodeBuild project"
     Value: !Ref CodeBuildProject
     Export:
-      Name: !Sub '${AWS::StackName}-CodeBuildProjectName'
+      Name: !Sub "${AWS::StackName}-CodeBuildProjectName"
 
   ElasticBeanstalkApplicationName:
-    Description: 'Name of the Elastic Beanstalk application'
+    Description: "Name of the Elastic Beanstalk application"
     Value: !Ref ElasticBeanstalkApplication
     Export:
-      Name: !Sub '${AWS::StackName}-ElasticBeanstalkApplicationName'
+      Name: !Sub "${AWS::StackName}-ElasticBeanstalkApplicationName"
 
   StackName:
-    Description: 'Name of this CloudFormation stack'
+    Description: "Name of this CloudFormation stack"
     Value: !Ref AWS::StackName
     Export:
-      Name: !Sub '${AWS::StackName}-StackName'
+      Name: !Sub "${AWS::StackName}-StackName"
 
   EnvironmentSuffix:
-    Description: 'Environment suffix used for this deployment'
+    Description: "Environment suffix used for this deployment"
     Value: !Ref EnvironmentSuffix
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+      Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
