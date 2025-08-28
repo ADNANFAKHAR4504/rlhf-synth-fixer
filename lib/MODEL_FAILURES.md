@@ -1,5 +1,8 @@
 # Model Failures Analysis
 
+## Summary
+This document analyzes the failures and improvements made to the model's infrastructure implementation. The model initially had several security vulnerabilities, missing configurations, and code quality issues that were addressed in the final implementation.
+
 ### 1. Security Issue - SSH Access Vulnerability
 **Type of Issue**: Security vulnerability
 **Description**: Model included SSH access from a specific IP range which creates unnecessary attack surface
@@ -216,4 +219,68 @@ return {
   internetGatewayId: this.internetGateway.id,
   natGatewayId: this.natGateway.id,
 };
+```
+
+### 12. Code Quality Issue - Availability Zone Bounds Error
+**Type of Issue**: Runtime error risk
+**Description**: Model accessed availability zone array without bounds checking, potentially causing runtime errors if fewer than 3 AZs are available
+**Model Code**:
+```typescript
+availabilityZone: availabilityZones.then(az => az.names[0]),
+// ...
+availabilityZone: availabilityZones.then(az => az.names[1]),
+// ...
+availabilityZone: availabilityZones.then(az => az.names[2] || az.names[0]),
+```
+**Correct Code**:
+```typescript
+availabilityZone: availabilityZones.then(az => az.names[0] || 'ap-south-1a'),
+// ...
+availabilityZone: availabilityZones.then(az => az.names[1] || 'ap-south-1b'),
+// ...
+availabilityZone: availabilityZones.then(az => 
+  az.names.length > 2 ? az.names[2] : (az.names[1] || az.names[0])
+),
+```
+
+### 13. Performance Issue - Non-deterministic Resource Naming
+**Type of Issue**: Resource management issue
+**Description**: Model used Date.now() in S3 bucket name causing unnecessary resource recreation on each deployment
+**Model Code**:
+```typescript
+bucket: `${environment}-secure-bucket-${Date.now()}`,
+```
+**Correct Code**:
+```typescript
+bucket: `${environment}-secure-bucket-${pulumi.getStack()}`,
+// or use a deterministic suffix:
+bucket: `${environment}-secure-bucket-main`,
+```
+
+### 14. Code Quality Issue - Large Constructor Method
+**Type of Issue**: Code maintainability issue
+**Description**: Model implemented all infrastructure logic in a single 600+ line constructor, making code difficult to maintain and understand
+**Model Code**: Single large constructor with all resource creation
+**Correct Code**:
+```typescript
+constructor(environment: string) {
+  const provider = this.createProvider();
+  const kmsKey = this.createKMSKey(environment, provider);
+  this.createNetworking(environment, provider);
+  this.createSecurity(environment, provider);
+  this.createCompute(environment, provider);
+  this.createDatabase(environment, provider, kmsKey);
+  this.createStorage(environment, provider, kmsKey);
+  this.createMonitoring(environment, provider);
+}
+
+private createNetworking(environment: string, provider: aws.Provider) {
+  // VPC, subnets, routing logic
+}
+
+private createSecurity(environment: string, provider: aws.Provider) {
+  // Security groups, IAM roles logic
+}
+
+// ... other private methods
 ```

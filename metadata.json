@@ -8,22 +8,27 @@
   "startedAt": "2025-08-28T15:35:38.672Z",
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
+    "General Infrastructure Tooling QA",
     "Security Configuration",
-    "Network Configuration", 
     "Database Management",
-    "Access Control",
+    "Network Configuration",
     "Monitoring Setup",
-    "General Infrastructure Tooling QA"
+    "Access Control",
+    "Performance Optimization",
+    "IaC Optimization"
   ],
   "training_quality": 9,
   "aws_services": [
-    "VPC",
     "EC2",
     "RDS",
     "S3",
-    "IAM",
+    "CloudFront",
     "CloudWatch",
+    "CloudTrail",
+    "IAM",
     "KMS",
-    "Session Manager"
+    "VPC",
+    "Config",
+    "SSM"
   ]
 }

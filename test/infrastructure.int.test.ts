@@ -5,6 +5,7 @@ import * as path from 'path';
 // Integration Tests
 describe('Infrastructure Integration Tests', () => {
   const region = 'ap-south-1';
+  const requiredRegions = ['us-east-1', 'us-west-2', 'ap-south-1'];
   AWS.config.update({ region });
 
   const ec2 = new AWS.EC2();
@@ -13,6 +14,8 @@ describe('Infrastructure Integration Tests', () => {
   const iam = new AWS.IAM();
   const logs = new AWS.CloudWatchLogs();
   const ssm = new AWS.SSM();
+  const cloudfront = new AWS.CloudFront();
+  const configService = new AWS.ConfigService();
 
   const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
   let outputs: any = {};
@@ -170,7 +173,7 @@ describe('Infrastructure Integration Tests', () => {
       expect(dbInstance.MasterUserSecret).toBeDefined();
       expect(dbInstance.EnabledCloudwatchLogsExports).toContain('error');
       expect(dbInstance.EnabledCloudwatchLogsExports).toContain('slowquery');
-      expect(dbInstance.MultiAZ).toBe(false);
+      expect(dbInstance.MultiAZ).toBe(true);
     });
 
     it('RDS instance is in ap-south-1 region', async () => {
@@ -427,7 +430,7 @@ describe('Infrastructure Integration Tests', () => {
   });
 
   describe('Resource Tagging and Compliance', () => {
-    it('resources have proper environment and department tags', async () => {
+    it('resources have proper environment and purpose tags', async () => {
       if (!outputs.vpcId) {
         console.log('Skipping tagging test - no VPC ID in outputs');
         return;
@@ -437,11 +440,28 @@ describe('Infrastructure Integration Tests', () => {
       const vpc = response.Vpcs![0];
 
       expect(vpc.Tags).toBeDefined();
-      const environmentTag = vpc.Tags!.find(tag => tag.Key === 'Environment');
-      const departmentTag = vpc.Tags!.find(tag => tag.Key === 'Department');
+      const environmentTag = vpc.Tags!.find(tag => tag.Key === 'environment');
+      const purposeTag = vpc.Tags!.find(tag => tag.Key === 'purpose');
       expect(environmentTag).toBeDefined();
-      expect(departmentTag).toBeDefined();
-      expect(departmentTag!.Value).toBe('IT');
+      expect(purposeTag).toBeDefined();
+      expect(environmentTag!.Value).toBeDefined();
+      expect(purposeTag!.Value).toBeDefined();
+    });
+
+    it('resources follow naming convention <environment>-<resource-name>', async () => {
+      const namingPattern = /^[a-z]+-[a-z0-9-]+$/;
+      
+      if (outputs.vpcId) {
+        const response = await ec2.describeVpcs({ VpcIds: [outputs.vpcId] }).promise();
+        const nameTag = response.Vpcs![0].Tags?.find(tag => tag.Key === 'Name');
+        if (nameTag) {
+          expect(nameTag.Value).toMatch(namingPattern);
+        }
+      }
+
+      if (outputs.s3BucketName) {
+        expect(outputs.s3BucketName).toMatch(namingPattern);
+      }
     });
 
     it('all resources are in ap-south-1 region', async () => {
@@ -584,6 +604,182 @@ describe('Infrastructure Integration Tests', () => {
 
       if (!hasBackupChecks) {
         console.log('Skipping backup test - no resources to check');
+      }
+    });
+  });
+
+  describe('Multi-Region Infrastructure', () => {
+    it('infrastructure is deployed across multiple regions', async () => {
+      const deployedRegions = [];
+      
+      for (const testRegion of requiredRegions) {
+        try {
+          const regionalEC2 = new AWS.EC2({ region: testRegion });
+          const vpcs = await regionalEC2.describeVpcs({
+            Filters: [{ Name: 'tag:environment', Values: ['*'] }]
+          }).promise();
+          
+          if (vpcs.Vpcs && vpcs.Vpcs.length > 0) {
+            deployedRegions.push(testRegion);
+          }
+        } catch (error) {
+          console.log(`No resources found in region ${testRegion}`);
+        }
+      }
+      
+      expect(deployedRegions.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  describe('CloudFront Distribution', () => {
+    it('CloudFront distribution exists and serves S3 content', async () => {
+      if (!outputs.cloudfrontDistributionId) {
+        console.log('Skipping CloudFront test - no distribution ID in outputs');
+        return;
+      }
+
+      const response = await cloudfront.getDistribution({
+        Id: outputs.cloudfrontDistributionId
+      }).promise();
+
+      expect(response.Distribution).toBeDefined();
+      expect(response.Distribution!.DistributionConfig.Enabled).toBe(true);
+      expect(response.Distribution!.DistributionConfig.Origins.Items).toHaveLength(1);
+      
+      const origin = response.Distribution!.DistributionConfig.Origins.Items[0];
+      expect(origin.DomainName).toContain('.s3.');
+    });
+
+    it('CloudFront distribution has proper security configuration', async () => {
+      if (!outputs.cloudfrontDistributionId) {
+        console.log('Skipping CloudFront security test - no distribution ID in outputs');
+        return;
+      }
+
+      const response = await cloudfront.getDistribution({
+        Id: outputs.cloudfrontDistributionId
+      }).promise();
+
+      const config = response.Distribution!.DistributionConfig;
+      expect(config.DefaultCacheBehavior.ViewerProtocolPolicy).toBe('redirect-to-https');
+    });
+  });
+
+  describe('AWS Config Compliance', () => {
+    it('AWS Config is enabled for compliance monitoring', async () => {
+      if (!outputs.configDeliveryChannelName) {
+        console.log('Skipping Config test - no delivery channel in outputs');
+        return;
+      }
+
+      const response = await configService.describeDeliveryChannels({
+        DeliveryChannelNames: [outputs.configDeliveryChannelName]
+      }).promise();
+
+      expect(response.DeliveryChannels).toHaveLength(1);
+      expect(response.DeliveryChannels![0].s3BucketName).toBeDefined();
+    });
+
+    it('Config rules are monitoring resource compliance', async () => {
+      try {
+        const response = await configService.describeConfigRules().promise();
+        expect(response.ConfigRules).toBeDefined();
+        expect(response.ConfigRules!.length).toBeGreaterThan(0);
+      } catch (error) {
+        console.log('Config rules may not be configured yet');
+      }
+    });
+  });
+
+  describe('RDS Performance Insights', () => {
+    it('RDS instance has Performance Insights enabled', async () => {
+      if (!outputs.rdsEndpoint) {
+        console.log('Skipping Performance Insights test - no RDS endpoint in outputs');
+        return;
+      }
+
+      const dbId = outputs.rdsEndpoint.split('.')[0];
+      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+      
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
+      expect(dbInstance.PerformanceInsightsKMSKeyId).toBeDefined();
+    });
+
+    it('RDS instance has proper backup configuration', async () => {
+      if (!outputs.rdsEndpoint) {
+        console.log('Skipping RDS backup test - no RDS endpoint in outputs');
+        return;
+      }
+
+      const dbId = outputs.rdsEndpoint.split('.')[0];
+      const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+      
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThan(0);
+      expect(dbInstance.AutoMinorVersionUpgrade).toBe(true);
+    });
+  });
+
+  describe('Infrastructure Outputs and Parameterization', () => {
+    it('key outputs are exported for resource sharing', async () => {
+      const requiredOutputs = [
+        'vpcId',
+        'publicSubnetId', 
+        'privateSubnetId',
+        'ec2InstanceId',
+        'rdsEndpoint',
+        's3BucketName',
+        'iamRoleArn',
+        'cloudWatchLogGroup'
+      ];
+
+      const missingOutputs = requiredOutputs.filter(output => !outputs[output]);
+      expect(missingOutputs).toEqual([]);
+    });
+
+    it('infrastructure supports parameterized configurations', async () => {
+      // Verify different instance sizes can be configured
+      if (outputs.ec2InstanceId) {
+        const response = await ec2.describeInstances({ InstanceIds: [outputs.ec2InstanceId] }).promise();
+        const instance = response.Reservations![0].Instances![0];
+        expect(['t3.micro', 't3.small', 't3.medium']).toContain(instance.InstanceType);
+      }
+
+      // Verify RDS instance class is configurable
+      if (outputs.rdsEndpoint) {
+        const dbId = outputs.rdsEndpoint.split('.')[0];
+        const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
+        const dbInstance = response.DBInstances![0];
+        expect(['db.t3.micro', 'db.t3.small', 'db.t3.medium']).toContain(dbInstance.DBInstanceClass);
+      }
+    });
+  });
+
+  describe('IAM Least Privilege Validation', () => {
+    it('IAM policies follow least privilege principle', async () => {
+      if (!outputs.iamRoleArn) {
+        console.log('Skipping IAM least privilege test - no IAM role ARN in outputs');
+        return;
+      }
+
+      const roleName = outputs.iamRoleArn.split('/').pop();
+      const policiesResponse = await iam.listRolePolicies({ RoleName: roleName }).promise();
+      
+      // Check that policies are specific and not overly broad
+      for (const policyName of policiesResponse.PolicyNames) {
+        const policyResponse = await iam.getRolePolicy({
+          RoleName: roleName,
+          PolicyName: policyName
+        }).promise();
+
+        const policyDocument = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument));
+        
+        // Ensure no wildcard actions on all resources
+        const hasWildcardActions = policyDocument.Statement.some((stmt: any) => 
+          stmt.Action === '*' && stmt.Resource === '*'
+        );
+        expect(hasWildcardActions).toBe(false);
       }
     });
   });
