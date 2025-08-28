@@ -76,12 +76,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.49.1
 	github.com/aws/aws-sdk-go-v2/service/sns v1.37.2
 	github.com/cdktf/cdktf-provider-aws-go/aws/v19 v19.65.1
-<<<<<<< HEAD
-	github.com/pulumi/pulumi-aws/sdk/v6 v6.83.0
 	github.com/pulumi/pulumi/pkg/v3 v3.154.0
-	github.com/pulumi/pulumi/sdk/v3 v3.191.0
-=======
->>>>>>> afe0bff50a1ab7302cf00726823b732e29c02115
 )
 
 require (
@@ -94,10 +89,6 @@ require (
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
-<<<<<<< HEAD
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.0 // indirect
-=======
->>>>>>> afe0bff50a1ab7302cf00726823b732e29c02115
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/endpoint-discovery v1.11.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/wafv2 v1.67.0 // indirect

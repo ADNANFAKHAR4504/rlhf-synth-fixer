@@ -1,4 +1,3 @@
-// tests/unit/tap_stack_unit_test.go
 package main
 
 import (
@@ -7,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	stackpkg "github.com/TuringGpt/iac-test-automations/lib/stack"
+	"github.com/TuringGpt/iac-test-automations/lib/stack"
 	resource "github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/stretchr/testify/require"
@@ -83,6 +82,11 @@ func (m mocks) Call(args pulumi.MockCallArgs) (resource.PropertyMap, error) {
 		return resource.PropertyMap{
 			resource.PropertyKey("value"): resource.NewStringProperty("ami-1234567890abcdef0"),
 		}, nil
+	case "aws:index/getCallerIdentity:getCallerIdentity":
+		// Return a fake account ID
+		return resource.PropertyMap{
+			resource.PropertyKey("accountId"): resource.NewStringProperty("123456789012"),
+		}, nil
 	default:
 		return resource.PropertyMap{}, nil
 	}
@@ -106,7 +110,7 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 	require.NoError(t, os.Setenv("PULUMI_CONFIG_PASSPHRASE", "test"))
 
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		return stackpkg.CreateTapStack(ctx)
+		return stack.CreateTapStack(ctx)
 	}, pulumi.WithMocks("unit", "test", mocks{}))
 	require.NoError(t, err)
 
@@ -117,17 +121,6 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 		var out []recordedResource
 		for _, r := range resources {
 			if r.Type == typeTok {
-				out = append(out, r)
-			}
-		}
-		return out
-	}
-	findPrefix := func(prefix string) []recordedResource {
-		mu.Lock()
-		defer mu.Unlock()
-		var out []recordedResource
-		for _, r := range resources {
-			if strings.HasPrefix(r.Type, prefix) {
 				out = append(out, r)
 			}
 		}
@@ -203,13 +196,9 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 		require.Truef(t, (port443 && proto == "HTTPS") || (port80 && proto == "HTTP"), "listener must be HTTPS:443 or HTTP:80, got port=%v protocol=%v", l.Inputs["port"], proto)
 	}
 
-	// AutoScaling Groups (token may vary across provider versions; match by prefix)
-	asgs := findPrefix("aws:autoscaling/")
-	t.Logf("autoscaling groups found: %d", len(asgs))
-	for _, g := range asgs {
-		t.Logf("asg: %s (%s)", g.Name, g.Type)
-	}
-	require.GreaterOrEqual(t, len(asgs), 1)
+	// AutoScaling Groups
+	asgs := find("aws:autoscaling/group:Group")
+	require.GreaterOrEqual(t, len(asgs), 2) // one per region
 	for _, g := range asgs {
 		require.Equal(t, float64(2), g.Inputs["minSize"])
 		require.Equal(t, float64(10), g.Inputs["maxSize"])
@@ -282,7 +271,7 @@ func Test_TapStack_ResourcesAndPolicies(t *testing.T) {
 	for _, typ := range []string{
 		"aws:ec2/vpc:Vpc",
 		"aws:ec2/subnet:Subnet",
-		"aws:elbv2/loadBalancer:LoadBalancer",
+		"aws:lb/loadBalancer:LoadBalancer",
 		"aws:rds/instance:Instance",
 		"aws:s3/bucketV2:BucketV2",
 		"aws:cloudfront/distribution:Distribution",
