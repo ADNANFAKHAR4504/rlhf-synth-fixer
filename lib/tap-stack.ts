@@ -63,9 +63,12 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', environment);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
 
-    // Helper function to generate resource names
+    // Generate random suffix for unique resource naming
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+
+    // Helper function to generate resource names with randomness
     const getResourceName = (resourceType: string): string => {
-      return `${projectName}-${environmentSuffix}-${resourceType}`;
+      return `${projectName}-${environmentSuffix}-${resourceType}-${randomSuffix}`;
     };
 
     // VPC Configuration

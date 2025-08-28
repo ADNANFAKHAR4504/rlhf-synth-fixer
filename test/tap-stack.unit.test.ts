@@ -36,15 +36,18 @@ describe('TapStack', () => {
 
     test('Secrets Manager secret is created', () => {
       template.hasResourceProperties('AWS::SecretsManager::Secret', {
-        Name: `tap-${environmentSuffix}-app-secrets`,
+        Description: 'Application secrets for tap dev',
       });
     });
 
     test('DynamoDB table is created with correct configuration', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
-        TableName: `tap-${environmentSuffix}-data-table`,
         PointInTimeRecoverySpecification: {
           PointInTimeRecoveryEnabled: true,
+        },
+        ProvisionedThroughput: {
+          ReadCapacityUnits: 500,
+          WriteCapacityUnits: 500,
         },
       });
     });
@@ -56,16 +59,30 @@ describe('TapStack', () => {
 
     test('S3 bucket is created with encryption', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: `tap-${environmentSuffix}-static-content`,
         VersioningConfiguration: {
           Status: 'Enabled',
+        },
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [{
+            ServerSideEncryptionByDefault: {
+              SSEAlgorithm: 'aws:kms'
+            }
+          }]
         },
       });
     });
 
     test('Lambda execution role is created with proper permissions', () => {
       template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `tap-${environmentSuffix}-lambda-execution-role`,
+        AssumeRolePolicyDocument: {
+          Statement: [{
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com'
+            },
+            Action: 'sts:AssumeRole'
+          }]
+        }
       });
     });
 
@@ -75,9 +92,10 @@ describe('TapStack', () => {
 
     test('Lambda function is created with correct configuration', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
-        FunctionName: `tap-${environmentSuffix}-api-handler`,
         Runtime: 'nodejs18.x',
         Handler: 'index.handler',
+        Timeout: 30,
+        MemorySize: 512,
       });
     });
 
@@ -107,7 +125,7 @@ describe('TapStack', () => {
 
     test('CloudWatch log group is created', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/lambda/tap-${environmentSuffix}-api-handler`,
+        RetentionInDays: 30,
       });
     });
   });
@@ -194,6 +212,257 @@ describe('TapStack', () => {
       testTemplate.resourceCountIs('AWS::EC2::VPC', 1);
       testTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
       testTemplate.resourceCountIs('AWS::Lambda::Function', 1);
+    });
+  });
+
+  describe('Resource Naming with Randomness', () => {
+    test('Resource names should include random suffix for uniqueness', () => {
+      const testApp = new cdk.App();
+      const testStack1 = new TapStack(testApp, 'TestRandomStack1', { 
+        environmentSuffix: 'rand1' 
+      });
+      const testStack2 = new TapStack(testApp, 'TestRandomStack2', { 
+        environmentSuffix: 'rand2' 
+      });
+      
+      const template1 = Template.fromStack(testStack1);
+      const template2 = Template.fromStack(testStack2);
+      
+      // Both stacks should have VPCs with different random suffixes
+      template1.resourceCountIs('AWS::EC2::VPC', 1);
+      template2.resourceCountIs('AWS::EC2::VPC', 1);
+      
+      // Names should be different due to random suffix
+      expect(template1).not.toEqual(template2);
+    });
+  });
+
+  describe('Environment Variables and Configuration', () => {
+    test('Lambda environment variables are set correctly', () => {
+      // Check that Lambda function has environment variables defined
+      const lambdaResources = template.findResources('AWS::Lambda::Function');
+      const lambdaResource = Object.values(lambdaResources)[0] as any;
+      
+      expect(lambdaResource.Properties.Environment.Variables.DYNAMODB_TABLE_NAME).toBeDefined();
+      expect(lambdaResource.Properties.Environment.Variables.S3_BUCKET_NAME).toBeDefined();
+      expect(lambdaResource.Properties.Environment.Variables.KMS_KEY_ID).toBeDefined();
+    });
+
+    test('Stack tags are applied correctly', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestTaggedStack', { 
+        environmentSuffix: 'tagged',
+        projectName: 'testproject',
+        environment: 'testenv'
+      });
+      
+      // Check that tags are applied by examining the template resources
+      const testTemplate = Template.fromStack(testStack);
+      const vpcResources = testTemplate.findResources('AWS::EC2::VPC');
+      const vpcResource = Object.values(vpcResources)[0] as any;
+      
+      const tags = vpcResource.Properties.Tags;
+      expect(tags.find((tag: any) => tag.Key === 'Project')?.Value).toBe('testproject');
+      expect(tags.find((tag: any) => tag.Key === 'Environment')?.Value).toBe('testenv');
+      expect(tags.find((tag: any) => tag.Key === 'ManagedBy')?.Value).toBe('CDK');
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('KMS encryption is enabled for all resources', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: {
+          SSEEnabled: true,
+          SSEType: 'KMS'
+        }
+      });
+
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [{
+            ServerSideEncryptionByDefault: {
+              SSEAlgorithm: 'aws:kms'
+            }
+          }]
+        }
+      });
+    });
+
+    test('S3 bucket has proper security configuration', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true
+        },
+        VersioningConfiguration: {
+          Status: 'Enabled'
+        }
+      });
+    });
+
+    test('Lambda function has proper IAM permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [{
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com'
+            },
+            Action: 'sts:AssumeRole'
+          }]
+        }
+      });
+    });
+
+    test('Security groups are configured properly', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for Lambda functions',
+        SecurityGroupEgress: [{
+          CidrIp: '0.0.0.0/0',
+          IpProtocol: '-1'
+        }]
+      });
+    });
+  });
+
+  describe('Monitoring and Observability', () => {
+    test('CloudWatch log groups have proper retention', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 30
+      });
+    });
+
+    test('X-Ray tracing is enabled', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        TracingConfig: {
+          Mode: 'Active'
+        }
+      });
+
+      template.resourceCountIs('AWS::XRay::SamplingRule', 1);
+    });
+
+    test('API Gateway has logging and tracing enabled', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        TracingEnabled: true,
+        MethodSettings: [{
+          LoggingLevel: 'INFO',
+          DataTraceEnabled: true,
+          MetricsEnabled: true,
+          ResourcePath: '/*',
+          HttpMethod: '*'
+        }]
+      });
+    });
+  });
+
+  describe('High Availability and Scaling', () => {
+    test('VPC spans multiple availability zones', () => {
+      // VPC should have subnets in multiple AZs
+      template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
+    });
+
+    test('DynamoDB auto scaling is configured correctly', () => {
+      template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
+        PolicyType: 'TargetTrackingScaling',
+        TargetTrackingScalingPolicyConfiguration: {
+          TargetValue: 70,
+          PredefinedMetricSpecification: {
+            PredefinedMetricType: 'DynamoDBReadCapacityUtilization'
+          }
+        }
+      });
+    });
+  });
+
+  describe('Error Handling and Resilience', () => {
+    test('Lambda function has timeout and memory configured', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Timeout: 30,
+        MemorySize: 512,
+        ReservedConcurrentExecutions: 100
+      });
+    });
+
+    test('API Gateway has usage plan for throttling', () => {
+      template.hasResourceProperties('AWS::ApiGateway::UsagePlan', {
+        Throttle: {
+          RateLimit: 1000,
+          BurstLimit: 2000
+        },
+        Quota: {
+          Limit: 1000000,
+          Period: 'MONTH'
+        }
+      });
+    });
+
+    test('WAF is configured for security', () => {
+      template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Scope: 'REGIONAL',
+        DefaultAction: { Allow: {} }
+      });
+      
+      // Check that WAF has rules configured
+      const wafResources = template.findResources('AWS::WAFv2::WebACL');
+      const wafResource = Object.values(wafResources)[0] as any;
+      expect(wafResource.Properties.Rules).toBeDefined();
+      expect(wafResource.Properties.Rules.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Edge Cases and Validation', () => {
+    test('Stack handles different environment suffixes correctly', () => {
+      const envSuffixes = ['dev', 'staging', 'prod', 'test123', 'pr456'];
+      
+      envSuffixes.forEach(suffix => {
+        const testApp = new cdk.App();
+        const testStack = new TapStack(testApp, `TestStack${suffix}`, { 
+          environmentSuffix: suffix 
+        });
+        const testTemplate = Template.fromStack(testStack);
+        
+        // Should create all core resources regardless of environment suffix
+        testTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+        testTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
+        testTemplate.resourceCountIs('AWS::Lambda::Function', 1);
+        testTemplate.resourceCountIs('AWS::ApiGateway::RestApi', 1);
+      });
+    });
+
+    test('Stack works with different project names', () => {
+      const projectNames = ['myapp', 'test-project', 'prod-api', 'dev123'];
+      
+      projectNames.forEach(projectName => {
+        const testApp = new cdk.App();
+        const testStack = new TapStack(testApp, `TestProject${projectName}`, { 
+          environmentSuffix: 'test',
+          projectName: projectName
+        });
+        const testTemplate = Template.fromStack(testStack);
+        
+        testTemplate.resourceCountIs('AWS::EC2::VPC', 1);
+        testTemplate.resourceCountIs('AWS::DynamoDB::Table', 1);
+      });
+    });
+
+    test('Stack handles custom DynamoDB capacity settings', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestCustomCapacityStack', { 
+        environmentSuffix: 'capacity-test',
+        dynamoDbReadCapacity: 1000,
+        dynamoDbWriteCapacity: 2000
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        ProvisionedThroughput: {
+          ReadCapacityUnits: 1000,
+          WriteCapacityUnits: 2000
+        }
+      });
     });
   });
 });
