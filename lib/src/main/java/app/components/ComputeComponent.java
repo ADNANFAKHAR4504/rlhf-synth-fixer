@@ -159,7 +159,7 @@ public class ComputeComponent extends ComponentResource {
                         .ebsOptimized(true)
                         .rootBlockDevice(InstanceRootBlockDeviceArgs.builder()
                                 .volumeType("gp3")
-                                .volumeSize(20)
+                                .volumeSize(30)
                                 .encrypted(true)
                                 .deleteOnTermination(true)
                                 .tags(getTags(name + "-web-" + (i + 1) + "-root", "EBSVolume", Map.of()))
