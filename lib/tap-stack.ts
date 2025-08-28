@@ -17,8 +17,8 @@ import {
   RdsModule,
   S3Module,
   VpcModule,
-  AlbModule, // ✅ Added missing import
-  Route53Module, // ✅ Added missing import
+  AlbModule, // Added missing import
+  Route53Module, // Added missing import
 } from './module';
 
 interface TapStackProps {
@@ -27,7 +27,7 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
-  // ✅ Added Route53 configuration
+  // Added Route53 configuration
   domainName?: string;
   recordName?: string;
 }
@@ -173,7 +173,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpc.privateSubnetIdsOutput[0],
       instanceType: 't3.micro',
       ami: ami.id,
-      keyName: 'turing-key',
+      keyName: 'compute-secure-key',
       instanceProfileName: iam.instanceProfileName,
       ec2SecurityGroupId: ec2SecurityGroup.id,
     });
@@ -200,12 +200,12 @@ export class TapStack extends TerraformStack {
       dbSecurityGroupId: dbSecurityGroup.id,
     });
 
-    // ✅ SOLUTION 1: Add ALB Module instantiation
+    // SOLUTION 1: Add ALB Module instantiation
     const alb = new AlbModule(this, 'application-load-balancer', {
       name: `fullstack-alb-${environmentSuffix}`,
       vpcId: vpc.vpcIdOutput,
       publicSubnetIds: vpc.publicSubnetIdsOutput,
-      targetGroupArn: ec2.targetGroupArnOutput, // ✅ Using EC2 target group output
+      targetGroupArn: ec2.targetGroupArnOutput, // 
       albSecurityGroupId: albSecurityGroup.id,
     });
 
@@ -213,8 +213,8 @@ export class TapStack extends TerraformStack {
     new Route53Module(this, 'dns-record', {
       zoneName: domainName,
       recordName: recordName,
-      albZoneId: alb.albZoneIdOutput, // ✅ Using ALB zone ID output
-      albDnsName: alb.albDnsNameOutput, // ✅ Using ALB DNS name output
+      albZoneId: alb.albZoneIdOutput, // 
+      albDnsName: alb.albDnsNameOutput, // 
     });
 
     new CloudwatchModule(this, 'alarms', {
