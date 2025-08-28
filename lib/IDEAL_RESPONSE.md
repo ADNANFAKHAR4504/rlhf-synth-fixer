@@ -314,6 +314,7 @@ import software.amazon.awscdk.services.iam.AccountPrincipal;
 import software.constructs.Construct;
 import app.config.EnvironmentConfig;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Security construct that manages encryption keys and security policies.
@@ -336,7 +337,7 @@ public class SecurityConstruct extends Construct {
      * The key is configured with appropriate policies for financial services compliance.
      */
     private Key createKmsKey() {
-        return Key.Builder.create(this, EnvironmentConfig.getResourceName("security", "kms-key"))
+        Key key = Key.Builder.create(this, EnvironmentConfig.getResourceName("security", "kms-key"))
                 .description("KMS key for financial services data encryption")
                 .keySpec(KeySpec.SYMMETRIC_DEFAULT)
                 .keyUsage(KeyUsage.ENCRYPT_DECRYPT)
@@ -366,6 +367,28 @@ public class SecurityConstruct extends Construct {
                     ))
                     .build())
                 .build();
+
+        // Additionally allow CloudWatch Logs service to use this key, but restrict it to CloudTrail
+        // log groups in this account using a StringLike condition on aws:SourceArn.
+        // The SourceArn pattern allows any region in the account for CloudTrail log-groups
+        String sourceArnPattern = "arn:aws:logs:*:" + software.amazon.awscdk.Stack.of(this).getAccount() + ":log-group:/aws/cloudtrail/*";
+        key.addToResourcePolicy(
+            PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .principals(List.of(software.amazon.awscdk.services.iam.ServicePrincipal.Builder.create("logs.amazonaws.com").build()))
+                .actions(List.of(
+                    "kms:Encrypt",
+                    "kms:Decrypt",
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:DescribeKey"
+                ))
+                .resources(List.of("*"))
+                .conditions(Map.of("StringLike", Map.of("aws:SourceArn", sourceArnPattern)))
+                .build()
+        );
+
+        return key;
     }
 
     public Key getKmsKey() {
