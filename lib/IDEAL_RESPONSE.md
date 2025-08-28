@@ -368,10 +368,12 @@ public class SecurityConstruct extends Construct {
                     .build())
                 .build();
 
-        // Additionally allow CloudWatch Logs service to use this key, but restrict it to CloudTrail
-        // log groups in this account using a StringLike condition on aws:SourceArn.
-        // The SourceArn pattern allows any region in the account for CloudTrail log-groups
-        String sourceArnPattern = "arn:aws:logs:*:" + software.amazon.awscdk.Stack.of(this).getAccount() + ":log-group:/aws/cloudtrail/*";
+        // Additionally allow CloudWatch Logs service to use this key, but scope it to
+        // log groups that are related to CloudTrail in this account. We use a
+        // StringLike condition with a wildcard to accommodate variations (for
+        // example randomized physical names or different naming prefixes).
+        String account = software.amazon.awscdk.Stack.of(this).getAccount();
+        String sourceArnPattern = "arn:aws:logs:*:" + account + ":log-group:*cloudtrail*";
         key.addToResourcePolicy(
             PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
@@ -384,7 +386,7 @@ public class SecurityConstruct extends Construct {
                     "kms:DescribeKey"
                 ))
                 .resources(List.of("*"))
-                .conditions(Map.of("StringLike", Map.of("aws:SourceArn", sourceArnPattern)))
+                .conditions(Map.of("StringLike", Map.of("aws:SourceArn", java.util.List.of(sourceArnPattern))))
                 .build()
         );
 
