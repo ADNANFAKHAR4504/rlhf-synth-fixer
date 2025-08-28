@@ -11,7 +11,6 @@ import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
-// FIX: Use the correct, more specific resource for attaching a policy to a single role
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { ElasticBeanstalkApplication } from '@cdktf/provider-aws/lib/elastic-beanstalk-application';
 import { ElasticBeanstalkEnvironment } from '@cdktf/provider-aws/lib/elastic-beanstalk-environment';
@@ -130,7 +129,6 @@ export class TapStack extends TerraformStack {
         ],
       }),
     });
-    // FIX: Use IamRolePolicyAttachment and the 'role' property
     new IamRolePolicyAttachment(this, 'eb-service-policy', {
       role: ebServiceRole.name,
       policyArn:
@@ -150,7 +148,6 @@ export class TapStack extends TerraformStack {
         ],
       }),
     });
-    // FIX: Use IamRolePolicyAttachment and the 'role' property
     new IamRolePolicyAttachment(this, 'eb-instance-policy', {
       role: ebInstanceRole.name,
       policyArn: 'arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier',
@@ -193,7 +190,8 @@ export class TapStack extends TerraformStack {
     const ebEnv = new ElasticBeanstalkEnvironment(this, 'beanstalk-env', {
       name: `webapp-env-${randomSuffix}`,
       application: app.name,
-      solutionStackName: '64bit Amazon Linux 2 v5.8.0 running Node.js 18',
+      // FIX 1: Updated to a current, valid solution stack name.
+      solutionStackName: '64bit Amazon Linux 2023 v4.2.0 running Node.js 18',
       setting: [
         {
           namespace: 'aws:autoscaling:launchconfiguration',
@@ -250,10 +248,16 @@ export class TapStack extends TerraformStack {
     const failoverS3Bucket = new S3Bucket(this, 'failover-bucket', {
       bucket: `failover-bucket-${randomSuffix}`,
     });
-    new S3BucketWebsiteConfiguration(this, 'failover-website', {
-      bucket: failoverS3Bucket.bucket,
-      indexDocument: { suffix: 'index.html' },
-    });
+
+    // FIX 2: Assigned the website configuration to a constant to access its properties.
+    const failoverWebsiteConfig = new S3BucketWebsiteConfiguration(
+      this,
+      'failover-website',
+      {
+        bucket: failoverS3Bucket.bucket,
+        indexDocument: { suffix: 'index.html' },
+      }
+    );
 
     new Route53Record(this, 'primary-record', {
       zoneId: zone.zoneId,
@@ -274,7 +278,8 @@ export class TapStack extends TerraformStack {
       name: `www.${zone.name}`,
       type: 'A',
       alias: {
-        name: failoverS3Bucket.websiteEndpoint,
+        // FIX 3: Use the 'websiteDomain' attribute from the S3BucketWebsiteConfiguration resource.
+        name: failoverWebsiteConfig.websiteDomain,
         zoneId: failoverS3Bucket.hostedZoneId,
         evaluateTargetHealth: false,
       },

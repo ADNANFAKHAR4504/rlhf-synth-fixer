@@ -6,7 +6,7 @@ const app = new App();
 
 new TapStack(app, 'tap-aws-stack', {
   env: {
-    region: 'us-east-1',
+    region: 'us-east-2',
   },
 });
 
