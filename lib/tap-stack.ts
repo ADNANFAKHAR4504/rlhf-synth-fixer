@@ -62,6 +62,7 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly albArn: pulumi.Output<string>;
   public readonly targetGroupArn: pulumi.Output<string>;
   public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly secondaryAutoScalingGroupName: pulumi.Output<string>;
   public readonly launchTemplateName: pulumi.Output<string>;
   public readonly ec2RoleArn: pulumi.Output<string>;
   public readonly albSecurityGroupId: pulumi.Output<string>;
@@ -131,6 +132,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.albArn = this.infrastructureStack.albArn;
     this.targetGroupArn = this.infrastructureStack.targetGroupArn;
     this.autoScalingGroupName = this.infrastructureStack.autoScalingGroupName;
+    this.secondaryAutoScalingGroupName =
+      this.infrastructureStack.secondaryAutoScalingGroupName;
     this.launchTemplateName = this.infrastructureStack.launchTemplateName;
     this.ec2RoleArn = this.infrastructureStack.ec2RoleArn;
     this.albSecurityGroupId = this.infrastructureStack.albSecurityGroupId;
@@ -161,6 +164,7 @@ export class TapStack extends pulumi.ComponentResource {
       albArn: this.albArn,
       targetGroupArn: this.targetGroupArn,
       autoScalingGroupName: this.autoScalingGroupName,
+      secondaryAutoScalingGroupName: this.secondaryAutoScalingGroupName,
       launchTemplateName: this.launchTemplateName,
       ec2RoleArn: this.ec2RoleArn,
       albSecurityGroupId: this.albSecurityGroupId,

@@ -60,12 +60,18 @@ describe('TAP Infrastructure Integration Tests', () => {
       }
 
       // Parse subnet IDs if they are JSON strings
-      const publicSubnetIds = Array.isArray(outputs.publicSubnetIds) 
-        ? outputs.publicSubnetIds 
-        : JSON.parse(outputs.publicSubnetIds);
-      const privateSubnetIds = Array.isArray(outputs.privateSubnetIds) 
-        ? outputs.privateSubnetIds 
-        : JSON.parse(outputs.privateSubnetIds);
+      let publicSubnetIds, privateSubnetIds;
+      try {
+        publicSubnetIds = Array.isArray(outputs.publicSubnetIds) 
+          ? outputs.publicSubnetIds 
+          : JSON.parse(outputs.publicSubnetIds);
+        privateSubnetIds = Array.isArray(outputs.privateSubnetIds) 
+          ? outputs.privateSubnetIds 
+          : JSON.parse(outputs.privateSubnetIds);
+      } catch (error) {
+        console.error('Failed to parse subnet IDs:', error);
+        return;
+      }
 
       const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
       
@@ -372,10 +378,15 @@ describe('TAP Infrastructure Integration Tests', () => {
         return;
       }
 
+      // Parse WAF ARN to extract ID and Name
+      const arnParts = outputs.webAclArn.split('/');
+      const webAclId = arnParts[arnParts.length - 1];
+      const webAclName = arnParts[arnParts.length - 2];
+      
       const response = await wafv2.getWebACL({
         Scope: 'CLOUDFRONT',
-        Id: outputs.webAclArn.split('/').pop()!,
-        Name: outputs.webAclArn.split('/').slice(-2, -1)[0],
+        Id: webAclId,
+        Name: webAclName,
       }).promise();
 
       expect(response.WebACL).toBeDefined();

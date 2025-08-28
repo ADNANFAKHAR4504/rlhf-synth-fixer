@@ -2,6 +2,11 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
+// Explicit AWS Provider configuration
+const awsProvider = new aws.Provider('aws-provider', {
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+
 export interface InfrastructureStackArgs {
   environmentSuffix?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
@@ -18,8 +23,14 @@ export function getELBServiceAccount(region: string): string {
     'eu-central-1': '054676820928',
     'ap-southeast-1': '114774131450',
     'ap-northeast-1': '582318560864',
+    'ap-south-1': '718504428378',
+    'eu-north-1': '897822967062',
+    'ca-central-1': '985666609251',
   };
-  return elbServiceAccounts[region] || '127311923021'; // Default to us-east-1
+  if (!elbServiceAccounts[region]) {
+    throw new Error(`Unsupported region for ELB service account: ${region}`);
+  }
+  return elbServiceAccounts[region];
 }
 
 export class InfrastructureStack extends pulumi.ComponentResource {
@@ -40,6 +51,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
   public readonly albArn: pulumi.Output<string>;
   public readonly targetGroupArn: pulumi.Output<string>;
   public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly secondaryAutoScalingGroupName: pulumi.Output<string>;
   public readonly launchTemplateName: pulumi.Output<string>;
   public readonly ec2RoleArn: pulumi.Output<string>;
   public readonly albSecurityGroupId: pulumi.Output<string>;
@@ -53,7 +65,10 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     args: InfrastructureStackArgs,
     opts?: ResourceOptions
   ) {
-    super('tap:infrastructure:InfrastructureStack', name, args, opts);
+    super('tap:infrastructure:InfrastructureStack', name, args, {
+      ...opts,
+      providers: [awsProvider],
+    });
 
     // Get current AWS region and account ID
     const current = aws.getCallerIdentity({});
@@ -71,9 +86,19 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       .toLowerCase()
       .replace(/[^a-z0-9-]/g, '-');
 
-    // Availability Zones
+    // Availability Zones - ensure at least 2 are available
     const availabilityZones = aws.getAvailabilityZones({
       state: 'available',
+    });
+
+    // Validate minimum AZ requirement
+    const azValidation = availabilityZones.then(azs => {
+      if (azs.names.length < 2) {
+        throw new Error(
+          `Region ${process.env.AWS_REGION || 'us-east-1'} must have at least 2 availability zones. Found: ${azs.names.length}`
+        );
+      }
+      return azs;
     });
 
     // Create KMS key for encryption
@@ -173,7 +198,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           {
             vpcId: vpc.id,
             cidrBlock: `10.0.${i + 1}.0/24`,
-            availabilityZone: availabilityZones.then(azs => azs.names[i]),
+            availabilityZone: azValidation.then(azs => azs.names[i]),
             mapPublicIpOnLaunch: true,
             tags: {
               Name: `${sanitizedName}-public-subnet-${i}`,
@@ -193,7 +218,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           {
             vpcId: vpc.id,
             cidrBlock: `10.0.${i + 10}.0/24`,
-            availabilityZone: availabilityZones.then(azs => azs.names[i]),
+            availabilityZone: azValidation.then(azs => azs.names[i]),
             tags: {
               Name: `${sanitizedName}-private-subnet-${i}`,
               Environment: environment,
@@ -759,8 +784,8 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         secretId: appSecret.id,
         secretString: JSON.stringify({
           database_url: pulumi.interpolate`dynamodb://${dynamoTable.name}`,
-          api_key: 'your-api-key-here',
-          jwt_secret: 'your-jwt-secret-here',
+          api_key: pulumi.interpolate`${sanitizedName}-${Math.random().toString(36).substring(2, 15)}`,
+          jwt_secret: pulumi.interpolate`${sanitizedName}-${Math.random().toString(36).substring(2, 15)}`,
         }),
       },
       { parent: this }
@@ -855,6 +880,34 @@ export class InfrastructureStack extends pulumi.ComponentResource {
         versioningConfiguration: {
           status: 'Enabled',
         },
+      },
+      { parent: this }
+    );
+
+    // CloudWatch Event Rule for S3 bucket monitoring
+    const s3EventRule = new aws.cloudwatch.EventRule(
+      `${sanitizedName}-s3-event-rule`,
+      {
+        description: 'Monitor S3 bucket events',
+        eventPattern: JSON.stringify({
+          source: ['aws.s3'],
+          'detail-type': ['Object Created'],
+          detail: {
+            bucket: {
+              name: [cloudFrontLogsBucket.bucket],
+            },
+          },
+        }),
+      },
+      { parent: this }
+    );
+
+    // CloudWatch Event Target
+    new aws.cloudwatch.EventTarget(
+      `${sanitizedName}-s3-event-target`,
+      {
+        rule: s3EventRule.name,
+        arn: logGroup.arn,
       },
       { parent: this }
     );
@@ -993,7 +1046,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // CloudFront Distribution with WAF
+    // CloudFront Distribution with WAF protection
     const cloudFrontDistribution = new aws.cloudfront.Distribution(
       `${sanitizedName}-main-distribution`,
       {
@@ -1053,6 +1106,43 @@ export class InfrastructureStack extends pulumi.ComponentResource {
           Environment: environment,
         },
       },
+      { parent: this, dependsOn: [webAcl] }
+    );
+
+    // Additional Auto Scaling Group for redundancy (second service)
+    const secondaryAutoScalingGroup = new aws.autoscaling.Group(
+      `${sanitizedName}-secondary-asg`,
+      {
+        name: `${sanitizedName}-secondary-asg`,
+        vpcZoneIdentifiers: privateSubnets.map(subnet => subnet.id),
+        targetGroupArns: [targetGroup.arn],
+        healthCheckType: 'ELB',
+        healthCheckGracePeriod: 300,
+        minSize: 2,
+        maxSize: 4,
+        desiredCapacity: 2,
+        launchTemplate: {
+          id: launchTemplate.id,
+          version: '$Latest',
+        },
+        tags: [
+          {
+            key: 'Name',
+            value: `${sanitizedName}-secondary-asg`,
+            propagateAtLaunch: false,
+          },
+          {
+            key: 'Environment',
+            value: environment,
+            propagateAtLaunch: true,
+          },
+          {
+            key: 'Service',
+            value: 'secondary',
+            propagateAtLaunch: true,
+          },
+        ],
+      },
       { parent: this }
     );
 
@@ -1079,6 +1169,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     this.albArn = alb.arn;
     this.targetGroupArn = targetGroup.arn;
     this.autoScalingGroupName = autoScalingGroup.name;
+    this.secondaryAutoScalingGroupName = secondaryAutoScalingGroup.name;
     this.launchTemplateName = launchTemplate.name;
     this.ec2RoleArn = ec2Role.arn;
     this.albSecurityGroupId = albSecurityGroup.id;
@@ -1106,6 +1197,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
       albArn: alb.arn,
       targetGroupArn: targetGroup.arn,
       autoScalingGroupName: autoScalingGroup.name,
+      secondaryAutoScalingGroupName: secondaryAutoScalingGroup.name,
       launchTemplateName: launchTemplate.name,
       ec2RoleArn: ec2Role.arn,
       albSecurityGroupId: albSecurityGroup.id,
