@@ -9,6 +9,11 @@ import software.amazon.awssdk.services.iam.model.*;
 
 import java.util.Comparator;
 
+// ✅ CDK imports
+import software.amazon.awscdk.App;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.StackProps;
+
 /**
  * Example AWS SDK v2 implementation of TapStack.
  */
@@ -32,6 +37,11 @@ public class Main {
         } catch (Exception e) {
             System.err.println("❌ Error provisioning TapStack: " + e.getMessage());
         }
+
+        // ✅ Minimal CDK App so `cdk synth` produces a manifest
+        App cdkApp = new App();
+        new Stack(cdkApp, "TapStack", StackProps.builder().build());
+        cdkApp.synth();
     }
 
     /**
