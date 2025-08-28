@@ -369,8 +369,8 @@ systemctl enable nginx
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole",
             opts=pulumi.ResourceOptions(parent=self, provider=self.aws_provider))
 
-        self.db_password = aws.secretsmanager.Secret(f"{self.args.environment}-{self.args.project}-db",
-            name=f"{self.args.environment}-{self.args.project}-db")
+        self.db_password = aws.secretsmanager.Secret(f"{self.args.environment}-{self.args.project}-pw",
+            name=f"{self.args.environment}-{self.args.project}-pw")
 
         self.db_instance = aws.rds.Instance(
             f"{self.args.environment}-{self.args.project}-{self.args.owner}-db",
