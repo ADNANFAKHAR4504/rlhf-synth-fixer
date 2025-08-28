@@ -26,11 +26,11 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
-// CFN
+// CloudFormation
 import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
 import software.amazon.awssdk.services.cloudformation.model.DescribeStacksRequest;
 import software.amazon.awssdk.services.cloudformation.model.Stack;
-// CloudFront
+// CloudFront (GLOBAL)
 import software.amazon.awssdk.services.cloudfront.CloudFrontClient;
 import software.amazon.awssdk.services.cloudfront.model.DistributionSummary;
 import software.amazon.awssdk.services.cloudfront.model.GetDistributionRequest;
@@ -46,7 +46,7 @@ import software.amazon.awssdk.services.ec2.model.DescribeSubnetsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeSubnetsResponse;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
-import software.amazon.awssdk.services.ec2.model.Filter; // <-- MISSING IMPORT ADDED
+import software.amazon.awssdk.services.ec2.model.Filter;
 // IAM
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.GetRolePolicyRequest;
@@ -89,7 +89,7 @@ public class MainIntegrationTest {
   private static Ec2Client ec2;
   private static RdsClient rds;
   private static S3Client s3;
-  private static CloudFrontClient cf;
+  private static CloudFrontClient cf; // global (no region)
   private static IamClient iam;
   private static SecretsManagerClient secrets;
 
