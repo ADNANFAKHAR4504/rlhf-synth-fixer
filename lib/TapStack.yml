@@ -77,6 +77,24 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     ConstraintDescription: "Must be a valid email address"
 
+  PlatformType:
+    Type: String
+    Default: "Python"
+    Description: "Platform type for the application"
+    AllowedValues:
+      - "Python"
+      - "Node.js"
+      - "Java"
+
+Mappings:
+  PlatformMap:
+    Python:
+      SolutionStack: "64bit Amazon Linux 2 v3.5.8 running Python 3.9"
+    Node.js:
+      SolutionStack: "64bit Amazon Linux 2 v5.8.4 running Node.js 18"
+    Java:
+      SolutionStack: "64bit Amazon Linux 2 v3.2.17 running Corretto 11"
+
 Resources:
   # KMS Key for encryption
   PipelineKMSKey:
@@ -430,7 +448,8 @@ Resources:
       ApplicationName: !Ref ElasticBeanstalkApplication
       EnvironmentName: !Sub "cicd-dev-${EnvironmentSuffix}"
       Description: "Development environment for CI/CD pipeline"
-      SolutionStackName: "64bit Amazon Linux 2 v3.6.0 running Python 3.11"
+      SolutionStackName:
+        !FindInMap [PlatformMap, !Ref PlatformType, SolutionStack]
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -464,7 +483,8 @@ Resources:
       ApplicationName: !Ref ElasticBeanstalkApplication
       EnvironmentName: !Sub "cicd-test-${EnvironmentSuffix}"
       Description: "Testing environment for CI/CD pipeline"
-      SolutionStackName: "64bit Amazon Linux 2 v3.6.0 running Python 3.11"
+      SolutionStackName:
+        !FindInMap [PlatformMap, !Ref PlatformType, SolutionStack]
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -498,7 +518,8 @@ Resources:
       ApplicationName: !Ref ElasticBeanstalkApplication
       EnvironmentName: !Sub "cicd-prod-${EnvironmentSuffix}"
       Description: "Production environment for CI/CD pipeline"
-      SolutionStackName: "64bit Amazon Linux 2 v3.6.0 running Python 3.11"
+      SolutionStackName:
+        !FindInMap [PlatformMap, !Ref PlatformType, SolutionStack]
       OptionSettings:
         - Namespace: aws:autoscaling:launchconfiguration
           OptionName: IamInstanceProfile
@@ -723,3 +744,9 @@ Outputs:
     Value: !Ref EnvironmentSuffix
     Export:
       Name: !Sub "${AWS::StackName}-EnvironmentSuffix"
+
+  SelectedSolutionStack:
+    Description: "Selected Solution Stack for the platform"
+    Value: !FindInMap [PlatformMapping, !Ref PlatformType, SolutionStack]
+    Export:
+      Name: !Sub "${AWS::StackName}-SelectedSolutionStack"
