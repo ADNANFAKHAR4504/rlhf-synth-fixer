@@ -183,6 +183,16 @@ Parameters:
     Description: 'Route53 Hosted Zone ID for DomainName (optional, used to auto-create DNS validation records)'
     Default: ''
 
+  ExistingConfigRecorderName:
+    Type: String
+    Description: 'If provided, use this existing AWS Config recorder name and do not create a new one.'
+    Default: ''
+
+  ExistingConfigDeliveryChannelName:
+    Type: String
+    Description: 'If provided, use this existing AWS Config delivery channel name and do not create a new one.'
+    Default: ''
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
 
@@ -211,6 +221,16 @@ Conditions:
     - !Not [!Equals [!Ref HostedZoneId, '']]
   CreateGuardDuty:
     !And [!Equals [!Ref CreateDetector, 'true'], !Condition IsPrimaryRegion]
+  CreateConfigRecorder:
+    !And [
+      !Condition EnableAWSConfigCondition,
+      !Equals [!Ref ExistingConfigRecorderName, ''],
+    ]
+  CreateConfigDeliveryChannel:
+    !And [
+      !Condition EnableAWSConfigCondition,
+      !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
+    ]
 
 Resources:
   # VPC and Networking Resources
@@ -709,7 +729,7 @@ Resources:
   # AWS Config Configuration Recorder
   ProdConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    Condition: EnableAWSConfigCondition
+    Condition: CreateConfigRecorder
     Properties:
       Name: !Sub '${Environment}-config-recorder'
       RoleARN: !GetAtt ProdConfigRole.Arn
@@ -720,7 +740,7 @@ Resources:
   # AWS Config Delivery Channel
   ProdConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
-    Condition: EnableAWSConfigCondition
+    Condition: CreateConfigDeliveryChannel
     Properties:
       Name: !Sub '${Environment}-config-delivery-channel'
       S3BucketName: !Ref ProdConfigBucket
@@ -1283,7 +1303,12 @@ Outputs:
 
   ConfigRecorderName:
     Description: 'AWS Config recorder name'
-    Value: !Ref ProdConfigRecorder
+    Value:
+      !If [
+        CreateConfigRecorder,
+        !Ref ProdConfigRecorder,
+        !Ref ExistingConfigRecorderName,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
 
