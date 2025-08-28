@@ -19,9 +19,64 @@ variable "project_name" {
   default     = "webapp"
 }
 
+variable "vpc_cidr" {
+  description = "CIDR block for the VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+variable "instance_type" {
+  description = "EC2 instance type for the Auto Scaling Group"
+  type        = string
+  default     = "t3.micro"
+}
+
+variable "min_size" {
+  description = "Minimum number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "max_size" {
+  description = "Maximum number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 10
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "Allocated storage for RDS instance in GB"
+  type        = number
+  default     = 20
+}
+
+variable "db_max_allocated_storage" {
+  description = "Maximum allocated storage for RDS instance in GB"
+  type        = number
+  default     = 100
+}
+
+variable "db_name" {
+  description = "Name of the database to create"
+  type        = string
+  default     = "webapp"
+}
+
+variable "db_username" {
+  description = "Username for the database"
+  type        = string
+  default     = "admin"
+}
+
 ########################
 # Data Sources
 ########################
+data "aws_region" "current" {}
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -34,18 +89,17 @@ data "aws_ami" "amazon_linux" {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
 ########################
 # Random Resources
 ########################
 resource "random_string" "suffix" {
-  length  = 6
-  special = false
-  upper   = false
-}
-
-resource "random_string" "unique_suffix" {
   length  = 8
   special = false
   upper   = false
@@ -95,7 +149,7 @@ resource "aws_kms_alias" "main" {
 # VPC and Networking
 ########################
 resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
+  cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
@@ -114,68 +168,64 @@ resource "aws_internet_gateway" "main" {
 
 # Public Subnets (one per AZ)
 resource "aws_subnet" "public" {
-  count = 2
+  count = min(2, length(data.aws_availability_zones.available.names))
 
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.${count.index + 1}.0/24"
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index)
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
+    Name = "${local.name_prefix}-public-subnet-${data.aws_availability_zones.available.names[count.index]}"
     Type = "Public"
   })
 }
 
 # Private Subnets (one per AZ)
 resource "aws_subnet" "private" {
-  count = 2
+  count = min(2, length(data.aws_availability_zones.available.names))
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 10}.0/24"
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
+    Name = "${local.name_prefix}-private-subnet-${data.aws_availability_zones.available.names[count.index]}"
     Type = "Private"
   })
 }
 
 # Database Subnets (for RDS subnet group)
 resource "aws_subnet" "database" {
-  count = 2
+  count = min(2, length(data.aws_availability_zones.available.names))
 
   vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.${count.index + 20}.0/24"
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 20)
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-database-subnet-${count.index + 1}"
+    Name = "${local.name_prefix}-database-subnet-${data.aws_availability_zones.available.names[count.index]}"
     Type = "Database"
   })
 }
 
-# Elastic IPs for NAT Gateways
+# Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
-  count = 2
-
   domain = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
+    Name = "${local.name_prefix}-nat-eip"
   })
 }
 
-# NAT Gateways (one per public subnet for high availability)
+# NAT Gateway for private subnets
 resource "aws_nat_gateway" "main" {
-  count = 2
-
-  allocation_id = aws_eip.nat[count.index].id
-  subnet_id     = aws_subnet.public[count.index].id
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
+    Name = "${local.name_prefix}-nat-gateway"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -195,25 +245,23 @@ resource "aws_route_table" "public" {
   })
 }
 
-# Route Tables for Private Subnets (one per AZ)
+# Route Table for Private Subnets
 resource "aws_route_table" "private" {
-  count = 2
-
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[count.index].id
+    nat_gateway_id = aws_nat_gateway.main.id
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-private-rt-${count.index + 1}"
+    Name = "${local.name_prefix}-private-rt"
   })
 }
 
 # Route Table Associations - Public
 resource "aws_route_table_association" "public" {
-  count = 2
+  count = length(aws_subnet.public)
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
@@ -221,10 +269,10 @@ resource "aws_route_table_association" "public" {
 
 # Route Table Associations - Private
 resource "aws_route_table_association" "private" {
-  count = 2
+  count = length(aws_subnet.private)
 
   subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private[count.index].id
+  route_table_id = aws_route_table.private.id
 }
 
 ########################
@@ -287,8 +335,6 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
   }
 
-
-
   egress {
     description = "All outbound traffic"
     from_port   = 0
@@ -316,6 +362,14 @@ resource "aws_security_group" "rds" {
     to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2.id]
+  }
+
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = merge(local.common_tags, {
@@ -368,39 +422,6 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
 ########################
 # IAM Roles and Policies
 ########################
-
-# IAM Policy for Terraform ENI cleanup permissions
-resource "aws_iam_policy" "terraform_eni_cleanup" {
-  name = "${local.name_prefix}-terraform-eni-cleanup"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DetachNetworkInterface",
-          "ec2:DeleteNetworkInterface",
-          "ec2:DescribeNetworkInterfaceAttribute",
-          "ec2:DescribeInstances",
-          "ec2:DescribeVpcs",
-          "ec2:DescribeSubnets"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-
-  tags = local.common_tags
-}
-
-# Attach the ENI cleanup policy to your existing role
-resource "aws_iam_role_policy_attachment" "terraform_eni_cleanup" {
-  role       = "iac-rlhf-trainer-instances-role"
-  policy_arn = aws_iam_policy.terraform_eni_cleanup.arn
-}
-
 resource "aws_iam_role" "ec2_role" {
   name_prefix = "${local.name_prefix}-ec2-role-"
 
@@ -473,9 +494,12 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux.id
-  instance_type = "t3.micro"
+  instance_type = var.instance_type
 
-  vpc_security_group_ids = [aws_security_group.ec2.id]
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [aws_security_group.ec2.id]
+  }
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -491,38 +515,12 @@ resource "aws_launch_template" "main" {
     }
   }
 
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              set -e
-              
-              # Update system packages
-              yum update -y
-              
-              # Install Apache
-              yum install -y httpd
-              
-              # Start and enable Apache
-              systemctl start httpd
-              systemctl enable httpd
-              
-              # Create web content
-              cat > /var/www/html/index.html << 'HTML'
-              <h1>Hello from ${local.name_prefix}</h1>
-              <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-              <p>Health check endpoint is working!</p>
-              <p>Timestamp: $(date)</p>
-              HTML
-              
-              # Create health check endpoint
-              echo "OK" > /var/www/html/health
-              chmod 644 /var/www/html/health
-              
-              # Test the web server
-              curl -f http://localhost/health || exit 1
-              
-              echo "Web server setup completed successfully"
-              EOF
-  )
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    db_endpoint = aws_db_instance.main.endpoint
+    db_name     = var.db_name
+    db_username = var.db_username
+    db_password = random_password.db_password.result
+  }))
 
   tag_specifications {
     resource_type = "instance"
@@ -566,13 +564,13 @@ resource "aws_lb_target_group" "main" {
   health_check {
     enabled             = true
     healthy_threshold   = 2
-    interval            = 90
+    interval            = 30
     matcher             = "200"
-    path                = "/health"
+    path                = "/"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 15
-    unhealthy_threshold = 5
+    timeout             = 5
+    unhealthy_threshold = 2
   }
 
   tags = merge(local.common_tags, {
@@ -597,15 +595,15 @@ resource "aws_lb_listener" "main" {
 # Auto Scaling Group
 ########################
 resource "aws_autoscaling_group" "main" {
-  name                = "${local.name_prefix}-${random_string.unique_suffix.result}-asg"
+  name                = "${local.name_prefix}-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
-  health_check_grace_period = 900
+  health_check_grace_period = 300
 
-  min_size         = 1
-  max_size         = 3
-  desired_capacity = 1
+  min_size         = var.min_size
+  max_size         = var.max_size
+  desired_capacity = var.min_size
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -616,7 +614,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${local.name_prefix}-${random_string.unique_suffix.result}-asg-instance"
+    value               = "${local.name_prefix}-asg-instance"
     propagate_at_launch = true
   }
 
@@ -631,6 +629,62 @@ resource "aws_autoscaling_group" "main" {
 
   lifecycle {
     create_before_destroy = true
+  }
+}
+
+########################
+# Auto Scaling Policies
+########################
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "${local.name_prefix}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "${local.name_prefix}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
+
+########################
+# CloudWatch Alarms
+########################
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${local.name_prefix}-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "Scale up if CPU > 80% for 4 minutes"
+  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${local.name_prefix}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "20"
+  alarm_description   = "Scale down if CPU < 20% for 4 minutes"
+  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
   }
 }
 
@@ -651,8 +705,13 @@ resource "aws_db_parameter_group" "main" {
   name   = "${local.name_prefix}-db-params"
 
   parameter {
-    name  = "innodb_buffer_pool_size"
-    value = "{DBInstanceClassMemory*3/4}"
+    name  = "character_set_server"
+    value = "utf8"
+  }
+
+  parameter {
+    name  = "character_set_client"
+    value = "utf8"
   }
 
   tags = merge(local.common_tags, {
@@ -667,18 +726,18 @@ resource "aws_db_parameter_group" "main" {
 resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-database"
 
-  allocated_storage     = 20
-  max_allocated_storage = 100
+  allocated_storage     = var.db_allocated_storage
+  max_allocated_storage = var.db_max_allocated_storage
   storage_type          = "gp3"
   storage_encrypted     = true
   kms_key_id           = aws_kms_key.main.arn
 
   engine         = "mysql"
   engine_version = "8.0"
-  instance_class = "db.t3.micro"
+  instance_class = var.db_instance_class
 
-  db_name  = "appdb"
-  username = "admin"
+  db_name  = var.db_name
+  username = var.db_username
   password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
@@ -698,7 +757,6 @@ resource "aws_db_instance" "main" {
     Name = "${local.name_prefix}-database"
   })
 
-  # Ensure proper deletion order
   depends_on = [
     aws_subnet.database
   ]
@@ -707,6 +765,16 @@ resource "aws_db_instance" "main" {
 ########################
 # Outputs
 ########################
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the Application Load Balancer"
+  value       = aws_lb.main.zone_id
+}
+
 output "vpc_id" {
   description = "ID of the VPC"
   value       = aws_vpc.main.id
@@ -722,9 +790,9 @@ output "private_subnet_ids" {
   value       = aws_subnet.private[*].id
 }
 
-output "load_balancer_dns" {
-  description = "DNS name of the load balancer"
-  value       = aws_lb.main.dns_name
+output "database_subnet_ids" {
+  description = "IDs of the database subnets"
+  value       = aws_subnet.database[*].id
 }
 
 output "load_balancer_url" {
@@ -743,9 +811,9 @@ output "s3_bucket_name" {
   value       = aws_s3_bucket.app_data.bucket
 }
 
-output "kms_key_id" {
-  description = "KMS key ID"
-  value       = aws_kms_key.main.key_id
+output "kms_key_arn" {
+  description = "ARN of the KMS key"
+  value       = aws_kms_key.main.arn
 }
 
 output "autoscaling_group_name" {
