@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291683",
+  "team": "6",
+  "startedAt": "2025-08-19T09:19:10.926Z",
+  "recommended_enhancements": {
+    "subtask": "Infrastructure QA and Management",
+    "subject_labels": [
+      "General Infrastructure Tooling QA",
+      "Security Configuration",
+      "Performance Optimization",
+      "IaC Optimization"
+    ],
+    "training_quality": 6,
+    "aws_services": [
+      "AWS Lambda",
+      "API Gateway",
+      "S3",
+      "Secrets Manager",
+      "CloudWatch",
+      "IAM",
+      "Budgets",
+      "SNS"
+    ]
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

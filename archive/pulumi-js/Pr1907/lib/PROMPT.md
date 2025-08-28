@@ -74,11 +74,11 @@ Deploy a serverless application using Pulumi JavaScript with RESTful APIs served
 
 ## Validation Criteria
 All 8 constraint requirements must be satisfied:
-1. ✅ AWS Lambda for computation
-2. ✅ API Gateway RESTful interface
-3. ✅ IAM role with least privilege
-4. ✅ us-west-2 region deployment
-5. ✅ Environment tags for cost tracking
-6. ✅ S3 server-side encryption
-7. ✅ Blue-green deployment support
-8. ✅ CloudWatch logs enabled
+1. AWS Lambda for computation
+2. API Gateway RESTful interface
+3. IAM role with least privilege
+4. us-west-2 region deployment
+5. Environment tags for cost tracking
+6. S3 server-side encryption
+7. Blue-green deployment support
+8. CloudWatch logs enabled

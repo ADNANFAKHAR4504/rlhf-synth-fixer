@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "274776",
+  "team": "4",
+  "startedAt": "2025-08-23T13:40:13.350Z",
+  "author": "jpoola-turing",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "KMS",
+    "S3",
+    "IAM",
+    "EC2",
+    "Security Group",
+    "SNS",
+    "CloudWatch",
+    "CloudTrail"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

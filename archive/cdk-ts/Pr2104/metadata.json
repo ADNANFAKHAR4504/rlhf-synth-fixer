@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292034",
+  "team": "5",
+  "startedAt": "2025-08-22T03:39:41.965Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "WAF",
+    "IAM",
+    "KMS",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "AmbitiousSam",
+  "dockerS3Location": ""
+}
