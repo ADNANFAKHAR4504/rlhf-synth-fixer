@@ -11,13 +11,13 @@ import (
 )
 
 type ComputeConstructProps struct {
-	Environment      string
-	VPC              awsec2.IVpc
-	LambdaRole       awsiam.IRole
-	ImageBucket      awss3.IBucket
-	ResultsBucket    awss3.IBucket
-	DynamoTable      awsdynamodb.ITable
-	AlertingTopic    awssns.ITopic
+	Environment   string
+	VPC           awsec2.IVpc
+	LambdaRole    awsiam.IRole
+	ImageBucket   awss3.IBucket
+	ResultsBucket awss3.IBucket
+	DynamoTable   awsdynamodb.ITable
+	AlertingTopic awssns.ITopic
 }
 
 type ComputeConstruct struct {
