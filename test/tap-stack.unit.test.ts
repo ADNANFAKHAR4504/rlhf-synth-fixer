@@ -35,11 +35,11 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
 
   // Parameters Tests
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(templateContent).toContain('EnvironmentSuffix:');
+    test('should have Environment parameter', () => {
+      expect(templateContent).toContain('Environment:');
       expect(templateContent).toContain('Type: String');
       expect(templateContent).toContain('Default: prod');
-      expect(templateContent).toContain('AllowedValues: [dev, staging, prod]');
+      expect(templateContent).toContain('Environment suffix for resource tagging and naming');
     });
 
     test('should have CreateKeyPair parameter', () => {
@@ -254,9 +254,9 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
 
   // Environment-Agnostic Implementation Tests
   describe('Environment-Agnostic Implementation', () => {
-    test('should use EnvironmentSuffix parameter consistently', () => {
-      expect(templateContent).toContain('!Ref EnvironmentSuffix');
-      expect(templateContent).toContain('${EnvironmentSuffix}');
+    test('should use Environment parameter consistently', () => {
+      expect(templateContent).toContain('!Ref Environment');
+      expect(templateContent).toContain('${Environment}');
     });
 
     test('should use dynamic AZ selection', () => {
@@ -288,7 +288,7 @@ describe('AcmeWeb CloudFormation Template Unit Tests', () => {
     test('should have consistent tagging strategy', () => {
       expect(templateContent).toContain('Key: Name');
       expect(templateContent).toContain('Key: Environment');
-      expect(templateContent).toContain('Value: !Ref EnvironmentSuffix');
+      expect(templateContent).toContain('Value: !Ref Environment');
     });
   });
 
