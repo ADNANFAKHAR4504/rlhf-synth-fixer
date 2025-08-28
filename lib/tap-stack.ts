@@ -70,7 +70,7 @@ export class TapStack extends cdk.Stack {
 
     // VPC Configuration
     const vpc = new ec2.Vpc(this, getResourceName('vpc'), {
-      cidr: '10.0.0.0/16',
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 3,
       subnetConfiguration: [
         {
@@ -131,7 +131,9 @@ export class TapStack extends cdk.Stack {
         writeCapacity: dynamoDbWriteCapacity,
         encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
         encryptionKey: kmsKey,
-        pointInTimeRecovery: true,
+        pointInTimeRecoverySpecification: {
+          pointInTimeRecoveryEnabled: true,
+        },
         removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
         stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
       }
@@ -451,11 +453,20 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    // Associate WAF with API Gateway
-    new wafv2.CfnWebACLAssociation(this, getResourceName('waf-association'), {
-      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/${environment}`,
-      webAclArn: webAcl.attrArn,
-    });
+    // Associate WAF with API Gateway - add explicit dependency
+    const wafAssociation = new wafv2.CfnWebACLAssociation(
+      this,
+      getResourceName('waf-association'),
+      {
+        resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/${environment}`,
+        webAclArn: webAcl.attrArn,
+      }
+    );
+
+    // Ensure WebACL is created before association
+    wafAssociation.addDependency(webAcl);
+    // Ensure API deployment is complete before WAF association
+    wafAssociation.node.addDependency(api.deploymentStage);
 
     // CloudFront Distribution
     let certificate: certificatemanager.ICertificate | undefined;
@@ -550,7 +561,7 @@ export class TapStack extends cdk.Stack {
 
     new cloudwatch.Alarm(this, getResourceName('dynamodb-throttle-alarm'), {
       alarmName: getResourceName('dynamodb-throttles'),
-      metric: dynamoTable.metricThrottledRequests(),
+      metric: dynamoTable.metricThrottledRequestsForOperation('GetItem'),
       threshold: 1,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
