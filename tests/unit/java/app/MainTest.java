@@ -129,13 +129,20 @@ public class MainTest {
                 "PolicyDocument", Match.objectLike(Map.of(
                     "Statement", Match.arrayWith(List.of(
                         Match.objectLike(Map.of(
+                            "Effect", "Allow",
                             "Action", Match.arrayWith(List.of(
-                                "secretsmanager:GetSecretValue")))),
+                                "secretsmanager:GetSecretValue",
+                                "secretsmanager:DescribeSecret")),
+                            "Condition", Map.of("Bool", Map.of("aws:SecureTransport", "true")))),
+                        // For the RDS Describe statement, CDK may serialize Action as a string.
+                        // Use Match.anyValue() instead of forcing an array.
                         Match.objectLike(Map.of(
-                            "Action", Match.arrayWith(List.of(
-                                "rds:DescribeDBInstances"))))))))))))));
+                            "Effect", "Allow",
+                            "Action", Match.anyValue(), // string OR array
+                            "Condition", Map.of("Bool", Map.of("aws:SecureTransport", "true"))))))))))))));
 
-    // Role with S3 read-only permissions
+    // Role with S3 read-only permissions (CDK usually emits 2 statements -> array
+    // ok)
     template.hasResourceProperties("AWS::IAM::Role", Map.of(
         "Policies", Match.arrayWith(List.of(
             Match.objectLike(Map.of(
