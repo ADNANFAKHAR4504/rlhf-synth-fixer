@@ -36,44 +36,57 @@ func sanitizeBucketName(name string) string {
 	return name
 }
 
-func generateRandomString(length int, includeSpecial bool) (string, error) {
+// Generate RDS-compliant username
+func generateDBUsername(length int) (string, error) {
+	if length < 1 || length > 16 {
+		return "", fmt.Errorf("username length must be between 1 and 16")
+	}
+
 	letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	digits := "0123456789"
-	specials := "!@#$%^&*"
-	var charset string
-
-	if includeSpecial {
-		charset = letters + digits + specials
-	} else {
-		charset = letters + digits
-	}
+	allowed := letters + digits + "_"
 
 	result := make([]byte, length)
 
-	// ✅ Ensure first character is always a letter for DB usernames
-	if !includeSpecial {
-		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+	// First character must be a letter
+	num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+	if err != nil {
+		return "", err
+	}
+	result[0] = letters[num.Int64()]
+
+	// Remaining characters can be letters, digits, underscore
+	for i := 1; i < length; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(allowed))))
 		if err != nil {
 			return "", err
 		}
-		result[0] = letters[num.Int64()]
-		// fill the rest
-		for i := 1; i < length; i++ {
-			num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-			if err != nil {
-				return "", err
-			}
-			result[i] = charset[num.Int64()]
+		result[i] = allowed[num.Int64()]
+	}
+
+	return string(result), nil
+}
+
+// Generate RDS-compliant password
+func generateDBPassword(length int) (string, error) {
+	if length < 8 || length > 41 {
+		return "", fmt.Errorf("password length must be between 8 and 41")
+	}
+
+	letters := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digits := "0123456789"
+	// ✅ safe specials (removed /, @, ", space)
+	specials := "!#$%^&*()-_=+[]{}:;,.?"
+	allowed := letters + digits + specials
+
+	result := make([]byte, length)
+
+	for i := 0; i < length; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(allowed))))
+		if err != nil {
+			return "", err
 		}
-	} else {
-		// Passwords can start with anything
-		for i := 0; i < length; i++ {
-			num, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-			if err != nil {
-				return "", err
-			}
-			result[i] = charset[num.Int64()]
-		}
+		result[i] = allowed[num.Int64()]
 	}
 
 	return string(result), nil
@@ -84,12 +97,12 @@ func main() {
 		projectName := ctx.Project()
 		stackName := ctx.Stack()
 
-		dbUsername, err := generateRandomString(8, false)
+		dbUsername, err := generateDBUsername(12) // max 16
 		if err != nil {
 			return fmt.Errorf("failed to generate DB username: %w", err)
 		}
 
-		dbPassword, err := generateRandomString(16, true)
+		dbPassword, err := generateDBPassword(20) // between 8 and 41
 		if err != nil {
 			return fmt.Errorf("failed to generate DB password: %w", err)
 		}
@@ -391,23 +404,23 @@ func main() {
 		}
 
 		rdsInstance, err := rds.NewInstance(ctx, "hipaa-db", &rds.InstanceArgs{
-			AllocatedStorage:        pulumi.Int(20),
-			StorageType:             pulumi.String("gp2"),
-			Engine:                  pulumi.String("mysql"),
-			EngineVersion:           pulumi.String("8.0"),
-			InstanceClass:           pulumi.String("db.t3.micro"),
-			DbName:                  pulumi.String("hipaadb"),
-			Username:                pulumi.String(dbUsername),
-			Password:                pulumi.String(dbPassword),
-			VpcSecurityGroupIds:     pulumi.StringArray{dbSecurityGroup.ID()},
-			DbSubnetGroupName:       dbSubnetGroup.Name,
-			MultiAz:                 pulumi.Bool(true),
-			StorageEncrypted:        pulumi.Bool(true),
-			BackupRetentionPeriod:   pulumi.Int(30),
-			BackupWindow:            pulumi.String("03:00-04:00"),
-			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
-			DeletionProtection:      pulumi.Bool(false),
-			SkipFinalSnapshot:       pulumi.Bool(true),
+			AllocatedStorage:      pulumi.Int(20),
+			StorageType:           pulumi.String("gp2"),
+			Engine:                pulumi.String("mysql"),
+			EngineVersion:         pulumi.String("8.0"),
+			InstanceClass:         pulumi.String("db.t3.micro"),
+			DbName:                pulumi.String("hipaadb"),
+			Username:              pulumi.String(dbUsername),
+			Password:              pulumi.String(dbPassword),
+			VpcSecurityGroupIds:   pulumi.StringArray{dbSecurityGroup.ID()},
+			DbSubnetGroupName:     dbSubnetGroup.Name,
+			MultiAz:               pulumi.Bool(true),
+			StorageEncrypted:      pulumi.Bool(true),
+			BackupRetentionPeriod: pulumi.Int(30),
+			BackupWindow:          pulumi.String("03:00-04:00"),
+			MaintenanceWindow:     pulumi.String("sun:04:00-sun:05:00"),
+			DeletionProtection:    pulumi.Bool(false),
+			SkipFinalSnapshot:     pulumi.Bool(true),
 			Tags: pulumi.StringMap{
 				"Name":        pulumi.String(fmt.Sprintf("%s-%s-rds", projectName, stackName)),
 				"Environment": pulumi.String(stackName),
