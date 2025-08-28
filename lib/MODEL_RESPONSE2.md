@@ -1,3 +1,6 @@
+Here's the updated `tap_stack.tf` file with all key pair references removed:
+
+```hcl
 # tap_stack.tf - Complete infrastructure stack for web application
 
 # ============================================================================
@@ -707,3 +710,24 @@ output "private_route_table_ids" {
   description = "IDs of the private route tables"
   value       = aws_route_table.private[*].id
 }
+```
+
+## **Key Changes Made:**
+
+1. **Removed `key_pair_name` variable** - No longer needed
+2. **Removed `key_name` parameter** from both the launch template and standalone EC2 instance
+3. **Updated comments** - Removed references to SSH access via key pairs
+
+## **Access Methods Available:**
+
+Since SSH key pairs are removed, you can still access the instances using:
+
+1. **AWS Systems Manager Session Manager** - The IAM role includes `AmazonSSMManagedInstanceCore` policy
+2. **EC2 Instance Connect** - Can be used for temporary SSH access
+3. **Load Balancer** - For HTTP access to the web application
+
+## **Security Note:**
+
+The security group still allows SSH (port 22) from the specified CIDR blocks, but without key pairs, you'll need to use alternative access methods like Session Manager or EC2 Instance Connect if SSH access is required.
+
+The configuration is now ready to deploy without any key pair dependencies!
