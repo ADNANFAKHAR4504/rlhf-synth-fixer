@@ -151,7 +151,7 @@ class TapStack(Stack):
             self,
             "PostgresDatabase",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.of(major_version="13", minor_version="22")
+                version=rds.PostgresEngineVersion.VER_13_7
             ),
             instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO),  # db.t2.micro
             vpc=self.vpc,
