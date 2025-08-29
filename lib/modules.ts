@@ -19,19 +19,21 @@ import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-assoc
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule as AwsSecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule'; // Renamed to avoid conflict
+import { SecurityGroupRule as AwsSecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 
-// KMS Module - Creates customer-managed KMS key
+/* =========================
+   KMS Module
+   ========================= */
 export interface KmsModuleProps {
   project: string;
   environment: string;
   description: string;
-  accountId: string; // Add this
+  accountId: string;
 }
 
 export class KmsModule extends Construct {
@@ -41,11 +43,9 @@ export class KmsModule extends Construct {
   constructor(scope: Construct, id: string, props: KmsModuleProps) {
     super(scope, id);
 
-    // Create KMS key
     this.key = new KmsKey(this, 'kms-key', {
       description: props.description,
       keyUsage: 'ENCRYPT_DECRYPT',
-      // Removed keySpec as it doesn't exist in KmsKeyConfig
       deletionWindowInDays: 7,
       enableKeyRotation: true,
       policy: JSON.stringify({
@@ -54,18 +54,14 @@ export class KmsModule extends Construct {
           {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
-            Principal: {
-              AWS: `arn:aws:iam::${props.accountId}:root`,
-            },
+            Principal: { AWS: `arn:aws:iam::${props.accountId}:root` },
             Action: 'kms:*',
             Resource: '*',
           },
           {
             Sid: 'Allow CloudTrail to encrypt logs',
             Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
+            Principal: { Service: 'cloudtrail.amazonaws.com' },
             Action: [
               'kms:GenerateDataKey*',
               'kms:DescribeKey',
@@ -84,7 +80,6 @@ export class KmsModule extends Construct {
       },
     });
 
-    // Create KMS alias
     this.alias = new KmsAlias(this, 'kms-alias', {
       name: `alias/${props.project}-${props.environment}-key`,
       targetKeyId: this.key.keyId,
@@ -92,7 +87,9 @@ export class KmsModule extends Construct {
   }
 }
 
-// S3 Module - Creates encrypted S3 bucket
+/* =========================
+   S3 Module
+   ========================= */
 export interface S3ModuleProps {
   project: string;
   environment: string;
@@ -106,7 +103,6 @@ export class S3Module extends Construct {
   constructor(scope: Construct, id: string, props: S3ModuleProps) {
     super(scope, id);
 
-    // Create S3 bucket
     this.bucket = new S3Bucket(this, 's3-bucket', {
       bucket: props.bucketName,
       tags: {
@@ -116,13 +112,12 @@ export class S3Module extends Construct {
       },
     });
 
-    // Configure bucket encryption
     new S3BucketServerSideEncryptionConfigurationA(this, 's3-encryption', {
       bucket: this.bucket.id,
       rule: [
         {
           applyServerSideEncryptionByDefault: {
-            kmsMasterKeyId: props.kmsKey.arn, // Changed from kmsKeyId to kmsMasterKeyId
+            kmsMasterKeyId: props.kmsKey.arn,
             sseAlgorithm: 'aws:kms',
           },
           bucketKeyEnabled: true,
@@ -130,7 +125,6 @@ export class S3Module extends Construct {
       ],
     });
 
-    // Block public access
     new S3BucketPublicAccessBlock(this, 's3-public-access-block', {
       bucket: this.bucket.id,
       blockPublicAcls: true,
@@ -139,23 +133,24 @@ export class S3Module extends Construct {
       restrictPublicBuckets: true,
     });
 
-    // Enable versioning
     new S3BucketVersioningA(this, 's3-versioning', {
       bucket: this.bucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
-      },
+      versioningConfiguration: { status: 'Enabled' },
     });
   }
 }
 
-// CloudTrail Module - Creates CloudTrail with encrypted logging
+/* =========================
+   CloudTrail Module
+   ========================= */
 export interface CloudTrailModuleProps {
   project: string;
   environment: string;
   kmsKey: KmsKey;
-  accountId: string; // Add account ID
-  region: string; // Add region
+  accountId: string;
+  region: string;
+  /** Optional: pass in a pre-unique bucket name; if omitted we derive one with account+region */
+  logsBucketName?: string;
 }
 
 export class CloudTrailModule extends Construct {
@@ -165,8 +160,14 @@ export class CloudTrailModule extends Construct {
   constructor(scope: Construct, id: string, props: CloudTrailModuleProps) {
     super(scope, id);
 
-    // Create S3 bucket for CloudTrail logs
-    const logsBucketName = `${props.project}-${props.environment}-cloudtrail-logs`;
+    // ✅ Make the logs bucket globally-unique & deterministic across acct/region
+    const derivedName = `${props.project}-${props.environment}-cloudtrail-${props.region}-${props.accountId}`
+      .toLowerCase()
+      .replace(/[^a-z0-9.-]/g, '')
+      .slice(0, 63)
+      .replace(/^[.-]+|[.-]+$/g, '');
+
+    const logsBucketName = (props.logsBucketName || derivedName);
 
     this.logsBucket = new S3Bucket(this, 'cloudtrail-logs-bucket', {
       bucket: logsBucketName,
@@ -177,7 +178,6 @@ export class CloudTrailModule extends Construct {
       },
     });
 
-    // Configure logs bucket encryption
     new S3BucketServerSideEncryptionConfigurationA(
       this,
       'logs-bucket-encryption',
@@ -195,7 +195,6 @@ export class CloudTrailModule extends Construct {
       }
     );
 
-    // Block public access for logs bucket
     new S3BucketPublicAccessBlock(this, 'logs-bucket-public-access-block', {
       bucket: this.logsBucket.id,
       blockPublicAcls: true,
@@ -204,7 +203,6 @@ export class CloudTrailModule extends Construct {
       restrictPublicBuckets: true,
     });
 
-    // **FIXED: Create proper bucket policy for CloudTrail**
     const bucketPolicy = new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
       bucket: this.logsBucket.id,
       policy: JSON.stringify({
@@ -213,9 +211,7 @@ export class CloudTrailModule extends Construct {
           {
             Sid: 'AWSCloudTrailAclCheck',
             Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
+            Principal: { Service: 'cloudtrail.amazonaws.com' },
             Action: 's3:GetBucketAcl',
             Resource: this.logsBucket.arn,
             Condition: {
@@ -227,9 +223,7 @@ export class CloudTrailModule extends Construct {
           {
             Sid: 'AWSCloudTrailWrite',
             Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
+            Principal: { Service: 'cloudtrail.amazonaws.com' },
             Action: 's3:PutObject',
             Resource: `${this.logsBucket.arn}/*`,
             Condition: {
@@ -242,9 +236,7 @@ export class CloudTrailModule extends Construct {
           {
             Sid: 'AWSCloudTrailGetBucketLocation',
             Effect: 'Allow',
-            Principal: {
-              Service: 'cloudtrail.amazonaws.com',
-            },
+            Principal: { Service: 'cloudtrail.amazonaws.com' },
             Action: 's3:GetBucketLocation',
             Resource: this.logsBucket.arn,
             Condition: {
@@ -257,7 +249,6 @@ export class CloudTrailModule extends Construct {
       }),
     });
 
-    // Create CloudTrail - ensure it depends on the bucket policy
     this.trail = new cloudtrail.Cloudtrail(this, 'cloudtrail', {
       name: `${props.project}-${props.environment}-trail`,
       s3BucketName: this.logsBucket.id,
@@ -270,12 +261,14 @@ export class CloudTrailModule extends Construct {
         Project: props.project,
         Environment: props.environment,
       },
-      dependsOn: [bucketPolicy], // Ensure bucket policy is created first
+      dependsOn: [bucketPolicy],
     });
   }
 }
 
-// IAM Module - Creates IAM role and policies for EC2
+/* =========================
+   IAM Module
+   ========================= */
 export interface IamModuleProps {
   project: string;
   environment: string;
@@ -289,18 +282,16 @@ export class IamModule extends Construct {
   constructor(scope: Construct, id: string, props: IamModuleProps) {
     super(scope, id);
 
-    // Create IAM role for EC2
+    // ✅ Use namePrefix to avoid collisions (Terraform appends a unique suffix)
     this.role = new IamRole(this, 'ec2-role', {
-      name: `${props.project}-${props.environment}-ec2-role`,
+      namePrefix: `${props.project}-${props.environment}-ec2-role-`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
           {
             Action: 'sts:AssumeRole',
             Effect: 'Allow',
-            Principal: {
-              Service: 'ec2.amazonaws.com',
-            },
+            Principal: { Service: 'ec2.amazonaws.com' },
           },
         ],
       }),
@@ -311,13 +302,11 @@ export class IamModule extends Construct {
       },
     });
 
-    // Attach basic EC2 permissions
     new IamRolePolicyAttachment(this, 'ec2-ssm-policy', {
       role: this.role.name,
       policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
     });
 
-    // Create inline policy for S3 access
     new IamRolePolicy(this, 's3-access-policy', {
       name: `${props.project}-${props.environment}-s3-access`,
       role: this.role.id,
@@ -333,19 +322,17 @@ export class IamModule extends Construct {
       }),
     });
 
-    // Create instance profile
-    this.instanceProfile = new IamInstanceProfile(
-      this,
-      'ec2-instance-profile',
-      {
-        name: `${props.project}-${props.environment}-ec2-profile`,
-        role: this.role.name,
-      }
-    );
+    // ✅ Use namePrefix here too
+    this.instanceProfile = new IamInstanceProfile(this, 'ec2-instance-profile', {
+      namePrefix: `${props.project}-${props.environment}-ec2-profile-`,
+      role: this.role.name,
+    });
   }
 }
 
-// VPC Module - Creates VPC with public and private subnets
+/* =========================
+   VPC Module
+   ========================= */
 export interface VpcModuleProps {
   project: string;
   environment: string;
@@ -362,7 +349,6 @@ export class VpcModule extends Construct {
   constructor(scope: Construct, id: string, props: VpcModuleProps) {
     super(scope, id);
 
-    // Create VPC
     this.vpc = new Vpc(this, 'vpc', {
       cidrBlock: props.cidrBlock,
       enableDnsHostnames: true,
@@ -374,7 +360,6 @@ export class VpcModule extends Construct {
       },
     });
 
-    // Create Internet Gateway
     this.internetGateway = new InternetGateway(this, 'igw', {
       vpcId: this.vpc.id,
       tags: {
@@ -384,12 +369,10 @@ export class VpcModule extends Construct {
       },
     });
 
-    // Create public subnets
     this.publicSubnets = [];
     this.privateSubnets = [];
 
     props.availabilityZones.forEach((az, index) => {
-      // Public subnet
       const publicSubnet = new Subnet(this, `public-subnet-${index}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${index * 2 + 1}.0/24`,
@@ -404,7 +387,6 @@ export class VpcModule extends Construct {
       });
       this.publicSubnets.push(publicSubnet);
 
-      // Private subnet
       const privateSubnet = new Subnet(this, `private-subnet-${index}`, {
         vpcId: this.vpc.id,
         cidrBlock: `10.0.${index * 2 + 2}.0/24`,
@@ -418,7 +400,6 @@ export class VpcModule extends Construct {
       });
       this.privateSubnets.push(privateSubnet);
 
-      // Create NAT Gateway for private subnet
       const eip = new Eip(this, `nat-eip-${index}`, {
         domain: 'vpc',
         tags: {
@@ -438,7 +419,6 @@ export class VpcModule extends Construct {
         },
       });
 
-      // Private route table
       const privateRouteTable = new RouteTable(this, `private-rt-${index}`, {
         vpcId: this.vpc.id,
         tags: {
@@ -460,7 +440,6 @@ export class VpcModule extends Construct {
       });
     });
 
-    // Public route table
     const publicRouteTable = new RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
       tags: {
@@ -476,7 +455,6 @@ export class VpcModule extends Construct {
       gatewayId: this.internetGateway.id,
     });
 
-    // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
       new RouteTableAssociation(this, `public-rt-association-${index}`, {
         subnetId: subnet.id,
@@ -486,9 +464,10 @@ export class VpcModule extends Construct {
   }
 }
 
-// Security Group Module - Creates security groups with configurable rules
+/* =========================
+   Security Group Module
+   ========================= */
 export interface SecurityGroupRuleConfig {
-  // Renamed to avoid conflict
   type: 'ingress' | 'egress';
   fromPort: number;
   toPort: number;
@@ -512,7 +491,6 @@ export class SecurityGroupModule extends Construct {
   constructor(scope: Construct, id: string, props: SecurityGroupModuleProps) {
     super(scope, id);
 
-    // Create security group
     this.securityGroup = new SecurityGroup(this, 'sg', {
       name: `${props.project}-${props.environment}-${props.name}-sg`,
       description: props.description,
@@ -524,10 +502,8 @@ export class SecurityGroupModule extends Construct {
       },
     });
 
-    // Create security group rules
     props.rules.forEach((rule, index) => {
       new AwsSecurityGroupRule(this, `sg-rule-${index}`, {
-        // Using renamed import
         type: rule.type,
         fromPort: rule.fromPort,
         toPort: rule.toPort,
@@ -540,7 +516,9 @@ export class SecurityGroupModule extends Construct {
   }
 }
 
-// EC2 Module - Creates EC2 instances
+/* =========================
+   EC2 Module
+   ========================= */
 export interface Ec2ModuleProps {
   project: string;
   environment: string;
@@ -557,23 +535,15 @@ export class Ec2Module extends Construct {
   constructor(scope: Construct, id: string, props: Ec2ModuleProps) {
     super(scope, id);
 
-    // Get latest Amazon Linux 2 AMI
     const ami = new DataAwsAmi(this, 'amazon-linux', {
       mostRecent: true,
       owners: ['amazon'],
       filter: [
-        {
-          name: 'name',
-          values: ['amzn2-ami-hvm-*-x86_64-gp2'],
-        },
-        {
-          name: 'virtualization-type',
-          values: ['hvm'],
-        },
+        { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
+        { name: 'virtualization-type', values: ['hvm'] },
       ],
     });
 
-    // Create EC2 instance
     this.instance = new Instance(this, 'instance', {
       ami: ami.id,
       instanceType: props.instanceType,
@@ -594,7 +564,9 @@ yum install -y amazon-cloudwatch-agent
   }
 }
 
-// RDS Module - Creates encrypted RDS instance
+/* =========================
+   RDS Module
+   ========================= */
 export interface RdsModuleProps {
   project: string;
   environment: string;
@@ -604,7 +576,7 @@ export interface RdsModuleProps {
   allocatedStorage: number;
   dbName: string;
   username: string;
-  password: string;
+  password: string;            // ensure ≤ 41 chars; handled in stack
   subnetIds: string[];
   securityGroupIds: string[];
   kmsKey: KmsKey;
@@ -617,7 +589,6 @@ export class RdsModule extends Construct {
   constructor(scope: Construct, id: string, props: RdsModuleProps) {
     super(scope, id);
 
-    // Create DB subnet group
     this.subnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
       name: `${props.project}-${props.environment}-db-subnet-group`,
       subnetIds: props.subnetIds,
@@ -628,7 +599,6 @@ export class RdsModule extends Construct {
       },
     });
 
-    // Create RDS instance
     this.dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `${props.project}-${props.environment}-db`,
       engine: props.engine,

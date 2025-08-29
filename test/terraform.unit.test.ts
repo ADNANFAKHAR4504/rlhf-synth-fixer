@@ -6,7 +6,7 @@ import { TapStack } from '../lib/tap-stack';
 // Import the mocked functions
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
-import { AwsProvider, AwsProviderDefaultTags } from '@cdktf/provider-aws/lib/provider';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformOutput } from 'cdktf';
 import {
   CloudTrailModule,
@@ -126,18 +126,19 @@ jest.mock('@cdktf/provider-aws/lib/data-aws-caller-identity', () => ({
   })),
 }));
 
-// Mock DataAwsSecretsmanagerSecretVersion
+// Mock DataAwsSecretsmanagerSecretVersion with a valid (<=41-char) password
 jest.mock(
   '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version',
   () => ({
     DataAwsSecretsmanagerSecretVersion: jest.fn((_, id, config) => ({
-      secretString: '&YBY=?}{AmEH+oy8Rmj!E2*g>ky-2$V[',
+      // 31 chars: valid for RDS MySQL (8–41)
+      secretString: 'Tp_Dev$rds_P@ssw0rd_2025_ABC123',
       secretId: config.secretId,
     })),
   })
 );
 
-// Mock RandomProvider
+// Mock RandomProvider (kept; harmless if unused)
 jest.mock('@cdktf/provider-random/lib/provider', () => ({
   RandomProvider: jest.fn(),
 }));
@@ -169,11 +170,11 @@ describe('TapStack Unit Tests', () => {
     );
   });
 
-  test('should use props.awsRegion when region override is disabled', () => {
+  // renamed for clarity (no awsRegion provided)
+  test('should fall back to default region when override is disabled', () => {
     const app = new App();
     new TapStack(app, 'TestStackNoOverride', {
       _regionOverrideForTesting: null, // Disable the override
-      // No awsRegion prop provided
     });
 
     expect(AwsProvider).toHaveBeenCalledWith(
@@ -428,7 +429,7 @@ describe('TapStack Unit Tests', () => {
         allocatedStorage: 20,
         dbName: 'appdb',
         username: 'admin',
-        password: '&YBY=?}{AmEH+oy8Rmj!E2*g>ky-2$V[',
+        password: 'Tp_Dev$rds_P@ssw0rd_2025_ABC123', // updated: valid length
         subnetIds: ['subnet-private-1', 'subnet-private-2'],
         securityGroupIds: ['rds-sg-sg-id'],
         kmsKey: expect.objectContaining({
@@ -437,6 +438,11 @@ describe('TapStack Unit Tests', () => {
         }),
       })
     );
+
+    // Guard: ensure we never exceed the RDS 41-char limit
+    const rdsArgs = (RdsModule as unknown as jest.Mock).mock.calls[0][2];
+    expect(rdsArgs.password.length).toBeLessThanOrEqual(41);
+    expect(rdsArgs.password.length).toBeGreaterThanOrEqual(8);
   });
 
   test('should handle custom environment suffix', () => {
@@ -550,7 +556,7 @@ describe('TapStack Unit Tests', () => {
       'addOverride'
     );
 
-    const stack = new TapStack(app, 'TestStackOverride');
+    new TapStack(app, 'TestStackOverride');
 
     expect(addOverrideSpy).toHaveBeenCalledWith(
       'terraform.backend.s3.use_lockfile',
