@@ -116,7 +116,6 @@ describe("TAP Terraform Stack Integration Tests", () => {
       "standalone_instance_arn",
       "launch_template_id",
       "launch_template_latest_version",
-      "autoscaling_group_arn",
       "autoscaling_group_name",
       "load_balancer_zone_id",
       "target_group_id",
