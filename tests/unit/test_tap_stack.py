@@ -46,11 +46,12 @@ class TestTapStackModelFailures(unittest.TestCase):  # pylint: disable=too-many-
             "AWS::RDS::DBInstance",
             {
                 "Engine": "postgres",
-                # Updated: encryption requires t3.micro (t2.micro doesn't support enc-at-rest)
+                # encryption-compatible instance class
                 "DBInstanceClass": "db.t3.micro",
                 "PubliclyAccessible": False,
                 "StorageEncrypted": True,
-                "DatabaseName": "webapp",
+                # CloudFormation property name is DBName (not DatabaseName)
+                "DBName": "webapp",
             },
         )
 
@@ -126,7 +127,7 @@ class TestTapStackModelFailures(unittest.TestCase):  # pylint: disable=too-many-
         )
 
         # PostgreSQL should only be allowed from App SG (port 5432).
-        # CDK emits this as a standalone SecurityGroupIngress using SourceSecurityGroupId.
+        # CDK often emits this as a standalone SecurityGroupIngress using SourceSecurityGroupId.
         self.template.has_resource_properties(
             "AWS::EC2::SecurityGroupIngress",
             {
@@ -253,9 +254,18 @@ class TestTapStackModelFailures(unittest.TestCase):  # pylint: disable=too-many-
     @pytest.mark.it("ensures secrets manager integration for RDS")
     def test_rds_secrets_manager(self) -> None:
         """RDS should use Secrets Manager for credentials."""
+        # One secret should be created by CDK for the DB admin user
         self.template.resource_count_is("AWS::SecretsManager::Secret", 1)
-        # CDK sets ManageMasterUserPassword: True instead of an inline MasterUserSecret block.
-        self.template.has_resource_properties("AWS::RDS::DBInstance", {"ManageMasterUserPassword": True})
+
+        # CDK supplies a dynamic Secrets Manager reference via MasterUserPassword,
+        # and sets MasterUsername explicitly. We do NOT require ManageMasterUserPassword here.
+        self.template.has_resource_properties(
+            "AWS::RDS::DBInstance",
+            {
+                "MasterUserPassword": Match.any_value(),
+                "MasterUsername": "dbadmin",
+            },
+        )
 
     @pytest.mark.it("validates resource count matches architecture")
     def test_resource_count_validation(self) -> None:
