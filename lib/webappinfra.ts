@@ -590,6 +590,26 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
+    new aws.s3.BucketAcl(
+      `cloudfront-logs-acl-${environment}`,
+      {
+        bucket: cloudFrontLogsBucket.id,
+        acl: 'private',
+      },
+      { provider: this.provider }
+    );
+
+    new aws.s3.BucketOwnershipControls(
+      `cloudfront-logs-ownership-${environment}`,
+      {
+        bucket: cloudFrontLogsBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      },
+      { provider: this.provider }
+    );
+
     this.cloudFrontDistribution = new aws.cloudfront.Distribution(
       `cdn-${environment}`,
       {
