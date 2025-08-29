@@ -478,8 +478,18 @@ export class SecureInfrastructure {
       {
         bucket: logsBucket.id,
         rule: {
-          objectOwnership: 'BucketOwnerPreferred',
+          objectOwnership: 'BucketOwnerFullControl',
         },
+      },
+      { provider: this.provider }
+    );
+
+    // Enable ACLs on the bucket
+    new aws.s3.BucketAcl(
+      `logs-bucket-acl-${this.environment}`,
+      {
+        bucket: logsBucket.id,
+        acl: 'private',
       },
       { provider: this.provider }
     );
