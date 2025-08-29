@@ -71,11 +71,13 @@ variable "environment" {
 variable "github_owner" {
   description = "GitHub repository owner"
   type        = string
+  default     = "your-github-username"
 }
 
 variable "github_repo" {
   description = "GitHub repository name"
   type        = string
+  default     = "your-repo-name"
 }
 
 variable "github_branch" {
@@ -87,6 +89,7 @@ variable "github_branch" {
 variable "application_name" {
   description = "Elastic Beanstalk application name"
   type        = string
+  default     = "your-app-name"
 }
 
 variable "solution_stack_name" {
@@ -104,6 +107,7 @@ variable "instance_type" {
 variable "notification_email" {
   description = "Email for pipeline notifications"
   type        = string
+  default     = "your-team@company.com"
 }
 
 variable "enable_manual_approval" {
