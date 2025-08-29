@@ -3,11 +3,13 @@ import * as path from "path";
 
 const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 
+// Validator helper functions
 const isNonEmptyString = (val: any): boolean =>
   typeof val === "string" && val.trim().length > 0;
 
 const isValidArn = (val: any): boolean => {
   if (typeof val !== "string" || val.trim().length === 0) return false;
+  // Simplified ARN pattern (IAM and generic)
   const iamRoleArnPattern = /^arn:aws:iam::\d{12}:role\/[\w+=,.@\-_/]+$/;
   const genericArnPattern = /^arn:aws:[^:]+:[^:]*:\d{12}:[^ ]+$/;
   return iamRoleArnPattern.test(val) || genericArnPattern.test(val);
@@ -31,24 +33,9 @@ const isValidNatGatewayId = (val: any): boolean =>
 const isValidRouteTableId = (val: any): boolean =>
   isNonEmptyString(val) && val.startsWith("rtb-");
 
-const isValidArrayOfType = (val: any, validator: (v: any) => boolean): boolean => {
-  if (!Array.isArray(val)) return false;
-  return val.every(validator);
-};
-
-const parseMaybeJsonArray = (val: any): any[] | null => {
-  if (!val) return null;
-  if (Array.isArray(val)) return val;
-  if (typeof val === "string") {
-    try {
-      const parsed = JSON.parse(val);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      return null;
-    }
-  }
-  return null;
-};
+// To validate array of items with given validator
+const isValidArrayOfType = (val: any, validator: (v: any) => boolean): boolean =>
+  Array.isArray(val) && val.every(validator);
 
 describe("tap_stack.tf Integration Tests", () => {
   let outputsRaw: Record<string, any>;
@@ -215,7 +202,7 @@ describe("tap_stack.tf Integration Tests", () => {
     });
   });
 
-  // Validate ARNs with a helper function
+  // ARN keys validation
   const arnKeys = [
     "cloudwatch_access_policy_arn",
     "cloudwatch_log_group_arn",
@@ -235,9 +222,7 @@ describe("tap_stack.tf Integration Tests", () => {
     "secondary_alb_arn",
     "secondary_asg_arn",
     "secondary_db_subnet_group_arn",
-    "secondary_ec2_security_group_id", // This is SG ID, not ARN, careful below
     "secondary_launch_template_arn",
-    "secondary_rds_security_group_id", // SG ID, not ARN
     "secondary_scale_down_policy_arn",
     "secondary_scale_up_policy_arn",
     "secondary_sns_topic_arn",
@@ -245,22 +230,15 @@ describe("tap_stack.tf Integration Tests", () => {
   ];
 
   arnKeys.forEach(key => {
-    it(`${key} should be a valid ARN if it is an ARN, or valid ID if not`, () => {
+    it(`${key} should be a valid ARN`, () => {
       const val = outputs[key];
-      if (val === undefined) {
-        return;
-      }
-      if (key.endsWith("security_group_id")) {
-        // Validate as SG ID string starting with "sg-"
-        expect(isValidSecurityGroupId(val)).toBe(true);
-      } else {
-        expect(isValidArn(val)).toBe(true);
-      }
+      if (val === undefined) return;
+      expect(isValidArn(val)).toBe(true);
     });
   });
 
-  // Validate VPC and subnet IDs 
-  [
+  // Validate IDs that start with certain prefixes
+  const idValidators: [string, (val: any) => boolean][] = [
     ["primary_vpc_id", isValidVpcId],
     ["secondary_vpc_id", isValidVpcId],
     ["primary_alb_security_group_id", isValidSecurityGroupId],
@@ -270,36 +248,27 @@ describe("tap_stack.tf Integration Tests", () => {
     ["secondary_ec2_security_group_id", isValidSecurityGroupId],
     ["secondary_rds_security_group_id", isValidSecurityGroupId],
     ["primary_internet_gateway_id", isValidInternetGatewayId],
-    ["secondary_internet_gateway_id", isValidInternetGatewayId]
-  ].forEach(([key, validator]) => {
-    it(`${key} should be a valid AWS ID`, () => {
+    ["secondary_internet_gateway_id", isValidInternetGatewayId],
+    ["primary_nat_gateway_ids", (val) => isValidArrayOfType(val, isValidNatGatewayId)],
+    ["secondary_nat_gateway_ids", (val) => isValidArrayOfType(val, isValidNatGatewayId)],
+    ["primary_nat_eip_ids", (val) => isValidArrayOfType(val, isNonEmptyString)],
+    ["secondary_nat_eip_ids", (val) => isValidArrayOfType(val, isNonEmptyString)],
+    ["primary_public_subnet_ids", (val) => isValidArrayOfType(val, isValidSubnetId)],
+    ["primary_private_subnet_ids", (val) => isValidArrayOfType(val, isValidSubnetId)],
+    ["secondary_public_subnet_ids", (val) => isValidArrayOfType(val, isValidSubnetId)],
+    ["secondary_private_subnet_ids", (val) => isValidArrayOfType(val, isValidSubnetId)],
+    ["primary_private_route_table_ids", (val) => isValidArrayOfType(val, isValidRouteTableId)],
+    ["secondary_private_route_table_ids", (val) => isValidArrayOfType(val, isValidRouteTableId)]
+  ];
+
+  idValidators.forEach(([key, validator]) => {
+    it(`${key} should be valid and properly formatted`, () => {
+      expect(outputs).toHaveProperty(key);
       expect(validator(outputs[key])).toBe(true);
     });
   });
 
-  // Validate arrays of IDs with safety
-  [
-    {key: "primary_nat_gateway_ids", validator: isValidNatGatewayId},
-    {key: "secondary_nat_gateway_ids", validator: isValidNatGatewayId},
-    {key: "primary_nat_eip_ids", validator: isNonEmptyString},
-    {key: "secondary_nat_eip_ids", validator: isNonEmptyString},
-    {key: "primary_public_subnet_ids", validator: isValidSubnetId},
-    {key: "primary_private_subnet_ids", validator: isValidSubnetId},
-    {key: "secondary_public_subnet_ids", validator: isValidSubnetId},
-    {key: "secondary_private_subnet_ids", validator: isValidSubnetId},
-    {key: "primary_private_route_table_ids", validator: isValidRouteTableId},
-    {key: "secondary_private_route_table_ids", validator: isValidRouteTableId}
-  ].forEach(({key, validator}) => {
-    it(`${key} should be an array of valid IDs`, () => {
-      const arr = outputs[key];
-      expect(Array.isArray(arr)).toBe(true);
-      arr.forEach((id: any) => {
-        expect(validator(id)).toBe(true);
-      });
-    });
-  });
-
-  // Validate CIDR strings
+  // CIDR block validations
   [
     "primary_public_subnet_1_cidr",
     "primary_public_subnet_2_cidr",
@@ -310,22 +279,22 @@ describe("tap_stack.tf Integration Tests", () => {
     "secondary_private_subnet_1_cidr",
     "secondary_private_subnet_2_cidr"
   ].forEach(key => {
-    it(`${key} should be a valid CIDR block string`, () => {
+    it(`${key} should be a valid CIDR`, () => {
       expect(typeof outputs[key]).toBe("string");
       expect(outputs[key]).toMatch(/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/);
     });
   });
 
-  // Validate availability zone arrays
+  // Availability zones are arrays of strings
   ["primary_availability_zones", "secondary_availability_zones"].forEach(key => {
-    it(`${key} should be an array of availability zones strings`, () => {
-      const azs = outputs[key];
-      expect(Array.isArray(azs)).toBe(true);
-      azs.forEach((az: any) => expect(typeof az === "string" && az.length > 0).toBe(true));
+    it(`${key} should be an array of non-empty strings`, () => {
+      const azList = outputs[key];
+      expect(Array.isArray(azList)).toBe(true);
+      azList.forEach((az: any) => expect(isNonEmptyString(az)).toBe(true));
     });
   });
 
-  // Validate some basic string outputs presence
+  // Validate some mandatory string outputs
   [
     "cloudwatch_log_group_arn",
     "cloudwatch_log_group_name",
@@ -344,18 +313,17 @@ describe("tap_stack.tf Integration Tests", () => {
 
   it("rds_backup_retention_period should be a positive integer", () => {
     const val = outputs.rds_backup_retention_period;
-    expect(typeof val === "number" || typeof val === "string").toBe(true);
-    const parsed = typeof val === "string" ? parseInt(val, 10) : val;
-    expect(Number.isInteger(parsed)).toBe(true);
-    expect(parsed).toBeGreaterThan(0);
+    const numVal = typeof val === "string" ? parseInt(val, 10) : val;
+    expect(Number.isInteger(numVal)).toBe(true);
+    expect(numVal).toBeGreaterThan(0);
   });
 
-  it("rds_storage_encrypted should be boolean true or 'true'", () => {
+  it("rds_storage_encrypted should be boolean true or string 'true'", () => {
     const val = outputs.rds_storage_encrypted;
     expect(val === true || val === "true").toBe(true);
   });
 
-  it("rds_engine should be 'mysql' and rds_engine_version should be '8.0'", () => {
+  it("rds_engine and version should match expected", () => {
     expect(outputs.rds_engine).toBe("mysql");
     expect(outputs.rds_engine_version).toBe("8.0");
   });
@@ -365,5 +333,4 @@ describe("tap_stack.tf Integration Tests", () => {
     expect(outputs.rds_username.startsWith("a")).toBe(true);
     expect(outputs.rds_username.endsWith(outputs.db_username_suffix)).toBe(true);
   });
-
 });
