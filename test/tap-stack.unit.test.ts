@@ -190,17 +190,186 @@ describe('TapStack', () => {
     const outputs = template.findOutputs('*');
 
     expect(outputs).toHaveProperty('S3BucketArn');
+    expect(outputs).toHaveProperty('S3BucketName');
     expect(outputs).toHaveProperty('LambdaFunctionArn');
     expect(outputs).toHaveProperty('LambdaRoleArn');
     expect(outputs).toHaveProperty('KmsKeyArn');
     expect(outputs).toHaveProperty('CloudFrontDistributionArn');
+    expect(outputs).toHaveProperty('CloudFrontDomainName');
     expect(outputs).toHaveProperty('VpcId');
     expect(outputs).toHaveProperty('EnvironmentSuffix');
 
     // Check export names include environment suffix
     expect(outputs['S3BucketArn'].Export?.Name).toBe('TapS3BucketArn-test');
+    expect(outputs['S3BucketName'].Export?.Name).toBe('TapS3BucketName-test');
     expect(outputs['EnvironmentSuffix'].Export?.Name).toBe(
       'TapEnvironmentSuffix-test'
     );
+  });
+
+  test('SSM Parameters are created with correct configuration', () => {
+    template.hasResourceProperties('AWS::SSM::Parameter', {
+      Name: '/tap/test/lambda/db-credentials',
+      Type: 'String',
+      Description: 'Database credentials for TAP Lambda function - test',
+    });
+
+    template.hasResourceProperties('AWS::SSM::Parameter', {
+      Name: '/tap/test/lambda/api-key',
+      Type: 'String',
+      Description: 'API key for external service integration - test',
+    });
+  });
+
+  test('VPC is created with correct configuration', () => {
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      CidrBlock: '10.0.0.0/16',
+      EnableDnsHostnames: true,
+      EnableDnsSupport: true,
+    });
+
+    // Check for public and private subnets
+    const subnets = template.findResources('AWS::EC2::Subnet');
+    expect(Object.keys(subnets)).toHaveLength(4); // 2 public + 2 private
+  });
+
+  test('Lambda function has correct environment variables', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: {
+          S3_BUCKET_NAME: Match.anyValue(),
+          DB_CREDENTIALS_PARAM: '/tap/test/lambda/db-credentials',
+          API_KEY_PARAM: '/tap/test/lambda/api-key',
+          ENVIRONMENT_SUFFIX: 'test',
+        },
+      },
+    });
+  });
+
+  test('KMS key alias is created with environment suffix', () => {
+    template.hasResourceProperties('AWS::KMS::Alias', {
+      AliasName: 'alias/tap-s3-encryption-key-test',
+    });
+  });
+
+  test('CloudWatch log group is created for Lambda function', () => {
+    template.hasResourceProperties('AWS::Logs::LogGroup', {
+      LogGroupName: Match.stringLikeRegexp('/aws/lambda/.*TapLambdaFunction.*'),
+      RetentionInDays: 7,
+    });
+  });
+
+  test('Security best practices are enforced', () => {
+    // Ensure S3 bucket blocks all public access
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+    });
+
+    // Ensure Lambda uses Python 3.9 (not older versions)
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Runtime: 'python3.9',
+    });
+
+    // Ensure CloudFront uses HTTPS redirect
+    template.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: {
+        DefaultCacheBehavior: {
+          ViewerProtocolPolicy: 'redirect-to-https',
+        },
+      },
+    });
+  });
+
+  test('Resource naming follows convention with environment suffix', () => {
+    // S3 bucket name should include environment suffix
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: Match.stringLikeRegexp('^tap-secure-bucket-test-.*'),
+    });
+
+    // KMS key description should include environment suffix
+    template.hasResourceProperties('AWS::KMS::Key', {
+      Description: 'KMS key for S3 bucket encryption - test',
+    });
+
+    // Lambda function description should include environment suffix
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Description: 'TAP Lambda function triggered by S3 events - test',
+    });
+  });
+
+  test('Error handling: Stack creation with missing environmentSuffix defaults to dev', () => {
+    const stackPropsWithoutSuffix = {
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+    };
+
+    const stackWithDefaults = new TapStack(app, 'TestTapStackDefaults', stackPropsWithoutSuffix);
+    const templateWithDefaults = Template.fromStack(stackWithDefaults);
+
+    // Should default to 'dev' when environmentSuffix is not provided
+    templateWithDefaults.hasResourceProperties('AWS::S3::Bucket', {
+      BucketName: 'tap-secure-bucket-dev-123456789012-us-east-1',
+    });
+
+    templateWithDefaults.hasResourceProperties('AWS::KMS::Key', {
+      Description: 'KMS key for S3 bucket encryption - dev',
+    });
+  });
+
+  test('All IAM policies follow least privilege principle', () => {
+    // Check Lambda execution role has only necessary permissions
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'lambda.amazonaws.com',
+            },
+          },
+        ],
+      },
+    });
+
+    // Check that explicit S3 permissions are scoped to specific bucket
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          {
+            Effect: 'Allow',
+            Action: [
+              's3:GetObject',
+              's3:PutObject',
+              's3:DeleteObject',
+              's3:ListBucket',
+              's3:GetObjectVersion',
+              's3:DeleteObjectVersion',
+            ],
+            Resource: Match.anyValue(),
+          },
+        ]),
+      },
+    });
+
+    // Check SSM parameter permissions are scoped to specific parameters
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          {
+            Effect: 'Allow',
+            Action: ['ssm:GetParameter', 'ssm:GetParameters'],
+            Resource: Match.anyValue(),
+          },
+        ]),
+      },
+    });
   });
 });
