@@ -25,6 +25,12 @@ export interface TapStackArgs {
   environmentSuffix?: string;
 
   /**
+   * AWS region for resource deployment.
+   * Defaults to 'ap-south-1' if not provided.
+   */
+  awsRegion?: string;
+
+  /**
    * Optional default tags to apply to resources.
    */
   tags?: pulumi.Input<{ [key: string]: string }>;
@@ -50,14 +56,19 @@ export class TapStack extends pulumi.ComponentResource {
    * @param args Configuration arguments including environment suffix and tags.
    * @param opts Pulumi options.
    */
-  constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
+  constructor(name: string, args: TapStackArgs = {}, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
 
-    new SecureInfrastructure('ap-south-1', 'production', {
+    const region = args.awsRegion || 'ap-south-1';
+    const environment = args.environmentSuffix || 'dev';
+    const defaultTags = {
       Project: 'MyApp',
       Owner: 'DevOps Team',
       CostCenter: 'Engineering',
-    });
+      ...((args.tags as any) || {}),
+    };
+
+    new SecureInfrastructure(region, environment, defaultTags);
 
     // Register the outputs of this component.
     this.registerOutputs({

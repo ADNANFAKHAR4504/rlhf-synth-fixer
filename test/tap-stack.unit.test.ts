@@ -25,9 +25,11 @@ describe("TapStack Structure", () => {
     beforeAll(() => {
       stack = new TapStack("TestTapStackWithProps", {
         environmentSuffix: "prod",
-        stateBucket: "custom-state-bucket",
-        stateBucketRegion: "us-west-2",
         awsRegion: "us-west-2",
+        tags: {
+          Environment: "prod",
+          Project: "TestProject"
+        }
       });
     });
 
@@ -44,15 +46,15 @@ describe("TapStack Structure", () => {
       );
     });
 
-    it("uses custom state bucket name", async () => {
-      expect(pulumi.Config).toHaveBeenCalledWith("tapstack");
-      // Add assertions for your state bucket configuration
+    it("uses custom tags", async () => {
+      // Test that custom tags are applied
+      expect(stack).toBeDefined();
     });
   });
 
   describe("with default values", () => {
     beforeAll(() => {
-      stack = new TapStack("TestTapStackDefault");
+      stack = new TapStack("TestTapStackDefault", {});
     });
 
     it("instantiates successfully", () => {

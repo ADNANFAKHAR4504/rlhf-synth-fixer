@@ -1,4 +1,5 @@
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export class SecureInfrastructure {
   private provider: aws.Provider;
@@ -11,6 +12,12 @@ export class SecureInfrastructure {
   private internetGateway: aws.ec2.InternetGateway;
   private natGateway: aws.ec2.NatGateway;
   private dbSubnetGroup: aws.rds.SubnetGroup;
+  private webSecurityGroup: aws.ec2.SecurityGroup;
+  private dbSecurityGroup: aws.ec2.SecurityGroup;
+  private ec2Role: aws.iam.Role;
+  private flowLogsRole: aws.iam.Role;
+  private appBucket: aws.s3.Bucket;
+  private logsBucket: aws.s3.Bucket;
 
   constructor(
     region: string,
@@ -31,11 +38,11 @@ export class SecureInfrastructure {
       region: this.region,
     });
 
-    // Initialize infrastructure components
+    // Initialize infrastructure components in correct order
     this.createNetworking();
     this.createSecurityGroups();
-    this.createIAMRoles();
     this.createS3Buckets();
+    this.createIAMRoles();
     this.createSecretsManager();
     this.createRDSDatabase();
     this.createEC2Instances();
@@ -231,7 +238,7 @@ export class SecureInfrastructure {
 
   private createSecurityGroups(): void {
     // Web Security Group
-    new aws.ec2.SecurityGroup(
+    this.webSecurityGroup = new aws.ec2.SecurityGroup(
       `web-sg-${this.environment}`,
       {
         name: `web-sg-${this.environment}`,
@@ -278,7 +285,7 @@ export class SecureInfrastructure {
     );
 
     // Database Security Group
-    new aws.ec2.SecurityGroup(
+    this.dbSecurityGroup = new aws.ec2.SecurityGroup(
       `db-sg-${this.environment}`,
       {
         name: `db-sg-${this.environment}`,
@@ -289,8 +296,8 @@ export class SecureInfrastructure {
             protocol: 'tcp',
             fromPort: 3306,
             toPort: 3306,
-            cidrBlocks: ['10.0.0.0/16'],
-            description: 'MySQL access from VPC',
+            securityGroups: [this.webSecurityGroup.id],
+            description: 'MySQL access from web servers',
           },
         ],
         egress: [
@@ -311,9 +318,120 @@ export class SecureInfrastructure {
     );
   }
 
+  private createS3Buckets(): void {
+    // Application Bucket
+    this.appBucket = new aws.s3.Bucket(
+      `secure-app-bucket-${this.environment}`,
+      {
+        bucket: `secure-app-bucket-${this.environment}-${Math.random().toString(36).substring(7)}`,
+        tags: {
+          ...this.tags,
+          Name: `secure-app-bucket-${this.environment}`,
+          Purpose: 'Application Data',
+        },
+      },
+      { provider: this.provider }
+    );
+
+    // Enable versioning
+    new aws.s3.BucketVersioningV2(
+      `app-bucket-versioning-${this.environment}`,
+      {
+        bucket: this.appBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { provider: this.provider }
+    );
+
+    // Enable server-side encryption
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      `app-bucket-encryption-${this.environment}`,
+      {
+        bucket: this.appBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      { provider: this.provider }
+    );
+
+    // Block public access
+    new aws.s3.BucketPublicAccessBlock(
+      `app-bucket-pab-${this.environment}`,
+      {
+        bucket: this.appBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { provider: this.provider }
+    );
+
+    // CloudFront Logs Bucket
+    this.logsBucket = new aws.s3.Bucket(
+      `cloudfront-logs-bucket-${this.environment}`,
+      {
+        bucket: `cloudfront-logs-bucket-${this.environment}-${Math.random().toString(36).substring(7)}`,
+        tags: {
+          ...this.tags,
+          Name: `cloudfront-logs-bucket-${this.environment}`,
+          Purpose: 'CloudFront Logs',
+        },
+      },
+      { provider: this.provider }
+    );
+
+    new aws.s3.BucketVersioningV2(
+      `logs-bucket-versioning-${this.environment}`,
+      {
+        bucket: this.logsBucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { provider: this.provider }
+    );
+
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      `logs-bucket-encryption-${this.environment}`,
+      {
+        bucket: this.logsBucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      { provider: this.provider }
+    );
+
+    new aws.s3.BucketPublicAccessBlock(
+      `logs-bucket-pab-${this.environment}`,
+      {
+        bucket: this.logsBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { provider: this.provider }
+    );
+  }
+
   private createIAMRoles(): void {
     // EC2 Instance Role
-    const ec2Role = new aws.iam.Role(
+    this.ec2Role = new aws.iam.Role(
       `ec2-role-${this.environment}`,
       {
         assumeRolePolicy: JSON.stringify({
@@ -341,30 +459,32 @@ export class SecureInfrastructure {
       `ec2-policy-${this.environment}`,
       {
         description: 'Minimal policy for EC2 instances',
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-              Resource: `arn:aws:s3:::secure-app-bucket-${this.environment}/*`,
-            },
-            {
-              Effect: 'Allow',
-              Action: ['secretsmanager:GetSecretValue'],
-              Resource: `arn:aws:secretsmanager:${this.region}:*:secret:app-secrets-${this.environment}-*`,
-            },
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: pulumi.all([this.appBucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+                Resource: `${bucketArn}/*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: ['secretsmanager:GetSecretValue'],
+                Resource: `arn:aws:secretsmanager:${this.region}:*:secret:app-secrets-${this.environment}-*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: '*',
+              },
+            ],
+          })
+        ),
         tags: {
           ...this.tags,
           Name: `ec2-policy-${this.environment}`,
@@ -376,7 +496,7 @@ export class SecureInfrastructure {
     new aws.iam.RolePolicyAttachment(
       `ec2-policy-attachment-${this.environment}`,
       {
-        role: ec2Role.name,
+        role: this.ec2Role.name,
         policyArn: ec2Policy.arn,
       },
       { provider: this.provider }
@@ -386,7 +506,7 @@ export class SecureInfrastructure {
     new aws.iam.InstanceProfile(
       `ec2-instance-profile-${this.environment}`,
       {
-        role: ec2Role.name,
+        role: this.ec2Role.name,
         tags: {
           ...this.tags,
           Name: `ec2-instance-profile-${this.environment}`,
@@ -396,7 +516,7 @@ export class SecureInfrastructure {
     );
 
     // VPC Flow Logs Role
-    const flowLogsRole = new aws.iam.Role(
+    this.flowLogsRole = new aws.iam.Role(
       `flow-logs-role-${this.environment}`,
       {
         assumeRolePolicy: JSON.stringify({
@@ -422,7 +542,7 @@ export class SecureInfrastructure {
     new aws.iam.RolePolicyAttachment(
       `flow-logs-policy-attachment-${this.environment}`,
       {
-        role: flowLogsRole.name,
+        role: this.flowLogsRole.name,
         policyArn:
           'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
       },
@@ -430,140 +550,13 @@ export class SecureInfrastructure {
     );
   }
 
-  private createS3Buckets(): void {
-    // Application Bucket
-    const appBucket = new aws.s3.Bucket(
-      `secure-app-bucket-${this.environment}`,
-      {
-        bucket: `secure-app-bucket-${this.environment}-${Math.random()
-          .toString(36)
-          .substring(7)}`,
-        tags: {
-          ...this.tags,
-          Name: `secure-app-bucket-${this.environment}`,
-          Purpose: 'Application Data',
-        },
-      },
-      { provider: this.provider }
-    );
-
-    // Enable versioning
-    new aws.s3.BucketVersioningV2(
-      `app-bucket-versioning-${this.environment}`,
-      {
-        bucket: appBucket.id,
-        versioningConfiguration: {
-          status: 'Enabled',
-        },
-      },
-      { provider: this.provider }
-    );
-
-    // Enable server-side encryption
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
-      `app-bucket-encryption-${this.environment}`,
-      {
-        bucket: appBucket.id,
-        serverSideEncryptionConfiguration: {
-          rules: [
-            {
-              applyServerSideEncryptionByDefault: {
-                sseAlgorithm: 'AES256',
-              },
-              bucketKeyEnabled: true,
-            },
-          ],
-        },
-      },
-      { provider: this.provider }
-    );
-
-    // Block public access
-    new aws.s3.BucketPublicAccessBlock(
-      `app-bucket-pab-${this.environment}`,
-      {
-        bucket: appBucket.id,
-        blockPublicAcls: true,
-        blockPublicPolicy: true,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: true,
-      },
-      { provider: this.provider }
-    );
-
-    // CloudFront Logs Bucket
-    const logsBucket = new aws.s3.Bucket(
-      `cloudfront-logs-bucket-${this.environment}`,
-      {
-        bucket: `cloudfront-logs-bucket-${this.environment}-${Math.random()
-          .toString(36)
-          .substring(7)}`,
-        tags: {
-          ...this.tags,
-          Name: `cloudfront-logs-bucket-${this.environment}`,
-          Purpose: 'CloudFront Logs',
-        },
-      },
-      { provider: this.provider }
-    );
-
-    new aws.s3.BucketVersioningV2(
-      `logs-bucket-versioning-${this.environment}`,
-      {
-        bucket: logsBucket.id,
-        versioningConfiguration: {
-          status: 'Enabled',
-        },
-      },
-      { provider: this.provider }
-    );
-
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
-      `logs-bucket-encryption-${this.environment}`,
-      {
-        bucket: logsBucket.id,
-        serverSideEncryptionConfiguration: {
-          rules: [
-            {
-              applyServerSideEncryptionByDefault: {
-                sseAlgorithm: 'AES256',
-              },
-              bucketKeyEnabled: true,
-            },
-          ],
-        },
-      },
-      { provider: this.provider }
-    );
-
-    new aws.s3.BucketPublicAccessBlock(
-      `logs-bucket-pab-${this.environment}`,
-      {
-        bucket: logsBucket.id,
-        blockPublicAcls: true,
-        blockPublicPolicy: true,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: true,
-      },
-      { provider: this.provider }
-    );
-  }
-
   private createSecretsManager(): void {
     // Database credentials
-    new aws.secretsmanager.Secret(
+    const dbSecret = new aws.secretsmanager.Secret(
       `db-credentials-${this.environment}`,
       {
         name: `app-secrets-${this.environment}`,
         description: 'Database credentials for the application',
-        secretString: JSON.stringify({
-          username: 'admin',
-          password: 'ChangeMe123!',
-          engine: 'mysql',
-          host: 'localhost',
-          port: 3306,
-          dbname: `appdb_${this.environment}`,
-        }),
         tags: {
           ...this.tags,
           Name: `db-credentials-${this.environment}`,
@@ -573,22 +566,46 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
+    new aws.secretsmanager.SecretVersion(
+      `db-credentials-version-${this.environment}`,
+      {
+        secretId: dbSecret.id,
+        secretString: JSON.stringify({
+          username: 'admin',
+          password: 'ChangeMe123!',
+          engine: 'mysql',
+          host: 'localhost',
+          port: 3306,
+          dbname: `appdb_${this.environment}`,
+        }),
+      },
+      { provider: this.provider }
+    );
+
     // API Keys
-    new aws.secretsmanager.Secret(
+    const apiSecret = new aws.secretsmanager.Secret(
       `api-keys-${this.environment}`,
       {
         name: `api-keys-${this.environment}`,
         description: 'API keys for external services',
-        secretString: JSON.stringify({
-          stripe_key: 'sk_test_...',
-          sendgrid_key: 'SG...',
-          jwt_secret: 'your-jwt-secret-key',
-        }),
         tags: {
           ...this.tags,
           Name: `api-keys-${this.environment}`,
           Purpose: 'API Keys',
         },
+      },
+      { provider: this.provider }
+    );
+
+    new aws.secretsmanager.SecretVersion(
+      `api-keys-version-${this.environment}`,
+      {
+        secretId: apiSecret.id,
+        secretString: JSON.stringify({
+          stripe_key: 'sk_test_...',
+          sendgrid_key: 'SG...',
+          jwt_secret: 'your-jwt-secret-key',
+        }),
       },
       { provider: this.provider }
     );
@@ -616,7 +633,7 @@ export class SecureInfrastructure {
     );
 
     // RDS Instance
-    new aws.rds.Instance(
+    const rdsInstance = new aws.rds.Instance(
       `mysql-db-${this.environment}`,
       {
         identifier: `mysql-db-${this.environment}`,
@@ -632,7 +649,7 @@ export class SecureInfrastructure {
         password: 'ChangeMe123!',
         parameterGroupName: parameterGroup.name,
         dbSubnetGroupName: this.dbSubnetGroup.name,
-        vpcSecurityGroupIds: [],
+        vpcSecurityGroupIds: [this.dbSecurityGroup.id],
         multiAz: true,
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
@@ -654,9 +671,8 @@ export class SecureInfrastructure {
     new aws.rds.Snapshot(
       `db-snapshot-${this.environment}`,
       {
-        dbInstanceIdentifier: `mysql-db-${this.environment}`,
-        dbSnapshotIdentifier: `mysql-db-${this.environment
-          }-snapshot-${Date.now()}`,
+        dbInstanceIdentifier: rdsInstance.identifier,
+        dbSnapshotIdentifier: `mysql-db-${this.environment}-snapshot-${Date.now()}`,
         tags: {
           ...this.tags,
           Name: `db-snapshot-${this.environment}`,
@@ -690,8 +706,10 @@ export class SecureInfrastructure {
         namePrefix: `web-launch-template-${this.environment}`,
         imageId: ami.then(ami => ami.id),
         instanceType: 't3.micro',
-        keyName: `web-key-${this.environment}`,
-        vpcSecurityGroupIds: [],
+        vpcSecurityGroupIds: [this.webSecurityGroup.id],
+        iamInstanceProfile: {
+          name: `ec2-instance-profile-${this.environment}`,
+        },
         userData: Buffer.from(
           `#!/bin/bash
                 yum update -y
@@ -721,8 +739,7 @@ export class SecureInfrastructure {
       {
         name: `web-asg-${this.environment}`,
         vpcZoneIdentifiers: this.privateSubnets.map(subnet => subnet.id),
-        targetGroupArns: [],
-        healthCheckType: 'ELB',
+        healthCheckType: 'EC2',
         healthCheckGracePeriod: 300,
         minSize: 1,
         maxSize: 3,
@@ -758,6 +775,33 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
+    // S3 Bucket Policy for CloudFront OAI
+    new aws.s3.BucketPolicy(
+      `app-bucket-policy-${this.environment}`,
+      {
+        bucket: this.appBucket.id,
+        policy: pulumi
+          .all([this.appBucket.arn, oai.iamArn])
+          .apply(([bucketArn, oaiArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'AllowCloudFrontAccess',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: oaiArn,
+                  },
+                  Action: 's3:GetObject',
+                  Resource: `${bucketArn}/*`,
+                },
+              ],
+            })
+          ),
+      },
+      { provider: this.provider }
+    );
+
     // CloudFront Distribution
     new aws.cloudfront.Distribution(
       `cdn-${this.environment}`,
@@ -789,7 +833,7 @@ export class SecureInfrastructure {
         },
         origins: [
           {
-            domainName: `secure-app-bucket-${this.environment}.s3.amazonaws.com`,
+            domainName: this.appBucket.bucketDomainName,
             originId: `S3-secure-app-bucket-${this.environment}`,
             s3OriginConfig: {
               originAccessIdentity: oai.cloudfrontAccessIdentityPath,
@@ -800,7 +844,7 @@ export class SecureInfrastructure {
         isIpv6Enabled: true,
         defaultRootObject: 'index.html',
         loggingConfig: {
-          bucket: `cloudfront-logs-bucket-${this.environment}.s3.amazonaws.com`,
+          bucket: this.logsBucket.bucketDomainName,
           includeCookies: false,
           prefix: `cloudfront-logs-${this.environment}/`,
         },
@@ -843,14 +887,10 @@ export class SecureInfrastructure {
     new aws.ec2.FlowLog(
       `vpc-flow-log-${this.environment}`,
       {
-        iamRoleArn: `arn:aws:iam::${aws
-          .getCallerIdentity({}, { provider: this.provider })
-          .then(identity => identity.accountId)}:role/flow-logs-role-${this.environment
-          }`,
+        iamRoleArn: this.flowLogsRole.arn,
         logDestination: logGroup.arn,
         logDestinationType: 'cloud-watch-logs',
-        resourceId: this.vpc.id,
-        resourceType: 'VPC',
+        vpcId: this.vpc.id,
         trafficType: 'ALL',
         tags: {
           ...this.tags,
