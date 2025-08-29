@@ -300,156 +300,164 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import * as path from 'path';
 
+export interface TapStackProps extends cdk.StackProps {
+  isTest?: boolean;
+}
 
-export class MyServerlessAppStack extends cdk.Stack {
- constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-   super(scope, id, props);
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
 
+    // ==============================================
+    // VPC Configuration
+    // ==============================================
+    const vpc = new ec2.Vpc(this, 'MyWebAppVPC', {
+      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      maxAzs: 2,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'PublicSubnet',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'PrivateSubnet',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
 
-   // VPC Configuration
-   const vpc = new ec2.Vpc(this, 'MyWebAppVPC', {
-     ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-     maxAzs: 2,
-     subnetConfiguration: [
-       {
-         cidrMask: 24,
-         name: 'PublicSubnet',
-         subnetType: ec2.SubnetType.PUBLIC,
-       },
-       {
-         cidrMask: 24,
-         name: 'PrivateSubnet',
-         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-       },
-     ],
-   });
+    vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+      privateDnsEnabled: true,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+    });
 
+    // ==============================================
+    // S3 Bucket for Static Website Hosting
+    // ==============================================
+    const websiteBucket = new s3.Bucket(this, 'MyWebAppS3Bucket', {
+      websiteIndexDocument: 'index.html',
+      websiteErrorDocument: 'error.html',
+      publicReadAccess: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: new s3.BlockPublicAccess({
+        blockPublicPolicy: false,
+        blockPublicAcls: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: false,
+      }),
+    });
 
-   // VPC Endpoint for Secrets Manager
-   vpc.addInterfaceEndpoint('SecretsManagerEndpoint', {
-     service: ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-     privateDnsEnabled: true,
-     subnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-   });
+    // ==============================================
+    // Database Credentials (Secrets Manager)
+    // ==============================================
+    const databaseSecret = new secretsmanager.Secret(
+      this,
+      'MyWebAppDatabaseSecret',
+      {
+        description: 'PostgreSQL database credentials for MyWebApp',
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({ username: 'postgres' }),
+          generateStringKey: 'password',
+          excludeCharacters: '"@/\\',
+          passwordLength: 32,
+        },
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
+    // ==============================================
+    // Security Groups
+    // ==============================================
+    const lambdaSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'MyWebAppLambdaSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for Lambda function',
+        allowAllOutbound: true,
+      }
+    );
 
-   // S3 Bucket for Static Website Hosting
-   const websiteBucket = new s3.Bucket(this, 'MyWebAppS3Bucket', {
-     websiteIndexDocument: 'index.html',
-     websiteErrorDocument: 'error.html',
-     publicReadAccess: true,
-     removalPolicy: cdk.RemovalPolicy.DESTROY,
-     autoDeleteObjects: true,
-     blockPublicAccess: new s3.BlockPublicAccess({
-       blockPublicPolicy: false,
-       blockPublicAcls: true,
-       ignorePublicAcls: true,
-       restrictPublicBuckets: false,
-     }),
-   });
+    const rdsSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'MyWebAppRDSSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for RDS PostgreSQL database',
+        allowAllOutbound: false,
+      }
+    );
 
+    rdsSecurityGroup.addIngressRule(
+      lambdaSecurityGroup,
+      ec2.Port.tcp(5432),
+      'Allow Lambda to connect to PostgreSQL'
+    );
 
-   // Database Credentials (Secrets Manager)
-   const databaseSecret = new secretsmanager.Secret(
-     this,
-     'MyWebAppDatabaseSecret',
-     {
-       description: 'PostgreSQL database credentials for MyWebApp',
-       generateSecretString: {
-         secretStringTemplate: JSON.stringify({ username: 'postgres' }),
-         generateStringKey: 'password',
-         excludeCharacters: '"@/\\',
-         passwordLength: 32,
-       },
-       removalPolicy: cdk.RemovalPolicy.DESTROY,
-     }
-   );
+    // ==============================================
+    // RDS PostgreSQL Database
+    // ==============================================
+    const database = new rds.DatabaseInstance(this, 'MyWebAppDatabase', {
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_14,
+      }),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
+      credentials: rds.Credentials.fromSecret(databaseSecret),
+      vpc,
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      securityGroups: [rdsSecurityGroup],
+      multiAz: false,
+      allocatedStorage: 20,
+      backupRetention: cdk.Duration.days(7),
+      deletionProtection: false,
+      databaseName: 'mywebappdb',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
+    // ==============================================
+    // Lambda Function
+    // ==============================================
+    const lambdaRole = new iam.Role(this, 'MyWebAppLambdaRole', {
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      description: 'Execution role for MyWebApp Lambda function',
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
+      ],
+    });
 
-   // Security Groups
-   const lambdaSecurityGroup = new ec2.SecurityGroup(
-     this,
-     'MyWebAppLambdaSecurityGroup',
-     {
-       vpc,
-       description: 'Security group for Lambda function',
-       allowAllOutbound: true,
-     }
-   );
+    databaseSecret.grantRead(lambdaRole);
 
+    const targetArchitecture =
+      process.env.TARGET_ARCHITECTURE === 'arm64'
+        ? lambda.Architecture.ARM_64
+        : lambda.Architecture.X86_64;
 
-   const rdsSecurityGroup = new ec2.SecurityGroup(
-     this,
-     'MyWebAppRDSSecurityGroup',
-     {
-       vpc,
-       description: 'Security group for RDS PostgreSQL database',
-       allowAllOutbound: false,
-     }
-   );
-
-
-   rdsSecurityGroup.addIngressRule(
-     lambdaSecurityGroup,
-     ec2.Port.tcp(5432),
-     'Allow Lambda to connect to PostgreSQL'
-   );
-
-
-   // RDS PostgreSQL Database
-   const database = new rds.DatabaseInstance(this, 'MyWebAppDatabase', {
-     engine: rds.DatabaseInstanceEngine.postgres({
-       version: rds.PostgresEngineVersion.VER_14,
-     }),
-     instanceType: ec2.InstanceType.of(
-       ec2.InstanceClass.T3,
-       ec2.InstanceSize.MICRO
-     ),
-     credentials: rds.Credentials.fromSecret(databaseSecret),
-     vpc,
-     vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-     securityGroups: [rdsSecurityGroup],
-     multiAz: false,
-     allocatedStorage: 20,
-     backupRetention: cdk.Duration.days(7),
-     deletionProtection: false,
-     databaseName: 'mywebappdb',
-     removalPolicy: cdk.RemovalPolicy.DESTROY,
-   });
-
-
-   // Lambda Function IAM Role
-   const lambdaRole = new iam.Role(this, 'MyWebAppLambdaRole', {
-     assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-     description: 'Execution role for MyWebApp Lambda function',
-     managedPolicies: [
-       iam.ManagedPolicy.fromAwsManagedPolicyName(
-         'service-role/AWSLambdaBasicExecutionRole'
-       ),
-       iam.ManagedPolicy.fromAwsManagedPolicyName(
-         'service-role/AWSLambdaVPCAccessExecutionRole'
-       ),
-     ],
-   });
-
-
-   databaseSecret.grantRead(lambdaRole);
-
-
-   // Lambda Function
-   const lambdaFunction = new lambda.Function(this, 'MyWebAppLambdaFunction', {
+    const lambdaFunction = new lambda.Function(this, 'MyWebAppLambdaFunction', {
       runtime: lambda.Runtime.PYTHON_3_8,
       handler: 'handler.lambda_handler',
       architecture: targetArchitecture,
 
-      // Conditionally use a placeholder for tests or the real build for deployments
       code: props?.isTest
-        ? lambda.Code.fromInline('// Fast placeholder for unit tests')
+        ? lambda.Code.fromInline('def handler(event, context): pass')
         : lambda.Code.fromAsset(path.join(__dirname, 'lambda'), {
-            // <-- Corrected: path.join() now closes here
             bundling: {
               image: lambda.Runtime.PYTHON_3_8.bundlingImage,
+              // THE FIX: Force the build to be for an x86 CPU
+              platform: 'linux/amd64', 
               command: [
                 'bash',
                 '-c',
@@ -471,66 +479,57 @@ export class MyServerlessAppStack extends cdk.Stack {
       description: 'Lambda function for MyWebApp API backend',
     });
 
+    // ==============================================
+    // API Gateway
+    // ==============================================
+    const api = new apigateway.RestApi(this, 'MyWebAppApiGateway', {
+      restApiName: 'MyWebApp API',
+      description: 'REST API for MyWebApp serverless application',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+        ],
+      },
+      deployOptions: { stageName: 'prod' },
+    });
 
-   // API Gateway
-   const api = new apigateway.RestApi(this, 'MyWebAppApiGateway', {
-     restApiName: 'MyWebApp API',
-     description: 'REST API for MyWebApp serverless application',
-     defaultCorsPreflightOptions: {
-       allowOrigins: apigateway.Cors.ALL_ORIGINS,
-       allowMethods: apigateway.Cors.ALL_METHODS,
-       allowHeaders: [
-         'Content-Type',
-         'X-Amz-Date',
-         'Authorization',
-         'X-Api-Key',
-       ],
-     },
-     deployOptions: { stageName: 'prod' },
-   });
+    const apiResource = api.root.addResource('api');
+    const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction);
+    apiResource.addMethod('GET', lambdaIntegration);
 
-
-   const apiResource = api.root.addResource('api');
-   const lambdaIntegration = new apigateway.LambdaIntegration(lambdaFunction);
-   apiResource.addMethod('GET', lambdaIntegration);
-
-
-   // CloudFormation Outputs
-   new cdk.CfnOutput(this, 'WebsiteBucketName', {
-     value: websiteBucket.bucketName,
-     description: 'Name of the S3 bucket for static website hosting',
-   });
-
-
-   new cdk.CfnOutput(this, 'WebsiteURL', {
-     value: websiteBucket.bucketWebsiteUrl,
-     description: 'URL of the static website hosted on S3',
-   });
-
-
-   new cdk.CfnOutput(this, 'ApiGatewayEndpoint', {
-     value: api.url,
-     description: 'Root endpoint URL for the API Gateway',
-   });
-
-
-   new cdk.CfnOutput(this, 'ApiEndpointURL', {
-     value: `${api.url}api`,
-     description: 'Complete API endpoint URL for testing the Lambda function',
-   });
-
-
-   new cdk.CfnOutput(this, 'DatabaseEndpoint', {
-     value: database.instanceEndpoint.hostname,
-     description: 'Hostname of the RDS database instance',
-   });
-
-
-   new cdk.CfnOutput(this, 'DatabaseSecretArn', {
-     value: databaseSecret.secretArn,
-     description: 'ARN of the Secrets Manager secret for database credentials',
-   });
- }
+    // ==============================================
+    // CloudFormation Outputs
+    // ==============================================
+    new cdk.CfnOutput(this, 'WebsiteBucketName', {
+      value: websiteBucket.bucketName,
+      description: 'Name of the S3 bucket for static website hosting',
+    });
+    new cdk.CfnOutput(this, 'WebsiteURL', {
+      value: websiteBucket.bucketWebsiteUrl,
+      description: 'URL of the static website hosted on S3',
+    });
+    new cdk.CfnOutput(this, 'ApiGatewayEndpoint', {
+      value: api.url,
+      description: 'Root endpoint URL for the API Gateway',
+    });
+    new cdk.CfnOutput(this, 'ApiEndpointURL', {
+      value: `${api.url}api`,
+      description: 'Complete API endpoint URL for testing the Lambda function',
+    });
+    new cdk.CfnOutput(this, 'DatabaseEndpoint', {
+      value: database.instanceEndpoint.hostname,
+      description: 'Hostname of the RDS database instance',
+    });
+    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
+      value: databaseSecret.secretArn,
+      description: 'ARN of the Secrets Manager secret for database credentials',
+    });
+  }
 }
 ```
 
@@ -544,140 +543,92 @@ import boto3
 import psycopg2
 import os
 from botocore.exceptions import ClientError
-from aws_secretsmanager_caching import SecretCache, SecretCacheConfig
 
+# It's good practice to initialize boto3 clients outside the handler
+secrets_manager_client = boto3.client('secretsmanager')
 
-# Initialize the secret cache
-client = boto3.client('secretsmanager')
-cache_config = SecretCacheConfig()
-cache = SecretCache(config=cache_config, client=client)
+def get_secret(secret_arn):
+    """Retrieves a secret from AWS Secrets Manager."""
+    try:
+        response = secrets_manager_client.get_secret_value(SecretId=secret_arn)
+        return json.loads(response['SecretString'])
+    except ClientError as e:
+        print(f"Error retrieving secret: {e}")
+        raise e
 
+def create_response(status_code, body):
+    """Creates a standardized API Gateway response."""
+    return {
+        'statusCode': status_code,
+        'headers': {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*'
+        },
+        'body': json.dumps(body)
+    }
 
 def lambda_handler(event, context):
-   """
-   AWS Lambda handler function for the MyWebApp API.
-  
-   This function:
-   1. Retrieves database credentials from AWS Secrets Manager
-   2. Establishes a connection to PostgreSQL database
-   3. Returns a JSON response with connection status
-   """
-  
-   try:
-       # Get database secret ARN from environment variable
-       db_secret_arn = os.environ.get('DB_SECRET_ARN')
-       db_name = os.environ.get('DB_NAME', 'mywebappdb')
-      
-       if not db_secret_arn:
-           raise ValueError("DB_SECRET_ARN environment variable not set")
-      
-       # Retrieve database credentials from Secrets Manager
-       secret_value = cache.get_secret_string(db_secret_arn)
-       secret = json.loads(secret_value)
-      
-       # Extract database connection parameters
-       db_username = secret['username']
-       db_password = secret['password']
-       db_host = os.environ.get('DB_HOST')
-       db_port = 5432  # Standard PostgreSQL port
-      
-       # Log connection attempt (password will not be logged)
-       print(f"Attempting to connect to database: {db_host}:{db_port}/{db_name}")
-      
-       # Establish database connection
-       connection = psycopg2.connect(
-           host=db_host,
-           port=db_port,
-           database=db_name,
-           user=db_username,
-           password=db_password,
-           connect_timeout=10
-       )
-      
-       # Test the connection with a simple query
-       cursor = connection.cursor()
-       cursor.execute("SELECT version();")
-       db_version = cursor.fetchone()
-      
-       # Close the connection
-       cursor.close()
-       connection.close()
-      
-       # Prepare success response
-       response_body = {
-           'status': 'success',
-           'message': 'Successfully connected to PostgreSQL database',
-           'database_version': db_version[0] if db_version else 'Unknown',
-           'database_name': db_name,
-           'timestamp': context.aws_request_id
-       }
-      
-       print(f"Database connection successful: {response_body}")
-      
-       return {
-           'statusCode': 200,
-           'headers': {
-               'Content-Type': 'application/json',
-               'Access-Control-Allow-Origin': '*',
-               'Access-Control-Allow-Headers': 'Content-Type',
-               'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
-           },
-           'body': json.dumps(response_body)
-       }
-      
-   except ClientError as e:
-       # AWS service error (Secrets Manager)
-       error_message = f"AWS service error: {str(e)}"
-       print(f"ERROR: {error_message}")
-      
-       return {
-           'statusCode': 500,
-           'headers': {
-               'Content-Type': 'application/json',
-               'Access-Control-Allow-Origin': '*'
-           },
-           'body': json.dumps({
-               'status': 'error',
-               'message': 'Failed to retrieve database credentials',
-               'error_type': 'AWS_SERVICE_ERROR'
-           })
-       }
-      
-   except psycopg2.Error as e:
-       # Database connection error
-       error_message = f"Database connection error: {str(e)}"
-       print(f"ERROR: {error_message}")
-      
-       return {
-           'statusCode': 500,
-           'headers': {
-               'Content-Type': 'application/json',
-               'Access-Control-Allow-Origin': '*'
-           },
-           'body': json.dumps({
-               'status': 'error',
-               'message': 'Failed to connect to database',
-               'error_type': 'DATABASE_CONNECTION_ERROR'
-           })
-       }
-      
-   except Exception as e:
-       # General error
-       error_message = f"Unexpected error: {str(e)}"
-       print(f"ERROR: {error_message}")
-      
-       return {
-           'statusCode': 500,
-           'headers': {
-               'Content-Type': 'application/json',
-               'Access-Control-Allow-Origin': '*'
-           },
-           'body': json.dumps({
-               'status': 'error',
-               'message': 'Internal server error',
-               'error_type': 'INTERNAL_ERROR'
-           })
-       }
+    """
+    AWS Lambda handler to connect to PostgreSQL and return status.
+    """
+    db_secret_arn = os.environ.get('DB_SECRET_ARN')
+    db_host = os.environ.get('DB_HOST')
+    db_name = os.environ.get('DB_NAME')
+
+    if not all([db_secret_arn, db_host, db_name]):
+        print("Error: Missing required environment variables.")
+        return create_response(500, {
+            'status': 'error',
+            'message': 'Internal server configuration error.'
+        })
+
+    connection = None
+    try:
+        # 1. Get database credentials
+        secret = get_secret(db_secret_arn)
+        
+        # 2. Establish database connection
+        print(f"Attempting to connect to database '{db_name}' at {db_host}...")
+        connection = psycopg2.connect(
+            host=db_host,
+            database=db_name,
+            user=secret['username'],
+            password=secret['password'],
+            # THE FIX: Increased timeout to handle Lambda cold starts in a VPC
+            connect_timeout=30
+        )
+        
+        # 3. Test the connection with a query
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT version();")
+            db_version = cursor.fetchone()
+        
+        print("Database connection successful.")
+        
+        # 4. Prepare and return success response
+        response_body = {
+            'status': 'success',
+            'message': 'Successfully connected to PostgreSQL database',
+            'database_version': db_version[0] if db_version else 'Unknown',
+            'database_name': db_name
+        }
+        return create_response(200, response_body)
+
+    except Exception as e:
+        print(f"An error occurred: {str(e)}")
+        return create_response(500, {
+            'status': 'error',
+            'message': 'Internal server error.',
+            'error_type': type(e).__name__
+        })
+
+    finally:
+        # 5. Ensure the connection is always closed
+        if connection:
+            connection.close()
+            print("Database connection closed.")
+
+
 ```
 
 
@@ -685,10 +636,8 @@ def lambda_handler(event, context):
 
 
 ```txt
-psycopg2-binary==2.9.9
-aws-secretsmanager-caching==1.1.1.5
-boto3==1.34.0
-botocore==1.34.0
+psycopg2-binary==2.9.7
+boto3==1.28.57
 ```
 
 

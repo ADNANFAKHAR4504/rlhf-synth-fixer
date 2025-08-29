@@ -49,7 +49,7 @@ export class TapStack extends cdk.Stack {
     const websiteBucket = new s3.Bucket(this, 'MyWebAppS3Bucket', {
       websiteIndexDocument: 'index.html',
       websiteErrorDocument: 'error.html',
-      publicReadAccess: true, // Required for website hosting, CDK creates the correct policy
+      publicReadAccess: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       blockPublicAccess: new s3.BlockPublicAccess({
@@ -97,7 +97,7 @@ export class TapStack extends cdk.Stack {
       {
         vpc,
         description: 'Security group for RDS PostgreSQL database',
-        allowAllOutbound: false, // More secure
+        allowAllOutbound: false,
       }
     );
 
@@ -158,13 +158,13 @@ export class TapStack extends cdk.Stack {
       handler: 'handler.lambda_handler',
       architecture: targetArchitecture,
 
-      // Conditionally use a placeholder for tests or the real build for deployments
       code: props?.isTest
-        ? lambda.Code.fromInline('// Fast placeholder for unit tests')
+        ? lambda.Code.fromInline('def handler(event, context): pass')
         : lambda.Code.fromAsset(path.join(__dirname, 'lambda'), {
-            // <-- Corrected: path.join() now closes here
             bundling: {
               image: lambda.Runtime.PYTHON_3_8.bundlingImage,
+              // THE FIX: Force the build to be for an x86 CPU
+              platform: 'linux/amd64', 
               command: [
                 'bash',
                 '-c',
@@ -212,35 +212,30 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // CloudFormation Outputs
     // ==============================================
-
     new cdk.CfnOutput(this, 'WebsiteBucketName', {
       value: websiteBucket.bucketName,
       description: 'Name of the S3 bucket for static website hosting',
     });
-
     new cdk.CfnOutput(this, 'WebsiteURL', {
       value: websiteBucket.bucketWebsiteUrl,
       description: 'URL of the static website hosted on S3',
     });
-
     new cdk.CfnOutput(this, 'ApiGatewayEndpoint', {
       value: api.url,
       description: 'Root endpoint URL for the API Gateway',
     });
-
     new cdk.CfnOutput(this, 'ApiEndpointURL', {
       value: `${api.url}api`,
       description: 'Complete API endpoint URL for testing the Lambda function',
     });
-
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: 'Hostname of the RDS database instance',
     });
-
     new cdk.CfnOutput(this, 'DatabaseSecretArn', {
       value: databaseSecret.secretArn,
       description: 'ARN of the Secrets Manager secret for database credentials',
     });
   }
 }
+
