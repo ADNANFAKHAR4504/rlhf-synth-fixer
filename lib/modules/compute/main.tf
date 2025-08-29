@@ -37,13 +37,16 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # SSH access (restrict this in production!)
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # TODO: Restrict to your IP range
+  # SSH access - SECURITY HARDENED: Only allow SSH if key_name is provided and from VPC only
+  dynamic "ingress" {
+    for_each = var.key_name != "" ? [1] : []
+    content {
+      description = "SSH (restricted to VPC)"
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = ["10.0.0.0/16"] # VPC CIDR only - NO external SSH access
+    }
   }
 
   # All outbound traffic

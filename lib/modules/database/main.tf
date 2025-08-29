@@ -7,7 +7,7 @@ resource "random_id" "database_suffix" {
 resource "random_password" "db_password" {
   length  = 16
   special = true
-  
+
   # Exclude problematic characters for RDS
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
@@ -94,16 +94,16 @@ resource "aws_db_instance" "main" {
 
   # Backup configuration
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Monitoring
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
 
   # Security
-  deletion_protection = true
-  skip_final_snapshot = false
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   tags = {

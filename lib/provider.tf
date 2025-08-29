@@ -10,14 +10,14 @@ terraform {
       version = "~> 3.1"
     }
   }
-  
-    backend "s3" {}
+
+  backend "s3" {}
 }
 
 # AWS Provider configuration with default tags
 provider "aws" {
   region = var.aws_region
-  
+
   default_tags {
     tags = {
       Project     = "project-166"
