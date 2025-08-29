@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
@@ -30,6 +29,7 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
+	"os"
 )
 
 type InfrastructureStackConfig struct {
