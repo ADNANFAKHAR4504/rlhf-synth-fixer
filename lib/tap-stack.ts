@@ -15,8 +15,17 @@ export class TapStack extends cdk.Stack {
     const environment = this.node.tryGetContext('environment') || 'production';
     const costCenter = this.node.tryGetContext('costCenter') || 'engineering';
 
-    const vpc = ec2.Vpc.fromLookup(this, 'ExistingVpc', {
-      isDefault: true,
+    // Use a simpler approach - create VPC instead of lookup to avoid context issues
+    const vpc = new ec2.Vpc(this, 'CompanyName-ProjectName-VPC', {
+      maxAzs: 2,
+      natGateways: 0, // Use public subnets only to reduce cost
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
     });
 
     const lambdaRole = new iam.Role(

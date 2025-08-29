@@ -68,6 +68,13 @@ This document captures the failures and issues encountered during the AWS CDK Ty
 5. **Output Verification**: Validate actual deployment outputs before writing integration test expectations
 6. **Continuous Integration**: Run all tests (unit, integration, lint) in CI pipeline to catch issues early
 
+### Issue 7: Pipeline VPC Context Lookup Failure
+**Error**: CDK synthesis failed in pipeline with VPC lookup error
+**Root Cause**: `Vpc.fromLookup()` requires VPC context that's not available in pipeline environment
+**Impact**: Pipeline synthesis failed while local synthesis worked fine
+**Resolution**: Replaced VPC lookup with VPC creation to eliminate context dependency
+**File**: `lib/tap-stack.ts` - VPC configuration
+
 ## Error Patterns to Watch
 
 - Resource naming length violations (S3 buckets, IAM roles)
@@ -76,3 +83,4 @@ This document captures the failures and issues encountered during the AWS CDK Ty
 - Hardcoded resource IDs instead of dynamic lookups
 - Public subnet Lambda placement without explicit allowance
 - Test expectations not matching actual AWS resource output formats
+- VPC lookup context failures in pipeline environments

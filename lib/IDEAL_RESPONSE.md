@@ -44,10 +44,11 @@ The project successfully implements a secure, private serverless AWS infrastruct
 
 ### Issues Encountered and Resolved
 1. **S3 Bucket Naming**: Initial bucket name too long - fixed by shortening prefix
-2. **VPC Lookup**: Placeholder VPC/subnet IDs - fixed to use default VPC lookup
+2. **VPC Lookup**: Placeholder VPC/subnet IDs - initially fixed with default VPC lookup, then replaced with VPC creation
 3. **Lambda Subnet Placement**: Required `allowPublicSubnet: true` for public subnet deployment
-4. **Unit Test Mocking**: Added proper environment context and VPC lookup mocks
+4. **Unit Test Mocking**: Added proper environment context and VPC lookup mocks, later updated for VPC creation
 5. **Integration Test Format**: Fixed output JSON structure mismatch by flattening outputs
+6. **Pipeline VPC Context**: VPC lookup failed in pipeline - resolved by creating VPC instead of lookup
 
 ## Best Practices Followed
 

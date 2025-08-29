@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
@@ -10,41 +10,8 @@ describe('TapStack', () => {
   beforeEach(() => {
     app = new cdk.App();
     
-    // Mock VPC lookup to avoid requiring actual AWS resources
-    app.node.setContext('vpc-provider:account=123456789012:filter.isDefault=true:region=us-west-2:returnAsymmetricSubnets=true', {
-      vpcId: 'vpc-12345',
-      vpcCidrBlock: '10.0.0.0/16',
-      availabilityZones: ['us-west-2a', 'us-west-2b'],
-      publicSubnetIds: ['subnet-12345', 'subnet-67890'],
-      publicSubnetNames: ['Public Subnet 1', 'Public Subnet 2'],
-      publicSubnetRouteTableIds: ['rtb-12345', 'rtb-67890'],
-      privateSubnetIds: [],
-      privateSubnetNames: [],
-      privateSubnetRouteTableIds: [],
-      isolatedSubnetIds: [],
-      isolatedSubnetNames: [],
-      isolatedSubnetRouteTableIds: [],
-      subnetGroups: [
-        {
-          name: 'Public',
-          type: 'Public',
-          subnets: [
-            {
-              subnetId: 'subnet-12345',
-              availabilityZone: 'us-west-2a',
-              routeTableId: 'rtb-12345'
-            },
-            {
-              subnetId: 'subnet-67890',
-              availabilityZone: 'us-west-2b',
-              routeTableId: 'rtb-67890'
-            }
-          ]
-        }
-      ]
-    });
-    
-    stack = new TapStack(app, 'TestTapStack', {
+    // No need for VPC lookup mocks since we're creating a new VPC
+    stack = new TapStack(app, 'TestStack', {
       env: { account: '123456789012', region: 'us-west-2' }
     });
     template = Template.fromStack(stack);
@@ -63,7 +30,10 @@ describe('TapStack', () => {
     test('should create Lambda function with VPC configuration', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         VpcConfig: {
-          SubnetIds: ['subnet-12345', 'subnet-67890']
+          SubnetIds: [
+            { "Ref": Match.stringLikeRegexp(".*VPCPublicSubnet1.*") },
+            { "Ref": Match.stringLikeRegexp(".*VPCPublicSubnet2.*") }
+          ]
         }
       });
     });
