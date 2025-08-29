@@ -16,6 +16,7 @@ export class SecureInfrastructure {
   private dbSecurityGroup!: aws.ec2.SecurityGroup;
   private ec2Role!: aws.iam.Role;
   private flowLogsRole!: aws.iam.Role;
+  private instanceProfile!: aws.iam.InstanceProfile;
   private appBucket!: aws.s3.Bucket;
   private logsBucket!: aws.s3.Bucket;
   private masterKey!: aws.kms.Key;
@@ -60,6 +61,7 @@ export class SecureInfrastructure {
     const roles = this.createIAMRoles();
     this.ec2Role = roles.ec2;
     this.flowLogsRole = roles.flowLogs;
+    this.instanceProfile = roles.instanceProfile;
     this.createSecretsManager();
     this.createRDSDatabase();
     this.createEC2Instances();
@@ -517,7 +519,11 @@ export class SecureInfrastructure {
     return { app: appBucket, logs: logsBucket };
   }
 
-  private createIAMRoles(): { ec2: aws.iam.Role; flowLogs: aws.iam.Role } {
+  private createIAMRoles(): {
+    ec2: aws.iam.Role;
+    flowLogs: aws.iam.Role;
+    instanceProfile: aws.iam.InstanceProfile;
+  } {
     // EC2 Instance Role
     const ec2Role = new aws.iam.Role(
       `ec2-role-${this.environment}`,
@@ -591,7 +597,7 @@ export class SecureInfrastructure {
     );
 
     // Instance Profile
-    new aws.iam.InstanceProfile(
+    const instanceProfile = new aws.iam.InstanceProfile(
       `ec2-instance-profile-${this.environment}`,
       {
         role: ec2Role.name,
@@ -663,7 +669,7 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    return { ec2: ec2Role, flowLogs: flowLogsRole };
+    return { ec2: ec2Role, flowLogs: flowLogsRole, instanceProfile };
   }
 
   private createSecretsManager(): void {
@@ -828,7 +834,7 @@ export class SecureInfrastructure {
         vpcSecurityGroupIds: [this.webSecurityGroup.id],
         monitoring: { enabled: true },
         iamInstanceProfile: {
-          name: `ec2-instance-profile-${this.environment}`,
+          name: this.instanceProfile.name,
         },
         userData: Buffer.from(
           `#!/bin/bash
