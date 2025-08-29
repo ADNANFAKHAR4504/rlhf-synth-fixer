@@ -345,7 +345,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	configRole := awsiam.NewRole(stack, jsii.String("ConfigRole"), &awsiam.RoleProps{
 		AssumedBy: awsiam.NewServicePrincipal(jsii.String("config.amazonaws.com"), nil),
 		ManagedPolicies: &[]awsiam.IManagedPolicy{
-			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("ConfigRole")),
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("AWS_ConfigRole")),
 		},
 	})
 
