@@ -105,18 +105,13 @@ class TapStack(Stack):
             enable_dns_hostnames=True,
             enable_dns_support=True,
             subnet_configuration=[
-                # Two public subnets for web servers and load balancer
+                # Public subnets for web servers and load balancer (will create one per AZ)
                 ec2.SubnetConfiguration(
-                    name="PublicSubnet1",
+                    name="PublicSubnet",
                     subnet_type=ec2.SubnetType.PUBLIC,
                     cidr_mask=24,
                 ),
-                ec2.SubnetConfiguration(
-                    name="PublicSubnet2", 
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24,
-                ),
-                # One private subnet for database
+                # Private subnets for database (will create one per AZ)
                 ec2.SubnetConfiguration(
                     name="PrivateSubnet",
                     subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
