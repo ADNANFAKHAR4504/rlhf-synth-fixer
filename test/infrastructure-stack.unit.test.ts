@@ -142,6 +142,27 @@ describe('InfrastructureStack Unit Tests', () => {
       expect(stack.privateSubnetIds).toBeDefined();
     });
 
+    it('should handle AWS_REGION environment variable scenarios', () => {
+      const originalRegion = process.env.AWS_REGION;
+      
+      // Test when AWS_REGION is not set (covers line 7 branch)
+      delete process.env.AWS_REGION;
+      const stack1 = new InfrastructureStack('no-region-test', { environmentSuffix: 'test' });
+      expect(stack1).toBeDefined();
+      
+      // Test when AWS_REGION is set
+      process.env.AWS_REGION = 'eu-west-1';
+      const stack2 = new InfrastructureStack('with-region-test', { environmentSuffix: 'test' });
+      expect(stack2).toBeDefined();
+      
+      // Restore original environment
+      if (originalRegion) {
+        process.env.AWS_REGION = originalRegion;
+      } else {
+        delete process.env.AWS_REGION;
+      }
+    });
+
     it('should handle falsy environment suffix values', () => {
       const falsyValues = [false, 0, '', null, undefined, NaN];
       falsyValues.forEach((value, index) => {

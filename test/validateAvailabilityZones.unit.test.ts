@@ -36,4 +36,32 @@ describe('validateAvailabilityZones()', () => {
       delete process.env.AWS_REGION;
     }
   });
+
+  it('should handle all region parameter scenarios', () => {
+    const originalRegion = process.env.AWS_REGION;
+    
+    // Test with region parameter provided (first branch)
+    expect(() => validateAvailabilityZones(['az1'], 'custom-region')).toThrow(
+      'Region custom-region must have at least 2 availability zones. Found: 1'
+    );
+    
+    // Test with no region parameter but AWS_REGION set (second branch)
+    process.env.AWS_REGION = 'env-region';
+    expect(() => validateAvailabilityZones(['az1'])).toThrow(
+      'Region env-region must have at least 2 availability zones. Found: 1'
+    );
+    
+    // Test with no region parameter and no AWS_REGION (third branch)
+    delete process.env.AWS_REGION;
+    expect(() => validateAvailabilityZones(['az1'])).toThrow(
+      'Region us-east-1 must have at least 2 availability zones. Found: 1'
+    );
+    
+    // Restore original environment
+    if (originalRegion) {
+      process.env.AWS_REGION = originalRegion;
+    } else {
+      delete process.env.AWS_REGION;
+    }
+  });
 });
