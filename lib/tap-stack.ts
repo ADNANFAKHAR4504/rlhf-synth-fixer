@@ -12,6 +12,7 @@ import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { DataAwsElasticBeanstalkSolutionStack } from '@cdktf/provider-aws/lib/data-aws-elastic-beanstalk-solution-stack';
 import { ElasticBeanstalkApplication } from '@cdktf/provider-aws/lib/elastic-beanstalk-application';
 import { ElasticBeanstalkEnvironment } from '@cdktf/provider-aws/lib/elastic-beanstalk-environment';
 import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
@@ -183,20 +184,26 @@ export class TapStack extends TerraformStack {
     });
 
     // 5. Elastic Beanstalk Application
+    // **FIX**: Use a data source to find the latest Node.js 18 solution stack
+    const solutionStack = new DataAwsElasticBeanstalkSolutionStack(
+      this,
+      'node-js-18-solution-stack',
+      {
+        mostRecent: true,
+        nameRegex: '^64bit Amazon Linux 2023 v.* running Node.js 18$',
+      }
+    );
+
     const app = new ElasticBeanstalkApplication(this, 'beanstalk-app', {
       name: `webapp-${randomSuffix}`,
-    });    
-    // **FIX**: Use a data source to find the latest Node.js 18 solution stack
-    const solutionStack = new ElasticBeanstalkSolutionStack(this, 'node-js-18-solution-stack', {
-      mostRecent: true,
-      nameRegex: '^64bit Amazon Linux 2023 v.* running Node.js 18$'
     });
 
     const ebEnv = new ElasticBeanstalkEnvironment(this, 'beanstalk-env', {
       name: `webapp-env-${randomSuffix}`,
       application: app.name,
-      // FIX 1: Updated to a current, valid solution stack name.
-      solutionStackName: solutionStack.name, // Use the dynamically looked-up name      setting: [
+      // Use the dynamically looked-up name from the data source
+      solutionStackName: solutionStack.name,
+      setting: [
         {
           namespace: 'aws:autoscaling:launchconfiguration',
           name: 'IamInstanceProfile',
