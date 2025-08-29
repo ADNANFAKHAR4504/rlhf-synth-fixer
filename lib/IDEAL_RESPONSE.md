@@ -420,6 +420,11 @@ import software.amazon.awscdk.services.iam.Effect;
 import software.constructs.Construct;
 import software.amazon.awscdk.CfnResource;
 import software.amazon.awscdk.CfnResourceProps;
+import software.amazon.awscdk.customresources.AwsCustomResource;
+import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
+import software.amazon.awscdk.customresources.AwsSdkCall;
+import software.amazon.awscdk.customresources.PhysicalResourceId;
+import software.amazon.awscdk.customresources.SdkCallsPolicyOptions;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import app.config.EnvironmentConfig;
 import java.util.List;
@@ -536,21 +541,29 @@ public class IamConstruct extends Construct {
      * enforces 90-day rotation and complexity rules.
      */
     private void createPasswordPolicy() {
-        // Use a generic CloudFormation resource to set the account password policy
-        // so we don't depend on a specific CDK L1 class being present.
-        java.util.Map<String, Object> props = java.util.Map.of(
-            "MinimumPasswordLength", EnvironmentConfig.PASSWORD_MIN_LENGTH,
-            "RequireSymbols", EnvironmentConfig.REQUIRE_SYMBOLS,
-            "RequireNumbers", EnvironmentConfig.REQUIRE_NUMBERS,
-            "RequireUppercaseCharacters", EnvironmentConfig.REQUIRE_UPPERCASE,
-            "RequireLowercaseCharacters", EnvironmentConfig.REQUIRE_LOWERCASE,
-            "MaxPasswordAge", EnvironmentConfig.PASSWORD_MAX_AGE_DAYS,
-            "PasswordReusePrevention", EnvironmentConfig.PASSWORD_REUSE_PREVENTION
-        );
+        // Use an AWS SDK custom resource to call PutAccountPasswordPolicy because
+        // CloudFormation does not recognize an account-level AccountPasswordPolicy resource.
+        AwsSdkCall sdkCall = AwsSdkCall.builder()
+            .service("IAM")
+            .action("putAccountPasswordPolicy")
+            .parameters(java.util.Map.of(
+                "MinimumPasswordLength", EnvironmentConfig.PASSWORD_MIN_LENGTH,
+                "RequireSymbols", EnvironmentConfig.REQUIRE_SYMBOLS,
+                "RequireNumbers", EnvironmentConfig.REQUIRE_NUMBERS,
+                "RequireUppercaseCharacters", EnvironmentConfig.REQUIRE_UPPERCASE,
+                "RequireLowercaseCharacters", EnvironmentConfig.REQUIRE_LOWERCASE,
+                "MaxPasswordAge", EnvironmentConfig.PASSWORD_MAX_AGE_DAYS,
+                "PasswordReusePrevention", EnvironmentConfig.PASSWORD_REUSE_PREVENTION
+            ))
+            .physicalResourceId(PhysicalResourceId.of(EnvironmentConfig.getResourceName("iam", "password-policy")))
+            .build();
 
-        CfnResource.Builder.create(this, EnvironmentConfig.getResourceName("iam", "password-policy"))
-            .type("AWS::IAM::AccountPasswordPolicy")
-            .properties(props)
+        AwsCustomResource.Builder.create(this, EnvironmentConfig.getResourceName("iam", "password-policy"))
+            .onCreate(sdkCall)
+            .onUpdate(sdkCall)
+            .policy(AwsCustomResourcePolicy.fromSdkCalls(SdkCallsPolicyOptions.builder()
+                .resources(java.util.List.of("*"))
+                .build()))
             .build();
     }
 
