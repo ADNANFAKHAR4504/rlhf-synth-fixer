@@ -203,7 +203,7 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `alb-logs-encryption-${environment}`,
       {
         bucket: albLogsBucket.id,
@@ -474,7 +474,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `static-content-encryption-${environment}`,
       {
         bucket: this.s3Bucket.id,
@@ -575,7 +575,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `cloudfront-logs-encryption-${environment}`,
       {
         bucket: cloudFrontLogsBucket.id,
@@ -671,12 +671,26 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.iam.RolePolicyAttachment(
+    new aws.iam.RolePolicy(
       `vpc-flow-log-policy-${environment}`,
       {
-        role: flowLogRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+        role: flowLogRole.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
       },
       { provider: this.provider }
     );
@@ -714,7 +728,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `cloudtrail-encryption-${environment}`,
       {
         bucket: cloudTrailBucket.id,
