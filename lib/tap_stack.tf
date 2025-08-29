@@ -184,7 +184,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${local.name_prefix}-kms"
+  name          = "alias/${local.name_prefix}-kms-${random_string.suffix.result}"
   target_key_id = aws_kms_key.main.key_id
 }
 

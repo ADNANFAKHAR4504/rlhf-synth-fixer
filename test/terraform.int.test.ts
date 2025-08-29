@@ -21,7 +21,7 @@ function getOutput(outputName: string): string | null {
     const output = execSync(`terraform output -json ${outputName}`, {
       encoding: 'utf8',
       stdio: 'pipe',
-      timeout: 10000,
+      timeout: 5000, // Reduced timeout
       cwd: libPath
     });
     const parsed = JSON.parse(output);
@@ -123,9 +123,9 @@ function runTerraformInit() {
     const libPath = path.resolve(process.cwd(), 'lib');
 
     // Run terraform init with backend=false to avoid interactive prompts
-    execSync('terraform init ', {
+    execSync('terraform init -backend=false', {
       stdio: 'pipe',
-      timeout: 60000, // 60 second timeout
+      timeout: 30000, // Reduced timeout
       cwd: libPath // Set working directory without changing process.cwd()
     });
 
@@ -147,7 +147,7 @@ function runTerraformValidate() {
     // Run terraform validate from the lib directory
     const result = execSync('terraform validate', {
       stdio: 'pipe',
-      timeout: 60000, // 60 second timeout
+      timeout: 30000, // Reduced timeout
       cwd: libPath // Set working directory without changing process.cwd()
     });
 
@@ -166,9 +166,9 @@ function runTerraformPlan() {
     const libPath = path.resolve(process.cwd(), 'lib');
 
     // Run terraform plan from the lib directory
-    const result = execSync('terraform plan ', {
+    const result = execSync('terraform plan', {
       stdio: 'pipe',
-      timeout: 120000, // 2 minute timeout
+      timeout: 60000, // Reduced timeout
       cwd: libPath // Set working directory without changing process.cwd()
     });
 
@@ -211,6 +211,17 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       }
     }
   });
+
+  afterAll(async () => {
+    // Clean up any remaining handles
+    await new Promise(resolve => setTimeout(resolve, 100));
+  });
+
+  // Global teardown to ensure all processes are cleaned up
+  afterAll(async () => {
+    // Force cleanup of any remaining handles
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }, 10000);
 
   describe('Infrastructure Deployment Status', () => {
     test('Live infrastructure deployment check', () => {
@@ -454,10 +465,14 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
   describe("S3 Buckets", () => {
     async function getBucketRegion(bucket: string): Promise<string> {
       const s3Client = new S3Client({ region: testRegion });
-      const loc = await s3Client.send(new GetBucketLocationCommand({ Bucket: bucket }));
-      let actualRegion = loc.LocationConstraint as string | undefined;
-      if (!actualRegion || actualRegion === "US") actualRegion = "us-east-1";
-      return actualRegion;
+      try {
+        const loc = await s3Client.send(new GetBucketLocationCommand({ Bucket: bucket }));
+        let actualRegion = loc.LocationConstraint as string | undefined;
+        if (!actualRegion || actualRegion === "US") actualRegion = "us-east-1";
+        return actualRegion;
+      } finally {
+        await s3Client.destroy();
+      }
     }
 
     if (outputs.s3BucketName) {
@@ -470,18 +485,26 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       test("S3 bucket has versioning enabled", async () => {
         const actualRegion = await getBucketRegion(outputs.s3BucketName!);
         const s3 = new S3Client({ region: actualRegion });
-        const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: outputs.s3BucketName! }));
-        expect(ver.Status).toBe("Enabled");
-        console.log(`✅ S3 bucket ${outputs.s3BucketName} has versioning enabled`);
+        try {
+          const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: outputs.s3BucketName! }));
+          expect(ver.Status).toBe("Enabled");
+          console.log(`✅ S3 bucket ${outputs.s3BucketName} has versioning enabled`);
+        } finally {
+          await s3.destroy();
+        }
       });
 
       test("S3 bucket is encrypted with KMS", async () => {
         const actualRegion = await getBucketRegion(outputs.s3BucketName!);
         const s3 = new S3Client({ region: actualRegion });
-        const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: outputs.s3BucketName! }));
-        const rules = enc.ServerSideEncryptionConfiguration?.Rules || [];
-        expect(rules.some(r => r.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "aws:kms")).toBe(true);
-        console.log(`✅ S3 bucket ${outputs.s3BucketName} is encrypted with KMS`);
+        try {
+          const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: outputs.s3BucketName! }));
+          const rules = enc.ServerSideEncryptionConfiguration?.Rules || [];
+          expect(rules.some(r => r.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "aws:kms")).toBe(true);
+          console.log(`✅ S3 bucket ${outputs.s3BucketName} is encrypted with KMS`);
+        } finally {
+          await s3.destroy();
+        }
       });
     }
   });
@@ -492,6 +515,12 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       let ec2: EC2Client;
       beforeAll(() => {
         ec2 = new EC2Client({ region: testRegion });
+      });
+
+      afterAll(async () => {
+        if (ec2) {
+          await ec2.destroy();
+        }
       });
 
       test("VPC exists", async () => {
@@ -518,6 +547,12 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
         iam = new IAMClient({ region: testRegion });
       });
 
+      afterAll(async () => {
+        if (iam) {
+          await iam.destroy();
+        }
+      });
+
       test("IAM role exists", async () => {
         const roleName = outputs.iamRoleArn!.split("/").pop();
         const roleRes = await iam.send(new GetRoleCommand({ RoleName: roleName }));
@@ -533,6 +568,12 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       let kms: KMSClient;
       beforeAll(() => {
         kms = new KMSClient({ region: testRegion });
+      });
+
+      afterAll(async () => {
+        if (kms) {
+          await kms.destroy();
+        }
       });
 
       test("KMS key exists and is enabled", async () => {
@@ -551,6 +592,12 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       let ec2: EC2Client;
       beforeAll(() => {
         ec2 = new EC2Client({ region: testRegion });
+      });
+
+      afterAll(async () => {
+        if (ec2) {
+          await ec2.destroy();
+        }
       });
 
       test("Security group exists with HTTPS-only access", async () => {
@@ -583,6 +630,12 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       let ec2: EC2Client;
       beforeAll(() => {
         ec2 = new EC2Client({ region: testRegion });
+      });
+
+      afterAll(async () => {
+        if (ec2) {
+          await ec2.destroy();
+        }
       });
 
       if (outputs.publicSubnetIds) {
@@ -639,6 +692,12 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
         ec2 = new EC2Client({ region: testRegion });
       });
 
+      afterAll(async () => {
+        if (ec2) {
+          await ec2.destroy();
+        }
+      });
+
       test("Internet Gateway exists and is attached to VPC", async () => {
         try {
           const igwRes = await ec2.send(new DescribeInternetGatewaysCommand({
@@ -668,6 +727,12 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       let ec2: EC2Client;
       beforeAll(() => {
         ec2 = new EC2Client({ region: testRegion });
+      });
+
+      afterAll(async () => {
+        if (ec2) {
+          await ec2.destroy();
+        }
       });
 
       test("Route Table exists and has internet gateway route", async () => {
