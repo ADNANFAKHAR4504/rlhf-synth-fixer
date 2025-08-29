@@ -675,11 +675,6 @@ resource "aws_elastic_beanstalk_environment" "production" {
     value     = "production"
   }
 
-  setting {
-    namespace = "aws:elasticbeanstalk:managedactions"
-    name      = "ServiceRoleForManagedUpdates"
-    value     = aws_iam_role.beanstalk_service_role.arn
-  }
 
   setting {
     namespace = "aws:elasticbeanstalk:managedactions"
