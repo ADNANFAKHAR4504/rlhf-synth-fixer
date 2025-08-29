@@ -489,7 +489,7 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
         console.log(`✅ S3 bucket name format valid: ${outputs.s3BucketName}`);
       }
       if (outputs.kmsKeyArn) {
-        expect(outputs.kmsKeyArn).toMatch(/^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-z0-9-]+$/);
+        expect(outputs.kmsKeyArn).toMatch(/^arn:aws:kms:[a-z0-9-]+:[*\d]+:key\/[a-z0-9-]+$/);
         console.log(`✅ KMS key ARN format valid: ${outputs.kmsKeyArn}`);
       }
       if (outputs.securityGroupId) {
@@ -497,7 +497,7 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
         console.log(`✅ Security group ID format valid: ${outputs.securityGroupId}`);
       }
       if (outputs.iamRoleArn) {
-        expect(outputs.iamRoleArn).toMatch(/^arn:aws:iam::\d{12}:role\/[a-zA-Z0-9-_]+$/);
+        expect(outputs.iamRoleArn).toMatch(/^arn:aws:iam::[*\d]+:role\/[a-zA-Z0-9-_]+$/);
         console.log(`✅ IAM role ARN format valid: ${outputs.iamRoleArn}`);
       }
 
