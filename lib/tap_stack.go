@@ -22,7 +22,6 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lblistener"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/launchtemplate"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroupattachment"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iaminstanceprofile"
@@ -589,6 +588,7 @@ echo "Application Server - $(hostname -f)" > /tmp/app-status.txt`
 		DesiredCapacity:    jsii.Number(3),
 		HealthCheckType:    jsii.String("ELB"),
 		HealthCheckGracePeriod: jsii.Number(300),
+		TargetGroupArns:    &[]*string{webTG.Arn()},
 		LaunchTemplate: &autoscalinggroup.AutoscalingGroupLaunchTemplate{
 			Id:      webLT.Id(),
 			Version: jsii.String("$Latest"),
@@ -624,11 +624,7 @@ echo "Application Server - $(hostname -f)" > /tmp/app-status.txt`
 		},
 	})
 
-	// Attach ASG to Target Group
-	autoscalinggroupattachment.NewAutoscalingGroupAttachment(scope, jsii.String("web-asg-attachment"), &autoscalinggroupattachment.AutoscalingGroupAttachmentConfig{
-		AutoscalingGroupName: webASG.Name(),
-		LbTargetGroupArn:     webTG.Arn(),
-	})
+	// Target group attachment is handled via TargetGroupArns in the ASG configuration above
 
 	return &CompleteInfrastructure{
 		VPC:          mainVpc,
