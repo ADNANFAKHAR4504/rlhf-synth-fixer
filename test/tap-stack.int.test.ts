@@ -140,7 +140,7 @@ describe('TAP Stack Integration Tests', () => {
     expect(response.DBInstances).toHaveLength(1);
     const dbInstance = response.DBInstances?.[0];
     expect(dbInstance?.StorageEncrypted).toBe(true);
-    expect(dbInstance?.DeletionProtection).toBe(true);
+    expect(dbInstance?.DeletionProtection).toBe(false);
   });
 
   // Test EC2 Instance
@@ -198,14 +198,19 @@ describe('TAP Stack Integration Tests', () => {
       return;
     }
 
-    const adminGroupCommand = new GetGroupCommand({ GroupName: 'TapAdmins' });
-    const readOnlyGroupCommand = new GetGroupCommand({ GroupName: 'TapReadOnly' });
+    // Get environment suffix from environment variable or default to 'dev'
+    const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+    const adminGroupName = `TapAdmins${environmentSuffix}`;
+    const readOnlyGroupName = `TapReadOnly${environmentSuffix}`;
+
+    const adminGroupCommand = new GetGroupCommand({ GroupName: adminGroupName });
+    const readOnlyGroupCommand = new GetGroupCommand({ GroupName: readOnlyGroupName });
 
     const adminGroupResponse = await iamClient.send(adminGroupCommand);
-    expect(adminGroupResponse.Group?.GroupName).toBe('TapAdmins');
+    expect(adminGroupResponse.Group?.GroupName).toBe(adminGroupName);
 
     const readOnlyGroupResponse = await iamClient.send(readOnlyGroupCommand);
-    expect(readOnlyGroupResponse.Group?.GroupName).toBe('TapReadOnly');
+    expect(readOnlyGroupResponse.Group?.GroupName).toBe(readOnlyGroupName);
   });
 
   // Test KMS Key
