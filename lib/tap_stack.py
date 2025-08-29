@@ -270,16 +270,16 @@ class TapStack(Stack):
             self,
             "PostgreSQLParameterGroup",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_15_4
+                version=rds.PostgresEngineVersion.VER_15_7
             ),
-            description="Parameter group for PostgreSQL 15.4"
+            description="Parameter group for PostgreSQL 15.7"
         )
         
         database = rds.DatabaseInstance(
             self,
             "PostgreSQLDatabase",
             engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_15_4
+                version=rds.PostgresEngineVersion.VER_15_7
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
