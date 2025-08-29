@@ -5,13 +5,39 @@ describe('TapStack Integration Tests', () => {
   let outputs: any;
 
   beforeAll(() => {
-    // Try flat outputs first, fallback to all outputs
-    const flatOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
-    const allOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'all-outputs.json');
+    // In CI/CD pipeline, outputs are downloaded to current directory
+    // Locally, they're in cfn-outputs/ subdirectory
+    const paths = [
+      // CI/CD pipeline paths (downloaded to current directory)
+      path.join(process.cwd(), 'flat-outputs.json'),
+      path.join(process.cwd(), 'all-outputs.json'),
+      // Local development paths
+      path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json'),
+      path.join(process.cwd(), 'cfn-outputs', 'all-outputs.json')
+    ];
     
-    if (fs.existsSync(flatOutputsPath)) {
+    let flatOutputsPath = '';
+    let allOutputsPath = '';
+    
+    // Find the first existing flat outputs file
+    for (const p of paths) {
+      if (p.includes('flat-outputs.json') && fs.existsSync(p)) {
+        flatOutputsPath = p;
+        break;
+      }
+    }
+    
+    // Find the first existing all outputs file
+    for (const p of paths) {
+      if (p.includes('all-outputs.json') && fs.existsSync(p)) {
+        allOutputsPath = p;
+        break;
+      }
+    }
+    
+    if (flatOutputsPath && fs.existsSync(flatOutputsPath)) {
       outputs = JSON.parse(fs.readFileSync(flatOutputsPath, 'utf8'));
-    } else if (fs.existsSync(allOutputsPath)) {
+    } else if (allOutputsPath && fs.existsSync(allOutputsPath)) {
       const rawOutputs = JSON.parse(fs.readFileSync(allOutputsPath, 'utf8'));
       
       // Flatten the outputs structure for easier testing
@@ -24,7 +50,7 @@ describe('TapStack Integration Tests', () => {
         }
       });
     } else {
-      throw new Error(`No outputs file found. Make sure the deployment has completed and outputs are generated.`);
+      throw new Error(`No outputs file found. Checked paths: ${paths.join(', ')}`);
     }
   });
 
