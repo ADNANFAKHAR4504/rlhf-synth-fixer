@@ -108,6 +108,10 @@ describe("Terraform Infrastructure Configuration Tests", () => {
       expect(stackContent).toMatch(/name\s*=\s*"\${var\.environment}-web-tg-\${local\.random_suffix}"/);
     });
 
+    test("Target group tag uses random suffix", () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"\${var\.environment}-web-tg-\${local\.random_suffix}"/);
+    });
+
     test("Auto scaling group uses random suffix", () => {
       expect(stackContent).toMatch(/name\s*=\s*"\${var\.environment}-web-asg-\${local\.random_suffix}"/);
     });
@@ -323,11 +327,17 @@ describe("Terraform Infrastructure Configuration Tests", () => {
       expect(stackContent).toMatch(/output\s+"vpc_id"\s*{/);
       expect(stackContent).toMatch(/output\s+"load_balancer_dns"\s*{/);
       expect(stackContent).toMatch(/output\s+"auto_scaling_group_arn"\s*{/);
+      expect(stackContent).toMatch(/output\s+"random_suffix"\s*{/);
     });
 
     test("outputs have descriptions", () => {
       expect(stackContent).toMatch(/description\s*=\s*"ID of the VPC"/);
       expect(stackContent).toMatch(/description\s*=\s*"DNS name of the load balancer"/);
+      expect(stackContent).toMatch(/description\s*=\s*"Random suffix used for resource naming"/);
+    });
+
+    test("random_suffix output references local variable", () => {
+      expect(stackContent).toMatch(/value\s*=\s*local\.random_suffix/);
     });
   });
 

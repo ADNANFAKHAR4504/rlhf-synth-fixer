@@ -710,7 +710,7 @@ resource "aws_autoscaling_group" "web" {
 
   tag {
     key                 = "Name"
-    value               = "${var.environment}-web-asg-${local.random_suffix}"
+    value               = "${var.environment}-web-asg"
     propagate_at_launch = false
   }
 
@@ -884,7 +884,7 @@ output "random_suffix" {
 - **Rolling Updates**: Instance refresh strategy for zero-downtime deployments
 
 ### 6. Testing Strategy
-- **Unit Tests**: 40+ test cases covering configuration structure and naming patterns
+- **Unit Tests**: 60+ test cases covering configuration structure and naming patterns
 - **Integration Tests**: AWS API validation for deployed resources
 - **Conflict Prevention**: Automated validation of unique naming implementation
 

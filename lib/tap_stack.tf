@@ -323,6 +323,10 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # FIXED: Conditional IAM Policy for S3 access (only if bucket is specified)
@@ -421,8 +425,12 @@ resource "aws_lb_target_group" "web" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.environment}-web-tg"
+    Name = "${var.environment}-web-tg-${local.random_suffix}"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Load Balancer Listener
@@ -702,6 +710,10 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # CloudWatch Alarm for Low CPU
@@ -722,6 +734,10 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # CloudWatch Log Group
@@ -780,4 +796,9 @@ output "security_group_web_id" {
 output "iam_role_arn" {
   description = "ARN of the EC2 IAM role"
   value       = aws_iam_role.ec2_role.arn
+}
+
+output "random_suffix" {
+  description = "Random suffix used for resource naming"
+  value       = local.random_suffix
 }
