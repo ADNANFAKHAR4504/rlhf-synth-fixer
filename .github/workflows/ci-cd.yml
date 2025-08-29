@@ -31,6 +31,9 @@ env:
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
+  # Go caching optimization
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
 
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
@@ -382,14 +385,12 @@ jobs:
           fi
 
       - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          timeout_minutes: '60'
-          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
-          custom_instructions: |
+          prompt: |
             CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
             2. Read the PROMPT files
@@ -421,6 +422,8 @@ jobs:
             then immediately FAIL the check by exiting with an error and fail the pipeline.
 
             This validation is mandatory and must be completed before any other review activities.
+          claude_args: |
+            --allowedTools Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
