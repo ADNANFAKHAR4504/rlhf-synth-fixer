@@ -1,7 +1,8 @@
 import AWS from "aws-sdk";
 import fs from "fs";
+import path from "path";
 
-const outputsPath = "cfn-outputs/terraform.json";
+const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
 let outputs: any = {};
 
 beforeAll(() => {
