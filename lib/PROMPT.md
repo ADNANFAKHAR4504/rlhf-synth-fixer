@@ -45,7 +45,7 @@ Manual/automatic approvals included where appropriate.
 
 Notifications
 
-Integrate Amazon SNS to send notifications for pipeline events and errors.
+Integrate Amazon SNS to send notifications for pipeline events & errors.
 
 Integration with Boto3
 
