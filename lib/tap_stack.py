@@ -1,7 +1,6 @@
 """tap_stack.py
 Main CDK stack for the TAP project: VPC, ALB (HTTP/HTTPS), ASG, and RDS PostgreSQL.
 """
-
 from typing import Optional, Tuple
 
 import aws_cdk as cdk
@@ -21,14 +20,13 @@ from constructs import Construct
 
 class TapStackProps(cdk.StackProps):
     """Props for TapStack."""
-
     def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
         self.environment_suffix = environment_suffix
 
 
 class TapStack(Stack):
-    """Single stack deploying VPC, ALB, ASG, and RDS in us-east-1."""
+    """Single stack deploying VPC, ALB, ASG, and RDS (us-east-1)."""
 
     def __init__(self, scope: Construct, construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
         super().__init__(scope, construct_id, **kwargs)
@@ -38,7 +36,7 @@ class TapStack(Stack):
         ) or "dev"
         _ = environment_suffix  # reserved for future naming/tagging
 
-        # IMPORTANT: Certificate must be in the SAME region as the ALB (now us-east-1).
+        # ACM cert must be in the same region as ALB (you’re using us-east-1)
         self.certificate_arn = CfnParameter(
             self,
             "CertificateArn",
@@ -99,12 +97,12 @@ class TapStack(Stack):
             self,
             "AlbSecurityGroup",
             vpc=self.vpc,
-            description="SG for ALB: allow 80/443 from internet",
+            description="SG for ALB: allow 80/443 from internet; egress to app on 80",
             allow_all_outbound=False,
         )
         alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), "HTTP from internet")
         alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), "HTTPS from internet")
-
+        # REQUIRED because allow_all_outbound=False; ALB must reach targets on 80
         app_sg = ec2.SecurityGroup(
             self,
             "AppSecurityGroup",
@@ -112,6 +110,8 @@ class TapStack(Stack):
             description="SG for EC2 instances",
             allow_all_outbound=True,
         )
+        alb_sg.add_egress_rule(app_sg, ec2.Port.tcp(80), "Egress to app on 80")
+
         app_sg.add_ingress_rule(alb_sg, ec2.Port.tcp(80), "HTTP from ALB")
         app_sg.add_ingress_rule(ec2.Peer.ipv4("192.168.1.0/24"), ec2.Port.tcp(22), "SSH from management CIDR")
 
@@ -138,7 +138,7 @@ class TapStack(Stack):
         return role
 
     def _create_rds_database(self) -> rds.DatabaseInstance:
-        """RDS PostgreSQL in private subnets; engine 13.22-R1."""
+        """RDS PostgreSQL in private subnets; engine 13.22."""
         db_subnet_group = rds.SubnetGroup(
             self,
             "DbSubnetGroup",
@@ -147,12 +147,15 @@ class TapStack(Stack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
         )
 
+        # Try enum first (newer CDK), fall back to positional of("13","22") for compatibility.
+        pg_version = getattr(rds.PostgresEngineVersion, "VER_13_22", None)
+        if pg_version is None:
+            pg_version = rds.PostgresEngineVersion.of("13", "22")
+
         return rds.DatabaseInstance(
             self,
             "PostgresDatabase",
-            engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_13_7
-            ),
+            engine=rds.DatabaseInstanceEngine.postgres(version=pg_version),
             instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO),  # db.t2.micro
             vpc=self.vpc,
             subnet_group=db_subnet_group,
