@@ -342,18 +342,18 @@ export class TapStack extends cdk.Stack {
           // Manual Approval stage (only for production)
           ...(environmentSuffix === 'prod'
             ? [
-              {
-                stageName: 'ManualApproval',
-                actions: [
-                  new codepipelineActions.ManualApprovalAction({
-                    actionName: 'ManualApproval',
-                    notificationTopic: approvalTopic,
-                    additionalInformation: `Please review and approve deployment to ${environmentSuffix} environment`,
-                    externalEntityLink: `https://console.aws.amazon.com/codesuite/codepipeline/pipelines/tap-pipeline-${environmentSuffix}/view`,
-                  }),
-                ],
-              },
-            ]
+                {
+                  stageName: 'ManualApproval',
+                  actions: [
+                    new codepipelineActions.ManualApprovalAction({
+                      actionName: 'ManualApproval',
+                      notificationTopic: approvalTopic,
+                      additionalInformation: `Please review and approve deployment to ${environmentSuffix} environment`,
+                      externalEntityLink: `https://console.aws.amazon.com/codesuite/codepipeline/pipelines/tap-pipeline-${environmentSuffix}/view`,
+                    }),
+                  ],
+                },
+              ]
             : []),
           // Deploy stage
           {
