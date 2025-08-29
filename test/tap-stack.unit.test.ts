@@ -14,11 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(true).toBe(true);
-    });
-  });
 
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
@@ -261,4 +256,3 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 });
-// abc
