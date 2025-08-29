@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
@@ -64,7 +65,7 @@ func mergeTags(base *map[string]*string, additional *map[string]*string) *map[st
 	return &result
 }
 
-func NewCompleteInfrastructure(scope constructs.Construct, id *string, region string) *CompleteInfrastructure {
+func NewCompleteInfrastructure(scope constructs.Construct, id *string, region string, envSuffix string) *CompleteInfrastructure {
 	// Get standard tags
 	tags := &map[string]*string{
 		"Project":     jsii.String("Migration"),
@@ -92,7 +93,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("migration-vpc-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("migration-vpc-%s-%s", region, envSuffix)),
 		}),
 	})
 
@@ -100,7 +101,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	igw := internetgateway.NewInternetGateway(scope, jsii.String("internet-gateway"), &internetgateway.InternetGatewayConfig{
 		VpcId: mainVpc.Id(),
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("migration-igw-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("migration-igw-%s-%s", region, envSuffix)),
 		}),
 	})
 
@@ -122,7 +123,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			AvailabilityZone:    cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(azIndex)), nil),
 			MapPublicIpOnLaunch: jsii.Bool(true),
 			Tags: mergeTags(tags, &map[string]*string{
-				"Name": jsii.String(fmt.Sprintf("public-subnet-%d-%s", i+1, region)),
+				"Name": jsii.String(fmt.Sprintf("public-subnet-%d-%s-%s", i+1, region, envSuffix)),
 				"Type": jsii.String("Public"),
 			}),
 		})
@@ -135,7 +136,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			CidrBlock:        jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+2)),
 			AvailabilityZone: cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(azIndex)), nil),
 			Tags: mergeTags(tags, &map[string]*string{
-				"Name": jsii.String(fmt.Sprintf("private-subnet-%d-%s", i+1, region)),
+				"Name": jsii.String(fmt.Sprintf("private-subnet-%d-%s-%s", i+1, region, envSuffix)),
 				"Type": jsii.String("Private"),
 			}),
 		})
@@ -148,7 +149,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			CidrBlock:        jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+3)),
 			AvailabilityZone: cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(azIndex)), nil),
 			Tags: mergeTags(tags, &map[string]*string{
-				"Name": jsii.String(fmt.Sprintf("database-subnet-%d-%s", i+1, region)),
+				"Name": jsii.String(fmt.Sprintf("database-subnet-%d-%s-%s", i+1, region, envSuffix)),
 				"Type": jsii.String("Database"),
 			}),
 		})
@@ -159,7 +160,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		natEip := eip.NewEip(scope, jsii.String(fmt.Sprintf("nat-eip-%d", i)), &eip.EipConfig{
 			Domain: jsii.String("vpc"),
 			Tags: mergeTags(tags, &map[string]*string{
-				"Name": jsii.String(fmt.Sprintf("nat-eip-%d-%s", i+1, region)),
+				"Name": jsii.String(fmt.Sprintf("nat-eip-%d-%s-%s", i+1, region, envSuffix)),
 			}),
 		})
 
@@ -167,7 +168,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			AllocationId: natEip.Id(),
 			SubnetId:     pubSubnet.Id(),
 			Tags: mergeTags(tags, &map[string]*string{
-				"Name": jsii.String(fmt.Sprintf("nat-gateway-%d-%s", i+1, region)),
+				"Name": jsii.String(fmt.Sprintf("nat-gateway-%d-%s-%s", i+1, region, envSuffix)),
 			}),
 		})
 
@@ -175,7 +176,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		privRouteTable := routetable.NewRouteTable(scope, jsii.String(fmt.Sprintf("private-route-table-%d", i)), &routetable.RouteTableConfig{
 			VpcId: mainVpc.Id(),
 			Tags: mergeTags(tags, &map[string]*string{
-				"Name": jsii.String(fmt.Sprintf("private-rt-%d-%s", i+1, region)),
+				"Name": jsii.String(fmt.Sprintf("private-rt-%d-%s-%s", i+1, region, envSuffix)),
 			}),
 		})
 
@@ -200,7 +201,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	publicRouteTable := routetable.NewRouteTable(scope, jsii.String("public-route-table"), &routetable.RouteTableConfig{
 		VpcId: mainVpc.Id(),
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("public-rt-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("public-rt-%s-%s", region, envSuffix)),
 		}),
 	})
 
@@ -219,7 +220,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 
 	// Security Groups
 	albSG := securitygroup.NewSecurityGroup(scope, jsii.String("alb-security-group"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("alb-sg-%s", region)),
+		Name:        jsii.String(fmt.Sprintf("alb-sg-%s-%s", region, envSuffix)),
 		Description: jsii.String("Security group for Application Load Balancer"),
 		VpcId:       mainVpc.Id(),
 		Ingress: &[]*securitygroup.SecurityGroupIngress{
@@ -248,12 +249,12 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			},
 		},
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("alb-sg-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("alb-sg-%s-%s", region, envSuffix)),
 		}),
 	})
 
 	webSG := securitygroup.NewSecurityGroup(scope, jsii.String("web-security-group"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("web-sg-%s", region)),
+		Name:        jsii.String(fmt.Sprintf("web-sg-%s-%s", region, envSuffix)),
 		Description: jsii.String("Security group for web tier instances"),
 		VpcId:       mainVpc.Id(),
 		Ingress: &[]*securitygroup.SecurityGroupIngress{
@@ -282,12 +283,12 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			},
 		},
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("web-sg-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("web-sg-%s-%s", region, envSuffix)),
 		}),
 	})
 
 	appSG := securitygroup.NewSecurityGroup(scope, jsii.String("app-security-group"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("app-sg-%s", region)),
+		Name:        jsii.String(fmt.Sprintf("app-sg-%s-%s", region, envSuffix)),
 		Description: jsii.String("Security group for application tier instances"),
 		VpcId:       mainVpc.Id(),
 		Ingress: &[]*securitygroup.SecurityGroupIngress{
@@ -309,12 +310,12 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			},
 		},
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("app-sg-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("app-sg-%s-%s", region, envSuffix)),
 		}),
 	})
 
 	dbSG := securitygroup.NewSecurityGroup(scope, jsii.String("database-security-group"), &securitygroup.SecurityGroupConfig{
-		Name:        jsii.String(fmt.Sprintf("db-sg-%s", region)),
+		Name:        jsii.String(fmt.Sprintf("db-sg-%s-%s", region, envSuffix)),
 		Description: jsii.String("Security group for database instances"),
 		VpcId:       mainVpc.Id(),
 		Ingress: &[]*securitygroup.SecurityGroupIngress{
@@ -327,13 +328,13 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			},
 		},
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("db-sg-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("db-sg-%s-%s", region, envSuffix)),
 		}),
 	})
 
 	// IAM Role for EC2
 	ec2Role := iamrole.NewIamRole(scope, jsii.String("ec2-role"), &iamrole.IamRoleConfig{
-		Name: jsii.String(fmt.Sprintf("ec2-migration-role-%s", region)),
+		Name: jsii.String(fmt.Sprintf("ec2-migration-role-%s-%s", region, envSuffix)),
 		AssumeRolePolicy: jsii.String(`{
 			"Version": "2012-10-17",
 			"Statement": [
@@ -360,7 +361,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	})
 
 	ec2Profile := iaminstanceprofile.NewIamInstanceProfile(scope, jsii.String("ec2-instance-profile"), &iaminstanceprofile.IamInstanceProfileConfig{
-		Name: jsii.String(fmt.Sprintf("ec2-migration-profile-%s", region)),
+		Name: jsii.String(fmt.Sprintf("ec2-migration-profile-%s-%s", region, envSuffix)),
 		Role: ec2Role.Name(),
 		Tags: tags,
 	})
@@ -373,14 +374,14 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 
 	// CloudWatch Log Groups
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("web-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-		Name:            jsii.String(fmt.Sprintf("/migration/web/%s", region)),
+		Name:            jsii.String(fmt.Sprintf("/migration/web/%s-%s", region, envSuffix)),
 		RetentionInDays: jsii.Number(30),
 		KmsKeyId:        kmsKey.Arn(),
 		Tags:            tags,
 	})
 
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("app-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-		Name:            jsii.String(fmt.Sprintf("/migration/app/%s", region)),
+		Name:            jsii.String(fmt.Sprintf("/migration/app/%s-%s", region, envSuffix)),
 		RetentionInDays: jsii.Number(30),
 		KmsKeyId:        kmsKey.Arn(),
 		Tags:            tags,
@@ -388,16 +389,16 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 
 	// Database Subnet Group
 	dbSubnetGroup := dbsubnetgroup.NewDbSubnetGroup(scope, jsii.String("db-subnet-group"), &dbsubnetgroup.DbSubnetGroupConfig{
-		Name:      jsii.String(fmt.Sprintf("migration-db-subnet-group-%s", region)),
+		Name:      jsii.String(fmt.Sprintf("migration-db-subnet-group-%s-%s", region, envSuffix)),
 		SubnetIds: &databaseSubnetIds,
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("db-subnet-group-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("db-subnet-group-%s-%s", region, envSuffix)),
 		}),
 	})
 
 	// RDS Database
 	database := dbinstance.NewDbInstance(scope, jsii.String("primary-database"), &dbinstance.DbInstanceConfig{
-		Identifier:       jsii.String(fmt.Sprintf("migration-primary-db-%s", region)),
+		Identifier:       jsii.String(fmt.Sprintf("migration-primary-db-%s-%s", region, envSuffix)),
 		Engine:           jsii.String("mysql"),
 		EngineVersion:    jsii.String("8.0"),
 		InstanceClass:    jsii.String("db.t3.micro"),
@@ -421,10 +422,10 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		PubliclyAccessible:      jsii.Bool(false),
 		DeletionProtection:      jsii.Bool(true),
 		SkipFinalSnapshot:       jsii.Bool(false),
-		FinalSnapshotIdentifier: jsii.String(fmt.Sprintf("migration-final-snapshot-%s", region)),
+		FinalSnapshotIdentifier: jsii.String(fmt.Sprintf("migration-final-snapshot-%s-%s", region, envSuffix)),
 
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("primary-database-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("primary-database-%s-%s", region, envSuffix)),
 		}),
 	})
 
@@ -450,7 +451,7 @@ echo '<h1>Web Server - $(hostname -f)</h1>' > /var/www/html/index.html`
 
 	// Launch Template for Web Tier
 	webLT := launchtemplate.NewLaunchTemplate(scope, jsii.String("web-launch-template"), &launchtemplate.LaunchTemplateConfig{
-		Name:         jsii.String(fmt.Sprintf("web-lt-%s", region)),
+		Name:         jsii.String(fmt.Sprintf("web-lt-%s-%s", region, envSuffix)),
 		Description:  jsii.String("Launch template for web tier instances"),
 		ImageId:      ami.Id(),
 		InstanceType: jsii.String("t3.micro"),
@@ -471,7 +472,7 @@ yum install -y java-11-openjdk-devel
 echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	appLT := launchtemplate.NewLaunchTemplate(scope, jsii.String("app-launch-template"), &launchtemplate.LaunchTemplateConfig{
-		Name:         jsii.String(fmt.Sprintf("app-lt-%s", region)),
+		Name:         jsii.String(fmt.Sprintf("app-lt-%s-%s", region, envSuffix)),
 		Description:  jsii.String("Launch template for application tier instances"),
 		ImageId:      ami.Id(),
 		InstanceType: jsii.String("t3.small"),
@@ -487,18 +488,18 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	// Application Load Balancer
 	alb := lb.NewLb(scope, jsii.String("application-load-balancer"), &lb.LbConfig{
-		Name:             jsii.String(fmt.Sprintf("migration-alb-%s", region)),
+		Name:             jsii.String(fmt.Sprintf("migration-alb-%s-%s", region, envSuffix)),
 		LoadBalancerType: jsii.String("application"),
 		Subnets:          &publicSubnetIds,
 		SecurityGroups:   &[]*string{albSG.Id()},
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("migration-alb-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("migration-alb-%s-%s", region, envSuffix)),
 		}),
 	})
 
 	// Target Group for Web Tier
 	webTG := lbtargetgroup.NewLbTargetGroup(scope, jsii.String("web-target-group"), &lbtargetgroup.LbTargetGroupConfig{
-		Name:     jsii.String(fmt.Sprintf("web-tg-%s", region)),
+		Name:     jsii.String(fmt.Sprintf("web-tg-%s-%s", region, envSuffix)),
 		Port:     jsii.Number(80),
 		Protocol: jsii.String("HTTP"),
 		VpcId:    mainVpc.Id(),
@@ -512,7 +513,7 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 			Matcher:            jsii.String("200"),
 		},
 		Tags: mergeTags(tags, &map[string]*string{
-			"Name": jsii.String(fmt.Sprintf("web-tg-%s", region)),
+			"Name": jsii.String(fmt.Sprintf("web-tg-%s-%s", region, envSuffix)),
 		}),
 	})
 
@@ -531,7 +532,7 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	// Auto Scaling Group for Web Tier
 	webASG := autoscalinggroup.NewAutoscalingGroup(scope, jsii.String("web-auto-scaling-group"), &autoscalinggroup.AutoscalingGroupConfig{
-		Name:                   jsii.String(fmt.Sprintf("web-asg-%s", region)),
+		Name:                   jsii.String(fmt.Sprintf("web-asg-%s-%s", region, envSuffix)),
 		VpcZoneIdentifier:      &privateSubnetIds,
 		MinSize:                jsii.Number(2),
 		MaxSize:                jsii.Number(6),
@@ -546,7 +547,7 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		Tag: &[]*autoscalinggroup.AutoscalingGroupTag{
 			{
 				Key:               jsii.String("Name"),
-				Value:             jsii.String(fmt.Sprintf("web-asg-%s", region)),
+				Value:             jsii.String(fmt.Sprintf("web-asg-%s-%s", region, envSuffix)),
 				PropagateAtLaunch: jsii.Bool(true),
 			},
 		},
@@ -554,7 +555,7 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	// Auto Scaling Group for App Tier
 	appASG := autoscalinggroup.NewAutoscalingGroup(scope, jsii.String("app-auto-scaling-group"), &autoscalinggroup.AutoscalingGroupConfig{
-		Name:                   jsii.String(fmt.Sprintf("app-asg-%s", region)),
+		Name:                   jsii.String(fmt.Sprintf("app-asg-%s-%s", region, envSuffix)),
 		VpcZoneIdentifier:      &privateSubnetIds,
 		MinSize:                jsii.Number(2),
 		MaxSize:                jsii.Number(8),
@@ -568,7 +569,7 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		Tag: &[]*autoscalinggroup.AutoscalingGroupTag{
 			{
 				Key:               jsii.String("Name"),
-				Value:             jsii.String(fmt.Sprintf("app-asg-%s", region)),
+				Value:             jsii.String(fmt.Sprintf("app-asg-%s-%s", region, envSuffix)),
 				PropagateAtLaunch: jsii.Bool(true),
 			},
 		},
@@ -603,8 +604,14 @@ func NewInfrastructureStack(scope constructs.Construct, id *string, config *Infr
 		},
 	})
 
+	// Get environment suffix
+	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if envSuffix == "" {
+		envSuffix = "dev"
+	}
+
 	// Create the complete infrastructure
-	infra := NewCompleteInfrastructure(stack, jsii.String("migration-infra"), config.Region)
+	infra := NewCompleteInfrastructure(stack, jsii.String("migration-infra"), config.Region, envSuffix)
 
 	// Outputs
 	cdktf.NewTerraformOutput(stack, jsii.String("vpc-id"), &cdktf.TerraformOutputConfig{
@@ -627,15 +634,14 @@ func NewInfrastructureStack(scope constructs.Construct, id *string, config *Infr
 func main() {
 	app := cdktf.NewApp(nil)
 
-	// Deploy to us-east-1
-	NewInfrastructureStack(app, jsii.String("migration-stack-east"), &InfrastructureStackConfig{
-		Region:      "us-east-1",
-		Environment: "production",
-	})
+	envSuffix := os.Getenv("ENVIRONMENT_SUFFIX")
+	if envSuffix == "" {
+		envSuffix = "dev"
+	}
 
-	// Deploy to us-west-2
-	NewInfrastructureStack(app, jsii.String("migration-stack-west"), &InfrastructureStackConfig{
-		Region:      "us-west-2",
+	// Deploy to us-east-1
+	NewInfrastructureStack(app, jsii.String(fmt.Sprintf("TapStack%s", envSuffix)), &InfrastructureStackConfig{
+		Region:      "us-east-1",
 		Environment: "production",
 	})
 
