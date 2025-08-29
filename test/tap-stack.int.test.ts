@@ -498,10 +498,87 @@ describe('Integration Tests - Live Infrastructure', () => {
         expect(cpuAlarms.length).toBeGreaterThanOrEqual(0);
 
         cpuAlarms.forEach(alarm => {
-          expect(alarm.Namespace).toBe('AWS/EC2');
+          expect(['AWS/EC2', 'AWS/RDS'].includes(alarm.Namespace!)).toBe(true);
           expect(alarm.Statistic).toBeDefined();
           expect(alarm.Period).toBeDefined();
         });
+      }
+    });
+
+    it('Specific CloudWatch alarms exist by name', async () => {
+      const alarmNames = [
+        outputs.cpuAlarmHighName,
+        outputs.cpuAlarmLowName,
+        outputs.rdsConnectionsAlarmName,
+        outputs.rdsCpuAlarmName
+      ].filter(name => name); // Filter out undefined names
+
+      if (alarmNames.length > 0) {
+        const command = new DescribeAlarmsCommand({ AlarmNames: alarmNames });
+        const response = await cloudWatchClient.send(command);
+
+        expect(response.MetricAlarms).toBeDefined();
+        
+        response.MetricAlarms!.forEach(alarm => {
+          expect(alarm.AlarmName).toBeDefined();
+          expect(alarm.StateValue).toBeDefined();
+          expect(alarm.MetricName).toBeDefined();
+          expect(alarm.Namespace).toBeDefined();
+        });
+      } else {
+        console.log('No alarm names found in outputs, skipping specific alarm test');
+      }
+    });
+
+    it('EC2 CPU alarms have correct thresholds', async () => {
+      const ec2AlarmNames = [outputs.cpuAlarmHighName, outputs.cpuAlarmLowName].filter(name => name);
+      
+      if (ec2AlarmNames.length > 0) {
+        const command = new DescribeAlarmsCommand({ AlarmNames: ec2AlarmNames });
+        const response = await cloudWatchClient.send(command);
+
+        const highAlarm = response.MetricAlarms!.find(alarm => 
+          alarm.AlarmName && alarm.AlarmName.includes('high')
+        );
+        const lowAlarm = response.MetricAlarms!.find(alarm => 
+          alarm.AlarmName && alarm.AlarmName.includes('low')
+        );
+
+        if (highAlarm) {
+          expect(highAlarm.Threshold).toBe(80);
+          expect(highAlarm.ComparisonOperator).toBe('GreaterThanThreshold');
+        }
+
+        if (lowAlarm) {
+          expect(lowAlarm.Threshold).toBe(10);
+          expect(lowAlarm.ComparisonOperator).toBe('LessThanThreshold');
+        }
+      }
+    });
+
+    it('RDS alarms have correct configuration', async () => {
+      const rdsAlarmNames = [outputs.rdsConnectionsAlarmName, outputs.rdsCpuAlarmName].filter(name => name);
+      
+      if (rdsAlarmNames.length > 0) {
+        const command = new DescribeAlarmsCommand({ AlarmNames: rdsAlarmNames });
+        const response = await cloudWatchClient.send(command);
+
+        const connectionsAlarm = response.MetricAlarms!.find(alarm => 
+          alarm.MetricName === 'DatabaseConnections'
+        );
+        const cpuAlarm = response.MetricAlarms!.find(alarm => 
+          alarm.MetricName === 'CPUUtilization' && alarm.Namespace === 'AWS/RDS'
+        );
+
+        if (connectionsAlarm) {
+          expect(connectionsAlarm.Threshold).toBe(80);
+          expect(connectionsAlarm.Namespace).toBe('AWS/RDS');
+        }
+
+        if (cpuAlarm) {
+          expect(cpuAlarm.Threshold).toBe(75);
+          expect(cpuAlarm.Namespace).toBe('AWS/RDS');
+        }
       }
     });
   });

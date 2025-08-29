@@ -58,3 +58,7 @@ export const albSecurityGroupId = stack.albSecurityGroupId;
 export const rdsInstanceId = stack.rdsInstanceId;
 export const launchTemplateId = stack.launchTemplateId;
 export const vpcFlowLogGroupName = stack.vpcFlowLogGroupName;
+export const cpuAlarmHighName = stack.cpuAlarmHighName;
+export const cpuAlarmLowName = stack.cpuAlarmLowName;
+export const rdsConnectionsAlarmName = stack.rdsConnectionsAlarmName;
+export const rdsCpuAlarmName = stack.rdsCpuAlarmName;

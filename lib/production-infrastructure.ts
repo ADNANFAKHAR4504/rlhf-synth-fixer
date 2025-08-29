@@ -1020,6 +1020,8 @@ export class ProductionInfrastructure {
       scaleDownPolicyArn: this.scaleDownPolicy.arn,
       cpuAlarmHighName: this.cpuAlarmHigh.name,
       cpuAlarmLowName: this.cpuAlarmLow.name,
+      rdsConnectionsAlarmName: this.rdsConnectionsAlarm.name,
+      rdsCpuAlarmName: this.rdsCpuAlarm.name,
       internetGatewayId: this.internetGateway.id,
       publicRouteTableId: this.publicRouteTable.id,
       privateRouteTableId: this.privateRouteTable.id,

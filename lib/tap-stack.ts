@@ -51,6 +51,10 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly rdsInstanceId: pulumi.Output<string>;
   public readonly launchTemplateId: pulumi.Output<string>;
   public readonly vpcFlowLogGroupName: pulumi.Output<string>;
+  public readonly cpuAlarmHighName: pulumi.Output<string>;
+  public readonly cpuAlarmLowName: pulumi.Output<string>;
+  public readonly rdsConnectionsAlarmName: pulumi.Output<string>;
+  public readonly rdsCpuAlarmName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -89,6 +93,10 @@ export class TapStack extends pulumi.ComponentResource {
     this.rdsInstanceId = outputs.rdsInstanceId;
     this.launchTemplateId = outputs.launchTemplateId;
     this.vpcFlowLogGroupName = outputs.vpcFlowLogGroupName;
+    this.cpuAlarmHighName = outputs.cpuAlarmHighName;
+    this.cpuAlarmLowName = outputs.cpuAlarmLowName;
+    this.rdsConnectionsAlarmName = outputs.rdsConnectionsAlarmName;
+    this.rdsCpuAlarmName = outputs.rdsCpuAlarmName;
 
     // Register the outputs of this component
     this.registerOutputs({
@@ -109,6 +117,10 @@ export class TapStack extends pulumi.ComponentResource {
       rdsInstanceId: this.rdsInstanceId,
       launchTemplateId: this.launchTemplateId,
       vpcFlowLogGroupName: this.vpcFlowLogGroupName,
+      cpuAlarmHighName: this.cpuAlarmHighName,
+      cpuAlarmLowName: this.cpuAlarmLowName,
+      rdsConnectionsAlarmName: this.rdsConnectionsAlarmName,
+      rdsCpuAlarmName: this.rdsCpuAlarmName,
     });
   }
 }
