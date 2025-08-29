@@ -302,7 +302,7 @@ export class WebAppInfrastructure {
         accessLogs: {
           bucket: albLogsBucket.bucket,
           enabled: true,
-          prefix: `alb-logs/${environment}/`,
+          prefix: `alb-logs-${environment}`,
         },
         tags: resourceTags.apply(t => ({
           ...t,
