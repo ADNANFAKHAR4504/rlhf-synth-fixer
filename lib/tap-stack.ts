@@ -2,12 +2,12 @@ import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-i
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import {
   AwsProvider,
-  AwsProviderDefaultTags,
+  AwsProviderDefaultTags
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
-// Random provider (correct imports)
+// Random provider (for unique bucket name when not provided)
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { Id as RandomId } from '@cdktf/provider-random/lib/id';
 
@@ -19,7 +19,7 @@ import {
   RdsModule,
   S3Module,
   SecurityGroupModule,
-  VpcModule,
+  VpcModule
 } from './modules';
 
 interface TapStackProps {
@@ -29,10 +29,14 @@ interface TapStackProps {
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
 
-  appDataBucketName?: string; // optional: use an existing/shared bucket
-  keyName?: string; // optional: EC2 key pair name
+  // Optional overrides
+  appDataBucketName?: string; // use an existing/shared bucket instead of generating one
+  keyName?: string; // EC2 key pair name
+  dbPasswordSecretId?: string; // custom secret id (defaults to "example-secret")
+  dbPassword?: string; // direct password (must be ≤ 41 chars for MySQL)
 
-  _regionOverrideForTesting?: string | null; // test helper
+  // test helper to override the hard-coded override
+  _regionOverrideForTesting?: string | null;
 }
 
 const AWS_REGION_OVERRIDE = 'us-west-2';
@@ -50,14 +54,13 @@ export class TapStack extends TerraformStack {
 
     const awsRegion = regionOverride || props?.awsRegion || 'us-west-2';
     const stateBucketRegion = props?.stateBucketRegion || 'us-west-2';
-    const stateBucket =
-      props?.stateBucket || 'prod-config-logs-us-west-2-a8e48bba';
+    const stateBucket = props?.stateBucket || 'prod-config-logs-us-west-2-a8e48bba';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // AWS provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags,
+      defaultTags
     });
 
     // Random provider (needed for unique S3 bucket names if not provided)
@@ -71,61 +74,69 @@ export class TapStack extends TerraformStack {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
-      encrypt: true,
+      encrypt: true
     });
+    // S3 backend lockfile (escape hatch)
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     const project = 'tap-project';
+    const projectSlug = project.toLowerCase();
+    const envSlug = environmentSuffix.toLowerCase();
 
     // KMS
     const kmsModule = new KmsModule(this, 'kms', {
       project,
       environment: environmentSuffix,
       description: `KMS key for ${project} ${environmentSuffix} environment`,
-      accountId: current.accountId,
+      accountId: current.accountId
     });
 
-    // S3 app data bucket (use provided name or generate a unique one).
-    // IMPORTANT: do NOT call .toLowerCase() on tokenized strings (causes ${tftoken[...]})
-    const randomSuffix = new RandomId(this, 'app-bucket-suffix', {
-      byteLength: 4,
-    });
-    const generatedBucketName = `${project}-${environmentSuffix}-app-${randomSuffix.hex}`;
-    const appBucketName = props?.appDataBucketName || generatedBucketName;
+    // S3 app data bucket
+    // IMPORTANT: avoid calling .toLowerCase() on tokenized strings.
+    const randomSuffix = new RandomId(this, 'app-bucket-suffix', { byteLength: 4 });
+    const generatedBucketName = `${projectSlug}-${envSlug}-app-` + randomSuffix.hex;
+    const appBucketName = props?.appDataBucketName ? props.appDataBucketName : generatedBucketName;
 
     const s3Module = new S3Module(this, 's3-app-data', {
       project,
       environment: environmentSuffix,
       bucketName: appBucketName,
-      kmsKey: kmsModule.key,
+      kmsKey: kmsModule.key
     });
 
-    // DB password (prefer secret; fallback is ≤ 41 chars)
-    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
-      this,
-      'db-password-secret',
-      {
-        secretId: `three-tier-db-credentials-${environmentSuffix}`,
-      },
-    );
-    // 24 chars, meets MySQL complexity and is under 41 characters
-    const fallbackPassword = 'A1b!A1b!A1b!A1b!A1b!A1b!';
-    const dbPassword = dbPasswordSecret.secretString || fallbackPassword;
+    // RDS password:
+    // 1) if props.dbPassword provided, use it (ensure ≤ 41 chars)
+    // 2) else read from Secrets Manager secret "example-secret"
+    //    (can be overridden via props.dbPasswordSecretId)
+    const fallbackPassword = 'A1b!A1b!A1b!A1b!A1b!A1b!'; // 24 chars, MySQL-safe
+    const chosenSecretId = props?.dbPasswordSecretId ?? 'example-secret';
+    let dbPassword: string | undefined;
 
-    // CloudTrail
+    if (props?.dbPassword) {
+      dbPassword = props.dbPassword;
+    } else {
+      const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+        this,
+        'db-password-secret',
+        { secretId: chosenSecretId }
+      );
+      dbPassword = dbPasswordSecret.secretString || fallbackPassword;
+    }
+
+    // CloudTrail (deterministic logs bucket name)
     const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail', {
       project,
       environment: environmentSuffix,
       kmsKey: kmsModule.key,
       accountId: current.accountId,
-      region: awsRegion,
+      region: awsRegion
     });
 
     // IAM for EC2
     const iamModule = new IamModule(this, 'iam', {
       project,
       environment: environmentSuffix,
-      appDataBucketArn: s3Module.bucket.arn,
+      appDataBucketArn: s3Module.bucket.arn
     });
 
     // VPC
@@ -133,7 +144,7 @@ export class TapStack extends TerraformStack {
       project,
       environment: environmentSuffix,
       cidrBlock: '10.0.0.0/16',
-      availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],
+      availabilityZones: [`${awsRegion}a`, `${awsRegion}b`]
     });
 
     // Security groups
@@ -149,16 +160,16 @@ export class TapStack extends TerraformStack {
           fromPort: 22,
           toPort: 22,
           protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
+          cidrBlocks: ['0.0.0.0/0']
         },
         {
           type: 'egress',
           fromPort: 0,
           toPort: 65535,
           protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
+          cidrBlocks: ['0.0.0.0/0']
+        }
+      ]
     });
 
     const rdsSecurityGroup = new SecurityGroupModule(this, 'rds-sg', {
@@ -173,9 +184,9 @@ export class TapStack extends TerraformStack {
           fromPort: 3306,
           toPort: 3306,
           protocol: 'tcp',
-          sourceSecurityGroupId: ec2SecurityGroup.securityGroup.id,
-        },
-      ],
+          sourceSecurityGroupId: ec2SecurityGroup.securityGroup.id
+        }
+      ]
     });
 
     // EC2
@@ -186,7 +197,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.privateSubnets[0].id,
       securityGroupIds: [ec2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: props?.keyName, // optional
+      keyName: props?.keyName
     });
 
     // RDS
@@ -199,51 +210,37 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       dbName: 'appdb',
       username: 'admin',
-      password: dbPassword,
+      password: dbPassword!,
       subnetIds: vpcModule.privateSubnets.map(s => s.id),
       securityGroupIds: [rdsSecurityGroup.securityGroup.id],
-      kmsKey: kmsModule.key,
+      kmsKey: kmsModule.key
     });
 
     // Outputs
-    new TerraformOutput(this, 'vpc-id', {
-      value: vpcModule.vpc.id,
-    });
+    new TerraformOutput(this, 'vpc-id', { value: vpcModule.vpc.id });
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: vpcModule.publicSubnets.map(s => s.id),
+      value: vpcModule.publicSubnets.map(s => s.id)
     });
     new TerraformOutput(this, 'private-subnet-ids', {
-      value: vpcModule.privateSubnets.map(s => s.id),
+      value: vpcModule.privateSubnets.map(s => s.id)
     });
-    new TerraformOutput(this, 'ec2-instance-id', {
-      value: ec2Module.instance.id,
-    });
-    new TerraformOutput(this, 'ec2-private-ip', {
-      value: ec2Module.instance.privateIp,
-    });
-    new TerraformOutput(this, 's3-bucket-name', {
-      value: s3Module.bucket.bucket,
-    });
+    new TerraformOutput(this, 'ec2-instance-id', { value: ec2Module.instance.id });
+    new TerraformOutput(this, 'ec2-private-ip', { value: ec2Module.instance.privateIp });
+    new TerraformOutput(this, 's3-bucket-name', { value: s3Module.bucket.bucket });
     new TerraformOutput(this, 'cloudtrail-s3-bucket-name', {
-      value: cloudTrailModule.logsBucket.bucket,
+      value: cloudTrailModule.logsBucket.bucket
     });
     new TerraformOutput(this, 'ec2-security-group-id', {
-      value: ec2SecurityGroup.securityGroup.id,
+      value: ec2SecurityGroup.securityGroup.id
     });
     new TerraformOutput(this, 'rds-security-group-id', {
-      value: rdsSecurityGroup.securityGroup.id,
+      value: rdsSecurityGroup.securityGroup.id
     });
     new TerraformOutput(this, 'rds-endpoint', {
-      value: rdsModule.dbInstance.endpoint,
+      value: rdsModule.dbInstance.endpoint
     });
-    new TerraformOutput(this, 'kms-key-id', {
-      value: kmsModule.key.keyId,
-    });
-    new TerraformOutput(this, 'kms-key-arn', {
-      value: kmsModule.key.arn,
-    });
-    new TerraformOutput(this, 'aws-account-id', {
-      value: current.accountId,
-    });
+    new TerraformOutput(this, 'kms-key-id', { value: kmsModule.key.keyId });
+    new TerraformOutput(this, 'kms-key-arn', { value: kmsModule.key.arn });
+    new TerraformOutput(this, 'aws-account-id', { value: current.accountId });
   }
 }
