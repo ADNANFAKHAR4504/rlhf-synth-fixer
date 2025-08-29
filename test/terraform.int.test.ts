@@ -8,7 +8,6 @@ const isNonEmptyString = (val: any): boolean =>
 
 const isValidArn = (val: any): boolean => {
   if (typeof val !== "string" || val.trim().length === 0) return false;
-  // Match most AWS ARNs, including IAM roles with slashes
   const iamRoleArnPattern = /^arn:aws:iam::\d{12}:role\/[\w+=,.@\-_/]+$/;
   const genericArnPattern = /^arn:aws:[^:]+:[^:]*:\d{12}:[^ ]+$/;
   return iamRoleArnPattern.test(val) || genericArnPattern.test(val);
@@ -43,11 +42,7 @@ const parseMaybeJsonArray = (val: any): any[] | null => {
   return null;
 };
 
-const isValidIp = (val: string): boolean =>
-  typeof val === "string" &&
-  /^(\d{1,3}\.){3}\d{1,3}$/.test(val);
-
-describe("tap_stack.tf integration test from flat-outputs.json", () => {
+describe("tap_stack.tf Integration Tests", () => {
   let outputsRaw: Record<string, any>;
   let outputs: Record<string, any>;
 
@@ -198,14 +193,12 @@ describe("tap_stack.tf integration test from flat-outputs.json", () => {
       "secondary_vpc_cidr",
       "secondary_vpc_id"
     ];
-
     expectedKeys.forEach(key => {
       expect(outputs).toHaveProperty(key);
     });
   });
 
-  // General string checks for URLs and domain names
-  it("application URLs and domain names should be non-empty strings with http", () => {
+  it("application URLs and domain names should be non-empty strings starting with http", () => {
     ["application_url", "primary_application_url", "secondary_application_url", "domain_name"].forEach(key => {
       expect(isNonEmptyString(outputs[key])).toBe(true);
       if (key.includes("url") || key === "application_url") {
@@ -214,7 +207,6 @@ describe("tap_stack.tf integration test from flat-outputs.json", () => {
     });
   });
 
-  // Validate ARNs with generalized patterns
   [
     "cloudwatch_access_policy_arn",
     "cloudwatch_log_group_arn",
@@ -247,7 +239,6 @@ describe("tap_stack.tf integration test from flat-outputs.json", () => {
     });
   });
 
-  // Validate IDs and security groups that follow AWS ID conventions
   [
     ["primary_vpc_id", isValidVpcId],
     ["secondary_vpc_id", isValidVpcId],
@@ -265,26 +256,23 @@ describe("tap_stack.tf integration test from flat-outputs.json", () => {
     });
   });
 
-  // Validate arrays parsed from JSON strings for IDs
   it("primary_nat_gateway_ids should be array of valid NAT Gateway IDs", () => {
     const arr = parseMaybeJsonArray(outputs.primary_nat_gateway_ids);
     expect(arr).not.toBeNull();
-    arr!.forEach(id => expect(isValidNatGatewayId(id)).toBe(true));
+    arr!.forEach(id => {
+      expect(isValidNatGatewayId(id)).toBe(true);
+    });
   });
 
   it("secondary_nat_gateway_ids should be array of valid NAT Gateway IDs", () => {
     const arr = parseMaybeJsonArray(outputs.secondary_nat_gateway_ids);
     expect(arr).not.toBeNull();
-    arr!.forEach(id => expect(isValidNatGatewayId(id)).toBe(true));
+    arr!.forEach(id => {
+      expect(isValidNatGatewayId(id)).toBe(true);
+    });
   });
 
-  // Validate subnet and route table arrays
-  [
-    "primary_private_subnet_ids",
-    "primary_public_subnet_ids",
-    "secondary_private_subnet_ids",
-    "secondary_public_subnet_ids"
-  ].forEach(key => {
+  ["primary_private_subnet_ids", "primary_public_subnet_ids", "secondary_private_subnet_ids", "secondary_public_subnet_ids"].forEach(key => {
     it(`${key} should be an array of valid Subnet IDs`, () => {
       const arr = parseMaybeJsonArray(outputs[key]);
       expect(arr).not.toBeNull();
@@ -296,11 +284,13 @@ describe("tap_stack.tf integration test from flat-outputs.json", () => {
     it(`${key} should be an array of route table IDs`, () => {
       const arr = parseMaybeJsonArray(outputs[key]);
       expect(arr).not.toBeNull();
-      arr!.forEach(id => expect(typeof id).toBe("string") && id.startsWith("rtb-")).toBeTruthy();
+      arr!.forEach(id => {
+        expect(typeof id).toBe("string");
+        expect(id.startsWith("rtb-")).toBe(true);
+      });
     });
   });
 
-  // CIDRs validation for subnets
   [
     "primary_public_subnet_1_cidr",
     "primary_public_subnet_2_cidr",
@@ -317,62 +307,58 @@ describe("tap_stack.tf integration test from flat-outputs.json", () => {
     });
   });
 
-  // Validate availability zones are arrays with strings
   ["primary_availability_zones", "secondary_availability_zones"].forEach(key => {
-    it(`${key} should be an array of AZ strings`, () => {
+    it(`${key} should be an array of availability zones strings`, () => {
       const azs = parseMaybeJsonArray(outputs[key]);
       expect(azs).not.toBeNull();
-      azs!.forEach((az: any) => expect(typeof az).toBe("string") && az.length > 0).toBeTruthy();
+      azs!.forEach((az: any) => expect(typeof az === "string" && az.length > 0).toBe(true));
     });
   });
 
-  // Validate CloudWatch log group related outputs are non-empty strings
   ["cloudwatch_log_group_arn", "cloudwatch_log_group_name"].forEach(key => {
     it(`${key} should be a non-empty string`, () => {
       expect(isNonEmptyString(outputs[key])).toBe(true);
     });
   });
 
-  // Validate backup-related outputs are numbers as strings
-  it("rds_backup_retention_period should be a string-formatted positive integer", () => {
-    expect(/^\d+$/.test(outputs.rds_backup_retention_period)).toBe(true);
-    expect(parseInt(outputs.rds_backup_retention_period, 10)).toBeGreaterThan(0);
+  it("rds_backup_retention_period should be a string representing a positive integer", () => {
+    expect(/^\d+$/.test(String(outputs.rds_backup_retention_period))).toBe(true);
+    expect(Number(outputs.rds_backup_retention_period)).toBeGreaterThan(0);
   });
 
-  // Validate EC2 instance type and RDS instance class match expected values
   it("ec2_instance_type and rds_instance_class should be non-empty strings", () => {
     expect(isNonEmptyString(outputs.ec2_instance_type)).toBe(true);
     expect(isNonEmptyString(outputs.rds_instance_class)).toBe(true);
   });
 
-  // Validate RDS details
-  it("rds_engine should be mysql and version should be 8.0", () => {
+  it("rds_engine should be mysql and rds_engine_version should be 8.0", () => {
     expect(outputs.rds_engine).toBe("mysql");
     expect(outputs.rds_engine_version).toBe("8.0");
   });
 
-  it("rds_storage_encrypted should be true (string)", () => {
-    expect(outputs.rds_storage_encrypted).toBe("true");
+  it("rds_storage_encrypted should be true (string or boolean)", () => {
+    const val = outputs.rds_storage_encrypted;
+    expect(val === "true" || val === true).toBe(true);
   });
 
-  // Validate usernames start with 'a' as per random_string resource config (db_username_suffix)
-  it("rds_username should start with 'a'", () => {
+  it("rds_username should start with 'a' and end with db_username_suffix", () => {
     expect(typeof outputs.rds_username).toBe("string");
     expect(outputs.rds_username.startsWith("a")).toBe(true);
     expect(outputs.rds_username.endsWith(outputs.db_username_suffix)).toBe(true);
   });
 
-  // Validate S3 bucket related outputs
-  it("s3_bucket_name, s3_bucket_arn and domain names are non-empty", () => {
-    ["s3_bucket_name", "s3_bucket_arn", "s3_bucket_domain_name", "s3_bucket_regional_domain_name"].forEach(key => {
+  ["s3_bucket_name", "s3_bucket_arn", "s3_bucket_domain_name", "s3_bucket_regional_domain_name"].forEach(key => {
+    it(`${key} should be non-empty string`, () => {
       expect(isNonEmptyString(outputs[key])).toBe(true);
     });
   });
 
-  // Validate route53 name servers are array of strings
-  it("route53_name_servers should be an array of valid name servers", () => {
+  it("route53_name_servers should be array of valid name servers", () => {
     const servers = parseMaybeJsonArray(outputs.route53_name_servers);
     expect(servers).not.toBeNull();
-    servers!.forEach((server: any) => expect(typeof server === "string" && server.includes("awsdns")).toBe(true));
+    servers!.forEach((server: any) => {
+      expect(typeof server).toBe("string");
+      expect(server.includes("awsdns")).toBe(true);
+    });
   });
 });
