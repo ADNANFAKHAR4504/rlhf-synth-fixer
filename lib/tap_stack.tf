@@ -59,16 +59,18 @@ variable "desired_capacity" {
   default     = 2
 }
 
+# FIXED: Make S3 bucket optional with empty string default
 variable "app_config_bucket" {
-  description = "S3 bucket name for application configuration"
+  description = "S3 bucket name for application configuration (leave empty to skip S3 integration)"
   type        = string
-  default     = "app-config-bucket"
+  default     = ""
 }
 
+# FIXED: Make key pair optional with empty string default
 variable "key_pair_name" {
-  description = "EC2 Key Pair name for SSH access"
+  description = "EC2 Key Pair name for SSH access (leave empty to skip SSH key)"
   type        = string
-  default     = "web-app-key"
+  default     = ""
 }
 
 # Data sources
@@ -317,8 +319,10 @@ resource "aws_iam_role" "ec2_role" {
   tags = local.common_tags
 }
 
-# IAM Policy for S3 access
+# FIXED: Conditional IAM Policy for S3 access (only if bucket is specified)
 resource "aws_iam_policy" "s3_access" {
+  count = var.app_config_bucket != "" ? 1 : 0
+  
   name        = "${var.environment}-s3-access"
   description = "Policy for S3 access to app config bucket"
 
@@ -342,10 +346,12 @@ resource "aws_iam_policy" "s3_access" {
   tags = local.common_tags
 }
 
-# Attach policy to role
+# FIXED: Conditional attachment of S3 policy
 resource "aws_iam_role_policy_attachment" "s3_access" {
+  count = var.app_config_bucket != "" ? 1 : 0
+  
   role       = aws_iam_role.ec2_role.name
-  policy_arn = aws_iam_policy.s3_access.arn
+  policy_arn = aws_iam_policy.s3_access[0].arn
 }
 
 # Attach CloudWatch agent policy
@@ -420,7 +426,8 @@ resource "aws_launch_template" "web" {
   name_prefix   = "${var.environment}-web-"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = var.instance_type
-  key_name      = var.key_pair_name
+  # FIXED: Make key pair optional
+  key_name = var.key_pair_name != "" ? var.key_pair_name : null
 
   vpc_security_group_ids = [aws_security_group.web.id]
 
@@ -437,9 +444,154 @@ resource "aws_launch_template" "web" {
     }
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    app_config_bucket = var.app_config_bucket
-  }))
+  # FIXED: Inline user_data script instead of external file
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    
+    # Update system
+    yum update -y
+    yum install -y httpd aws-cli
+    
+    # Start and enable Apache
+    systemctl start httpd
+    systemctl enable httpd
+    
+    # Get instance metadata
+    INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+    AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+    REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+    
+    # Create web page
+    cat > /var/www/html/index.html << 'HTML'
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Production Web Application</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+                padding: 40px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                min-height: 100vh;
+            }
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: rgba(255, 255, 255, 0.1);
+                padding: 40px;
+                border-radius: 15px;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            }
+            .status {
+                background: rgba(212, 237, 218, 0.2);
+                padding: 20px;
+                border-radius: 10px;
+                margin: 20px 0;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            .info-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 20px;
+                margin: 20px 0;
+            }
+            .info-card {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 15px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            h1 { text-align: center; margin-bottom: 30px; }
+            h2 { color: #4CAF50; margin-top: 0; }
+            .timestamp { font-size: 0.9em; opacity: 0.8; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 Production Web Application</h1>
+            <div class="status">
+                <h2>✅ Server Status: Online</h2>
+                <p>Your application is running successfully on AWS!</p>
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-card">
+                    <strong>Instance ID:</strong><br>
+                    <code>INSTANCE_ID_PLACEHOLDER</code>
+                </div>
+                <div class="info-card">
+                    <strong>Availability Zone:</strong><br>
+                    <code>AZ_PLACEHOLDER</code>
+                </div>
+                <div class="info-card">
+                    <strong>Region:</strong><br>
+                    <code>REGION_PLACEHOLDER</code>
+                </div>
+                <div class="info-card">
+                    <strong>Environment:</strong><br>
+                    <code>${var.environment}</code>
+                </div>
+            </div>
+            
+            <div class="status">
+                <h2>🔧 Infrastructure Details</h2>
+                <ul>
+                    <li>Auto Scaling Group: Active</li>
+                    <li>Load Balancer: Distributing Traffic</li>
+                    <li>Health Checks: Passing</li>
+                    <li>Monitoring: CloudWatch Enabled</li>
+                </ul>
+            </div>
+            
+            <div class="timestamp">
+                <p>Page generated: <span id="timestamp"></span></p>
+            </div>
+        </div>
+        
+        <script>
+            // Update timestamp
+            document.getElementById('timestamp').textContent = new Date().toLocaleString();
+            
+            // Replace placeholders with actual values (done server-side)
+            document.addEventListener('DOMContentLoaded', function() {
+                // This would be replaced by server-side processing in a real app
+                console.log('Web application loaded successfully');
+            });
+        </script>
+    </body>
+    </html>
+    HTML
+    
+    # Replace placeholders with actual values
+    sed -i "s/INSTANCE_ID_PLACEHOLDER/$INSTANCE_ID/g" /var/www/html/index.html
+    sed -i "s/AZ_PLACEHOLDER/$AZ/g" /var/www/html/index.html
+    sed -i "s/REGION_PLACEHOLDER/$REGION/g" /var/www/html/index.html
+    
+    # Create health check endpoint
+    echo "OK" > /var/www/html/health
+    
+    # FIXED: Conditional S3 access - only if bucket exists
+    %{if var.app_config_bucket != ""}
+    # Try to download config from S3 (fail silently if bucket doesn't exist)
+    aws s3 cp s3://${var.app_config_bucket}/app-config.conf /etc/httpd/conf.d/ 2>/dev/null || echo "No S3 config found, using defaults"
+    %{endif}
+    
+    # Restart Apache to apply all changes
+    systemctl restart httpd
+    
+    # Ensure Apache starts on boot
+    systemctl enable httpd
+    
+    # Log successful completion
+    echo "$(date): Web server setup completed successfully" >> /var/log/user-data.log
+    
+    EOF
+  )
 
   tag_specifications {
     resource_type = "instance"
