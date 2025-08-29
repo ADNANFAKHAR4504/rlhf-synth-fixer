@@ -1,9 +1,3 @@
-# Model Response 2 – IaC: AWS Nova Model Breaking (CDK Java)
-
-The model attempted to generate a **CDK Java solution** for deploying a fault-tolerant multi-region infrastructure with stacks in `us-east-1` and `us-west-2`.
-
----
-
 ## Expected Behavior
 - Provision two **TapStack** instances across `us-east-1` and `us-west-2`.
 - Synthesize CloudFormation templates that deploy:

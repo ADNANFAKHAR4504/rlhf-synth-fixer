@@ -1,4 +1,4 @@
-The goal is to implement the same multi-region fault-tolerant infrastructure, but this time using AWS CDK in Java.  
+The goal is to implement the multi-region fault-tolerant infrastructure.  
 We need two stacks, one in us-east-1 and one in us-west-2, to achieve redundancy.  
 
 The Java code should set up VPCs, subnets, load balancers, auto scaling groups, RDS with Multi-AZ, S3 logging buckets, IAM roles, and CloudWatch alarms.  

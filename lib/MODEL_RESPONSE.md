@@ -1,9 +1,3 @@
-# Model Response – IaC: AWS Nova Model Breaking (CDK Java)
-
-This document explains how the CDK implementation in **Main.java** satisfies the expert-level requirements defined in `Prompt.md`.
-
----
-
 ## Multi-Region High Availability
 - The CDK app provisions resources in **two regions**: `us-east-1` and `us-west-2`.
 - Two independent `TapStack` instances are created, one per region, to ensure **failover** and **disaster recovery**.

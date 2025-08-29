@@ -1,7 +1,5 @@
-# MODEL_FAILURE.md
-
 ## Use Case
-Task: Implement a **multi-region AWS CDK Java project** for fault-tolerant infrastructure.  
+Task: Implement a **multi-region AWS SDK Java project** for fault-tolerant infrastructure.  
 
 ---
 

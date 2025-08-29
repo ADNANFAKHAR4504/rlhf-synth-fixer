@@ -1,4 +1,3 @@
-We want to design a fault-tolerant AWS infrastructure for a web application under the project name “IaC – AWS Nova Model Breaking.”  
 The system should be deployed across two AWS regions (us-east-1 and us-west-2) to provide high availability and disaster recovery.  
 
 The stack needs a VPC with public and private subnets, Auto Scaling Groups with an ALB, and an RDS database in Multi-AZ mode.  

@@ -1,4 +1,3 @@
-We are extending the AWS CDK (Java) project for “IaC – AWS Nova Model Breaking.”  
 The design still targets a two-region setup with us-east-1 and us-west-2 for resilience.  
 
 The code should be organized so that stacks and their properties can be reused and tested.  
