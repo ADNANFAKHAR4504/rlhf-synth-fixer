@@ -249,7 +249,7 @@ describe("tap_stack.tf Integration Tests", () => {
     ["secondary_ec2_security_group_id", isValidSecurityGroupId],
     ["secondary_rds_security_group_id", isValidSecurityGroupId],
     ["primary_internet_gateway_id", isValidInternetGatewayId],
-    ["secondary_internet_gateway_id", isValidInternetGatewayId],
+    ["secondary_internet_gateway_id", isValidInternetGatewayId]
   ].forEach(([key, validator]) => {
     it(`${key} should be a valid AWS ID`, () => {
       expect(validator(outputs[key])).toBe(true);
