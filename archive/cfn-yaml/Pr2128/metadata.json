@@ -9,7 +9,7 @@
   "subtask": "General Infrastructure Provisioning",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment", 
+    "Web Application Deployment",
     "Security Configuration",
     "Database Management",
     "Network Configuration",
@@ -22,7 +22,7 @@
     "VPC",
     "EC2",
     "RDS",
-    "S3", 
+    "S3",
     "ELB",
     "Auto Scaling",
     "CloudWatch",
@@ -31,5 +31,11 @@
     "KMS",
     "IAM",
     "Secrets Manager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anshuk-turing",
+  "dockerS3Location": ""
 }
