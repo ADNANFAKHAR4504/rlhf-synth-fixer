@@ -1,49 +1,26 @@
-# main.tf
+# CI/CD Pipeline Infrastructure - Production Ready
+# This file contains all resources for the CI/CD pipeline including
+# CodePipeline, CodeBuild, Elastic Beanstalk, KMS, Secrets Manager, and monitoring
+
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
+  }
+}
 
 # Data sources for existing resources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# S3 bucket for CodePipeline artifacts
-resource "aws_s3_bucket" "pipeline_artifacts" {
-  bucket        = "${var.project_prefix}-artifacts-${random_string.bucket_suffix.result}"
-  force_destroy = var.environment != "production" # Only allow force destroy in non-prod
-}
-
-resource "random_string" "bucket_suffix" {
-  length  = 8
-  special = false
-  upper   = false
-}
-
-resource "aws_s3_bucket_versioning" "pipeline_artifacts" {
-  bucket = aws_s3_bucket.pipeline_artifacts.id
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "pipeline_artifacts" {
-  bucket = aws_s3_bucket.pipeline_artifacts.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.pipeline.arn
-      sse_algorithm     = "aws:kms"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "pipeline_artifacts" {
-  bucket = aws_s3_bucket.pipeline_artifacts.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# variables.tf
+# Variables
 variable "aws_region" {
   description = "AWS region for resources"
   type        = string
@@ -89,19 +66,19 @@ variable "github_branch" {
 variable "application_name" {
   description = "Elastic Beanstalk application name"
   type        = string
-  default     = "your-app-name"
+  default     = "my-web-app"
 }
 
 variable "solution_stack_name" {
   description = "Elastic Beanstalk solution stack"
   type        = string
-  default     = "64bit Amazon Linux 2 v5.8.4 running Node.js 18"
+  default     = "64bit Amazon Linux 2 v5.8.6 running Node.js 18"
 }
 
 variable "instance_type" {
   description = "EC2 instance type for Beanstalk"
   type        = string
-  default     = "t3.small" # Cost-effective for moderate traffic
+  default     = "t3.small"
 }
 
 variable "notification_email" {
@@ -116,9 +93,240 @@ variable "enable_manual_approval" {
   default     = true
 }
 
-# iam.tf
+# Random string for unique resource naming
+resource "random_string" "bucket_suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
 
-# CodePipeline Service Role
+# KMS Key for encryption - simplified policy
+resource "aws_kms_key" "pipeline" {
+  description             = "KMS key for ${var.project_prefix} pipeline encryption"
+  deletion_window_in_days = 7
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow AWS Services"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "codepipeline.amazonaws.com",
+            "codebuild.amazonaws.com",
+            "logs.amazonaws.com",
+            "cloudtrail.amazonaws.com",
+            "s3.amazonaws.com",
+            "secretsmanager.amazonaws.com",
+            "sns.amazonaws.com"
+          ]
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_kms_alias" "pipeline" {
+  name          = "alias/${var.project_prefix}-pipeline"
+  target_key_id = aws_kms_key.pipeline.key_id
+}
+
+# S3 bucket for CodePipeline artifacts
+resource "aws_s3_bucket" "pipeline_artifacts" {
+  bucket        = "${var.project_prefix}-artifacts-${random_string.bucket_suffix.result}"
+  force_destroy = var.environment != "production"
+}
+
+resource "aws_s3_bucket_versioning" "pipeline_artifacts" {
+  bucket = aws_s3_bucket.pipeline_artifacts.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "pipeline_artifacts" {
+  bucket = aws_s3_bucket.pipeline_artifacts.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.pipeline.arn
+      sse_algorithm     = "aws:kms"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "pipeline_artifacts" {
+  bucket = aws_s3_bucket.pipeline_artifacts.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# S3 bucket for CloudTrail logs
+resource "aws_s3_bucket" "cloudtrail_logs" {
+  bucket        = "${var.project_prefix}-cloudtrail-${random_string.bucket_suffix.result}"
+  force_destroy = var.environment != "production"
+}
+
+resource "aws_s3_bucket_versioning" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail_logs" {
+  bucket = aws_s3_bucket.cloudtrail_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail_logs.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Secrets Manager for sensitive configuration
+resource "aws_secretsmanager_secret" "app_secrets" {
+  name                    = "${var.project_prefix}/app-secrets"
+  description             = "Application secrets for ${var.project_name}"
+  kms_key_id              = aws_kms_key.pipeline.arn
+  recovery_window_in_days = 7
+}
+
+resource "aws_secretsmanager_secret_version" "app_secrets" {
+  secret_id = aws_secretsmanager_secret.app_secrets.id
+  secret_string = jsonencode({
+    database_password = "change-me-in-console"
+    api_key          = "change-me-in-console"
+    jwt_secret       = "change-me-in-console"
+  })
+
+  lifecycle {
+    ignore_changes = [secret_string]
+  }
+}
+
+# Parameter Store for non-sensitive configuration
+resource "aws_ssm_parameter" "app_config" {
+  for_each = {
+    database_host = "your-db-host.amazonaws.com"
+    database_name = "your-app-db"
+    redis_host    = "your-redis-host.amazonaws.com"
+    app_port      = "3000"
+  }
+
+  name  = "/${var.project_prefix}/config/${each.key}"
+  type  = "String"
+  value = each.value
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# SNS Topic for notifications
+resource "aws_sns_topic" "pipeline_notifications" {
+  name              = "${var.project_prefix}-notifications"
+  kms_master_key_id = aws_kms_key.pipeline.arn
+}
+
+resource "aws_sns_topic_subscription" "email_notification" {
+  topic_arn = aws_sns_topic.pipeline_notifications.arn
+  protocol  = "email"
+  endpoint  = var.notification_email
+}
+
+resource "aws_sns_topic_policy" "pipeline_notifications" {
+  arn = aws_sns_topic.pipeline_notifications.arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "events.amazonaws.com",
+            "codepipeline.amazonaws.com"
+          ]
+        }
+        Action   = "SNS:Publish"
+        Resource = aws_sns_topic.pipeline_notifications.arn
+      }
+    ]
+  })
+}
+
+# CloudWatch Log Group for CodeBuild
+resource "aws_cloudwatch_log_group" "codebuild_logs" {
+  name              = "/aws/codebuild/${var.project_prefix}-build"
+  retention_in_days = 30
+}
+
+# IAM Role for CodePipeline
 resource "aws_iam_role" "codepipeline_role" {
   name = "${var.project_prefix}-codepipeline-role"
 
@@ -189,12 +397,19 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
           "kms:GenerateDataKey"
         ]
         Resource = aws_kms_key.pipeline.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codestar-connections:UseConnection"
+        ]
+        Resource = aws_codestarconnections_connection.github.arn
       }
     ]
   })
 }
 
-# CodeBuild Service Role
+# IAM Role for CodeBuild
 resource "aws_iam_role" "codebuild_role" {
   name = "${var.project_prefix}-codebuild-role"
 
@@ -269,7 +484,7 @@ resource "aws_iam_role_policy" "codebuild_policy" {
   })
 }
 
-# Elastic Beanstalk Service Role
+# IAM Role for Elastic Beanstalk Service
 resource "aws_iam_role" "beanstalk_service_role" {
   name = "${var.project_prefix}-beanstalk-service-role"
 
@@ -292,7 +507,7 @@ resource "aws_iam_role_policy_attachment" "beanstalk_service_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService"
 }
 
-# Elastic Beanstalk EC2 Instance Profile
+# IAM Role for Elastic Beanstalk EC2 instances
 resource "aws_iam_role" "beanstalk_ec2_role" {
   name = "${var.project_prefix}-beanstalk-ec2-role"
 
@@ -325,15 +540,13 @@ resource "aws_iam_instance_profile" "beanstalk_ec2_profile" {
   role = aws_iam_role.beanstalk_ec2_role.name
 }
 
-# codepipeline.tf
-
-# GitHub connection (you'll need to complete this in the console)
+# GitHub connection
 resource "aws_codestarconnections_connection" "github" {
   name          = "${var.project_prefix}-github-connection"
   provider_type = "GitHub"
 }
 
-# CodeBuild project for testing and building
+# CodeBuild project
 resource "aws_codebuild_project" "build_project" {
   name          = "${var.project_prefix}-build"
   description   = "Build and test project for ${var.application_name}"
@@ -344,7 +557,7 @@ resource "aws_codebuild_project" "build_project" {
   }
 
   environment {
-    compute_type                = "BUILD_GENERAL1_SMALL" # Cost-effective for most builds
+    compute_type                = "BUILD_GENERAL1_SMALL"
     image                      = "aws/codebuild/standard:7.0"
     type                       = "LINUX_CONTAINER"
     image_pull_credentials_type = "CODEBUILD"
@@ -366,16 +579,130 @@ resource "aws_codebuild_project" "build_project" {
   }
 
   source {
-    type = "CODEPIPELINE"
-    buildspec = "buildspec.yml" # We'll create this below
+    type      = "CODEPIPELINE"
+    buildspec = "buildspec.yml"
   }
 
-  # Enable CloudWatch logs
   logs_config {
     cloudwatch_logs {
-      status = "ENABLED"
-      group_name = "/aws/codebuild/${var.project_prefix}-build"
+      status     = "ENABLED"
+      group_name = aws_cloudwatch_log_group.codebuild_logs.name
     }
+  }
+}
+
+# Elastic Beanstalk Application
+resource "aws_elastic_beanstalk_application" "app" {
+  name        = var.application_name
+  description = "Application for ${var.project_name}"
+
+  appversion_lifecycle {
+    service_role          = aws_iam_role.beanstalk_service_role.arn
+    max_count             = 10
+    delete_source_from_s3 = false
+  }
+}
+
+# Elastic Beanstalk Environment
+resource "aws_elastic_beanstalk_environment" "production" {
+  name                = "beanstalk-env-${var.application_name}-prod"
+  application         = aws_elastic_beanstalk_application.app.name
+  solution_stack_name = var.solution_stack_name
+
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "IamInstanceProfile"
+    value     = aws_iam_instance_profile.beanstalk_ec2_profile.name
+  }
+
+  setting {
+    namespace = "aws:autoscaling:launchconfiguration"
+    name      = "InstanceType"
+    value     = var.instance_type
+  }
+
+  setting {
+    namespace = "aws:autoscaling:asg"
+    name      = "MinSize"
+    value     = "1"
+  }
+
+  setting {
+    namespace = "aws:autoscaling:asg"
+    name      = "MaxSize"
+    value     = "4"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "EnvironmentType"
+    value     = "LoadBalanced"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:environment"
+    name      = "LoadBalancerType"
+    value     = "application"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:healthreporting:system"
+    name      = "SystemType"
+    value     = "enhanced"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:healthreporting:system"
+    name      = "HealthCheckSuccessThreshold"
+    value     = "Ok"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:command"
+    name      = "DeploymentPolicy"
+    value     = "Rolling"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:command"
+    name      = "BatchSizeType"
+    value     = "Percentage"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:command"
+    name      = "BatchSize"
+    value     = "50"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:application:environment"
+    name      = "NODE_ENV"
+    value     = "production"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:managedactions"
+    name      = "ServiceRoleForManagedUpdates"
+    value     = aws_iam_role.beanstalk_service_role.arn
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:managedactions"
+    name      = "ManagedActionsEnabled"
+    value     = "true"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:managedactions:platformupdate"
+    name      = "UpdateLevel"
+    value     = "minor"
+  }
+
+  setting {
+    namespace = "aws:elasticbeanstalk:managedactions:platformupdate"
+    name      = "InstanceRefreshEnabled"
+    value     = "true"
   }
 }
 
@@ -431,7 +758,6 @@ resource "aws_codepipeline" "main_pipeline" {
     }
   }
 
-  # Manual approval stage (can be disabled via variable)
   dynamic "stage" {
     for_each = var.enable_manual_approval ? [1] : []
     content {
@@ -471,241 +797,7 @@ resource "aws_codepipeline" "main_pipeline" {
   }
 }
 
-# beanstalk.tf
-
-# Elastic Beanstalk Application
-resource "aws_elastic_beanstalk_application" "app" {
-  name        = var.application_name
-  description = "Application for ${var.project_name}"
-
-  appversion_lifecycle {
-    service_role          = aws_iam_role.beanstalk_service_role.arn
-    max_count             = 10 # Keep last 10 versions for rollback
-    delete_source_from_s3 = false
-  }
-}
-
-# Production Environment
-resource "aws_elastic_beanstalk_environment" "production" {
-  name                = "beanstalk-env-${var.application_name}-prod"
-  application         = aws_elastic_beanstalk_application.app.name
-  solution_stack_name = var.solution_stack_name
-
-  # Configuration settings for production
-  setting {
-    namespace = "aws:autoscaling:launchconfiguration"
-    name      = "IamInstanceProfile"
-    value     = aws_iam_instance_profile.beanstalk_ec2_profile.name
-  }
-
-  setting {
-    namespace = "aws:autoscaling:launchconfiguration"
-    name      = "InstanceType"
-    value     = var.instance_type
-  }
-
-  # Auto Scaling configuration
-  setting {
-    namespace = "aws:autoscaling:asg"
-    name      = "MinSize"
-    value     = "1"
-  }
-
-  setting {
-    namespace = "aws:autoscaling:asg"
-    name      = "MaxSize"
-    value     = "4" # Scale up under load
-  }
-
-  # Load balancer configuration
-  setting {
-    namespace = "aws:elasticbeanstalk:environment"
-    name      = "EnvironmentType"
-    value     = "LoadBalanced"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:environment"
-    name      = "LoadBalancerType"
-    value     = "application"
-  }
-
-  # Health monitoring
-  setting {
-    namespace = "aws:elasticbeanstalk:healthreporting:system"
-    name      = "SystemType"
-    value     = "enhanced"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:healthreporting:system"
-    name      = "HealthCheckSuccessThreshold"
-    value     = "Ok"
-  }
-
-  # Rolling deployments for zero-downtime updates
-  setting {
-    namespace = "aws:elasticbeanstalk:command"
-    name      = "DeploymentPolicy"
-    value     = "Rolling"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:command"
-    name      = "BatchSizeType"
-    value     = "Percentage"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:command"
-    name      = "BatchSize"
-    value     = "50"
-  }
-
-  # Environment variables from Parameter Store
-  setting {
-    namespace = "aws:elasticbeanstalk:application:environment"
-    name      = "NODE_ENV"
-    value     = "production"
-  }
-
-  # Service role for managed updates
-  setting {
-    namespace = "aws:elasticbeanstalk:managedactions"
-    name      = "ServiceRoleForManagedUpdates"
-    value     = aws_iam_role.beanstalk_service_role.arn
-  }
-
-  # Enable managed platform updates
-  setting {
-    namespace = "aws:elasticbeanstalk:managedactions"
-    name      = "ManagedActionsEnabled"
-    value     = "true"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:managedactions:platformupdate"
-    name      = "UpdateLevel"
-    value     = "minor"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:managedactions:platformupdate"
-    name      = "InstanceRefreshEnabled"
-    value     = "true"
-  }
-}
-
-# security.tf
-
-# KMS Key for encryption
-resource "aws_kms_key" "pipeline" {
-  description             = "KMS key for ${var.project_prefix} pipeline encryption"
-  deletion_window_in_days = 7
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "Enable IAM User Permissions"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Action   = "kms:*"
-        Resource = "*"
-      },
-      {
-        Sid    = "Allow CodePipeline to use the key"
-        Effect = "Allow"
-        Principal = {
-          AWS = [
-            aws_iam_role.codepipeline_role.arn,
-            aws_iam_role.codebuild_role.arn
-          ]
-        }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_kms_alias" "pipeline" {
-  name          = "alias/${var.project_prefix}-pipeline"
-  target_key_id = aws_kms_key.pipeline.key_id
-}
-
-# Secrets Manager for sensitive configuration
-resource "aws_secretsmanager_secret" "app_secrets" {
-  name                    = "${var.project_prefix}/app-secrets"
-  description             = "Application secrets for ${var.project_name}"
-  kms_key_id              = aws_kms_key.pipeline.arn
-  recovery_window_in_days = 7
-
-  replica {
-    region = var.aws_region
-  }
-}
-
-# Example secret values (you'll need to update these)
-resource "aws_secretsmanager_secret_version" "app_secrets" {
-  secret_id = aws_secretsmanager_secret.app_secrets.id
-  secret_string = jsonencode({
-    database_password = "change-me-in-console"
-    api_key          = "change-me-in-console"
-    jwt_secret       = "change-me-in-console"
-  })
-
-  lifecycle {
-    ignore_changes = [secret_string]
-  }
-}
-
-# Parameter Store for non-sensitive configuration
-resource "aws_ssm_parameter" "app_config" {
-  for_each = {
-    database_host = "your-db-host.amazonaws.com"
-    database_name = "your-app-db"
-    redis_host    = "your-redis-host.amazonaws.com"
-    app_port      = "3000"
-  }
-
-  name  = "/${var.project_prefix}/config/${each.key}"
-  type  = "String"
-  value = each.value
-
-  tags = {
-    Environment = var.environment
-    Project     = var.project_name
-  }
-}
-
-# monitoring.tf
-
-# SNS Topic for notifications
-resource "aws_sns_topic" "pipeline_notifications" {
-  name              = "${var.project_prefix}-notifications"
-  kms_master_key_id = aws_kms_key.pipeline.arn
-}
-
-resource "aws_sns_topic_subscription" "email_notification" {
-  topic_arn = aws_sns_topic.pipeline_notifications.arn
-  protocol  = "email"
-  endpoint  = var.notification_email
-}
-
-# CloudWatch Log Group for CodeBuild
-resource "aws_cloudwatch_log_group" "codebuild_logs" {
-  name              = "/aws/codebuild/${var.project_prefix}-build"
-  retention_in_days = 30 # Cost optimization - adjust as needed
-  kms_key_id        = aws_kms_key.pipeline.arn
-}
-
-# CloudWatch Event Rule for pipeline state changes
+# CloudWatch Event Rules for monitoring
 resource "aws_cloudwatch_event_rule" "pipeline_state_change" {
   name        = "${var.project_prefix}-pipeline-state-change"
   description = "Capture pipeline state changes"
@@ -725,7 +817,6 @@ resource "aws_cloudwatch_event_target" "sns" {
   arn       = aws_sns_topic.pipeline_notifications.arn
 }
 
-# CloudWatch Event Rule for build failures
 resource "aws_cloudwatch_event_rule" "build_state_change" {
   name        = "${var.project_prefix}-build-state-change"
   description = "Capture build failures"
@@ -753,7 +844,6 @@ resource "aws_cloudtrail" "pipeline_trail" {
   include_global_service_events = true
   is_multi_region_trail        = true
   enable_logging               = true
-  kms_key_id                   = aws_kms_key.pipeline.arn
 
   event_selector {
     read_write_type                 = "All"
@@ -765,45 +855,6 @@ resource "aws_cloudtrail" "pipeline_trail" {
       values = ["${aws_s3_bucket.pipeline_artifacts.arn}/*"]
     }
   }
-}
-
-# S3 bucket for CloudTrail logs
-resource "aws_s3_bucket" "cloudtrail_logs" {
-  bucket        = "${var.project_prefix}-cloudtrail-${random_string.bucket_suffix.result}"
-  force_destroy = var.environment != "production"
-}
-
-resource "aws_s3_bucket_policy" "cloudtrail_logs" {
-  bucket = aws_s3_bucket.cloudtrail_logs.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AWSCloudTrailAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.cloudtrail_logs.arn
-      },
-      {
-        Sid    = "AWSCloudTrailWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      }
-    ]
-  })
 }
 
 # CloudWatch Dashboard
@@ -836,7 +887,7 @@ resource "aws_cloudwatch_dashboard" "pipeline_dashboard" {
   })
 }
 
-# outputs.tf
+# Outputs
 output "pipeline_name" {
   description = "Name of the CodePipeline"
   value       = aws_codepipeline.main_pipeline.name
@@ -875,4 +926,29 @@ output "sns_topic_arn" {
 output "dashboard_url" {
   description = "URL to CloudWatch Dashboard"
   value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.pipeline_dashboard.dashboard_name}"
+}
+
+output "kms_key_id" {
+  description = "KMS key ID for pipeline encryption"
+  value       = aws_kms_key.pipeline.key_id
+}
+
+output "kms_key_arn" {
+  description = "KMS key ARN for pipeline encryption"
+  value       = aws_kms_key.pipeline.arn
+}
+
+output "secrets_manager_arn" {
+  description = "Secrets Manager secret ARN"
+  value       = aws_secretsmanager_secret.app_secrets.arn
+}
+
+output "codebuild_project_name" {
+  description = "CodeBuild project name"
+  value       = aws_codebuild_project.build_project.name
+}
+
+output "cloudtrail_s3_bucket" {
+  description = "S3 bucket for CloudTrail logs"
+  value       = aws_s3_bucket.cloudtrail_logs.bucket
 }
