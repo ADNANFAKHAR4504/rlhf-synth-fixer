@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291206",
+  "team": "3",
+  "startedAt": "2025-08-28T10:25:02.085Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}
