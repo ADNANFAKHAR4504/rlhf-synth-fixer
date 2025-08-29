@@ -39,7 +39,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// Create S3 bucket for logs with strict security
 	logsBucket := awss3.NewBucket(stack, jsii.String("TapLogsBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String("tap-production-logs-" + *stack.Account()),
+		BucketName:        jsii.String("tap-production-logs-" + *stack.Account() + "-" + *stack.Region()),
 		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		Versioned:         jsii.Bool(true),
@@ -366,8 +366,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 							jsii.String("s3:DeleteObjectVersion"),
 						},
 						Resources: &[]*string{
-							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account()),
-							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "/*"),
+							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "-" + *stack.Region()),
+							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "-" + *stack.Region() + "/*"),
 						},
 					}),
 					awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
@@ -401,7 +401,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	})
 
 	configBucket := awss3.NewBucket(stack, jsii.String("TapConfigBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String("tap-config-" + *stack.Account()),
+		BucketName:        jsii.String("tap-config-" + *stack.Account() + "-" + *stack.Region()),
 		Encryption:        awss3.BucketEncryption_KMS,
 		EncryptionKey:     kmsKey,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
