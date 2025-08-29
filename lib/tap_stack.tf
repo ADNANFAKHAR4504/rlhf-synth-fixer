@@ -615,28 +615,24 @@ resource "aws_elastic_beanstalk_environment" "production" {
     value     = var.instance_type
   }
 
-  setting {
-    namespace = "aws:autoscaling:asg"
-    name      = "MinSize"
-    value     = "1"
-  }
-
-  setting {
-    namespace = "aws:autoscaling:asg"
-    name      = "MaxSize"
-    value     = "4"
-  }
 
   setting {
     namespace = "aws:elasticbeanstalk:environment"
     name      = "EnvironmentType"
-    value     = "LoadBalanced"
+    value     = "SingleInstance"
+  }
+
+  # Explicitly disable load balancer for single instance
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "ELBScheme"
+    value     = ""
   }
 
   setting {
-    namespace = "aws:elasticbeanstalk:environment"
-    name      = "LoadBalancerType"
-    value     = "application"
+    namespace = "aws:ec2:vpc"
+    name      = "ELBSubnets"
+    value     = ""
   }
 
   setting {

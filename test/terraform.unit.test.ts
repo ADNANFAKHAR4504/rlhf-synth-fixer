@@ -217,13 +217,12 @@ describe('tap_stack.tf static verification', () => {
 
   it('configures Elastic Beanstalk settings properly', () => {
     expect(has(/aws:autoscaling:launchconfiguration/)).toBe(true);
-    expect(has(/aws:autoscaling:asg/)).toBe(true);
     expect(has(/aws:elasticbeanstalk:environment/)).toBe(true);
     expect(has(/aws:elasticbeanstalk:healthreporting:system/)).toBe(true);
     expect(has(/aws:elasticbeanstalk:command/)).toBe(true);
     expect(has(/IamInstanceProfile/)).toBe(true);
     expect(has(/InstanceType/)).toBe(true);
-    expect(has(/LoadBalanced/)).toBe(true);
+    expect(has(/SingleInstance/)).toBe(true);
     expect(has(/Rolling/)).toBe(true);
   });
 
