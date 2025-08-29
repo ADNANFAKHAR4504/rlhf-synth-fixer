@@ -160,11 +160,13 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
     
     test('should have comprehensive tagging strategy', () => {
-      expect(has(tapStackContent, /default_tags/)).toBe(true);
-      expect(has(tapStackContent, /Project.*project-166/)).toBe(true);
-      expect(has(tapStackContent, /Batch.*batch-004/)).toBe(true);
-      expect(has(tapStackContent, /ManagedBy.*terraform/)).toBe(true);
-      expect(has(tapStackContent, /CostCenter.*infrastructure/)).toBe(true);
+      // Check tagging in provider.tf instead of tap_stack.tf
+      const providerContent = fs.readFileSync(path.join(libPath, 'provider.tf'), 'utf8');
+      expect(has(providerContent, /default_tags/)).toBe(true);
+      expect(has(providerContent, /Project.*project-166/)).toBe(true);
+      expect(has(providerContent, /Batch.*batch-004/)).toBe(true);
+      expect(has(providerContent, /ManagedBy.*terraform/)).toBe(true);
+      expect(has(providerContent, /CostCenter.*infrastructure/)).toBe(true);
     });
     
     test('should pass tags to all modules', () => {
@@ -182,13 +184,17 @@ describe('Terraform Infrastructure Unit Tests', () => {
     });
     
     test('should have proper backend configuration for state management', () => {
-      expect(has(tapStackContent, /backend\s+"s3"/)).toBe(true);
-      expect(has(tapStackContent, /encrypt\s*=\s*true/)).toBe(true);
-      expect(has(tapStackContent, /dynamodb_table/)).toBe(true);
+      // Check backend configuration in provider.tf instead of tap_stack.tf
+      const providerContent = fs.readFileSync(path.join(libPath, 'provider.tf'), 'utf8');
+      expect(has(providerContent, /backend\s+"s3"/)).toBe(true);
+      expect(has(providerContent, /encrypt\s*=\s*true/)).toBe(true);
+      expect(has(providerContent, /dynamodb_table/)).toBe(true);
     });
     
     test('should use secure provider versions', () => {
-      expect(has(tapStackContent, /required_version\s*=\s*">=\s*1\.0"/)).toBe(true);
+      // Check provider versions in provider.tf instead of tap_stack.tf
+      const providerContent = fs.readFileSync(path.join(libPath, 'provider.tf'), 'utf8');
+      expect(has(providerContent, /required_version\s*=\s*">=\s*1\.0"/)).toBe(true);
     });
   });
   

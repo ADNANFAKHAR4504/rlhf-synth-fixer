@@ -5,16 +5,24 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
   
-  # Uncomment and configure for production
+  # Backend configuration for remote state storage
+  # Uncomment and configure for production use
   # backend "s3" {
-  #   bucket = "your-terraform-state-bucket"
-  #   key    = "prod/terraform.tfstate"
-  #   region = "us-west-2"
+  #   bucket         = "your-terraform-state-bucket"
+  #   key            = "prod/infrastructure/terraform.tfstate"
+  #   region         = "us-west-2"
+  #   encrypt        = true
+  #   dynamodb_table = "terraform-state-lock"
   # }
 }
 
+# AWS Provider configuration with default tags
 provider "aws" {
   region = var.aws_region
   
@@ -25,6 +33,10 @@ provider "aws" {
       Environment = var.environment
       ManagedBy   = "terraform"
       Owner       = var.owner
+      CostCenter  = "infrastructure"
     }
   }
 }
+
+# Random provider for generating unique identifiers
+provider "random" {}
