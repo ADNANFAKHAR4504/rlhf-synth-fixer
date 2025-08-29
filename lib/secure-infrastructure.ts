@@ -470,6 +470,18 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
+    // Enable ACLs for CloudFront logging
+    new aws.s3.BucketOwnershipControls(
+      `logs-bucket-ownership-${this.environment}`,
+      {
+        bucket: logsBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerPreferred',
+        },
+      },
+      { provider: this.provider }
+    );
+
     // S3 Lifecycle Configuration for logs bucket
     new aws.s3.BucketLifecycleConfiguration(
       `logs-bucket-lifecycle-${this.environment}`,
@@ -747,7 +759,7 @@ export class SecureInfrastructure {
         maxAllocatedStorage: 100,
         storageType: 'gp2',
         storageEncrypted: true,
-        kmsKeyId: this.masterKey.arn,
+        kmsKeyId: this.masterKey.keyId,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
