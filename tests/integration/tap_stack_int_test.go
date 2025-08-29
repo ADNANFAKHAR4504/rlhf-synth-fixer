@@ -1,163 +1,192 @@
 package lib
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-//
-// -----------------------------
-// Dummy Structs (no Pulumi deps)
-// -----------------------------
-
-type VPC struct {
-	CIDR string
-	Tags map[string]string
+type FlatOutputs struct {
+	AutoScalingGroupName   string `json:"autoScalingGroupName"`
+	CloudWatchLogGroupArn  string `json:"cloudWatchLogGroupArn"`
+	CloudWatchLogGroupName string `json:"cloudWatchLogGroupName"`
+	DbSecurityGroupId      string `json:"dbSecurityGroupId"`
+	DbUsername             string `json:"dbUsername"`
+	IamPolicyArn           string `json:"iamPolicyArn"`
+	IamRoleArn             string `json:"iamRoleArn"`
+	InternetGatewayId      string `json:"internetGatewayId"`
+	LaunchTemplateId       string `json:"launchTemplateId"`
+	NatGateway1Id          string `json:"natGateway1Id"`
+	NatGateway2Id          string `json:"natGateway2Id"`
+	PrivateSubnet1Id       string `json:"privateSubnet1Id"`
+	PrivateSubnet2Id       string `json:"privateSubnet2Id"`
+	PublicSubnet1Id        string `json:"publicSubnet1Id"`
+	PublicSubnet2Id        string `json:"publicSubnet2Id"`
+	RdsEndpoint            string `json:"rdsEndpoint"`
+	RdsInstanceId          string `json:"rdsInstanceId"`
+	S3BucketArn            string `json:"s3BucketArn"`
+	S3BucketName           string `json:"s3BucketName"`
+	VpcCidr                string `json:"vpcCidr"`
+	VpcId                  string `json:"vpcId"`
+	WebSecurityGroupId     string `json:"webSecurityGroupId"`
 }
 
-type Subnet struct {
-	CIDR   string
-	Public bool
-}
+var outputs FlatOutputs
+var awsCfg aws.Config
 
-type SecurityGroup struct {
-	Name    string
-	Ingress []Rule
-	Egress  []Rule
-}
-
-type Rule struct {
-	Protocol string
-	FromPort int
-	ToPort   int
-	Cidr     string
-}
-
-type EC2Instance struct {
-	Name      string
-	Type      string
-	AMI       string
-	Public    bool
-	Encrypted bool
-}
-
-type RDSInstance struct {
-	Name            string
-	Engine          string
-	MultiAZ         bool
-	Encrypted       bool
-	DeletionProtect bool
-}
-
-type S3Bucket struct {
-	Name         string
-	Versioning   bool
-	Encrypted    bool
-	PublicAccess bool
-	Logging      bool
-	Tags         map[string]string
-}
-
-//
-// -----------------------------
-// Fake "Stack" (from tap_stack.go)
-// -----------------------------
-
-func mockStack() (VPC, []Subnet, SecurityGroup, EC2Instance, RDSInstance, S3Bucket) {
-	vpc := VPC{
-		CIDR: "10.0.0.0/16",
-		Tags: map[string]string{"Environment": "dev"},
+func TestMain(m *testing.M) {
+	// Load outputs
+	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
+	if err != nil {
+		fmt.Println("Failed to read outputs:", err)
+		os.Exit(1)
+	}
+	err = json.Unmarshal(data, &outputs)
+	if err != nil {
+		fmt.Println("Failed to parse outputs:", err)
+		os.Exit(1)
 	}
 
-	subnets := []Subnet{
-		{CIDR: "10.0.1.0/24", Public: true},
-		{CIDR: "10.0.2.0/24", Public: false},
+	// Load AWS config
+	awsCfg, err = config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		fmt.Println("Failed to load AWS config:", err)
+		os.Exit(1)
 	}
 
-	sg := SecurityGroup{
-		Name: "db-sg",
-		Ingress: []Rule{
-			{Protocol: "tcp", FromPort: 3306, ToPort: 3306, Cidr: "10.0.0.0/16"},
-		},
-		Egress: []Rule{
-			{Protocol: "-1", FromPort: 0, ToPort: 0, Cidr: "0.0.0.0/0"},
-		},
+	os.Exit(m.Run())
+}
+
+func TestVpcExists(t *testing.T) {
+	client := ec2.NewFromConfig(awsCfg)
+	out, err := client.DescribeVpcs(context.TODO(), &ec2.DescribeVpcsInput{
+		VpcIds: []string{outputs.VpcId},
+	})
+	require.NoError(t, err)
+	require.Len(t, out.Vpcs, 1)
+	assert.Equal(t, outputs.VpcCidr, *out.Vpcs[0].CidrBlock)
+}
+
+func TestSubnetsExist(t *testing.T) {
+	client := ec2.NewFromConfig(awsCfg)
+	subnets := []string{outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id, outputs.PublicSubnet1Id, outputs.PublicSubnet2Id}
+	out, err := client.DescribeSubnets(context.TODO(), &ec2.DescribeSubnetsInput{
+		SubnetIds: subnets,
+	})
+	require.NoError(t, err)
+	assert.Len(t, out.Subnets, 4)
+	for _, sn := range out.Subnets {
+		assert.Equal(t, outputs.VpcId, *sn.VpcId)
 	}
+}
 
-	ec2 := EC2Instance{
-		Name:      "web-instance",
-		Type:      "t3.micro",
-		AMI:       "ami-123456",
-		Public:    true,
-		Encrypted: true,
+func TestInternetGatewayExists(t *testing.T) {
+	client := ec2.NewFromConfig(awsCfg)
+	out, err := client.DescribeInternetGateways(context.TODO(), &ec2.DescribeInternetGatewaysInput{
+		InternetGatewayIds: []string{outputs.InternetGatewayId},
+	})
+	require.NoError(t, err)
+	require.Len(t, out.InternetGateways, 1)
+}
+
+func TestNatGatewaysExist(t *testing.T) {
+	client := ec2.NewFromConfig(awsCfg)
+	nats := []string{outputs.NatGateway1Id, outputs.NatGateway2Id}
+	out, err := client.DescribeNatGateways(context.TODO(), &ec2.DescribeNatGatewaysInput{
+		NatGatewayIds: nats,
+	})
+	require.NoError(t, err)
+	assert.Len(t, out.NatGateways, 2)
+}
+
+func TestAutoScalingGroupExists(t *testing.T) {
+	client := autoscaling.NewFromConfig(awsCfg)
+	out, err := client.DescribeAutoScalingGroups(context.TODO(), &autoscaling.DescribeAutoScalingGroupsInput{
+		AutoScalingGroupNames: []string{outputs.AutoScalingGroupName},
+	})
+	require.NoError(t, err)
+	require.Len(t, out.AutoScalingGroups, 1)
+	assert.Equal(t, outputs.AutoScalingGroupName, *out.AutoScalingGroups[0].AutoScalingGroupName)
+}
+
+func TestLaunchTemplateExists(t *testing.T) {
+	client := ec2.NewFromConfig(awsCfg)
+	out, err := client.DescribeLaunchTemplates(context.TODO(), &ec2.DescribeLaunchTemplatesInput{
+		LaunchTemplateIds: []string{outputs.LaunchTemplateId},
+	})
+	require.NoError(t, err)
+	require.Len(t, out.LaunchTemplates, 1)
+}
+
+func TestSecurityGroupsExist(t *testing.T) {
+	client := ec2.NewFromConfig(awsCfg)
+	sgs := []string{outputs.DbSecurityGroupId, outputs.WebSecurityGroupId}
+	out, err := client.DescribeSecurityGroups(context.TODO(), &ec2.DescribeSecurityGroupsInput{
+		GroupIds: sgs,
+	})
+	require.NoError(t, err)
+	assert.Len(t, out.SecurityGroups, 2)
+}
+
+func TestRdsInstanceExists(t *testing.T) {
+	client := rds.NewFromConfig(awsCfg)
+	out, err := client.DescribeDBInstances(context.TODO(), &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: aws.String(outputs.RdsInstanceId),
+	})
+	require.NoError(t, err)
+	require.Len(t, out.DBInstances, 1)
+	assert.Equal(t, outputs.RdsEndpoint, *out.DBInstances[0].Endpoint.Address+":"+fmt.Sprint(out.DBInstances[0].Endpoint.Port))
+}
+
+func TestS3BucketExists(t *testing.T) {
+	client := s3.NewFromConfig(awsCfg)
+	_, err := client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
+		Bucket: aws.String(outputs.S3BucketName),
+	})
+	require.NoError(t, err)
+}
+
+func TestIamRoleAndPolicyExist(t *testing.T) {
+	client := iam.NewFromConfig(awsCfg)
+	// Role
+	_, err := client.GetRole(context.TODO(), &iam.GetRoleInput{
+		RoleName: aws.String(strings.Split(outputs.IamRoleArn, "/")[1]),
+	})
+	require.NoError(t, err)
+
+	// Policy
+	_, err = client.GetPolicy(context.TODO(), &iam.GetPolicyInput{
+		PolicyArn: aws.String(outputs.IamPolicyArn),
+	})
+	require.NoError(t, err)
+}
+
+func TestCloudWatchLogGroupExists(t *testing.T) {
+	client := cloudwatchlogs.NewFromConfig(awsCfg)
+	out, err := client.DescribeLogGroups(context.TODO(), &cloudwatchlogs.DescribeLogGroupsInput{
+		LogGroupNamePrefix: aws.String(outputs.CloudWatchLogGroupName),
+	})
+	require.NoError(t, err)
+	found := false
+	for _, lg := range out.LogGroups {
+		if *lg.LogGroupName == outputs.CloudWatchLogGroupName {
+			found = true
+			break
+		}
 	}
-
-	rds := RDSInstance{
-		Name:            "hipaa-db",
-		Engine:          "mysql",
-		MultiAZ:         true,
-		Encrypted:       true,
-		DeletionProtect: false,
-	}
-
-	s3 := S3Bucket{
-		Name:         "app-logs",
-		Versioning:   true,
-		Encrypted:    true,
-		PublicAccess: false,
-		Logging:      true,
-		Tags:         map[string]string{"Compliance": "HIPAA"},
-	}
-
-	return vpc, subnets, sg, ec2, rds, s3
-}
-
-//
-// -----------------------------
-// Unit Tests
-// -----------------------------
-
-func TestVPCConfig(t *testing.T) {
-	vpc, _, _, _, _, _ := mockStack()
-	assert.Equal(t, "10.0.0.0/16", vpc.CIDR)
-	assert.Equal(t, "dev", vpc.Tags["Environment"])
-}
-
-func TestSubnetConfig(t *testing.T) {
-	_, subnets, _, _, _, _ := mockStack()
-	assert.True(t, subnets[0].Public, "First subnet should be public")
-	assert.False(t, subnets[1].Public, "Second subnet should be private")
-}
-
-func TestSecurityGroupRules(t *testing.T) {
-	_, _, sg, _, _, _ := mockStack()
-	assert.Equal(t, "db-sg", sg.Name)
-	assert.Equal(t, 3306, sg.Ingress[0].FromPort)
-	assert.Equal(t, "10.0.0.0/16", sg.Ingress[0].Cidr)
-	assert.Equal(t, "0.0.0.0/0", sg.Egress[0].Cidr)
-}
-
-func TestEC2Instance(t *testing.T) {
-	_, _, _, ec2, _, _ := mockStack()
-	assert.Equal(t, "t3.micro", ec2.Type)
-	assert.True(t, ec2.Public)
-	assert.True(t, ec2.Encrypted)
-}
-
-func TestRDSInstance(t *testing.T) {
-	_, _, _, _, rds, _ := mockStack()
-	assert.Equal(t, "mysql", rds.Engine)
-	assert.True(t, rds.MultiAZ)
-	assert.True(t, rds.Encrypted)
-	assert.False(t, rds.DeletionProtect)
-}
-
-func TestS3Bucket(t *testing.T) {
-	_, _, _, _, _, s3 := mockStack()
-	assert.True(t, s3.Versioning)
-	assert.True(t, s3.Encrypted)
-	assert.False(t, s3.PublicAccess)
-	assert.True(t, s3.Logging)
-	assert.Equal(t, "HIPAA", s3.Tags["Compliance"])
+	assert.True(t, found, "CloudWatch log group not found")
 }
