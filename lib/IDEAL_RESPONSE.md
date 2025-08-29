@@ -718,19 +718,7 @@ resource "aws_elastic_beanstalk_environment" "production" {
   setting {
     namespace = "aws:elasticbeanstalk:managedactions"
     name      = "ManagedActionsEnabled"
-    value     = "true"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:managedactions:platformupdate"
-    name      = "UpdateLevel"
-    value     = "minor"
-  }
-
-  setting {
-    namespace = "aws:elasticbeanstalk:managedactions:platformupdate"
-    name      = "InstanceRefreshEnabled"
-    value     = "true"
+    value     = "false"
   }
 }
 
