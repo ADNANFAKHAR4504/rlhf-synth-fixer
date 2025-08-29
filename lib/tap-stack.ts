@@ -299,5 +299,60 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', environment);
     cdk.Tags.of(this).add('CostCenter', costCenter);
     cdk.Tags.of(this).add('Project', 'CompanyName-ProjectName');
+
+    // Stack Outputs for Integration Tests
+    new cdk.CfnOutput(this, 'ApiEndpoint', {
+      value: api.url,
+      description: 'API Gateway endpoint URL',
+      exportName: 'CompanyName-ProjectName-ApiEndpoint',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: lambdaFunction.functionArn,
+      description: 'Lambda function ARN',
+      exportName: 'CompanyName-ProjectName-LambdaFunctionArn',
+    });
+
+    new cdk.CfnOutput(this, 'LambdaRoleArn', {
+      value: lambdaRole.roleArn,
+      description: 'Lambda execution role ARN',
+      exportName: 'CompanyName-ProjectName-LambdaRoleArn',
+    });
+
+    new cdk.CfnOutput(this, 'BuildRoleArn', {
+      value: buildRole.roleArn,
+      description: 'CodeBuild service role ARN',
+      exportName: 'CompanyName-ProjectName-BuildRoleArn',
+    });
+
+    new cdk.CfnOutput(this, 'PipelineRoleArn', {
+      value: pipelineRole.roleArn,
+      description: 'CodePipeline service role ARN',
+      exportName: 'CompanyName-ProjectName-PipelineRoleArn',
+    });
+
+    new cdk.CfnOutput(this, 'ArtifactsBucketName', {
+      value: artifactsBucket.bucketName,
+      description: 'S3 bucket for pipeline artifacts',
+      exportName: 'CompanyName-ProjectName-ArtifactsBucketName',
+    });
+
+    new cdk.CfnOutput(this, 'CodePipelineArn', {
+      value: `arn:aws:codepipeline:${this.region}:${this.account}:CompanyName-ProjectName-Pipeline`,
+      description: 'CodePipeline ARN',
+      exportName: 'CompanyName-ProjectName-CodePipelineArn',
+    });
+
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+      exportName: 'CompanyName-ProjectName-VpcId',
+    });
+
+    new cdk.CfnOutput(this, 'VpcPublicSubnets', {
+      value: vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Public subnet IDs',
+      exportName: 'CompanyName-ProjectName-VpcPublicSubnets',
+    });
   }
 }
