@@ -5,8 +5,7 @@ describe('TapStack CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json` // Otherwise, ensure the template is in JSON format.
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
@@ -25,9 +24,8 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Parameters', () => {
-    test('should include required parameters', () => {
+    test('should include required parameters (without secret name param)', () => {
       const params = template.Parameters;
-      expect(params.DBMasterPasswordSecretName).toBeDefined();
       expect(params.DBAllocatedStorage).toBeDefined();
       expect(params.DBInstanceClass).toBeDefined();
       expect(params.DBEngineVersion).toBeDefined();
@@ -141,10 +139,10 @@ describe('TapStack CloudFormation Template', () => {
       expect(p.AutoMinorVersionUpgrade).toBe(true);
     });
 
-    test('RDS should use dynamic SSM secure password reference', () => {
+    test('RDS should manage master user password via Secrets Manager', () => {
       const p = template.Resources.RDSInstance.Properties;
-      expect(typeof p.MasterUserPassword).toBe('string');
-      expect(p.MasterUserPassword).toContain('resolve:ssm-secure');
+      expect(p.ManageMasterUserPassword).toBe(true);
+      expect(p.MasterUserPassword).toBeUndefined();
     });
 
     test('RDS should be in private subnets via subnet group', () => {

@@ -1,10 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Parameters": {
-        "DBMasterPasswordSecretName": {
-            "Type": "String",
-            "Description": "Name of the SSM Parameter Store (SecureString) holding the RDS master password"
-        },
         "DBAllocatedStorage": {
             "Type": "Number",
             "Default": 20,
@@ -316,7 +312,7 @@
                     "Ref": "DBEngineVersion"
                 },
                 "MasterUsername": "admin",
-                "MasterUserPassword": "{{resolve:ssm-secure:${DBMasterPasswordSecretName}:1}}",
+                "ManageMasterUserPassword": true,
                 "AllocatedStorage": {
                     "Ref": "DBAllocatedStorage"
                 },

@@ -1,8 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  DBMasterPasswordSecretName:
-    Type: String
-    Description: Name of the SSM Parameter Store (SecureString) holding the RDS master password
   DBAllocatedStorage:
     Type: Number
     Default: 20
@@ -182,7 +179,7 @@ Resources:
       Engine: mysql
       EngineVersion: !Ref DBEngineVersion
       MasterUsername: admin
-      MasterUserPassword: !Sub "{{resolve:ssm-secure:${DBMasterPasswordSecretName}:1}}"
+      ManageMasterUserPassword: true
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
       PubliclyAccessible: false
