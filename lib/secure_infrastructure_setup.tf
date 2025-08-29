@@ -615,7 +615,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
 }
 
 # Config S3 Bucket
@@ -704,16 +704,13 @@ resource "aws_config_configuration_recorder" "main" {
     all_supported                 = true
     include_global_resource_types = true
   }
-
-  depends_on = [aws_config_delivery_channel.main]
 }
 
-# AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
   name           = "secure-config-delivery-channel-${var.environment}"
   s3_bucket_name = aws_s3_bucket.config.id
 
-  depends_on = [aws_s3_bucket_policy.config]
+  depends_on = [aws_config_configuration_recorder.main]
 }
 
 # Lambda Function with private access
