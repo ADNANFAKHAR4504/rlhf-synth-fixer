@@ -136,7 +136,6 @@ describe("tap_stack.tf Integration Tests", () => {
       "route53_zone_id",
       "route53_zone_name",
       "s3_access_policy_arn",
-      "s3_bucket_arn",
       "s3_bucket_domain_name",
       "s3_bucket_name",
       "s3_bucket_regional_domain_name",
@@ -218,7 +217,6 @@ describe("tap_stack.tf Integration Tests", () => {
     "primary_sns_topic_arn",
     "primary_target_group_arn",
     "s3_access_policy_arn",
-    "s3_bucket_arn",
     "secondary_alb_arn",
     "secondary_asg_arn",
     "secondary_db_subnet_group_arn",
@@ -302,7 +300,6 @@ describe("tap_stack.tf Integration Tests", () => {
     "domain_name",
     "rds_database_name",
     "s3_bucket_name",
-    "s3_bucket_arn",
     "s3_bucket_domain_name",
     "s3_bucket_regional_domain_name"
   ].forEach(key => {
