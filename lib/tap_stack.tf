@@ -60,9 +60,15 @@ locals {
 
 # VPC
 data "aws_vpc" "main" {
-  tags = {
-    Name = "${var.project_name}-vpc"
+  filter {
+    name   = "tag:Name"
+    values = ["${var.project_name}-vpc"]
   }
+  filter {
+    name   = "isDefault"
+    values = ["false"]
+  }
+  # Optionally, add more filters or use 'id' if you know the VPC ID
 }
 
 # Public Subnets
