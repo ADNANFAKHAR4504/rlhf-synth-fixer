@@ -20,16 +20,12 @@ describe("tap_stack.tf static verification", () => {
   it("declares required input variables", () => {
     [
       "aws_region",
-      "environment",
       "project_name",
+      "environment",
       "owner",
-      "lambda_runtime",
-      "lambda_timeout",
-      "lambda_memory_size",
-      "dynamodb_read_capacity",
-      "dynamodb_write_capacity",
-      "api_gateway_stage_name",
-      "error_rate_threshold"
+      "db_read_capacity",
+      "db_write_capacity",
+      "log_retention_days"
     ].forEach(variable =>
       expect(has(new RegExp(`variable\\s+"${variable}"`))).toBe(true)
     );
@@ -37,7 +33,7 @@ describe("tap_stack.tf static verification", () => {
 
   // 3. Locals
   it("defines expected locals", () => {
-    ["common_tags", "lambda_function_name", "dynamodb_table_name", "api_gateway_name"].forEach(local =>
+    ["common_tags", "name_prefix"].forEach(local =>
       expect(has(new RegExp(`${local}\\s*=`))).toBe(true)
     );
   });
@@ -48,22 +44,22 @@ describe("tap_stack.tf static verification", () => {
   });
 
   it("configures Lambda with Node.js runtime", () => {
-    expect(has(/runtime\s*=\s*var\.lambda_runtime/)).toBe(true);
+    expect(has(/runtime\s*=\s*"nodejs18\.x"/)).toBe(true);
   });
 
   it("sets Lambda timeout and memory", () => {
-    expect(has(/timeout\s*=\s*var\.lambda_timeout/)).toBe(true);
-    expect(has(/memory_size\s*=\s*var\.lambda_memory_size/)).toBe(true);
+    expect(has(/timeout\s*=\s*30/)).toBe(true);
+    expect(has(/memory_size\s*=\s*256/)).toBe(true);
   });
 
   it("configures Lambda environment variables", () => {
     expect(has(/environment\s*{/)).toBe(true);
-    expect(has(/DYNAMODB_TABLE\s*=/)).toBe(true);
+    expect(has(/DYNAMODB_TABLE_NAME\s*=/)).toBe(true);
   });
 
   // 5. IAM role and policy for Lambda
   it("defines IAM role for Lambda execution", () => {
-    expect(has(/resource\s+"aws_iam_role"\s+"lambda_execution"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role"\s+"lambda_role"/)).toBe(true);
   });
 
   it("attaches basic Lambda execution policy", () => {
@@ -71,21 +67,21 @@ describe("tap_stack.tf static verification", () => {
   });
 
   it("defines custom IAM policy for DynamoDB access", () => {
-    expect(has(/resource\s+"aws_iam_role_policy"\s+"lambda_dynamodb_access"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role_policy"\s+"lambda_dynamodb_policy"/)).toBe(true);
   });
 
   // 6. DynamoDB table
   it("creates aws_dynamodb_table resource", () => {
-    expect(has(/resource\s+"aws_dynamodb_table"\s+"data_table"/)).toBe(true);
+    expect(has(/resource\s+"aws_dynamodb_table"\s+"main_table"/)).toBe(true);
   });
 
-  it("configures DynamoDB with itemId as primary key", () => {
-    expect(has(/hash_key\s*=\s*"itemId"/)).toBe(true);
+  it("configures DynamoDB with id as primary key", () => {
+    expect(has(/hash_key\s*=\s*"id"/)).toBe(true);
   });
 
   it("sets DynamoDB read/write capacity", () => {
-    expect(has(/read_capacity\s*=\s*var\.dynamodb_read_capacity/)).toBe(true);
-    expect(has(/write_capacity\s*=\s*var\.dynamodb_write_capacity/)).toBe(true);
+    expect(has(/read_capacity\s*=\s*var\.db_read_capacity/)).toBe(true);
+    expect(has(/write_capacity\s*=\s*var\.db_write_capacity/)).toBe(true);
   });
 
   it("configures DynamoDB to be retained on destroy", () => {
@@ -95,11 +91,11 @@ describe("tap_stack.tf static verification", () => {
 
   // 7. API Gateway
   it("creates aws_api_gateway_rest_api resource", () => {
-    expect(has(/resource\s+"aws_api_gateway_rest_api"\s+"api"/)).toBe(true);
+    expect(has(/resource\s+"aws_api_gateway_rest_api"\s+"main_api"/)).toBe(true);
   });
 
   it("enables CORS for API Gateway", () => {
-    expect(has(/resource\s+"aws_api_gateway_method"\s+"options"/)).toBe(true);
+    expect(has(/resource\s+"aws_api_gateway_method"\s+"options_method"/)).toBe(true);
     expect(has(/Access-Control-Allow-Origin/)).toBe(true);
   });
 
@@ -109,7 +105,8 @@ describe("tap_stack.tf static verification", () => {
   });
 
   it("configures stage variables", () => {
-    expect(has(/variables\s*{/)).toBe(true);
+    expect(has(/stage_name\s*=\s*"dev"/)).toBe(true);
+    expect(has(/stage_name\s*=\s*"prod"/)).toBe(true);
   });
 
   // 8. CloudWatch Logs
@@ -118,16 +115,16 @@ describe("tap_stack.tf static verification", () => {
   });
 
   it("configures log retention", () => {
-    expect(has(/retention_in_days\s*=/)).toBe(true);
+    expect(has(/retention_in_days\s*=\s*var\.log_retention_days/)).toBe(true);
   });
 
   // 9. CloudWatch Alarms
   it("creates error rate alarm", () => {
-    expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"error_rate"/)).toBe(true);
+    expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"lambda_error_rate"/)).toBe(true);
   });
 
   it("configures alarm with 5% threshold", () => {
-    expect(has(/threshold\s*=\s*var\.error_rate_threshold/)).toBe(true);
+    expect(has(/threshold\s*=\s*"5"/)).toBe(true);
   });
 
   // 10. SNS Topic for alerts
@@ -136,23 +133,23 @@ describe("tap_stack.tf static verification", () => {
   });
 
   it("subscribes CloudWatch alarm to SNS", () => {
-    expect(has(/resource\s+"aws_cloudwatch_metric_alarm"\s+"error_rate"/)).toBe(true);
+    expect(has(/alarm_actions\s*=\s*\[aws_sns_topic\.alerts\.arn\]/)).toBe(true);
   });
 
   // 11. API Gateway logging
   it("enables API Gateway access logging", () => {
-    expect(has(/resource\s+"aws_api_gateway_account"/)).toBe(true);
-    expect(has(/cloudwatch_log_role_arn/)).toBe(true);
+    expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"api_gateway_logs"/)).toBe(true);
+    expect(has(/access_log_settings/)).toBe(true);
   });
 
   // 12. Outputs
   it("defines expected outputs", () => {
     const expectedOutputs = [
-      "api_gateway_url",
-      "lambda_function_name",
+      "api_gateway_url_dev",
+      "api_gateway_url_prod",
       "dynamodb_table_name",
-      "sns_topic_arn",
-      "lambda_iam_role_arn"
+      "lambda_function_name",
+      "sns_topic_arn"
     ];
 
     expectedOutputs.forEach(output =>
