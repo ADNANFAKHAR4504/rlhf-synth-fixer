@@ -1,8 +1,8 @@
-Fix and improve following things :
+need to fix these issues that came up in testing:
 
-resolve deprecation Warning:  aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated. use `logGroup` instead 
-Implement API authentication
-Add WAF protection
-Fix CORS policy 
+1. there's some deprecation warning about logRetention - should use logGroup instead apparently?
+2. API is wide open - needs some kind of auth (maybe API keys?)
+3. no WAF protection whatsoever
+4. CORS is too loose, allowing everything
 
-Generate only necessary code
+just fix these things, don't add any extra stuff we don't need
