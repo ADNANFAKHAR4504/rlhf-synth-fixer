@@ -8,8 +8,8 @@ import * as http from "http";
 import * as https from "https";
 import { URL } from "url";
 import { promisify } from "util";
-import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand, DescribeAutoScalingGroupsCommand } from "@aws-sdk/client-ec2";
-import { AutoScalingClient, DescribeAutoScalingGroupsCommand as ASGDescribeCommand } from "@aws-sdk/client-auto-scaling";
+import { EC2Client, DescribeVpcsCommand, DescribeSecurityGroupsCommand } from "@aws-sdk/client-ec2";
+import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from "@aws-sdk/client-auto-scaling";
 
 type TfOutputValue<T> = {
   sensitive: boolean;
@@ -227,7 +227,7 @@ async function verifyAutoScalingGroupExists(asgName: string, region: string): Pr
   const asgClient = new AutoScalingClient({ region });
   
   try {
-    const command = new ASGDescribeCommand({
+    const command = new DescribeAutoScalingGroupsCommand({
       AutoScalingGroupNames: [asgName]
     });
     
@@ -502,7 +502,7 @@ describe("LIVE: Infrastructure verification from Terraform structured outputs", 
       const asgClient = new AutoScalingClient({ region });
       
       const asgInfo = await retry(async () => {
-        const command = new ASGDescribeCommand({
+        const command = new DescribeAutoScalingGroupsCommand({
           AutoScalingGroupNames: [autoscalingGroupName]
         });
         
@@ -545,7 +545,7 @@ describe("LIVE: Infrastructure verification from Terraform structured outputs", 
     test("Auto Scaling Group configuration is valid", async () => {
       const asgClient = new AutoScalingClient({ region });
       
-      const command = new ASGDescribeCommand({
+      const command = new DescribeAutoScalingGroupsCommand({
         AutoScalingGroupNames: [autoscalingGroupName]
       });
       
