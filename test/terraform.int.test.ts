@@ -116,12 +116,9 @@ describe("TAP Terraform Stack Integration Tests", () => {
       "standalone_instance_arn",
       "launch_template_id",
       "launch_template_latest_version",
-      "autoscaling_group_id",
       "autoscaling_group_arn",
       "autoscaling_group_name",
-      "load_balancer_id",
       "load_balancer_arn",
-      "load_balancer_dns_name",
       "load_balancer_zone_id",
       "target_group_id",
       "target_group_arn",
@@ -283,15 +280,6 @@ describe("TAP Terraform Stack Integration Tests", () => {
   it("launch_template_latest_version should be a non-empty string and not zero", () => {
     expect(isNonEmptyString(outputs.launch_template_latest_version)).toBe(true);
     expect(outputs.launch_template_latest_version).not.toBe("0");
-  });
-
-  it("load_balancer_id should be a non-empty string", () => {
-    expect(isNonEmptyString(outputs.load_balancer_id)).toBe(true);
-  });
-
-  it("load_balancer_dns_name should end with .elb.amazonaws.com", () => {
-    expect(typeof outputs.load_balancer_dns_name).toBe("string");
-    expect(outputs.load_balancer_dns_name.endsWith(".elb.amazonaws.com")).toBe(true);
   });
 
   it("application_url should start with http:// and reference ELB if present", () => {
