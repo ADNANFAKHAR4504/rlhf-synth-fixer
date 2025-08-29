@@ -222,21 +222,6 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfiguration(
-      `alb-logs-encryption-${environment}`,
-      {
-        bucket: albLogsBucket.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        ],
-      },
-      { provider: this.provider }
-    );
-
     new aws.s3.BucketLifecycleConfigurationV2(
       `alb-logs-lifecycle-${environment}`,
       {
@@ -548,7 +533,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `static-content-versioning-${environment}`,
       {
         bucket: this.s3Bucket.id,
