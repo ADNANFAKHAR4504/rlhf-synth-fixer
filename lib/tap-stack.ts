@@ -185,14 +185,18 @@ export class TapStack extends TerraformStack {
     // 5. Elastic Beanstalk Application
     const app = new ElasticBeanstalkApplication(this, 'beanstalk-app', {
       name: `webapp-${randomSuffix}`,
+    });    
+    // **FIX**: Use a data source to find the latest Node.js 18 solution stack
+    const solutionStack = new ElasticBeanstalkSolutionStack(this, 'node-js-18-solution-stack', {
+      mostRecent: true,
+      nameRegex: '^64bit Amazon Linux 2023 v.* running Node.js 18$'
     });
 
     const ebEnv = new ElasticBeanstalkEnvironment(this, 'beanstalk-env', {
       name: `webapp-env-${randomSuffix}`,
       application: app.name,
       // FIX 1: Updated to a current, valid solution stack name.
-      solutionStackName: '64bit Amazon Linux 2023 v4.2.0 running Node.js 18',
-      setting: [
+      solutionStackName: solutionStack.name, // Use the dynamically looked-up name      setting: [
         {
           namespace: 'aws:autoscaling:launchconfiguration',
           name: 'IamInstanceProfile',
