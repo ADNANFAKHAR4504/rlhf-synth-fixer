@@ -1499,5 +1499,4 @@ Outputs:
     Value: !Ref ExistingKMSKeyAlias
     Export:
       Name: !Sub '${AWS::StackName}-KMS-Alias-Name'
-
 ```
