@@ -344,8 +344,59 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	// Create Config Configuration Recorder
 	configRole := awsiam.NewRole(stack, jsii.String("ConfigRole"), &awsiam.RoleProps{
 		AssumedBy: awsiam.NewServicePrincipal(jsii.String("config.amazonaws.com"), nil),
-		ManagedPolicies: &[]awsiam.IManagedPolicy{
-			awsiam.ManagedPolicy_FromManagedPolicyArn(stack, jsii.String("AWSConfigServiceRolePolicy"), jsii.String("arn:aws:iam::aws:policy/aws-service-role/AWSConfigServiceRolePolicy")),
+		InlinePolicies: &map[string]awsiam.PolicyDocument{
+			"ConfigPolicy": awsiam.NewPolicyDocument(&awsiam.PolicyDocumentProps{
+				Statements: &[]awsiam.PolicyStatement{
+					awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+						Effect: awsiam.Effect_ALLOW,
+						Actions: &[]*string{
+							jsii.String("s3:GetBucketAcl"),
+							jsii.String("s3:ListBucket"),
+							jsii.String("s3:GetBucketLocation"),
+							jsii.String("s3:ListBucketMultipartUploads"),
+							jsii.String("s3:ListBucketVersions"),
+							jsii.String("s3:GetObject"),
+							jsii.String("s3:GetObjectAcl"),
+							jsii.String("s3:GetObjectVersion"),
+							jsii.String("s3:GetObjectVersionAcl"),
+							jsii.String("s3:PutObject"),
+							jsii.String("s3:PutObjectAcl"),
+							jsii.String("s3:PutObjectVersionAcl"),
+							jsii.String("s3:DeleteObject"),
+							jsii.String("s3:DeleteObjectVersion"),
+						},
+						Resources: &[]*string{
+							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account()),
+							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "/*"),
+						},
+					}),
+					awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+						Effect: awsiam.Effect_ALLOW,
+						Actions: &[]*string{
+							jsii.String("logs:CreateLogGroup"),
+							jsii.String("logs:CreateLogStream"),
+							jsii.String("logs:PutLogEvents"),
+							jsii.String("logs:DescribeLogGroups"),
+							jsii.String("logs:DescribeLogStreams"),
+						},
+						Resources: &[]*string{
+							jsii.String("arn:aws:logs:*:*:*"),
+						},
+					}),
+					awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+						Effect: awsiam.Effect_ALLOW,
+						Actions: &[]*string{
+							jsii.String("config:Put*"),
+							jsii.String("config:Get*"),
+							jsii.String("config:List*"),
+							jsii.String("config:Describe*"),
+						},
+						Resources: &[]*string{
+							jsii.String("*"),
+						},
+					}),
+				},
+			}),
 		},
 	})
 
