@@ -23,6 +23,7 @@ import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketWebsiteConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-website-configuration';
+import { DataAwsLb } from '@cdktf/provider-aws/lib/data-aws-lb';
 
 interface TapStackConfig {
   env: {
@@ -36,7 +37,6 @@ export class TapStack extends TerraformStack {
 
     const region = config.env.region;
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
-    const albHostedZoneId = 'Z35SXDOTRQ7X7K';
 
     // 1. AWS Provider and VPC Setup
     new AwsProvider(this, 'aws', { region });
@@ -184,13 +184,12 @@ export class TapStack extends TerraformStack {
     });
 
     // 5. Elastic Beanstalk Application
-    // **FIX**: Use a data source to find the latest Node.js 18 solution stack
     const solutionStack = new DataAwsElasticBeanstalkSolutionStack(
       this,
-      'node-js-18-solution-stack',
+      'node-js-lts-solution-stack',
       {
         mostRecent: true,
-        nameRegex: '^64bit Amazon Linux 2023 v.* running Node.js 18$',
+        nameRegex: '^64bit Amazon Linux.* running Node.js 22$',
       }
     );
 
@@ -201,7 +200,6 @@ export class TapStack extends TerraformStack {
     const ebEnv = new ElasticBeanstalkEnvironment(this, 'beanstalk-env', {
       name: `webapp-env-${randomSuffix}`,
       application: app.name,
-      // Use the dynamically looked-up name from the data source
       solutionStackName: solutionStack.name,
       setting: [
         {
@@ -219,6 +217,11 @@ export class TapStack extends TerraformStack {
           namespace: 'aws:ec2:vpc',
           name: 'ELBSubnets',
           value: `${publicSubnetA.id},${publicSubnetB.id}`,
+        },
+        {
+          namespace: 'aws:ec2:vpc',
+          name: 'AssociatePublicIpAddress',
+          value: 'true',
         },
         {
           namespace: 'aws:elasticbeanstalk:environment',
@@ -256,11 +259,33 @@ export class TapStack extends TerraformStack {
       requestInterval: 30,
     });
 
+    // Get the ARN of the load balancer created by the Elastic Beanstalk environment
+    const albArn = Fn.element(ebEnv.loadBalancers, 0);
+
+    // Use a data source to get the load balancer's details
+    const albData = new DataAwsLb(this, 'eb-alb-data', {
+      arn: albArn,
+    });
+
+    // Create the Route 53 record using the dynamically looked-up data
+    new Route53Record(this, 'primary-record', {
+      zoneId: zone.zoneId,
+      name: `www.${zone.name}`,
+      type: 'A',
+      alias: {
+        name: albData.dnsName,
+        zoneId: albData.zoneId,
+        evaluateTargetHealth: true,
+      },
+      failoverRoutingPolicy: { type: 'PRIMARY' },
+      setIdentifier: 'primary-eb-environment',
+      healthCheckId: healthCheck.id,
+    });
+
     const failoverS3Bucket = new S3Bucket(this, 'failover-bucket', {
       bucket: `failover-bucket-${randomSuffix}`,
     });
 
-    // FIX 2: Assigned the website configuration to a constant to access its properties.
     const failoverWebsiteConfig = new S3BucketWebsiteConfiguration(
       this,
       'failover-website',
@@ -270,26 +295,11 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    new Route53Record(this, 'primary-record', {
-      zoneId: zone.zoneId,
-      name: `www.${zone.name}`,
-      type: 'A',
-      alias: {
-        name: ebEnv.cname,
-        zoneId: albHostedZoneId,
-        evaluateTargetHealth: true,
-      },
-      failoverRoutingPolicy: { type: 'PRIMARY' },
-      setIdentifier: 'primary-eb-environment',
-      healthCheckId: healthCheck.id,
-    });
-
     new Route53Record(this, 'secondary-record', {
       zoneId: zone.zoneId,
       name: `www.${zone.name}`,
       type: 'A',
       alias: {
-        // FIX 3: Use the 'websiteDomain' attribute from the S3BucketWebsiteConfiguration resource.
         name: failoverWebsiteConfig.websiteDomain,
         zoneId: failoverS3Bucket.hostedZoneId,
         evaluateTargetHealth: false,
