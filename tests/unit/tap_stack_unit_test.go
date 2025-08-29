@@ -16,7 +16,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackVPCTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+				Env: &awscdk.Environment{
+					Region: jsii.String("us-east-1"),
+				},
+			},
 		})
 
 		// ASSERT
@@ -28,7 +32,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackS3Test", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -40,7 +48,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackKMSTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -52,7 +64,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackALBTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -64,7 +80,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackASGTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -76,7 +96,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackRDSTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -88,7 +112,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackCloudTrailTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -100,7 +128,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackConfigTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -112,7 +144,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackIAMTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -124,7 +160,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackSecurityTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -136,7 +176,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackNACLTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -148,7 +192,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackLogsTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -160,7 +208,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackOutputsTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -172,7 +224,11 @@ func TestTapStack(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, "TapStackBasicTest", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 
 		// ASSERT
@@ -188,7 +244,11 @@ func BenchmarkTapStackCreation(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		app := awscdk.NewApp(nil)
 		lib.NewTapStack(app, "BenchStack", &lib.TapStackProps{
-			StackProps: awscdk.StackProps{},
+			StackProps: awscdk.StackProps{
+			Env: &awscdk.Environment{
+				Region: jsii.String("us-east-1"),
+			},
+		},
 		})
 	}
 }

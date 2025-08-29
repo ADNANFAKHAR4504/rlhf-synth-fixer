@@ -244,8 +244,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		},
 	})
 
-	// Enable ALB access logs
-	alb.LogAccessLogs(logsBucket, jsii.String("alb-logs"))
+	// Enable ALB access logs - Commented out due to region requirement
+	// alb.LogAccessLogs(logsBucket, jsii.String("alb-logs"))
 
 	// Create Target Group
 	targetGroup := awselasticloadbalancingv2.NewApplicationTargetGroup(stack, jsii.String("TapTargetGroup"), &awselasticloadbalancingv2.ApplicationTargetGroupProps{
@@ -345,7 +345,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	configRole := awsiam.NewRole(stack, jsii.String("ConfigRole"), &awsiam.RoleProps{
 		AssumedBy: awsiam.NewServicePrincipal(jsii.String("config.amazonaws.com"), nil),
 		ManagedPolicies: &[]awsiam.IManagedPolicy{
-			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("service-role/ConfigRole")),
+			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("ConfigRole")),
 		},
 	})
 
