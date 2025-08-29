@@ -94,7 +94,8 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
+              KMSMasterKeyID:
+                Ref: KMSKey
             BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -102,16 +103,46 @@ Resources:
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       LoggingConfiguration:
-        DestinationBucketName: !Ref S3LoggingBucket
-        LogFilePrefix: 'access-logs/'
+        DestinationBucketName:
+          Ref: S3LoggingBucket
+        LogFilePrefix: access-logs/
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${Environment}-content-bucket'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
-          Value: !Ref ProjectName
-  # S3 Bucket for Access Logs
+          Value:
+            Ref: ProjectName
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3LoggingBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AllowCloudFrontLogging
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub arn:aws:s3:::${S3LoggingBucket}/*
+          - Sid: GrantLoggingServiceWriteAccess
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${S3LoggingBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: AllowReadACP
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${S3LoggingBucket}'
   S3LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -120,6 +151,9 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -204,7 +238,7 @@ Resources:
             Principal:
               Service: cloudfront.amazonaws.com
             Action: s3:GetObject
-            Resource: !Sub '${S3Bucket}/*'
+            Resource: !Sub arn:aws:s3:::${S3Bucket}/*
             Condition:
               StringEquals:
                 'AWS:SourceArn': !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
@@ -263,7 +297,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${S3Bucket}/*'
+                Resource: !GetAtt S3Bucket.Arn
         - PolicyName: DynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -526,6 +560,23 @@ Resources:
   # ==========================================
   # CloudWatch Log Groups
   # ==========================================
+  APIGatewayCloudWatchLogsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: APIGatewayCloudWatchLogsRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt APIGatewayCloudWatchLogsRole.Arn
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -547,7 +598,7 @@ Resources:
       StageName: !Sub '${Environment}-logging'
       AccessLogSetting:
         DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
-        Format: '$requestId $requestTime $httpMethod $resourcePath $status $responseLength $requestTime'
+        Format: '$context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status $context.responseLength $context.requestTime'
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
