@@ -164,7 +164,7 @@ export class TapStack extends cdk.Stack {
             bundling: {
               image: lambda.Runtime.PYTHON_3_8.bundlingImage,
               // THE FIX: Force the build to be for an x86 CPU
-              platform: 'linux/amd64', 
+              platform: 'linux/amd64',
               command: [
                 'bash',
                 '-c',
@@ -238,4 +238,3 @@ export class TapStack extends cdk.Stack {
     });
   }
 }
-
