@@ -58,7 +58,7 @@ variable "application_name" {
 variable "solution_stack_name" {
   description = "Elastic Beanstalk solution stack"
   type        = string  
-  default     = "64bit Amazon Linux 2023 v6.6.4 running Node.js 22"
+  default     = "64bit Amazon Linux 2 v5.9.4 running Node.js 18"
 }
 
 variable "instance_type" {
@@ -620,19 +620,6 @@ resource "aws_elastic_beanstalk_environment" "production" {
     namespace = "aws:elasticbeanstalk:environment"
     name      = "EnvironmentType"
     value     = "SingleInstance"
-  }
-
-  # Explicitly disable load balancer for single instance
-  setting {
-    namespace = "aws:ec2:vpc"
-    name      = "ELBScheme"
-    value     = ""
-  }
-
-  setting {
-    namespace = "aws:ec2:vpc"
-    name      = "ELBSubnets"
-    value     = ""
   }
 
   setting {
