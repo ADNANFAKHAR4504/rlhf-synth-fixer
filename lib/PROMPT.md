@@ -20,7 +20,7 @@ Server-side encryption using KMS CMK (Customer Managed Key).
 
 Bucket versioning enabled.
 
-Resource policy restricting access only to specific IAM roles and users.
+Resource policy restricting access only to specific IAM roles & users.
 
 IAM Role
 
