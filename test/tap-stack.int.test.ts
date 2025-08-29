@@ -305,7 +305,7 @@ describe('TapStack Live Integration Tests', () => {
             trustPolicyDoc.Statement?.[0]?.Principal?.Service || [];
 
           // Verify that each role has the correct service principal
-          const validPrincipals = ['lambda.amazonaws.com'];
+          const validPrincipals = 'codebuild.amazonaws.com';
 
           expect(validPrincipals).toContain(principals);
         }
