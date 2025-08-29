@@ -1,27 +1,10 @@
 ``` yaml
 AWSTemplateFormatVersion: '2010-09-09'
+
 Parameters:
   DBMasterPasswordSecretName:
     Type: String
-    Description: Name of the SSM Parameter Store (SecureString) holding the RDS master password
-  DBAllocatedStorage:
-    Type: Number
-    Default: 20
-    MinValue: 20
-    Description: Allocated storage for RDS in GB (minimum 20GB)
-  DBInstanceClass:
-    Type: String
-    Default: db.t3.micro
-    Description: RDS instance class
-  DBEngineVersion:
-    Type: String
-    Default: '8.0.37'
-    Description: RDS MySQL engine version
-  BackupRetentionPeriod:
-    Type: Number
-    Default: 7
-    MinValue: 1
-    Description: Number of days to retain automated backups
+    Description: Name of the SSM Parameter Store secret containing the RDS master password
 
 Resources:
   VPC:
@@ -88,7 +71,6 @@ Resources:
 
   PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: VPCGatewayAttachment
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -102,7 +84,6 @@ Resources:
 
   NatGatewayEIP:
     Type: AWS::EC2::EIP
-    DependsOn: VPCGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
@@ -148,7 +129,7 @@ Resources:
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP and HTTPS
+      GroupDescription: Allow HTTP/HTTPS
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -166,7 +147,7 @@ Resources:
   RDSSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: RDS Subnet Group
+      DBSubnetGroupDescription: Subnet group for RDS
       SubnetIds:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
@@ -176,28 +157,12 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: !Ref DBEngineVersion
       MasterUsername: admin
       MasterUserPassword: "{{resolve:ssm-secure:${DBMasterPasswordSecretName}:1}}"
-      AllocatedStorage: !Ref DBAllocatedStorage
-      StorageType: gp3
-      PubliclyAccessible: false
-      DeletionProtection: true
-      BackupRetentionPeriod: !Ref BackupRetentionPeriod
-      PreferredBackupWindow: '03:00-04:00'
-      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-        - slowquery
-      AutoMinorVersionUpgrade: true
-      CopyTagsToSnapshot: true
-      MultiAZ: true
+      AllocatedStorage: 20
       DBSubnetGroupName: !Ref RDSSubnetGroup
       VPCSecurityGroups:
         - !Ref SecurityGroup
@@ -206,33 +171,4 @@ Resources:
       Tags:
         - Key: Environment
           Value: Production
-
-Outputs:
-  VPCId:
-    Description: VPC ID
-    Value: !Ref VPC
-  PublicSubnetId:
-    Description: Public Subnet ID
-    Value: !Ref PublicSubnet
-  PrivateSubnet1Id:
-    Description: Private Subnet 1 ID
-    Value: !Ref PrivateSubnet1
-  PrivateSubnet2Id:
-    Description: Private Subnet 2 ID
-    Value: !Ref PrivateSubnet2
-  InternetGatewayId:
-    Description: Internet Gateway ID
-    Value: !Ref InternetGateway
-  NatGatewayId:
-    Description: NAT Gateway ID
-    Value: !Ref NatGateway
-  SecurityGroupId:
-    Description: Security Group ID
-    Value: !Ref SecurityGroup
-  RDSSubnetGroupName:
-    Description: RDS Subnet Group Name
-    Value: !Ref RDSSubnetGroup
-  RDSEndpointAddress:
-    Description: RDS Endpoint Address
-    Value: !GetAtt RDSInstance.Endpoint.Address
 ```
