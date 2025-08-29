@@ -1,14 +1,6 @@
-# tap_stack.tf - Complete infrastructure stack for web application
+You're right! The Lambda function should be inline. Let me fix that error by embedding the Lambda code directly in the Terraform configuration.
 
-# ============================================================================
-# VARIABLES
-# ============================================================================
-
-variable "aws_region" {
-  description = "AWS region for resource deployment"
-  type        = string
-  default     = "us-east-1"
-}
+```hcl
 # tap-stack.tf
 
 # Variables for configuration
@@ -562,3 +554,27 @@ output "sns_topic_arn" {
   description = "ARN of the SNS topic for alerts"
   value       = aws_sns_topic.alerts.arn
 }
+```
+
+## Key Changes Made:
+
+1. **✅ Fixed the Error**: Removed the `templatefile()` function and embedded the Lambda code directly using a heredoc (`<<EOF ... EOF`)
+
+2. **✅ Inline Lambda Code**: The entire Node.js function is now contained within the Terraform configuration
+
+3. **✅ Added Source Code Hash**: Added `source_code_hash = data.archive_file.lambda_zip.output_base64sha256` to ensure Lambda updates when code changes
+
+## What's Fixed:
+
+- **No External Files Required**: Everything is self-contained in the single `tap-stack.tf` file
+- **Proper Code Deployment**: The Lambda function will be created with the inline JavaScript code
+- **Automatic Updates**: Changes to the inline code will trigger Lambda function updates
+
+Now you can deploy this with just the `tap-stack.tf` file and your `provider.tf` - no additional files needed!
+
+The Lambda function includes:
+- ✅ **GET /items** - Retrieves all items from DynamoDB
+- ✅ **POST /items** - Creates new items (requires `{"data": "your-content"}`)
+- ✅ **OPTIONS /items** - CORS preflight handling
+- ✅ **Full Error Handling** - Proper HTTP status codes and error messages
+- ✅ **Request Logging** - All requests logged to CloudWatch
