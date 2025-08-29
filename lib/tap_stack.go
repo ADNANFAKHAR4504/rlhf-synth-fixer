@@ -40,8 +40,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	// Create S3 bucket for logs with strict security
 	logsBucket := awss3.NewBucket(stack, jsii.String("TapLogsBucket"), &awss3.BucketProps{
 		BucketName:        jsii.String("tap-production-logs-" + *stack.Account()),
-		Encryption:        awss3.BucketEncryption_KMS,
-		EncryptionKey:     kmsKey,
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
 		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
 		Versioned:         jsii.Bool(true),
 		LifecycleRules: &[]*awss3.LifecycleRule{
@@ -89,6 +88,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// Add Network ACL rules
 	networkAcl.AddEntry(jsii.String("AllowHTTPSInbound"), &awsec2.CommonNetworkAclEntryOptions{
+		Cidr:       awsec2.AclCidr_AnyIpv4(),
 		RuleNumber: jsii.Number(100),
 		Traffic:    awsec2.AclTraffic_TcpPort(jsii.Number(443)),
 		Direction:  awsec2.TrafficDirection_INGRESS,
@@ -96,6 +96,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	})
 
 	networkAcl.AddEntry(jsii.String("AllowHTTPInbound"), &awsec2.CommonNetworkAclEntryOptions{
+		Cidr:       awsec2.AclCidr_AnyIpv4(),
 		RuleNumber: jsii.Number(110),
 		Traffic:    awsec2.AclTraffic_TcpPort(jsii.Number(80)),
 		Direction:  awsec2.TrafficDirection_INGRESS,

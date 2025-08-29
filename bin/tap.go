@@ -1,10 +1,9 @@
 package main
 
 import (
-	"tap-infrastructure/lib"
+	"github.com/TuringGpt/iac-test-automations/lib"
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
-	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
 )
 
