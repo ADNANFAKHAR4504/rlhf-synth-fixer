@@ -70,7 +70,7 @@ export class TapStack extends cdk.Stack {
     // Artifact bucket
     this.artifactBucket = new s3.Bucket(this, 'PipelineArtifacts', {
       autoDeleteObjects: true, // force delete objects with bucket
-      versioned: false,
+      versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
