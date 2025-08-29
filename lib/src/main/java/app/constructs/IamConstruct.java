@@ -133,7 +133,9 @@ public class IamConstruct extends Construct {
         // CloudFormation does not recognize an account-level AccountPasswordPolicy resource.
         AwsSdkCall sdkCall = AwsSdkCall.builder()
             .service("IAM")
-            .action("putAccountPasswordPolicy")
+            // Use the service operation name expected by the CDK custom resource runtime
+            // (some runtimes expect the PascalCase operation name).
+            .action("PutAccountPasswordPolicy")
             .parameters(java.util.Map.of(
                 "MinimumPasswordLength", EnvironmentConfig.PASSWORD_MIN_LENGTH,
                 "RequireSymbols", EnvironmentConfig.REQUIRE_SYMBOLS,
