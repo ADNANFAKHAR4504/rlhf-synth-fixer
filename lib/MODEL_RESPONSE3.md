@@ -1,3 +1,6 @@
+The error is occurring because `region` is a read-only property in the CDK Stack class and cannot be set directly. Let me fix the `tap_stack.py` file:
+
+```python
 #!/usr/bin/env python3
 """
 TAP Stack - Production-ready web application infrastructure on AWS.
@@ -714,3 +717,24 @@ echo "User data script completed successfully" >> /var/log/user-data.log
         except Exception as e:
             print(f"Error creating outputs: {str(e)}")
             raise
+```
+
+## Key Changes Made
+
+1. **Fixed Region Assignment**: Changed `self.region = "us-west-2"` to `self.target_region = self.region or "us-west-2"` to avoid trying to set the read-only `region` property.
+
+2. **Updated Region References**: Changed all references from `self.region` to `self.target_region` in the IAM policy ARNs.
+
+3. **Removed Instance Profile**: Removed the unused `instance_profile` creation that was causing potential issues.
+
+## What Was Wrong
+
+The CDK Stack class has a read-only `region` property that cannot be overwritten. When we tried to assign `self.region = "us-west-2"`, it caused an AttributeError because the property has no setter.
+
+## How It's Fixed
+
+- **Read-Only Property Handling**: Now we use `self.target_region = self.region or "us-west-2"` to get the region from the stack environment or use the default
+- **Proper Region Usage**: All ARN constructions now use `self.target_region` instead of trying to set the read-only `self.region`
+- **Clean Code**: Removed unused variables and ensured all references are consistent
+
+This should resolve the synthesis error and allow your CDK application to synthesize successfully. The stack will now properly handle the region information without trying to modify read-only properties.
