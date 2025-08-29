@@ -134,6 +134,14 @@ describe('InfrastructureStack Unit Tests', () => {
   });
 
   describe('Edge cases and branch coverage', () => {
+    it('should create stack with multiple availability zones', () => {
+      const stack = new InfrastructureStack('multi-az-test', { environmentSuffix: 'test' });
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.publicSubnetIds).toBeDefined();
+      expect(stack.privateSubnetIds).toBeDefined();
+    });
+
     it('should handle falsy environment suffix values', () => {
       const falsyValues = [false, 0, '', null, undefined, NaN];
       falsyValues.forEach((value, index) => {

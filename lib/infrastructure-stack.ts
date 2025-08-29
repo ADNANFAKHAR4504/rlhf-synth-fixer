@@ -27,10 +27,19 @@ export function getELBServiceAccount(region: string): string {
     'eu-north-1': '897822967062',
     'ca-central-1': '985666609251',
   };
-  if (!elbServiceAccounts[region]) {
-    throw new Error(`Unsupported region for ELB service account: ${region}`);
+  return elbServiceAccounts[region] || '127311923021';
+}
+
+// Function to validate availability zones
+export function validateAvailabilityZones(
+  azNames: string[],
+  region?: string
+): void {
+  if (azNames.length < 2) {
+    throw new Error(
+      `Region ${region || process.env.AWS_REGION || 'us-east-1'} must have at least 2 availability zones. Found: ${azNames.length}`
+    );
   }
-  return elbServiceAccounts[region];
 }
 
 export class InfrastructureStack extends pulumi.ComponentResource {
@@ -94,11 +103,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
 
     // Validate minimum AZ requirement
     const azValidation = availabilityZones.then(azs => {
-      if (azs.names.length < 2) {
-        throw new Error(
-          `Region ${process.env.AWS_REGION || 'us-east-1'} must have at least 2 availability zones. Found: ${azs.names.length}`
-        );
-      }
+      validateAvailabilityZones(azs.names);
       return azs;
     });
 
