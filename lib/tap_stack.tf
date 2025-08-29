@@ -57,8 +57,8 @@ variable "application_name" {
 
 variable "solution_stack_name" {
   description = "Elastic Beanstalk solution stack"
-  type        = string
-  default     = "64bit Amazon Linux 2023 v6.1.6 running Node.js 18"
+  type        = string  
+  default     = "64bit Amazon Linux 2023 v6.6.4 running Node.js 22"
 }
 
 variable "instance_type" {
@@ -252,8 +252,8 @@ resource "aws_secretsmanager_secret_version" "app_secrets" {
   secret_id = aws_secretsmanager_secret.app_secrets.id
   secret_string = jsonencode({
     database_password = "change-me-in-console"
-    api_key          = "change-me-in-console"
-    jwt_secret       = "change-me-in-console"
+    api_key           = "change-me-in-console"
+    jwt_secret        = "change-me-in-console"
   })
 
   lifecycle {
@@ -273,7 +273,7 @@ resource "aws_ssm_parameter" "app_config" {
   name      = "/${var.project_prefix}/config/${each.key}-${random_string.resource_suffix.result}"
   type      = "String"
   value     = each.value
-  overwrite = true  # Allow overwriting existing parameters
+  overwrite = true # Allow overwriting existing parameters
 
   tags = {
     Environment = var.environment
@@ -542,9 +542,9 @@ resource "aws_codestarconnections_connection" "github" {
 
 # CodeBuild project with unique suffix
 resource "aws_codebuild_project" "build_project" {
-  name          = "${var.project_prefix}-build-${random_string.resource_suffix.result}"
-  description   = "Build and test project for ${var.application_name}"
-  service_role  = aws_iam_role.codebuild_role.arn
+  name         = "${var.project_prefix}-build-${random_string.resource_suffix.result}"
+  description  = "Build and test project for ${var.application_name}"
+  service_role = aws_iam_role.codebuild_role.arn
 
   artifacts {
     type = "CODEPIPELINE"
@@ -552,8 +552,8 @@ resource "aws_codebuild_project" "build_project" {
 
   environment {
     compute_type                = "BUILD_GENERAL1_SMALL"
-    image                      = "aws/codebuild/standard:7.0"
-    type                       = "LINUX_CONTAINER"
+    image                       = "aws/codebuild/standard:7.0"
+    type                        = "LINUX_CONTAINER"
     image_pull_credentials_type = "CODEBUILD"
 
     environment_variable {
@@ -834,14 +834,14 @@ resource "aws_cloudwatch_event_target" "build_sns" {
 # CloudTrail for audit logging with unique suffix
 resource "aws_cloudtrail" "pipeline_trail" {
   name                          = "${var.project_prefix}-trail-${random_string.resource_suffix.result}"
-  s3_bucket_name               = aws_s3_bucket.cloudtrail_logs.bucket
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.bucket
   include_global_service_events = true
-  is_multi_region_trail        = true
-  enable_logging               = true
+  is_multi_region_trail         = true
+  enable_logging                = true
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type                  = "All"
+    include_management_events        = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -950,10 +950,10 @@ output "codebuild_project_name" {
 output "iam_roles" {
   description = "IAM role names with suffixes"
   value = {
-    codepipeline_role = aws_iam_role.codepipeline_role.name
-    codebuild_role = aws_iam_role.codebuild_role.name
+    codepipeline_role      = aws_iam_role.codepipeline_role.name
+    codebuild_role         = aws_iam_role.codebuild_role.name
     beanstalk_service_role = aws_iam_role.beanstalk_service_role.name
-    beanstalk_ec2_role = aws_iam_role.beanstalk_ec2_role.name
+    beanstalk_ec2_role     = aws_iam_role.beanstalk_ec2_role.name
   }
 }
 
