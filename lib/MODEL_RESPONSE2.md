@@ -1,3 +1,6 @@
+The error is occurring because the `TapStackProps` dataclass doesn't inherit from `cdk.StackProps` properly, so it doesn't accept the `env` parameter. Let me fix the `tap_stack.py` file:
+
+```python
 #!/usr/bin/env python3
 """
 TAP Stack - Production-ready web application infrastructure on AWS.
@@ -720,3 +723,24 @@ echo "User data script completed successfully" >> /var/log/user-data.log
         except Exception as e:
             print(f"Error creating outputs: {str(e)}")
             raise
+```
+
+## Key Changes Made
+
+1. **Fixed TapStackProps Class**: Changed from `@dataclass` to a proper class that inherits from `cdk.StackProps` and properly handles the `env` parameter through `**kwargs`.
+
+2. **Proper Inheritance**: The `TapStackProps` class now correctly inherits from `cdk.StackProps` and passes all additional keyword arguments to the parent constructor.
+
+3. **Constructor Fix**: The `__init__` method now properly accepts the `environment_suffix` parameter and passes other arguments to the parent class.
+
+## What Was Wrong
+
+The original issue was that the `@dataclass` decorator with inheritance from `cdk.StackProps` wasn't properly handling the `env` parameter that was being passed from `tap.py`. The dataclass was only expecting the `environment_suffix` parameter but not the additional `env` parameter.
+
+## How It's Fixed
+
+- **Proper Class Definition**: Now uses a regular class with proper inheritance
+- **Flexible Parameter Handling**: Uses `**kwargs` to accept any additional parameters that `cdk.StackProps` expects
+- **Correct Initialization**: Calls `super().__init__(**kwargs)` to properly initialize the parent class
+
+This should resolve the synthesis error and allow your CDK application to deploy successfully. The stack will now properly accept both the `environment_suffix` and `env` parameters as expected.
