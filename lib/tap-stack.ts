@@ -12,23 +12,31 @@ import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
+// Custom props interface that extends StackProps
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
+
+    // Get environment suffix from props or default to 'dev'
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Get custom domain from context (optional)
     const customDomain = this.node.tryGetContext('customDomain');
 
     // 1. KMS Customer Managed Key for S3 encryption
     const s3KmsKey = new kms.Key(this, 'S3EncryptionKey', {
-      description: 'KMS key for S3 bucket encryption',
+      description: `KMS key for S3 bucket encryption - ${environmentSuffix}`,
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
     });
 
     // KMS key alias for easier identification
     new kms.Alias(this, 'S3EncryptionKeyAlias', {
-      aliasName: 'alias/tap-s3-encryption-key',
+      aliasName: `alias/tap-s3-encryption-key-${environmentSuffix}`,
       targetKey: s3KmsKey,
     });
 
@@ -53,8 +61,7 @@ export class TapStack extends cdk.Stack {
     // 3. IAM Role for Lambda function
     const lambdaRole = new iam.Role(this, 'TapLambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description:
-        'IAM role for TAP Lambda function with least privilege access',
+      description: `IAM role for TAP Lambda function with least privilege access - ${environmentSuffix}`,
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AWSLambdaVPCAccessExecutionRole'
@@ -64,7 +71,7 @@ export class TapStack extends cdk.Stack {
 
     // 4. S3 Bucket with security configurations
     const s3Bucket = new s3.Bucket(this, 'TapS3Bucket', {
-      bucketName: `tap-secure-bucket-${this.account}-${this.region}`,
+      bucketName: `tap-secure-bucket-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
       encryptionKey: s3KmsKey,
       encryption: s3.BucketEncryption.KMS,
@@ -96,19 +103,19 @@ export class TapStack extends cdk.Stack {
 
     // 5. SSM Parameters for Lambda environment variables
     const dbCredentialsParam = new ssm.StringParameter(this, 'DbCredentials', {
-      parameterName: '/tap/lambda/db-credentials',
+      parameterName: `/tap/${environmentSuffix}/lambda/db-credentials`,
       stringValue: JSON.stringify({
         username: 'tapuser',
         password: 'changeme123!', // In production, use SecureString and proper secrets
       }),
-      description: 'Database credentials for TAP Lambda function',
+      description: `Database credentials for TAP Lambda function - ${environmentSuffix}`,
       tier: ssm.ParameterTier.STANDARD,
     });
 
     const apiKeyParam = new ssm.StringParameter(this, 'ApiKey', {
-      parameterName: '/tap/lambda/api-key',
+      parameterName: `/tap/${environmentSuffix}/lambda/api-key`,
       stringValue: 'your-api-key-here',
-      description: 'API key for external service integration',
+      description: `API key for external service integration - ${environmentSuffix}`,
       tier: ssm.ParameterTier.STANDARD,
     });
 
@@ -149,6 +156,7 @@ export class TapStack extends cdk.Stack {
         S3_BUCKET_NAME: s3Bucket.bucketName,
         DB_CREDENTIALS_PARAM: dbCredentialsParam.parameterName,
         API_KEY_PARAM: apiKeyParam.parameterName,
+        ENVIRONMENT_SUFFIX: environmentSuffix,
       },
       code: lambda.Code.fromInline(`
 import json
@@ -164,6 +172,7 @@ s3 = boto3.client('s3')
 
 def handler(event, context):
     logger.info(f"Received event: {json.dumps(event)}")
+    logger.info(f"Environment: {os.environ.get('ENVIRONMENT_SUFFIX', 'unknown')}")
     
     try:
         # Get environment variables from SSM
@@ -190,7 +199,7 @@ def handler(event, context):
       `),
       timeout: cdk.Duration.minutes(5),
       memorySize: 256,
-      description: 'TAP Lambda function triggered by S3 events',
+      description: `TAP Lambda function triggered by S3 events - ${environmentSuffix}`,
     });
 
     // Lambda resource policy to restrict invocation
@@ -238,57 +247,63 @@ def handler(event, context):
         certificate: certificate,
         minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
         enableIpv6: true,
-        comment: 'TAP CloudFront distribution for secure content delivery',
+        comment: `TAP CloudFront distribution for secure content delivery - ${environmentSuffix}`,
       }
     );
 
     // 11. Outputs for auditing and reference
     new cdk.CfnOutput(this, 'S3BucketArn', {
       value: s3Bucket.bucketArn,
-      description: 'ARN of the TAP S3 bucket',
-      exportName: 'TapS3BucketArn',
+      description: `ARN of the TAP S3 bucket - ${environmentSuffix}`,
+      exportName: `TapS3BucketArn-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'S3BucketName', {
       value: s3Bucket.bucketName,
-      description: 'Name of the TAP S3 bucket',
-      exportName: 'TapS3BucketName',
+      description: `Name of the TAP S3 bucket - ${environmentSuffix}`,
+      exportName: `TapS3BucketName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'LambdaFunctionArn', {
       value: tapLambda.functionArn,
-      description: 'ARN of the TAP Lambda function',
-      exportName: 'TapLambdaFunctionArn',
+      description: `ARN of the TAP Lambda function - ${environmentSuffix}`,
+      exportName: `TapLambdaFunctionArn-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'LambdaRoleArn', {
       value: lambdaRole.roleArn,
-      description: 'ARN of the TAP Lambda IAM role',
-      exportName: 'TapLambdaRoleArn',
+      description: `ARN of the TAP Lambda IAM role - ${environmentSuffix}`,
+      exportName: `TapLambdaRoleArn-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'KmsKeyArn', {
       value: s3KmsKey.keyArn,
-      description: 'ARN of the KMS key used for S3 encryption',
-      exportName: 'TapKmsKeyArn',
+      description: `ARN of the KMS key used for S3 encryption - ${environmentSuffix}`,
+      exportName: `TapKmsKeyArn-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'CloudFrontDistributionArn', {
       value: `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
-      description: 'ARN of the TAP CloudFront distribution',
-      exportName: 'TapCloudFrontDistributionArn',
+      description: `ARN of the TAP CloudFront distribution - ${environmentSuffix}`,
+      exportName: `TapCloudFrontDistributionArn-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'CloudFrontDomainName', {
       value: distribution.distributionDomainName,
-      description: 'Domain name of the TAP CloudFront distribution',
-      exportName: 'TapCloudFrontDomainName',
+      description: `Domain name of the TAP CloudFront distribution - ${environmentSuffix}`,
+      exportName: `TapCloudFrontDomainName-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
-      description: 'ID of the TAP VPC',
-      exportName: 'TapVpcId',
+      description: `ID of the TAP VPC - ${environmentSuffix}`,
+      exportName: `TapVpcId-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: environmentSuffix,
+      description: 'Environment suffix used for resource naming',
+      exportName: `TapEnvironmentSuffix-${environmentSuffix}`,
     });
   }
 }
