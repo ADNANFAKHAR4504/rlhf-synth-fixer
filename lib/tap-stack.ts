@@ -29,14 +29,23 @@ interface TapStackProps extends cdk.StackProps {
    */
   environmentName: string;
 }
+
 export class TapStack extends cdk.Stack {
   public readonly kmsKey: kms.Key;
   public readonly vpc: ec2.Vpc;
   public readonly secureDataBucket: s3.Bucket;
   public readonly cloudTrailBucket: s3.Bucket;
+  environmentSuffix: string;
+  randomSuffix: string;
 
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
+
+    this.environmentSuffix = props?.environmentSuffix || 'dev';
+
+    // Generate random suffix for unique resource naming
+    this.randomSuffix = Math.random().toString(36).substring(2, 8);
+
     // 1. Create KMS Key for encryption across all resources
     this.kmsKey = this.createKMSKey();
 
@@ -48,17 +57,20 @@ export class TapStack extends cdk.Stack {
     this.secureDataBucket = buckets.dataBucket;
     this.cloudTrailBucket = buckets.cloudTrailBucket;
 
-    // 4. Create IAM roles and policies with least privilege
+    // 4. Set up CloudTrail bucket permissions BEFORE creating CloudTrail
+    this.setupCloudTrailBucketPermissions();
+
+    // 5. Create IAM roles and policies with least privilege
     this.createIAMRolesAndPolicies();
 
-    // 5. Set up VPC endpoints with restricted access
+    // 6. Set up VPC endpoints with restricted access
     this.createVPCEndpoints(props.corporateIpRanges);
 
-    // 6. Enable CloudTrail with encryption
-    const trail = this.createCloudTrail();
+    // 7. Enable CloudTrail with encryption (now that permissions are set)
+    const { logGroup } = this.createCloudTrail();
 
-    // 7. Set up CloudWatch monitoring and alerts
-    this.createCloudWatchAlertsAndMonitoring(props.alertEmail, trail);
+    // 8. Set up CloudWatch monitoring and alerts
+    this.createCloudWatchAlertsAndMonitoring(props.alertEmail, logGroup);
 
     // Output important resources
     this.createOutputs();
@@ -66,7 +78,7 @@ export class TapStack extends cdk.Stack {
 
   private createKMSKey(): kms.Key {
     const key = new kms.Key(this, 'SecureEnterpriseKMSKey', {
-      alias: `secure-enterprise-key-${this.stackName}`,
+      alias: `secure-enterprise-key-${this.environmentSuffix}-${this.randomSuffix}`,
       description: 'KMS key for encrypting sensitive enterprise data',
       enableKeyRotation: true,
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
@@ -90,8 +102,14 @@ export class TapStack extends cdk.Stack {
               'kms:Encrypt',
               'kms:ReEncrypt*',
               'kms:Decrypt',
+              'kms:CreateGrant',
             ],
             resources: ['*'],
+            conditions: {
+              StringLike: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:*:${this.account}:trail/*`,
+              },
+            },
           }),
           new iam.PolicyStatement({
             sid: 'Allow CloudWatch Logs',
@@ -108,6 +126,24 @@ export class TapStack extends cdk.Stack {
             conditions: {
               ArnEquals: {
                 'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:*`,
+              },
+            },
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow S3 service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
+            actions: [
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:Encrypt',
+              'kms:ReEncrypt*',
+              'kms:Decrypt',
+            ],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:ViaService': `s3.${this.region}.amazonaws.com`,
               },
             },
           }),
@@ -169,7 +205,7 @@ export class TapStack extends cdk.Stack {
     });
 
     const flowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
-      logGroupName: `/aws/vpc/flowlogs/${this.stackName}`,
+      logGroupName: `/aws/vpc/flowlogs/${this.environmentSuffix}-${this.randomSuffix}`,
       retention: logs.RetentionDays.ONE_YEAR,
       encryptionKey: this.kmsKey,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -196,7 +232,7 @@ export class TapStack extends cdk.Stack {
   } {
     // Secure data bucket
     const dataBucket = new s3.Bucket(this, 'SecureDataBucket', {
-      bucketName: `secure-enterprise-data-${this.account}-${this.region}`,
+      bucketName: `secure-enterprisedata-${this.environmentSuffix}-${this.randomSuffix}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -229,9 +265,9 @@ export class TapStack extends cdk.Stack {
       minimumTLSVersion: 1.2,
     });
 
-    // CloudTrail bucket
+    // CloudTrail bucket with proper permissions
     const cloudTrailBucket = new s3.Bucket(this, 'CloudTrailBucket', {
-      bucketName: `secure-cloudtrail-logs-${this.account}-${this.region}`,
+      bucketName: `cloudtrailsecure-logs-${this.environmentSuffix}-${this.randomSuffix}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -258,39 +294,76 @@ export class TapStack extends cdk.Stack {
       minimumTLSVersion: 1.2,
     });
 
-    // Grant CloudTrail permissions to write to the bucket
-    cloudTrailBucket.addToResourcePolicy(
+    return { dataBucket, cloudTrailBucket };
+  }
+
+  private setupCloudTrailBucketPermissions(): void {
+    const trailName = `secure-enterprise-trail-${this.environmentSuffix}-${this.randomSuffix}`;
+
+    // Allow CloudTrail to check bucket ACL
+    this.cloudTrailBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'AWSCloudTrailAclCheck',
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
-        actions: ['s3:GetBucketAcl'],
-        resources: [cloudTrailBucket.bucketArn],
+        actions: ['s3:GetBucketAcl', 's3:ListBucket'],
+        resources: [this.cloudTrailBucket.bucketArn],
         conditions: {
           StringEquals: {
-            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/*`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/${trailName}`,
           },
         },
       })
     );
 
-    cloudTrailBucket.addToResourcePolicy(
+    // Allow CloudTrail to write objects
+    this.cloudTrailBucket.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'AWSCloudTrailWrite',
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
         actions: ['s3:PutObject'],
-        resources: [`${cloudTrailBucket.bucketArn}/*`],
+        resources: [`${this.cloudTrailBucket.bucketArn}/*`],
         conditions: {
           StringEquals: {
             's3:x-amz-acl': 'bucket-owner-full-control',
-            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/*`,
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/${trailName}`,
           },
         },
       })
     );
 
-    return { dataBucket, cloudTrailBucket };
+    // Allow CloudTrail to get bucket location
+    this.cloudTrailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailGetBucketLocation',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketLocation'],
+        resources: [this.cloudTrailBucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/${trailName}`,
+          },
+        },
+      })
+    );
+
+    // Allow CloudTrail to check bucket versioning
+    this.cloudTrailBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSCloudTrailBucketExistenceCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
+        actions: ['s3:GetBucketVersioning'],
+        resources: [this.cloudTrailBucket.bucketArn],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudtrail:${this.region}:${this.account}:trail/${trailName}`,
+          },
+        },
+      })
+    );
   }
 
   private createIAMRolesAndPolicies(): {
@@ -299,7 +372,6 @@ export class TapStack extends cdk.Stack {
   } {
     // Data Access Role with MFA requirement
     const dataAccessRole = new iam.Role(this, 'SecureDataAccessRole', {
-      roleName: `SecureDataAccess-${this.stackName}`,
       assumedBy: new iam.AccountPrincipal(this.account),
       description:
         'Role for accessing secure enterprise data with MFA requirement',
@@ -363,7 +435,6 @@ export class TapStack extends cdk.Stack {
 
     // Admin Role with enhanced MFA requirements
     const adminRole = new iam.Role(this, 'SecureAdminRole', {
-      roleName: `SecureAdmin-${this.stackName}`,
       assumedBy: new iam.AccountPrincipal(this.account),
       description: 'Administrative role with strict MFA requirements',
       maxSessionDuration: cdk.Duration.hours(1),
@@ -409,7 +480,7 @@ export class TapStack extends cdk.Stack {
 
     // Create a group that requires MFA for console access
     new iam.Group(this, 'MFARequiredGroup', {
-      groupName: `MFARequired-${this.stackName}`,
+      groupName: `MFARequired-${this.environmentSuffix}-${this.randomSuffix}`,
       managedPolicies: [
         new iam.ManagedPolicy(this, 'MFARequiredPolicy', {
           managedPolicyName: `MFARequired-${this.stackName}`,
@@ -548,54 +619,33 @@ export class TapStack extends cdk.Stack {
     });
   }
 
-  private createCloudTrail(): cloudtrail.Trail {
+  private createCloudTrail(): {
+    trail: cloudtrail.Trail;
+    logGroup: logs.LogGroup;
+  } {
     // CloudWatch Log Group for CloudTrail
     const cloudTrailLogGroup = new logs.LogGroup(this, 'CloudTrailLogGroup', {
-      logGroupName: `/aws/cloudtrail/${this.stackName}`,
+      logGroupName: `/aws/cloudtrail/${this.environmentSuffix}-${this.randomSuffix}`,
       retention: logs.RetentionDays.ONE_YEAR,
       encryptionKey: this.kmsKey,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
-    // IAM Role for CloudTrail to write to CloudWatch Logs
-    const cloudTrailLogRole = new iam.Role(this, 'CloudTrailLogRole', {
-      assumedBy: new iam.ServicePrincipal('cloudtrail.amazonaws.com'),
-      inlinePolicies: {
-        CloudTrailLogsPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:PutLogEvents',
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-              ],
-              resources: [`${cloudTrailLogGroup.logGroupArn}:*`],
-            }),
-          ],
-        }),
-      },
-    });
-
-    // Create CloudTrail
+    // Create CloudTrail with simplified configuration
     const trail = new cloudtrail.Trail(this, 'SecureEnterpriseCloudTrail', {
-      trailName: `secure-enterprise-trail-${this.stackName}`,
+      trailName: `secure-enterprise-trail-${this.environmentSuffix}-${this.randomSuffix}`,
       bucket: this.cloudTrailBucket,
       s3KeyPrefix: 'cloudtrail-logs/',
       encryptionKey: this.kmsKey,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableFileValidation: true,
-      sendToCloudWatchLogs: true,
       cloudWatchLogGroup: cloudTrailLogGroup,
       managementEvents: cloudtrail.ReadWriteType.ALL,
     });
 
-    // Manually associate the CloudWatch Logs role with CloudTrail
-    const cfnTrail = trail.node.defaultChild as cloudtrail.CfnTrail;
-    cfnTrail.cloudWatchLogsRoleArn = cloudTrailLogRole.roleArn;
-
     // Add CloudTrail Insights using the CloudFormation resource
+    const cfnTrail = trail.node.defaultChild as cloudtrail.CfnTrail;
     cfnTrail.insightSelectors = [
       {
         insightType: 'ApiCallRateInsight',
@@ -616,16 +666,16 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    return trail;
+    return { trail, logGroup: cloudTrailLogGroup };
   }
 
   private createCloudWatchAlertsAndMonitoring(
     alertEmail: string,
-    trail: cloudtrail.Trail
+    cloudTrailLogGroup: logs.LogGroup
   ): void {
     // SNS Topic for security alerts
     const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
-      topicName: `security-alerts-${this.stackName}`,
+      topicName: `security-alerts-${this.environmentSuffix}-${this.randomSuffix}`,
       displayName: 'Security Alerts',
       masterKey: this.kmsKey,
     });
@@ -633,16 +683,6 @@ export class TapStack extends cdk.Stack {
     securityAlertsTopic.addSubscription(
       new subscriptions.EmailSubscription(alertEmail)
     );
-
-    // Use CloudTrail's CloudWatch Log Group for monitoring
-    const cloudTrailLogGroup = logs.LogGroup.fromLogGroupName(
-      this,
-      'ImportedCloudTrailLogGroup',
-      `/aws/cloudtrail/${this.stackName}`
-    );
-
-    // Add explicit dependency on the trail to ensure log group exists
-    cloudTrailLogGroup.node.addDependency(trail);
 
     // Metric filters and alarms for security events
     const securityMetrics = [
@@ -724,7 +764,7 @@ export class TapStack extends cdk.Stack {
       this,
       'S3AccessDeniedAlarm',
       {
-        alarmName: `S3AccessDenied-${this.stackName}`,
+        alarmName: `S3AccessDenied-${this.environmentSuffix}-${this.randomSuffix}`,
         alarmDescription: 'Alert on S3 access denied events',
         metric: s3AccessDeniedMetric.metric(),
         threshold: 5,
@@ -739,7 +779,7 @@ export class TapStack extends cdk.Stack {
 
     // Dashboard for security monitoring
     new cloudwatch.Dashboard(this, 'SecurityDashboard', {
-      dashboardName: `security-monitoring-${this.stackName}`,
+      dashboardName: `security-monitoring-${this.environmentSuffix}-${this.randomSuffix}`,
       widgets: [
         [
           new cloudwatch.GraphWidget({
