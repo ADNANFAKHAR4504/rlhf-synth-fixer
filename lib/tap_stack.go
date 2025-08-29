@@ -366,9 +366,40 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		Tags: tags,
 	})
 
-	// KMS Key
+	// KMS Key with CloudWatch Logs permissions
+	kmsKeyPolicy := `{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Sid": "EnableIAMUserPermissions",
+				"Effect": "Allow",
+				"Principal": {
+					"AWS": "arn:aws:iam::*:root"
+				},
+				"Action": "kms:*",
+				"Resource": "*"
+			},
+			{
+				"Sid": "AllowCloudWatchLogs",
+				"Effect": "Allow",
+				"Principal": {
+					"Service": "logs.*.amazonaws.com"
+				},
+				"Action": [
+					"kms:Encrypt",
+					"kms:Decrypt",
+					"kms:ReEncrypt*",
+					"kms:GenerateDataKey*",
+					"kms:DescribeKey"
+				],
+				"Resource": "*"
+			}
+		]
+	}`
+
 	kmsKey := kmskey.NewKmsKey(scope, jsii.String("encryption-key"), &kmskey.KmsKeyConfig{
 		Description: jsii.String("KMS key for migration project encryption"),
+		Policy:      jsii.String(kmsKeyPolicy),
 		Tags:        tags,
 	})
 
