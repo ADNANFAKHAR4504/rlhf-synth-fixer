@@ -63,9 +63,14 @@ resource "aws_security_group" "ec2" {
   }
 }
 
+# Random suffix for unique resource names
+resource "random_id" "compute_suffix" {
+  byte_length = 4
+}
+
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.project_name}-ec2-role"
+  name = "${var.project_name}-ec2-role-${random_id.compute_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -80,14 +85,18 @@ resource "aws_iam_role" "ec2_role" {
     ]
   })
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.project_name}-ec2-role"
+  })
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
 # IAM Policy for S3 access
 resource "aws_iam_role_policy" "s3_access" {
-  name = "${var.project_name}-s3-access"
+  name = "${var.project_name}-s3-access-${random_id.compute_suffix.hex}"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -118,7 +127,7 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance" {
 
 # IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.project_name}-ec2-profile"
+  name = "${var.project_name}-ec2-profile-${random_id.compute_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 }
 
@@ -153,13 +162,14 @@ resource "aws_instance" "web" {
 
 # Parameter Store entries for configuration
 resource "aws_ssm_parameter" "app_config" {
-  name  = "/${var.project_name}/app/database_url"
-  type  = "SecureString"
-  value = "placeholder-will-be-updated-after-rds-creation"
+  name      = "/${var.project_name}/app/database_url-${random_id.compute_suffix.hex}"
+  type      = "SecureString"
+  value     = "placeholder-will-be-updated-after-rds-creation"
+  overwrite = true
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.project_name}-app-config"
-  }
+  })
 
   lifecycle {
     ignore_changes = [value]

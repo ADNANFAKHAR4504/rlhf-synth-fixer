@@ -1,3 +1,8 @@
+# Random suffix for unique resource names
+resource "random_id" "database_suffix" {
+  byte_length = 4
+}
+
 # Random password for RDS
 resource "random_password" "db_password" {
   length  = 16
@@ -9,13 +14,14 @@ resource "random_password" "db_password" {
 
 # Store password in Parameter Store
 resource "aws_ssm_parameter" "db_password" {
-  name  = "/${var.project_name}/database/password"
-  type  = "SecureString"
-  value = random_password.db_password.result
+  name      = "/${var.project_name}/database/password-${random_id.database_suffix.hex}"
+  type      = "SecureString"
+  value     = random_password.db_password.result
+  overwrite = true
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.project_name}-db-password"
-  }
+  })
 }
 
 # Security Group for RDS
@@ -49,17 +55,21 @@ resource "aws_security_group" "rds" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
+  name       = "${var.project_name}-db-subnet-group-${random_id.database_suffix.hex}"
   subnet_ids = var.private_subnet_ids
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.project_name}-db-subnet-group"
+  })
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-database"
+  identifier = "${var.project_name}-database-${random_id.database_suffix.hex}"
 
   # Engine configuration
   engine         = "mysql"
@@ -107,7 +117,7 @@ resource "aws_db_instance" "main" {
 
 # IAM Role for RDS Enhanced Monitoring
 resource "aws_iam_role" "rds_monitoring" {
-  name = "${var.project_name}-rds-monitoring-role"
+  name = "${var.project_name}-rds-monitoring-role-${random_id.database_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -122,8 +132,12 @@ resource "aws_iam_role" "rds_monitoring" {
     ]
   })
 
-  tags = {
+  tags = merge(var.tags, {
     Name = "${var.project_name}-rds-monitoring-role"
+  })
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

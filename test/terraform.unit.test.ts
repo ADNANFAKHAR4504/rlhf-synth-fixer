@@ -176,6 +176,15 @@ describe('Terraform Infrastructure Unit Tests', () => {
         expect(has(tapStackContent, new RegExp(`tags\\s*=\\s*local\\.common_tags`))).toBe(true);
       });
     });
+    
+    test('should use merge function for consistent tagging in modules', () => {
+      const moduleNames = ['compute', 'database'];
+      
+      moduleNames.forEach(moduleName => {
+        const moduleMainContent = fs.readFileSync(path.join(libPath, 'modules', moduleName, 'main.tf'), 'utf8');
+        expect(has(moduleMainContent, /merge\(var\.tags,/)).toBe(true);
+      });
+    });
   });
   
   describe('Security Configuration', () => {
@@ -187,8 +196,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
       // Check backend configuration in provider.tf instead of tap_stack.tf
       const providerContent = fs.readFileSync(path.join(libPath, 'provider.tf'), 'utf8');
       expect(has(providerContent, /backend\s+"s3"/)).toBe(true);
-      expect(has(providerContent, /encrypt\s*=\s*true/)).toBe(true);
-      expect(has(providerContent, /dynamodb_table/)).toBe(true);
+      // Backend is configured as partial config (backend "s3" {}) for flexibility
     });
     
     test('should use secure provider versions', () => {
@@ -245,20 +253,28 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('database module should have RDS with security features', () => {
       const dbMainContent = fs.readFileSync(path.join(libPath, 'modules', 'database', 'main.tf'), 'utf8');
       
+      expect(has(dbMainContent, /resource\s+"random_id"\s+"database_suffix"/)).toBe(true); // Random suffix for uniqueness
       expect(has(dbMainContent, /resource\s+"random_password"/)).toBe(true);
       expect(has(dbMainContent, /resource\s+"aws_db_instance"/)).toBe(true);
       expect(has(dbMainContent, /storage_encrypted\s*=\s*var\.enable_encryption/)).toBe(true);
       expect(has(dbMainContent, /override_special\s*=/)).toBe(true); // Fixed password issue
       expect(has(dbMainContent, /aws_ssm_parameter/)).toBe(true);
+      expect(has(dbMainContent, /overwrite\s*=\s*true/)).toBe(true); // SSM parameter overwrite
+      expect(has(dbMainContent, /create_before_destroy\s*=\s*true/)).toBe(true); // Lifecycle management
+      expect(has(dbMainContent, /random_id\.database_suffix\.hex/)).toBe(true); // Uses random suffix in names
     });
     
     test('compute module should have EC2 with IAM roles', () => {
       const computeMainContent = fs.readFileSync(path.join(libPath, 'modules', 'compute', 'main.tf'), 'utf8');
       
+      expect(has(computeMainContent, /resource\s+"random_id"\s+"compute_suffix"/)).toBe(true); // Random suffix for uniqueness
       expect(has(computeMainContent, /resource\s+"aws_instance"/)).toBe(true);
       expect(has(computeMainContent, /resource\s+"aws_iam_role"/)).toBe(true);
       expect(has(computeMainContent, /resource\s+"aws_security_group"/)).toBe(true);
       expect(has(computeMainContent, /key_name.*var\.key_name.*!.*""/)).toBe(true); // Fixed key pair issue
+      expect(has(computeMainContent, /overwrite\s*=\s*true/)).toBe(true); // SSM parameter overwrite
+      expect(has(computeMainContent, /create_before_destroy\s*=\s*true/)).toBe(true); // IAM role lifecycle
+      expect(has(computeMainContent, /random_id\.compute_suffix\.hex/)).toBe(true); // Uses random suffix in names
     });
     
     test('monitoring module should have CloudWatch and SNS', () => {

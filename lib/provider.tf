@@ -11,15 +11,7 @@ terraform {
     }
   }
   
-  # Backend configuration for remote state storage
-  # Uncomment and configure for production use
-  # backend "s3" {
-  #   bucket         = "your-terraform-state-bucket"
-  #   key            = "prod/infrastructure/terraform.tfstate"
-  #   region         = "us-west-2"
-  #   encrypt        = true
-  #   dynamodb_table = "terraform-state-lock"
-  # }
+    backend "s3" {}
 }
 
 # AWS Provider configuration with default tags
