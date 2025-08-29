@@ -446,7 +446,7 @@ yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Web Server - $(hostname -f)</h1>" > /var/www/html/index.html`
+echo '<h1>Web Server - $(hostname -f)</h1>' > /var/www/html/index.html`
 
 	// Launch Template for Web Tier
 	webLT := launchtemplate.NewLaunchTemplate(scope, jsii.String("web-launch-template"), &launchtemplate.LaunchTemplateConfig{
@@ -461,14 +461,14 @@ echo "<h1>Web Server - $(hostname -f)</h1>" > /var/www/html/index.html`
 			Name: ec2Profile.Name(),
 		},
 
-		UserData: cdktf.Fn_Base64encode(jsii.String(webUserData)),
+		UserData: cdktf.Fn_Base64encode(cdktf.Fn_RawString(jsii.String(webUserData))),
 	})
 
 	// Launch Template for App Tier
 	appUserData := `#!/bin/bash
 yum update -y
 yum install -y java-11-openjdk-devel
-echo "Application Server - $(hostname -f)" > /tmp/app-status.txt`
+echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	appLT := launchtemplate.NewLaunchTemplate(scope, jsii.String("app-launch-template"), &launchtemplate.LaunchTemplateConfig{
 		Name:         jsii.String(fmt.Sprintf("app-lt-%s", region)),
@@ -482,7 +482,7 @@ echo "Application Server - $(hostname -f)" > /tmp/app-status.txt`
 			Name: ec2Profile.Name(),
 		},
 
-		UserData: cdktf.Fn_Base64encode(jsii.String(appUserData)),
+		UserData: cdktf.Fn_Base64encode(cdktf.Fn_RawString(jsii.String(appUserData))),
 	})
 
 	// Application Load Balancer
