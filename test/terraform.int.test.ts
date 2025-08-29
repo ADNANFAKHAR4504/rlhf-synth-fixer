@@ -2,7 +2,7 @@ import {
   APIGatewayClient,
   GetRestApiCommand,
   GetStagesCommand,
-} from "@aws-sdk/client-apigateway";
+} from "@aws-sdk/client-api-gateway";
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
