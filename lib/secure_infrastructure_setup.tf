@@ -232,6 +232,33 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for encryption (${var.environment})"
   deletion_window_in_days = 7
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "Allow CloudTrail to use key"
+        Effect   = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = [
+          "kms:GenerateDataKey*",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid      = "Enable IAM User Permissions"
+        Effect   = "Allow"
+        Principal = {
+          AWS = "*"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      }
+    ]
+  })
+
   tags = {
     Name = "secure-kms-key-${var.environment}"
   }
@@ -615,7 +642,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSConfigRoleForOrganizations"
 }
 
 # Config S3 Bucket
