@@ -15,6 +15,39 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Tests', () => {
+    test('should use props environmentSuffix when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack1', { environmentSuffix: 'test' });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'MyApp-Metadata-test'
+      });
+    });
+
+    test('should use context environmentSuffix when props not provided', () => {
+      const testApp = new cdk.App();
+      testApp.node.setContext('environmentSuffix', 'staging');
+      const testStack = new TapStack(testApp, 'TestStack2');
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'MyApp-Metadata-staging'
+      });
+    });
+
+    test('should use default dev when neither props nor context provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack3');
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'MyApp-Metadata-dev'
+      });
+    });
+  });
+
   describe('Infrastructure Unit Tests', () => {
     test('should create VPC with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
