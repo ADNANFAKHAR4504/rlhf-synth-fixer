@@ -118,7 +118,7 @@ describe("Serverless API Terraform live integration tests", () => {
       );
       expect(response.Environment).toBeDefined();
       expect(response.Environment?.Variables).toBeDefined();
-      expect(response.Environment?.Variables?.DYNAMODB_TABLE).toBe(outputs.dynamodb_table_name);
+      expect(response.Environment?.Variables?.DYNAMODB_TABLE_NAME).toBe(outputs.dynamodb_table_name);
     });
 
     it("should have proper timeout and memory settings", async () => {
@@ -179,12 +179,12 @@ describe("Serverless API Terraform live integration tests", () => {
       expect(response.Table?.TableName).toBe(outputs.dynamodb_table_name);
     });
 
-    it("should have itemId as the primary key", async () => {
+    it("should have id as the primary key", async () => {
       const response = await dynamoClient.send(
         new DescribeTableCommand({ TableName: outputs.dynamodb_table_name })
       );
       const hashKey = response.Table?.KeySchema?.find(key => key.KeyType === "HASH")?.AttributeName;
-      expect(hashKey).toBe("itemId");
+      expect(hashKey).toBe("id");
     });
 
     it("should have proper read/write capacity", async () => {
