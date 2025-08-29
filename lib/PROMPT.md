@@ -28,7 +28,7 @@ Encryption: Everything encrypted at rest (KMS) and in transit (TLS 1.2 minimum).
 Security Groups: Lock down all ports except 80/443. No 0.0.0.0/0 access except for public web traffic.
 CloudTrail: Log everything, encrypt the logs with KMS.
 Password policies: 90-day rotation for IAM users.
-MFA: Required for all IAM users, no exceptions.
+MFA: For all IAM users.
 S3: Server-side encryption with KMS, versioning turned on.
 
 ## Technical specs

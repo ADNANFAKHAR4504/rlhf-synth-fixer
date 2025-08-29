@@ -32,7 +32,7 @@ public class RdsConstruct extends Construct {
                 .credentials(Credentials.fromGeneratedSecret("postgres"))
         .storageEncrypted(true)
         .storageEncryptionKey(kmsKey)
-                .multiAz(false)
+                        .multiAz(true)
                 .allocatedStorage(20)
                 .build();
     }
