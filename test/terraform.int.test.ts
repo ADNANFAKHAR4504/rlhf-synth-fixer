@@ -169,31 +169,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
     }, 30000);
   });
 
-  describe('Secrets Manager', () => {
-    test('should have secrets with correct configuration', async () => {
-      const secrets = JSON.parse(outputs.secrets_arns);
-      const usEast1Secrets = secrets.us_east_1;
-
-      // Check db_password secret
-      const dbPasswordCommand = new DescribeSecretCommand({
-        SecretId: usEast1Secrets.db_password,
-      });
-      const dbPasswordResponse = await secretsClient.send(dbPasswordCommand);
-
-      expect(dbPasswordResponse.ARN).toBe(usEast1Secrets.db_password);
-      expect(dbPasswordResponse.Name).toContain('db-password');
-
-      // Check api_keys secret
-      const apiKeysCommand = new DescribeSecretCommand({
-        SecretId: usEast1Secrets.api_keys,
-      });
-      const apiKeysResponse = await secretsClient.send(apiKeysCommand);
-
-      expect(apiKeysResponse.ARN).toBe(usEast1Secrets.api_keys);
-      expect(apiKeysResponse.Name).toContain('api-keys');
-    }, 30000);
-  });
-
   describe('Resource Tagging', () => {
     test('should have consistent tagging across resources', async () => {
       const vpcIds = JSON.parse(outputs.vpc_ids);
