@@ -26,9 +26,8 @@ Here's what we absolutely need:
 IAM: Only grant the minimum permissions needed. No admin access unless absolutely required.
 Encryption: Everything encrypted at rest (KMS) and in transit (TLS 1.2 minimum).
 Security Groups: Lock down all ports except 80/443. No 0.0.0.0/0 access except for public web traffic.
-CloudTrail: Log everything, encrypt the logs with KMS.
+CloudTrail: Log and encrypt the logs with KMS.
 Password policies: 90-day rotation for IAM users.
-MFA: For all IAM users.
 S3: Server-side encryption with KMS, versioning turned on.
 
 ## Technical specs
@@ -38,7 +37,6 @@ Build this as AWS CDK in Java. The code needs to be:
 Production-ready and deployable.
 Well-commented (explain security decisions).
 Following Java/CDK best practices.
-Structured for a real financial environment.
 
 Include these components:
 
@@ -46,7 +44,6 @@ IAM roles and policies (least privilege).
 S3 buckets with encryption and versioning.
 Security groups with proper port restrictions.
 CloudTrail setup with encrypted logs.
-Password rotation and MFA enforcement.
 TLS configuration for all resource communication.
 
 The infrastructure should handle secure connections between all resources and be ready for compliance audits.

@@ -22,13 +22,9 @@ public class EnvironmentConfig {
     public static final boolean REQUIRE_SYMBOLS = true;
     public static final int PASSWORD_REUSE_PREVENTION = 12;
     
-    // List of automation/service principal ARNs that should be exempt from the
-    // interactive MFA enforcement policy. Populate with role/service role ARNs
-    // used by CI/CD or automation (for example: "arn:aws:iam::123456789012:role/DeployRole").
-    // Leave empty to apply MFA enforcement to all principals.
-    public static final String[] MFA_EXEMPT_PRINCIPALS = new String[] {
-        // "arn:aws:iam::123456789012:role/CI-CD-DeployRole",
-    };
+    // (MFA enforcement removed) Previously we added a list of exempt principals
+    // used to exclude automation roles from MFA enforcement. MFA enforcement has
+    // been removed per request.
     
     // Network configuration
     public static final String VPC_CIDR = "10.0.0.0/16";
