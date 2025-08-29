@@ -6,7 +6,7 @@ import { TapStack } from '../lib/tap-stack';
 // Import the mocked functions
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { AwsProvider, AwsProviderDefaultTags } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformOutput } from 'cdktf';
 import {
   CloudTrailModule,
@@ -24,26 +24,26 @@ jest.mock('../lib/modules', () => ({
   VpcModule: jest.fn((_, id, config) => ({
     vpc: {
       id: `${id}-vpc-id`,
-      arn: `arn:aws:ec2:us-east-1:123456789012:vpc/${id}-vpc-id`,
+      arn: `arn:aws:ec2:us-west-2:123456789012:vpc/${id}-vpc-id`,
     },
     publicSubnets: [
       {
         id: 'subnet-public-1',
-        arn: 'arn:aws:ec2:us-east-1:123456789012:subnet/subnet-public-1',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-public-1',
       },
       {
         id: 'subnet-public-2',
-        arn: 'arn:aws:ec2:us-east-1:123456789012:subnet/subnet-public-2',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-public-2',
       },
     ],
     privateSubnets: [
       {
         id: 'subnet-private-1',
-        arn: 'arn:aws:ec2:us-east-1:123456789012:subnet/subnet-private-1',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-private-1',
       },
       {
         id: 'subnet-private-2',
-        arn: 'arn:aws:ec2:us-east-1:123456789012:subnet/subnet-private-2',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-private-2',
       },
     ],
     config,
@@ -51,14 +51,14 @@ jest.mock('../lib/modules', () => ({
   KmsModule: jest.fn((_, id, config) => ({
     key: {
       keyId: `${id}-key-id`,
-      arn: `arn:aws:kms:us-east-1:123456789012:key/${id}-key-id`,
+      arn: `arn:aws:kms:us-west-2:123456789012:key/${id}-key-id`,
     },
     config,
   })),
   SecurityGroupModule: jest.fn((_, id, config) => ({
     securityGroup: {
       id: `${id}-sg-id`,
-      arn: `arn:aws:ec2:us-east-1:123456789012:security-group/${id}-sg-id`,
+      arn: `arn:aws:ec2:us-west-2:123456789012:security-group/${id}-sg-id`,
     },
     config,
   })),
@@ -72,15 +72,15 @@ jest.mock('../lib/modules', () => ({
   RdsModule: jest.fn((_, id, config) => ({
     dbInstance: {
       id: `${id}-db-id`,
-      endpoint: `${id}-db.cluster-xyz.us-east-1.rds.amazonaws.com:3306`,
-      arn: `arn:aws:rds:us-east-1:123456789012:db:${id}-db-id`,
+      endpoint: `${id}-db.cluster-xyz.us-west-2.rds.amazonaws.com:3306`,
+      arn: `arn:aws:rds:us-west-2:123456789012:db:${id}-db-id`,
     },
     config,
   })),
   Ec2Module: jest.fn((_, id, config) => ({
     instance: {
       id: `${id}-instance-id`,
-      arn: `arn:aws:ec2:us-east-1:123456789012:instance/${id}-instance-id`,
+      arn: `arn:aws:ec2:us-west-2:123456789012:instance/${id}-instance-id`,
     },
     config,
   })),
@@ -94,7 +94,7 @@ jest.mock('../lib/modules', () => ({
   CloudTrailModule: jest.fn((_, id, config) => ({
     trail: {
       id: `${id}-cloudtrail-id`,
-      arn: `arn:aws:cloudtrail:us-east-1:123456789012:trail/${id}-cloudtrail`,
+      arn: `arn:aws:cloudtrail:us-west-2:123456789012:trail/${id}-cloudtrail`,
     },
     logsBucket: {
       bucket: `${id}-logs-bucket-name`,
@@ -185,7 +185,7 @@ describe('TapStack Unit Tests', () => {
     );
   });
 
-  test('should use default us-east-1 when no override and no props.awsRegion', () => {
+  test('should use default us-west-2 when no override and no props.awsRegion', () => {
     const app = new App();
     new TapStack(app, 'TestStackDefaultFallback', {
       _regionOverrideForTesting: null, // Disable the override
@@ -205,7 +205,7 @@ describe('TapStack Unit Tests', () => {
   test('should use props.awsRegion when region override is empty string', () => {
     const app = new App();
     new TapStack(app, 'TestStackEmptyOverride', {
-      awsRegion: 'us-east-1',
+      awsRegion: 'us-west-2',
       _regionOverrideForTesting: '', // Empty string (falsy)
     });
 
@@ -213,7 +213,7 @@ describe('TapStack Unit Tests', () => {
       expect.anything(),
       'aws',
       expect.objectContaining({
-        region: 'us-east-1',
+        region: 'us-west-2',
       })
     );
   });
@@ -229,7 +229,7 @@ describe('TapStack Unit Tests', () => {
     new TapStack(app, 'TestStackCustom', {
       environmentSuffix: 'prod',
       awsRegion: 'us-west-2',
-      defaultTags: customTags,
+      defaultTags: { tags: customTags },
     });
 
     expect(AwsProvider).toHaveBeenCalledWith(
@@ -237,7 +237,7 @@ describe('TapStack Unit Tests', () => {
       'aws',
       expect.objectContaining({
         region: 'us-west-2', // Override is set to us-west-2
-        defaultTags: [customTags],
+        defaultTags: [{ tags: customTags }],
       })
     );
   });
@@ -327,7 +327,7 @@ describe('TapStack Unit Tests', () => {
         bucketName: 'iac-rlhf-cfn-states-us-west-2',
         kmsKey: expect.objectContaining({
           keyId: 'kms-key-id',
-          arn: 'arn:aws:kms:us-east-1:123456789012:key/kms-key-id',
+          arn: 'arn:aws:kms:us-west-2:123456789012:key/kms-key-id',
         }),
       })
     );
@@ -348,7 +348,7 @@ describe('TapStack Unit Tests', () => {
         region: 'us-west-2',
         kmsKey: expect.objectContaining({
           keyId: 'kms-key-id',
-          arn: 'arn:aws:kms:us-east-1:123456789012:key/kms-key-id',
+          arn: 'arn:aws:kms:us-west-2:123456789012:key/kms-key-id',
         }),
       })
     );
@@ -433,7 +433,7 @@ describe('TapStack Unit Tests', () => {
         securityGroupIds: ['rds-sg-sg-id'],
         kmsKey: expect.objectContaining({
           keyId: 'kms-key-id',
-          arn: 'arn:aws:kms:us-east-1:123456789012:key/kms-key-id',
+          arn: 'arn:aws:kms:us-west-2:123456789012:key/kms-key-id',
         }),
       })
     );
@@ -518,7 +518,7 @@ describe('TapStack Unit Tests', () => {
       stateBucket: 'my-custom-tf-states',
       stateBucketRegion: 'eu-west-1',
       awsRegion: 'eu-west-1',
-      defaultTags: customTags,
+      defaultTags: { tags: customTags },
     });
 
     expect(AwsProvider).toHaveBeenCalledWith(
@@ -526,7 +526,7 @@ describe('TapStack Unit Tests', () => {
       'aws',
       expect.objectContaining({
         region: 'us-west-2', // Override is set to us-west-2
-        defaultTags: [customTags],
+        defaultTags: [{ tags: customTags }],
       })
     );
 

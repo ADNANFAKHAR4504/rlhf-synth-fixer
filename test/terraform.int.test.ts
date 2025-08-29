@@ -45,7 +45,7 @@ async function resourceExists<T>(
 // Helper to determine the actual deployment region from KMS ARN
 function getDeploymentRegionFromArn(arn: string): string {
   const arnParts = arn.split(':');
-  return arnParts[3] || 'us-east-1';
+  return arnParts[3] || 'us-west-2';
 }
 
 describe("TapStack Integration Tests", () => {
