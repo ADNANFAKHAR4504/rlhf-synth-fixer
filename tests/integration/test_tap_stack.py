@@ -5,11 +5,9 @@ import os
 import unittest
 import boto3
 import requests
-import psycopg2
 from botocore.exceptions import ClientError
 from pytest import mark
 import time
-import ssl
 import socket
 
 # Open file cfn-outputs/flat-outputs.json
