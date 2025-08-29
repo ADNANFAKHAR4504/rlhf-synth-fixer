@@ -1,3 +1,7 @@
+// tests/live-alb-domain.test.ts
+// Live verification using Terraform structured outputs (cfn-outputs/all-outputs.json)
+// No Terraform CLI; tests ALB domain reachability and DNS resolution.
+
 import * as fs from "fs";
 import * as path from "path";
 import * as http from "http";
