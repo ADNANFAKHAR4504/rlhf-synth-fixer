@@ -11,6 +11,7 @@ import { Construct } from 'constructs';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { Id as RandomId } from '@cdktf/provider-random/lib/id';
 
+// Import
 import {
   CloudTrailModule,
   Ec2Module,
