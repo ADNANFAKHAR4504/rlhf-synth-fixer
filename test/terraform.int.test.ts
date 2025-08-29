@@ -88,9 +88,11 @@ function isInfrastructureDeployed(): boolean {
   // First try to read from file
   const fileOutputs = readOutputsFromFile();
   if (fileOutputs && Object.keys(fileOutputs).length > 0) {
+    console.log('✅ Found infrastructure outputs from cfn-outputs file');
     return true;
   }
 
+  // If file doesn't exist or is empty, try terraform outputs
   try {
     const libPath = path.resolve(process.cwd(), 'lib');
 
@@ -390,9 +392,14 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       // Validate Terraform configuration
       terraformValid = runTerraformValidate();
 
-      if (terraformValid) {
-        // Run Terraform plan
+      // Only run terraform plan if we don't have infrastructure outputs from file
+      if (terraformValid && !infrastructureDeployed) {
+        // Run Terraform plan only if infrastructure is not deployed
         terraformPlanned = runTerraformPlan();
+      } else if (infrastructureDeployed) {
+        // Skip plan if we have live infrastructure data
+        console.log('✅ Skipping terraform plan - live infrastructure data available from cfn-outputs');
+        terraformPlanned = true;
       }
     }
   });
