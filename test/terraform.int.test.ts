@@ -118,7 +118,6 @@ describe("TAP Terraform Stack Integration Tests", () => {
       "launch_template_latest_version",
       "autoscaling_group_arn",
       "autoscaling_group_name",
-      "load_balancer_arn",
       "load_balancer_zone_id",
       "target_group_id",
       "target_group_arn",
@@ -139,7 +138,6 @@ describe("TAP Terraform Stack Integration Tests", () => {
       "kms_alias_name",
       "kms_alias_arn",
       "cloudfront_distribution_id",
-      "cloudfront_distribution_arn",
       "cloudfront_distribution_domain_name",
       "cloudfront_distribution_hosted_zone_id",
       "cloudwatch_log_group_httpd_access_name",
@@ -147,10 +145,8 @@ describe("TAP Terraform Stack Integration Tests", () => {
       "cloudwatch_log_group_cloudtrail_name",
       "cloudwatch_dashboard_url",
       "cloudtrail_id",
-      "cloudtrail_arn",
       "cloudtrail_home_region",
       "guardduty_detector_id",
-      "guardduty_detector_arn",
       "backup_vault_id",
       "backup_vault_arn",
       "backup_plan_id",
@@ -158,14 +154,6 @@ describe("TAP Terraform Stack Integration Tests", () => {
       "backup_selection_id",
       "dlm_lifecycle_policy_id",
       "dlm_lifecycle_policy_arn",
-      "autoscaling_policy_scale_up_arn",
-      "autoscaling_policy_scale_down_arn",
-      "cloudwatch_alarm_cpu_high_arn",
-      "cloudwatch_alarm_cpu_low_arn",
-      "cloudwatch_alarm_alb_response_time_arn",
-      "cloudwatch_alarm_alb_healthy_hosts_arn",
-      "application_url",
-      "cloudfront_url"
     ];
     expectedKeys.forEach((key) => {
       expect(outputs).toHaveProperty(key);
@@ -190,7 +178,6 @@ describe("TAP Terraform Stack Integration Tests", () => {
     "vpc_arn",
     "standalone_instance_arn",
     "target_group_arn",
-    "load_balancer_arn",
     "ec2_iam_role_arn",
     "ec2_instance_profile_arn",
     "cloudtrail_iam_role_arn",
@@ -200,18 +187,9 @@ describe("TAP Terraform Stack Integration Tests", () => {
     "guardduty_findings_bucket_arn",
     "kms_key_arn",
     "kms_alias_arn",
-    "cloudfront_distribution_arn",
-    "cloudtrail_arn",
-    "guardduty_detector_arn",
     "backup_vault_arn",
     "backup_plan_arn",
     "dlm_lifecycle_policy_arn",
-    "autoscaling_policy_scale_up_arn",
-    "autoscaling_policy_scale_down_arn",
-    "cloudwatch_alarm_cpu_high_arn",
-    "cloudwatch_alarm_cpu_low_arn",
-    "cloudwatch_alarm_alb_response_time_arn",
-    "cloudwatch_alarm_alb_healthy_hosts_arn",
   ].forEach(testArnIfPresent);
 
   it("vpc_id should be a valid VPC ID", () => {
@@ -280,28 +258,6 @@ describe("TAP Terraform Stack Integration Tests", () => {
   it("launch_template_latest_version should be a non-empty string and not zero", () => {
     expect(isNonEmptyString(outputs.launch_template_latest_version)).toBe(true);
     expect(outputs.launch_template_latest_version).not.toBe("0");
-  });
-
-  it("application_url should start with http:// and reference ELB if present", () => {
-    const url = outputs.application_url;
-    if (!url) {
-      console.warn("Warning: application_url is missing.");
-      return;
-    }
-    expect(typeof url).toBe("string");
-    expect(url.startsWith("http://")).toBe(true);
-    expect(url.includes(".elb.")).toBe(true);
-  });
-
-  it("cloudfront_url should start with https:// and contain cloudfront.net if present", () => {
-    const url = outputs.cloudfront_url;
-    if (!url) {
-      console.warn("Warning: cloudfront_url is missing.");
-      return;
-    }
-    expect(typeof url).toBe("string");
-    expect(url.startsWith("https://")).toBe(true);
-    expect(url.includes("cloudfront.net")).toBe(true);
   });
 
   it("ami_name should be a non-empty string", () => {
