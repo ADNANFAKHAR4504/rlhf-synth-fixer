@@ -53,6 +53,44 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		ServerAccessLogsPrefix: jsii.String("access-logs/"),
 	})
 
+	// Add bucket policy for CloudTrail
+	logsBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("s3:GetBucketAcl"),
+		},
+		Resources: &[]*string{
+			logsBucket.BucketArn(),
+		},
+		Conditions: &map[string]interface{}{
+			"StringEquals": map[string]interface{}{
+				"AWS:SourceArn": jsii.String("arn:aws:cloudtrail:" + *stack.Region() + ":" + *stack.Account() + ":trail/TapCloudTrail"),
+			},
+		},
+	}))
+
+	logsBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("s3:PutObject"),
+		},
+		Resources: &[]*string{
+			jsii.String(*logsBucket.BucketArn() + "/cloudtrail-logs/*"),
+		},
+		Conditions: &map[string]interface{}{
+			"StringEquals": map[string]interface{}{
+				"s3:x-amz-acl":  jsii.String("bucket-owner-full-control"),
+				"AWS:SourceArn": jsii.String("arn:aws:cloudtrail:" + *stack.Region() + ":" + *stack.Account() + ":trail/TapCloudTrail"),
+			},
+		},
+	}))
+
 	// Create VPC with public and private subnets
 	vpc := awsec2.NewVpc(stack, jsii.String("TapVPC"), &awsec2.VpcProps{
 		MaxAzs:      jsii.Number(3),
