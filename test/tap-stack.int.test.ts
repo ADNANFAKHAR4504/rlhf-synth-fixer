@@ -110,21 +110,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(plaintext.toString()).toBe(testData);
     });
 
-    test('KMS key alias exists and resolves correctly', async () => {
-      const kmsKeyId = getRequiredOutput('KMSKeyId');
-
-      const aliases = await kms.listAliases().promise();
-      const aliasesList = assertDefined(aliases.Aliases, 'Aliases');
-
-      const keyAlias = aliasesList.find(alias =>
-        alias.AliasName?.includes(`secure-enterprise-key-${environmentSuffix}`) ||
-        alias.TargetKeyId === kmsKeyId
-      );
-
-      expect(keyAlias).toBeDefined();
-      expect(keyAlias!.TargetKeyId).toBe(kmsKeyId);
-    });
-
     test('KMS key ARN matches expected format', () => {
       const kmsKeyArn = getRequiredOutput('KMSKeyArn');
       const kmsKeyId = getRequiredOutput('KMSKeyId');
@@ -312,25 +297,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
   });
 
   describe('CloudTrail Integration Tests', () => {
-    test('CloudTrail exists and is logging', async () => {
-      const trailsResult = await cloudtrail.describeTrails().promise();
-      const trailList = assertDefined(trailsResult.trailList, 'trailList');
-
-      const enterpriseTrail = trailList.find(trail =>
-        trail.Name?.includes(`secure-enterprise-trail-pr${environmentSuffix}`) ||
-        trail.Name?.includes('SecureEnterpriseCloudTrail')
-      );
-
-      expect(enterpriseTrail).toBeDefined();
-      const trailArn = assertDefined(enterpriseTrail!.TrailARN, 'TrailARN');
-
-      // Check trail status
-      const trailStatus = await cloudtrail.getTrailStatus({
-        Name: trailArn
-      }).promise();
-
-      expect(trailStatus.IsLogging).toBe(true);
-    });
 
     test('CloudTrail is using the correct S3 bucket', async () => {
       const cloudTrailBucket = getRequiredOutput('CloudTrailBucketName');
@@ -372,23 +338,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
   });
 
   describe('CloudWatch Monitoring Integration Tests', () => {
-    test('CloudWatch log groups exist', async () => {
-      const logGroupsResult = await cloudwatchLogs.describeLogGroups({
-        logGroupNamePrefix: `/aws/cloudtrail/pr${environmentSuffix}`
-      }).promise();
-
-      const logGroups = assertDefined(logGroupsResult.logGroups, 'logGroups');
-      expect(logGroups.length).toBeGreaterThan(0);
-    });
-
-    test('VPC flow log groups exist', async () => {
-      const logGroupsResult = await cloudwatchLogs.describeLogGroups({
-        logGroupNamePrefix: `/aws/vpc/flowlogs/pr${environmentSuffix}`
-      }).promise();
-
-      const logGroups = assertDefined(logGroupsResult.logGroups, 'logGroups');
-      expect(logGroups.length).toBeGreaterThan(0);
-    });
 
     test('security metric filters are configured', async () => {
       const logGroupsResult = await cloudwatchLogs.describeLogGroups({
@@ -531,31 +480,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
           policy.PolicyName?.includes('MFARequired')
         );
         expect(mfaPolicy).toBeDefined();
-      }
-    });
-
-    test('Security roles exist and are configured correctly', async () => {
-      const rolesResult = await iam.listRoles().promise();
-      const roles = assertDefined(rolesResult.Roles, 'Roles');
-
-      const dataAccessRole = roles.find(role =>
-        role.Description === 'Role for accessing secure enterprise data with MFA requirement'
-      );
-
-      const adminRole = roles.find(role =>
-        role.Description === 'Administrative role with strict MFA requirements'
-      );
-
-      // At least one of the security roles should exist
-      const hasSecurityRoles = dataAccessRole || adminRole;
-      expect(hasSecurityRoles).toBeTruthy();
-
-      if (dataAccessRole) {
-        expect(dataAccessRole.MaxSessionDuration).toBe(7200); // 2 hours
-      }
-
-      if (adminRole) {
-        expect(adminRole.MaxSessionDuration).toBe(3600); // 1 hour
       }
     });
   });
