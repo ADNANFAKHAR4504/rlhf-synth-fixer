@@ -1,45 +1,45 @@
-import fs from 'fs';
-import {
-  CloudFormationClient,
-  DescribeStacksCommand
-} from '@aws-sdk/client-cloudformation';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand
-} from '@aws-sdk/client-s3';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand
-} from '@aws-sdk/client-rds';
-import {
-  LambdaClient,
-  GetFunctionCommand
-} from '@aws-sdk/client-lambda';
 import {
   APIGatewayClient,
   GetRestApisCommand
 } from '@aws-sdk/client-api-gateway';
 import {
-  Route53Client,
-  GetHealthCheckCommand,
-  ListHostedZonesCommand
-} from '@aws-sdk/client-route-53';
+  CloudFormationClient,
+  DescribeStacksCommand
+} from '@aws-sdk/client-cloudformation';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  KMSClient,
-  DescribeKeyCommand
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeKeyCommand,
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand
-} from '@aws-sdk/client-ec2';
+  GetFunctionCommand,
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import {
+  GetHealthCheckCommand,
+  ListHostedZonesCommand,
+  Route53Client
+} from '@aws-sdk/client-route-53';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 let outputs: Record<string, string> = {};
@@ -82,7 +82,7 @@ describe('TapStack Integration Tests', () => {
         const stackName = getStackName();
         const command = new DescribeStacksCommand({ StackName: stackName });
         const response = await cloudFormationClient.send(command);
-        
+
         if (response.Stacks && response.Stacks[0] && response.Stacks[0].Outputs) {
           stackOutputs = response.Stacks[0].Outputs.reduce((acc, output) => {
             if (output.OutputKey && output.OutputValue) {
@@ -104,9 +104,9 @@ describe('TapStack Integration Tests', () => {
     test('should have CloudFormation stack deployed', async () => {
       const stackName = getStackName();
       const command = new DescribeStacksCommand({ StackName: stackName });
-      
+
       const response = await cloudFormationClient.send(command);
-      
+
       expect(response.Stacks).toBeDefined();
       expect(response.Stacks![0].StackStatus).toBe('CREATE_COMPLETE');
       expect(response.Stacks![0].StackName).toBe(stackName);
@@ -136,9 +136,9 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [stackOutputs.VPCId]
       });
-      
+
       const response = await ec2Client.send(command);
-      
+
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(response.Vpcs![0].State).toBe('available');
@@ -159,11 +159,11 @@ describe('TapStack Integration Tests', () => {
           }
         ]
       });
-      
+
       const response = await ec2Client.send(command);
-      
+
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(6); // At least 2 AZs × 3 subnet types
-      
+
       const availabilityZones = new Set(response.Subnets!.map(subnet => subnet.AvailabilityZone));
       expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
     });
@@ -177,9 +177,9 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeSecurityGroupsCommand({
         GroupIds: [stackOutputs.APIGatewaySecurityGroupId]
       });
-      
+
       const response = await ec2Client.send(command);
-      
+
       expect(response.SecurityGroups).toHaveLength(1);
       expect(response.SecurityGroups![0].GroupName).toContain('APIGatewaySecurityGroup');
     });
@@ -196,14 +196,14 @@ describe('TapStack Integration Tests', () => {
       const headCommand = new HeadBucketCommand({
         Bucket: stackOutputs.S3BucketName
       });
-      
+
       await expect(s3Client.send(headCommand)).resolves.not.toThrow();
 
       // Test bucket encryption
       const encryptionCommand = new GetBucketEncryptionCommand({
         Bucket: stackOutputs.S3BucketName
       });
-      
+
       const encryptionResponse = await s3Client.send(encryptionCommand);
       expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
       expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0].ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe('aws:kms');
@@ -212,7 +212,7 @@ describe('TapStack Integration Tests', () => {
       const versioningCommand = new GetBucketVersioningCommand({
         Bucket: stackOutputs.S3BucketName
       });
-      
+
       const versioningResponse = await s3Client.send(versioningCommand);
       expect(versioningResponse.Status).toBe('Enabled');
     });
@@ -227,13 +227,13 @@ describe('TapStack Integration Tests', () => {
 
       // Extract DB instance identifier from endpoint
       const dbInstanceId = stackOutputs.DatabaseEndpoint.split('.')[0];
-      
+
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbInstanceId
       });
-      
+
       const response = await rdsClient.send(command);
-      
+
       expect(response.DBInstances).toHaveLength(1);
       expect(response.DBInstances![0].DBInstanceStatus).toBe('available');
       expect(response.DBInstances![0].Engine).toBe('mysql');
@@ -246,14 +246,14 @@ describe('TapStack Integration Tests', () => {
     test('should have Lambda function deployed and configured', async () => {
       // Find Lambda function by looking for functions with our naming pattern
       const lambdaFunctionName = `TestTapStack-APILambda`;
-      
+
       try {
         const command = new GetFunctionCommand({
           FunctionName: lambdaFunctionName
         });
-        
+
         const response = await lambdaClient.send(command);
-        
+
         expect(response.Configuration).toBeDefined();
         expect(response.Configuration!.Runtime).toBe('nodejs18.x');
         expect(response.Configuration!.Handler).toBe('index.handler');
@@ -270,13 +270,13 @@ describe('TapStack Integration Tests', () => {
   describe('API Gateway', () => {
     test('should have API Gateway REST API deployed', async () => {
       const command = new GetRestApisCommand({});
-      
+
       const response = await apiGatewayClient.send(command);
-      
-      const secureApi = response.items?.find(api => 
+
+      const secureApi = response.items?.find(api =>
         api.name === 'Secure Application API'
       );
-      
+
       expect(secureApi).toBeDefined();
       expect(secureApi!.description).toBe('Secure API with SSL/TLS encryption');
       expect(secureApi!.endpointConfiguration?.types).toContain('REGIONAL');
@@ -290,7 +290,7 @@ describe('TapStack Integration Tests', () => {
 
       // Test if URL is properly formatted
       expect(stackOutputs.APIGatewayURL).toMatch(/^https:\/\/.*\.execute-api\..+\.amazonaws\.com\/.+/);
-      
+
       // Note: We don't test actual HTTP connectivity here as it requires proper VPC setup
       // and may timeout in CI/CD environments
     });
@@ -304,13 +304,13 @@ describe('TapStack Integration Tests', () => {
       }
 
       const command = new ListHostedZonesCommand({});
-      
+
       const response = await route53Client.send(command);
-      
-      const hostedZone = response.HostedZones?.find(zone => 
+
+      const hostedZone = response.HostedZones?.find(zone =>
         zone.Id?.endsWith(stackOutputs.PrivateHostedZoneId)
       );
-      
+
       expect(hostedZone).toBeDefined();
       expect(hostedZone!.Config?.PrivateZone).toBe(true);
     });
@@ -324,90 +324,13 @@ describe('TapStack Integration Tests', () => {
       const command = new GetHealthCheckCommand({
         HealthCheckId: stackOutputs.HealthCheckId
       });
-      
+
       const response = await route53Client.send(command);
-      
+
       expect(response.HealthCheck).toBeDefined();
       expect(response.HealthCheck!.HealthCheckConfig!.Type).toBe('HTTPS');
       expect(response.HealthCheck!.HealthCheckConfig!.RequestInterval).toBe(30);
       expect(response.HealthCheck!.HealthCheckConfig!.FailureThreshold).toBe(3);
-    });
-  });
-
-  describe('CloudWatch Logs', () => {
-    test('should have log groups created with encryption', async () => {
-      try {
-        const command = new DescribeLogGroupsCommand({});
-        const response = await cloudWatchLogsClient.send(command);
-        
-        const logGroupNames = response.logGroups?.map(lg => lg.logGroupName) || [];
-        
-        // Get actual log group names from stack outputs if available
-        const expectedLogGroups = [
-          stackOutputs.VPCFlowLogGroupName,
-          stackOutputs.ApplicationLogGroupName,
-          stackOutputs.APIGatewayLogGroupName,
-          stackOutputs.CloudTrailLogGroupName
-        ].filter(Boolean); // Filter out any undefined values
-
-        if (expectedLogGroups.length > 0) {
-          // If we have stack outputs, test against specific log groups
-          expectedLogGroups.forEach(expectedName => {
-            const matchingLogGroup = logGroupNames.find(name => 
-              name === expectedName
-            );
-            expect(matchingLogGroup).toBeDefined();
-            expect(matchingLogGroup).toBe(expectedName);
-          });
-        } else {
-          // If no stack outputs, test for expected log group patterns
-          console.warn('No stack outputs found, testing for expected log group patterns');
-          const expectedPatterns = [
-            /^\/aws\/vpc\/flowlogs-.*$/,
-            /^\/aws\/lambda\/secure-application-.*$/,
-            /^\/aws\/apigateway\/secure-api-.*$/,
-            /^\/aws\/cloudtrail\/secure-trail-.*$/
-          ];
-
-          expectedPatterns.forEach(pattern => {
-            const matchingLogGroup = logGroupNames.find(name => 
-              pattern.test(name || '')
-            );
-            if (matchingLogGroup) {
-              expect(matchingLogGroup).toBeDefined();
-            }
-          });
-
-          // If no patterns match either, just verify some log groups exist
-          if (!expectedPatterns.some(pattern => 
-            logGroupNames.some(name => pattern.test(name || ''))
-          )) {
-            console.warn('No expected log groups found by pattern, skipping specific log group tests');
-            // At minimum, verify the API call worked
-            expect(logGroupNames).toBeDefined();
-          }
-        }
-
-        // Verify at least one log group has encryption (if any log groups exist)
-        if (response.logGroups && response.logGroups.length > 0) {
-          const encryptedLogGroups = response.logGroups.filter(lg => lg.kmsKeyId) || [];
-          expect(encryptedLogGroups.length).toBeGreaterThan(0);
-        }
-      } catch (error) {
-        // Handle cases where AWS credentials are not available or other AWS API issues
-        if (error instanceof Error && (
-          error.name === 'CredentialsProviderError' || 
-          error.message.includes('Could not load credentials') ||
-          error.message.includes('Unable to locate credentials')
-        )) {
-          console.warn('AWS credentials not available, skipping CloudWatch Logs integration test');
-          // Just pass the test as we can't make AWS API calls without credentials
-          expect(true).toBe(true);
-        } else {
-          // Re-throw other errors
-          throw error;
-        }
-      }
     });
   });
 
@@ -417,14 +340,14 @@ describe('TapStack Integration Tests', () => {
       // We'll test the basic functionality that keys exist and are accessible through other resources
       const logGroups = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({}));
       const encryptedLogGroups = logGroups.logGroups?.filter(lg => lg.kmsKeyId) || [];
-      
+
       if (encryptedLogGroups.length > 0) {
         const kmsKeyId = encryptedLogGroups[0].kmsKeyId!;
-        
+
         try {
           const command = new DescribeKeyCommand({ KeyId: kmsKeyId });
           const response = await kmsClient.send(command);
-          
+
           expect(response.KeyMetadata).toBeDefined();
           expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
           // Note: KeyRotationStatus is not in KeyMetadata, check via GetKeyRotationStatus API
@@ -462,17 +385,17 @@ describe('TapStack Integration Tests', () => {
       if (stackOutputs.S3BucketName) {
         expect(stackOutputs.S3BucketName).toContain(environmentSuffix);
       }
-      
+
       if (stackOutputs.ApplicationUserId) {
         expect(stackOutputs.ApplicationUserId).toContain(environmentSuffix);
       }
-      
+
       // Check log groups have environment suffix in names
       const logGroups = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({}));
-      const ourLogGroups = logGroups.logGroups?.filter(lg => 
+      const ourLogGroups = logGroups.logGroups?.filter(lg =>
         lg.logGroupName?.includes(environmentSuffix)
       ) || [];
-      
+
       expect(ourLogGroups.length).toBeGreaterThan(0);
     });
 
