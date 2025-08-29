@@ -20,7 +20,40 @@ RUN apt-get update && apt-get install -y \
     unzip \
     jq \
     bc \
+    wget \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Java 17 (Temurin distribution)
+RUN wget -qO - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /usr/share/keyrings/adoptium-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/adoptium-keyring.gpg] https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list && \
+    apt-get update && \
+    apt-get install -y temurin-17-jdk && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set JAVA_HOME environment variable
+ENV JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
+# Install Gradle
+RUN wget https://services.gradle.org/distributions/gradle-8.5-bin.zip -O gradle.zip && \
+    unzip gradle.zip && \
+    mv gradle-8.5 /opt/gradle && \
+    rm gradle.zip
+
+# Set Gradle environment variables
+ENV GRADLE_HOME=/opt/gradle
+ENV PATH="$GRADLE_HOME/bin:$PATH"
+
+# Install Go 1.23.12
+RUN wget https://go.dev/dl/go1.23.12.linux-amd64.tar.gz -O go.tar.gz && \
+    tar -C /usr/local -xzf go.tar.gz && \
+    rm go.tar.gz
+
+# Set Go environment variables
+ENV GOROOT=/usr/local/go
+ENV GOPATH=/root/go
+ENV PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
 
 # Install AWS CLI (arch-aware)
 RUN arch=$(uname -m) && \
