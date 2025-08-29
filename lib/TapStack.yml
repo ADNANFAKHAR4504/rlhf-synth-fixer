@@ -182,7 +182,7 @@ Resources:
       Engine: mysql
       EngineVersion: !Ref DBEngineVersion
       MasterUsername: admin
-      MasterUserPassword: "{{resolve:ssm-secure:${DBMasterPasswordSecretName}:1}}"
+      MasterUserPassword: !Sub "{{resolve:ssm-secure:${DBMasterPasswordSecretName}:1}}"
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
       PubliclyAccessible: false
