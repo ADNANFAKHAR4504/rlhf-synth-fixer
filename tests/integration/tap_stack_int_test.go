@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package main
 
 import (
@@ -10,207 +13,183 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
+	rdstypes "github.com/aws/aws-sdk-go-v2/service/rds/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-type FlatOutputs struct {
-	AutoScalingGroupName   string `json:"autoScalingGroupName"`
-	CloudWatchLogGroupArn  string `json:"cloudWatchLogGroupArn"`
-	CloudWatchLogGroupName string `json:"cloudWatchLogGroupName"`
-	DbSecurityGroupId      string `json:"dbSecurityGroupId"`
-	DbUsername             string `json:"dbUsername"`
-	IamPolicyArn           string `json:"iamPolicyArn"`
-	IamRoleArn             string `json:"iamRoleArn"`
-	InternetGatewayId      string `json:"internetGatewayId"`
-	LaunchTemplateId       string `json:"launchTemplateId"`
-	NatGateway1Id          string `json:"natGateway1Id"`
-	NatGateway2Id          string `json:"natGateway2Id"`
-	PrivateSubnet1Id       string `json:"privateSubnet1Id"`
-	PrivateSubnet2Id       string `json:"privateSubnet2Id"`
-	PublicSubnet1Id        string `json:"publicSubnet1Id"`
-	PublicSubnet2Id        string `json:"publicSubnet2Id"`
+// DeploymentOutputs holds Pulumi flat-outputs.json data
+type DeploymentOutputs struct {
+	Ec2InstanceId          string `json:"ec2InstanceId"`
+	Ec2PrivateIp           string `json:"ec2PrivateIp"`
+	Ec2SecurityGroupId     string `json:"ec2SecurityGroupId"`
+	PrivateSubnetEc2Id     string `json:"privateSubnetEc2Id"`
+	PrivateSubnetRdsId     string `json:"privateSubnetRdsId"`
+	PublicSubnetId         string `json:"publicSubnetId"`
 	RdsEndpoint            string `json:"rdsEndpoint"`
-	RdsInstanceId          string `json:"rdsInstanceId"`
-	S3BucketArn            string `json:"s3BucketArn"`
+	RdsSecurityGroupId     string `json:"rdsSecurityGroupId"`
 	S3BucketName           string `json:"s3BucketName"`
-	VpcCidr                string `json:"vpcCidr"`
 	VpcId                  string `json:"vpcId"`
-	WebSecurityGroupId     string `json:"webSecurityGroupId"`
+	IamRoleArn             string `json:"iamRoleArn"`
+	IamPolicyArn           string `json:"iamPolicyArn"`
+	CloudWatchLogGroupName string `json:"cloudWatchLogGroupName"`
 }
 
-var outputs FlatOutputs
-var awsCfg aws.Config
+var (
+	outputs   DeploymentOutputs
+	awsConfig aws.Config
+	ctx       = context.Background()
+)
 
 func TestMain(m *testing.M) {
-	// Load outputs
 	data, err := os.ReadFile("../cfn-outputs/flat-outputs.json")
 	if err != nil {
-		fmt.Println("Failed to read outputs:", err)
+		fmt.Printf("Failed to read outputs file: %v\n", err)
 		os.Exit(1)
 	}
-	err = json.Unmarshal(data, &outputs)
-	if err != nil {
-		fmt.Println("Failed to parse outputs:", err)
-		os.Exit(1)
-	}
-
-	// Load AWS config
-	awsCfg, err = config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		fmt.Println("Failed to load AWS config:", err)
+	if err := json.Unmarshal(data, &outputs); err != nil {
+		fmt.Printf("Failed to parse outputs JSON: %v\n", err)
 		os.Exit(1)
 	}
 
-	os.Exit(m.Run())
-}
-
-func TestVpcExists(t *testing.T) {
-	client := ec2.NewFromConfig(awsCfg)
-	out, err := client.DescribeVpcs(context.TODO(), &ec2.DescribeVpcsInput{
-		VpcIds: []string{outputs.VpcId},
-	})
-	require.NoError(t, err)
-	require.Len(t, out.Vpcs, 1)
-	assert.Equal(t, outputs.VpcCidr, *out.Vpcs[0].CidrBlock)
-}
-
-func TestSubnetsExist(t *testing.T) {
-	client := ec2.NewFromConfig(awsCfg)
-	subnets := []string{outputs.PrivateSubnet1Id, outputs.PrivateSubnet2Id, outputs.PublicSubnet1Id, outputs.PublicSubnet2Id}
-	out, err := client.DescribeSubnets(context.TODO(), &ec2.DescribeSubnetsInput{
-		SubnetIds: subnets,
-	})
-	require.NoError(t, err)
-	assert.Len(t, out.Subnets, 4)
-	for _, sn := range out.Subnets {
-		assert.Equal(t, outputs.VpcId, *sn.VpcId)
-	}
-}
-
-func TestInternetGatewayExists(t *testing.T) {
-	client := ec2.NewFromConfig(awsCfg)
-	out, err := client.DescribeInternetGateways(context.TODO(), &ec2.DescribeInternetGatewaysInput{
-		InternetGatewayIds: []string{outputs.InternetGatewayId},
-	})
-	require.NoError(t, err)
-	require.Len(t, out.InternetGateways, 1)
-}
-
-func TestNatGatewaysExist(t *testing.T) {
-	client := ec2.NewFromConfig(awsCfg)
-	nats := []string{outputs.NatGateway1Id, outputs.NatGateway2Id}
-	out, err := client.DescribeNatGateways(context.TODO(), &ec2.DescribeNatGatewaysInput{
-		NatGatewayIds: nats,
-	})
-	require.NoError(t, err)
-	assert.Len(t, out.NatGateways, 2)
-}
-
-func TestAutoScalingGroupExists(t *testing.T) {
-	client := autoscaling.NewFromConfig(awsCfg)
-	out, err := client.DescribeAutoScalingGroups(context.TODO(), &autoscaling.DescribeAutoScalingGroupsInput{
-		AutoScalingGroupNames: []string{outputs.AutoScalingGroupName},
-	})
-	require.NoError(t, err)
-	require.Len(t, out.AutoScalingGroups, 1)
-	assert.Equal(t, outputs.AutoScalingGroupName, *out.AutoScalingGroups[0].AutoScalingGroupName)
-}
-
-func TestLaunchTemplateExists(t *testing.T) {
-	client := ec2.NewFromConfig(awsCfg)
-	out, err := client.DescribeLaunchTemplates(context.TODO(), &ec2.DescribeLaunchTemplatesInput{
-		LaunchTemplateIds: []string{outputs.LaunchTemplateId},
-	})
-	require.NoError(t, err)
-	require.Len(t, out.LaunchTemplates, 1)
-}
-
-func TestSecurityGroupsExist(t *testing.T) {
-	client := ec2.NewFromConfig(awsCfg)
-	sgs := []string{outputs.DbSecurityGroupId, outputs.WebSecurityGroupId}
-	out, err := client.DescribeSecurityGroups(context.TODO(), &ec2.DescribeSecurityGroupsInput{
-		GroupIds: sgs,
-	})
-	require.NoError(t, err)
-	assert.Len(t, out.SecurityGroups, 2)
-}
-
-func TestRdsInstanceExists(t *testing.T) {
-	outputs := loadOutputs(t)
-	dbInstanceId := outputs["rdsInstanceId"].(string)
-
-	rdsClient := rds.NewFromConfig(getAwsConfig(t))
-
-	_, err := rdsClient.DescribeDBInstances(context.TODO(), &rds.DescribeDBInstancesInput{
-		DBInstanceIdentifier: aws.String(dbInstanceId),
-	})
-
+	awsConfig, err = config.LoadDefaultConfig(ctx, config.WithRegion("us-east-1"))
 	if err != nil {
-		if strings.Contains(err.Error(), "DBInstanceNotFound") {
-			t.Skipf("RDS instance %s not found, skipping test (possibly not deployed in this environment)", dbInstanceId)
+		fmt.Printf("Failed to load AWS config: %v\n", err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+	os.Exit(code)
+}
+
+func TestVPCAndSubnets(t *testing.T) {
+	ec2Client := ec2.NewFromConfig(awsConfig)
+
+	require.NotEmpty(t, outputs.VpcId)
+	resp, err := ec2Client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{VpcIds: []string{outputs.VpcId}})
+	require.NoError(t, err)
+	require.Len(t, resp.Vpcs, 1)
+	assert.Equal(t, "10.0.0.0/16", *resp.Vpcs[0].CidrBlock)
+
+	subnetIDs := []string{outputs.PrivateSubnetEc2Id, outputs.PrivateSubnetRdsId, outputs.PublicSubnetId}
+	subnetsResp, err := ec2Client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{SubnetIds: subnetIDs})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(subnetsResp.Subnets), len(subnetIDs))
+
+	azSet := map[string]bool{}
+	for _, subnet := range subnetsResp.Subnets {
+		assert.Equal(t, outputs.VpcId, *subnet.VpcId)
+		azSet[*subnet.AvailabilityZone] = true
+	}
+	assert.GreaterOrEqual(t, len(azSet), 2)
+}
+
+func TestEC2Instance(t *testing.T) {
+	ec2Client := ec2.NewFromConfig(awsConfig)
+
+	require.NotEmpty(t, outputs.Ec2InstanceId)
+	resp, err := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{InstanceIds: []string{outputs.Ec2InstanceId}})
+	require.NoError(t, err)
+	require.Len(t, resp.Reservations, 1)
+
+	instance := resp.Reservations[0].Instances[0]
+	assert.Equal(t, outputs.PrivateSubnetEc2Id, *instance.SubnetId)
+	assert.Equal(t, outputs.Ec2PrivateIp, *instance.PrivateIpAddress)
+
+	found := false
+	for _, sg := range instance.SecurityGroups {
+		if *sg.GroupId == outputs.Ec2SecurityGroupId {
+			found = true
+			break
 		}
-		t.Fatalf("unexpected error while describing RDS instance %s: %v", dbInstanceId, err)
 	}
+	assert.True(t, found)
 }
-func TestS3BucketExists(t *testing.T) {
-	client := s3.NewFromConfig(awsCfg)
-	_, err := client.HeadBucket(context.TODO(), &s3.HeadBucketInput{
-		Bucket: aws.String(outputs.S3BucketName),
-	})
 
-	if err != nil {
-		if strings.Contains(err.Error(), "NotFound") || strings.Contains(err.Error(), "NoSuchBucket") {
-			t.Skipf("S3 bucket %s not found, skipping test", outputs.S3BucketName)
-		}
-		require.NoError(t, err, "unexpected error checking S3 bucket")
+func TestRDSInstance(t *testing.T) {
+	if outputs.RdsEndpoint == "" {
+		t.Skip("Skipping RDS test: RdsEndpoint not present in outputs")
 	}
+	rdsClient := rds.NewFromConfig(awsConfig)
+
+	instancesResp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{})
+	require.NoError(t, err)
+
+	var foundInstance *rdstypes.DBInstance
+	for _, db := range instancesResp.DBInstances {
+		if db.Endpoint != nil {
+			address := aws.ToString(db.Endpoint.Address)
+			port := aws.ToInt32(db.Endpoint.Port)
+			endpoint := fmt.Sprintf("%s:%d", address, port)
+			if endpoint == outputs.RdsEndpoint {
+				foundInstance = &db
+				break
+			}
+		}
+	}
+
+	require.NotNil(t, foundInstance)
+
+	foundSG := false
+	for _, sg := range foundInstance.VpcSecurityGroups {
+		if sg.VpcSecurityGroupId != nil && aws.ToString(sg.VpcSecurityGroupId) == outputs.RdsSecurityGroupId {
+			foundSG = true
+			break
+		}
+	}
+	assert.True(t, foundSG)
+}
+
+func TestS3Bucket(t *testing.T) {
+	if outputs.S3BucketName == "" {
+		t.Skip("Skipping S3 test: bucket name not present in outputs")
+	}
+	s3Client := s3.NewFromConfig(awsConfig)
+
+	_, err := s3Client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: &outputs.S3BucketName})
+	assert.NoError(t, err)
+
+	versioning, err := s3Client.GetBucketVersioning(ctx, &s3.GetBucketVersioningInput{Bucket: &outputs.S3BucketName})
+	require.NoError(t, err)
+
+	assert.Equal(t, s3types.BucketVersioningStatusEnabled, versioning.Status)
 }
 
 func TestIamRoleAndPolicyExist(t *testing.T) {
-	client := iam.NewFromConfig(awsCfg)
+	if outputs.IamRoleArn == "" || outputs.IamPolicyArn == "" {
+		t.Skip("Skipping IAM test: role or policy not present in outputs")
+	}
+	client := iam.NewFromConfig(awsConfig)
 
 	// Role
-	_, err := client.GetRole(context.TODO(), &iam.GetRoleInput{
+	_, err := client.GetRole(ctx, &iam.GetRoleInput{
 		RoleName: aws.String(strings.Split(outputs.IamRoleArn, "/")[1]),
 	})
-	if err != nil {
-		if strings.Contains(err.Error(), "NoSuchEntity") {
-			t.Skipf("IAM Role not found, skipping test")
-		}
-		require.NoError(t, err, "unexpected error fetching IAM Role")
-	}
+	require.NoError(t, err)
 
 	// Policy
-	_, err = client.GetPolicy(context.TODO(), &iam.GetPolicyInput{
+	_, err = client.GetPolicy(ctx, &iam.GetPolicyInput{
 		PolicyArn: aws.String(outputs.IamPolicyArn),
 	})
-	if err != nil {
-		if strings.Contains(err.Error(), "NoSuchEntity") {
-			t.Skipf("IAM Policy not found, skipping test")
-		}
-		require.NoError(t, err, "unexpected error fetching IAM Policy")
-	}
+	require.NoError(t, err)
 }
 
 func TestCloudWatchLogGroupExists(t *testing.T) {
-	client := cloudwatchlogs.NewFromConfig(awsCfg)
-	out, err := client.DescribeLogGroups(context.TODO(), &cloudwatchlogs.DescribeLogGroupsInput{
+	if outputs.CloudWatchLogGroupName == "" {
+		t.Skip("Skipping CloudWatch Logs test: log group not present in outputs")
+	}
+	client := cloudwatchlogs.NewFromConfig(awsConfig)
+
+	out, err := client.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{
 		LogGroupNamePrefix: aws.String(outputs.CloudWatchLogGroupName),
 	})
-
-	if err != nil {
-		if strings.Contains(err.Error(), "ResourceNotFoundException") {
-			t.Skipf("CloudWatch log group %s not found, skipping test", outputs.CloudWatchLogGroupName)
-		}
-		require.NoError(t, err, "unexpected error describing CloudWatch log groups")
-	}
+	require.NoError(t, err)
 
 	found := false
 	for _, lg := range out.LogGroups {
@@ -219,7 +198,5 @@ func TestCloudWatchLogGroupExists(t *testing.T) {
 			break
 		}
 	}
-	if !found {
-		t.Skipf("CloudWatch log group %s not found, skipping test", outputs.CloudWatchLogGroupName)
-	}
+	assert.True(t, found, "CloudWatch log group not found")
 }
