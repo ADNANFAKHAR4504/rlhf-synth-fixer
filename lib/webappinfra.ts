@@ -18,7 +18,7 @@ export class WebAppInfrastructure {
     environment: string,
     tags: pulumi.Input<Record<string, string>>
   ) {
-    this.provider = new aws.Provider(`provider-${environment}`, {
+    this.provider = new aws.Provider(`provider - ${environment} `, {
       region: region,
     });
 
@@ -35,26 +35,26 @@ export class WebAppInfrastructure {
     );
 
     this.vpc = new aws.ec2.Vpc(
-      `vpc-${environment}`,
+      `vpc - ${environment} `,
       {
         cidrBlock: '10.0.0.0/16',
         enableDnsHostnames: true,
         enableDnsSupport: true,
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `vpc-${environment}`,
+          Name: `vpc - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     this.internetGateway = new aws.ec2.InternetGateway(
-      `igw-${environment}`,
+      `igw - ${environment} `,
       {
         vpcId: this.vpc.id,
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `igw-${environment}`,
+          Name: `igw - ${environment} `,
         })),
       },
       { provider: this.provider }
@@ -65,29 +65,29 @@ export class WebAppInfrastructure {
 
     for (let i = 0; i < 2; i++) {
       const publicSubnet = new aws.ec2.Subnet(
-        `public-subnet-${i + 1}-${environment}`,
+        `public - subnet - ${i + 1} -${environment} `,
         {
           vpcId: this.vpc.id,
-          cidrBlock: `10.0.${i + 1}.0/24`,
+          cidrBlock: `10.0.${i + 1} .0 / 24`,
           availabilityZone: azs.then(azs => azs.names[i]),
           mapPublicIpOnLaunch: true,
           tags: resourceTags.apply(t => ({
             ...t,
-            Name: `public-subnet-${i + 1}-${environment}`,
+            Name: `public - subnet - ${i + 1} -${environment} `,
           })),
         },
         { provider: this.provider }
       );
 
       const privateSubnet = new aws.ec2.Subnet(
-        `private-subnet-${i + 1}-${environment}`,
+        `private - subnet - ${i + 1} -${environment} `,
         {
           vpcId: this.vpc.id,
-          cidrBlock: `10.0.${i + 10}.0/24`,
+          cidrBlock: `10.0.${i + 10} .0 / 24`,
           availabilityZone: azs.then(azs => azs.names[i]),
           tags: resourceTags.apply(t => ({
             ...t,
-            Name: `private-subnet-${i + 1}-${environment}`,
+            Name: `private - subnet - ${i + 1} -${environment} `,
           })),
         },
         { provider: this.provider }
@@ -98,19 +98,19 @@ export class WebAppInfrastructure {
     }
 
     const publicRouteTable = new aws.ec2.RouteTable(
-      `public-rt-${environment}`,
+      `public - rt - ${environment} `,
       {
         vpcId: this.vpc.id,
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `public-rt-${environment}`,
+          Name: `public - rt - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     new aws.ec2.Route(
-      `public-route-${environment}`,
+      `public - route - ${environment} `,
       {
         routeTableId: publicRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
@@ -121,7 +121,7 @@ export class WebAppInfrastructure {
 
     this.publicSubnets.forEach((subnet, i) => {
       new aws.ec2.RouteTableAssociation(
-        `public-rta-${i + 1}-${environment}`,
+        `public - rta - ${i + 1} -${environment} `,
         {
           subnetId: subnet.id,
           routeTableId: publicRouteTable.id,
@@ -133,25 +133,25 @@ export class WebAppInfrastructure {
     this.natGateways = [];
     this.publicSubnets.forEach((subnet, i) => {
       const eip = new aws.ec2.Eip(
-        `nat-eip-${i + 1}-${environment}`,
+        `nat - eip - ${i + 1} -${environment} `,
         {
           domain: 'vpc',
           tags: resourceTags.apply(t => ({
             ...t,
-            Name: `nat-eip-${i + 1}-${environment}`,
+            Name: `nat - eip - ${i + 1} -${environment} `,
           })),
         },
         { provider: this.provider }
       );
 
       const natGateway = new aws.ec2.NatGateway(
-        `nat-gw-${i + 1}-${environment}`,
+        `nat - gw - ${i + 1} -${environment} `,
         {
           allocationId: eip.id,
           subnetId: subnet.id,
           tags: resourceTags.apply(t => ({
             ...t,
-            Name: `nat-gw-${i + 1}-${environment}`,
+            Name: `nat - gw - ${i + 1} -${environment} `,
           })),
         },
         { provider: this.provider }
@@ -160,19 +160,19 @@ export class WebAppInfrastructure {
       this.natGateways.push(natGateway);
 
       const privateRouteTable = new aws.ec2.RouteTable(
-        `private-rt-${i + 1}-${environment}`,
+        `private - rt - ${i + 1} -${environment} `,
         {
           vpcId: this.vpc.id,
           tags: resourceTags.apply(t => ({
             ...t,
-            Name: `private-rt-${i + 1}-${environment}`,
+            Name: `private - rt - ${i + 1} -${environment} `,
           })),
         },
         { provider: this.provider }
       );
 
       new aws.ec2.Route(
-        `private-route-${i + 1}-${environment}`,
+        `private - route - ${i + 1} -${environment} `,
         {
           routeTableId: privateRouteTable.id,
           destinationCidrBlock: '0.0.0.0/0',
@@ -182,7 +182,7 @@ export class WebAppInfrastructure {
       );
 
       new aws.ec2.RouteTableAssociation(
-        `private-rta-${i + 1}-${environment}`,
+        `private - rta - ${i + 1} -${environment} `,
         {
           subnetId: this.privateSubnets[i].id,
           routeTableId: privateRouteTable.id,
@@ -192,7 +192,7 @@ export class WebAppInfrastructure {
     });
 
     const albSecurityGroup = new aws.ec2.SecurityGroup(
-      `alb-sg-${environment}`,
+      `alb - sg - ${environment} `,
       {
         vpcId: this.vpc.id,
         description: 'Security group for Application Load Balancer',
@@ -220,14 +220,14 @@ export class WebAppInfrastructure {
         ],
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `alb-sg-${environment}`,
+          Name: `alb - sg - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     const ec2SecurityGroup = new aws.ec2.SecurityGroup(
-      `ec2-sg-${environment}`,
+      `ec2 - sg - ${environment} `,
       {
         vpcId: this.vpc.id,
         description: 'Security group for EC2 instances',
@@ -255,28 +255,28 @@ export class WebAppInfrastructure {
         ],
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `ec2-sg-${environment}`,
+          Name: `ec2 - sg - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     this.loadBalancer = new aws.lb.LoadBalancer(
-      `alb-${environment}`,
+      `alb - ${environment} `,
       {
         loadBalancerType: 'application',
         subnets: this.publicSubnets.map(subnet => subnet.id),
         securityGroups: [albSecurityGroup.id],
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `alb-${environment}`,
+          Name: `alb - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     const targetGroup = new aws.lb.TargetGroup(
-      `tg-${environment}`,
+      `tg - ${environment} `,
       {
         port: 80,
         protocol: 'HTTP',
@@ -294,14 +294,14 @@ export class WebAppInfrastructure {
         },
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `tg-${environment}`,
+          Name: `tg - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     new aws.lb.Listener(
-      `http-listener-${environment}`,
+      `http - listener - ${environment} `,
       {
         loadBalancerArn: this.loadBalancer.arn,
         port: 80,
@@ -317,7 +317,7 @@ export class WebAppInfrastructure {
     );
 
     new aws.lb.Listener(
-      `https-listener-${environment}`,
+      `https - listener - ${environment} `,
       {
         loadBalancerArn: this.loadBalancer.arn,
         port: 443,
@@ -349,7 +349,7 @@ export class WebAppInfrastructure {
     );
 
     const instanceRole = new aws.iam.Role(
-      `instance-role-${environment}`,
+      `instance - role - ${environment} `,
       {
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
@@ -365,14 +365,14 @@ export class WebAppInfrastructure {
         }),
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `instance-role-${environment}`,
+          Name: `instance - role - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     new aws.iam.RolePolicyAttachment(
-      `instance-role-policy-${environment}`,
+      `instance - role - policy - ${environment} `,
       {
         role: instanceRole.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
@@ -381,7 +381,7 @@ export class WebAppInfrastructure {
     );
 
     const instanceProfile = new aws.iam.InstanceProfile(
-      `instance-profile-${environment}`,
+      `instance - profile - ${environment} `,
       {
         role: instanceRole.name,
       },
@@ -389,7 +389,7 @@ export class WebAppInfrastructure {
     );
 
     const launchTemplate = new aws.ec2.LaunchTemplate(
-      `lt-${environment}`,
+      `lt - ${environment} `,
       {
         imageId: amiId.then(ami => ami.id),
         instanceType: 't3.micro',
@@ -399,23 +399,23 @@ export class WebAppInfrastructure {
         },
         userData: Buffer.from(
           `#!/bin/bash
-yum update -y
-yum install -y httpd
+yum update - y
+yum install - y httpd
 systemctl start httpd
 systemctl enable httpd
-echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html
-`
+echo "<h1>Hello from ${environment}</h1>" > /var/www / html / index.html
+  `
         ).toString('base64'),
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `lt-${environment}`,
+          Name: `lt - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
     this.autoScalingGroup = new aws.autoscaling.Group(
-      `asg-${environment}`,
+      `asg - ${environment} `,
       {
         vpcZoneIdentifiers: this.privateSubnets.map(subnet => subnet.id),
         targetGroupArns: [targetGroup.arn],
@@ -431,7 +431,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html
         tags: resourceTags.apply(t => [
           {
             key: 'Name',
-            value: `asg-${environment}`,
+            value: `asg - ${environment} `,
             propagateAtLaunch: true,
           },
           ...Object.entries(t).map(([key, value]) => ({
@@ -445,21 +445,29 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html
     );
 
     this.s3Bucket = new aws.s3.Bucket(
-      `static-content-${environment}`,
+      `static - content - ${environment} `,
       {
-        versioning: {
-          enabled: true,
-        },
         tags: resourceTags.apply(t => ({
           ...t,
-          Name: `static-content-${environment}`,
+          Name: `static - content - ${environment} `,
         })),
       },
       { provider: this.provider }
     );
 
+    new aws.s3.BucketVersioningV2(
+      `static - content - versioning - ${environment} `,
+      {
+        bucket: this.s3Bucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { provider: this.provider }
+    );
+
     new aws.s3.BucketPublicAccessBlock(
-      `static-content-pab-${environment}`,
+      `static - content - pab - ${environment} `,
       {
         bucket: this.s3Bucket.id,
         blockPublicAcls: true,
@@ -471,7 +479,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html
     );
 
     const originAccessIdentity = new aws.cloudfront.OriginAccessIdentity(
-      `oai-${environment}`,
+      `oai - ${environment} `,
       {
         comment: `OAI for ${environment}`,
       },
@@ -479,7 +487,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html
     );
 
     new aws.s3.BucketPolicy(
-      `static-content-policy-${environment}`,
+      `static - content - policy - ${environment} `,
       {
         bucket: this.s3Bucket.id,
         policy: pulumi
@@ -510,7 +518,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html
         origins: [
           {
             domainName: this.s3Bucket.bucketDomainName,
-            originId: `S3-${this.s3Bucket.id}`,
+            originId: 'S3Origin',
             s3OriginConfig: {
               originAccessIdentity:
                 originAccessIdentity.cloudfrontAccessIdentityPath,
@@ -531,7 +539,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html
             'PUT',
           ],
           cachedMethods: ['GET', 'HEAD'],
-          targetOriginId: `S3-${this.s3Bucket.id}`,
+          targetOriginId: 'S3Origin',
           forwardedValues: {
             queryString: false,
             cookies: {
