@@ -103,7 +103,7 @@ export class TapStack extends cdk.Stack {
     // IAM roles
     const pipelineRole = this.createPipelineRole();
     const buildRole = this.createBuildRole();
-    const deployRole = this.createDeployRole();
+    const deployRole = this.createDeployRole(pipelineRole);
 
     // CodeBuild projects
     this.buildProject = this.createBuildProject(
@@ -197,7 +197,6 @@ export class TapStack extends cdk.Stack {
 
     role.addToPolicy(
       new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
         actions: ['iam:PassRole'],
         resources: ['*'],
         conditions: {
@@ -259,11 +258,11 @@ export class TapStack extends cdk.Stack {
     return role;
   }
 
-  private createDeployRole(): iam.Role {
+  private createDeployRole(pipelineRole: iam.IRole): iam.Role {
     const role = new iam.Role(this, 'DeployRole', {
       assumedBy: new iam.CompositePrincipal(
         new iam.ServicePrincipal('cloudformation.amazonaws.com'),
-        new iam.ServicePrincipal('codepipeline.amazonaws.com')
+        new iam.ArnPrincipal(pipelineRole.roleArn) // 👈 explicitly trust the pipeline role
       ),
       description: 'IAM role for CloudFormation deployments via CodePipeline',
     });
