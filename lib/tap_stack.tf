@@ -110,9 +110,12 @@ data "aws_db_instance" "main" {
   db_instance_identifier = "${var.project_name}-database"
 }
 
+
 # S3 Bucket
-data "aws_s3_bucket" "main" {
-  bucket = "${var.project_name}-bucket-${var.environment}"
+resource "aws_s3_bucket" "main" {
+  bucket        = "${var.project_name}-bucket-${var.environment}"
+  force_destroy = true
+  tags          = local.common_tags
 }
 
 
