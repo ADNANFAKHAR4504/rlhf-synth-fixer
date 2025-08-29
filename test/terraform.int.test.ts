@@ -18,39 +18,125 @@ import * as path from 'path';
 function getOutput(outputName: string): string | null {
   try {
     const libPath = path.resolve(process.cwd(), 'lib');
+
+    // First check if terraform is initialized
+    try {
+      execSync('terraform version', {
+        encoding: 'utf8',
+        stdio: 'pipe',
+        timeout: 5000,
+        cwd: libPath
+      });
+    } catch (error) {
+      return null;
+    }
+
+    // Try to get the output
     const output = execSync(`terraform output -json ${outputName}`, {
       encoding: 'utf8',
       stdio: 'pipe',
-      timeout: 5000, // Reduced timeout
+      timeout: 5000,
       cwd: libPath
     });
+
     const parsed = JSON.parse(output);
     return parsed.value || null;
   } catch (error) {
-    console.log(`⚠️  Output ${outputName} not available:`, error instanceof Error ? error.message : String(error));
+    // Don't log every single output failure - just return null
     return null;
   }
 }
 
+// Check if infrastructure is deployed by looking for any outputs
+function isInfrastructureDeployed(): boolean {
+  try {
+    const libPath = path.resolve(process.cwd(), 'lib');
+
+    // Try to get any output to see if infrastructure exists
+    const output = execSync('terraform output -json', {
+      encoding: 'utf8',
+      stdio: 'pipe',
+      timeout: 5000,
+      cwd: libPath
+    });
+
+    const outputs = JSON.parse(output);
+    return Object.keys(outputs).length > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Initialize Terraform and check infrastructure status
+function initializeTerraformAndCheckStatus(): { initialized: boolean; deployed: boolean } {
+  const initialized = runTerraformInit();
+  const deployed = initialized ? isInfrastructureDeployed() : false;
+
+  return { initialized, deployed };
+}
+
 // Outputs from your latest deployment
 const outputs = {
-  vpcId: getOutput("vpc_id"),
-  publicSubnetIds: getOutput("public_subnet_ids"),
-  privateSubnetIds: getOutput("private_subnet_ids"),
-  s3BucketName: getOutput("s3_bucket_name"),
-  kmsKeyArn: getOutput("kms_key_arn"),
-  environment: getOutput("environment"),
-  projectName: getOutput("project_name"),
-  region: getOutput("region"),
-  securityGroupId: getOutput("security_group_id"),
-  iamRoleArn: getOutput("iam_role_arn"),
-
-  internetGatewayId: getOutput("internet_gateway_id"),
-  routeTableId: getOutput("route_table_id"),
-  kmsKeyId: getOutput("kms_key_id"),
-  s3BucketArn: getOutput("s3_bucket_arn"),
-  vpcCidrBlock: getOutput("vpc_cidr_block"),
+  vpcId: null as string | null,
+  publicSubnetIds: null as string | null,
+  privateSubnetIds: null as string | null,
+  s3BucketName: null as string | null,
+  kmsKeyArn: null as string | null,
+  environment: null as string | null,
+  projectName: null as string | null,
+  region: null as string | null,
+  securityGroupId: null as string | null,
+  iamRoleArn: null as string | null,
+  internetGatewayId: null as string | null,
+  routeTableId: null as string | null,
+  kmsKeyId: null as string | null,
+  s3BucketArn: null as string | null,
+  vpcCidrBlock: null as string | null,
 };
+
+// Function to populate outputs if infrastructure is deployed
+function populateOutputs(isDeployed: boolean): void {
+  if (isDeployed) {
+    console.log('🔍 Checking for live infrastructure deployment...');
+
+    outputs.vpcId = getOutput('vpc_id');
+    outputs.publicSubnetIds = getOutput('public_subnet_ids');
+    outputs.privateSubnetIds = getOutput('private_subnet_ids');
+    outputs.s3BucketName = getOutput('s3_bucket_name');
+    outputs.kmsKeyArn = getOutput('kms_key_arn');
+    outputs.environment = getOutput('environment');
+    outputs.projectName = getOutput('project_name');
+    outputs.region = getOutput('region');
+    outputs.securityGroupId = getOutput('security_group_id');
+    outputs.iamRoleArn = getOutput('iam_role_arn');
+    outputs.internetGatewayId = getOutput('internet_gateway_id');
+    outputs.routeTableId = getOutput('route_table_id');
+    outputs.kmsKeyId = getOutput('kms_key_id');
+    outputs.s3BucketArn = getOutput('s3_bucket_arn');
+    outputs.vpcCidrBlock = getOutput('vpc_cidr_block');
+
+    // Check if we got any outputs
+    const hasOutputs = Object.values(outputs).some(output => output !== null);
+
+    if (hasOutputs) {
+      console.log(' Live infrastructure outputs retrieved successfully');
+    } else {
+      console.log('  Live infrastructure check failed - no outputs available');
+      console.log(' This may indicate:');
+      console.log(' - Infrastructure not deployed (run terraform apply)');
+      console.log(' - Terraform not initialized (run terraform init)');
+      console.log(' - AWS credentials not configured');
+      console.log(' - Backend configuration issues');
+    }
+  } else {
+    console.log('  Live infrastructure is NOT deployed');
+    console.log(' To deploy infrastructure:');
+    console.log(' 1. Run: cd lib && terraform init');
+    console.log(' 2. Run: cd lib && terraform apply');
+    console.log(' 3. Ensure AWS credentials are configured');
+    console.log(' 4. Ensure backend configuration is correct');
+  }
+}
 
 // Dynamically determine region from outputs or environment
 function getRegion(): string {
@@ -62,22 +148,6 @@ function getRegion(): string {
 const testRegion = getRegion();
 const environmentTag = process.env.ENVIRONMENT_TAG || outputs.environment || "staging";
 
-// Check if infrastructure is deployed
-const infrastructureDeployed = Object.values(outputs).some(value => value !== null);
-
-console.log('🔍 Checking for live infrastructure deployment...');
-if (infrastructureDeployed) {
-  console.log('✅ Live infrastructure detected - using terraform outputs directly');
-  console.log(`📊 Found ${Object.values(outputs).filter(v => v !== null).length} live infrastructure outputs`);
-} else {
-  console.log('⚠️  Live infrastructure check failed - no outputs available');
-  console.log('💡 This may indicate:');
-  console.log('   - Infrastructure not deployed (run terraform apply)');
-  console.log('   - Terraform not initialized (run terraform init)');
-  console.log('   - AWS credentials not configured');
-  console.log('   - Backend configuration issues');
-}
-
 const TEST_CONFIG = {
   vpcId: outputs.vpcId,
   publicSubnetIds: outputs.publicSubnetIds ? JSON.parse(outputs.publicSubnetIds) : [],
@@ -86,7 +156,6 @@ const TEST_CONFIG = {
   kmsKeyArn: outputs.kmsKeyArn,
   securityGroupId: outputs.securityGroupId,
   iamRoleArn: outputs.iamRoleArn,
-
   internetGatewayId: outputs.internetGatewayId,
   routeTableId: outputs.routeTableId,
   kmsKeyId: outputs.kmsKeyId,
@@ -95,7 +164,6 @@ const TEST_CONFIG = {
   environment: outputs.environment || 'staging',
   projectName: outputs.projectName || 'myapp',
   region: outputs.region || testRegion,
-  infrastructureDeployed
 };
 
 // -----------------------------
@@ -190,16 +258,23 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
   let terraformInitialized = false;
   let terraformValid = false;
   let terraformPlanned = false;
+  let infrastructureDeployed = false;
 
   beforeAll(async () => {
     console.log('🚀 Starting infrastructure integration tests...');
     console.log(`📍 Region: ${TEST_CONFIG.region}`);
     console.log(`🏗️  Environment: ${TEST_CONFIG.environment}`);
     console.log(`📦 Project: ${TEST_CONFIG.projectName}`);
-    console.log(`🔍 Infrastructure Status: ${TEST_CONFIG.infrastructureDeployed ? '✅ DEPLOYED' : '⚠️  NOT DEPLOYED'}`);
 
-    // Initialize Terraform
-    terraformInitialized = runTerraformInit();
+    // Initialize Terraform and check infrastructure status
+    const status = initializeTerraformAndCheckStatus();
+    terraformInitialized = status.initialized;
+    infrastructureDeployed = status.deployed;
+
+    console.log(`🔍 Infrastructure Status: ${infrastructureDeployed ? '✅ DEPLOYED' : '⚠️  NOT DEPLOYED'}`);
+
+    // Populate outputs only if infrastructure is deployed
+    populateOutputs(infrastructureDeployed);
 
     if (terraformInitialized) {
       // Validate Terraform configuration
@@ -225,7 +300,7 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
 
   describe('Infrastructure Deployment Status', () => {
     test('Live infrastructure deployment check', () => {
-      if (TEST_CONFIG.infrastructureDeployed) {
+      if (infrastructureDeployed) {
         console.log('✅ Live infrastructure is deployed and accessible');
         console.log(`📊 Infrastructure components found: ${Object.keys(outputs).filter(key => outputs[key as keyof typeof outputs] !== null).length}`);
 
@@ -237,7 +312,7 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
         if (outputs.iamRoleArn) console.log(`   - IAM Role: ${outputs.iamRoleArn}`);
 
 
-        expect(TEST_CONFIG.infrastructureDeployed).toBe(true);
+        expect(infrastructureDeployed).toBe(true);
       } else {
         console.log('⚠️  Live infrastructure is NOT deployed');
         console.log('💡 To deploy infrastructure:');
@@ -247,7 +322,7 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
         console.log('   4. Ensure backend configuration is correct');
 
         // Don't fail the test - infrastructure might not be deployed yet
-        expect(TEST_CONFIG.infrastructureDeployed).toBe(false);
+        expect(infrastructureDeployed).toBe(false);
       }
     });
   });
