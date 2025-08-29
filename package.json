@@ -173,7 +173,7 @@
     "@aws-sdk/client-sqs": "^3.855.0",
     "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-wafv2": "^3.848.0",
-    "@cdktf/provider-aws": "21.3.0",
+    "@cdktf/provider-aws": "^21.9.0",
     "@cdktf/provider-random": "^12.0.0",
     "@pulumi/aws": "^7.3.1",
     "@pulumi/awsx": "^3.0.0",
