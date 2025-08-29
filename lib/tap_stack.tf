@@ -79,9 +79,15 @@ variable "enable_manual_approval" {
   default     = true
 }
 
-# Random string for unique resource naming
+# Random strings for unique resource naming
 resource "random_string" "bucket_suffix" {
   length  = 8
+  special = false
+  upper   = false
+}
+
+resource "random_string" "resource_suffix" {
+  length  = 6
   special = false
   upper   = false
 }
@@ -130,8 +136,9 @@ resource "aws_kms_key" "pipeline" {
   })
 }
 
+# KMS Alias with unique suffix
 resource "aws_kms_alias" "pipeline" {
-  name          = "alias/${var.project_prefix}-pipeline"
+  name          = "alias/${var.project_prefix}-pipeline-${random_string.resource_suffix.result}"
   target_key_id = aws_kms_key.pipeline.key_id
 }
 
@@ -254,7 +261,7 @@ resource "aws_secretsmanager_secret_version" "app_secrets" {
   }
 }
 
-# Parameter Store for non-sensitive configuration
+# Parameter Store for non-sensitive configuration with unique paths
 resource "aws_ssm_parameter" "app_config" {
   for_each = {
     database_host = "your-db-host.amazonaws.com"
@@ -263,9 +270,10 @@ resource "aws_ssm_parameter" "app_config" {
     app_port      = "3000"
   }
 
-  name  = "/${var.project_prefix}/config/${each.key}"
-  type  = "String"
-  value = each.value
+  name      = "/${var.project_prefix}/config/${each.key}-${random_string.resource_suffix.result}"
+  type      = "String"
+  value     = each.value
+  overwrite = true  # Allow overwriting existing parameters
 
   tags = {
     Environment = var.environment
@@ -312,9 +320,9 @@ resource "aws_cloudwatch_log_group" "codebuild_logs" {
   retention_in_days = 30
 }
 
-# IAM Role for CodePipeline
+# IAM Role for CodePipeline with unique suffix
 resource "aws_iam_role" "codepipeline_role" {
-  name = "${var.project_prefix}-codepipeline-role"
+  name = "${var.project_prefix}-codepipeline-role-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -331,7 +339,7 @@ resource "aws_iam_role" "codepipeline_role" {
 }
 
 resource "aws_iam_role_policy" "codepipeline_policy" {
-  name = "${var.project_prefix}-codepipeline-policy"
+  name = "${var.project_prefix}-codepipeline-policy-${random_string.resource_suffix.result}"
   role = aws_iam_role.codepipeline_role.id
 
   policy = jsonencode({
@@ -395,9 +403,9 @@ resource "aws_iam_role_policy" "codepipeline_policy" {
   })
 }
 
-# IAM Role for CodeBuild
+# IAM Role for CodeBuild with unique suffix
 resource "aws_iam_role" "codebuild_role" {
-  name = "${var.project_prefix}-codebuild-role"
+  name = "${var.project_prefix}-codebuild-role-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -414,7 +422,7 @@ resource "aws_iam_role" "codebuild_role" {
 }
 
 resource "aws_iam_role_policy" "codebuild_policy" {
-  name = "${var.project_prefix}-codebuild-policy"
+  name = "${var.project_prefix}-codebuild-policy-${random_string.resource_suffix.result}"
   role = aws_iam_role.codebuild_role.id
 
   policy = jsonencode({
@@ -470,9 +478,9 @@ resource "aws_iam_role_policy" "codebuild_policy" {
   })
 }
 
-# IAM Role for Elastic Beanstalk Service
+# IAM Role for Elastic Beanstalk Service with unique suffix
 resource "aws_iam_role" "beanstalk_service_role" {
-  name = "${var.project_prefix}-beanstalk-service-role"
+  name = "${var.project_prefix}-beanstalk-service-role-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -493,9 +501,9 @@ resource "aws_iam_role_policy_attachment" "beanstalk_service_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkService"
 }
 
-# IAM Role for Elastic Beanstalk EC2 instances
+# IAM Role for Elastic Beanstalk EC2 instances with unique suffix
 resource "aws_iam_role" "beanstalk_ec2_role" {
-  name = "${var.project_prefix}-beanstalk-ec2-role"
+  name = "${var.project_prefix}-beanstalk-ec2-role-${random_string.resource_suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -522,7 +530,7 @@ resource "aws_iam_role_policy_attachment" "beanstalk_worker_tier" {
 }
 
 resource "aws_iam_instance_profile" "beanstalk_ec2_profile" {
-  name = "${var.project_prefix}-beanstalk-ec2-profile"
+  name = "${var.project_prefix}-beanstalk-ec2-profile-${random_string.resource_suffix.result}"
   role = aws_iam_role.beanstalk_ec2_role.name
 }
 
@@ -532,9 +540,9 @@ resource "aws_codestarconnections_connection" "github" {
   provider_type = "GitHub"
 }
 
-# CodeBuild project
+# CodeBuild project with unique suffix
 resource "aws_codebuild_project" "build_project" {
-  name          = "${var.project_prefix}-build"
+  name          = "${var.project_prefix}-build-${random_string.resource_suffix.result}"
   description   = "Build and test project for ${var.application_name}"
   service_role  = aws_iam_role.codebuild_role.arn
 
@@ -692,9 +700,9 @@ resource "aws_elastic_beanstalk_environment" "production" {
   }
 }
 
-# CodePipeline
+# CodePipeline with unique suffix
 resource "aws_codepipeline" "main_pipeline" {
-  name     = "${var.project_prefix}-pipeline"
+  name     = "${var.project_prefix}-pipeline-${random_string.resource_suffix.result}"
   role_arn = aws_iam_role.codepipeline_role.arn
 
   artifact_store {
@@ -783,9 +791,9 @@ resource "aws_codepipeline" "main_pipeline" {
   }
 }
 
-# CloudWatch Event Rules for monitoring
+# CloudWatch Event Rules for monitoring with unique suffix
 resource "aws_cloudwatch_event_rule" "pipeline_state_change" {
-  name        = "${var.project_prefix}-pipeline-state-change"
+  name        = "${var.project_prefix}-pipeline-state-change-${random_string.resource_suffix.result}"
   description = "Capture pipeline state changes"
 
   event_pattern = jsonencode({
@@ -804,7 +812,7 @@ resource "aws_cloudwatch_event_target" "sns" {
 }
 
 resource "aws_cloudwatch_event_rule" "build_state_change" {
-  name        = "${var.project_prefix}-build-state-change"
+  name        = "${var.project_prefix}-build-state-change-${random_string.resource_suffix.result}"
   description = "Capture build failures"
 
   event_pattern = jsonencode({
@@ -823,9 +831,9 @@ resource "aws_cloudwatch_event_target" "build_sns" {
   arn       = aws_sns_topic.pipeline_notifications.arn
 }
 
-# CloudTrail for audit logging
+# CloudTrail for audit logging with unique suffix
 resource "aws_cloudtrail" "pipeline_trail" {
-  name                          = "${var.project_prefix}-trail"
+  name                          = "${var.project_prefix}-trail-${random_string.resource_suffix.result}"
   s3_bucket_name               = aws_s3_bucket.cloudtrail_logs.bucket
   include_global_service_events = true
   is_multi_region_trail        = true
@@ -843,9 +851,9 @@ resource "aws_cloudtrail" "pipeline_trail" {
   }
 }
 
-# CloudWatch Dashboard
+# CloudWatch Dashboard with unique suffix
 resource "aws_cloudwatch_dashboard" "pipeline_dashboard" {
-  dashboard_name = "${var.project_prefix}-dashboard"
+  dashboard_name = "${var.project_prefix}-dashboard-${random_string.resource_suffix.result}"
 
   dashboard_body = jsonencode({
     widgets = [
@@ -877,6 +885,11 @@ resource "aws_cloudwatch_dashboard" "pipeline_dashboard" {
 output "pipeline_name" {
   description = "Name of the CodePipeline"
   value       = aws_codepipeline.main_pipeline.name
+}
+
+output "resource_suffix" {
+  description = "Random suffix used for resource naming"
+  value       = random_string.resource_suffix.result
 }
 
 output "pipeline_url" {
@@ -932,6 +945,16 @@ output "secrets_manager_arn" {
 output "codebuild_project_name" {
   description = "CodeBuild project name"
   value       = aws_codebuild_project.build_project.name
+}
+
+output "iam_roles" {
+  description = "IAM role names with suffixes"
+  value = {
+    codepipeline_role = aws_iam_role.codepipeline_role.name
+    codebuild_role = aws_iam_role.codebuild_role.name
+    beanstalk_service_role = aws_iam_role.beanstalk_service_role.name
+    beanstalk_ec2_role = aws_iam_role.beanstalk_ec2_role.name
+  }
 }
 
 output "cloudtrail_s3_bucket" {

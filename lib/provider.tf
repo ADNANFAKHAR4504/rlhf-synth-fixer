@@ -12,9 +12,7 @@ terraform {
     }
   }
 
-  backend "s3" {
-    # Backend configuration will be provided via -backend-config flags
-  }
+  backend "s3" {}
 }
 
 provider "aws" {

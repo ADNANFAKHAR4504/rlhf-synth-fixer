@@ -59,7 +59,9 @@ describe("Terraform CI/CD Pipeline Integration Tests", () => {
       "kms_key_arn",
       "secrets_manager_arn",
       "codebuild_project_name",
-      "cloudtrail_s3_bucket"
+      "cloudtrail_s3_bucket",
+      "resource_suffix",
+      "iam_roles"
     ];
     
     if (Object.keys(outputs).length === 0) {
@@ -73,7 +75,7 @@ describe("Terraform CI/CD Pipeline Integration Tests", () => {
   it("pipeline_name should be a non-empty string", () => {
     if (!outputs.pipeline_name) return;
     expect(isNonEmptyString(outputs.pipeline_name)).toBe(true);
-    expect(outputs.pipeline_name).toMatch(/^ci-pipeline-pipeline$/);
+    expect(outputs.pipeline_name).toMatch(/^ci-pipeline-pipeline-[a-z0-9]{6}$/);
   });
 
   it("pipeline_url should be a valid AWS console URL", () => {
@@ -143,7 +145,7 @@ describe("Terraform CI/CD Pipeline Integration Tests", () => {
   it("codebuild_project_name should follow naming convention", () => {
     if (!outputs.codebuild_project_name) return;
     expect(isNonEmptyString(outputs.codebuild_project_name)).toBe(true);
-    expect(outputs.codebuild_project_name).toMatch(/^ci-pipeline-build$/);
+    expect(outputs.codebuild_project_name).toMatch(/^ci-pipeline-build-[a-z0-9]{6}$/);
   });
 
   // Test resource relationships and consistency
