@@ -52,6 +52,16 @@ Metadata:
           - GreenMinSize
           - GreenMaxSize
           - GreenDesiredCapacity
+          - EnableCrossRegionFailover
+          - HostedZoneId
+          - RecordName
+          - UseExistingALBDNSName
+          - UseExistingALBHostedZoneId
+          - SecondaryALBDNSName
+          - SecondaryALBHostedZoneId
+          - EnableLambdaProvisionedConcurrency
+          - LambdaProvisionedConcurrency
+          - EnableCloudTrail
 
 Parameters:
   Environment:
@@ -216,6 +226,63 @@ Parameters:
     MinValue: 0
     Description: 'Green ASG desired capacity when green fleet is enabled'
 
+  # Route 53 Failover and ALB alias support
+  EnableCrossRegionFailover:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable Route 53 failover records'
+
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: 'Hosted Zone ID for Route 53 records'
+
+  RecordName:
+    Type: String
+    Default: ''
+    Description: 'Record name (e.g., app.example.com) for primary/secondary failover'
+
+  UseExistingALBDNSName:
+    Type: String
+    Default: ''
+    Description: 'Existing ALB/NLB DNS name to alias when UseExistingALB is set'
+
+  UseExistingALBHostedZoneId:
+    Type: String
+    Default: ''
+    Description: 'Hosted zone ID for existing ALB/NLB to alias when UseExistingALB is set'
+
+  SecondaryALBDNSName:
+    Type: String
+    Default: ''
+    Description: 'Secondary region ALB/NLB DNS name for failover'
+
+  SecondaryALBHostedZoneId:
+    Type: String
+    Default: ''
+    Description: 'Secondary region ALB/NLB hosted zone ID for failover'
+
+  # Lambda Provisioned Concurrency
+  EnableLambdaProvisionedConcurrency:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable provisioned concurrency on the example Lambda alias'
+
+  LambdaProvisionedConcurrency:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    Description: 'Provisioned concurrency units for the example Lambda alias'
+
+  # CloudTrail control
+  EnableCloudTrail:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable AWS CloudTrail with KMS encryption (primary region only)'
+
 Mappings:
   RegionMap:
     us-east-1:
@@ -285,6 +352,46 @@ Conditions:
   CreateNatGateway2EIP: !Equals [!Ref UseExistingNatGateway2EIP, '']
   CreateGreenFleet: !Equals [!Ref EnableGreenFleet, 'true']
 
+  # CloudTrail/Trail
+  EnableTrail: !Equals [!Ref EnableCloudTrail, 'true']
+  CreateCloudTrail: !And [IsPrimaryRegion, EnableTrail]
+
+  # Route 53 conditions
+  EnableFailover: !Equals [!Ref EnableCrossRegionFailover, 'true']
+  HasHostedZoneId: !Not [!Equals [!Ref HostedZoneId, '']]
+  HasPrimaryRecordName: !Not [!Equals [!Ref RecordName, '']]
+  UseExistingAlbAliasData:
+    !And [
+      !Not [!Equals [!Ref UseExistingALBDNSName, '']],
+      !Not [!Equals [!Ref UseExistingALBHostedZoneId, '']],
+    ]
+  HasSecondaryAliasData:
+    !And [
+      !Not [!Equals [!Ref SecondaryALBDNSName, '']],
+      !Not [!Equals [!Ref SecondaryALBHostedZoneId, '']],
+    ]
+  CreatePrimaryAliasWithNewALB:
+    !And [CreateALB, EnableFailover, HasHostedZoneId, HasPrimaryRecordName]
+  CreatePrimaryAliasWithExistingALB:
+    !And [
+      !Not [!Equals [!Ref UseExistingALB, '']],
+      EnableFailover,
+      HasHostedZoneId,
+      HasPrimaryRecordName,
+      UseExistingAlbAliasData,
+    ]
+  CreateSecondaryAlias:
+    !And [
+      EnableFailover,
+      HasHostedZoneId,
+      HasPrimaryRecordName,
+      HasSecondaryAliasData,
+    ]
+
+  # Lambda provisioned concurrency condition
+  EnableLambdaProv: !Equals [!Ref EnableLambdaProvisionedConcurrency, 'true']
+  HasLambdaProvAndCode: !And [HasLambdaCode, EnableLambdaProv]
+
 Resources:
   # SNS Topic for CloudFormation Notifications
   CloudFormationNotificationTopic:
@@ -294,6 +401,80 @@ Resources:
       DisplayName: 'CloudFormation Stack Notifications'
       KmsMasterKeyId:
         !If [CreateKMSKey, !GetAtt KMSKey.Arn, !Ref UseExistingKMSKeyId]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # CloudTrail (PCI DSS audit logging)
+  CloudTrailS3Bucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateCloudTrail
+    Properties:
+      BucketName: !Sub
+        - '${EnvironmentLower}-secure-trail-${AWS::AccountId}-${AWS::Region}'
+        - EnvironmentLower:
+            !FindInMap [EnvironmentLowerMap, !Ref Environment, Name]
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID:
+                !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldTrails
+            Status: Enabled
+            ExpirationInDays: 365
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateCloudTrail
+    Properties:
+      Bucket: !Ref CloudTrailS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  OrganizationTrail:
+    Type: AWS::CloudTrail::Trail
+    Condition: CreateCloudTrail
+    Properties:
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IncludeGlobalServiceEvents: true
+      S3BucketName: !Ref CloudTrailS3Bucket
+      KMSKeyId: !If [CreateKMSKey, !Ref KMSKey, !Ref UseExistingKMSKeyId]
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -323,6 +504,17 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow CloudTrail
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
             Resource: '*'
           - Sid: Allow CloudWatch Logs
             Effect: Allow
@@ -413,6 +605,120 @@ Resources:
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
+
+  # Network ACLs for Public Subnets (stateless allow of common traffic)
+  PublicNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-acl'
+
+  PublicNetworkAclEntryInboundAllowHTTP:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 80
+        To: 80
+
+  PublicNetworkAclEntryInboundAllowHTTPS:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 110
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 443
+        To: 443
+
+  PublicNetworkAclEntryInboundEphemeral:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 120
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+
+  PublicNetworkAclEntryOutboundAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+
+  PublicSubnet1AclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  PublicSubnet2AclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  # Network ACLs for Private Subnets (restrictive egress only)
+  PrivateNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-acl'
+
+  PrivateNetworkAclEntryInboundEphemeralFromALB:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: 6
+      RuleAction: allow
+      Egress: false
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: 1024
+        To: 65535
+
+  PrivateNetworkAclEntryOutboundAll:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref PrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      Egress: true
+      CidrBlock: 0.0.0.0/0
+
+  PrivateSubnet1AclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      NetworkAclId: !Ref PrivateNetworkAcl
+
+  PrivateSubnet2AclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      NetworkAclId: !Ref PrivateNetworkAcl
 
   # VPC Flow Logs
   VPCFlowLogsRole:
@@ -887,6 +1193,26 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # S3 SSL-only bucket policy (PCI DSS)
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateS3BucketAndPrimary
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceTLSRequestsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${S3Bucket}'
+              - !Sub 'arn:aws:s3:::${S3Bucket}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+
   # Database Subnet Group
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -1276,6 +1602,21 @@ Resources:
             TargetGroupStickinessConfig:
               Enabled: false
 
+  # Route 53 Primary Alias (new ALB)
+  PrimaryFailoverRecordNewAlb:
+    Type: AWS::Route53::RecordSet
+    Condition: CreatePrimaryAliasWithNewALB
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref RecordName
+      Type: A
+      SetIdentifier: Primary
+      Failover: PRIMARY
+      AliasTarget:
+        DNSName: !GetAtt ALB.DNSName
+        HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+
   ALBHTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Condition: CreateALBAndHasSSL
@@ -1296,6 +1637,36 @@ Resources:
                 Weight: !If [CreateGreenFleet, !Ref GreenTrafficWeight, 0]
             TargetGroupStickinessConfig:
               Enabled: false
+
+  # Route 53 Primary Alias (existing ALB)
+  PrimaryFailoverRecordExistingAlb:
+    Type: AWS::Route53::RecordSet
+    Condition: CreatePrimaryAliasWithExistingALB
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref RecordName
+      Type: A
+      SetIdentifier: Primary
+      Failover: PRIMARY
+      AliasTarget:
+        DNSName: !Ref UseExistingALBDNSName
+        HostedZoneId: !Ref UseExistingALBHostedZoneId
+        EvaluateTargetHealth: true
+
+  # Route 53 Secondary Alias (cross-region failover)
+  SecondaryFailoverRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: CreateSecondaryAlias
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref RecordName
+      Type: A
+      SetIdentifier: Secondary
+      Failover: SECONDARY
+      AliasTarget:
+        DNSName: !Ref SecondaryALBDNSName
+        HostedZoneId: !Ref SecondaryALBHostedZoneId
+        EvaluateTargetHealth: true
 
   # Launch Template for Web Servers
   WebServerLaunchTemplate:
@@ -1399,13 +1770,39 @@ Resources:
       ApplicationName: !Ref CodeDeployApplication
       DeploymentGroupName: !Sub '${Environment}-dg'
       ServiceRoleArn: !GetAtt CodeDeployRole.Arn
-      AutoScalingGroups:
-        - !Ref WebServerASG
       DeploymentStyle:
-        DeploymentType: IN_PLACE
-        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
+        DeploymentType: BLUE_GREEN
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+      BlueGreenDeploymentConfiguration:
+        TerminateBlueInstancesOnDeploymentSuccess:
+          Action: KEEP_ALIVE
+          TerminationWaitTimeInMinutes: 0
+        DeploymentReadyOption:
+          ActionOnTimeout: CONTINUE_DEPLOYMENT
+          WaitTimeInMinutes: 0
+        GreenFleetProvisioningOption:
+          Action: COPY_AUTO_SCALING_GROUP
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_ALARM
+          - DEPLOYMENT_STOP_ON_REQUEST
+      LoadBalancerInfo:
+        TargetGroupPairInfoList:
+          - TargetGroups:
+              - Name: !Ref ALBTargetGroupBlue
+              - Name: !Ref ALBTargetGroupGreen
+            ProdTrafficRoute:
+              ListenerArns:
+                - !If [CreateALB, !Ref ALBListener, !Ref 'AWS::NoValue']
+                - !If [
+                    CreateALBAndHasSSL,
+                    !Ref ALBHTTPSListener,
+                    !Ref 'AWS::NoValue',
+                  ]
 
-  # Lambda Function (example)
+  # Lambda Function
   ExampleLambdaFunction:
     Type: AWS::Lambda::Function
     Condition: HasLambdaCode
@@ -1437,6 +1834,29 @@ Resources:
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
+
+  # Lambda Version and Alias with optional Provisioned Concurrency
+  ExampleLambdaVersion:
+    Type: AWS::Lambda::Version
+    Condition: HasLambdaCode
+    Properties:
+      FunctionName: !Ref ExampleLambdaFunction
+
+  ExampleLambdaAlias:
+    Type: AWS::Lambda::Alias
+    Condition: HasLambdaCode
+    Properties:
+      FunctionName: !Ref ExampleLambdaFunction
+      FunctionVersion: !GetAtt ExampleLambdaVersion.Version
+      Name: live
+
+  ExampleLambdaPC:
+    Type: AWS::Lambda::ProvisionedConcurrencyConfig
+    Condition: HasLambdaProvAndCode
+    Properties:
+      FunctionName: !Ref ExampleLambdaFunction
+      Qualifier: !Ref ExampleLambdaAlias
+      ProvisionedConcurrentExecutions: !Ref LambdaProvisionedConcurrency
 
   # CloudWatch Alarms
   HighCPUAlarm:
@@ -1529,4 +1949,3 @@ Outputs:
     Description: 'Name of the Lambda function'
     Value: !Ref ExampleLambdaFunction
     Condition: HasLambdaCode
-```
