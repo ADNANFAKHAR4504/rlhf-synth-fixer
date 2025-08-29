@@ -1,6 +1,6 @@
 Design and implement a robust CI/CD pipeline for deploying infrastructure across AWS accounts using Pulumi's Python SDK. The pipeline must integrate with GitHub Actions and be capable of handling multiple AWS regions configurable via pipeline variables.
 
-Requirements:
+Requirements: 
 
 1. Create a complete Pulumi Python project with proper project structure and dependencies
 2. Implement comprehensive AWS infrastructure including VPC with public/private subnets across 2 AZs, ECS Fargate cluster for microservices, RDS PostgreSQL with Multi-AZ, ElastiCache Redis cluster, Application Load Balancer with health checks, ECR private registry, S3 buckets for artifacts, CloudFront distribution, and CloudWatch monitoring
