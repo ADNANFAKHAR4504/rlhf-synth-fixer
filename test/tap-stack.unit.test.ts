@@ -17,7 +17,7 @@ describe('TapStack', () => {
       },
     });
     // Force the stack to be in us-east-2 (primary region) for testing
-    stack = new TapStack(app, 'TestTapStack', { 
+    stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
       env: { region: 'us-east-2', account: '123456789012' }
     });
@@ -430,6 +430,108 @@ describe('TapStack', () => {
             Value: 'Primary',
           },
         ]),
+      });
+    });
+
+    test('should configure secondary region correctly', () => {
+      // Create a secondary region stack
+      const secondaryApp = new cdk.App({
+        context: {
+          domainName: 'testturing.com',
+        },
+      });
+      const secondaryStack = new TapStack(secondaryApp, 'TestSecondaryStack', {
+        environmentSuffix,
+        env: { region: 'us-west-2', account: '123456789012' }
+      });
+      const secondaryTemplate = Template.fromStack(secondaryStack);
+
+      // Check that it's tagged as Secondary
+      secondaryTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'Type',
+            Value: 'Secondary',
+          },
+        ]),
+      });
+
+      // Check that it creates a read replica instead of primary database
+      secondaryTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
+        SourceDBInstanceIdentifier: Match.anyValue(),
+      });
+    });
+  });
+
+  describe('Hosted Zone Configuration', () => {
+    test('should use existing hosted zone when hostedZoneId is provided', () => {
+      const appWithExistingZone = new cdk.App({
+        context: {
+          domainName: 'testturing.com',
+          hostedZoneId: 'Z1234567890ABC',
+        },
+      });
+      const stackWithExistingZone = new TapStack(appWithExistingZone, 'TestExistingZoneStack', {
+        environmentSuffix,
+        env: { region: 'us-east-2', account: '123456789012' }
+      });
+      const templateWithExistingZone = Template.fromStack(stackWithExistingZone);
+
+      // Should not create a new hosted zone
+      templateWithExistingZone.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          HostedZone: Match.anyValue(),
+        })),
+      });
+
+      // Should still create Route 53 records
+      templateWithExistingZone.hasResourceProperties('AWS::Route53::RecordSet', {
+        HostedZoneId: 'Z1234567890ABC',
+      });
+    });
+
+    test('should not create DNS resources when domainName is not provided', () => {
+      const appWithoutDomain = new cdk.App({
+        context: {
+          // No domainName provided
+        },
+      });
+      const stackWithoutDomain = new TapStack(appWithoutDomain, 'TestNoDomainStack', {
+        environmentSuffix,
+        env: { region: 'us-east-2', account: '123456789012' }
+      });
+      const templateWithoutDomain = Template.fromStack(stackWithoutDomain);
+
+      // Should not create any Route 53 resources
+      templateWithoutDomain.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          HostedZone: Match.anyValue(),
+        })),
+      });
+
+      templateWithoutDomain.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          HealthCheck: Match.anyValue(),
+        })),
+      });
+
+      templateWithoutDomain.templateMatches({
+        Resources: Match.not(Match.objectLike({
+          PrimaryRecord: Match.anyValue(),
+        })),
+      });
+
+      // Should not create DNS-related outputs
+      templateWithoutDomain.templateMatches({
+        Outputs: Match.not(Match.objectLike({
+          HostedZoneId: Match.anyValue(),
+        })),
+      });
+
+      templateWithoutDomain.templateMatches({
+        Outputs: Match.not(Match.objectLike({
+          HealthCheckId: Match.anyValue(),
+        })),
       });
     });
   });
