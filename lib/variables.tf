@@ -43,7 +43,7 @@ variable "instance_type" {
 variable "key_name" {
   description = "EC2 Key Pair name"
   type        = string
-  # No default - must be provided
+  default     = "prod-key-pair"
 }
 
 variable "db_instance_class" {
@@ -73,5 +73,5 @@ variable "enable_encryption" {
 variable "sns_email" {
   description = "Email for SNS notifications"
   type        = string
-  # No default - must be provided
+  default     = "devops-team@company.com"
 }
