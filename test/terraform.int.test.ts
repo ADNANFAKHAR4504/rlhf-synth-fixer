@@ -48,7 +48,7 @@ function readStructuredOutputs() {
   const vpcId = out.vpc_id.value;
   const securityGroupId = out.alb_security_group_id.value;
   const autoscalingGroupName = out.autoscaling_group_name.value;
-  const region = process.env.AWS_REGION || 'us-east-1';
+  const region = process.env.AWS_REGION || 'us-west-2';
 
   return { domain, vpcId, securityGroupId, autoscalingGroupName, region };
 }
