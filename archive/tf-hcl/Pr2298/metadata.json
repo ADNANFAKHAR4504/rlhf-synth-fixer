@@ -25,5 +25,11 @@
     "VPC",
     "EC2",
     "CloudWatch"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohankrishnapechetti",
+  "dockerS3Location": ""
 }
