@@ -93,6 +93,11 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
+# Random suffix for unique resource names
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 # Local values
 locals {
   common_tags = {
@@ -102,6 +107,7 @@ locals {
   }
 
   availability_zones = slice(data.aws_availability_zones.available.names, 0, 2)
+  random_suffix      = random_id.suffix.hex
 }
 
 # VPC
@@ -301,7 +307,7 @@ resource "aws_security_group" "web" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "${var.environment}-ec2-role"
+  name = "${var.environment}-ec2-role-${local.random_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -323,7 +329,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_policy" "s3_access" {
   count = var.app_config_bucket != "" ? 1 : 0
   
-  name        = "${var.environment}-s3-access"
+  name        = "${var.environment}-s3-access-${local.random_suffix}"
   description = "Policy for S3 access to app config bucket"
 
   policy = jsonencode({
@@ -344,6 +350,10 @@ resource "aws_iam_policy" "s3_access" {
   })
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # FIXED: Conditional attachment of S3 policy
@@ -362,15 +372,19 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
 
 # Instance profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${var.environment}-ec2-profile"
+  name = "${var.environment}-ec2-profile-${local.random_suffix}"
   role = aws_iam_role.ec2_role.name
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${var.environment}-alb"
+  name               = "${var.environment}-alb-${local.random_suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -379,13 +393,17 @@ resource "aws_lb" "main" {
   enable_deletion_protection = false
 
   tags = merge(local.common_tags, {
-    Name = "${var.environment}-alb"
+    Name = "${var.environment}-alb-${local.random_suffix}"
   })
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Target Group
 resource "aws_lb_target_group" "web" {
-  name     = "${var.environment}-web-tg"
+  name     = "${var.environment}-web-tg-${local.random_suffix}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -611,7 +629,7 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                      = "${var.environment}-web-asg"
+  name                      = "${var.environment}-web-asg-${local.random_suffix}"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.web.arn]
   health_check_type         = "ELB"
@@ -651,7 +669,7 @@ resource "aws_autoscaling_group" "web" {
 
 # Auto Scaling Policies
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${var.environment}-scale-up"
+  name                   = "${var.environment}-scale-up-${local.random_suffix}"
   scaling_adjustment     = 2
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -659,7 +677,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${var.environment}-scale-down"
+  name                   = "${var.environment}-scale-down-${local.random_suffix}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -668,7 +686,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 
 # CloudWatch Alarm for High CPU
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
-  alarm_name          = "${var.environment}-high-cpu"
+  alarm_name          = "${var.environment}-high-cpu-${local.random_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -688,7 +706,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 
 # CloudWatch Alarm for Low CPU
 resource "aws_cloudwatch_metric_alarm" "low_cpu" {
-  alarm_name          = "${var.environment}-low-cpu"
+  alarm_name          = "${var.environment}-low-cpu-${local.random_suffix}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -708,10 +726,14 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "web_app" {
-  name              = "/aws/ec2/${var.environment}-web-app"
+  name              = "/aws/ec2/${var.environment}-web-app-${local.random_suffix}"
   retention_in_days = 14
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # Outputs
