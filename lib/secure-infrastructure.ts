@@ -12,12 +12,13 @@ export class SecureInfrastructure {
   private internetGateway: aws.ec2.InternetGateway;
   private natGateway: aws.ec2.NatGateway;
   private dbSubnetGroup: aws.rds.SubnetGroup;
-  private webSecurityGroup: aws.ec2.SecurityGroup;
-  private dbSecurityGroup: aws.ec2.SecurityGroup;
-  private ec2Role: aws.iam.Role;
-  private flowLogsRole: aws.iam.Role;
-  private appBucket: aws.s3.Bucket;
-  private logsBucket: aws.s3.Bucket;
+  private webSecurityGroup!: aws.ec2.SecurityGroup;
+  private dbSecurityGroup!: aws.ec2.SecurityGroup;
+  private ec2Role!: aws.iam.Role;
+  private flowLogsRole!: aws.iam.Role;
+  private appBucket!: aws.s3.Bucket;
+  private logsBucket!: aws.s3.Bucket;
+  private masterKey!: aws.kms.Key;
 
   constructor(
     region: string,
@@ -43,20 +44,44 @@ export class SecureInfrastructure {
     this.publicSubnets = [];
 
     // Initialize infrastructure components in correct order
+    this.masterKey = this.createKMSKey();
     this.vpc = this.createVPC();
     this.internetGateway = this.createInternetGateway();
     this.createSubnets();
     this.natGateway = this.createNATGateway();
     this.createRouteTables();
     this.dbSubnetGroup = this.createDBSubnetGroup();
-    this.createSecurityGroups();
-    this.createS3Buckets();
-    this.createIAMRoles();
+    const securityGroups = this.createSecurityGroups();
+    this.webSecurityGroup = securityGroups.web;
+    this.dbSecurityGroup = securityGroups.db;
+    const buckets = this.createS3Buckets();
+    this.appBucket = buckets.app;
+    this.logsBucket = buckets.logs;
+    const roles = this.createIAMRoles();
+    this.ec2Role = roles.ec2;
+    this.flowLogsRole = roles.flowLogs;
     this.createSecretsManager();
     this.createRDSDatabase();
     this.createEC2Instances();
     this.createCloudFront();
     this.createVPCFlowLogs();
+    this.createVPCEndpoints();
+  }
+
+  private createKMSKey(): aws.kms.Key {
+    return new aws.kms.Key(
+      `master-key-${this.environment}`,
+      {
+        description: `Master key for RDS and SecretsManager - ${this.environment}`,
+        enableKeyRotation: true,
+        tags: {
+          ...this.tags,
+          Name: `master-key-${this.environment}`,
+          Purpose: 'Master encryption key for DB and secrets',
+        },
+      },
+      { provider: this.provider }
+    );
   }
 
   private createVPC(): aws.ec2.Vpc {
@@ -247,9 +272,12 @@ export class SecureInfrastructure {
     );
   }
 
-  private createSecurityGroups(): void {
+  private createSecurityGroups(): {
+    web: aws.ec2.SecurityGroup;
+    db: aws.ec2.SecurityGroup;
+  } {
     // Web Security Group
-    this.webSecurityGroup = new aws.ec2.SecurityGroup(
+    const webSecurityGroup = new aws.ec2.SecurityGroup(
       `web-sg-${this.environment}`,
       {
         name: `web-sg-${this.environment}`,
@@ -296,7 +324,7 @@ export class SecureInfrastructure {
     );
 
     // Database Security Group
-    this.dbSecurityGroup = new aws.ec2.SecurityGroup(
+    const dbSecurityGroup = new aws.ec2.SecurityGroup(
       `db-sg-${this.environment}`,
       {
         name: `db-sg-${this.environment}`,
@@ -307,7 +335,7 @@ export class SecureInfrastructure {
             protocol: 'tcp',
             fromPort: 3306,
             toPort: 3306,
-            securityGroups: [this.webSecurityGroup.id],
+            securityGroups: [webSecurityGroup.id],
             description: 'MySQL access from web servers',
           },
         ],
@@ -327,11 +355,13 @@ export class SecureInfrastructure {
       },
       { provider: this.provider }
     );
+
+    return { web: webSecurityGroup, db: dbSecurityGroup };
   }
 
-  private createS3Buckets(): void {
+  private createS3Buckets(): { app: aws.s3.Bucket; logs: aws.s3.Bucket } {
     // Application Bucket
-    this.appBucket = new aws.s3.Bucket(
+    const appBucket = new aws.s3.Bucket(
       `secure-app-bucket-${this.environment}`,
       {
         bucket: `secure-app-bucket-${this.environment}-${Math.random().toString(36).substring(7)}`,
@@ -348,7 +378,7 @@ export class SecureInfrastructure {
     new aws.s3.BucketVersioningV2(
       `app-bucket-versioning-${this.environment}`,
       {
-        bucket: this.appBucket.id,
+        bucket: appBucket.id,
         versioningConfiguration: {
           status: 'Enabled',
         },
@@ -360,7 +390,7 @@ export class SecureInfrastructure {
     new aws.s3.BucketServerSideEncryptionConfigurationV2(
       `app-bucket-encryption-${this.environment}`,
       {
-        bucket: this.appBucket.id,
+        bucket: appBucket.id,
         rules: [
           {
             applyServerSideEncryptionByDefault: {
@@ -377,7 +407,7 @@ export class SecureInfrastructure {
     new aws.s3.BucketPublicAccessBlock(
       `app-bucket-pab-${this.environment}`,
       {
-        bucket: this.appBucket.id,
+        bucket: appBucket.id,
         blockPublicAcls: true,
         blockPublicPolicy: true,
         ignorePublicAcls: true,
@@ -387,10 +417,18 @@ export class SecureInfrastructure {
     );
 
     // CloudFront Logs Bucket
-    this.logsBucket = new aws.s3.Bucket(
+    const logsBucket = new aws.s3.Bucket(
       `cloudfront-logs-bucket-${this.environment}`,
       {
         bucket: `cloudfront-logs-bucket-${this.environment}-${Math.random().toString(36).substring(7)}`,
+        lifecycleRules: [
+          {
+            enabled: true,
+            id: 'log-expiry',
+            expiration: { days: 90 },
+            prefix: 'cloudfront-logs/',
+          },
+        ],
         tags: {
           ...this.tags,
           Name: `cloudfront-logs-bucket-${this.environment}`,
@@ -403,7 +441,7 @@ export class SecureInfrastructure {
     new aws.s3.BucketVersioningV2(
       `logs-bucket-versioning-${this.environment}`,
       {
-        bucket: this.logsBucket.id,
+        bucket: logsBucket.id,
         versioningConfiguration: {
           status: 'Enabled',
         },
@@ -414,7 +452,7 @@ export class SecureInfrastructure {
     new aws.s3.BucketServerSideEncryptionConfigurationV2(
       `logs-bucket-encryption-${this.environment}`,
       {
-        bucket: this.logsBucket.id,
+        bucket: logsBucket.id,
         rules: [
           {
             applyServerSideEncryptionByDefault: {
@@ -430,7 +468,7 @@ export class SecureInfrastructure {
     new aws.s3.BucketPublicAccessBlock(
       `logs-bucket-pab-${this.environment}`,
       {
-        bucket: this.logsBucket.id,
+        bucket: logsBucket.id,
         blockPublicAcls: true,
         blockPublicPolicy: true,
         ignorePublicAcls: true,
@@ -438,11 +476,24 @@ export class SecureInfrastructure {
       },
       { provider: this.provider }
     );
+
+    // S3 Access Logging for App Bucket
+    new aws.s3.BucketLogging(
+      `app-bucket-logging-${this.environment}`,
+      {
+        bucket: appBucket.id,
+        targetBucket: logsBucket.id,
+        targetPrefix: `access-logs/${this.environment}/`,
+      },
+      { provider: this.provider }
+    );
+
+    return { app: appBucket, logs: logsBucket };
   }
 
-  private createIAMRoles(): void {
+  private createIAMRoles(): { ec2: aws.iam.Role; flowLogs: aws.iam.Role } {
     // EC2 Instance Role
-    this.ec2Role = new aws.iam.Role(
+    const ec2Role = new aws.iam.Role(
       `ec2-role-${this.environment}`,
       {
         assumeRolePolicy: JSON.stringify({
@@ -507,7 +558,7 @@ export class SecureInfrastructure {
     new aws.iam.RolePolicyAttachment(
       `ec2-policy-attachment-${this.environment}`,
       {
-        role: this.ec2Role.name,
+        role: ec2Role.name,
         policyArn: ec2Policy.arn,
       },
       { provider: this.provider }
@@ -517,7 +568,7 @@ export class SecureInfrastructure {
     new aws.iam.InstanceProfile(
       `ec2-instance-profile-${this.environment}`,
       {
-        role: this.ec2Role.name,
+        role: ec2Role.name,
         tags: {
           ...this.tags,
           Name: `ec2-instance-profile-${this.environment}`,
@@ -527,7 +578,7 @@ export class SecureInfrastructure {
     );
 
     // VPC Flow Logs Role
-    this.flowLogsRole = new aws.iam.Role(
+    const flowLogsRole = new aws.iam.Role(
       `flow-logs-role-${this.environment}`,
       {
         assumeRolePolicy: JSON.stringify({
@@ -553,12 +604,14 @@ export class SecureInfrastructure {
     new aws.iam.RolePolicyAttachment(
       `flow-logs-policy-attachment-${this.environment}`,
       {
-        role: this.flowLogsRole.name,
+        role: flowLogsRole.name,
         policyArn:
           'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
       },
       { provider: this.provider }
     );
+
+    return { ec2: ec2Role, flowLogs: flowLogsRole };
   }
 
   private createSecretsManager(): void {
@@ -652,6 +705,7 @@ export class SecureInfrastructure {
         maxAllocatedStorage: 100,
         storageType: 'gp2',
         storageEncrypted: true,
+        kmsKeyId: this.masterKey.id,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
@@ -718,6 +772,7 @@ export class SecureInfrastructure {
         imageId: ami.then(ami => ami.id),
         instanceType: 't3.micro',
         vpcSecurityGroupIds: [this.webSecurityGroup.id],
+        monitoring: { enabled: true },
         iamInstanceProfile: {
           name: `ec2-instance-profile-${this.environment}`,
         },
@@ -907,6 +962,41 @@ export class SecureInfrastructure {
           ...this.tags,
           Name: `vpc-flow-log-${this.environment}`,
           Purpose: 'Network Monitoring',
+        },
+      },
+      { provider: this.provider }
+    );
+  }
+
+  private createVPCEndpoints(): void {
+    // S3 VPC Endpoint
+    new aws.ec2.VpcEndpoint(
+      `s3-endpoint-${this.environment}`,
+      {
+        vpcId: this.vpc.id,
+        serviceName: `com.amazonaws.${this.region}.s3`,
+        vpcEndpointType: 'Gateway',
+        routeTableIds: [],
+        tags: {
+          ...this.tags,
+          Name: `s3-endpoint-${this.environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    // Secrets Manager VPC Endpoint
+    new aws.ec2.VpcEndpoint(
+      `secrets-endpoint-${this.environment}`,
+      {
+        vpcId: this.vpc.id,
+        serviceName: `com.amazonaws.${this.region}.secretsmanager`,
+        vpcEndpointType: 'Interface',
+        subnetIds: this.privateSubnets.map(s => s.id),
+        securityGroupIds: [this.webSecurityGroup.id],
+        tags: {
+          ...this.tags,
+          Name: `secrets-endpoint-${this.environment}`,
         },
       },
       { provider: this.provider }
