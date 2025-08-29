@@ -32,6 +32,8 @@ new TapStack(app, stackName, {
   stateBucketRegion: stateBucketRegion,
   awsRegion: awsRegion,
   defaultTags: defaultTags,
+  // Provide a direct database password to avoid Secrets Manager dependency
+  dbPassword: 'cZWeLY7LbVcTsFK',
 });
 
 // Synthesize the app to generate the Terraform configuration

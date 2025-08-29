@@ -33,7 +33,7 @@ interface TapStackProps {
   // Optional overrides
   appDataBucketName?: string; // use an existing/shared bucket instead of generating one
   keyName?: string; // EC2 key pair name
-  dbPasswordSecretId?: string; // custom secret id (defaults to "example-secret")
+  dbPasswordSecretId?: string; // custom secret id (defaults to "my-new-secret")
   dbPassword?: string; // direct password (must be ≤ 41 chars for MySQL)
 
   // test helper to override the hard-coded override
@@ -113,10 +113,10 @@ export class TapStack extends TerraformStack {
 
     // RDS password:
     // 1) if props.dbPassword provided, use it (ensure ≤ 41 chars)
-    // 2) else read from Secrets Manager secret "example-secret"
+    // 2) else read from Secrets Manager secret "my-new-secret"
     //    (can be overridden via props.dbPasswordSecretId)
     const fallbackPassword = 'A1b!A1b!A1b!A1b!A1b!A1b!'; // 24 chars, MySQL-safe
-    const chosenSecretId = props?.dbPasswordSecretId ?? 'example-secret';
+    const chosenSecretId = props?.dbPasswordSecretId ?? 'my-new-secret';
     let dbPassword: string | undefined;
 
     if (props?.dbPassword) {

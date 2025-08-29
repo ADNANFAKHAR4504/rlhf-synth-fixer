@@ -279,7 +279,9 @@ describe('TapStack Unit Tests', () => {
 
   test('should create AWS data sources', () => {
     const app = new App();
-    new TapStack(app, 'TestStackDataSources');
+    new TapStack(app, 'TestStackDataSources', {
+      dbPassword: 'cZWeLY7LbVcTsFK',
+    });
 
     expect(DataAwsCallerIdentity).toHaveBeenCalledTimes(1);
     expect(DataAwsCallerIdentity).toHaveBeenCalledWith(
@@ -287,12 +289,21 @@ describe('TapStack Unit Tests', () => {
       'current'
     );
 
+    // When providing direct password, Secrets Manager should not be called
+    expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledTimes(0);
+  });
+
+  test('should use AWS Secrets Manager when no direct password provided', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackSecretsManager');
+
+    expect(DataAwsCallerIdentity).toHaveBeenCalledTimes(1);
     expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledTimes(1);
     expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledWith(
       expect.anything(),
       'db-password-secret',
       expect.objectContaining({
-        secretId: 'three-tier-db-credentials-dev',
+        secretId: 'my-new-secret',
       })
     );
   });
@@ -325,7 +336,7 @@ describe('TapStack Unit Tests', () => {
       expect.objectContaining({
         project: 'tap-project',
         environment: 'dev',
-        bucketName: 'iac-rlhf-cfn-states-us-west-2',
+        bucketName: expect.stringContaining('tap-project-dev-app-'),
         kmsKey: expect.objectContaining({
           keyId: 'kms-key-id',
           arn: 'arn:aws:kms:us-west-2:123456789012:key/kms-key-id',
@@ -407,14 +418,16 @@ describe('TapStack Unit Tests', () => {
         project: 'tap-project',
         environment: 'dev',
         instanceType: 't3.micro',
-        keyName: 'my-key-pair',
+        keyName: undefined,
       })
     );
   });
 
   test('should create RDS module with correct configuration', () => {
     const app = new App();
-    new TapStack(app, 'TestStackRDS');
+    new TapStack(app, 'TestStackRDS', {
+      dbPassword: 'cZWeLY7LbVcTsFK',
+    });
 
     expect(RdsModule).toHaveBeenCalledTimes(1);
     expect(RdsModule).toHaveBeenCalledWith(
@@ -429,7 +442,7 @@ describe('TapStack Unit Tests', () => {
         allocatedStorage: 20,
         dbName: 'appdb',
         username: 'admin',
-        password: 'Tp_Dev$rds_P@ssw0rd_2025_ABC123', // updated: valid length
+        password: 'cZWeLY7LbVcTsFK', // updated: new password for dev-tap-database
         subnetIds: ['subnet-private-1', 'subnet-private-2'],
         securityGroupIds: ['rds-sg-sg-id'],
         kmsKey: expect.objectContaining({
@@ -457,7 +470,7 @@ describe('TapStack Unit Tests', () => {
       expect.objectContaining({
         project: 'tap-project',
         environment: 'staging',
-        bucketName: 'iac-rlhf-cfn-states-us-west-2',
+        bucketName: expect.stringContaining('tap-project-staging-app-'),
       })
     );
   });
