@@ -962,7 +962,7 @@ resource "aws_db_instance" "primary" {
   deletion_protection = false
   
   # Performance Insights
-  performance_insights_enabled = true
+  #performance_insights_enabled = true
   
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-database"
@@ -995,7 +995,7 @@ resource "aws_db_instance" "secondary" {
   deletion_protection = false
   
   # Performance Insights
-  performance_insights_enabled = true
+  #performance_insights_enabled = true
   
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-database-replica"

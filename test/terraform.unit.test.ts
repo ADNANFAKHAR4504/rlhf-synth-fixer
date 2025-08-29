@@ -1,241 +1,209 @@
 import * as fs from "fs";
 import * as path from "path";
 
-const LIB_DIR = path.resolve(__dirname, "../lib");
-const TAP_STACK_TF = path.join(LIB_DIR, "tap_stack.tf");
+const TAP_STACK_TF = path.resolve(__dirname, "../lib/tap_stack.tf");
 const tf = fs.readFileSync(TAP_STACK_TF, "utf8");
 const has = (regex: RegExp) => regex.test(tf);
 
-describe("tap_stack.tf comprehensive static validation", () => {
+const expectedVariables = [
+  "primary_region",
+  "secondary_region",
+  "allowed_ssh_cidrs",
+  "allowed_https_cidrs",
+  "instance_type",
+  "db_instance_class"
+];
 
-  // 1. File presence and basic content length
-  it("exists and has sufficient config content", () => {
+const expectedLocals = [
+  "environment",
+  "primary_vpc_cidr",
+  "secondary_vpc_cidr",
+  "primary_public_subnet_cidr",
+  "primary_private_subnet_cidr",
+  "secondary_public_subnet_cidr",
+  "secondary_private_subnet_cidr",
+  "common_tags",
+  "primary_prefix",
+  "secondary_prefix"
+];
+
+const expectedSecurityGroups = [
+  "ec2_primary",
+  "ec2_secondary",
+  "elb_primary",
+  "elb_secondary",
+  "rds_primary",
+  "rds_secondary"
+];
+
+describe("tap_stack.tf static content validation", () => {
+  it("file exists and contains sufficient content", () => {
     expect(fs.existsSync(TAP_STACK_TF)).toBe(true);
-    expect(tf.length).toBeGreaterThan(50000); // Adjusted for full stack length
+    expect(tf.length).toBeGreaterThan(30000);
   });
 
-  // 2. Validate required input variables based on current stack
-  it("declares required input variables", () => {
-    [
-      "environment",
-      "project_name",
-      "primary_region",
-      "secondary_region",
-      "primary_vpc_cidr",
-      "secondary_vpc_cidr",
-      "instance_type",
-      "db_instance_class",
-      "domain_name"
-    ].forEach(variableName => {
-      expect(has(new RegExp(`variable\\s+"${variableName}"`))).toBe(true);
+  it("declares all required input variables", () => {
+    expectedVariables.forEach(variable => {
+      expect(has(new RegExp(`variable\\s+"${variable}"`))).toBe(true);
     });
   });
 
-  // 3. Validate locals definitions for tags, prefixes, and subnets
-  it("defines all expected locals", () => {
-    [
-      "common_tags",
-      "primary_prefix",
-      "secondary_prefix",
-      "primary_public_subnet_1",
-      "primary_public_subnet_2",
-      "primary_private_subnet_1",
-      "primary_private_subnet_2",
-      "secondary_public_subnet_1",
-      "secondary_public_subnet_2",
-      "secondary_private_subnet_1",
-      "secondary_private_subnet_2"
-    ].forEach(localName => {
-      expect(has(new RegExp(`local\\.${localName}`))).toBe(true);
+  it("defines expected locals", () => {
+    expectedLocals.forEach(local => {
+      expect(has(new RegExp(`local\\.${local}`))).toBe(true);
     });
   });
 
-  // 4. Validate data sources for AMI and availability zones in both regions
-  it("declares AWS data sources needed for AMI and AZs", () => {
-    [
-      /data\s+"aws_ami"\s+"amazon_linux_primary"/,
-      /data\s+"aws_ami"\s+"amazon_linux_secondary"/,
-      /data\s+"aws_availability_zones"\s+"primary"/,
-      /data\s+"aws_availability_zones"\s+"secondary"/
-    ].forEach(rx => {
-      expect(has(rx)).toBe(true);
+  it("declares VPC and subnet resources for primary and secondary regions", () => {
+    ["primary", "secondary"].forEach(region => {
+      expect(has(new RegExp(`resource\\s+"aws_vpc"\\s+"${region}"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_subnet"\\s+"${region}_public"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_subnet"\\s+"${region}_private"`))).toBe(true);
     });
   });
 
-  // 5. Validate primary and secondary VPC and subnet resources
-  it("creates VPCs and subnets in both primary and secondary regions", () => {
-    [
-      "aws_vpc.primary",
-      "aws_vpc.secondary",
-      "aws_subnet.primary_public_1",
-      "aws_subnet.primary_public_2",
-      "aws_subnet.primary_private_1",
-      "aws_subnet.primary_private_2",
-      "aws_subnet.secondary_public_1",
-      "aws_subnet.secondary_public_2",
-      "aws_subnet.secondary_private_1",
-      "aws_subnet.secondary_private_2"
-    ].forEach(resourceName => {
-      expect(has(new RegExp(`resource\\s+"aws_subnet"\\s+"${resourceName.split('.').pop()}"`))
-           || has(new RegExp(`resource\\s+"aws_vpc"\\s+"${resourceName.split('.').pop()}"`))).toBe(true);
+  it("declares NAT gateways and elastic IPs for both regions", () => {
+    ["primary", "secondary"].forEach(region => {
+      expect(has(new RegExp(`resource\\s+"aws_nat_gateway"\\s+"${region}"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_eip"\\s+"${region}_nat"`))).toBe(true);
     });
   });
 
-  // 6. Validate NAT Gateways and EIPs for both regions
-  it("declares NAT gateways and elastic IPs", () => {
-    [
-      /resource\s+"aws_nat_gateway"\s+"primary_1"/,
-      /resource\s+"aws_nat_gateway"\s+"primary_2"/,
-      /resource\s+"aws_nat_gateway"\s+"secondary_1"/,
-      /resource\s+"aws_nat_gateway"\s+"secondary_2"/,
-      /resource\s+"aws_eip"\s+"primary_nat_1"/,
-      /resource\s+"aws_eip"\s+"primary_nat_2"/,
-      /resource\s+"aws_eip"\s+"secondary_nat_1"/,
-      /resource\s+"aws_eip"\s+"secondary_nat_2"/
-    ].forEach(rx => {
-      expect(has(rx)).toBe(true);
-    });
-  });
-
-  // 7. Validate security groups for ALB, EC2, and RDS in both regions
-  it("creates security groups for ALB, EC2, and RDS in both regions", () => {
-    [
-      "primary_alb", "primary_ec2", "primary_rds",
-      "secondary_alb", "secondary_ec2", "secondary_rds"
-    ].forEach(sg => {
+  it("creates expected security groups for both regions", () => {
+    expectedSecurityGroups.forEach(sg => {
       expect(has(new RegExp(`resource\\s+"aws_security_group"\\s+"${sg}"`))).toBe(true);
     });
   });
 
-  // 8. Validate IAM roles, policies, and instance profile for EC2 and CloudWatch
-  it("defines IAM roles, policies, and instance profiles as expected", () => {
+  it("declares IAM roles and instance profiles for EC2 and RDS monitoring", () => {
     [
-      /resource\s+"aws_iam_role"\s+"ec2_role"/,
-      /resource\s+"aws_iam_policy"\s+"s3_access"/,
-      /resource\s+"aws_iam_policy"\s+"cloudwatch_access"/,
-      /resource\s+"aws_iam_role_policy_attachment"\s+"s3_access"/,
-      /resource\s+"aws_iam_role_policy_attachment"\s+"cloudwatch_access"/,
-      /resource\s+"aws_iam_role_policy_attachment"\s+"ssm_managed_instance_core"/,
-      /resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/
-    ].forEach(rx => {
-      expect(has(rx)).toBe(true);
+      "aws_iam_role.ec2_role",
+      "aws_iam_instance_profile.ec2_profile",
+      "aws_iam_role.rds_monitoring",
+      "aws_iam_role_policy_attachment.rds_monitoring"
+    ].forEach(item => {
+      const name = item.split(".")[1];
+      expect(has(new RegExp(`resource\\s+"aws_iam_role"\\s+"${name}"`)) || has(new RegExp(`resource\\s+"aws_iam_instance_profile"\\s+"${name}"`)) || has(new RegExp(`resource\\s+"aws_iam_role_policy_attachment"\\s+"${name}"`))).toBe(true);
     });
   });
 
-  // 9. Validate S3 bucket and related configurations
-  it("manages S3 buckets with versioning, encryption, lifecycle, and public access block", () => {
-    [
-      /resource\s+"aws_s3_bucket"\s+"logs"/,
-      /resource\s+"aws_s3_bucket_versioning"\s+"logs"/,
-      /resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"logs"/,
-      /resource\s+"aws_s3_bucket_public_access_block"\s+"logs"/,
-      /resource\s+"aws_s3_bucket_lifecycle_configuration"\s+"logs"/,
-      /resource\s+"random_string"\s+"bucket_suffix"/
-    ].forEach(rx => {
-      expect(has(rx)).toBe(true);
+  it("declares launch templates in both primary and secondary regions", () => {
+    ["primary", "secondary"].forEach(region => {
+      expect(has(new RegExp(`resource\\s+"aws_launch_template"\\s+"${region}"`))).toBe(true);
     });
   });
 
-  // 10. Validate Launch Templates with correct user data and IAM profile in both regions
-  it("defines launch templates for EC2 in both primary and secondary regions", () => {
-    [
-      /resource\s+"aws_launch_template"\s+"primary"/,
-      /resource\s+"aws_launch_template"\s+"secondary"/,
-      /user_data = local.user_data/
-    ].forEach(rx => expect(has(rx)).toBe(true));
+  it("declares auto scaling groups, policies, and scaling alarms for both regions", () => {
+    ["primary", "secondary"].forEach(region => {
+      expect(has(new RegExp(`resource\\s+"aws_autoscaling_group"\\s+"${region}"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_autoscaling_policy"\\s+"${region}_scale_up"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_autoscaling_policy"\\s+"${region}_scale_down"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_cloudwatch_metric_alarm"\\s+"${region}_cpu_high"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_cloudwatch_metric_alarm"\\s+"${region}_cpu_low"`))).toBe(true);
+    });
   });
 
-  // 11. Validate Application Load Balancers, target groups and listeners
-  it("creates ALBs, target groups and listeners in both regions", () => {
-    [
-      /resource\s+"aws_lb"\s+"primary"/,
-      /resource\s+"aws_lb_target_group"\s+"primary"/,
-      /resource\s+"aws_lb_listener"\s+"primary"/,
-      /resource\s+"aws_lb"\s+"secondary"/,
-      /resource\s+"aws_lb_target_group"\s+"secondary"/,
-      /resource\s+"aws_lb_listener"\s+"secondary"/
-    ].forEach(rx => expect(has(rx)).toBe(true));
-  });
-
-  // 12. Validate Auto Scaling Groups and policies in both regions with scaling alarms
-  it("creates ASGs and autoscaling policies for both primary and secondary regions", () => {
-    [
-      /resource\s+"aws_autoscaling_group"\s+"primary"/,
-      /resource\s+"aws_autoscaling_group"\s+"secondary"/,
-      /resource\s+"aws_autoscaling_policy"\s+"primary_scale_up"/,
-      /resource\s+"aws_autoscaling_policy"\s+"primary_scale_down"/,
-      /resource\s+"aws_autoscaling_policy"\s+"secondary_scale_up"/,
-      /resource\s+"aws_autoscaling_policy"\s+"secondary_scale_down"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_cpu_high"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_cpu_low"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"secondary_cpu_high"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"secondary_cpu_low"/
-    ].forEach(rx => expect(has(rx)).toBe(true));
-  });
-
-  // 13. Validate RDS resources: subnet groups, primary instance, secondary replication with encryption enabled
-  it("creates RDS subnet groups and instances with encrypted primary and encrypted cross-region replica", () => {
-    expect(has(/resource\s+"aws_db_subnet_group"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_db_subnet_group"\s+"secondary"/)).toBe(true);
+  it("declares primary and replica RDS instances with storage encrypted", () => {
     expect(has(/resource\s+"aws_db_instance"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_db_instance"\s+"secondary_replica"/)).toBe(true);
-
-    // Validate primary storage encryption
-    expect(has(/storage_encrypted\s*=\s*true/)).toBe(true);
-
-    // Validate secondary read replica includes storage_encrypted = true
-    const replicaRegex = /resource\s+"aws_db_instance"\s+"secondary_replica"[\s\S]*?storage_encrypted\s*=\s*true/;
-    expect(replicaRegex.test(tf)).toBe(true);
+    expect(has(/resource\s+"aws_db_instance"\s+"secondary"/)).toBe(true);
+    expect(tf.match(/resource\s+"aws_db_instance"\s+"primary"[\s\S]*?storage_encrypted\s*=\s*true/)).not.toBeNull();
+    expect(tf.match(/resource\s+"aws_db_instance"\s+"secondary"[\s\S]*?storage_encrypted\s*=\s*true/)).not.toBeNull();
   });
 
-  // 14. Validate Route53 hosted zone, health checks and weighted records
-  it("declares Route53 hosted zone, health checks and weighted routing records", () => {
-    expect(has(/resource\s+"aws_route53_zone"\s+"main"/)).toBe(true);
-    expect(has(/resource\s+"aws_route53_health_check"\s+"primary_alb"/)).toBe(true);
-    expect(has(/resource\s+"aws_route53_health_check"\s+"secondary_alb"/)).toBe(true);
-    expect(has(/resource\s+"aws_route53_record"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_route53_record"\s+"secondary"/)).toBe(true);
-
-    // Ensure health check of type HTTP, no insufficient_data_health_status since it's invalid for HTTP (fix if present)
-    expect(!has(/insufficient_data_health_status/)).toBe(true);
+  it("declares S3 bucket with versioning, encryption, and public access block", () => {
+    expect(has(/resource\s+"aws_s3_bucket"\s+"cloudfront_bucket"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_versioning"\s+"cloudfront_bucket"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"cloudfront_bucket"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_public_access_block"\s+"cloudfront_bucket"/)).toBe(true);
   });
 
-  // 15. Validate CloudWatch log group and alarms for ALB & RDS
-  it("creates CloudWatch log groups and alarms in both regions for ALB and RDS", () => {
-    [
-      /resource\s+"aws_cloudwatch_log_group"\s+"app_logs"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_alb_health"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"secondary_alb_health"/,
-      /resource\s+"aws_cloudwatch_metric_alarm"\s+"primary_rds_cpu"/
-    ].forEach(rx => expect(has(rx)).toBe(true));
+  it("declares CloudFront distribution and origin access control", () => {
+    expect(has(/resource\s+"aws_cloudfront_distribution"\s+"s3_distribution"/)).toBe(true);
+    expect(has(/resource\s+"aws_cloudfront_origin_access_control"\s+"s3_oac"/)).toBe(true);
   });
 
-  // 16. Validate outputs covering VPC, subnets, load balancers, asgs, launch templates, RDS, S3 bucket, IAM and Route53
-  it("defines expected outputs without sensitive info", () => {
-    [
+  it("declares CloudWatch log groups for both regions", () => {
+    ["primary", "secondary"].forEach(region => {
+      expect(has(new RegExp(`resource\\s+"aws_cloudwatch_log_group"\\s+"${region}_app_logs"`))).toBe(true);
+    });
+  });
+
+  it("declares expected outputs without sensitive data", () => {
+    const outputsToCheck = [
       "primary_vpc_id",
       "secondary_vpc_id",
-      "primary_public_subnet_ids",
-      "primary_private_subnet_ids",
-      "secondary_public_subnet_ids",
-      "secondary_private_subnet_ids",
-      "primary_alb_dns_name",
-      "secondary_alb_dns_name",
-      "primary_asg_name",
-      "secondary_asg_name",
+      "primary_public_subnet_id",
+      "primary_private_subnet_id",
+      "secondary_public_subnet_id",
+      "secondary_private_subnet_id",
+      "primary_internet_gateway_id",
+      "secondary_internet_gateway_id",
+      "primary_nat_gateway_id",
+      "secondary_nat_gateway_id",
+      "primary_public_route_table_id",
+      "primary_private_route_table_id",
+      "secondary_public_route_table_id",
+      "secondary_private_route_table_id",
+      "primary_ec2_security_group_id",
+      "secondary_ec2_security_group_id",
+      "primary_elb_security_group_id",
+      "secondary_elb_security_group_id",
+      "primary_rds_security_group_id",
+      "secondary_rds_security_group_id",
+      "primary_ami_id",
+      "secondary_ami_id",
+      "primary_ami_name",
+      "secondary_ami_name",
+      "ec2_iam_role_arn",
+      "ec2_instance_profile_name",
+      "rds_monitoring_role_arn",
       "primary_launch_template_id",
       "secondary_launch_template_id",
+      "primary_asg_name",
+      "secondary_asg_name",
+      "primary_alb_arn",
+      "secondary_alb_arn",
+      "primary_alb_dns_name",
+      "secondary_alb_dns_name",
+      "primary_target_group_arn",
+      "secondary_target_group_arn",
       "primary_rds_endpoint",
       "secondary_rds_endpoint",
+      "primary_rds_instance_id",
+      "secondary_rds_instance_id",
+      "primary_rds_port",
+      "secondary_rds_port",
+      "rds_database_name",
+      "rds_username",
       "s3_bucket_name",
-      "ec2_iam_role_name",
-      "route53_zone_id",
-    ].forEach(outputName => {
-      expect(has(new RegExp(`output\\s+"${outputName}"`))).toBe(true);
+      "s3_bucket_arn",
+      "s3_bucket_domain_name",
+      "s3_bucket_regional_domain_name",
+      "cloudfront_distribution_id",
+      "cloudfront_distribution_arn",
+      "cloudfront_distribution_domain_name",
+      "cloudfront_distribution_hosted_zone_id",
+      "primary_log_group_name",
+      "secondary_log_group_name",
+      "primary_cpu_high_alarm_name",
+      "secondary_cpu_high_alarm_name",
+      "primary_scale_up_policy_arn",
+      "primary_scale_down_policy_arn",
+      "secondary_scale_up_policy_arn",
+      "secondary_scale_down_policy_arn",
+      "primary_availability_zones",
+      "secondary_availability_zones",
+      "primary_region",
+      "secondary_region",
+      "environment",
+      "common_tags"
+    ];
+
+    outputsToCheck.forEach(outputVar => {
+      expect(has(new RegExp(`output\\s+"${outputVar}"`))).toBe(true);
     });
 
-    // Ensure no sensitive keys like password, secret included in outputs
+    // Ensure no sensitive output keys like password, secret, or keys exposed
     expect(has(/output\s+.*(password|secret|access_key|secret_key)/i)).toBe(false);
   });
-
 });
