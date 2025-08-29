@@ -71,7 +71,10 @@ class TapStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,  # Fixed: Changed from ON_DEMAND
             removal_policy=RemovalPolicy.DESTROY,  # For demo purposes
-            point_in_time_recovery=True
+            # Fixed: Updated deprecated property
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            )
         )
 
         # Apply tags to DynamoDB table
@@ -144,8 +147,8 @@ class TapStack(Stack):
             memory_size=256,
             environment={
                 "DYNAMODB_TABLE_NAME": metadata_table.table_name,
-                "DYNAMODB_TABLE_ARN": metadata_table.table_arn,
-                "AWS_REGION": self.region or "us-east-1"  # Fallback region
+                "DYNAMODB_TABLE_ARN": metadata_table.table_arn
+                # AWS_REGION is automatically provided by Lambda runtime
             }
         )
 

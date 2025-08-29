@@ -22,6 +22,12 @@ def lambda_handler(event, context):
         table_name = os.environ['DYNAMODB_TABLE_NAME']
         table = dynamodb.Table(table_name)
 
+        # AWS_REGION is automatically available in Lambda runtime
+        # No need to pass it as environment variable
+        current_region = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+
+        logger.info(f"Processing S3 event in region: {current_region}")
+
         # Process each record in the event
         for record in event['Records']:
             # Extract S3 event information
@@ -37,7 +43,11 @@ def lambda_handler(event, context):
             try:
                 response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
                 content_type = response.get('ContentType', 'unknown')
-                last_modified = response.get('LastModified', datetime.now()).isoformat()
+                last_modified = response.get('LastModified')
+                if last_modified:
+                    last_modified = last_modified.isoformat()
+                else:
+                    last_modified = datetime.now().isoformat()
                 etag = response.get('ETag', '').strip('"')
 
             except Exception as e:
@@ -57,7 +67,8 @@ def lambda_handler(event, context):
                 'last_modified': last_modified,
                 'etag': etag,
                 'processed_at': datetime.now().isoformat(),
-                'processing_status': 'completed'
+                'processing_status': 'completed',
+                'region': current_region
             }
 
             # Store metadata in DynamoDB
@@ -72,7 +83,8 @@ def lambda_handler(event, context):
                 'processed_files': [
                     unquote_plus(record['s3']['object']['key'])
                     for record in event['Records']
-                ]
+                ],
+                'region': current_region
             })
         }
 
