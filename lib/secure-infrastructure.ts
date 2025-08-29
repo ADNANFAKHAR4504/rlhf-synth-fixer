@@ -375,7 +375,7 @@ export class SecureInfrastructure {
     );
 
     // Enable versioning
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `app-bucket-versioning-${this.environment}`,
       {
         bucket: appBucket.id,
@@ -387,7 +387,7 @@ export class SecureInfrastructure {
     );
 
     // Enable server-side encryption
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `app-bucket-encryption-${this.environment}`,
       {
         bucket: appBucket.id,
@@ -421,14 +421,7 @@ export class SecureInfrastructure {
       `cloudfront-logs-bucket-${this.environment}`,
       {
         bucket: `cloudfront-logs-bucket-${this.environment}-${Math.random().toString(36).substring(7)}`,
-        lifecycleRules: [
-          {
-            enabled: true,
-            id: 'log-expiry',
-            expiration: { days: 90 },
-            prefix: 'cloudfront-logs/',
-          },
-        ],
+
         tags: {
           ...this.tags,
           Name: `cloudfront-logs-bucket-${this.environment}`,
@@ -438,7 +431,7 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `logs-bucket-versioning-${this.environment}`,
       {
         bucket: logsBucket.id,
@@ -449,7 +442,7 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `logs-bucket-encryption-${this.environment}`,
       {
         bucket: logsBucket.id,
@@ -473,6 +466,27 @@ export class SecureInfrastructure {
         blockPublicPolicy: true,
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
+      },
+      { provider: this.provider }
+    );
+
+    // S3 Lifecycle Configuration for logs bucket
+    new aws.s3.BucketLifecycleConfiguration(
+      `logs-bucket-lifecycle-${this.environment}`,
+      {
+        bucket: logsBucket.id,
+        rules: [
+          {
+            id: 'log-expiry',
+            status: 'Enabled',
+            filter: {
+              prefix: 'cloudfront-logs/',
+            },
+            expiration: {
+              days: 90,
+            },
+          },
+        ],
       },
       { provider: this.provider }
     );
@@ -577,22 +591,35 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    // VPC Flow Logs Role
+    // Get current AWS account ID
+    const caller = aws.getCallerIdentity({}, { provider: this.provider });
+
+    // VPC Flow Logs Role with proper trust policy
     const flowLogsRole = new aws.iam.Role(
       `flow-logs-role-${this.environment}`,
       {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
+        assumeRolePolicy: caller.then(c =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'vpc-flow-logs.amazonaws.com',
+                },
+                Action: 'sts:AssumeRole',
+                Condition: {
+                  StringEquals: {
+                    'aws:SourceAccount': c.accountId,
+                  },
+                  ArnLike: {
+                    'aws:SourceArn': `arn:aws:ec2:${this.region}:${c.accountId}:vpc-flow-log/*`,
+                  },
+                },
               },
-            },
-          ],
-        }),
+            ],
+          })
+        ),
         tags: {
           ...this.tags,
           Name: `flow-logs-role-${this.environment}`,
@@ -601,12 +628,25 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.iam.RolePolicyAttachment(
-      `flow-logs-policy-attachment-${this.environment}`,
+    // Custom inline policy for VPC Flow Logs
+    new aws.iam.RolePolicy(
+      `flow-logs-policy-${this.environment}`,
       {
-        role: flowLogsRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+        role: flowLogsRole.id,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              Resource: `arn:aws:logs:${this.region}:*:log-group:/aws/vpc/flowlogs/${this.environment}*`,
+            },
+          ],
+        }),
       },
       { provider: this.provider }
     );
@@ -621,6 +661,7 @@ export class SecureInfrastructure {
       {
         name: `app-secrets-${this.environment}`,
         description: 'Database credentials for the application',
+        kmsKeyId: this.masterKey.id,
         tags: {
           ...this.tags,
           Name: `db-credentials-${this.environment}`,
@@ -652,6 +693,7 @@ export class SecureInfrastructure {
       {
         name: `api-keys-${this.environment}`,
         description: 'API keys for external services',
+        kmsKeyId: this.masterKey.id,
         tags: {
           ...this.tags,
           Name: `api-keys-${this.environment}`,
