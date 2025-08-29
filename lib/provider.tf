@@ -6,14 +6,15 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
 
-  # Uncomment and configure for remote state
-  # backend "s3" {
-  #   bucket = "your-terraform-state-bucket"
-  #   key    = "ci-pipeline/terraform.tfstate"
-  #   region = "us-east-1"
-  # }
+  backend "s3" {
+    # Backend configuration will be provided via -backend-config flags
+  }
 }
 
 provider "aws" {

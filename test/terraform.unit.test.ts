@@ -30,11 +30,10 @@ describe('tap_stack.tf static verification', () => {
     );
   });
 
-  it('has terraform provider requirements', () => {
-    expect(has(/terraform\s*\{/)).toBe(true);
-    expect(has(/required_providers\s*\{/)).toBe(true);
-    expect(has(/source\s*=\s*"hashicorp\/aws"/)).toBe(true);
-    expect(has(/source\s*=\s*"hashicorp\/random"/)).toBe(true);
+  it('does not have terraform provider requirements (moved to provider.tf)', () => {
+    expect(has(/terraform\s*\{/)).toBe(false);
+    expect(has(/required_providers\s*\{/)).toBe(false);
+    // Provider requirements are now in provider.tf file
   });
 
   it('declares essential data sources', () => {

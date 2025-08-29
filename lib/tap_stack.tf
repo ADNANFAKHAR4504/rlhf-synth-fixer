@@ -2,20 +2,6 @@
 # This file contains all resources for the CI/CD pipeline including
 # CodePipeline, CodeBuild, Elastic Beanstalk, KMS, Secrets Manager, and monitoring
 
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.1"
-    }
-  }
-}
-
 # Data sources for existing resources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
