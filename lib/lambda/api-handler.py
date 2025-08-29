@@ -27,6 +27,13 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Log the incoming request
     logger.info(f"Received event: {json.dumps(event, default=str)}")
     
+    # Get origin from request headers for CORS
+    origin = event.get('headers', {}).get('Origin') or event.get('headers', {}).get('origin')
+    allowed_origins = ['https://yourdomain.com', 'https://app.yourdomain.com']
+    
+    # Determine CORS origin
+    cors_origin = origin if origin in allowed_origins else 'https://yourdomain.com'
+    
     try:
         # Extract request information
         http_method = event.get('httpMethod', 'GET')
@@ -61,14 +68,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'supported_methods': ['GET', 'POST', 'PUT', 'DELETE']
             }
         
-        # Prepare successful response
+        # Prepare successful response with improved CORS
         response = {
             'statusCode': 200,
             'headers': {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+                'Access-Control-Allow-Origin': cors_origin,
+                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent',
+                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+                'Access-Control-Allow-Credentials': 'true',
+                'Vary': 'Origin',
             },
             'body': json.dumps({
                 'success': True,
@@ -84,14 +93,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         
-        # Return error response
+        # Return error response with improved CORS
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+                'Access-Control-Allow-Origin': cors_origin,
+                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent',
+                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+                'Access-Control-Allow-Credentials': 'true',
+                'Vary': 'Origin',
             },
             'body': json.dumps({
                 'success': False,

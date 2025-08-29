@@ -7,6 +7,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -137,7 +138,18 @@ export class TapStack extends cdk.Stack {
       cdk.Tags.of(lambdaRole).add(key, value);
     });
 
-    // Lambda function
+    // Create dedicated log group for Lambda (fixes deprecation)
+    const lambdaLogGroup = new logs.LogGroup(this, 'ApiLambdaLogGroup', {
+      logGroupName: `/aws/lambda/${projectName}-API-${environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(lambdaLogGroup).add(key, value);
+    });
+
+    // Lambda function (updated to use logGroup instead of logRetention)
     const apiFunction = new lambda.Function(this, 'ApiFunction', {
       functionName: `${projectName}-API-${environmentSuffix}`,
       runtime: lambda.Runtime.PYTHON_3_9,
@@ -152,14 +164,104 @@ export class TapStack extends cdk.Stack {
       },
       deadLetterQueue: deadLetterQueue,
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logs.RetentionDays.ONE_MONTH,
+      logGroup: lambdaLogGroup,
     });
 
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(apiFunction).add(key, value);
     });
 
-    // API Gateway with CORS and X-Ray tracing
+    // API Key for authentication
+    const apiKey = new apigateway.ApiKey(this, 'ApiKey', {
+      apiKeyName: `${projectName}-API-Key-${environmentSuffix}`,
+      description: `API Key for ${projectName} Production API`,
+    });
+
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(apiKey).add(key, value);
+    });
+
+    // Usage Plan
+    const usagePlan = new apigateway.UsagePlan(this, 'UsagePlan', {
+      name: `${projectName}-Usage-Plan-${environmentSuffix}`,
+      description: `Usage plan for ${projectName} API`,
+      throttle: {
+        rateLimit: 1000,
+        burstLimit: 2000,
+      },
+      quota: {
+        limit: 10000,
+        period: apigateway.Period.DAY,
+      },
+    });
+
+    Object.entries(commonTags).forEach(([key, value]) => {
+      cdk.Tags.of(usagePlan).add(key, value);
+    });
+
+    // WAF Web ACL
+    const webAcl = new wafv2.CfnWebACL(this, 'ApiWebAcl', {
+      name: `${projectName}-WAF-${environmentSuffix}`,
+      scope: 'REGIONAL',
+      defaultAction: { allow: {} },
+      rules: [
+        {
+          name: 'RateLimitRule',
+          priority: 1,
+          statement: {
+            rateBasedStatement: {
+              limit: 2000,
+              aggregateKeyType: 'IP',
+            },
+          },
+          action: { block: {} },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'RateLimitRule',
+          },
+        },
+        {
+          name: 'AWSManagedRulesCommonRuleSet',
+          priority: 2,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'CommonRuleSetMetric',
+          },
+        },
+        {
+          name: 'AWSManagedRulesKnownBadInputsRuleSet',
+          priority: 3,
+          overrideAction: { none: {} },
+          statement: {
+            managedRuleGroupStatement: {
+              vendorName: 'AWS',
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
+          },
+          visibilityConfig: {
+            sampledRequestsEnabled: true,
+            cloudWatchMetricsEnabled: true,
+            metricName: 'KnownBadInputsRuleSetMetric',
+          },
+        },
+      ],
+      visibilityConfig: {
+        sampledRequestsEnabled: true,
+        cloudWatchMetricsEnabled: true,
+        metricName: `${projectName}WebAcl`,
+      },
+    });
+
+    // API Gateway with improved CORS and authentication
     const api = new apigateway.RestApi(this, 'ApiGateway', {
       restApiName: `${projectName}-API-${environmentSuffix}`,
       description: `${projectName} Production API`,
@@ -167,14 +269,17 @@ export class TapStack extends cdk.Stack {
         types: [apigateway.EndpointType.REGIONAL],
       },
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowOrigins: ['https://yourdomain.com', 'https://app.yourdomain.com'],
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowHeaders: [
           'Content-Type',
           'X-Amz-Date',
           'Authorization',
           'X-Api-Key',
+          'X-Amz-Security-Token',
+          'X-Amz-User-Agent',
         ],
+        allowCredentials: true,
       },
       deployOptions: {
         stageName: 'prod',
@@ -183,22 +288,38 @@ export class TapStack extends cdk.Stack {
         metricsEnabled: true,
         tracingEnabled: true,
       },
+      apiKeySourceType: apigateway.ApiKeySourceType.HEADER,
+    });
+
+    // Associate WAF with API Gateway
+    new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
+      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/prod`,
+      webAclArn: webAcl.attrArn,
     });
 
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(api).add(key, value);
     });
 
-    // Lambda integration
+    // Lambda integration with API Key requirement
     const lambdaIntegration = new apigateway.LambdaIntegration(apiFunction, {
-      requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
       proxy: true,
     });
 
-    // Add proxy resource to handle all paths
+    // Add proxy resource with API Key requirement
     api.root.addProxy({
       defaultIntegration: lambdaIntegration,
       anyMethod: true,
+      defaultMethodOptions: {
+        apiKeyRequired: true,
+      },
+    });
+
+    // Associate API Key with Usage Plan and API
+    usagePlan.addApiKey(apiKey);
+    usagePlan.addApiStage({
+      api: api,
+      stage: api.deploymentStage,
     });
 
     // CloudWatch Alarms
@@ -235,6 +356,16 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
       description: 'API Gateway URL',
+    });
+
+    new cdk.CfnOutput(this, 'ApiKeyId', {
+      value: apiKey.keyId,
+      description: 'API Key ID - retrieve value from AWS Console',
+    });
+
+    new cdk.CfnOutput(this, 'WAFWebAclArn', {
+      value: webAcl.attrArn,
+      description: 'WAF Web ACL ARN',
     });
 
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
