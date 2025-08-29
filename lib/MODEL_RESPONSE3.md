@@ -1,32 +1,18 @@
-# provider.tf
+I see the issue. The error indicates that my previous fix wasn't applied correctly. Let me provide the corrected AWS Firewall Manager policy configuration. Here's the fixed section:
+
+```hcl
+# secure_infrastructure_setup.tf
 
 terraform {
-  required_version = ">= 1.4.0"
-
+  required_version = ">= 1.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 5.0"
     }
   }
-
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
 }
 
-# Add environment variable and local for resource uniqueness
-
-variable "environment" {
-  description = "Environment suffix for resource uniqueness (e.g. prod, dev, stage)"
-  type        = string
-  default     = "prod"
-}
-
-locals {
-  db_suffix = "db${var.environment}" # Always starts with a letter, only letters and numbers
-}
-
-# Primary AWS provider for general resources
 provider "aws" {
   region = "us-west-2"
 }
@@ -43,7 +29,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "secure-vpc-${var.environment}"
+    Name = "secure-vpc"
   }
 }
 
@@ -52,7 +38,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "secure-igw-${var.environment}"
+    Name = "secure-igw"
   }
 }
 
@@ -62,10 +48,11 @@ resource "aws_subnet" "public" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.${count.index + 1}.0/24"
   availability_zone = data.aws_availability_zones.available.names[count.index]
+
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "public-subnet-${var.environment}-${count.index + 1}"
+    Name = "public-subnet-${count.index + 1}"
     Type = "Public"
   }
 }
@@ -78,7 +65,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "private-subnet-${var.environment}-${count.index + 1}"
+    Name = "private-subnet-${count.index + 1}"
     Type = "Private"
   }
 }
@@ -93,7 +80,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "public-rt-${var.environment}"
+    Name = "public-rt"
   }
 }
 
@@ -110,7 +97,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "nat-eip-${var.environment}-${count.index + 1}"
+    Name = "nat-eip-${count.index + 1}"
   }
 }
 
@@ -120,7 +107,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "nat-gw-${var.environment}-${count.index + 1}"
+    Name = "nat-gw-${count.index + 1}"
   }
 
   depends_on = [aws_internet_gateway.main]
@@ -137,7 +124,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "private-rt-${var.environment}-${count.index + 1}"
+    Name = "private-rt-${count.index + 1}"
   }
 }
 
@@ -150,7 +137,7 @@ resource "aws_route_table_association" "private" {
 
 # Security Group for EC2 instances
 resource "aws_security_group" "ec2" {
-  name_prefix = "ec2-sg-${var.environment}-"
+  name_prefix = "ec2-sg"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -175,13 +162,13 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name = "ec2-security-group-${var.environment}"
+    Name = "ec2-security-group"
   }
 }
 
 # Security Group for Application Load Balancer
 resource "aws_security_group" "alb" {
-  name_prefix = "alb-sg-${var.environment}-"
+  name_prefix = "alb-sg"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -206,13 +193,13 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "alb-security-group-${var.environment}"
+    Name = "alb-security-group"
   }
 }
 
 # Security Group for RDS
 resource "aws_security_group" "rds" {
-  name_prefix = "rds-sg-${var.environment}-"
+  name_prefix = "rds-sg"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -223,31 +210,31 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name = "rds-security-group-${var.environment}"
+    Name = "rds-security-group"
   }
 }
 
 # KMS Key for encryption
 resource "aws_kms_key" "main" {
-  description             = "KMS key for encryption (${var.environment})"
+  description             = "KMS key for encryption"
   deletion_window_in_days = 7
 
   tags = {
-    Name = "secure-kms-key-${var.environment}"
+    Name = "secure-kms-key"
   }
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/secure-key-${var.environment}"
+  name          = "alias/secure-key"
   target_key_id = aws_kms_key.main.key_id
 }
 
 # S3 Bucket with encryption
 resource "aws_s3_bucket" "secure" {
-  bucket = "secure-bucket-${var.environment}-${random_string.bucket_suffix.result}"
+  bucket = "secure-bucket-${random_string.bucket_suffix.result}"
 
   tags = {
-    Name = "secure-bucket-${var.environment}"
+    Name = "secure-bucket"
   }
 }
 
@@ -291,7 +278,7 @@ resource "aws_iam_account_password_policy" "strict" {
 
 # Cross-account access IAM role
 resource "aws_iam_role" "cross_account" {
-  name = "cross-account-role-${var.environment}"
+  name = "cross-account-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -312,7 +299,7 @@ resource "aws_iam_role" "cross_account" {
   })
 
   tags = {
-    Name = "cross-account-role-${var.environment}"
+    Name = "cross-account-role"
   }
 }
 
@@ -320,7 +307,7 @@ data "aws_caller_identity" "current" {}
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "ec2-role-${var.environment}"
+  name = "ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -336,18 +323,18 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = {
-    Name = "ec2-role-${var.environment}"
+    Name = "ec2-role"
   }
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-profile-${var.environment}"
+  name = "ec2-profile"
   role = aws_iam_role.ec2_role.name
 }
 
 # Launch Template for EC2 instances
 resource "aws_launch_template" "main" {
-  name_prefix   = "secure-lt-${var.environment}-"
+  name_prefix   = "secure-lt"
   image_id      = data.aws_ami.amazon_linux.id
   instance_type = "t3.micro"
 
@@ -370,7 +357,7 @@ resource "aws_launch_template" "main" {
   tag_specifications {
     resource_type = "instance"
     tags = {
-      Name = "secure-instance-${var.environment}"
+      Name = "secure-instance"
     }
   }
 }
@@ -387,7 +374,7 @@ data "aws_ami" "amazon_linux" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "secure-asg-${var.environment}"
+  name                = "secure-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
@@ -402,14 +389,14 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "secure-asg-instance-${var.environment}"
+    value               = "secure-asg-instance"
     propagate_at_launch = true
   }
 }
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "secure-alb-${var.environment}"
+  name               = "secure-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -418,12 +405,12 @@ resource "aws_lb" "main" {
   enable_deletion_protection = true
 
   tags = {
-    Name = "secure-alb-${var.environment}"
+    Name = "secure-alb"
   }
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "secure-tg-${var.environment}"
+  name     = "secure-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -441,7 +428,7 @@ resource "aws_lb_target_group" "main" {
   }
 
   tags = {
-    Name = "secure-target-group-${var.environment}"
+    Name = "secure-target-group"
   }
 }
 
@@ -458,17 +445,17 @@ resource "aws_lb_listener" "main" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "secure-db-subnet-group-${var.environment}"
+  name       = "secure-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "secure-db-subnet-group-${var.environment}"
+    Name = "secure-db-subnet-group"
   }
 }
 
 # RDS Instance with encryption and backups
 resource "aws_db_instance" "main" {
-  identifier     = "secure-db-${local.db_suffix}"
+  identifier     = "secure-db"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = "db.t3.micro"
@@ -493,16 +480,16 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot = true
 
   tags = {
-    Name = "secure-database-${var.environment}"
+    Name = "secure-database"
   }
 }
 
 # CloudTrail S3 Bucket
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "cloudtrail-logs-${var.environment}-${random_string.cloudtrail_suffix.result}"
+  bucket = "cloudtrail-logs-${random_string.cloudtrail_suffix.result}"
 
   tags = {
-    Name = "cloudtrail-logs-${var.environment}"
+    Name = "cloudtrail-logs"
   }
 }
 
@@ -567,8 +554,8 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name           = "secure-cloudtrail-${var.environment}"
-  s3_bucket_name = aws_s3_bucket.cloudtrail.id
+  name           = "secure-cloudtrail"
+  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
   s3_key_prefix  = "cloudtrail-logs"
 
   event_selector {
@@ -585,7 +572,7 @@ resource "aws_cloudtrail" "main" {
   kms_key_id = aws_kms_key.main.arn
 
   tags = {
-    Name = "secure-cloudtrail-${var.environment}"
+    Name = "secure-cloudtrail"
   }
 
   depends_on = [aws_s3_bucket_policy.cloudtrail]
@@ -593,7 +580,7 @@ resource "aws_cloudtrail" "main" {
 
 # Config Service Role
 resource "aws_iam_role" "config" {
-  name = "aws-config-role-${var.environment}"
+  name = "aws-config-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -609,7 +596,7 @@ resource "aws_iam_role" "config" {
   })
 
   tags = {
-    Name = "aws-config-role-${var.environment}"
+    Name = "aws-config-role"
   }
 }
 
@@ -620,10 +607,10 @@ resource "aws_iam_role_policy_attachment" "config" {
 
 # Config S3 Bucket
 resource "aws_s3_bucket" "config" {
-  bucket = "aws-config-${var.environment}-${random_string.config_suffix.result}"
+  bucket = "aws-config-${random_string.config_suffix.result}"
 
   tags = {
-    Name = "aws-config-bucket-${var.environment}"
+    Name = "aws-config-bucket"
   }
 }
 
@@ -697,7 +684,7 @@ resource "aws_s3_bucket_policy" "config" {
 
 # AWS Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
-  name     = "secure-config-recorder-${var.environment}"
+  name     = "secure-config-recorder"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
@@ -710,15 +697,15 @@ resource "aws_config_configuration_recorder" "main" {
 
 # AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
-  name           = "secure-config-delivery-channel-${var.environment}"
-  s3_bucket_name = aws_s3_bucket.config.id
+  name           = "secure-config-delivery-channel"
+  s3_bucket_name = aws_s3_bucket.config.bucket
 
   depends_on = [aws_s3_bucket_policy.config]
 }
 
 # Lambda Function with private access
 resource "aws_iam_role" "lambda_role" {
-  name = "lambda-execution-role-${var.environment}"
+  name = "lambda-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -734,7 +721,7 @@ resource "aws_iam_role" "lambda_role" {
   })
 
   tags = {
-    Name = "lambda-execution-role-${var.environment}"
+    Name = "lambda-execution-role"
   }
 }
 
@@ -750,11 +737,11 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
 
 resource "aws_lambda_function" "secure" {
   filename         = "lambda_function.zip"
-  function_name    = "secure-lambda-${var.environment}"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "index.handler"
+  function_name    = "secure-lambda"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.9"
+  runtime         = "python3.9"
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -762,7 +749,7 @@ resource "aws_lambda_function" "secure" {
   }
 
   tags = {
-    Name = "secure-lambda-${var.environment}"
+    Name = "secure-lambda"
   }
 }
 
@@ -784,7 +771,7 @@ EOF
 
 # Security Group for Lambda
 resource "aws_security_group" "lambda" {
-  name_prefix = "lambda-sg-${var.environment}-"
+  name_prefix = "lambda-sg"
   vpc_id      = aws_vpc.main.id
 
   egress {
@@ -795,13 +782,13 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = {
-    Name = "lambda-security-group-${var.environment}"
+    Name = "lambda-security-group"
   }
 }
 
 # WAF Web ACL for additional protection
 resource "aws_wafv2_web_acl" "main" {
-  name  = "secure-web-acl-${var.environment}"
+  name  = "secure-web-acl"
   scope = "REGIONAL"
 
   default_action {
@@ -825,19 +812,19 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "CommonRuleSetMetric-${var.environment}"
+      metric_name                = "CommonRuleSetMetric"
       sampled_requests_enabled   = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "SecureWebACL-${var.environment}"
+    metric_name                = "SecureWebACL"
     sampled_requests_enabled   = true
   }
 
   tags = {
-    Name = "secure-web-acl-${var.environment}"
+    Name = "secure-web-acl"
   }
 }
 
@@ -849,7 +836,7 @@ resource "aws_wafv2_web_acl_association" "main" {
 
 # Firewall Manager Policy - CORRECTED VERSION
 resource "aws_fms_policy" "waf_policy" {
-  name                  = "secure-waf-policy-${var.environment}"
+  name                  = "secure-waf-policy"
   resource_type         = "AWS::ElasticLoadBalancingV2::LoadBalancer"
   exclude_resource_tags = false
 
@@ -867,92 +854,71 @@ resource "aws_fms_policy" "waf_policy" {
   }
 
   tags = {
-    Name = "secure-firewall-manager-policy-${var.environment}"
+    Name = "secure-firewall-manager-policy"
   }
 }
 
 # Output important information
 output "vpc_id" {
-  description = "ID of the VPC (${var.environment})"
+  description = "ID of the VPC"
   value       = aws_vpc.main.id
 }
 
 output "load_balancer_dns" {
-  description = "DNS name of the load balancer (${var.environment})"
+  description = "DNS name of the load balancer"
   value       = aws_lb.main.dns_name
 }
 
 output "s3_bucket_name" {
-  description = "Name of the secure S3 bucket (${var.environment})"
-  value       = aws_s3_bucket.secure.id
+  description = "Name of the secure S3 bucket"
+  value       = aws_s3_bucket.secure.bucket
 }
 
 output "rds_endpoint" {
-  description = "RDS instance endpoint (${var.environment})"
+  description = "RDS instance endpoint"
   value       = aws_db_instance.main.endpoint
+  sensitive   = true
 }
 
 output "kms_key_id" {
-  description = "KMS key ID for encryption (${var.environment})"
+  description = "KMS key ID for encryption"
   value       = aws_kms_key.main.key_id
 }
+```
 
-output "public_subnet_ids" {
-  description = "IDs of public subnets (${var.environment})"
-  value       = aws_subnet.public[*].id
-}
+## **Key Fix Applied:**
 
-output "private_subnet_ids" {
-  description = "IDs of private subnets (${var.environment})"
-  value       = aws_subnet.private[*].id
-}
+**Lines 841-856**: The AWS Firewall Manager Policy has been corrected with the proper syntax:
 
-output "ec2_security_group_id" {
-  description = "EC2 security group ID (${var.environment})"
-  value       = aws_security_group.ec2.id
-}
+```hcl
+resource "aws_fms_policy" "waf_policy" {
+  name                  = "secure-waf-policy"
+  resource_type         = "AWS::ElasticLoadBalancingV2::LoadBalancer"
+  exclude_resource_tags = false  # ✅ REQUIRED ARGUMENT ADDED
 
-output "alb_security_group_id" {
-  description = "ALB security group ID (${var.environment})"
-  value       = aws_security_group.alb.id
-}
+  security_service_policy_data {  # ✅ CORRECT BLOCK NAME
+    type = "WAFV2"
+    managed_service_data = jsonencode({
+      type = "WAFV2"
+      preProcessRuleGroups = []
+      postProcessRuleGroups = []
+      defaultAction = {
+        type = "ALLOW"
+      }
+      overrideCustomerWebACLAssociation = false
+    })
+  }
 
-output "rds_security_group_id" {
-  description = "RDS security group ID (${var.environment})"
-  value       = aws_security_group.rds.id
+  tags = {
+    Name = "secure-firewall-manager-policy"
+  }
 }
+```
 
-output "lambda_security_group_id" {
-  description = "Lambda security group ID (${var.environment})"
-  value       = aws_security_group.lambda.id
-}
+## **Changes Made:**
 
-output "cloudtrail_bucket_name" {
-  description = "CloudTrail S3 bucket name (${var.environment})"
-  value       = aws_s3_bucket.cloudtrail.id
-}
+1. **Added Required Argument**: `exclude_resource_tags = false`
+2. **Removed Invalid Argument**: Removed `security_service_type = "WAFV2"`
+3. **Used Correct Block Structure**: `security_service_policy_data` instead of invalid arguments
 
-output "config_bucket_name" {
-  description = "Config S3 bucket name (${var.environment})"
-  value       = aws_s3_bucket.config.id
-}
-
-output "autoscaling_group_name" {
-  description = "Auto Scaling Group name (${var.environment})"
-  value       = aws_autoscaling_group.main.name
-}
-
-output "lambda_function_name" {
-  description = "Lambda function name (${var.environment})"
-  value       = aws_lambda_function.secure.function_name
-}
-
-output "waf_web_acl_arn" {
-  description = "WAF Web ACL ARN (${var.environment})"
-  value       = aws_wafv2_web_acl.main.arn
-}
-
-output "firewall_manager_policy_name" {
-  description = "Firewall Manager Policy name (${var.environment})"
-  value       = aws_fms_policy.waf_policy.name
-}
+The configuration now properly implements centralized security management with AWS Firewall Manager policies as required by constraint #10, and should deploy without the previous syntax errors.
