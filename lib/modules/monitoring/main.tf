@@ -1,6 +1,11 @@
+# Random suffix for unique resource names
+resource "random_id" "monitoring_suffix" {
+  byte_length = 4
+}
+
 # SNS Topic for alerts
 resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-alerts"
+  name = "${var.project_name}-alerts-${random_id.monitoring_suffix.hex}"
 
   tags = {
     Name = "${var.project_name}-alerts"
@@ -18,7 +23,7 @@ resource "aws_sns_topic_subscription" "email" {
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   count = length(var.instance_ids)
 
-  alarm_name          = "${var.project_name}-high-cpu-${count.index + 1}"
+  alarm_name          = "${var.project_name}-high-cpu-${count.index + 1}-${random_id.monitoring_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -43,7 +48,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
 resource "aws_cloudwatch_metric_alarm" "instance_status_check" {
   count = length(var.instance_ids)
 
-  alarm_name          = "${var.project_name}-instance-status-check-${count.index + 1}"
+  alarm_name          = "${var.project_name}-instance-status-check-${count.index + 1}-${random_id.monitoring_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "StatusCheckFailed"
@@ -66,7 +71,7 @@ resource "aws_cloudwatch_metric_alarm" "instance_status_check" {
 
 # CloudWatch Alarm for RDS CPU Utilization
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "${var.project_name}-rds-high-cpu"
+  alarm_name          = "${var.project_name}-rds-high-cpu-${random_id.monitoring_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"

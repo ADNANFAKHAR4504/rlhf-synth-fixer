@@ -280,9 +280,11 @@ describe('Terraform Infrastructure Unit Tests', () => {
     test('monitoring module should have CloudWatch and SNS', () => {
       const monitoringMainContent = fs.readFileSync(path.join(libPath, 'modules', 'monitoring', 'main.tf'), 'utf8');
       
+      expect(has(monitoringMainContent, /resource\s+"random_id"\s+"monitoring_suffix"/)).toBe(true); // Random suffix for uniqueness
       expect(has(monitoringMainContent, /resource\s+"aws_sns_topic"/)).toBe(true);
       expect(has(monitoringMainContent, /resource\s+"aws_cloudwatch_metric_alarm"/)).toBe(true);
       expect(has(monitoringMainContent, /resource\s+"aws_sns_topic_subscription"/)).toBe(true);
+      expect(has(monitoringMainContent, /random_id\.monitoring_suffix\.hex/)).toBe(true); // Uses random suffix in names
     });
   });
 });
