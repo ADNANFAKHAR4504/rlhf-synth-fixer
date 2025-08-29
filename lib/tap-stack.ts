@@ -15,7 +15,8 @@ export class TapStack extends cdk.Stack {
 
     const environment = 'Production';
     const costCenter = 'Engineering';
-    const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
+    const environmentSuffix =
+      this.node.tryGetContext('environmentSuffix') || 'dev';
     const stackBaseName = `TapStack${environmentSuffix}`;
 
     // Use a simpler approach - create VPC instead of lookup to avoid context issues
@@ -195,113 +196,102 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    const pipelineRole = new iam.Role(
-      this,
-      `${stackBaseName}-pipeline-role`,
-      {
-        roleName: `${stackBaseName}-pipeline-role`,
-        assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
-        inlinePolicies: {
-          PipelinePolicy: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObject',
-                  's3:PutObject',
-                  's3:GetBucketVersioning',
-                ],
-                resources: [
-                  artifactsBucket.bucketArn,
-                  artifactsBucket.arnForObjects('*'),
-                ],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  'codebuild:BatchGetBuilds',
-                  'codebuild:StartBuild',
-                ],
-                resources: [buildProject.projectArn],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  'cloudformation:CreateStack',
-                  'cloudformation:DeleteStack',
-                  'cloudformation:DescribeStacks',
-                  'cloudformation:UpdateStack',
-                  'cloudformation:CreateChangeSet',
-                  'cloudformation:DeleteChangeSet',
-                  'cloudformation:DescribeChangeSet',
-                  'cloudformation:ExecuteChangeSet',
-                  'cloudformation:SetStackPolicy',
-                  'cloudformation:ValidateTemplate',
-                ],
-                resources: [
-                  `arn:aws:cloudformation:${this.region}:${this.account}:stack/${stackBaseName}-*/*`,
-                ],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['sts:AssumeRole'],
-                resources: [`arn:aws:iam::${this.account}:role/cdk-*`],
-              }),
-            ],
-          }),
-        },
-      }
-    );
+    const pipelineRole = new iam.Role(this, `${stackBaseName}-pipeline-role`, {
+      roleName: `${stackBaseName}-pipeline-role`,
+      assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
+      inlinePolicies: {
+        PipelinePolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                's3:GetObject',
+                's3:PutObject',
+                's3:GetBucketVersioning',
+              ],
+              resources: [
+                artifactsBucket.bucketArn,
+                artifactsBucket.arnForObjects('*'),
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['codebuild:BatchGetBuilds', 'codebuild:StartBuild'],
+              resources: [buildProject.projectArn],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'cloudformation:CreateStack',
+                'cloudformation:DeleteStack',
+                'cloudformation:DescribeStacks',
+                'cloudformation:UpdateStack',
+                'cloudformation:CreateChangeSet',
+                'cloudformation:DeleteChangeSet',
+                'cloudformation:DescribeChangeSet',
+                'cloudformation:ExecuteChangeSet',
+                'cloudformation:SetStackPolicy',
+                'cloudformation:ValidateTemplate',
+              ],
+              resources: [
+                `arn:aws:cloudformation:${this.region}:${this.account}:stack/${stackBaseName}-*/*`,
+              ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ['sts:AssumeRole'],
+              resources: [`arn:aws:iam::${this.account}:role/cdk-*`],
+            }),
+          ],
+        }),
+      },
+    });
 
     const sourceOutput = new codepipeline.Artifact();
     const buildOutput = new codepipeline.Artifact();
 
-    const pipeline = new codepipeline.Pipeline(
-      this,
-      `${stackBaseName}-pipeline`,
-      {
-        pipelineName: `${stackBaseName}-pipeline`,
-        role: pipelineRole,
-        artifactBucket: artifactsBucket,
-        stages: [
-          {
-            stageName: 'Source',
-            actions: [
-              new codepipelineActions.S3SourceAction({
-                actionName: 'Source',
-                bucket: artifactsBucket,
-                bucketKey: 'source.zip',
-                output: sourceOutput,
-              }),
-            ],
-          },
-          {
-            stageName: 'Build',
-            actions: [
-              new codepipelineActions.CodeBuildAction({
-                actionName: 'Build',
-                project: buildProject,
-                input: sourceOutput,
-                outputs: [buildOutput],
-              }),
-            ],
-          },
-          {
-            stageName: 'Deploy',
-            actions: [
-              new codepipelineActions.CloudFormationCreateUpdateStackAction({
-                actionName: 'Deploy',
-                templatePath: buildOutput.atPath(
-                  `cdk.out/${stackBaseName}-template.json`
-                ),
-                stackName: `${stackBaseName}`,
-                adminPermissions: true,
-              }),
-            ],
-          },
-        ],
-      }
-    );
+    new codepipeline.Pipeline(this, `${stackBaseName}-pipeline`, {
+      pipelineName: `${stackBaseName}-pipeline`,
+      role: pipelineRole,
+      artifactBucket: artifactsBucket,
+      stages: [
+        {
+          stageName: 'Source',
+          actions: [
+            new codepipelineActions.S3SourceAction({
+              actionName: 'Source',
+              bucket: artifactsBucket,
+              bucketKey: 'source.zip',
+              output: sourceOutput,
+            }),
+          ],
+        },
+        {
+          stageName: 'Build',
+          actions: [
+            new codepipelineActions.CodeBuildAction({
+              actionName: 'Build',
+              project: buildProject,
+              input: sourceOutput,
+              outputs: [buildOutput],
+            }),
+          ],
+        },
+        {
+          stageName: 'Deploy',
+          actions: [
+            new codepipelineActions.CloudFormationCreateUpdateStackAction({
+              actionName: 'Deploy',
+              templatePath: buildOutput.atPath(
+                `cdk.out/${stackBaseName}-template.json`
+              ),
+              stackName: `${stackBaseName}`,
+              adminPermissions: true,
+            }),
+          ],
+        },
+      ],
+    });
 
     cdk.Tags.of(this).add('Environment', environment);
     cdk.Tags.of(this).add('CostCenter', costCenter);

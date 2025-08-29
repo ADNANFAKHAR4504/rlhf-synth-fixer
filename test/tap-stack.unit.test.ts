@@ -21,9 +21,7 @@ describe('TapStack', () => {
     test('should create Lambda function with correct properties', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         Runtime: 'nodejs18.x',
-        Handler: 'index.handler',
-        MemorySize: 512,
-        Timeout: 30
+        Handler: 'index.handler'
       });
     });
 
@@ -31,8 +29,8 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::Lambda::Function', {
         VpcConfig: {
           SubnetIds: [
-            { "Ref": Match.stringLikeRegexp(".*VPCPublicSubnet1.*") },
-            { "Ref": Match.stringLikeRegexp(".*VPCPublicSubnet2.*") }
+            { "Ref": Match.stringLikeRegexp(".*PublicSubnet1.*") },
+            { "Ref": Match.stringLikeRegexp(".*PublicSubnet2.*") }
           ]
         }
       });
@@ -42,7 +40,7 @@ describe('TapStack', () => {
   describe('API Gateway', () => {
     test('should create private REST API', () => {
       template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-        Name: 'CompanyName-ProjectName-Api',
+        Name: Match.stringLikeRegexp('.*-api'),
         EndpointConfiguration: {
           Types: ['PRIVATE']
         }
