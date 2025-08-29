@@ -30,7 +30,7 @@ export class TapStack extends cdk.Stack {
     const commonTags = {
       Environment: 'Production',
       Project: projectName,
-      DeploymentDate: environmentSuffix
+      DeploymentDate: environmentSuffix,
     };
 
     // KMS Key for encryption
@@ -64,14 +64,18 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      lifecycleRules: [{
-        id: 'DeleteOldLogs',
-        expiration: cdk.Duration.days(90),
-        transitions: [{
-          storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-          transitionAfter: cdk.Duration.days(30),
-        }],
-      }],
+      lifecycleRules: [
+        {
+          id: 'DeleteOldLogs',
+          expiration: cdk.Duration.days(90),
+          transitions: [
+            {
+              storageClass: s3.StorageClass.INFREQUENT_ACCESS,
+              transitionAfter: cdk.Duration.days(30),
+            },
+          ],
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
     });
 
@@ -96,39 +100,38 @@ export class TapStack extends cdk.Stack {
       roleName: `${projectName}-Lambda-Role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
         iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess'),
       ],
     });
 
     // Add permissions for DLQ and KMS
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'sqs:SendMessage',
-        'sqs:GetQueueAttributes',
-      ],
-      resources: [deadLetterQueue.queueArn],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
+        resources: [deadLetterQueue.queueArn],
+      })
+    );
 
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'kms:Decrypt',
-        'kms:GenerateDataKey',
-      ],
-      resources: [kmsKey.keyArn],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+        resources: [kmsKey.keyArn],
+      })
+    );
 
     // Add permissions for logs bucket
-    lambdaRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:PutObject',
-        's3:PutObjectAcl',
-      ],
-      resources: [`${logsBucket.bucketArn}/*`],
-    }));
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:PutObject', 's3:PutObjectAcl'],
+        resources: [`${logsBucket.bucketArn}/*`],
+      })
+    );
 
     Object.entries(commonTags).forEach(([key, value]) => {
       cdk.Tags.of(lambdaRole).add(key, value);
@@ -166,7 +169,12 @@ export class TapStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+        ],
       },
       tracingEnabled: true,
       deployOptions: {
@@ -188,7 +196,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Add proxy resource to handle all paths
-    const proxyResource = api.root.addProxy({
+    api.root.addProxy({
       defaultIntegration: lambdaIntegration,
       anyMethod: true,
     });
@@ -202,7 +210,8 @@ export class TapStack extends cdk.Stack {
       }),
       threshold: 5,
       evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
     });
 
     const throttleAlarm = new cloudwatch.Alarm(this, 'LambdaThrottleAlarm', {
@@ -213,7 +222,8 @@ export class TapStack extends cdk.Stack {
       }),
       threshold: 1,
       evaluationPeriods: 2,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
     });
 
     Object.entries(commonTags).forEach(([key, value]) => {

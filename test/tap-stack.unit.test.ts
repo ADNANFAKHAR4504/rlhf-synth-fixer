@@ -18,7 +18,10 @@ describe('TapStack', () => {
     jest.clearAllMocks();
 
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    stack = new TapStack(app, 'TestTapStack', {
+      projectName: 'TestProject',
+      environmentSuffix,
+    });
     template = Template.fromStack(stack);
   });
 
