@@ -126,7 +126,7 @@ describe('TapStack Integration Tests', () => {
       );
       
       if (bucketKey) {
-        expect(outputs[bucketKey]).toMatch(/^cp-proj-artifacts-.+/);
+        expect(outputs[bucketKey]).toMatch(/^tapstack.+-artifacts-.+/);
       }
     });
   });
