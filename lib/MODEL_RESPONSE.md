@@ -1048,3 +1048,86 @@
           "Ref": "LambdaFunction"
         },
         "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPC-ID"
+        }
+      }
+    },
+    "LoadBalancerDNS": {
+      "Description": "Load Balancer DNS Name",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApplicationLoadBalancer",
+          "DNSName"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+        }
+      }
+    },
+    "RDSEndpoint": {
+      "Description": "RDS Instance Endpoint",
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSInstance",
+          "Endpoint.Address"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-RDS-Endpoint"
+        }
+      }
+    },
+    "S3BucketName": {
+      "Description": "S3 Bucket Name",
+      "Value": {
+        "Ref": "S3Bucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+        }
+      }
+    },
+    "ApiGatewayURL": {
+      "Description": "API Gateway URL",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-API-URL"
+        }
+      }
+    },
+    "CloudFrontURL": {
+      "Description": "CloudFront Distribution URL",
+      "Value": {
+        "Fn::Sub": "https://${CloudFrontDistribution.DomainName}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CloudFront-URL"
+        }
+      }
+    }
+  }
+}
+```
