@@ -156,6 +156,15 @@ export class WebAppStack extends cdk.Stack {
         machineImage: ec2.MachineImage.latestAmazonLinux2(),
         securityGroup: ec2SecurityGroup,
         role: ec2Role,
+        blockDevices: [
+          {
+            deviceName: '/dev/xvda',
+            volume: ec2.BlockDeviceVolume.ebs(8, {
+              encrypted: false, // Explicitly disable encryption to avoid KMS key issues
+              volumeType: ec2.EbsDeviceVolumeType.GP3,
+            }),
+          },
+        ],
         userData: ec2.UserData.custom(`#!/bin/bash
         yum update -y
         yum install -y httpd
