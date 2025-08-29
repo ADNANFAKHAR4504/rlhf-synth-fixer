@@ -6,6 +6,19 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# Get default VPC for Elastic Beanstalk
+data "aws_vpc" "default" {
+  default = true
+}
+
+# Get default subnets in the default VPC
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
 # Variables
 variable "aws_region" {
   description = "AWS region for resources"
@@ -620,6 +633,25 @@ resource "aws_elastic_beanstalk_environment" "production" {
     namespace = "aws:elasticbeanstalk:environment"
     name      = "EnvironmentType"
     value     = "SingleInstance"
+  }
+
+  # Use default VPC to ensure internet gateway is available
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "VPCId"
+    value     = data.aws_vpc.default.id
+  }
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "Subnets"
+    value     = join(",", data.aws_subnets.default.ids)
+  }
+
+  setting {
+    namespace = "aws:ec2:vpc"
+    name      = "AssociatePublicIpAddress"
+    value     = "true"
   }
 
   setting {
