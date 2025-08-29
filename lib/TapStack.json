@@ -210,6 +210,60 @@
                 ]
             }
         },
+        "LoggingBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "S3LoggingBucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontLogging",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${S3LoggingBucket}/*"
+                            }
+                        },
+                        {
+                            "Sid": "GrantLoggingServiceWriteAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logging.s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:PutObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${S3LoggingBucket}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowReadACP",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logging.s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetBucketAcl"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${S3LoggingBucket}"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "S3LoggingBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
@@ -222,6 +276,13 @@
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "AES256"
                             }
+                        }
+                    ]
+                },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
                         }
                     ]
                 },
@@ -396,7 +457,7 @@
                             },
                             "Action": "s3:GetObject",
                             "Resource": {
-                                "Fn::Sub": "${S3Bucket}/*"
+                                "Fn::Sub": "arn:aws:s3:::${S3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -499,7 +560,10 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${S3Bucket}/*"
+                                        "Fn::GetAtt": [
+                                            "S3Bucket",
+                                            "Arn"
+                                        ]
                                     }
                                 }
                             ]
@@ -819,6 +883,38 @@
                 }
             }
         },
+        "APIGatewayCloudWatchLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": "APIGatewayCloudWatchLogsRole",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ]
+            }
+        },
+        "ApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "APIGatewayCloudWatchLogsRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
         "LambdaLogGroup": {
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
@@ -868,7 +964,7 @@
                             "Arn"
                         ]
                     },
-                    "Format": "$requestId $requestTime $httpMethod $resourcePath $status $responseLength $requestTime"
+                    "Format": "$context.requestId $context.requestTime $context.httpMethod $context.resourcePath $context.status $context.responseLength $context.requestTime"
                 },
                 "MethodSettings": [
                     {
