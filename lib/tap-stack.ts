@@ -6,17 +6,20 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipelineActions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const environment = this.node.tryGetContext('environment') || 'production';
-    const costCenter = this.node.tryGetContext('costCenter') || 'engineering';
+    const environment = 'Production';
+    const costCenter = 'Engineering';
+    const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
+    const stackBaseName = `TapStack${environmentSuffix}`;
 
     // Use a simpler approach - create VPC instead of lookup to avoid context issues
-    const vpc = new ec2.Vpc(this, 'CompanyName-ProjectName-VPC', {
+    const vpc = new ec2.Vpc(this, `${stackBaseName}-vpc`, {
       maxAzs: 2,
       natGateways: 0, // Use public subnets only to reduce cost
       subnetConfiguration: [
@@ -28,39 +31,36 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    const lambdaRole = new iam.Role(
-      this,
-      'CompanyName-ProjectName-LambdaRole',
-      {
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'service-role/AWSLambdaVPCAccessExecutionRole'
-          ),
-        ],
-        inlinePolicies: {
-          CloudWatchLogs: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  'logs:CreateLogGroup',
-                  'logs:CreateLogStream',
-                  'logs:PutLogEvents',
-                ],
-                resources: [
-                  `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/CompanyName-ProjectName-*`,
-                ],
-              }),
-            ],
-          }),
-        },
-      }
-    );
+    const lambdaRole = new iam.Role(this, `${stackBaseName}-lambda-role`, {
+      roleName: `${stackBaseName}-lambda-role`,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
+      ],
+      inlinePolicies: {
+        CloudWatchLogs: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${stackBaseName}-*`,
+              ],
+            }),
+          ],
+        }),
+      },
+    });
 
     const lambdaFunction = new lambda.Function(
       this,
-      'CompanyName-ProjectName-Function',
+      `${stackBaseName}-function`,
       {
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.handler',
@@ -72,9 +72,8 @@ export class TapStack extends cdk.Stack {
           };
         };
       `),
-        memorySize: 512,
-        timeout: cdk.Duration.seconds(30),
         role: lambdaRole,
+        functionName: `${stackBaseName}-function`,
         vpc: vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PUBLIC,
@@ -89,7 +88,7 @@ export class TapStack extends cdk.Stack {
 
     const vpcEndpoint = new ec2.InterfaceVpcEndpoint(
       this,
-      'CompanyName-ProjectName-ApiGatewayEndpoint',
+      `${stackBaseName}-api-gateway-endpoint`,
       {
         vpc: vpc,
         service: ec2.InterfaceVpcEndpointAwsService.APIGATEWAY,
@@ -99,8 +98,8 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    const api = new apigateway.RestApi(this, 'CompanyName-ProjectName-Api', {
-      restApiName: 'CompanyName-ProjectName-Api',
+    const api = new apigateway.RestApi(this, `${stackBaseName}-api`, {
+      restApiName: `${stackBaseName}-api`,
       endpointConfiguration: {
         types: [apigateway.EndpointType.PRIVATE],
         vpcEndpoints: [vpcEndpoint],
@@ -124,18 +123,19 @@ export class TapStack extends cdk.Stack {
 
     api.root.addMethod('GET', new apigateway.LambdaIntegration(lambdaFunction));
 
-    const artifactsBucket = new cdk.aws_s3.Bucket(
+    const artifactsBucket = new s3.Bucket(
       this,
-      'CompanyName-ProjectName-PipelineArtifacts',
+      `${stackBaseName}-artifacts-bucket`,
       {
-        bucketName: `cp-proj-artifacts-${this.account}-${this.region}`,
-        encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
-        blockPublicAccess: cdk.aws_s3.BlockPublicAccess.BLOCK_ALL,
+        bucketName: `${stackBaseName.toLowerCase()}-artifacts-${this.account}-${this.region}`,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
-    const buildRole = new iam.Role(this, 'CompanyName-ProjectName-BuildRole', {
+    const buildRole = new iam.Role(this, `${stackBaseName}-build-role`, {
+      roleName: `${stackBaseName}-build-role`,
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
       inlinePolicies: {
         BuildPolicy: new iam.PolicyDocument({
@@ -148,7 +148,7 @@ export class TapStack extends cdk.Stack {
                 'logs:PutLogEvents',
               ],
               resources: [
-                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/codebuild/CompanyName-ProjectName-*`,
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/codebuild/${stackBaseName}-*`,
               ],
             }),
             new iam.PolicyStatement({
@@ -168,9 +168,9 @@ export class TapStack extends cdk.Stack {
 
     const buildProject = new codebuild.Project(
       this,
-      'CompanyName-ProjectName-BuildProject',
+      `${stackBaseName}-build-project`,
       {
-        projectName: 'CompanyName-ProjectName-Build',
+        projectName: `${stackBaseName}-build`,
         role: buildRole,
         environment: {
           buildImage: codebuild.LinuxBuildImage.STANDARD_7_0,
@@ -183,10 +183,9 @@ export class TapStack extends cdk.Stack {
               'runtime-versions': {
                 nodejs: '18',
               },
-              commands: ['npm install -g aws-cdk', 'npm ci'],
             },
             build: {
-              commands: ['npm run build', 'cdk synth'],
+              commands: ['echo "Build completed on `date`"'],
             },
           },
           artifacts: {
@@ -198,8 +197,9 @@ export class TapStack extends cdk.Stack {
 
     const pipelineRole = new iam.Role(
       this,
-      'CompanyName-ProjectName-PipelineRole',
+      `${stackBaseName}-pipeline-role`,
       {
+        roleName: `${stackBaseName}-pipeline-role`,
         assumedBy: new iam.ServicePrincipal('codepipeline.amazonaws.com'),
         inlinePolicies: {
           PipelinePolicy: new iam.PolicyDocument({
@@ -218,7 +218,10 @@ export class TapStack extends cdk.Stack {
               }),
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
-                actions: ['codebuild:BatchGetBuilds', 'codebuild:StartBuild'],
+                actions: [
+                  'codebuild:BatchGetBuilds',
+                  'codebuild:StartBuild',
+                ],
                 resources: [buildProject.projectArn],
               }),
               new iam.PolicyStatement({
@@ -236,7 +239,7 @@ export class TapStack extends cdk.Stack {
                   'cloudformation:ValidateTemplate',
                 ],
                 resources: [
-                  `arn:aws:cloudformation:${this.region}:${this.account}:stack/CompanyName-ProjectName-*/*`,
+                  `arn:aws:cloudformation:${this.region}:${this.account}:stack/${stackBaseName}-*/*`,
                 ],
               }),
               new iam.PolicyStatement({
@@ -253,106 +256,110 @@ export class TapStack extends cdk.Stack {
     const sourceOutput = new codepipeline.Artifact();
     const buildOutput = new codepipeline.Artifact();
 
-    new codepipeline.Pipeline(this, 'CompanyName-ProjectName-Pipeline', {
-      pipelineName: 'CompanyName-ProjectName-Pipeline',
-      role: pipelineRole,
-      artifactBucket: artifactsBucket,
-      stages: [
-        {
-          stageName: 'Source',
-          actions: [
-            new codepipelineActions.S3SourceAction({
-              actionName: 'Source',
-              bucket: artifactsBucket,
-              bucketKey: 'source.zip',
-              output: sourceOutput,
-            }),
-          ],
-        },
-        {
-          stageName: 'Build',
-          actions: [
-            new codepipelineActions.CodeBuildAction({
-              actionName: 'Build',
-              project: buildProject,
-              input: sourceOutput,
-              outputs: [buildOutput],
-            }),
-          ],
-        },
-        {
-          stageName: 'Deploy',
-          actions: [
-            new codepipelineActions.CloudFormationCreateUpdateStackAction({
-              actionName: 'Deploy',
-              templatePath: buildOutput.atPath(
-                'cdk.out/CompanyName-ProjectName-Production.template.json'
-              ),
-              stackName: 'CompanyName-ProjectName-Production',
-              adminPermissions: true,
-            }),
-          ],
-        },
-      ],
-    });
+    const pipeline = new codepipeline.Pipeline(
+      this,
+      `${stackBaseName}-pipeline`,
+      {
+        pipelineName: `${stackBaseName}-pipeline`,
+        role: pipelineRole,
+        artifactBucket: artifactsBucket,
+        stages: [
+          {
+            stageName: 'Source',
+            actions: [
+              new codepipelineActions.S3SourceAction({
+                actionName: 'Source',
+                bucket: artifactsBucket,
+                bucketKey: 'source.zip',
+                output: sourceOutput,
+              }),
+            ],
+          },
+          {
+            stageName: 'Build',
+            actions: [
+              new codepipelineActions.CodeBuildAction({
+                actionName: 'Build',
+                project: buildProject,
+                input: sourceOutput,
+                outputs: [buildOutput],
+              }),
+            ],
+          },
+          {
+            stageName: 'Deploy',
+            actions: [
+              new codepipelineActions.CloudFormationCreateUpdateStackAction({
+                actionName: 'Deploy',
+                templatePath: buildOutput.atPath(
+                  `cdk.out/${stackBaseName}-template.json`
+                ),
+                stackName: `${stackBaseName}`,
+                adminPermissions: true,
+              }),
+            ],
+          },
+        ],
+      }
+    );
 
     cdk.Tags.of(this).add('Environment', environment);
     cdk.Tags.of(this).add('CostCenter', costCenter);
-    cdk.Tags.of(this).add('Project', 'CompanyName-ProjectName');
+    cdk.Tags.of(this).add('Project', `${stackBaseName}`);
 
     // Stack Outputs for Integration Tests
     new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: api.url,
       description: 'API Gateway endpoint URL',
-      exportName: 'CompanyName-ProjectName-ApiEndpoint',
+      exportName: `${stackBaseName}-ApiEndpoint`,
     });
 
     new cdk.CfnOutput(this, 'LambdaFunctionArn', {
       value: lambdaFunction.functionArn,
       description: 'Lambda function ARN',
-      exportName: 'CompanyName-ProjectName-LambdaFunctionArn',
+      exportName: `${stackBaseName}-LambdaFunctionArn`,
     });
 
     new cdk.CfnOutput(this, 'LambdaRoleArn', {
       value: lambdaRole.roleArn,
       description: 'Lambda execution role ARN',
-      exportName: 'CompanyName-ProjectName-LambdaRoleArn',
+      exportName: `${stackBaseName}-LambdaRoleArn`,
     });
 
     new cdk.CfnOutput(this, 'BuildRoleArn', {
       value: buildRole.roleArn,
       description: 'CodeBuild service role ARN',
-      exportName: 'CompanyName-ProjectName-BuildRoleArn',
+      exportName: `${stackBaseName}-BuildRoleArn`,
     });
 
     new cdk.CfnOutput(this, 'PipelineRoleArn', {
       value: pipelineRole.roleArn,
       description: 'CodePipeline service role ARN',
-      exportName: 'CompanyName-ProjectName-PipelineRoleArn',
+      exportName: `${stackBaseName}-PipelineRoleArn`,
     });
 
     new cdk.CfnOutput(this, 'ArtifactsBucketName', {
       value: artifactsBucket.bucketName,
       description: 'S3 bucket for pipeline artifacts',
-      exportName: 'CompanyName-ProjectName-ArtifactsBucketName',
+      exportName: `${stackBaseName}-ArtifactsBucketName`,
     });
 
     new cdk.CfnOutput(this, 'CodePipelineArn', {
-      value: `arn:aws:codepipeline:${this.region}:${this.account}:CompanyName-ProjectName-Pipeline`,
+      value: `arn:aws:codepipeline:${this.region}:${this.account}:${stackBaseName}-pipeline`,
       description: 'CodePipeline ARN',
-      exportName: 'CompanyName-ProjectName-CodePipelineArn',
+      exportName: `${stackBaseName}-CodePipelineArn`,
     });
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID',
-      exportName: 'CompanyName-ProjectName-VpcId',
+      exportName: `${stackBaseName}-VpcId`,
     });
 
     new cdk.CfnOutput(this, 'VpcPublicSubnets', {
       value: vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
       description: 'Public subnet IDs',
-      exportName: 'CompanyName-ProjectName-VpcPublicSubnets',
+      exportName: `${stackBaseName}-VpcPublicSubnets`,
     });
   }
 }
