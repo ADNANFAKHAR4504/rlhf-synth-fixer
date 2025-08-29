@@ -894,7 +894,7 @@ output "pipeline_url" {
 
 output "beanstalk_environment_url" {
   description = "URL of the Elastic Beanstalk environment"
-  value       = aws_elastic_beanstalk_environment.production.endpoint_url
+  value       = "http://${aws_elastic_beanstalk_environment.production.cname}"
 }
 
 output "beanstalk_environment_name" {
