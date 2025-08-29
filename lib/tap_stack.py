@@ -102,7 +102,7 @@ class TapStack(Stack):
         )
         alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(80), "HTTP from internet")
         alb_sg.add_ingress_rule(ec2.Peer.any_ipv4(), ec2.Port.tcp(443), "HTTPS from internet")
-        # REQUIRED because allow_all_outbound=False; ALB must reach targets on 80
+
         app_sg = ec2.SecurityGroup(
             self,
             "AppSecurityGroup",
@@ -110,6 +110,7 @@ class TapStack(Stack):
             description="SG for EC2 instances",
             allow_all_outbound=True,
         )
+        # REQUIRED because allow_all_outbound=False; ALB must reach targets on 80
         alb_sg.add_egress_rule(app_sg, ec2.Port.tcp(80), "Egress to app on 80")
 
         app_sg.add_ingress_rule(alb_sg, ec2.Port.tcp(80), "HTTP from ALB")
@@ -138,7 +139,7 @@ class TapStack(Stack):
         return role
 
     def _create_rds_database(self) -> rds.DatabaseInstance:
-        """RDS PostgreSQL in private subnets; engine 13.22."""
+        """RDS PostgreSQL in private subnets; engine 13.22; encrypted; class db.t3.micro."""
         db_subnet_group = rds.SubnetGroup(
             self,
             "DbSubnetGroup",
@@ -147,7 +148,7 @@ class TapStack(Stack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
         )
 
-        # Try enum first (newer CDK), fall back to positional of("13","22") for compatibility.
+        # Prefer enum if available; fallback to of("13", "22") for cross-version compatibility
         pg_version = getattr(rds.PostgresEngineVersion, "VER_13_22", None)
         if pg_version is None:
             pg_version = rds.PostgresEngineVersion.of("13", "22")
@@ -156,7 +157,7 @@ class TapStack(Stack):
             self,
             "PostgresDatabase",
             engine=rds.DatabaseInstanceEngine.postgres(version=pg_version),
-            instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.MICRO),  # db.t2.micro
+            instance_type=ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MICRO),  # db.t3.micro
             vpc=self.vpc,
             subnet_group=db_subnet_group,
             security_groups=[self.rds_sg],
@@ -242,10 +243,12 @@ class TapStack(Stack):
         )
 
     def _add_tags(self) -> None:
+        """Apply common tags."""
         Tags.of(self).add("Project", "WebApp")
         Tags.of(self).add("Environment", "Production")
         Tags.of(self).add("ManagedBy", "CDK")
 
     def _create_outputs(self) -> None:
+        """Export key outputs."""
         CfnOutput(self, "AlbDnsName", value=self.alb.load_balancer_dns_name, description="ALB DNS")
         CfnOutput(self, "DbEndpoint", value=self.rds_instance.instance_endpoint.hostname, description="RDS endpoint")
