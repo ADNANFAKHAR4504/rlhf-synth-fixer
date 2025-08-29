@@ -832,7 +832,7 @@ export class InfrastructureStack extends pulumi.ComponentResource {
     const appSecret = new aws.secretsmanager.Secret(
       `${sanitizedName}-app-secret`,
       {
-        name: `${sanitizedName}-app-secrets`,
+        name: `${sanitizedName}-pulumi-app-secrets`,
         description: 'Application secrets',
         kmsKeyId: kmsKey.id,
         tags: {
