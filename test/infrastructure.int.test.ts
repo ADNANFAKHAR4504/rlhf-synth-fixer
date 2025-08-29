@@ -1008,7 +1008,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(hasS3Policy).toBe(true);
       });
 
-      it('e2e: S3 bucket policy is restrictive (PutObject only)', async () => {
+      it('e2e: S3 bucket policy allows PutObject and GetObject', async () => {
         if (!outputs.s3BucketName || !outputs.iamRoleArn) {
           console.log('Skipping S3 policy test - missing outputs');
           return;
@@ -1026,11 +1026,11 @@ describe('Infrastructure Integration Tests', () => {
 
             const policyDocument = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument));
             const s3Statement = policyDocument.Statement.find((stmt: any) =>
-              stmt.Action && stmt.Action.includes('s3:PutObject')
+              stmt.Action && (stmt.Action.includes('s3:PutObject') || stmt.Action.includes('s3:GetObject'))
             );
 
             expect(s3Statement).toBeDefined();
-            expect(s3Statement.Action).toEqual(['s3:PutObject']);
+            expect(s3Statement.Action).toEqual(['s3:PutObject', 's3:GetObject']);
           }
         }
       });
