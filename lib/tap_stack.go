@@ -461,34 +461,7 @@ echo "<h1>Web Server - $(hostname -f)</h1>" > /var/www/html/index.html`
 			Name: ec2Profile.Name(),
 		},
 
-		UserData: jsii.String(cdktf.Fn_Base64encode(jsii.String(webUserData))),
-
-		BlockDeviceMapping: &[]*launchtemplate.LaunchTemplateBlockDeviceMapping{
-			{
-				DeviceName: jsii.String("/dev/xvda"),
-				Ebs: &launchtemplate.LaunchTemplateBlockDeviceMappingEbs{
-					VolumeSize:          jsii.Number(20),
-					VolumeType:          jsii.String("gp3"),
-					DeleteOnTermination: jsii.Bool(true),
-					Encrypted:           jsii.Bool(true),
-					KmsKeyId:            kmsKey.Arn(),
-				},
-			},
-		},
-
-		Monitoring: &launchtemplate.LaunchTemplateMonitoring{
-			Enabled: jsii.Bool(true),
-		},
-
-		TagSpecification: &[]*launchtemplate.LaunchTemplateTagSpecification{
-			{
-				ResourceType: jsii.String("instance"),
-				Tags: mergeTags(tags, &map[string]*string{
-					"Name": jsii.String(fmt.Sprintf("web-instance-%s", region)),
-					"Tier": jsii.String("Web"),
-				}),
-			},
-		},
+		UserData: cdktf.Fn_Base64encode(jsii.String(webUserData)),
 	})
 
 	// Launch Template for App Tier
@@ -509,30 +482,7 @@ echo "Application Server - $(hostname -f)" > /tmp/app-status.txt`
 			Name: ec2Profile.Name(),
 		},
 
-		UserData: jsii.String(cdktf.Fn_Base64encode(jsii.String(appUserData))),
-
-		BlockDeviceMapping: &[]*launchtemplate.LaunchTemplateBlockDeviceMapping{
-			{
-				DeviceName: jsii.String("/dev/xvda"),
-				Ebs: &launchtemplate.LaunchTemplateBlockDeviceMappingEbs{
-					VolumeSize:          jsii.Number(30),
-					VolumeType:          jsii.String("gp3"),
-					DeleteOnTermination: jsii.Bool(true),
-					Encrypted:           jsii.Bool(true),
-					KmsKeyId:            kmsKey.Arn(),
-				},
-			},
-		},
-
-		TagSpecification: &[]*launchtemplate.LaunchTemplateTagSpecification{
-			{
-				ResourceType: jsii.String("instance"),
-				Tags: mergeTags(tags, &map[string]*string{
-					"Name": jsii.String(fmt.Sprintf("app-instance-%s", region)),
-					"Tier": jsii.String("Application"),
-				}),
-			},
-		},
+		UserData: cdktf.Fn_Base64encode(jsii.String(appUserData)),
 	})
 
 	// Application Load Balancer
@@ -569,7 +519,7 @@ echo "Application Server - $(hostname -f)" > /tmp/app-status.txt`
 	// ALB Listener
 	lblistener.NewLbListener(scope, jsii.String("alb-listener"), &lblistener.LbListenerConfig{
 		LoadBalancerArn: alb.Arn(),
-		Port:            jsii.String("80"),
+		Port:            jsii.Number(80),
 		Protocol:        jsii.String("HTTP"),
 		DefaultAction: &[]*lblistener.LbListenerDefaultAction{
 			{
