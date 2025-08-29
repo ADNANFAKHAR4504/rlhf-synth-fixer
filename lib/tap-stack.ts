@@ -67,17 +67,17 @@ export class TapStack extends cdk.Stack {
     // Outputs for integration tests
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: api.url,
-      description: 'API Gateway URL'
+      description: 'API Gateway URL',
     });
 
     new cdk.CfnOutput(this, 'TableName', {
       value: table.tableName,
-      description: 'DynamoDB Table Name'
+      description: 'DynamoDB Table Name',
     });
 
     new cdk.CfnOutput(this, 'LogsBucketName', {
       value: logsBucket.bucketName,
-      description: 'S3 Logs Bucket Name'
+      description: 'S3 Logs Bucket Name',
     });
   }
 }
