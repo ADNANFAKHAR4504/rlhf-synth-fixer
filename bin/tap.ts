@@ -1,0 +1,12 @@
+#!/usr/bin/env node
+import 'source-map-support/register';
+import * as cdk from 'aws-cdk-lib';
+import { TapStack } from '../lib/tap-stack';
+
+const app = new cdk.App();
+new TapStack(app, 'CompanyName-ProjectName-Production', {
+  env: {
+    account: process.env.CDK_DEFAULT_ACCOUNT,
+    region: 'us-west-2',
+  },
+});
