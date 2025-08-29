@@ -39,67 +39,6 @@ Parameters:
 
 Resources:
   # ============================================================================
-  # KMS Key for Encryption
-  # ============================================================================
-  KMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: 'KMS key for encrypting RDS and other resources'
-      KeyPolicy:
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action:
-              - 'kms:CreateKey'
-              - 'kms:CreateAlias'
-              - 'kms:CreateGrant'
-              - 'kms:DescribeKey'
-              - 'kms:EnableKey'
-              - 'kms:EnableKeyRotation'
-              - 'kms:ListKeys'
-              - 'kms:ListAliases'
-              - 'kms:ListGrants'
-              - 'kms:PutKeyPolicy'
-              - 'kms:UpdateKeyDescription'
-              - 'kms:UpdateAlias'
-              - 'kms:RevokeGrant'
-              - 'kms:DisableKey'
-              - 'kms:DisableKeyRotation'
-              - 'kms:GetKeyPolicy'
-              - 'kms:GetKeyRotationStatus'
-              - 'kms:DeleteAlias'
-              - 'kms:ScheduleKeyDeletion'
-              - 'kms:CancelKeyDeletion'
-              - 'kms:GenerateDataKey'
-              - 'kms:GenerateDataKeyWithoutPlaintext'
-              - 'kms:Decrypt'
-              - 'kms:Encrypt'
-            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:*'
-          - Sid: Allow RDS Service
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
-            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:*'
-      Tags:
-        - Key: Owner
-          Value: !Ref OwnerName
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  KMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-key'
-      TargetKeyId: !Ref KMSKey
-
-  # ============================================================================
   # VPC and Networking
   # ============================================================================
   VPC:
@@ -247,7 +186,6 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-
   # ============================================================================
   # IAM Roles and Policies
   # ============================================================================
@@ -310,7 +248,7 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${EnvironmentSuffix}-security-response*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${EnvironmentSuffix}-security-response:*'
               - Effect: Allow
                 Action:
                   - sns:Publish
@@ -385,9 +323,71 @@ Resources:
           Value: !Ref ProjectName
 
   # ============================================================================
-  # RDS Database
+  # CloudTrail Logging
   # ============================================================================
-  DBSubnetGroup:
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub '${ProjectName}-${EnvironmentSuffix}-cloudtrail'
+      S3BucketName: !Ref LogsBucket
+      S3KeyPrefix: 'cloudtrail-logs/'
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values: 
+                - !Sub '${ApplicationBucket}/*'
+      Tags:
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ============================================================================
+  # Database Security (RDS with KMS)
+  # ============================================================================
+  KMSKeyForRDS:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for RDS encryption'
+      KeyPolicy:
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow RDS Service
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+      Tags:
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
+  KMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-rds-key'
+      TargetKeyId: !Ref KMSKeyForRDS
+
+  DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub '${ProjectName}-${EnvironmentSuffix}-db-subnet-group'
@@ -413,7 +413,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 10.0.0.0/16
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
           Description: 'MySQL access from EC2 instances'
       Tags:
         - Key: Name
@@ -425,48 +425,22 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  DBSecret:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-db-credentials'
-      Description: 'Database credentials for RDS instance'
-      GenerateSecretString:
-        SecretStringTemplate: '{"username": "admin"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 16
-        RequireEachIncludedType: false
-        IncludeSpace: false
-        ExcludeNumbers: false
-        ExcludeUppercase: false
-        ExcludeLowercase: false
-        ExcludePunctuation: true
-      Tags:
-        - Key: Owner
-          Value: !Ref OwnerName
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Project
-          Value: !Ref ProjectName
-
-  Database:
+  DatabaseInstance:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.43'
+      EngineVersion: '8.0.35'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !Ref KMSKey
+      KmsKeyId: !Ref KMSKeyForRDS
       MasterUsername: admin
-      ManageMasterUserPassword: true
-      MasterUserSecret:
-        SecretArn: !Ref DBSecret
+      MasterUserPassword: !Sub '${ProjectName}${EnvironmentSuffix}Password123!'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
       BackupRetentionPeriod: 7
       DeletionProtection: false
       Tags:
@@ -477,6 +451,75 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
+  # ============================================================================
+  # Multi-Region Disaster Recovery
+  # ============================================================================
+  CrossRegionBackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-dr-backup-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration:
+        Role: !GetAtt S3ReplicationRole.Arn
+        Rules:
+          - Id: ReplicateToSecondaryRegion
+            Status: Enabled
+            Prefix: 'disaster-recovery/'
+            Destination:
+              Bucket: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-dr-replica-${AWS::AccountId}'
+              StorageClass: STANDARD_IA
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReplicationPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObjectVersionForReplication
+                  - s3:GetObjectVersionAcl
+                Resource: !Sub '${CrossRegionBackupBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Ref CrossRegionBackupBucket
+              - Effect: Allow
+                Action:
+                  - s3:ReplicateObject
+                  - s3:ReplicateDelete
+                Resource: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-dr-replica-${AWS::AccountId}/*'
+      Tags:
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
 
   # ============================================================================
   # SNS Topic for Notifications
@@ -658,12 +701,24 @@ Outputs:
 
   DatabaseEndpoint:
     Description: 'RDS database endpoint'
-    Value: !GetAtt Database.Endpoint.Address
+    Value: !GetAtt DatabaseInstance.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
 
   KMSKeyId:
-    Description: 'KMS Key ID'
-    Value: !Ref KMSKey
+    Description: 'KMS Key ID for RDS encryption'
+    Value: !Ref KMSKeyForRDS
     Export:
       Name: !Sub '${AWS::StackName}-KMSKey'
+
+  CloudTrailArn:
+    Description: 'CloudTrail ARN'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail'
+
+  CrossRegionBackupBucket:
+    Description: 'Cross-region backup bucket for disaster recovery'
+    Value: !Ref CrossRegionBackupBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CrossRegionBackupBucket'
