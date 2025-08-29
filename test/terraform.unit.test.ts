@@ -241,7 +241,7 @@ describe('tap_stack.tf static verification', () => {
   });
 
   it('uses hardcoded solution stack name', () => {
-    expect(has(/64bit Amazon Linux 2023 v6\.4\.0 running Node\.js 18/)).toBe(true);
+    expect(has(/64bit Amazon Linux 2023 v6\.4\.0 running Node\.js 22/)).toBe(true);
   });
 
 });
