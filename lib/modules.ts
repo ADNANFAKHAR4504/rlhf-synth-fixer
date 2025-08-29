@@ -1,15 +1,21 @@
 import { Construct } from 'constructs';
+
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+
 import { cloudtrail } from '@cdktf/provider-aws';
+
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -18,13 +24,16 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
+
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule as AwsSecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+
 import { Instance } from '@cdktf/provider-aws/lib/instance';
+
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
+
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 
 /* =========================
    KMS Module
@@ -135,7 +144,9 @@ export class S3Module extends Construct {
 
     new S3BucketVersioningA(this, 's3-versioning', {
       bucket: this.bucket.id,
-      versioningConfiguration: { status: 'Enabled' },
+      versioningConfiguration: {
+        status: 'Enabled',
+      },
     });
   }
 }
@@ -160,14 +171,14 @@ export class CloudTrailModule extends Construct {
   constructor(scope: Construct, id: string, props: CloudTrailModuleProps) {
     super(scope, id);
 
-    // ✅ Make the logs bucket globally-unique & deterministic across acct/region
+    // Make the logs bucket globally-unique & deterministic across acct/region
     const derivedName = `${props.project}-${props.environment}-cloudtrail-${props.region}-${props.accountId}`
       .toLowerCase()
       .replace(/[^a-z0-9.-]/g, '')
       .slice(0, 63)
       .replace(/^[.-]+|[.-]+$/g, '');
 
-    const logsBucketName = (props.logsBucketName || derivedName);
+    const logsBucketName = props.logsBucketName || derivedName;
 
     this.logsBucket = new S3Bucket(this, 'cloudtrail-logs-bucket', {
       bucket: logsBucketName,
@@ -192,7 +203,7 @@ export class CloudTrailModule extends Construct {
             bucketKeyEnabled: true,
           },
         ],
-      }
+      },
     );
 
     new S3BucketPublicAccessBlock(this, 'logs-bucket-public-access-block', {
@@ -282,7 +293,7 @@ export class IamModule extends Construct {
   constructor(scope: Construct, id: string, props: IamModuleProps) {
     super(scope, id);
 
-    // ✅ Use namePrefix to avoid collisions (Terraform appends a unique suffix)
+    // Use namePrefix to avoid collisions (Terraform appends a unique suffix)
     this.role = new IamRole(this, 'ec2-role', {
       namePrefix: `${props.project}-${props.environment}-ec2-role-`,
       assumeRolePolicy: JSON.stringify({
@@ -322,11 +333,15 @@ export class IamModule extends Construct {
       }),
     });
 
-    // ✅ Use namePrefix here too
-    this.instanceProfile = new IamInstanceProfile(this, 'ec2-instance-profile', {
-      namePrefix: `${props.project}-${props.environment}-ec2-profile-`,
-      role: this.role.name,
-    });
+    // Use namePrefix here too
+    this.instanceProfile = new IamInstanceProfile(
+      this,
+      'ec2-instance-profile',
+      {
+        namePrefix: `${props.project}-${props.environment}-ec2-profile-`,
+        role: this.role.name,
+      },
+    );
   }
 }
 
@@ -576,7 +591,7 @@ export interface RdsModuleProps {
   allocatedStorage: number;
   dbName: string;
   username: string;
-  password: string;            // ensure ≤ 41 chars; handled in stack
+  password: string; // ensure ≤ 41 chars; handled in stack
   subnetIds: string[];
   securityGroupIds: string[];
   kmsKey: KmsKey;
