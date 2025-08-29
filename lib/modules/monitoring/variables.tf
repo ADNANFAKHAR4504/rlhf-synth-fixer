@@ -27,3 +27,15 @@ variable "sns_email" {
   type        = string
   default     = "devops-team@company.com"
 }
+
+variable "vpc_id" {
+  description = "ID of the VPC for monitoring resources"
+  type        = string
+  default     = ""
+}
+
+variable "tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}

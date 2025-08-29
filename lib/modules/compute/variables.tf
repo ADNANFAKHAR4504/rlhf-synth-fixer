@@ -35,7 +35,13 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "EC2 Key Pair name"
+  description = "EC2 Key Pair name (optional - leave empty to launch without key pair)"
   type        = string
-  default     = "prod-key-pair"
+  default     = ""
+}
+
+variable "tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default     = {}
 }

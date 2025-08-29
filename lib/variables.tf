@@ -41,9 +41,9 @@ variable "instance_type" {
 }
 
 variable "key_name" {
-  description = "EC2 Key Pair name"
+  description = "EC2 Key Pair name (optional - leave empty to launch without key pair)"
   type        = string
-  default     = "prod-key-pair"
+  default     = ""
 }
 
 variable "db_instance_class" {

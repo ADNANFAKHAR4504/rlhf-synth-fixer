@@ -2,6 +2,9 @@
 resource "random_password" "db_password" {
   length  = 16
   special = true
+  
+  # Exclude problematic characters for RDS
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 # Store password in Parameter Store

@@ -27,3 +27,9 @@ variable "enable_nat_gateway" {
   type        = bool
   default     = true
 }
+
+variable "tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default     = {}
+}
