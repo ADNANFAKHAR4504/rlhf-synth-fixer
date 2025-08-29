@@ -51,5 +51,11 @@
     "AWS::WAFv2::WebACL",
     "AWS::CloudFront::Distribution",
     "AWS::Lambda::Function"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
 }
