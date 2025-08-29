@@ -11,6 +11,31 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
       "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
       "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
       "Description": "Latest Amazon Linux 2023 AMI ID"
+    },
+    "KeyPairName": {
+      "Type": "String",
+      "Description": "Name of an existing EC2 KeyPair (leave empty to create instance without key pair)",
+      "Default": "",
+      "AllowedPattern": "^$|^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
+      "ConstraintDescription": "Must be empty or a valid EC2 KeyPair name."
+    },
+    "DBUsername": {
+      "Type": "String",
+      "Description": "Database administrator username",
+      "Default": "admin",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+    },
+    "DBPassword": {
+      "Type": "String",
+      "Description": "Database administrator password",
+      "NoEcho": true,
+      "MinLength": "8",
+      "MaxLength": "41",
+      "AllowedPattern": "[a-zA-Z0-9!@#$%^&*()_+=-]*",
+      "ConstraintDescription": "Must contain 8-41 alphanumeric and special characters."
     }
   },
   "Resources": {
@@ -436,7 +461,7 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
             "Ref": "PrivateSubnet"
           },
           {
-            "Ref": "PrivateSubnetSecondary"
+            "Ref": "PrivateSubnetSecondAZ"
           }
         ],
         "Tags": [
@@ -455,25 +480,18 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
         ]
       }
     },
-    "PrivateSubnetSecondary": {
+    "PrivateSubnetSecondAZ": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
         "VpcId": {
           "Ref": "ProductionVPC"
         },
-        "AvailabilityZone": {
-          "Fn::Select": [
-            2,
-            {
-              "Fn::GetAZs": ""
-            }
-          ]
-        },
+        "AvailabilityZone": "us-west-2b",
         "CidrBlock": "10.0.3.0/24",
         "Tags": [
           {
             "Key": "Name",
-            "Value": "Production-Private-Subnet-Secondary"
+            "Value": "Production-Private-Subnet-SecondAZ"
           },
           {
             "Key": "Project",
@@ -486,15 +504,19 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
         ]
       }
     },
-    "DatabaseInstance": {
+    "ProductionDatabase": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
         "DBInstanceIdentifier": "production-webapp-db",
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
-        "MasterUsername": "dbadmin",
-        "MasterUserPassword": "ChangeMe123!",
+        "MasterUsername": {
+          "Ref": "DBUsername"
+        },
+        "MasterUserPassword": {
+          "Ref": "DBPassword"
+        },
         "AllocatedStorage": 20,
         "StorageType": "gp2",
         "StorageEncrypted": true,
@@ -507,7 +529,7 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
           "Ref": "DBSubnetGroup"
         },
         "BackupRetentionPeriod": 7,
-        "MultiAZ": true,
+        "MultiAZ": false,
         "DeletionProtection": false,
         "Tags": [
           {
@@ -579,7 +601,7 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
       "Description": "RDS Database Endpoint",
       "Value": {
         "Fn::GetAtt": [
-          "DatabaseInstance",
+          "ProductionDatabase",
           "Endpoint.Address"
         ]
       },
