@@ -661,7 +661,7 @@ export class SecureInfrastructure {
       {
         name: `app-secrets-${this.environment}`,
         description: 'Database credentials for the application',
-        kmsKeyId: this.masterKey.keyId,
+        kmsKeyId: this.masterKey.arn,
         tags: {
           ...this.tags,
           Name: `db-credentials-${this.environment}`,
@@ -747,7 +747,7 @@ export class SecureInfrastructure {
         maxAllocatedStorage: 100,
         storageType: 'gp2',
         storageEncrypted: true,
-        kmsKeyId: this.masterKey.keyId,
+        kmsKeyId: this.masterKey.arn,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
