@@ -55,10 +55,10 @@ export class TapStack extends cdk.Stack {
     this.createVPCEndpoints(props.corporateIpRanges);
 
     // 6. Enable CloudTrail with encryption
-    this.createCloudTrail();
+    const trail = this.createCloudTrail();
 
     // 7. Set up CloudWatch monitoring and alerts
-    this.createCloudWatchAlertsAndMonitoring(props.alertEmail);
+    this.createCloudWatchAlertsAndMonitoring(props.alertEmail, trail);
 
     // Output important resources
     this.createOutputs();
@@ -619,7 +619,10 @@ export class TapStack extends cdk.Stack {
     return trail;
   }
 
-  private createCloudWatchAlertsAndMonitoring(alertEmail: string): void {
+  private createCloudWatchAlertsAndMonitoring(
+    alertEmail: string,
+    trail: cloudtrail.Trail
+  ): void {
     // SNS Topic for security alerts
     const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
       topicName: `security-alerts-${this.stackName}`,
@@ -637,6 +640,9 @@ export class TapStack extends cdk.Stack {
       'ImportedCloudTrailLogGroup',
       `/aws/cloudtrail/${this.stackName}`
     );
+
+    // Add explicit dependency on the trail to ensure log group exists
+    cloudTrailLogGroup.node.addDependency(trail);
 
     // Metric filters and alarms for security events
     const securityMetrics = [
