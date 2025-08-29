@@ -55,7 +55,7 @@ func TestTapStackIntegration(t *testing.T) {
 		// ACT
 		app := awscdk.NewApp(nil)
 		stack := lib.NewTapStack(app, jsii.String(stackName), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
+			StackProps:        awscdk.StackProps{},
 			EnvironmentSuffix: jsii.String("inttest"),
 		})
 
@@ -74,8 +74,8 @@ func TestTapStackIntegration(t *testing.T) {
 		envSuffix := "integration"
 
 		// ACT
-		stack := lib.NewTapStack(app, jsii.String("TapStackResourceTest"), &lib.TapStackProps{
-			StackProps:        &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackResourceTest", &lib.TapStackProps{
+			StackProps:        awscdk.StackProps{},
 			EnvironmentSuffix: jsii.String(envSuffix),
 		})
 
@@ -100,8 +100,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory to verify VPC configuration
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackVPCTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackVPCTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -132,8 +132,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackS3Test"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackS3Test", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -157,8 +157,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackKMSTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackKMSTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -182,8 +182,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackRDSTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackRDSTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -207,8 +207,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackALBTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackALBTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -232,8 +232,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackWAFTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackWAFTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -259,8 +259,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackSecurityTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackSecurityTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -284,8 +284,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackNACLTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackNACLTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -307,8 +307,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackCloudWatchTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackCloudWatchTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -329,8 +329,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackIAMTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackIAMTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
@@ -344,17 +344,17 @@ func TestTapStackIntegration(t *testing.T) {
 	t.Run("verify stack outputs are properly configured", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackOutputsTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackOutputsTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
 		assert.NotNil(t, stack)
-		
+
 		// Verify stack has outputs
 		outputs := stack.Stack.Outputs()
 		assert.NotNil(t, outputs)
-		
+
 		// Verify specific outputs exist
 		outputKeys := []string{"LoadBalancerDNS", "DatabaseEndpoint", "KMSKeyId"}
 		for _, key := range outputKeys {
@@ -366,13 +366,13 @@ func TestTapStackIntegration(t *testing.T) {
 	t.Run("verify resource naming conventions", func(t *testing.T) {
 		// ARRANGE
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackNamingTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackNamingTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
 		assert.NotNil(t, stack)
-		
+
 		// Verify stack name follows convention
 		stackName := *stack.StackName()
 		assert.True(t, strings.HasPrefix(stackName, "TapStack"), "Stack name should start with TapStack")
@@ -390,8 +390,8 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Create stack in memory
 		app := awscdk.NewApp(nil)
-		stack := lib.NewTapStack(app, jsii.String("TapStackEncryptionTest"), &lib.TapStackProps{
-			StackProps: &awscdk.StackProps{},
+		stack := lib.NewTapStack(app, "TapStackEncryptionTest", &lib.TapStackProps{
+			StackProps: awscdk.StackProps{},
 		})
 
 		// ASSERT
