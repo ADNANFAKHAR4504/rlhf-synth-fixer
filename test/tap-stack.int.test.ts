@@ -33,14 +33,24 @@ describe('TapStack Integration Tests', () => {
 
   describe('VPC Resources', () => {
     test('VPC exists and is configured correctly', async () => {
-      const vpcs = await ec2.describeVpcs({
-        Filters: [
-          {
-            Name: 'tag:aws:cloudformation:stack-name',
-            Values: [stackName],
-          },
-        ],
-      }).promise();
+      // Use VPC ID from outputs if available
+      const vpcId = flatOutputs.VpcId;
+      
+      let vpcs;
+      if (vpcId) {
+        vpcs = await ec2.describeVpcs({
+          VpcIds: [vpcId],
+        }).promise();
+      } else {
+        vpcs = await ec2.describeVpcs({
+          Filters: [
+            {
+              Name: 'tag:aws:cloudformation:stack-name',
+              Values: [stackName],
+            },
+          ],
+        }).promise();
+      }
 
       expect(vpcs.Vpcs).toBeDefined();
       expect(vpcs.Vpcs!.length).toBeGreaterThan(0);
@@ -193,10 +203,11 @@ describe('TapStack Integration Tests', () => {
 
   describe('S3 Bucket', () => {
     test('S3 bucket exists with versioning', async () => {
-      const buckets = await s3.listBuckets().promise();
-      const bucketName = buckets.Buckets?.find(b => 
-        b.Name?.includes('webapp-logs')
-      )?.Name;
+      // Use bucket name from outputs if available, otherwise fallback to search
+      const bucketName = flatOutputs.LogsBucketName || 
+        (await s3.listBuckets().promise()).Buckets?.find(b => 
+          b.Name?.includes('webapp-logs')
+        )?.Name;
 
       expect(bucketName).toBeDefined();
 
@@ -210,10 +221,11 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('S3 bucket has SSL-only policy', async () => {
-      const buckets = await s3.listBuckets().promise();
-      const bucketName = buckets.Buckets?.find(b => 
-        b.Name?.includes('webapp-logs')
-      )?.Name;
+      // Use bucket name from outputs if available, otherwise fallback to search
+      const bucketName = flatOutputs.LogsBucketName || 
+        (await s3.listBuckets().promise()).Buckets?.find(b => 
+          b.Name?.includes('webapp-logs')
+        )?.Name;
 
       if (bucketName) {
         try {
@@ -242,10 +254,11 @@ describe('TapStack Integration Tests', () => {
     }, timeout);
 
     test('S3 bucket has lifecycle rules', async () => {
-      const buckets = await s3.listBuckets().promise();
-      const bucketName = buckets.Buckets?.find(b => 
-        b.Name?.includes('webapp-logs')
-      )?.Name;
+      // Use bucket name from outputs if available, otherwise fallback to search
+      const bucketName = flatOutputs.LogsBucketName || 
+        (await s3.listBuckets().promise()).Buckets?.find(b => 
+          b.Name?.includes('webapp-logs')
+        )?.Name;
 
       if (bucketName) {
         const lifecycle = await s3.getBucketLifecycleConfiguration({
@@ -398,11 +411,23 @@ describe('TapStack Integration Tests', () => {
 
   describe('CloudFront Distribution', () => {
     test('CloudFront distribution exists and is deployed', async () => {
-      const distributions = await cloudfront.listDistributions().promise();
+      // Use CloudFront URL from outputs if available to get distribution ID
+      const cloudFrontUrl = flatOutputs.CloudFrontUrl;
+      let distribution;
       
-      const distribution = distributions.DistributionList?.Items?.find(d => 
-        d.Comment === 'CloudFront distribution for WebApp'
-      );
+      if (cloudFrontUrl) {
+        // Extract distribution ID from URL pattern
+        const domainName = cloudFrontUrl.replace('https://', '').replace('http://', '');
+        const distributions = await cloudfront.listDistributions().promise();
+        distribution = distributions.DistributionList?.Items?.find(d => 
+          d.DomainName === domainName
+        );
+      } else {
+        const distributions = await cloudfront.listDistributions().promise();
+        distribution = distributions.DistributionList?.Items?.find(d => 
+          d.Comment === 'CloudFront distribution for WebApp'
+        );
+      }
 
       expect(distribution).toBeDefined();
       expect(distribution?.Status).toBe('Deployed');
