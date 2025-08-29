@@ -158,5 +158,5 @@ output "db_instance_endpoint" {
 }
 
 output "s3_bucket_name" {
-  value = data.aws_s3_bucket.main.bucket
+  value = aws_s3_bucket.main.bucket
 }
