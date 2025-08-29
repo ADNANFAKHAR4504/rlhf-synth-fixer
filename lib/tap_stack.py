@@ -18,7 +18,8 @@ from aws_cdk import (
     aws_s3_notifications as s3n,
     CfnOutput,
     Duration,
-    RemovalPolicy
+    RemovalPolicy,
+    Tags
 )
 from constructs import Construct
 
@@ -60,6 +61,7 @@ class TapStack(Stack):
         }
 
         # Create DynamoDB table with on-demand capacity
+        # Fixed: Use PAY_PER_REQUEST instead of ON_DEMAND
         metadata_table = dynamodb.Table(
             self, "MetadataTable",
             table_name=f"file-metadata-table-{environment_suffix}",
@@ -67,28 +69,28 @@ class TapStack(Stack):
                 name="file_key",
                 type=dynamodb.AttributeType.STRING
             ),
-            billing_mode=dynamodb.BillingMode.ON_DEMAND,
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,  # Fixed: Changed from ON_DEMAND
             removal_policy=RemovalPolicy.DESTROY,  # For demo purposes
             point_in_time_recovery=True
         )
 
-        # Add tags to DynamoDB table
+        # Apply tags to DynamoDB table
         for key, value in common_tags.items():
-            metadata_table.node.add_metadata(key, value)
+            Tags.of(metadata_table).add(key, value)
 
         # Create S3 bucket with versioning
         data_bucket = s3.Bucket(
             self, "DataBucket",
-            bucket_name=None,  # Let AWS generate unique name
             versioned=True,
-            removal_policy=RemovalPolicy.DESTROY,  # For demo purposes
-            auto_delete_objects=True,  # For demo purposes
-            event_bridge_enabled=False  # We'll use direct Lambda trigger
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
+            public_read_access=False,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL
         )
 
-        # Add tags to S3 bucket
+        # Apply tags to S3 bucket
         for key, value in common_tags.items():
-            data_bucket.node.add_metadata(key, value)
+            Tags.of(data_bucket).add(key, value)
 
         # Create IAM role for Lambda with least privilege
         lambda_role = iam.Role(
@@ -125,6 +127,10 @@ class TapStack(Stack):
             )
         )
 
+        # Apply tags to IAM role
+        for key, value in common_tags.items():
+            Tags.of(lambda_role).add(key, value)
+
         # Create Lambda function
         processor_lambda = _lambda.Function(
             self, "FileProcessorLambda",
@@ -139,13 +145,13 @@ class TapStack(Stack):
             environment={
                 "DYNAMODB_TABLE_NAME": metadata_table.table_name,
                 "DYNAMODB_TABLE_ARN": metadata_table.table_arn,
-                "AWS_REGION": self.region
+                "AWS_REGION": self.region or "us-east-1"  # Fallback region
             }
         )
 
-        # Add tags to Lambda function
+        # Apply tags to Lambda function
         for key, value in common_tags.items():
-            processor_lambda.node.add_metadata(key, value)
+            Tags.of(processor_lambda).add(key, value)
 
         # Add S3 trigger to Lambda
         data_bucket.add_event_notification(
@@ -170,4 +176,10 @@ class TapStack(Stack):
             self, "DynamoDBTableName",
             value=metadata_table.table_name,
             description="Name of the DynamoDB metadata table"
+        )
+
+        CfnOutput(
+            self, "LambdaFunctionName",
+            value=processor_lambda.function_name,
+            description="Name of the Lambda function"
         )
