@@ -58,7 +58,7 @@ variable "application_name" {
 variable "solution_stack_name" {
   description = "Elastic Beanstalk solution stack"
   type        = string  
-  default     = "64bit Amazon Linux 2 v5.9.4 running Node.js 18"
+  default     = "64bit Amazon Linux 2023 v6.4.0 running Node.js 18"
 }
 
 variable "instance_type" {
