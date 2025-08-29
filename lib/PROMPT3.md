@@ -1,15 +1,44 @@
-Fix errors and update the stack :
+## AWS CDK Stack Modernization and Compliance Fixes
 
-Warning: aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated.
-use `pointInTimeRecoverySpecification` instead
-This API will be removed in the next major release.
-jsii.errors.JavaScriptError:
-ValidationError: AWS_REGION environment variable is reserved by the lambda runtime and can not be set manually. See https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html
-at path [TapStackpr2475/FileProcessorLambda] in aws-cdk-lib.aws_lambda.Function
+You need to resolve critical deprecation warnings and AWS runtime constraints in the serverless data processing pipeline to ensure production readiness and future compatibility.
 
-      at Kernel._Kernel_create (/tmp/tmpn9q7ln0q/lib/program.js:548:25)
-      at Kernel.create (/tmp/tmpn9q7ln0q/lib/program.js:218:93)
-      at KernelHost.processRequest (/tmp/tmpn9q7ln0q/lib/program.js:15464:36)
-      at KernelHost.run (/tmp/tmpn9q7ln0q/lib/program.js:15424:22)
-      at Immediate._onImmediate (/tmp/tmpn9q7ln0q/lib/program.js:15425:45)
-      at process.processImmediate (node:internal/timers:485:21)
+### Problem Description
+
+The current CDK stack has two critical issues preventing successful deployment:
+
+1. **CDK Deprecation Warning**: The DynamoDB table configuration uses deprecated properties that will be removed in future CDK versions
+2. **Lambda Runtime Constraint**: The Lambda function configuration attempts to set reserved environment variables that AWS doesn't allow
+
+### Specific Requirements
+
+#### 1. DynamoDB Point-in-Time Recovery Update
+
+- **Current Issue**: Using deprecated `pointInTimeRecovery` property
+- **Required Fix**: Update to use the new `pointInTimeRecoverySpecification` format
+- **Maintain**: Same functionality - point-in-time recovery should remain enabled
+
+#### 2. Lambda Environment Variable Compliance
+
+- **Current Issue**: Manually setting `AWS_REGION` environment variable
+- **AWS Constraint**: `AWS_REGION` is reserved by Lambda runtime and cannot be set manually
+- **Required Fix**: Remove the manual `AWS_REGION` setting and use runtime-provided alternatives
+- **Reference**: AWS Lambda environment variable documentation
+
+### Expected Outcomes
+
+1. **Clean Deployment**: Stack should deploy without warnings or errors
+2. **Future Compatibility**: No deprecated CDK properties should remain
+3. **AWS Compliance**: All Lambda environment variables should follow AWS constraints
+4. **Functional Preservation**: All existing functionality must be maintained
+5. **Regional Access**: Lambda should still have access to region information through AWS-provided methods
+
+### Technical Context
+
+This is a serverless data processing pipeline with:
+
+- S3 bucket with event notifications
+- Lambda function for file processing
+- DynamoDB table for metadata storage
+- IAM roles with least privilege access
+
+The fixes should maintain the same architecture while ensuring modern CDK practices and AWS compliance.
