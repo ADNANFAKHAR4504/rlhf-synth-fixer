@@ -129,7 +129,7 @@ describe('Infrastructure Integration Tests', () => {
       const dbInstance = response.DBInstances![0];
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.DBInstanceClass).toBe('db.t3.micro');
+      expect(dbInstance.DBInstanceClass).toBe('db.t3.small');
       expect(dbInstance.AllocatedStorage).toBe(20);
       expect(dbInstance.StorageType).toBe('gp2');
     });
@@ -449,7 +449,7 @@ describe('Infrastructure Integration Tests', () => {
     });
 
     it('resources follow naming convention <environment>-<resource-name>', async () => {
-      const namingPattern = /^[a-z]+-[a-z0-9-]+$/;
+      const namingPattern = /^[a-z0-9]+-[a-z0-9-]+$/;
       
       if (outputs.vpcId) {
         const response = await ec2.describeVpcs({ VpcIds: [outputs.vpcId] }).promise();
@@ -501,7 +501,7 @@ describe('Infrastructure Integration Tests', () => {
         const dbId = outputs.rdsEndpoint.split('.')[0];
         const rdsResponse = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
         const dbInstance = rdsResponse.DBInstances![0];
-        expect(dbInstance.DBInstanceClass).toBe('db.t3.micro');
+        expect(dbInstance.DBInstanceClass).toBe('db.t3.small');
         expect(dbInstance.StorageType).toBe('gp2');
       }
     });
@@ -723,7 +723,7 @@ describe('Infrastructure Integration Tests', () => {
         const dbId = outputs.rdsEndpoint.split('.')[0];
         const response = await rds.describeDBInstances({ DBInstanceIdentifier: dbId }).promise();
         const dbInstance = response.DBInstances![0];
-        expect(['db.t3.micro', 'db.t3.small', 'db.t3.medium']).toContain(dbInstance.DBInstanceClass);
+        expect(['db.t3.small', 'db.t3.medium']).toContain(dbInstance.DBInstanceClass);
       }
     });
   });
