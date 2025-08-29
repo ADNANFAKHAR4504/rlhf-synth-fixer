@@ -312,6 +312,14 @@ describe('TapStack CloudFormation Template - Integration Tests', () => {
         if (vpcFlowLogsGroup) {
           console.log('✅ VPC Flow Logs log group found:', vpcFlowLogsGroup.logGroupName);
         }
+
+        // Check for CloudTrail log group if stack outputs include identifiers
+        const cloudTrailGroup = response.logGroups!.find((lg: any) =>
+          lg.logGroupName.includes('/aws/cloudtrail/')
+        );
+        if (cloudTrailGroup) {
+          console.log('✅ CloudTrail log group found:', cloudTrailGroup.logGroupName);
+        }
       } catch (error) {
         console.log('❌ CloudWatch logs access failed:', error);
         throw error;

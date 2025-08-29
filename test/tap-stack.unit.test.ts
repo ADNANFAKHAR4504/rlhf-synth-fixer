@@ -37,7 +37,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
         'ProjectName',
         'VpcCidr',
         'TrustedIpRange',
-        'ComplianceRetentionDays'
+        'ComplianceRetentionDays',
+        'CloudWatchRetentionInDays'
       ];
 
       expectedParams.forEach(paramName => {
@@ -272,6 +273,13 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(tagKeys).toContain('Project');
       expect(tagKeys).toContain('Purpose');
     });
+
+    test('should have CloudTrailLogsGroup with retention', () => {
+      expect(template.Resources.CloudTrailLogsGroup).toBeDefined();
+      expect(template.Resources.CloudTrailLogsGroup.Type).toBe('AWS::Logs::LogGroup');
+      const logGroup = template.Resources.CloudTrailLogsGroup;
+      expect(logGroup.Properties.RetentionInDays).toBeDefined();
+    });
   });
 
   describe('VPC Flow Logs', () => {
@@ -380,6 +388,19 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(template.Resources.VPCFlowLogsAlarm).toBeDefined();
       expect(template.Resources.VPCFlowLogsAlarm.Type).toBe('AWS::CloudWatch::Alarm');
     });
+
+    test('CloudTrail trail should reference CloudTrailLogsGroup ARN', () => {
+      const trail = template.Resources.CloudTrailTrail;
+      const arn = trail.Properties.CloudWatchLogsLogGroupArn;
+      if (arn && arn['Fn::GetAtt']) {
+        const getAtt = arn['Fn::GetAtt'];
+        expect(Array.isArray(getAtt)).toBe(true);
+        expect(getAtt[0]).toBe('CloudTrailLogsGroup');
+        expect(getAtt[1]).toBe('Arn');
+      } else {
+        expect(arn).toBeDefined();
+      }
+    });
   });
 
   describe('Template Validation', () => {
@@ -402,7 +423,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5); // Environment, ProjectName, VpcCidr, TrustedIpRange, ComplianceRetentionDays
+      expect(parameterCount).toBe(6); // + CloudWatchRetentionInDays
     });
   });
 
