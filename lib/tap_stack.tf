@@ -55,7 +55,7 @@ variable "db_instance_class" {
 variable "domain_name" {
   description = "Domain name for Route 53"
   type        = string
-  default     = "example.com"
+  default     = "stacknewentry.com"
 }
 
 # =============================================================================
@@ -1311,6 +1311,7 @@ resource "aws_db_instance" "secondary_replica" {
 
   identifier                = "${local.secondary_prefix}-database-replica"
   replicate_source_db       = aws_db_instance.primary.arn
+  storage_encrypted         = true
   instance_class            = var.db_instance_class
   auto_minor_version_upgrade = false
 
@@ -1347,7 +1348,6 @@ resource "aws_route53_health_check" "primary_alb" {
   request_interval                = "30"
   cloudwatch_alarm_region         = var.primary_region
   cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.primary_alb_health.alarm_name
-  insufficient_data_health_status = "Unhealthy"
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-health-check"
@@ -1364,7 +1364,6 @@ resource "aws_route53_health_check" "secondary_alb" {
   request_interval                = "30"
   cloudwatch_alarm_region         = var.secondary_region
   cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.secondary_alb_health.alarm_name
-  insufficient_data_health_status = "Unhealthy"
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-health-check"
