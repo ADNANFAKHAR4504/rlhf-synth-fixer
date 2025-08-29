@@ -35,10 +35,6 @@ env:
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
 
-  # Go caching optimization
-  GOCACHE: ${{ github.workspace }}/.cache/go-build
-  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
-
 jobs:
   detect-metadata:
     name: Detect Project Files
