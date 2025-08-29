@@ -69,37 +69,40 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
-    // 4. S3 Bucket with security configurations
+    // 4. S3 Bucket with security configurations (FIXED: Removed conflicting bucket policy)
     const s3Bucket = new s3.Bucket(this, 'TapS3Bucket', {
       bucketName: `tap-secure-bucket-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
       encryptionKey: s3KmsKey,
       encryption: s3.BucketEncryption.KMS,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, // Keep secure - blocks all public access
       enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Change to RETAIN for production
       autoDeleteObjects: true, // Only for development
     });
 
-    // S3 bucket policy for restricted access
-    const s3BucketPolicy = new iam.PolicyStatement({
-      sid: 'RestrictAccessToSpecificRoles',
-      effect: iam.Effect.ALLOW,
-      principals: [lambdaRole],
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-        's3:DeleteObject',
-        's3:ListBucket',
-      ],
-      resources: [s3Bucket.bucketArn, `${s3Bucket.bucketArn}/*`],
-    });
+    // REMOVED: The problematic bucket policy that was causing the deployment failure
+    // Instead, we'll use IAM role permissions which are more secure and don't conflict with BlockPublicAccess
 
-    s3Bucket.addToResourcePolicy(s3BucketPolicy);
-
-    // Grant Lambda role permissions to S3 bucket
+    // Grant Lambda role permissions to S3 bucket using IAM (not bucket policy)
     s3Bucket.grantReadWrite(lambdaRole);
     s3KmsKey.grantEncryptDecrypt(lambdaRole);
+
+    // Additional explicit IAM policy for Lambda role (optional, for fine-grained control)
+    lambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          's3:GetObject',
+          's3:PutObject',
+          's3:DeleteObject',
+          's3:ListBucket',
+          's3:GetObjectVersion',
+          's3:DeleteObjectVersion',
+        ],
+        resources: [s3Bucket.bucketArn, `${s3Bucket.bucketArn}/*`],
+      })
+    );
 
     // 5. SSM Parameters for Lambda environment variables
     const dbCredentialsParam = new ssm.StringParameter(this, 'DbCredentials', {
@@ -186,7 +189,24 @@ def handler(event, context):
             
             logger.info(f"Processing object: {key} from bucket: {bucket}")
             
-            # Your business logic here
+            # Example: Read the uploaded object
+            try:
+                response = s3.get_object(Bucket=bucket, Key=key)
+                content = response['Body'].read()
+                logger.info(f"Successfully read object {key}, size: {len(content)} bytes")
+                
+                # Example: Create a processed version
+                processed_key = f"processed/{key}"
+                s3.put_object(
+                    Bucket=bucket,
+                    Key=processed_key,
+                    Body=f"Processed: {content.decode('utf-8') if len(content) < 1000 else 'Large file processed'}",
+                    ContentType='text/plain'
+                )
+                logger.info(f"Created processed version: {processed_key}")
+                
+            except Exception as s3_error:
+                logger.error(f"Error processing S3 object {key}: {str(s3_error)}")
             
         return {
             'statusCode': 200,
@@ -202,10 +222,11 @@ def handler(event, context):
       description: `TAP Lambda function triggered by S3 events - ${environmentSuffix}`,
     });
 
-    // Lambda resource policy to restrict invocation
+    // Lambda resource policy to restrict invocation to S3 service
     tapLambda.addPermission('S3InvokePermission', {
       principal: new iam.ServicePrincipal('s3.amazonaws.com'),
       sourceArn: s3Bucket.bucketArn,
+      action: 'lambda:InvokeFunction',
     });
 
     // 7. S3 event notification to trigger Lambda
@@ -221,7 +242,16 @@ def handler(event, context):
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // 9. SSL Certificate (if custom domain is provided)
+    // 9. CloudFront Origin Access Control (OAC) for secure S3 access
+    const originAccessControl = new cloudfront.S3OriginAccessControl(
+      this,
+      'TapOAC',
+      {
+        description: `Origin Access Control for TAP S3 bucket - ${environmentSuffix}`,
+      }
+    );
+
+    // 10. SSL Certificate (if custom domain is provided)
     let certificate: acm.Certificate | undefined;
     if (customDomain) {
       certificate = new acm.Certificate(this, 'CloudFrontCertificate', {
@@ -230,13 +260,15 @@ def handler(event, context):
       });
     }
 
-    // 10. CloudFront Distribution
+    // 11. CloudFront Distribution with OAC
     const distribution = new cloudfront.Distribution(
       this,
       'TapCloudFrontDistribution',
       {
         defaultBehavior: {
-          origin: new origins.S3Origin(s3Bucket),
+          origin: origins.S3BucketOrigin.withOriginAccessControl(s3Bucket, {
+            originAccessControl: originAccessControl,
+          }),
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
@@ -251,7 +283,23 @@ def handler(event, context):
       }
     );
 
-    // 11. Outputs for auditing and reference
+    // Grant CloudFront OAC access to S3 bucket (this is the correct way to allow CloudFront access)
+    s3Bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudFrontServicePrincipal',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:GetObject'],
+        resources: [`${s3Bucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudfront::${this.account}:distribution/${distribution.distributionId}`,
+          },
+        },
+      })
+    );
+
+    // 12. Outputs for auditing and reference
     new cdk.CfnOutput(this, 'S3BucketArn', {
       value: s3Bucket.bucketArn,
       description: `ARN of the TAP S3 bucket - ${environmentSuffix}`,
