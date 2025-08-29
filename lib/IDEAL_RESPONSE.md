@@ -1,3 +1,78 @@
+# CDKTF Go Web Application Infrastructure Stack
+
+## Overview
+
+This implementation provides a comprehensive, production-ready web application infrastructure using **Terraform CDK (CDKTF) with Go**. The stack creates a secure, scalable foundation for hosting web applications on AWS with proper networking, compute, database, and storage components.
+
+## Architecture Components
+
+### 🏗️ **Core Infrastructure Design**
+- **Platform**: CDKTF (Terraform CDK) with Go language bindings
+- **Pattern**: Infrastructure as Code using escape hatches for raw Terraform resources
+- **State Management**: Remote S3 backend with encryption and versioning
+- **Environment Support**: Multi-environment deployment with PR-based isolation
+
+### 🌐 **Networking Layer**
+- **VPC**: Custom VPC with `10.0.0.0/16` CIDR block
+- **Subnets**: 
+  - Public subnet (`10.0.1.0/24`) for web servers
+  - Private subnets (`10.0.2.0/24`, `10.0.3.0/24`) for databases across AZs
+- **Connectivity**: Internet Gateway with proper routing for public access
+- **DNS**: Enabled DNS hostname resolution within VPC
+
+### 🔒 **Security Implementation**
+- **Security Groups**: 
+  - EC2 security group with SSH access restricted to office IP
+  - RDS security group allowing MySQL access only from EC2 instances
+- **Network Isolation**: Database tier isolated in private subnets
+- **Encryption**: Storage encryption enabled for RDS and S3
+
+### 💻 **Compute Resources**
+- **EC2 Instance**: Amazon Linux 2 with Apache web server
+- **Auto-configuration**: User data script for automatic web server setup
+- **Scalability**: Configurable instance types via environment variables
+- **Access**: SSH access via configurable office IP restriction
+
+### 🗄️ **Database Layer**
+- **RDS MySQL 8.0**: Managed database service in private subnets
+- **High Availability**: Multi-AZ subnet group configuration
+- **Backup Strategy**: 7-day retention with automated backup windows
+- **Security**: Encrypted storage with parameter group optimization
+
+### 📦 **Storage Solutions**
+- **State Storage**: Dedicated S3 bucket for Terraform state management
+- **Security Features**: Versioning, encryption, and public access blocking
+- **Compliance**: Server-side encryption with AES-256
+
+## 🚀 **Key Features**
+
+### Environment-Driven Configuration
+```go
+type TapStackProps struct {
+	EnvironmentSuffix string  // Environment identifier (dev, staging, prod)
+	StateBucket       string  // S3 bucket for Terraform state
+	StateBucketRegion string  // AWS region for state bucket
+	AwsRegion         string  // Primary AWS region for resources
+	RepositoryName    string  // GitHub repository name for tagging
+	CommitAuthor      string  // Author information for resource tagging
+	OfficeIP          string  // IP restriction for SSH access
+	InstanceType      string  // EC2 instance type configuration
+}
+```
+
+### Smart Environment Variable Integration
+```go
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+```
+
+### CDKTF Implementation Pattern
+The stack uses CDKTF's **escape hatch** pattern to define raw Terraform resources while maintaining type safety and Go's strong typing system:
+
 ```go
 package lib
 
