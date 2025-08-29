@@ -873,86 +873,86 @@ resource "aws_fms_policy" "waf_policy" {
 
 # Output important information
 output "vpc_id" {
-  description = "ID of the VPC (${var.environment})"
+  description = "ID of the VPC"
   value       = aws_vpc.main.id
 }
 
 output "load_balancer_dns" {
-  description = "DNS name of the load balancer (${var.environment})"
+  description = "DNS name of the load balancer"
   value       = aws_lb.main.dns_name
 }
 
 output "s3_bucket_name" {
-  description = "Name of the secure S3 bucket (${var.environment})"
+  description = "Name of the secure S3 bucket"
   value       = aws_s3_bucket.secure.id
 }
 
 output "rds_endpoint" {
-  description = "RDS instance endpoint (${var.environment})"
+  description = "RDS instance endpoint"
   value       = aws_db_instance.main.endpoint
 }
 
 output "kms_key_id" {
-  description = "KMS key ID for encryption (${var.environment})"
+  description = "KMS key ID for encryption"
   value       = aws_kms_key.main.key_id
 }
 
 output "public_subnet_ids" {
-  description = "IDs of public subnets (${var.environment})"
+  description = "IDs of public subnets"
   value       = aws_subnet.public[*].id
 }
 
 output "private_subnet_ids" {
-  description = "IDs of private subnets (${var.environment})"
+  description = "IDs of private subnets"
   value       = aws_subnet.private[*].id
 }
 
 output "ec2_security_group_id" {
-  description = "EC2 security group ID (${var.environment})"
+  description = "EC2 security group ID"
   value       = aws_security_group.ec2.id
 }
 
 output "alb_security_group_id" {
-  description = "ALB security group ID (${var.environment})"
+  description = "ALB security group ID"
   value       = aws_security_group.alb.id
 }
 
 output "rds_security_group_id" {
-  description = "RDS security group ID (${var.environment})"
+  description = "RDS security group ID"
   value       = aws_security_group.rds.id
 }
 
 output "lambda_security_group_id" {
-  description = "Lambda security group ID (${var.environment})"
+  description = "Lambda security group ID"
   value       = aws_security_group.lambda.id
 }
 
 output "cloudtrail_bucket_name" {
-  description = "CloudTrail S3 bucket name (${var.environment})"
+  description = "CloudTrail S3 bucket name"
   value       = aws_s3_bucket.cloudtrail.id
 }
 
 output "config_bucket_name" {
-  description = "Config S3 bucket name (${var.environment})"
+  description = "Config S3 bucket name"
   value       = aws_s3_bucket.config.id
 }
 
 output "autoscaling_group_name" {
-  description = "Auto Scaling Group name (${var.environment})"
+  description = "Auto Scaling Group name"
   value       = aws_autoscaling_group.main.name
 }
 
 output "lambda_function_name" {
-  description = "Lambda function name (${var.environment})"
+  description = "Lambda function name"
   value       = aws_lambda_function.secure.function_name
 }
 
 output "waf_web_acl_arn" {
-  description = "WAF Web ACL ARN (${var.environment})"
+  description = "WAF Web ACL ARN"
   value       = aws_wafv2_web_acl.main.arn
 }
 
 output "firewall_manager_policy_name" {
-  description = "Firewall Manager Policy name (${var.environment})"
+  description = "Firewall Manager Policy name"
   value       = aws_fms_policy.waf_policy.name
 }
