@@ -4,31 +4,31 @@ import (
 	"fmt"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
-	"github.com/hashicorp/terraform-cdk-go/cdktf"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbsubnetgroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbinstance"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lb"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lbtargetgroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lblistener"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/launchtemplate"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iaminstanceprofile"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsavailabilityzones"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbinstance"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbsubnetgroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iaminstanceprofile"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/launchtemplate"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lb"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lblistener"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lbtargetgroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
+	"github.com/hashicorp/terraform-cdk-go/cdktf"
 )
 
 type InfrastructureStackConfig struct {
@@ -77,7 +77,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	// Configuration
 	vpcCidr := "10.0.0.0/16"
 	companyIpRanges := []*string{
-		jsii.String("203.0.113.0/24"), // Company office IP range
+		jsii.String("203.0.113.0/24"),  // Company office IP range
 		jsii.String("198.51.100.0/24"), // Company VPN range
 	}
 
@@ -118,8 +118,8 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		// Public Subnet
 		pubSubnet := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("public-subnet-%d", i)), &subnet.SubnetConfig{
 			VpcId:               mainVpc.Id(),
-			CidrBlock:          jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+1)),
-			AvailabilityZone:   cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(azIndex)), nil),
+			CidrBlock:           jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+1)),
+			AvailabilityZone:    cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(azIndex)), nil),
 			MapPublicIpOnLaunch: jsii.Bool(true),
 			Tags: mergeTags(tags, &map[string]*string{
 				"Name": jsii.String(fmt.Sprintf("public-subnet-%d-%s", i+1, region)),
@@ -132,7 +132,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		// Private Subnet
 		privSubnet := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("private-subnet-%d", i)), &subnet.SubnetConfig{
 			VpcId:            mainVpc.Id(),
-			CidrBlock:       jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+2)),
+			CidrBlock:        jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+2)),
 			AvailabilityZone: cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(azIndex)), nil),
 			Tags: mergeTags(tags, &map[string]*string{
 				"Name": jsii.String(fmt.Sprintf("private-subnet-%d-%s", i+1, region)),
@@ -145,7 +145,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		// Database Subnet
 		dbSubnet := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("database-subnet-%d", i)), &subnet.SubnetConfig{
 			VpcId:            mainVpc.Id(),
-			CidrBlock:       jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+3)),
+			CidrBlock:        jsii.String(fmt.Sprintf("10.0.%d.0/24", i*10+3)),
 			AvailabilityZone: cdktf.Token_AsString(cdktf.Fn_Element(azs.Names(), jsii.Number(azIndex)), nil),
 			Tags: mergeTags(tags, &map[string]*string{
 				"Name": jsii.String(fmt.Sprintf("database-subnet-%d-%s", i+1, region)),
@@ -373,17 +373,17 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 
 	// CloudWatch Log Groups
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("web-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-		Name:             jsii.String(fmt.Sprintf("/migration/web/%s", region)),
-		RetentionInDays:  jsii.Number(30),
-		KmsKeyId:         kmsKey.Arn(),
-		Tags:             tags,
+		Name:            jsii.String(fmt.Sprintf("/migration/web/%s", region)),
+		RetentionInDays: jsii.Number(30),
+		KmsKeyId:        kmsKey.Arn(),
+		Tags:            tags,
 	})
 
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("app-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
-		Name:             jsii.String(fmt.Sprintf("/migration/app/%s", region)),
-		RetentionInDays:  jsii.Number(30),
-		KmsKeyId:         kmsKey.Arn(),
-		Tags:             tags,
+		Name:            jsii.String(fmt.Sprintf("/migration/app/%s", region)),
+		RetentionInDays: jsii.Number(30),
+		KmsKeyId:        kmsKey.Arn(),
+		Tags:            tags,
 	})
 
 	// Database Subnet Group
@@ -414,13 +414,13 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		DbSubnetGroupName:   dbSubnetGroup.Name(),
 
 		BackupRetentionPeriod: jsii.Number(7),
-		BackupWindow:         jsii.String("03:00-04:00"),
-		MaintenanceWindow:    jsii.String("sun:04:00-sun:05:00"),
+		BackupWindow:          jsii.String("03:00-04:00"),
+		MaintenanceWindow:     jsii.String("sun:04:00-sun:05:00"),
 
-		MultiAz:            jsii.Bool(true),
-		PubliclyAccessible: jsii.Bool(false),
-		DeletionProtection: jsii.Bool(true),
-		SkipFinalSnapshot:  jsii.Bool(false),
+		MultiAz:                 jsii.Bool(true),
+		PubliclyAccessible:      jsii.Bool(false),
+		DeletionProtection:      jsii.Bool(true),
+		SkipFinalSnapshot:       jsii.Bool(false),
 		FinalSnapshotIdentifier: jsii.String(fmt.Sprintf("migration-final-snapshot-%s", region)),
 
 		Tags: mergeTags(tags, &map[string]*string{
@@ -487,10 +487,10 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	// Application Load Balancer
 	alb := lb.NewLb(scope, jsii.String("application-load-balancer"), &lb.LbConfig{
-		Name:           jsii.String(fmt.Sprintf("migration-alb-%s", region)),
+		Name:             jsii.String(fmt.Sprintf("migration-alb-%s", region)),
 		LoadBalancerType: jsii.String("application"),
-		Subnets:        &publicSubnetIds,
-		SecurityGroups: &[]*string{albSG.Id()},
+		Subnets:          &publicSubnetIds,
+		SecurityGroups:   &[]*string{albSG.Id()},
 		Tags: mergeTags(tags, &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("migration-alb-%s", region)),
 		}),
@@ -503,13 +503,13 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		Protocol: jsii.String("HTTP"),
 		VpcId:    mainVpc.Id(),
 		HealthCheck: &lbtargetgroup.LbTargetGroupHealthCheck{
-			Enabled:             jsii.Bool(true),
-			HealthyThreshold:    jsii.Number(2),
-			UnhealthyThreshold:  jsii.Number(2),
-			Timeout:             jsii.Number(5),
-			Interval:            jsii.Number(30),
-			Path:                jsii.String("/"),
-			Matcher:             jsii.String("200"),
+			Enabled:            jsii.Bool(true),
+			HealthyThreshold:   jsii.Number(2),
+			UnhealthyThreshold: jsii.Number(2),
+			Timeout:            jsii.Number(5),
+			Interval:           jsii.Number(30),
+			Path:               jsii.String("/"),
+			Matcher:            jsii.String("200"),
 		},
 		Tags: mergeTags(tags, &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("web-tg-%s", region)),
@@ -531,14 +531,14 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	// Auto Scaling Group for Web Tier
 	webASG := autoscalinggroup.NewAutoscalingGroup(scope, jsii.String("web-auto-scaling-group"), &autoscalinggroup.AutoscalingGroupConfig{
-		Name:               jsii.String(fmt.Sprintf("web-asg-%s", region)),
-		VpcZoneIdentifier:  &privateSubnetIds,
-		MinSize:            jsii.Number(2),
-		MaxSize:            jsii.Number(6),
-		DesiredCapacity:    jsii.Number(3),
-		HealthCheckType:    jsii.String("ELB"),
+		Name:                   jsii.String(fmt.Sprintf("web-asg-%s", region)),
+		VpcZoneIdentifier:      &privateSubnetIds,
+		MinSize:                jsii.Number(2),
+		MaxSize:                jsii.Number(6),
+		DesiredCapacity:        jsii.Number(3),
+		HealthCheckType:        jsii.String("ELB"),
 		HealthCheckGracePeriod: jsii.Number(300),
-		TargetGroupArns:    &[]*string{webTG.Arn()},
+		TargetGroupArns:        &[]*string{webTG.Arn()},
 		LaunchTemplate: &autoscalinggroup.AutoscalingGroupLaunchTemplate{
 			Id:      webLT.Id(),
 			Version: jsii.String("$Latest"),
@@ -554,12 +554,12 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	// Auto Scaling Group for App Tier
 	appASG := autoscalinggroup.NewAutoscalingGroup(scope, jsii.String("app-auto-scaling-group"), &autoscalinggroup.AutoscalingGroupConfig{
-		Name:               jsii.String(fmt.Sprintf("app-asg-%s", region)),
-		VpcZoneIdentifier:  &privateSubnetIds,
-		MinSize:            jsii.Number(2),
-		MaxSize:            jsii.Number(8),
-		DesiredCapacity:    jsii.Number(4),
-		HealthCheckType:    jsii.String("EC2"),
+		Name:                   jsii.String(fmt.Sprintf("app-asg-%s", region)),
+		VpcZoneIdentifier:      &privateSubnetIds,
+		MinSize:                jsii.Number(2),
+		MaxSize:                jsii.Number(8),
+		DesiredCapacity:        jsii.Number(4),
+		HealthCheckType:        jsii.String("EC2"),
 		HealthCheckGracePeriod: jsii.Number(300),
 		LaunchTemplate: &autoscalinggroup.AutoscalingGroupLaunchTemplate{
 			Id:      appLT.Id(),
