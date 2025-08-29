@@ -834,7 +834,7 @@ export class SecureInfrastructure {
         vpcSecurityGroupIds: [this.webSecurityGroup.id],
         monitoring: { enabled: true },
         iamInstanceProfile: {
-          name: this.instanceProfile.name,
+          arn: this.instanceProfile.arn,
         },
         userData: Buffer.from(
           `#!/bin/bash
