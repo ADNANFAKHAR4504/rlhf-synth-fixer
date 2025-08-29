@@ -18,11 +18,13 @@ export class TapStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+    cdk.Tags.of(table).add('Environment', 'Production');
 
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
+    cdk.Tags.of(logsBucket).add('Environment', 'Production');
 
     const lambdaFunction = new lambda.Function(this, 'Function', {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -46,6 +48,7 @@ export class TapStack extends cdk.Stack {
         LOGS_BUCKET_NAME: logsBucket.bucketName,
       },
     });
+    cdk.Tags.of(lambdaFunction).add('Environment', 'Production');
 
     table.grantWriteData(lambdaFunction);
     logsBucket.grantWrite(lambdaFunction);
@@ -57,7 +60,24 @@ export class TapStack extends cdk.Stack {
         allowHeaders: apigateway.Cors.DEFAULT_HEADERS,
       },
     });
+    cdk.Tags.of(api).add('Environment', 'Production');
 
     api.root.addMethod('ANY', new apigateway.LambdaIntegration(lambdaFunction));
+
+    // Outputs for integration tests
+    new cdk.CfnOutput(this, 'ApiUrl', {
+      value: api.url,
+      description: 'API Gateway URL'
+    });
+
+    new cdk.CfnOutput(this, 'TableName', {
+      value: table.tableName,
+      description: 'DynamoDB Table Name'
+    });
+
+    new cdk.CfnOutput(this, 'LogsBucketName', {
+      value: logsBucket.bucketName,
+      description: 'S3 Logs Bucket Name'
+    });
   }
 }

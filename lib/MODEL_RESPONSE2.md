@@ -1,22 +1,3 @@
-# IDEAL_RESPONSE
-
-This document contains the ideal implementation that should be generated when given the PROMPT.md requirements.
-
-## Key Requirements from PROMPT.md
-- AWS CDK with TypeScript, deploying to us-east-1
-- Three files only: bin/tap.ts, lib/tap-stack.ts, cdk.json
-- Node.js Lambda with HTTP endpoint via API Gateway
-- CORS enabled for all origins
-- Lambda timeout ≤ 15 seconds
-- Environment variables for runtime configuration
-- Least-privilege IAM permissions for DynamoDB write access
-- DynamoDB table with on-demand capacity and string primary key 'id'
-- S3 bucket for function logs with write access
-- Global tag Environment: Production across everything
-- Must target us-east-1, synth and deploy cleanly
-
-## Ideal Implementation
-
 **bin/tap.ts**
 ```typescript
 #!/usr/bin/env node
@@ -28,6 +9,8 @@ const app = new cdk.App();
 new TapStack(app, 'TapStack', {
   env: { region: 'us-east-1' },
 });
+
+cdk.Tags.of(app).add('Environment', 'Production');
 ```
 
 **lib/tap-stack.ts**
@@ -37,6 +20,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 export class TapStack extends cdk.Stack {
@@ -45,16 +29,17 @@ export class TapStack extends cdk.Stack {
 
     const table = new dynamodb.Table(this, 'Table', {
       partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      billingMode: dynamodb.BillingMode.ON_DEMAND,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-    cdk.Tags.of(table).add('Environment', 'Production');
 
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
     });
-    cdk.Tags.of(logsBucket).add('Environment', 'Production');
 
     const lambdaFunction = new lambda.Function(this, 'Function', {
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -78,7 +63,6 @@ export class TapStack extends cdk.Stack {
         LOGS_BUCKET_NAME: logsBucket.bucketName,
       },
     });
-    cdk.Tags.of(lambdaFunction).add('Environment', 'Production');
 
     table.grantWriteData(lambdaFunction);
     logsBucket.grantWrite(lambdaFunction);
@@ -90,25 +74,8 @@ export class TapStack extends cdk.Stack {
         allowHeaders: apigateway.Cors.DEFAULT_HEADERS,
       },
     });
-    cdk.Tags.of(api).add('Environment', 'Production');
 
     api.root.addMethod('ANY', new apigateway.LambdaIntegration(lambdaFunction));
-
-    // Outputs for integration tests
-    new cdk.CfnOutput(this, 'ApiUrl', {
-      value: api.url,
-      description: 'API Gateway URL'
-    });
-
-    new cdk.CfnOutput(this, 'TableName', {
-      value: table.tableName,
-      description: 'DynamoDB Table Name'
-    });
-
-    new cdk.CfnOutput(this, 'LogsBucketName', {
-      value: logsBucket.bucketName,
-      description: 'S3 Logs Bucket Name'
-    });
   }
 }
 ```
@@ -190,22 +157,3 @@ export class TapStack extends cdk.Stack {
   }
 }
 ```
-
-## Critical Success Factors
-
-1. **Global Tagging**: `cdk.Tags.of(resource).add('Environment', 'Production')` applied to ALL resources
-2. **Correct Billing Mode**: `dynamodb.BillingMode.PAY_PER_REQUEST` (not ON_DEMAND)
-3. **Proper CORS Configuration**: Using CDK's built-in CORS support
-4. **Least Privilege IAM**: Using `table.grantWriteData()` and `logsBucket.grantWrite()`
-5. **Environment Variables**: TABLE_NAME and LOGS_BUCKET_NAME passed to Lambda
-6. **Stack Outputs**: Required for integration testing
-7. **Region Targeting**: Explicitly set to us-east-1 in bin/tap.ts
-
-## Validation Checklist
-
-- ✅ Lint passes
-- ✅ Unit tests pass (16/16)
-- ✅ Synth generates clean CloudFormation
-- ✅ All resources have Environment: Production tags
-- ✅ Integration tests can run after deployment
-- ✅ Follows PROMPT.md requirements exactly
