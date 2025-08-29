@@ -478,7 +478,7 @@ export class SecureInfrastructure {
       {
         bucket: logsBucket.id,
         rule: {
-          objectOwnership: 'BucketOwnerFullControl',
+          objectOwnership: 'BucketOwnerPreferred',
         },
       },
       { provider: this.provider }
