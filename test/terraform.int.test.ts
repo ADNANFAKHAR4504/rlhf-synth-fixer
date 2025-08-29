@@ -31,11 +31,33 @@ function getOutput(outputName: string): string | null {
       return null;
     }
 
+    // Try to initialize terraform if needed
+    try {
+      execSync('terraform init', {
+        encoding: 'utf8',
+        stdio: 'pipe',
+        timeout: 10000,
+        cwd: libPath
+      });
+    } catch (error) {
+      // If backend=false fails, try without it
+      try {
+        execSync('terraform init -backend=false', {
+          encoding: 'utf8',
+          stdio: 'pipe',
+          timeout: 10000,
+          cwd: libPath
+        });
+      } catch (initError) {
+        return null;
+      }
+    }
+
     // Try to get the output
     const output = execSync(`terraform output -json ${outputName}`, {
       encoding: 'utf8',
       stdio: 'pipe',
-      timeout: 5000,
+      timeout: 10000,
       cwd: libPath
     });
 
@@ -47,16 +69,56 @@ function getOutput(outputName: string): string | null {
   }
 }
 
+// Function to read outputs from cfn-outputs file
+function readOutputsFromFile(): Record<string, any> | null {
+  try {
+    const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
+    if (fs.existsSync(outputsPath)) {
+      const outputsContent = fs.readFileSync(outputsPath, 'utf8');
+      return JSON.parse(outputsContent);
+    }
+  } catch (error) {
+    // File doesn't exist or is invalid
+  }
+  return null;
+}
+
 // Check if infrastructure is deployed by looking for any outputs
 function isInfrastructureDeployed(): boolean {
+  // First try to read from file
+  const fileOutputs = readOutputsFromFile();
+  if (fileOutputs && Object.keys(fileOutputs).length > 0) {
+    return true;
+  }
+
   try {
     const libPath = path.resolve(process.cwd(), 'lib');
+
+    // First try to initialize with backend=false to avoid backend issues
+    try {
+      execSync('terraform init -backend=false', {
+        stdio: 'pipe',
+        timeout: 10000,
+        cwd: libPath
+      });
+    } catch (error) {
+      // If init fails, try without backend flags
+      try {
+        execSync('terraform init', {
+          stdio: 'pipe',
+          timeout: 10000,
+          cwd: libPath
+        });
+      } catch (initError) {
+        return false;
+      }
+    }
 
     // Try to get any output to see if infrastructure exists
     const output = execSync('terraform output -json', {
       encoding: 'utf8',
       stdio: 'pipe',
-      timeout: 5000,
+      timeout: 10000,
       cwd: libPath
     });
 
@@ -99,6 +161,33 @@ function populateOutputs(isDeployed: boolean): void {
   if (isDeployed) {
     console.log('🔍 Checking for live infrastructure deployment...');
 
+    // First try to get outputs from file
+    const fileOutputs = readOutputsFromFile();
+    if (fileOutputs && Object.keys(fileOutputs).length > 0) {
+      console.log('✅ Found infrastructure outputs from cfn-outputs file');
+
+      // Map file outputs to our outputs object
+      outputs.vpcId = fileOutputs.vpc_id || null;
+      outputs.publicSubnetIds = fileOutputs.public_subnet_ids || null;
+      outputs.privateSubnetIds = fileOutputs.private_subnet_ids || null;
+      outputs.s3BucketName = fileOutputs.s3_bucket_name || null;
+      outputs.kmsKeyArn = fileOutputs.kms_key_arn || null;
+      outputs.environment = fileOutputs.environment || null;
+      outputs.projectName = fileOutputs.project_name || null;
+      outputs.region = fileOutputs.region || null;
+      outputs.securityGroupId = fileOutputs.security_group_id || null;
+      outputs.iamRoleArn = fileOutputs.iam_role_arn || null;
+      outputs.internetGatewayId = fileOutputs.internet_gateway_id || null;
+      outputs.routeTableId = fileOutputs.route_table_id || null;
+      outputs.kmsKeyId = fileOutputs.kms_key_id || null;
+      outputs.s3BucketArn = fileOutputs.s3_bucket_arn || null;
+      outputs.vpcCidrBlock = fileOutputs.vpc_cidr_block || null;
+
+      console.log('✅ Live infrastructure outputs retrieved from file successfully');
+      return;
+    }
+
+    // Fallback to terraform output commands
     outputs.vpcId = getOutput('vpc_id');
     outputs.publicSubnetIds = getOutput('public_subnet_ids');
     outputs.privateSubnetIds = getOutput('private_subnet_ids');
@@ -119,22 +208,22 @@ function populateOutputs(isDeployed: boolean): void {
     const hasOutputs = Object.values(outputs).some(output => output !== null);
 
     if (hasOutputs) {
-      console.log(' Live infrastructure outputs retrieved successfully');
+      console.log('✅ Live infrastructure outputs retrieved successfully');
     } else {
-      console.log('  Live infrastructure check failed - no outputs available');
-      console.log(' This may indicate:');
-      console.log(' - Infrastructure not deployed (run terraform apply)');
-      console.log(' - Terraform not initialized (run terraform init)');
-      console.log(' - AWS credentials not configured');
-      console.log(' - Backend configuration issues');
+      console.log('⚠️  Live infrastructure check failed - no outputs available');
+      console.log('💡 This may indicate:');
+      console.log('   - Infrastructure not deployed (run terraform apply)');
+      console.log('   - Terraform not initialized (run terraform init)');
+      console.log('   - AWS credentials not configured');
+      console.log('   - Backend configuration issues');
     }
   } else {
-    console.log('  Live infrastructure is NOT deployed');
-    console.log(' To deploy infrastructure:');
-    console.log(' 1. Run: cd lib && terraform init');
-    console.log(' 2. Run: cd lib && terraform apply');
-    console.log(' 3. Ensure AWS credentials are configured');
-    console.log(' 4. Ensure backend configuration is correct');
+    console.log('⚠️  Live infrastructure is NOT deployed');
+    console.log('💡 To deploy infrastructure:');
+    console.log('   1. Run: cd lib && terraform init');
+    console.log('   2. Run: cd lib && terraform apply');
+    console.log('   3. Ensure AWS credentials are configured');
+    console.log('   4. Ensure backend configuration is correct');
   }
 }
 
@@ -233,6 +322,27 @@ function runTerraformPlan() {
     console.log('📋 Running Terraform plan...');
     const libPath = path.resolve(process.cwd(), 'lib');
 
+    // First ensure terraform is initialized with backend=false
+    try {
+      execSync('terraform init -backend=false', {
+        stdio: 'pipe',
+        timeout: 30000,
+        cwd: libPath
+      });
+    } catch (initError) {
+      // If backend=false fails, try without it
+      try {
+        execSync('terraform init', {
+          stdio: 'pipe',
+          timeout: 30000,
+          cwd: libPath
+        });
+      } catch (error) {
+        console.log('  Terraform init failed for plan:', error instanceof Error ? error.message : String(error));
+        return false;
+      }
+    }
+
     // Run terraform plan from the lib directory
     const result = execSync('terraform plan', {
       stdio: 'pipe',
@@ -261,10 +371,10 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
   let infrastructureDeployed = false;
 
   beforeAll(async () => {
-    console.log('🚀 Starting infrastructure integration tests...');
-    console.log(`📍 Region: ${TEST_CONFIG.region}`);
-    console.log(`🏗️  Environment: ${TEST_CONFIG.environment}`);
-    console.log(`📦 Project: ${TEST_CONFIG.projectName}`);
+    console.log(' Starting infrastructure integration tests...');
+    console.log(` Region: ${TEST_CONFIG.region}`);
+    console.log(` Environment: ${TEST_CONFIG.environment}`);
+    console.log(` Project: ${TEST_CONFIG.projectName}`);
 
     // Initialize Terraform and check infrastructure status
     const status = initializeTerraformAndCheckStatus();
@@ -316,8 +426,8 @@ describe('Terraform AWS Infrastructure E2E Deployment Outputs', () => {
       } else {
         console.log('⚠️  Live infrastructure is NOT deployed');
         console.log('💡 To deploy infrastructure:');
-        console.log('   1. Run: cd lib && terraform init');
-        console.log('   2. Run: cd lib && terraform apply');
+        console.log('   1. Run: terraform init');
+        console.log('   2. Run: terraform apply');
         console.log('   3. Ensure AWS credentials are configured');
         console.log('   4. Ensure backend configuration is correct');
 
