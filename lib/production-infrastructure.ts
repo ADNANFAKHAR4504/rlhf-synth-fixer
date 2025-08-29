@@ -1002,6 +1002,27 @@ export class ProductionInfrastructure {
       s3BucketName: this.s3Bucket.bucket,
       rdsEndpoint: this.rdsInstance.endpoint,
       natGatewayIp: this.elasticIp.publicIp,
+      // Additional outputs for comprehensive testing
+      albArn: this.applicationLoadBalancer.arn,
+      targetGroupArn: this.targetGroup.arn,
+      autoScalingGroupName: this.autoScalingGroup.name,
+      kmsKeyId: this.kmsKey.keyId,
+      kmsKeyArn: this.kmsKey.arn,
+      ec2SecurityGroupId: this.ec2SecurityGroup.id,
+      rdsSecurityGroupId: this.rdsSecurityGroup.id,
+      albSecurityGroupId: this.albSecurityGroup.id,
+      rdsInstanceId: this.rdsInstance.id,
+      rdsSubnetGroupName: this.rdsSubnetGroup.name,
+      launchTemplateId: this.launchTemplate.id,
+      vpcFlowLogGroupName: this.vpcFlowLogGroup.name,
+      ec2RoleName: this.ec2Role.name,
+      scaleUpPolicyArn: this.scaleUpPolicy.arn,
+      scaleDownPolicyArn: this.scaleDownPolicy.arn,
+      cpuAlarmHighName: this.cpuAlarmHigh.name,
+      cpuAlarmLowName: this.cpuAlarmLow.name,
+      internetGatewayId: this.internetGateway.id,
+      publicRouteTableId: this.publicRouteTable.id,
+      privateRouteTableId: this.privateRouteTable.id,
     };
   }
 }

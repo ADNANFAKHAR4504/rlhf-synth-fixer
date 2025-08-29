@@ -41,6 +41,16 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly s3BucketName: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly natGatewayIp: pulumi.Output<string>;
+  public readonly albArn: pulumi.Output<string>;
+  public readonly targetGroupArn: pulumi.Output<string>;
+  public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly ec2SecurityGroupId: pulumi.Output<string>;
+  public readonly rdsSecurityGroupId: pulumi.Output<string>;
+  public readonly albSecurityGroupId: pulumi.Output<string>;
+  public readonly rdsInstanceId: pulumi.Output<string>;
+  public readonly launchTemplateId: pulumi.Output<string>;
+  public readonly vpcFlowLogGroupName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -68,6 +78,17 @@ export class TapStack extends pulumi.ComponentResource {
     this.s3BucketName = outputs.s3BucketName;
     this.rdsEndpoint = outputs.rdsEndpoint;
     this.natGatewayIp = outputs.natGatewayIp;
+    // Additional outputs
+    this.albArn = outputs.albArn;
+    this.targetGroupArn = outputs.targetGroupArn;
+    this.autoScalingGroupName = outputs.autoScalingGroupName;
+    this.kmsKeyId = outputs.kmsKeyId;
+    this.ec2SecurityGroupId = outputs.ec2SecurityGroupId;
+    this.rdsSecurityGroupId = outputs.rdsSecurityGroupId;
+    this.albSecurityGroupId = outputs.albSecurityGroupId;
+    this.rdsInstanceId = outputs.rdsInstanceId;
+    this.launchTemplateId = outputs.launchTemplateId;
+    this.vpcFlowLogGroupName = outputs.vpcFlowLogGroupName;
 
     // Register the outputs of this component
     this.registerOutputs({
@@ -78,6 +99,16 @@ export class TapStack extends pulumi.ComponentResource {
       s3BucketName: this.s3BucketName,
       rdsEndpoint: this.rdsEndpoint,
       natGatewayIp: this.natGatewayIp,
+      albArn: this.albArn,
+      targetGroupArn: this.targetGroupArn,
+      autoScalingGroupName: this.autoScalingGroupName,
+      kmsKeyId: this.kmsKeyId,
+      ec2SecurityGroupId: this.ec2SecurityGroupId,
+      rdsSecurityGroupId: this.rdsSecurityGroupId,
+      albSecurityGroupId: this.albSecurityGroupId,
+      rdsInstanceId: this.rdsInstanceId,
+      launchTemplateId: this.launchTemplateId,
+      vpcFlowLogGroupName: this.vpcFlowLogGroupName,
     });
   }
 }

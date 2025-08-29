@@ -48,7 +48,6 @@ I need a Pulumi TypeScript implementation that provisions a production-ready, se
 ### Output:
 
 - Output the following from the stack:
-  - EC2 instance public IP
   - S3 bucket name
   - RDS endpoint
   - ALB DNS name
