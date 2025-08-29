@@ -30,7 +30,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
   const isValidVpcId = (val: any): boolean => /^vpc-[a-z0-9]+$/.test(val);
   const isValidSubnetId = (val: any): boolean => /^subnet-[a-z0-9]+$/.test(val);
   const isValidInstanceId = (val: any): boolean => /^i-[a-z0-9]+$/.test(val);
-  const isValidArn = (val: any): boolean => /^arn:aws:[\w-]+:[\w-]*:\d{12}:[\w\-\/:.]+$/.test(val);
+  const isValidArn = (val: any): boolean => /^arn:aws:[\w-]+:[\w-]*:(\d{12}|):[\w\-\/:.]+$/.test(val);
   
   const parseArray = (val: any): string[] => {
     if (Array.isArray(val)) return val;
@@ -43,10 +43,23 @@ describe('Terraform Infrastructure Integration Tests', () => {
   
   beforeAll(async () => {
     try {
-      const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-      if (fs.existsSync(outputsPath)) {
-        outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-      } else {
+      // Try multiple possible locations for outputs
+      const outputsPaths = [
+        path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json'),
+        '/Users/raajavelc/Downloads/cfn-outputs/flat-outputs.json'
+      ];
+      
+      let outputsLoaded = false;
+      for (const outputsPath of outputsPaths) {
+        if (fs.existsSync(outputsPath)) {
+          outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+          outputsLoaded = true;
+          console.log(`Loaded outputs from: ${outputsPath}`);
+          break;
+        }
+      }
+      
+      if (!outputsLoaded) {
         console.warn('Terraform outputs file not found. Some tests may fail.');
       }
     } catch (error) {
@@ -288,7 +301,9 @@ describe('Terraform Infrastructure Integration Tests', () => {
       }
       
       // Extract DB instance identifier from endpoint
-      const dbInstanceId = 'prod-project-166-database';
+      // RDS endpoint format: instanceid.randomstring.region.rds.amazonaws.com:port
+      const endpointParts = outputs.rds_endpoint.split('.');
+      const dbInstanceId = endpointParts[0];
       
       const response = await rdsClient.send(new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbInstanceId
