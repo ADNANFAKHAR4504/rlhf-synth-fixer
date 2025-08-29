@@ -5,24 +5,27 @@ describe('TapStack Integration Tests', () => {
   let outputs: any;
 
   beforeAll(() => {
-    // Read outputs from the CI/CD pipeline generated file
-    const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'all-outputs.json');
+    // Try flat outputs first, fallback to all outputs
+    const flatOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+    const allOutputsPath = path.join(process.cwd(), 'cfn-outputs', 'all-outputs.json');
     
-    if (!fs.existsSync(outputsPath)) {
-      throw new Error(`Outputs file not found at ${outputsPath}. Make sure the deployment has completed and outputs are generated.`);
+    if (fs.existsSync(flatOutputsPath)) {
+      outputs = JSON.parse(fs.readFileSync(flatOutputsPath, 'utf8'));
+    } else if (fs.existsSync(allOutputsPath)) {
+      const rawOutputs = JSON.parse(fs.readFileSync(allOutputsPath, 'utf8'));
+      
+      // Flatten the outputs structure for easier testing
+      outputs = {};
+      Object.keys(rawOutputs).forEach(stackName => {
+        if (Array.isArray(rawOutputs[stackName])) {
+          rawOutputs[stackName].forEach((output: any) => {
+            outputs[output.OutputKey] = output.OutputValue;
+          });
+        }
+      });
+    } else {
+      throw new Error(`No outputs file found. Make sure the deployment has completed and outputs are generated.`);
     }
-    
-    const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-    
-    // Flatten the outputs structure for easier testing
-    outputs = {};
-    Object.keys(rawOutputs).forEach(stackName => {
-      if (Array.isArray(rawOutputs[stackName])) {
-        rawOutputs[stackName].forEach((output: any) => {
-          outputs[output.OutputKey] = output.OutputValue;
-        });
-      }
-    });
   });
 
   describe('Stack Deployment Validation', () => {
