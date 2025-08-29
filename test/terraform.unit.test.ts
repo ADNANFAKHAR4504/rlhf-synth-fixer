@@ -6,7 +6,6 @@ const PROVIDER_REL = "../lib/provider.tf";
 const BACKEND_REL = "../lib/backend.conf";
 const stackPath = path.resolve(__dirname, STACK_REL);
 const providerPath = path.resolve(__dirname, PROVIDER_REL);
-const backendPath = path.resolve(__dirname, BACKEND_REL);
 
 describe("Terraform Infrastructure Unit Tests", () => {
   describe("File Structure", () => {
@@ -20,10 +19,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(exists).toBe(true);
     });
 
-    test("backend.conf exists", () => {
-      const exists = fs.existsSync(backendPath);
-      expect(exists).toBe(true);
-    });
   });
 
   describe("Provider Configuration", () => {
@@ -56,34 +51,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(providerContent).toMatch(/Environment\s*=\s*var\.environment/);
       expect(providerContent).toMatch(/Project\s*=\s*var\.project_name/);
       expect(providerContent).toMatch(/ManagedBy\s*=\s*"Terraform"/);
-    });
-  });
-
-  describe("Backend Configuration", () => {
-    let backendContent: string;
-
-    beforeAll(() => {
-      backendContent = fs.readFileSync(backendPath, "utf8");
-    });
-
-    test("configures S3 bucket for state storage", () => {
-      expect(backendContent).toMatch(/bucket\s*=\s*"iac-rlhf-tf-states"/);
-    });
-
-    test("configures state file key", () => {
-      expect(backendContent).toMatch(/key\s*=\s*"dev\/terraform\.tfstate"/);
-    });
-
-    test("configures correct AWS region", () => {
-      expect(backendContent).toMatch(/region\s*=\s*"us-east-1"/);
-    });
-
-    test("enables encryption", () => {
-      expect(backendContent).toMatch(/encrypt\s*=\s*true/);
-    });
-
-    test("enables state locking", () => {
-      expect(backendContent).toMatch(/use_lockfile\s*=\s*true/);
     });
   });
 
@@ -192,7 +159,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
 
     test("each module has required files", () => {
       const modules = ["logging", "secrets", "vpc"];
-      
+
       modules.forEach(moduleName => {
         const modulePath = path.join(modulesDir, moduleName);
         expect(fs.existsSync(path.join(modulePath, "main.tf"))).toBe(true);

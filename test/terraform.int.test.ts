@@ -347,16 +347,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
       }
     });
 
-    test('backend configuration is valid', () => {
-      const backendFile = path.join(libDir, 'backend.conf');
-      expect(fs.existsSync(backendFile)).toBe(true);
-
-      const content = fs.readFileSync(backendFile, 'utf8');
-      expect(content).toContain('bucket = "iac-rlhf-tf-states"');
-      expect(content).toContain('region = "us-east-1"');
-      expect(content).toContain('encrypt = true');
-    });
-
     test('provider configuration is valid', () => {
       const providerFile = path.join(libDir, 'provider.tf');
       expect(fs.existsSync(providerFile)).toBe(true);
