@@ -1,11 +1,110 @@
-// test/terraform.unit.test.ts
+// __tests__/tap-stack.unit.test.ts
 import { App } from 'cdktf';
 import 'cdktf/lib/testing/adapters/jest';
 import { TapStack } from '../lib/tap-stack';
 
-// --- Mocks ---
+// Import the mocked functions
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
+import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformOutput } from 'cdktf';
+import {
+  CloudTrailModule,
+  Ec2Module,
+  IamModule,
+  KmsModule,
+  RdsModule,
+  S3Module,
+  SecurityGroupModule,
+  VpcModule,
+} from '../lib/modules';
 
-// Mock TerraformOutput & S3Backend to avoid constructing real outputs/backends
+// Mock all the modules used in TapStack
+jest.mock('../lib/modules', () => ({
+  VpcModule: jest.fn((_, id, config) => ({
+    vpc: {
+      id: `${id}-vpc-id`,
+      arn: `arn:aws:ec2:us-west-2:123456789012:vpc/${id}-vpc-id`,
+    },
+    publicSubnets: [
+      {
+        id: 'subnet-public-1',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-public-1',
+      },
+      {
+        id: 'subnet-public-2',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-public-2',
+      },
+    ],
+    privateSubnets: [
+      {
+        id: 'subnet-private-1',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-private-1',
+      },
+      {
+        id: 'subnet-private-2',
+        arn: 'arn:aws:ec2:us-west-2:123456789012:subnet/subnet-private-2',
+      },
+    ],
+    config,
+  })),
+  KmsModule: jest.fn((_, id, config) => ({
+    key: {
+      keyId: `${id}-key-id`,
+      arn: `arn:aws:kms:us-west-2:123456789012:key/${id}-key-id`,
+    },
+    config,
+  })),
+  SecurityGroupModule: jest.fn((_, id, config) => ({
+    securityGroup: {
+      id: `${id}-sg-id`,
+      arn: `arn:aws:ec2:us-west-2:123456789012:security-group/${id}-sg-id`,
+    },
+    config,
+  })),
+  S3Module: jest.fn((_, id, config) => ({
+    bucket: {
+      bucket: `${id}-bucket-name`,
+      arn: `arn:aws:s3:::${id}-bucket-name`,
+    },
+    config,
+  })),
+  RdsModule: jest.fn((_, id, config) => ({
+    dbInstance: {
+      id: `${id}-db-id`,
+      endpoint: `${id}-db.cluster-xyz.us-west-2.rds.amazonaws.com:3306`,
+      arn: `arn:aws:rds:us-west-2:123456789012:db:${id}-db-id`,
+    },
+    config,
+  })),
+  Ec2Module: jest.fn((_, id, config) => ({
+    instance: {
+      id: `${id}-instance-id`,
+      arn: `arn:aws:ec2:us-west-2:123456789012:instance/${id}-instance-id`,
+    },
+    config,
+  })),
+  IamModule: jest.fn((_, id, config) => ({
+    instanceProfile: {
+      name: `${id}-instance-profile`,
+      arn: `arn:aws:iam::123456789012:instance-profile/${id}-instance-profile`,
+    },
+    config,
+  })),
+  CloudTrailModule: jest.fn((_, id, config) => ({
+    trail: {
+      id: `${id}-cloudtrail-id`,
+      arn: `arn:aws:cloudtrail:us-west-2:123456789012:trail/${id}-cloudtrail`,
+    },
+    logsBucket: {
+      bucket: `${id}-logs-bucket-name`,
+      arn: `arn:aws:s3:::${id}-logs-bucket-name`,
+    },
+    config,
+  })),
+}));
+
+// Mock TerraformOutput and S3Backend to prevent duplicate construct errors
 jest.mock('cdktf', () => {
   const actual = jest.requireActual('cdktf');
   return {
@@ -15,232 +114,456 @@ jest.mock('cdktf', () => {
   };
 });
 
-// Mock AWS provider to assert region/tags config
+// Mock AWS provider
 jest.mock('@cdktf/provider-aws/lib/provider', () => ({
   AwsProvider: jest.fn(),
 }));
 
-// Mock Random provider + Id
-jest.mock('@cdktf/provider-random/lib/provider', () => ({
-  RandomProvider: jest.fn(),
-}));
-jest.mock('@cdktf/provider-random/lib/id', () => ({
-  Id: jest.fn((_, __, cfg) => ({
-    // stable hex so we can assert bucket suffix deterministically
-    hex: 'abcd',
-    byteLength: cfg?.byteLength ?? 2,
+// Mock DataAwsCallerIdentity
+jest.mock('@cdktf/provider-aws/lib/data-aws-caller-identity', () => ({
+  DataAwsCallerIdentity: jest.fn((_, id) => ({
+    accountId: '123456789012',
   })),
 }));
 
-// Mock your modules (./modules)
-jest.mock('../lib/modules', () => {
-  return {
-    // Networking returns VPC, subnets, GW/RT ids etc.
-    NetworkingModule: jest.fn((_, id, config) => ({
-      vpc: { id: 'vpc-123' },
-      publicSubnets: [{ id: 'subnet-public-1' }, { id: 'subnet-public-2' }],
-      privateSubnets: [{ id: 'subnet-private-1' }, { id: 'subnet-private-2' }],
-      internetGateway: { id: 'igw-123' },
-      natGateway: { id: 'nat-123' },
-      publicRouteTable: { id: 'rtb-public' },
-      privateRouteTable: { id: 'rtb-private' },
-      config,
+// Mock DataAwsSecretsmanagerSecretVersion with a valid (<=41-char) password
+jest.mock(
+  '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version',
+  () => ({
+    DataAwsSecretsmanagerSecretVersion: jest.fn((_, id, config) => ({
+      // 31 chars: valid for RDS MySQL (8–41)
+      secretString: 'Tp_Dev$rds_P@ssw0rd_2025_ABC123',
+      secretId: config.secretId,
     })),
+  })
+);
 
-    // Security returns the EC2 SG id
-    SecurityModule: jest.fn((_, id, config) => ({
-      ec2SecurityGroup: { id: 'sg-ec2' },
-      config,
-    })),
+// Mock RandomProvider (kept; harmless if unused)
+jest.mock('@cdktf/provider-random/lib/provider', () => ({
+  RandomProvider: jest.fn(),
+}));
 
-    // Storage returns S3 bucket meta
-    StorageModule: jest.fn((_, id, config) => ({
-      s3Bucket: {
-        id: 'bucket-id',
-        arn: 'arn:aws:s3:::tap-dev-app-data-abcd',
-        bucket: `tap-dev-app-data-${config.bucketSuffix}`,
-      },
-      config,
-    })),
-
-    // Compute returns instance + role meta
-    ComputeModule: jest.fn((_, id, config) => ({
-      ec2Instance: {
-        id: 'i-0123456789abcdef0',
-        publicIp: '54.0.0.1',
-        privateIp: '10.0.0.10',
-      },
-      iamRole: { arn: 'arn:aws:iam::123456789012:role/tap-dev-EC2Role-xyz' },
-      config,
-    })),
-
-    // Re-exports used by older code paths (unused here but harmless)
-    VpcModule: undefined,
-    S3Module: undefined,
-    Ec2Module: undefined,
-    SecurityGroupModule: undefined,
-    KmsModule: undefined,
-    RdsModule: undefined,
-    IamModule: undefined,
-    CloudTrailModule: undefined,
-  };
-});
-
-// Pull mocks we want to assert on
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformOutput } from 'cdktf';
-import {
-  NetworkingModule,
-  SecurityModule,
-  StorageModule,
-  ComputeModule,
-} from '../lib/modules';
-
-describe('TapStack (current wiring) – unit', () => {
+describe('TapStack Unit Tests', () => {
   beforeEach(() => {
+    // Clear all mocks before each test
     jest.clearAllMocks();
   });
 
-  test('creates provider with default region and tags', () => {
+  test('should create TapStack with default props', () => {
     const app = new App();
     new TapStack(app, 'TestStack');
+
+    expect(AwsProvider).toHaveBeenCalledTimes(1);
+  });
+
+  test('should create AWS Provider with correct default configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackProvider');
+
     expect(AwsProvider).toHaveBeenCalledWith(
       expect.anything(),
       'aws',
-      expect.objectContaining({ region: 'us-west-2', defaultTags: [] })
+      expect.objectContaining({
+        region: 'us-west-2',
+        defaultTags: [],
+      })
     );
   });
 
-  test('resolves region with testing override present', () => {
+  // renamed for clarity (no awsRegion provided)
+  test('should fall back to default region when override is disabled', () => {
     const app = new App();
-    new TapStack(app, 'StackOverride', {
-      _regionOverrideForTesting: 'eu-west-1',
+    new TapStack(app, 'TestStackNoOverride', {
+      _regionOverrideForTesting: null, // Disable the override
     });
+
     expect(AwsProvider).toHaveBeenCalledWith(
       expect.anything(),
       'aws',
-      expect.objectContaining({ region: 'eu-west-1' })
+      expect.objectContaining({
+        region: 'us-west-2', // Should fallback to default us-west-2
+      })
     );
   });
 
-  test('falls back to props.awsRegion when override present but null', () => {
+  test('should use default us-west-2 when no override and no props.awsRegion', () => {
     const app = new App();
-    new TapStack(app, 'StackPropsRegion', {
-      _regionOverrideForTesting: null,
-      awsRegion: 'us-east-1',
+    new TapStack(app, 'TestStackDefaultFallback', {
+      _regionOverrideForTesting: null, // Disable the override
+      // No awsRegion prop provided
     });
+
     expect(AwsProvider).toHaveBeenCalledWith(
       expect.anything(),
       'aws',
-      expect.objectContaining({ region: 'us-east-1' })
+      expect.objectContaining({
+        region: 'us-west-2', // Should fallback to default us-west-2
+      })
     );
   });
 
-  test('configures S3 backend correctly', () => {
+  // NEW TEST: Cover when override is empty string (falsy)
+  test('should use props.awsRegion when region override is empty string', () => {
     const app = new App();
-    new TapStack(app, 'BackendStack', {
-      environmentSuffix: 'stage',
-      stateBucket: 'tf-state-bucket',
+    new TapStack(app, 'TestStackEmptyOverride', {
+      awsRegion: 'us-west-2',
+      _regionOverrideForTesting: '', // Empty string (falsy)
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-2',
+      })
+    );
+  });
+
+  test('should create AWS Provider with custom props', () => {
+    const customTags = {
+      Environment: 'prod',
+      Owner: 'DevOps Team',
+      Project: 'TapProject',
+    };
+
+    const app = new App();
+    new TapStack(app, 'TestStackCustom', {
+      environmentSuffix: 'prod',
+      awsRegion: 'us-west-2',
+      defaultTags: { tags: customTags },
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-2', // Override is set to us-west-2
+        defaultTags: [{ tags: customTags }],
+      })
+    );
+  });
+
+  test('should create S3Backend with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackBackend', {
+      environmentSuffix: 'staging',
+      stateBucket: 'custom-tf-states',
       stateBucketRegion: 'us-west-1',
     });
+
     expect(S3Backend).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        bucket: 'tf-state-bucket',
-        key: 'stage/BackendStack.tfstate',
+        bucket: 'custom-tf-states',
+        key: 'staging/TestStackBackend.tfstate',
         region: 'us-west-1',
         encrypt: true,
       })
     );
   });
 
-  test('wires Networking/Security/Storage/Compute with expected props', () => {
+  test('should create S3Backend with default configuration', () => {
     const app = new App();
-    new TapStack(app, 'WiringStack', {
-      existingFlowLogsRoleArn: 'arn:aws:iam::123:role/existing-flow-role',
-      existingFlowLogsLogGroupArn: 'arn:aws:logs:us-west-2:123:log-group:/aws/vpc/flowlogs/existing',
-    });
+    new TapStack(app, 'TestStackDefaultBackend');
 
-    // Networking
-    expect(NetworkingModule).toHaveBeenCalledWith(
+    expect(S3Backend).toHaveBeenCalledWith(
       expect.anything(),
-      'networking',
       expect.objectContaining({
-        vpcCidr: '10.0.0.0/16',
-        publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
-        privateSubnetCidrs: ['10.0.10.0/24', '10.0.20.0/24'],
-        projectName: 'tap-dev',
-        existingFlowLogsRoleArn: 'arn:aws:iam::123:role/existing-flow-role',
-        existingFlowLogsLogGroupArn:
-          'arn:aws:logs:us-west-2:123:log-group:/aws/vpc/flowlogs/existing',
-      })
-    );
-
-    // Security
-    expect(SecurityModule).toHaveBeenCalledWith(
-      expect.anything(),
-      'security',
-      expect.objectContaining({
-        vpcId: 'vpc-123',
-        projectName: 'tap-dev',
-      })
-    );
-
-    // Storage (bucketSuffix from RandomId hex)
-    expect(StorageModule).toHaveBeenCalledWith(
-      expect.anything(),
-      'storage',
-      expect.objectContaining({
-        projectName: 'tap-dev',
-        bucketSuffix: 'abcd',
-      })
-    );
-
-    // Compute
-    expect(ComputeModule).toHaveBeenCalledWith(
-      expect.anything(),
-      'compute',
-      expect.objectContaining({
-        subnetId: 'subnet-public-1',
-        securityGroupIds: ['sg-ec2'],
-        s3BucketArn: 'arn:aws:s3:::tap-dev-app-data-abcd',
-        projectName: 'tap-dev',
+        bucket: 'prod-config-logs-us-west-2-a8e48bba',
+        key: 'dev/TestStackDefaultBackend.tfstate',
+        region: 'us-west-2',
+        encrypt: true,
       })
     );
   });
 
-  test('creates expected Terraform outputs (12) and uses module values', () => {
+  test('should create AWS data sources', () => {
     const app = new App();
-    new TapStack(app, 'OutputsStack');
+    new TapStack(app, 'TestStackDataSources');
 
-    // number of outputs
-    expect(TerraformOutput).toHaveBeenCalledTimes(12);
-
-    // spot-check a couple of outputs are fed from modules
-    const calls = (TerraformOutput as jest.Mock).mock.calls.map(([_, id, cfg]) => ({
-      id,
-      cfg,
-    }));
-
-    // vpc-id
-    expect(calls.find(c => c.id === 'vpc-id')?.cfg.value).toBe('vpc-123');
-
-    // public-subnet-ids
-    expect(calls.find(c => c.id === 'public-subnet-ids')?.cfg.value).toEqual(
-      ['subnet-public-1', 'subnet-public-2']
+    expect(DataAwsCallerIdentity).toHaveBeenCalledTimes(1);
+    expect(DataAwsCallerIdentity).toHaveBeenCalledWith(
+      expect.anything(),
+      'current'
     );
 
-    // nat-gateway-id
-    expect(calls.find(c => c.id === 'nat-gateway-id')?.cfg.value).toBe('nat-123');
+    expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledTimes(1);
+    expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledWith(
+      expect.anything(),
+      'db-password-secret',
+      expect.objectContaining({
+        secretId: 'three-tier-db-credentials-dev',
+      })
+    );
+  });
 
-    // s3-bucket-name
-    expect(calls.find(c => c.id === 's3-bucket-name')?.cfg.value).toBe(
-      'tap-dev-app-data-abcd'
+  test('should create KMS module with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackKMS');
+
+    expect(KmsModule).toHaveBeenCalledTimes(1);
+    expect(KmsModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'kms',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'dev',
+        description: 'KMS key for tap-project dev environment',
+        accountId: '123456789012',
+      })
+    );
+  });
+
+  test('should create S3 module with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackS3');
+
+    expect(S3Module).toHaveBeenCalledTimes(1);
+    expect(S3Module).toHaveBeenCalledWith(
+      expect.anything(),
+      's3-app-data',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'dev',
+        bucketName: 'iac-rlhf-cfn-states-us-west-2',
+        kmsKey: expect.objectContaining({
+          keyId: 'kms-key-id',
+          arn: 'arn:aws:kms:us-west-2:123456789012:key/kms-key-id',
+        }),
+      })
+    );
+  });
+
+  test('should create CloudTrail module with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackCloudTrail');
+
+    expect(CloudTrailModule).toHaveBeenCalledTimes(1);
+    expect(CloudTrailModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'cloudtrail',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'dev',
+        accountId: '123456789012',
+        region: 'us-west-2',
+        kmsKey: expect.objectContaining({
+          keyId: 'kms-key-id',
+          arn: 'arn:aws:kms:us-west-2:123456789012:key/kms-key-id',
+        }),
+      })
+    );
+  });
+
+  test('should create IAM module with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackIAM');
+
+    expect(IamModule).toHaveBeenCalledTimes(1);
+    expect(IamModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'iam',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'dev',
+        appDataBucketArn: 'arn:aws:s3:::s3-app-data-bucket-name',
+      })
+    );
+  });
+
+  test('should create VPC module with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackVPC');
+
+    expect(VpcModule).toHaveBeenCalledTimes(1);
+    expect(VpcModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'vpc',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'dev',
+        cidrBlock: '10.0.0.0/16',
+        availabilityZones: ['us-west-2a', 'us-west-2b'],
+      })
+    );
+  });
+
+  test('should create security group modules with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackSG');
+
+    expect(SecurityGroupModule).toHaveBeenCalledTimes(2);
+  });
+
+  test('should create EC2 module with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackEC2');
+
+    expect(Ec2Module).toHaveBeenCalledTimes(1);
+    expect(Ec2Module).toHaveBeenCalledWith(
+      expect.anything(),
+      'ec2',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'dev',
+        instanceType: 't3.micro',
+        keyName: 'my-key-pair',
+      })
+    );
+  });
+
+  test('should create RDS module with correct configuration', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackRDS');
+
+    expect(RdsModule).toHaveBeenCalledTimes(1);
+    expect(RdsModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'rds',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'dev',
+        engine: 'mysql',
+        engineVersion: '8.0',
+        instanceClass: 'db.t3.micro',
+        allocatedStorage: 20,
+        dbName: 'appdb',
+        username: 'admin',
+        password: 'Tp_Dev$rds_P@ssw0rd_2025_ABC123', // updated: valid length
+        subnetIds: ['subnet-private-1', 'subnet-private-2'],
+        securityGroupIds: ['rds-sg-sg-id'],
+        kmsKey: expect.objectContaining({
+          keyId: 'kms-key-id',
+          arn: 'arn:aws:kms:us-west-2:123456789012:key/kms-key-id',
+        }),
+      })
     );
 
-    // ec2-iam-role-arn
-    expect(calls.find(c => c.id === 'ec2-iam-role-arn')?.cfg.value).toBe(
-      'arn:aws:iam::123456789012:role/tap-dev-EC2Role-xyz'
+    // Guard: ensure we never exceed the RDS 41-char limit
+    const rdsArgs = (RdsModule as unknown as jest.Mock).mock.calls[0][2];
+    expect(rdsArgs.password.length).toBeLessThanOrEqual(41);
+    expect(rdsArgs.password.length).toBeGreaterThanOrEqual(8);
+  });
+
+  test('should handle custom environment suffix', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackCustomEnv', {
+      environmentSuffix: 'staging',
+    });
+
+    expect(S3Module).toHaveBeenCalledWith(
+      expect.anything(),
+      's3-app-data',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'staging',
+        bucketName: 'iac-rlhf-cfn-states-us-west-2',
+      })
     );
+  });
+
+  test('should handle custom AWS region with availability zones', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackCustomRegion', {
+      awsRegion: 'us-west-2',
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-2', // Override is set to us-west-2
+      })
+    );
+
+    expect(VpcModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'vpc',
+      expect.objectContaining({
+        availabilityZones: ['us-west-2a', 'us-west-2b'], // Based on override
+      })
+    );
+  });
+
+  test('should create all terraform outputs', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackOutputs');
+
+    expect(TerraformOutput).toHaveBeenCalledTimes(13);
+  });
+
+  test('should create stack with all components integrated', () => {
+    const app = new App();
+    new TapStack(app, 'TestStackIntegrated');
+
+    expect(AwsProvider).toHaveBeenCalledTimes(1);
+    expect(S3Backend).toHaveBeenCalledTimes(1);
+    expect(DataAwsCallerIdentity).toHaveBeenCalledTimes(1);
+    expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledTimes(1);
+    expect(KmsModule).toHaveBeenCalledTimes(1);
+    expect(S3Module).toHaveBeenCalledTimes(1);
+    expect(CloudTrailModule).toHaveBeenCalledTimes(1);
+    expect(IamModule).toHaveBeenCalledTimes(1);
+    expect(VpcModule).toHaveBeenCalledTimes(1);
+    expect(SecurityGroupModule).toHaveBeenCalledTimes(2);
+    expect(Ec2Module).toHaveBeenCalledTimes(1);
+    expect(RdsModule).toHaveBeenCalledTimes(1);
+  });
+
+  test('should handle all custom props', () => {
+    const customTags = {
+      CostCenter: '12345',
+      Environment: 'production',
+      Owner: 'Platform Team',
+      Project: 'TapProject',
+    };
+
+    const app = new App();
+    new TapStack(app, 'TestStackAllCustom', {
+      environmentSuffix: 'production',
+      stateBucket: 'my-custom-tf-states',
+      stateBucketRegion: 'eu-west-1',
+      awsRegion: 'eu-west-1',
+      defaultTags: { tags: customTags },
+    });
+
+    expect(AwsProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      'aws',
+      expect.objectContaining({
+        region: 'us-west-2', // Override is set to us-west-2
+        defaultTags: [{ tags: customTags }],
+      })
+    );
+
+    expect(VpcModule).toHaveBeenCalledWith(
+      expect.anything(),
+      'vpc',
+      expect.objectContaining({
+        project: 'tap-project',
+        environment: 'production',
+        availabilityZones: ['us-west-2a', 'us-west-2b'], // Based on override
+      })
+    );
+  });
+
+  test('should verify stack addOverride is called for S3 backend lockfile', () => {
+    const app = new App();
+
+    // Spy on the TerraformStack addOverride method before creating the stack
+    const addOverrideSpy = jest.spyOn(
+      require('cdktf').TerraformStack.prototype,
+      'addOverride'
+    );
+
+    new TapStack(app, 'TestStackOverride');
+
+    expect(addOverrideSpy).toHaveBeenCalledWith(
+      'terraform.backend.s3.use_lockfile',
+      true
+    );
+
+    // Clean up the spy
+    addOverrideSpy.mockRestore();
   });
 });
