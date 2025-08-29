@@ -326,9 +326,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// Create CloudWatch Log Groups
 	appLogGroup := awslogs.NewLogGroup(stack, jsii.String("TapAppLogGroup"), &awslogs.LogGroupProps{
-		LogGroupName:  jsii.String("/aws/ec2/tap-application"),
-		Retention:     awslogs.RetentionDays_ONE_MONTH,
-		EncryptionKey: kmsKey,
+		LogGroupName: jsii.String("/aws/ec2/tap-application"),
+		Retention:    awslogs.RetentionDays_ONE_MONTH,
+		// Removed KMS encryption due to CloudWatch Logs KMS key requirements
 	})
 
 	// Create CloudTrail
