@@ -38,8 +38,17 @@ export class SecureInfrastructure {
       region: this.region,
     });
 
+    // Initialize arrays
+    this.privateSubnets = [];
+    this.publicSubnets = [];
+
     // Initialize infrastructure components in correct order
-    this.createNetworking();
+    this.vpc = this.createVPC();
+    this.internetGateway = this.createInternetGateway();
+    this.createSubnets();
+    this.natGateway = this.createNATGateway();
+    this.createRouteTables();
+    this.dbSubnetGroup = this.createDBSubnetGroup();
     this.createSecurityGroups();
     this.createS3Buckets();
     this.createIAMRoles();
@@ -50,9 +59,8 @@ export class SecureInfrastructure {
     this.createVPCFlowLogs();
   }
 
-  private createNetworking(): void {
-    // VPC
-    this.vpc = new aws.ec2.Vpc(
+  private createVPC(): aws.ec2.Vpc {
+    return new aws.ec2.Vpc(
       `secure-vpc-${this.environment}`,
       {
         cidrBlock: '10.0.0.0/16',
@@ -65,9 +73,10 @@ export class SecureInfrastructure {
       },
       { provider: this.provider }
     );
+  }
 
-    // Internet Gateway
-    this.internetGateway = new aws.ec2.InternetGateway(
+  private createInternetGateway(): aws.ec2.InternetGateway {
+    return new aws.ec2.InternetGateway(
       `igw-${this.environment}`,
       {
         vpcId: this.vpc.id,
@@ -78,12 +87,14 @@ export class SecureInfrastructure {
       },
       { provider: this.provider }
     );
+  }
 
-    // Public Subnets
-    this.publicSubnets = [];
+  private createSubnets(): void {
     const publicSubnetCidrs = ['10.0.1.0/24', '10.0.2.0/24'];
+    const privateSubnetCidrs = ['10.0.10.0/24', '10.0.11.0/24'];
     const availabilityZones = [`${this.region}a`, `${this.region}b`];
 
+    // Public Subnets
     for (let i = 0; i < 2; i++) {
       const publicSubnet = new aws.ec2.Subnet(
         `public-subnet-${i + 1}-${this.environment}`,
@@ -103,37 +114,7 @@ export class SecureInfrastructure {
       this.publicSubnets.push(publicSubnet);
     }
 
-    // Elastic IP for NAT Gateway
-    const eip = new aws.ec2.Eip(
-      `nat-eip-${this.environment}`,
-      {
-        domain: 'vpc',
-        tags: {
-          ...this.tags,
-          Name: `nat-eip-${this.environment}`,
-        },
-      },
-      { provider: this.provider }
-    );
-
-    // NAT Gateway
-    this.natGateway = new aws.ec2.NatGateway(
-      `nat-gateway-${this.environment}`,
-      {
-        allocationId: eip.id,
-        subnetId: this.publicSubnets[0].id,
-        tags: {
-          ...this.tags,
-          Name: `nat-gateway-${this.environment}`,
-        },
-      },
-      { provider: this.provider }
-    );
-
     // Private Subnets
-    this.privateSubnets = [];
-    const privateSubnetCidrs = ['10.0.10.0/24', '10.0.11.0/24'];
-
     for (let i = 0; i < 2; i++) {
       const privateSubnet = new aws.ec2.Subnet(
         `private-subnet-${i + 1}-${this.environment}`,
@@ -151,7 +132,36 @@ export class SecureInfrastructure {
       );
       this.privateSubnets.push(privateSubnet);
     }
+  }
 
+  private createNATGateway(): aws.ec2.NatGateway {
+    const eip = new aws.ec2.Eip(
+      `nat-eip-${this.environment}`,
+      {
+        domain: 'vpc',
+        tags: {
+          ...this.tags,
+          Name: `nat-eip-${this.environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    return new aws.ec2.NatGateway(
+      `nat-gateway-${this.environment}`,
+      {
+        allocationId: eip.id,
+        subnetId: this.publicSubnets[0].id,
+        tags: {
+          ...this.tags,
+          Name: `nat-gateway-${this.environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+  }
+
+  private createRouteTables(): void {
     // Public Route Table
     const publicRouteTable = new aws.ec2.RouteTable(
       `public-rt-${this.environment}`,
@@ -221,9 +231,10 @@ export class SecureInfrastructure {
         { provider: this.provider }
       );
     });
+  }
 
-    // DB Subnet Group
-    this.dbSubnetGroup = new aws.rds.SubnetGroup(
+  private createDBSubnetGroup(): aws.rds.SubnetGroup {
+    return new aws.rds.SubnetGroup(
       `db-subnet-group-${this.environment}`,
       {
         subnetIds: this.privateSubnets.map(subnet => subnet.id),
