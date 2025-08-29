@@ -56,7 +56,7 @@ describe('TapStack Integration Tests', () => {
       console.warn('Deployment outputs not found, using mock data for integration tests');
       stackOutputs = {
         VpcId: 'vpc-0a1b2c3d4e5f6789a',
-        AlbDnsName: 'mock-alb-123456789.elb.amazonaws.com'
+        AlbDnsName: 'mock-alb-123456789.us-east-1.elb.amazonaws.com'
       };
     }
   });
@@ -108,8 +108,8 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('should validate ALB DNS uses HTTPS-capable endpoint', () => {
-      // Ensure ALB DNS name is in correct AWS format
-      expect(stackOutputs.AlbDnsName).toMatch(/^[a-zA-Z0-9-]+\.elb\.amazonaws\.com$/);
+      // Ensure ALB DNS name is in correct AWS format (includes region)
+      expect(stackOutputs.AlbDnsName).toMatch(/^[a-zA-Z0-9-]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
     });
 
     test('should validate outputs do not contain sensitive information', () => {
