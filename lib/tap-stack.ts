@@ -8,8 +8,8 @@ import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
 // Random provider (for unique bucket name when not provided)
-import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { Id as RandomId } from '@cdktf/provider-random/lib/id';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 
 // Import
 import {
