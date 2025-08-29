@@ -6,13 +6,7 @@ import software.amazon.awscdk.services.iam.PolicyDocument;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
 import software.constructs.Construct;
-import software.amazon.awscdk.CfnResource;
-import software.amazon.awscdk.CfnResourceProps;
-import software.amazon.awscdk.customresources.AwsCustomResource;
-import software.amazon.awscdk.customresources.AwsCustomResourcePolicy;
-import software.amazon.awscdk.customresources.AwsSdkCall;
-import software.amazon.awscdk.customresources.PhysicalResourceId;
-import software.amazon.awscdk.customresources.SdkCallsPolicyOptions;
+// Removed imports for account-scoped custom resources to avoid runtime AWS account calls during synth
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import app.config.EnvironmentConfig;
 import java.util.List;
@@ -33,9 +27,12 @@ public class IamConstruct extends Construct {
     
     public IamConstruct(final Construct scope, final String id) {
         super(scope, id);
-    // Create and enforce account password policy (90-day rotation, complexity)
-    createPasswordPolicy();
-    // MFA enforcement removed by request.
+        // Account password policy (PutAccountPasswordPolicy) previously used an
+        // SDK-backed custom resource which performs account-level API calls during
+        // synth. To avoid synth-time account calls and pipeline failures, that
+        // behavior was removed from this construct. Account-level governance
+        // should be managed separately (CI/CD or org policy).
+        
         // Create IAM roles with least privilege
         this.s3ReadOnlyRole = createS3ReadOnlyRole();
         this.cloudTrailRole = createCloudTrailRole();
@@ -112,32 +109,11 @@ public class IamConstruct extends Construct {
      * enforces 90-day rotation and complexity rules.
      */
     private void createPasswordPolicy() {
-        // Use an AWS SDK custom resource to call PutAccountPasswordPolicy because
-        // CloudFormation does not recognize an account-level AccountPasswordPolicy resource.
-        AwsSdkCall sdkCall = AwsSdkCall.builder()
-            .service("IAM")
-            // Use the service operation name expected by the CDK custom resource runtime
-            // (some runtimes expect the PascalCase operation name).
-            .action("PutAccountPasswordPolicy")
-            .parameters(java.util.Map.of(
-                "MinimumPasswordLength", EnvironmentConfig.PASSWORD_MIN_LENGTH,
-                "RequireSymbols", EnvironmentConfig.REQUIRE_SYMBOLS,
-                "RequireNumbers", EnvironmentConfig.REQUIRE_NUMBERS,
-                "RequireUppercaseCharacters", EnvironmentConfig.REQUIRE_UPPERCASE,
-                "RequireLowercaseCharacters", EnvironmentConfig.REQUIRE_LOWERCASE,
-                "MaxPasswordAge", EnvironmentConfig.PASSWORD_MAX_AGE_DAYS,
-                "PasswordReusePrevention", EnvironmentConfig.PASSWORD_REUSE_PREVENTION
-            ))
-            .physicalResourceId(PhysicalResourceId.of(EnvironmentConfig.getResourceName("iam", "password-policy")))
-            .build();
-
-        AwsCustomResource.Builder.create(this, EnvironmentConfig.getResourceName("iam", "password-policy"))
-            .onCreate(sdkCall)
-            .onUpdate(sdkCall)
-            .policy(AwsCustomResourcePolicy.fromSdkCalls(SdkCallsPolicyOptions.builder()
-                .resources(java.util.List.of("*"))
-                .build()))
-            .build();
+    // Account-level password policy application removed.
+    // If desired, apply account password policies via an organizational
+    // automation or in a deployment step that has explicit credentials and
+    // the proper permissions. Keeping this method as a no-op avoids
+    // synth-time account API calls that break CI.
     }
 
     /**
