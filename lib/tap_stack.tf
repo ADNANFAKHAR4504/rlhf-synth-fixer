@@ -981,7 +981,6 @@ resource "aws_db_instance" "secondary" {
   
   # Storage Configuration
   storage_encrypted = true
-  kms_key_id       = "alias/aws/rds"
   
   # Network Configuration
   vpc_security_group_ids = [aws_security_group.rds_secondary.id]
