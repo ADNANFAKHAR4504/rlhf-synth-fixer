@@ -337,6 +337,12 @@ func main() {
 		}
 
 		// 6. RDS Instance
+		// Get database password from config or use default for development
+		dbPassword := cfg.Get("dbPassword")
+		if dbPassword == "" {
+			dbPassword = "DevPassword123!" // Default password for development
+		}
+		
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("%s-rds", projectName), &rds.InstanceArgs{
 			AllocatedStorage:        pulumi.Int(20),
 			StorageType:             pulumi.String("gp3"),
@@ -345,7 +351,7 @@ func main() {
 			InstanceClass:           pulumi.String("db.t3.micro"),
 			DbName:                  pulumi.String("webappdb"),
 			Username:                pulumi.String("dbadmin"),
-			Password:                cfg.GetSecret("dbPassword"),
+			Password:                pulumi.String(dbPassword),
 			ParameterGroupName:      rdsParameterGroup.Name,
 			DbSubnetGroupName:       dbSubnetGroup.Name,
 			VpcSecurityGroupIds:     pulumi.StringArray{dbSg.ID()},
