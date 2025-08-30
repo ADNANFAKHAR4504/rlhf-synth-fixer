@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -363,6 +364,31 @@ func main() {
 			return err
 		}
 
+		// S3 Bucket Policy for ALB Logs
+		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("%s-alb-logs-policy", projectName), &s3.BucketPolicyArgs{
+			Bucket: albLogsBucket.Bucket,
+			Policy: albLogsBucket.Bucket.ApplyT(func(bucketName string) (string, error) {
+				policy := map[string]interface{}{
+					"Version": "2012-10-17",
+					"Statement": []map[string]interface{}{
+						{
+							"Effect": "Allow",
+							"Principal": map[string]interface{}{
+								"AWS": "arn:aws:iam::127311923021:root", // AWS ELB account for us-west-2
+							},
+							"Action": "s3:PutObject",
+							"Resource": fmt.Sprintf("arn:aws:s3:::%s/*", bucketName),
+						},
+					},
+				}
+				policyBytes, err := json.Marshal(policy)
+				return string(policyBytes), err
+			}).(pulumi.StringOutput),
+		})
+		if err != nil {
+			return err
+		}
+
 		// 8. Application Load Balancer
 		alb, err := lb.NewLoadBalancer(ctx, fmt.Sprintf("%s-alb", projectName), &lb.LoadBalancerArgs{
 			Name:                     pulumi.String(fmt.Sprintf("%s-alb", projectName)),
@@ -423,19 +449,22 @@ func main() {
 		}
 
 		// 11. Launch Template for Application Servers
-		_, err = ec2.NewLaunchTemplate(ctx, fmt.Sprintf("%s-lt", projectName), &ec2.LaunchTemplateArgs{
-			NamePrefix:          pulumi.String(fmt.Sprintf("%s-lt", projectName)),
-			ImageId:             pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
-			InstanceType:        pulumi.String("t3.micro"),
-			VpcSecurityGroupIds: pulumi.StringArray{appSg.ID()},
-			UserData: pulumi.String(`#!/bin/bash
+		userData := `#!/bin/bash
 yum update -y
 yum install -y httpd
 systemctl start httpd
 systemctl enable httpd
 echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 echo "OK" > /var/www/html/health
-`),
+`
+		userDataEncoded := base64.StdEncoding.EncodeToString([]byte(userData))
+		
+		_, err = ec2.NewLaunchTemplate(ctx, fmt.Sprintf("%s-lt", projectName), &ec2.LaunchTemplateArgs{
+			NamePrefix:          pulumi.String(fmt.Sprintf("%s-lt", projectName)),
+			ImageId:             pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
+			InstanceType:        pulumi.String("t3.micro"),
+			VpcSecurityGroupIds: pulumi.StringArray{appSg.ID()},
+			UserData:            pulumi.String(userDataEncoded),
 			TagSpecifications: ec2.LaunchTemplateTagSpecificationArray{
 				&ec2.LaunchTemplateTagSpecificationArgs{
 					ResourceType: pulumi.String("instance"),
@@ -696,6 +725,16 @@ echo "OK" > /var/www/html/health
 		}
 
 		// Update launch template to use instance profile
+		userDataWithProfile := `#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
+echo "OK" > /var/www/html/health
+`
+		userDataWithProfileEncoded := base64.StdEncoding.EncodeToString([]byte(userDataWithProfile))
+		
 		_, err = ec2.NewLaunchTemplate(ctx, fmt.Sprintf("%s-lt-with-profile", projectName), &ec2.LaunchTemplateArgs{
 			NamePrefix:          pulumi.String(fmt.Sprintf("%s-lt-with-profile", projectName)),
 			ImageId:             pulumi.String("ami-0735c191cf914754d"),
@@ -704,14 +743,7 @@ echo "OK" > /var/www/html/health
 			IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileArgs{
 				Name: ec2InstanceProfile.Name,
 			},
-			UserData: pulumi.String(`#!/bin/bash
-yum update -y
-yum install -y httpd
-systemctl start httpd
-systemctl enable httpd
-echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
-echo "OK" > /var/www/html/health
-`),
+			UserData: pulumi.String(userDataWithProfileEncoded),
 			TagSpecifications: ec2.LaunchTemplateTagSpecificationArray{
 				&ec2.LaunchTemplateTagSpecificationArgs{
 					ResourceType: pulumi.String("instance"),
