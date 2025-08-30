@@ -133,7 +133,7 @@ cat > /var/www/html/index.html << EOF
                 <li><strong>Environment:</strong> ${environment}</li>
                 <li><strong>Region:</strong> ${aws_region}</li>
                 <li><strong>Instance ID:</strong> <span id="instance-id">Loading...</span></li>
-                <li><strong>S3 Bucket:</strong> ${S3_BUCKET_NAME}</li>
+                <li><strong>S3 Bucket:</strong> ${s3_bucket_name}</li>
                 <li><strong>CloudFront URL:</strong> <a href="https://${cloudfront_url}">https://${cloudfront_url}</a></li>
             </ul>
         </div>
@@ -174,7 +174,7 @@ systemctl enable nginx
 # Create application log
 echo "$(date): Web server initialization completed" >> /var/log/webapp/app.log
 echo "$(date): Project: ${project_name}, Environment: ${environment}" >> /var/log/webapp/app.log
-echo "$(date): S3 Bucket: ${S3_BUCKET_NAME}" >> /var/log/webapp/app.log
+echo "$(date): S3 Bucket: ${s3_bucket_name}" >> /var/log/webapp/app.log
 echo "$(date): CloudFront: ${cloudfront_url}" >> /var/log/webapp/app.log
 
 # Final log entry

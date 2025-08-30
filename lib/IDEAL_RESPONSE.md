@@ -45,6 +45,15 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+      CreatedAt   = timestamp()
+    }
+  }
 }
 ```
 
@@ -85,6 +94,7 @@ Bootstrap script that:
 - Sets up application logging
 - Provides simple web interface showing infrastructure details
 - Configures static asset redirection to CloudFront
+- Uses lowercase template variables matching Terraform outputs: `${db_secret_arn}`, `${s3_bucket_name}`, `${cloudfront_url}`, `${project_name}`, `${environment}`, `${aws_region}`, `${log_group_name}`
 
 ## Key Features & Best Practices
 
