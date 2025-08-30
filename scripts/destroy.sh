@@ -219,7 +219,17 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     echo "Target group not found or already deleted"
   fi
   
-  echo "Step 8: Clean up Launch Templates"
+  echo "Step 8: Clean up CloudWatch Log Groups"
+  WEB_LOG_GROUP="/migration/web/us-east-1-${ENVIRONMENT_SUFFIX}"
+  APP_LOG_GROUP="/migration/app/us-east-1-${ENVIRONMENT_SUFFIX}"
+  
+  echo "Deleting CloudWatch Log Group: $WEB_LOG_GROUP"
+  aws logs delete-log-group --log-group-name "$WEB_LOG_GROUP" || echo "Web log group not found or already deleted"
+  
+  echo "Deleting CloudWatch Log Group: $APP_LOG_GROUP"
+  aws logs delete-log-group --log-group-name "$APP_LOG_GROUP" || echo "App log group not found or already deleted"
+  
+  echo "Step 9: Clean up Launch Templates"
   WEB_LT_NAME="web-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
   APP_LT_NAME="app-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
   
@@ -229,7 +239,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   echo "Deleting Launch Template: $APP_LT_NAME"
   aws ec2 delete-launch-template --launch-template-name "$APP_LT_NAME" || echo "App launch template not found or already deleted"
   
-  echo "Step 9: Final verification of critical resources"
+  echo "Step 10: Final verification of critical resources"
   CRITICAL_ERRORS=0
   
   # Check if any critical resources still exist
@@ -275,6 +285,17 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   TG_CHECK=$(aws elbv2 describe-target-groups --names "$WEB_TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
   if [ "$TG_CHECK" != "None" ] && [ "$TG_CHECK" != "null" ]; then
     echo "❌ CRITICAL: Target Group still exists: $WEB_TG_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check CloudWatch Log Groups
+  if aws logs describe-log-groups --log-group-name-prefix "$WEB_LOG_GROUP" --query "logGroups[?logGroupName=='$WEB_LOG_GROUP']" --output text | grep -q .; then
+    echo "❌ CRITICAL: Web Log Group still exists: $WEB_LOG_GROUP"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if aws logs describe-log-groups --log-group-name-prefix "$APP_LOG_GROUP" --query "logGroups[?logGroupName=='$APP_LOG_GROUP']" --output text | grep -q .; then
+    echo "❌ CRITICAL: App Log Group still exists: $APP_LOG_GROUP"
     CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
   fi
   

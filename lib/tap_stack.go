@@ -15,7 +15,6 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/launchtemplate"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lb"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lblistener"
@@ -366,42 +365,8 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		Tags: tags,
 	})
 
-	// KMS Key with CloudWatch Logs permissions
-	kmsKeyPolicy := `{
-		"Version": "2012-10-17",
-		"Statement": [
-			{
-				"Sid": "EnableIAMUserPermissions",
-				"Effect": "Allow",
-				"Principal": {
-					"AWS": "arn:aws:iam::*:root"
-				},
-				"Action": "kms:*",
-				"Resource": "*"
-			},
-			{
-				"Sid": "AllowCloudWatchLogs",
-				"Effect": "Allow",
-				"Principal": {
-					"Service": "logs.amazonaws.com"
-				},
-				"Action": [
-					"kms:Encrypt",
-					"kms:Decrypt",
-					"kms:ReEncrypt*",
-					"kms:GenerateDataKey*",
-					"kms:DescribeKey"
-				],
-				"Resource": "*"
-			}
-		]
-	}`
-
-	kmsKey := kmskey.NewKmsKey(scope, jsii.String("encryption-key"), &kmskey.KmsKeyConfig{
-		Description: jsii.String("KMS key for migration project encryption"),
-		Policy:      jsii.String(kmsKeyPolicy),
-		Tags:        tags,
-	})
+	// Note: KMS key temporarily removed to avoid policy issues
+	// Will be re-added once CloudWatch Logs encryption is properly configured
 
 	// CloudWatch Log Groups (without KMS encryption for now)
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("web-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
@@ -434,7 +399,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		AllocatedStorage: jsii.Number(20),
 		StorageType:      jsii.String("gp2"),
 		StorageEncrypted: jsii.Bool(true),
-		KmsKeyId:         kmsKey.Arn(),
+		// KmsKeyId temporarily removed
 
 		DbName:   jsii.String("migrationdb"),
 		Username: jsii.String("admin"),
