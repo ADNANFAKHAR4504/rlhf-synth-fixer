@@ -187,7 +187,28 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     exit 1
   fi
   
-  echo "Step 6: Clean up Target Groups"
+  echo "Step 6: Clean up Load Balancer (must be first to free target groups)"
+  ALB_ARN=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
+  if [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
+    echo "Deleting Load Balancer: $ALB_NAME"
+    aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || echo "Failed to delete load balancer"
+    
+    echo "Waiting for Load Balancer to be deleted..."
+    for i in {1..24}; do
+      ALB_CHECK=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
+      if [ "$ALB_CHECK" = "None" ] || [ "$ALB_CHECK" = "null" ]; then
+        echo "✅ Load Balancer deleted successfully"
+        break
+      else
+        echo "Load Balancer still exists, waiting... ($i/24) - 5s intervals"
+        sleep 5
+      fi
+    done
+  else
+    echo "Load balancer not found or already deleted"
+  fi
+  
+  echo "Step 7: Clean up Target Groups (now safe to delete)"
   WEB_TG_NAME="web-tg-us-east-1-${ENVIRONMENT_SUFFIX}"
   
   WEB_TG_ARN=$(aws elbv2 describe-target-groups --names "$WEB_TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
@@ -198,7 +219,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     echo "Target group not found or already deleted"
   fi
   
-  echo "Step 7: Clean up Launch Templates"
+  echo "Step 8: Clean up Launch Templates"
   WEB_LT_NAME="web-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
   APP_LT_NAME="app-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
   
@@ -207,15 +228,6 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   
   echo "Deleting Launch Template: $APP_LT_NAME"
   aws ec2 delete-launch-template --launch-template-name "$APP_LT_NAME" || echo "App launch template not found or already deleted"
-  
-  echo "Step 8: Clean up Load Balancer"
-  ALB_ARN=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
-  if [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
-    echo "Deleting Load Balancer: $ALB_NAME"
-    aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || echo "Failed to delete load balancer"
-  else
-    echo "Load balancer not found or already deleted"
-  fi
   
   echo "Step 9: Final verification of critical resources"
   CRITICAL_ERRORS=0
