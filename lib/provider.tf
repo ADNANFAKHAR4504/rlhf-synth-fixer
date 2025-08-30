@@ -15,7 +15,7 @@ terraform {
   }
 
   # Use local state for testing
-   backend "s3" {}
+  backend "s3" {}
 }
 
 
