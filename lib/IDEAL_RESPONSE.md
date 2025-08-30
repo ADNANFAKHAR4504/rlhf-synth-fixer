@@ -51,7 +51,6 @@ provider "aws" {
       Project     = var.project_name
       Environment = var.environment
       ManagedBy   = "Terraform"
-      CreatedAt   = timestamp()
     }
   }
 }
@@ -146,6 +145,7 @@ terraform apply
 - To enable HTTPS, provide a valid `domain_name` variable
 - RDS password uses AWS-compliant character set (excludes /, @, ", space)
 - Target group names are truncated to stay within 32-character AWS limit
+- Default tags applied to all resources without timestamp to avoid plan inconsistencies
 
 **Test:**
 ```bash
