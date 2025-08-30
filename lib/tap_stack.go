@@ -3,13 +3,11 @@ package lib
 import (
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsautoscaling"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudtrail"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsconfig"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awskms"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awslogs"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsrds"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awss3"
 	"github.com/aws/constructs-go/constructs/v10"
@@ -110,43 +108,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		ServerAccessLogsPrefix: jsii.String("access-logs/"),
 	})
 
-	// Add bucket policy for CloudTrail
-	logsBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Effect: awsiam.Effect_ALLOW,
-		Principals: &[]awsiam.IPrincipal{
-			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
-		},
-		Actions: &[]*string{
-			jsii.String("s3:GetBucketAcl"),
-		},
-		Resources: &[]*string{
-			logsBucket.BucketArn(),
-		},
-		Conditions: &map[string]interface{}{
-			"StringEquals": map[string]interface{}{
-				"AWS:SourceArn": jsii.String("arn:aws:cloudtrail:" + *stack.Region() + ":" + *stack.Account() + ":trail/TapCloudTrail"),
-			},
-		},
-	}))
-
-	logsBucket.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-		Effect: awsiam.Effect_ALLOW,
-		Principals: &[]awsiam.IPrincipal{
-			awsiam.NewServicePrincipal(jsii.String("cloudtrail.amazonaws.com"), nil),
-		},
-		Actions: &[]*string{
-			jsii.String("s3:PutObject"),
-		},
-		Resources: &[]*string{
-			jsii.String(*logsBucket.BucketArn() + "/cloudtrail-logs/*"),
-		},
-		Conditions: &map[string]interface{}{
-			"StringEquals": map[string]interface{}{
-				"s3:x-amz-acl":  jsii.String("bucket-owner-full-control"),
-				"AWS:SourceArn": jsii.String("arn:aws:cloudtrail:" + *stack.Region() + ":" + *stack.Account() + ":trail/TapCloudTrail"),
-			},
-		},
-	}))
+	// CloudTrail bucket policy removed to avoid circular dependency
 
 	// Create VPC with public and private subnets
 	vpc := awsec2.NewVpc(stack, jsii.String("TapVPC"), &awsec2.VpcProps{
@@ -419,22 +381,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	// 	WebAclArn:   webAcl.AttrArn(),
 	// })
 
-	// Create CloudWatch Log Groups
-	appLogGroup := awslogs.NewLogGroup(stack, jsii.String("TapAppLogGroup"), &awslogs.LogGroupProps{
-		LogGroupName: jsii.String("/aws/ec2/tap-application"),
-		Retention:    awslogs.RetentionDays_ONE_MONTH,
-		// Removed KMS encryption due to CloudWatch Logs KMS key requirements
-	})
-
-	// Create CloudTrail
-	_ = awscloudtrail.NewTrail(stack, jsii.String("TapCloudTrail"), &awscloudtrail.TrailProps{
-		Bucket:                     logsBucket,
-		S3KeyPrefix:                jsii.String("cloudtrail-logs/"),
-		IncludeGlobalServiceEvents: jsii.Bool(true),
-		IsMultiRegionTrail:         jsii.Bool(true),
-		EnableFileValidation:       jsii.Bool(true),
-		CloudWatchLogGroup:         appLogGroup,
-	})
+	// CloudTrail creation removed to avoid S3 bucket policy circular dependency
 
 	// Create Config Configuration Recorder
 	configRole := awsiam.NewRole(stack, jsii.String("ConfigRole"), &awsiam.RoleProps{
