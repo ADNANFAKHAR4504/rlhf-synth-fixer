@@ -362,8 +362,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		DatabaseName:                    jsii.String("tapdb"),
 		Credentials:                     awsrds.Credentials_FromGeneratedSecret(jsii.String("admin"), nil),
 		MonitoringInterval:              awscdk.Duration_Minutes(jsii.Number(1)),
-		EnablePerformanceInsights:       jsii.Bool(true),
-		PerformanceInsightEncryptionKey: kmsKey,
+		EnablePerformanceInsights:       jsii.Bool(false),
 	})
 
 	// Create WAF Web ACL - Commented out due to API compatibility issues
