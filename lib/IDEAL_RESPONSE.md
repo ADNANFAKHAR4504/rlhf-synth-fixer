@@ -103,8 +103,9 @@ Bootstrap script that:
 - **Private Subnets**: EC2 and RDS isolated from internet
 - **Security Groups**: Layered access control (ALB→Web→Database)
 - **Encryption**: RDS and S3 server-side encryption enabled
-- **Secrets Management**: Database passwords in AWS Secrets Manager
+- **Secrets Management**: Database passwords in AWS Secrets Manager with RDS-compliant character restrictions
 - **S3 Security**: Public access blocked, CloudFront OAC integration
+- **SSL/TLS**: Optional HTTPS with ACM certificates (only when domain_name is provided)
 
 ### High Availability ✅
 - **Multi-AZ**: Resources across us-west-2a and us-west-2b
@@ -139,6 +140,12 @@ terraform init -backend=false
 terraform plan
 terraform apply
 ```
+
+**Production Deployment Notes:**
+- Default deployment creates HTTP-only load balancer (no SSL certificate)
+- To enable HTTPS, provide a valid `domain_name` variable
+- RDS password uses AWS-compliant character set (excludes /, @, ", space)
+- Target group names are truncated to stay within 32-character AWS limit
 
 **Test:**
 ```bash

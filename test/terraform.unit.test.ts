@@ -304,6 +304,7 @@ describe('AWS Web App Infrastructure - Unit Tests', () => {
       expect(stackContent).toMatch(/resource\s+"random_password"\s+"db_password"\s*{/);
       expect(stackContent).toMatch(/length\s*=\s*16/);
       expect(stackContent).toMatch(/special\s*=\s*true/);
+      expect(stackContent).toMatch(/override_special\s*=\s*"[^@\/\"'\s]+"/);
     });
 
     test('should create Secrets Manager secret', () => {
@@ -352,24 +353,26 @@ describe('AWS Web App Infrastructure - Unit Tests', () => {
       expect(stackContent).toMatch(/unhealthy_threshold\s*=\s*2/);
     });
 
-    test('should create HTTP listener with HTTPS redirect', () => {
+    test('should create HTTP listener with conditional behavior', () => {
       expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"web_http"\s*{/);
       expect(stackContent).toMatch(/port\s*=\s*"80"/);
       expect(stackContent).toMatch(/protocol\s*=\s*"HTTP"/);
-      expect(stackContent).toMatch(/type\s*=\s*"redirect"/);
-      expect(stackContent).toMatch(/protocol\s*=\s*"HTTPS"/);
-      expect(stackContent).toMatch(/status_code\s*=\s*"HTTP_301"/);
+      expect(stackContent).toMatch(/type\s*=\s*var\.domain_name.*\?\s*"redirect"\s*:\s*"forward"/);
+      expect(stackContent).toMatch(/dynamic\s+"redirect"/);
+      expect(stackContent).toMatch(/target_group_arn\s*=\s*var\.domain_name.*aws_lb_target_group\.web\.arn/);
     });
 
-    test('should create HTTPS listener', () => {
+    test('should create HTTPS listener conditionally', () => {
       expect(stackContent).toMatch(/resource\s+"aws_lb_listener"\s+"web_https"\s*{/);
+      expect(stackContent).toMatch(/count\s*=\s*var\.domain_name/);
       expect(stackContent).toMatch(/port\s*=\s*"443"/);
       expect(stackContent).toMatch(/protocol\s*=\s*"HTTPS"/);
       expect(stackContent).toMatch(/ssl_policy\s*=\s*"ELBSecurityPolicy-TLS-1-2-2017-01"/);
     });
 
-    test('should create ACM certificate', () => {
+    test('should create ACM certificate conditionally', () => {
       expect(stackContent).toMatch(/resource\s+"aws_acm_certificate"\s+"main"\s*{/);
+      expect(stackContent).toMatch(/count\s*=\s*var\.domain_name/);
       expect(stackContent).toMatch(/validation_method\s*=\s*"DNS"/);
     });
   });

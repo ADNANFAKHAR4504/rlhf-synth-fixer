@@ -642,10 +642,11 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-# Random password for RDS
+# Random password for RDS - exclude characters not allowed by RDS
 resource "random_password" "db_password" {
   length  = 16
   special = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 # AWS Secrets Manager secret for DB password
@@ -745,7 +746,7 @@ resource "aws_lb" "main" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "web" {
-  name     = "${var.project_name}-${var.environment}-web-tg-${random_string.resource_suffix.result}"
+  name     = "${substr("${var.project_name}-${var.environment}", 0, 15)}-tg-${random_string.resource_suffix.result}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -767,20 +768,25 @@ resource "aws_lb_target_group" "web" {
   }
 }
 
-# ALB Listener (HTTP) - Redirects to HTTPS
+# ALB Listener (HTTP) - Redirects to HTTPS if certificate available, otherwise forwards
 resource "aws_lb_listener" "web_http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
-
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
+    type = var.domain_name != "" ? "redirect" : "forward"
+    
+    dynamic "redirect" {
+      for_each = var.domain_name != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
     }
+    
+    target_group_arn = var.domain_name == "" ? aws_lb_target_group.web.arn : null
   }
 
   tags = {
@@ -788,9 +794,10 @@ resource "aws_lb_listener" "web_http" {
   }
 }
 
-# Self-signed certificate for demo purposes
+# SSL certificate (only created if domain_name is provided)
 resource "aws_acm_certificate" "main" {
-  domain_name       = var.domain_name != "" ? var.domain_name : "${var.project_name}-${var.environment}.local"
+  count             = var.domain_name != "" ? 1 : 0
+  domain_name       = var.domain_name
   validation_method = "DNS"
 
   lifecycle {
@@ -802,13 +809,14 @@ resource "aws_acm_certificate" "main" {
   }
 }
 
-# ALB Listener (HTTPS)
+# ALB Listener (HTTPS) - only created if domain_name is provided
 resource "aws_lb_listener" "web_https" {
+  count             = var.domain_name != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn
+  certificate_arn   = aws_acm_certificate.main[0].arn
 
   default_action {
     type             = "forward"
