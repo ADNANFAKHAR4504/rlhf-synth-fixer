@@ -24,7 +24,7 @@ func TestFileStructureAndSyntax(t *testing.T) {
 		filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
 		content, err := os.ReadFile(filePath)
 		require.NoError(t, err)
-		
+
 		// Check for required imports
 		assert.Contains(t, content, "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2")
 		assert.Contains(t, content, "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds")
@@ -37,7 +37,7 @@ func TestFileStructureAndSyntax(t *testing.T) {
 		filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
 		content, err := os.ReadFile(filePath)
 		require.NoError(t, err)
-		
+
 		// Check for configuration usage
 		assert.Contains(t, content, "config.New(ctx, \"\")")
 		assert.Contains(t, content, "cfg.Require(\"projectName\")")

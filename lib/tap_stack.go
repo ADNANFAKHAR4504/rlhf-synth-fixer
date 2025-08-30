@@ -24,7 +24,6 @@ func main() {
 		projectName := cfg.Require("projectName")
 		environment := cfg.Require("environment")
 
-
 		// Common tags
 		commonTags := pulumi.StringMap{
 			"Project":     pulumi.String(projectName),
@@ -69,11 +68,11 @@ func main() {
 		publicSubnets := make([]*ec2.Subnet, 2)
 		for i, az := range availabilityZones {
 			publicSubnet, err := ec2.NewSubnet(ctx, fmt.Sprintf("%s-public-subnet-%d", projectName, i), &ec2.SubnetArgs{
-				VpcId:            vpc.ID(),
-				CidrBlock:        pulumi.String(fmt.Sprintf("10.0.%d.0/24", i+1)),
-				AvailabilityZone: pulumi.String(az),
+				VpcId:               vpc.ID(),
+				CidrBlock:           pulumi.String(fmt.Sprintf("10.0.%d.0/24", i+1)),
+				AvailabilityZone:    pulumi.String(az),
 				MapPublicIpOnLaunch: pulumi.Bool(true),
-				Tags: commonTags,
+				Tags:                commonTags,
 			})
 			if err != nil {
 				return err
@@ -88,7 +87,7 @@ func main() {
 				VpcId:            vpc.ID(),
 				CidrBlock:        pulumi.String(fmt.Sprintf("10.0.%d.0/24", i+10)),
 				AvailabilityZone: pulumi.String(az),
-				Tags: commonTags,
+				Tags:             commonTags,
 			})
 			if err != nil {
 				return err
@@ -125,8 +124,8 @@ func main() {
 			VpcId: vpc.ID(),
 			Routes: ec2.RouteTableRouteArray{
 				&ec2.RouteTableRouteArgs{
-					CidrBlock:     pulumi.String("0.0.0.0/0"),
-					NatGatewayId:  natGateway.ID(),
+					CidrBlock:    pulumi.String("0.0.0.0/0"),
+					NatGatewayId: natGateway.ID(),
 				},
 			},
 			Tags: commonTags,
@@ -282,10 +281,10 @@ func main() {
 
 		// 3. KMS Key for Encryption
 		kmsKey, err := kms.NewKey(ctx, fmt.Sprintf("%s-kms-key", projectName), &kms.KeyArgs{
-			Description:         pulumi.String("KMS key for RDS encryption"),
+			Description:          pulumi.String("KMS key for RDS encryption"),
 			DeletionWindowInDays: pulumi.Int(7),
-			EnableKeyRotation:   pulumi.Bool(true),
-			Tags:                commonTags,
+			EnableKeyRotation:    pulumi.Bool(true),
+			Tags:                 commonTags,
 		})
 		if err != nil {
 			return err
@@ -293,9 +292,9 @@ func main() {
 
 		// 4. RDS Subnet Group
 		rdsSubnetGroup, err := rds.NewSubnetGroup(ctx, fmt.Sprintf("%s-rds-subnet-group", projectName), &rds.SubnetGroupArgs{
-			Name:       pulumi.String(fmt.Sprintf("%s-rds-subnet-group", projectName)),
-			SubnetIds:  pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
-			Tags:       commonTags,
+			Name:      pulumi.String(fmt.Sprintf("%s-rds-subnet-group", projectName)),
+			SubnetIds: pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
+			Tags:      commonTags,
 		})
 		if err != nil {
 			return err
@@ -323,26 +322,26 @@ func main() {
 
 		// 6. RDS Instance
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("%s-rds", projectName), &rds.InstanceArgs{
-			AllocatedStorage:      pulumi.Int(20),
-			StorageType:           pulumi.String("gp2"),
-			Engine:                pulumi.String("mysql"),
-			EngineVersion:         pulumi.String("8.0.35"),
-			InstanceClass:         pulumi.String("db.t3.micro"),
-			DbName:                pulumi.String("webappdb"),
-			Username:              pulumi.String("dbadmin"),
-			Password:              cfg.RequireSecret("dbPassword"),
-			ParameterGroupName:    rdsParameterGroup.Name,
-			DbSubnetGroupName:     rdsSubnetGroup.Name,
-			VpcSecurityGroupIds:   pulumi.StringArray{rdsSg.ID()},
-			StorageEncrypted:      pulumi.Bool(true),
-			KmsKeyId:              kmsKey.Arn,
-			BackupRetentionPeriod: pulumi.Int(7),
-			BackupWindow:          pulumi.String("03:00-04:00"),
-			MaintenanceWindow:     pulumi.String("sun:04:00-sun:05:00"),
-			MultiAz:               pulumi.Bool(true),
-			SkipFinalSnapshot:     pulumi.Bool(false),
+			AllocatedStorage:        pulumi.Int(20),
+			StorageType:             pulumi.String("gp2"),
+			Engine:                  pulumi.String("mysql"),
+			EngineVersion:           pulumi.String("8.0.35"),
+			InstanceClass:           pulumi.String("db.t3.micro"),
+			DbName:                  pulumi.String("webappdb"),
+			Username:                pulumi.String("dbadmin"),
+			Password:                cfg.RequireSecret("dbPassword"),
+			ParameterGroupName:      rdsParameterGroup.Name,
+			DbSubnetGroupName:       rdsSubnetGroup.Name,
+			VpcSecurityGroupIds:     pulumi.StringArray{rdsSg.ID()},
+			StorageEncrypted:        pulumi.Bool(true),
+			KmsKeyId:                kmsKey.Arn,
+			BackupRetentionPeriod:   pulumi.Int(7),
+			BackupWindow:            pulumi.String("03:00-04:00"),
+			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
+			MultiAz:                 pulumi.Bool(true),
+			SkipFinalSnapshot:       pulumi.Bool(false),
 			FinalSnapshotIdentifier: pulumi.String(fmt.Sprintf("%s-rds-final-snapshot", projectName)),
-			Tags:                  commonTags,
+			Tags:                    commonTags,
 		})
 		if err != nil {
 			return err
@@ -359,11 +358,11 @@ func main() {
 
 		// 8. Application Load Balancer
 		alb, err := lb.NewLoadBalancer(ctx, fmt.Sprintf("%s-alb", projectName), &lb.LoadBalancerArgs{
-			Name:               pulumi.String(fmt.Sprintf("%s-alb", projectName)),
-			Internal:           pulumi.Bool(false),
-			LoadBalancerType:   pulumi.String("application"),
-			SecurityGroups:     pulumi.StringArray{albSg.ID()},
-			Subnets:            pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
+			Name:                     pulumi.String(fmt.Sprintf("%s-alb", projectName)),
+			Internal:                 pulumi.Bool(false),
+			LoadBalancerType:         pulumi.String("application"),
+			SecurityGroups:           pulumi.StringArray{albSg.ID()},
+			Subnets:                  pulumi.StringArray{publicSubnets[0].ID(), publicSubnets[1].ID()},
 			EnableDeletionProtection: pulumi.Bool(false),
 			AccessLogs: &lb.LoadBalancerAccessLogsArgs{
 				Bucket:  albLogsBucket.Bucket,
@@ -384,15 +383,15 @@ func main() {
 			VpcId:      vpc.ID(),
 			TargetType: pulumi.String("instance"),
 			HealthCheck: &lb.TargetGroupHealthCheckArgs{
-				Enabled:             pulumi.Bool(true),
-				HealthyThreshold:    pulumi.Int(2),
-				Interval:            pulumi.Int(30),
-				Matcher:             pulumi.String("200"),
-				Path:                pulumi.String("/health"),
-				Port:                pulumi.String("traffic-port"),
-				Protocol:            pulumi.String("HTTP"),
-				Timeout:             pulumi.Int(5),
-				UnhealthyThreshold:  pulumi.Int(2),
+				Enabled:            pulumi.Bool(true),
+				HealthyThreshold:   pulumi.Int(2),
+				Interval:           pulumi.Int(30),
+				Matcher:            pulumi.String("200"),
+				Path:               pulumi.String("/health"),
+				Port:               pulumi.String("traffic-port"),
+				Protocol:           pulumi.String("HTTP"),
+				Timeout:            pulumi.Int(5),
+				UnhealthyThreshold: pulumi.Int(2),
 			},
 			Tags: commonTags,
 		})
@@ -418,9 +417,9 @@ func main() {
 
 		// 11. Launch Template for Application Servers
 		_, err = ec2.NewLaunchTemplate(ctx, fmt.Sprintf("%s-lt", projectName), &ec2.LaunchTemplateArgs{
-			NamePrefix:   pulumi.String(fmt.Sprintf("%s-lt", projectName)),
-			ImageId:      pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
-			InstanceType: pulumi.String("t3.micro"),
+			NamePrefix:          pulumi.String(fmt.Sprintf("%s-lt", projectName)),
+			ImageId:             pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
+			InstanceType:        pulumi.String("t3.micro"),
 			VpcSecurityGroupIds: pulumi.StringArray{appSg.ID()},
 			UserData: pulumi.String(`#!/bin/bash
 yum update -y
@@ -467,12 +466,12 @@ echo "OK" > /var/www/html/health
 
 		// 13. Bastion Host
 		bastionInstance, err := ec2.NewInstance(ctx, fmt.Sprintf("%s-bastion", projectName), &ec2.InstanceArgs{
-			Ami:           pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
-			InstanceType:  pulumi.String("t3.micro"),
-			SubnetId:      publicSubnets[0].ID(),
+			Ami:                 pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
+			InstanceType:        pulumi.String("t3.micro"),
+			SubnetId:            publicSubnets[0].ID(),
 			VpcSecurityGroupIds: pulumi.StringArray{bastionSg.ID()},
-			KeyName:       pulumi.StringPtr(cfg.Get("keyName")),
-			Tags:          commonTags,
+			KeyName:             pulumi.StringPtr(cfg.Get("keyName")),
+			Tags:                commonTags,
 		})
 		if err != nil {
 			return err
@@ -495,8 +494,8 @@ echo "OK" > /var/www/html/health
 					},
 					Statement: &wafv2.WebAclRuleStatementArgs{
 						ManagedRuleGroupStatement: &wafv2.WebAclRuleStatementManagedRuleGroupStatementArgs{
-							Name:        pulumi.String("AWSManagedRulesCommonRuleSet"),
-							VendorName:  pulumi.String("AWS"),
+							Name:       pulumi.String("AWSManagedRulesCommonRuleSet"),
+							VendorName: pulumi.String("AWS"),
 						},
 					},
 					VisibilityConfig: &wafv2.WebAclRuleVisibilityConfigArgs{
@@ -536,12 +535,12 @@ echo "OK" > /var/www/html/health
 		}
 
 		cloudTrail, err := cloudtrail.NewTrail(ctx, fmt.Sprintf("%s-trail", projectName), &cloudtrail.TrailArgs{
-			Name:           pulumi.String(fmt.Sprintf("%s-trail", projectName)),
-			S3BucketName:   cloudTrailBucket.Bucket,
+			Name:                       pulumi.String(fmt.Sprintf("%s-trail", projectName)),
+			S3BucketName:               cloudTrailBucket.Bucket,
 			IncludeGlobalServiceEvents: pulumi.Bool(true),
-			IsMultiRegionTrail:        pulumi.Bool(true),
-			EnableLogging:             pulumi.Bool(true),
-			Tags:                      commonTags,
+			IsMultiRegionTrail:         pulumi.Bool(true),
+			EnableLogging:              pulumi.Bool(true),
+			Tags:                       commonTags,
 		})
 		if err != nil {
 			return err
@@ -550,7 +549,7 @@ echo "OK" > /var/www/html/health
 		// 17. CloudWatch Alarms
 		// RDS CPU Alarm
 		rdsCpuAlarm, err := cloudwatch.NewMetricAlarm(ctx, fmt.Sprintf("%s-rds-cpu-alarm", projectName), &cloudwatch.MetricAlarmArgs{
-			Name:          pulumi.String(fmt.Sprintf("%s-rds-cpu-alarm", projectName)),
+			Name:               pulumi.String(fmt.Sprintf("%s-rds-cpu-alarm", projectName)),
 			ComparisonOperator: pulumi.String("GreaterThanThreshold"),
 			EvaluationPeriods:  pulumi.Int(2),
 			MetricName:         pulumi.String("CPUUtilization"),
@@ -570,7 +569,7 @@ echo "OK" > /var/www/html/health
 
 		// ALB 5xx Error Alarm
 		alb5xxAlarm, err := cloudwatch.NewMetricAlarm(ctx, fmt.Sprintf("%s-alb-5xx-alarm", projectName), &cloudwatch.MetricAlarmArgs{
-			Name:          pulumi.String(fmt.Sprintf("%s-alb-5xx-alarm", projectName)),
+			Name:               pulumi.String(fmt.Sprintf("%s-alb-5xx-alarm", projectName)),
 			ComparisonOperator: pulumi.String("GreaterThanThreshold"),
 			EvaluationPeriods:  pulumi.Int(2),
 			MetricName:         pulumi.String("HTTPCode_ELB_5XX_Count"),
@@ -651,9 +650,9 @@ echo "OK" > /var/www/html/health
 
 		// Update launch template to use instance profile
 		_, err = ec2.NewLaunchTemplate(ctx, fmt.Sprintf("%s-lt-with-profile", projectName), &ec2.LaunchTemplateArgs{
-			NamePrefix:   pulumi.String(fmt.Sprintf("%s-lt-with-profile", projectName)),
-			ImageId:      pulumi.String("ami-0735c191cf914754d"),
-			InstanceType: pulumi.String("t3.micro"),
+			NamePrefix:          pulumi.String(fmt.Sprintf("%s-lt-with-profile", projectName)),
+			ImageId:             pulumi.String("ami-0735c191cf914754d"),
+			InstanceType:        pulumi.String("t3.micro"),
 			VpcSecurityGroupIds: pulumi.StringArray{appSg.ID()},
 			IamInstanceProfile: &ec2.LaunchTemplateIamInstanceProfileArgs{
 				Name: ec2InstanceProfile.Name,
