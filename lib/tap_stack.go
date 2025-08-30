@@ -63,13 +63,17 @@ func main() {
 			return err
 		}
 
-		// NAT Gateway and Elastic IP
-		eip, err := ec2.NewEip(ctx, fmt.Sprintf("%s-nat-eip", projectName), &ec2.EipArgs{
-			Domain: pulumi.String("vpc"),
-			Tags:   commonTags,
-		})
-		if err != nil {
-			return err
+		// NAT Gateway and Elastic IPs
+		eips := make([]*ec2.Eip, 2)
+		for i := 0; i < 2; i++ {
+			eip, err := ec2.NewEip(ctx, fmt.Sprintf("%s-nat-eip-%d", projectName, i), &ec2.EipArgs{
+				Domain: pulumi.String("vpc"),
+				Tags:   commonTags,
+			})
+			if err != nil {
+				return err
+			}
+			eips[i] = eip
 		}
 
 		// Public subnets for ALB and Bastion
@@ -107,7 +111,7 @@ func main() {
 		natGateways := make([]*ec2.NatGateway, 2)
 		for i := 0; i < 2; i++ {
 			natGateway, err := ec2.NewNatGateway(ctx, fmt.Sprintf("%s-nat-%d", projectName, i), &ec2.NatGatewayArgs{
-				AllocationId: eip.ID(),
+				AllocationId: eips[i].ID(),
 				SubnetId:     publicSubnets[i].ID(),
 				Tags:         commonTags,
 			})
@@ -255,10 +259,10 @@ func main() {
 			},
 			Egress: ec2.SecurityGroupEgressArray{
 				&ec2.SecurityGroupEgressArgs{
-					Protocol:    pulumi.String("-1"),
+					Protocol:   pulumi.String("-1"),
 					FromPort:   pulumi.Int(0),
 					ToPort:     pulumi.Int(0),
-					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 				},
 			},
 			Tags: commonTags,
@@ -336,19 +340,19 @@ func main() {
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("%s-rds", projectName), &rds.InstanceArgs{
 			AllocatedStorage:        pulumi.Int(20),
 			StorageType:             pulumi.String("gp3"),
-			Engine:                pulumi.String("mysql"),
+			Engine:                  pulumi.String("mysql"),
 			EngineVersion:           pulumi.String("8.0"),
 			InstanceClass:           pulumi.String("db.t3.micro"),
 			DbName:                  pulumi.String("webappdb"),
 			Username:                pulumi.String("dbadmin"),
 			Password:                cfg.GetSecret("dbPassword"),
 			ParameterGroupName:      rdsParameterGroup.Name,
-			DbSubnetGroupName:     dbSubnetGroup.Name,
-			VpcSecurityGroupIds:   pulumi.StringArray{dbSg.ID()},
-					StorageEncrypted:      pulumi.Bool(true),
-		PubliclyAccessible:    pulumi.Bool(false),
+			DbSubnetGroupName:       dbSubnetGroup.Name,
+			VpcSecurityGroupIds:     pulumi.StringArray{dbSg.ID()},
+			StorageEncrypted:        pulumi.Bool(true),
+			PubliclyAccessible:      pulumi.Bool(false),
 			KmsKeyId:                kmsKey.Arn,
-			BackupRetentionPeriod: pulumi.Int(7),
+			BackupRetentionPeriod:   pulumi.Int(7),
 			BackupWindow:            pulumi.String("03:00-04:00"),
 			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
 			MultiAz:                 pulumi.Bool(true),
@@ -407,9 +411,31 @@ func main() {
 			return err
 		}
 
+		// S3 Bucket ACL for ALB Logs
+		albLogsBucketAcl, err := s3.NewBucketAclV2(ctx, fmt.Sprintf("%s-alb-logs-acl", projectName), &s3.BucketAclV2Args{
+			Bucket: albLogsBucket.Bucket,
+			AccessControlPolicy: &s3.BucketAclV2AccessControlPolicyArgs{
+				Grants: s3.BucketAclV2AccessControlPolicyGrantArray{
+					&s3.BucketAclV2AccessControlPolicyGrantArgs{
+						Grantee: &s3.BucketAclV2AccessControlPolicyGrantGranteeArgs{
+							Type: pulumi.String("CanonicalUser"),
+							Id:   pulumi.String("c4aa1a66c7c8c0320b9aa4e87ff9b2263f2db5fce0c30ddb87c4395bfd1e6a3a"), // AWS Logs Delivery account
+						},
+						Permission: pulumi.String("FULL_CONTROL"),
+					},
+				},
+				Owner: &s3.BucketAclV2AccessControlPolicyOwnerArgs{
+					Id: pulumi.String("c4aa1a66c7c8c0320b9aa4e87ff9b2263f2db5fce0c30ddb87c4395bfd1e6a3a"),
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
 		// S3 Bucket Server Access Logging
 		_, err = s3.NewBucketLoggingV2(ctx, fmt.Sprintf("%s-alb-logs-logging", projectName), &s3.BucketLoggingV2Args{
-			Bucket: albLogsBucket.Bucket,
+			Bucket:       albLogsBucket.Bucket,
 			TargetBucket: albLogsBucket.Bucket,
 			TargetPrefix: pulumi.String("logs/"),
 		})
@@ -418,7 +444,7 @@ func main() {
 		}
 
 		// S3 Bucket Policy for ALB Logs
-		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("%s-alb-logs-policy", projectName), &s3.BucketPolicyArgs{
+		albLogsBucketPolicy, err := s3.NewBucketPolicy(ctx, fmt.Sprintf("%s-alb-logs-policy", projectName), &s3.BucketPolicyArgs{
 			Bucket: albLogsBucket.Bucket,
 			Policy: albLogsBucket.Bucket.ApplyT(func(bucketName string) (string, error) {
 				policy := map[string]interface{}{
@@ -443,6 +469,24 @@ func main() {
 							"Effect": "Allow",
 							"Principal": map[string]interface{}{
 								"Service": "delivery.logs.amazonaws.com",
+							},
+							"Action":   "s3:GetBucketAcl",
+							"Resource": fmt.Sprintf("arn:aws:s3:::%s", bucketName),
+						},
+						{
+							"Sid":    "ELBLogDeliveryWrite",
+							"Effect": "Allow",
+							"Principal": map[string]interface{}{
+								"AWS": "arn:aws:iam::797873946194:root", // ELB account for us-west-2 region
+							},
+							"Action":   "s3:PutObject",
+							"Resource": fmt.Sprintf("arn:aws:s3:::%s/*", bucketName),
+						},
+						{
+							"Sid":    "ELBLogDeliveryAclCheck",
+							"Effect": "Allow",
+							"Principal": map[string]interface{}{
+								"AWS": "arn:aws:iam::797873946194:root", // ELB account for us-west-2 region
 							},
 							"Action":   "s3:GetBucketAcl",
 							"Resource": fmt.Sprintf("arn:aws:s3:::%s", bucketName),
@@ -543,7 +587,7 @@ func main() {
 				Enabled: pulumi.Bool(true),
 			},
 			Tags: commonTags,
-		}, pulumi.DependsOn([]pulumi.Resource{albLogsBucket}))
+		}, pulumi.DependsOn([]pulumi.Resource{albLogsBucket, albLogsBucketPolicy, albLogsBucketAcl}))
 		if err != nil {
 			return err
 		}
@@ -750,7 +794,7 @@ echo "OK" > /var/www/html/health
 
 		// CloudTrail S3 Bucket Server Access Logging
 		_, err = s3.NewBucketLoggingV2(ctx, fmt.Sprintf("%s-cloudtrail-logging", projectName), &s3.BucketLoggingV2Args{
-			Bucket: cloudTrailBucket.Bucket,
+			Bucket:       cloudTrailBucket.Bucket,
 			TargetBucket: cloudTrailBucket.Bucket,
 			TargetPrefix: pulumi.String("logs/"),
 		})
