@@ -350,19 +350,19 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		Engine: awsrds.DatabaseInstanceEngine_Mysql(&awsrds.MySqlInstanceEngineProps{
 			Version: awsrds.MysqlEngineVersion_VER_8_0_40(),
 		}),
-		InstanceType:                    awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
-		Vpc:                             vpc,
-		SubnetGroup:                     dbSubnetGroup,
-		SecurityGroups:                  &[]awsec2.ISecurityGroup{rdsSecurityGroup},
-		MultiAz:                         jsii.Bool(true),
-		StorageEncrypted:                jsii.Bool(true),
-		StorageEncryptionKey:            kmsKey,
-		BackupRetention:                 awscdk.Duration_Days(jsii.Number(7)),
-		DeletionProtection:              jsii.Bool(true),
-		DatabaseName:                    jsii.String("tapdb"),
-		Credentials:                     awsrds.Credentials_FromGeneratedSecret(jsii.String("admin"), nil),
-		MonitoringInterval:              awscdk.Duration_Minutes(jsii.Number(1)),
-		EnablePerformanceInsights:       jsii.Bool(false),
+		InstanceType:              awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
+		Vpc:                       vpc,
+		SubnetGroup:               dbSubnetGroup,
+		SecurityGroups:            &[]awsec2.ISecurityGroup{rdsSecurityGroup},
+		MultiAz:                   jsii.Bool(true),
+		StorageEncrypted:          jsii.Bool(true),
+		StorageEncryptionKey:      kmsKey,
+		BackupRetention:           awscdk.Duration_Days(jsii.Number(7)),
+		DeletionProtection:        jsii.Bool(true),
+		DatabaseName:              jsii.String("tapdb"),
+		Credentials:               awsrds.Credentials_FromGeneratedSecret(jsii.String("admin"), nil),
+		MonitoringInterval:        awscdk.Duration_Minutes(jsii.Number(1)),
+		EnablePerformanceInsights: jsii.Bool(false),
 	})
 
 	// Create WAF Web ACL - Commented out due to API compatibility issues
@@ -455,7 +455,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	deliveryChannel := awsconfig.NewCfnDeliveryChannel(stack, jsii.String("TapConfigDeliveryChannel"), &awsconfig.CfnDeliveryChannelProps{
 		S3BucketName: configBucket.BucketName(),
-		S3KeyPrefix:  jsii.String("config/"),
+		S3KeyPrefix:  jsii.String("config"),
 	})
 
 	configRecorder := awsconfig.NewCfnConfigurationRecorder(stack, jsii.String("TapConfigRecorder"), &awsconfig.CfnConfigurationRecorderProps{
