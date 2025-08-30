@@ -35,8 +35,8 @@ const iamClient = new IAMClient({ region: process.env.AWS_REGION || 'us-east-1' 
 const stsClient = new STSClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
 // Load CloudFormation stack outputs
-const flatOutputsPath = resolve(process.cwd(), 'cfn-outputs/flat-outputs.json');
-const allOutputsPath = resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
+const flatOutputsPath = resolve(process.cwd(), 'cfn-outputs/flat-outputs12.json');
+const allOutputsPath = resolve(process.cwd(), 'cfn-outputs/all-outputs1.json');
 let outputsPath = existsSync(flatOutputsPath) ? flatOutputsPath : allOutputsPath;
 if (!existsSync(outputsPath)) {
   console.warn('Outputs file not found at:', outputsPath);
