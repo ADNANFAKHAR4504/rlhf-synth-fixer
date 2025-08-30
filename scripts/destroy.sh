@@ -70,7 +70,12 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   IAM_PROFILE_NAME="ec2-migration-profile-us-east-1-${ENVIRONMENT_SUFFIX}"
   ALB_NAME="migration-alb-us-east-1-${ENVIRONMENT_SUFFIX}"
   
-  echo "Step 1: Delete RDS Database Instance: $DB_INSTANCE_NAME"
+  echo "Step 1: Disable RDS deletion protection and delete instance: $DB_INSTANCE_NAME"
+  # First disable deletion protection
+  aws rds modify-db-instance --db-instance-identifier "$DB_INSTANCE_NAME" --no-deletion-protection --apply-immediately || echo "Failed to modify DB instance or not found"
+  # Wait a moment for the modification to take effect
+  sleep 10
+  # Now delete the instance
   aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_NAME" --skip-final-snapshot || echo "DB instance not found or already deleted"
   
   echo "Step 2: Wait for RDS instance deletion (checking for 60 seconds)..."
@@ -94,8 +99,29 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   # Delete instance profile
   aws iam delete-instance-profile --instance-profile-name "$IAM_PROFILE_NAME" || echo "Instance profile not found or already deleted"
   
-  # Detach policies from role
-  aws iam detach-role-policy --role-name "$IAM_ROLE_NAME" --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" || echo "Policy not attached or role not found"
+  # List and detach all policies from role
+  echo "Listing and detaching all policies from role: $IAM_ROLE_NAME"
+  ATTACHED_POLICIES=$(aws iam list-attached-role-policies --role-name "$IAM_ROLE_NAME" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null || echo "")
+  if [ -n "$ATTACHED_POLICIES" ]; then
+    for policy in $ATTACHED_POLICIES; do
+      echo "Detaching policy: $policy"
+      aws iam detach-role-policy --role-name "$IAM_ROLE_NAME" --policy-arn "$policy" || echo "Failed to detach policy $policy"
+    done
+  else
+    echo "No attached policies found or role does not exist"
+  fi
+  
+  # List and delete inline policies
+  echo "Listing and deleting inline policies from role: $IAM_ROLE_NAME"
+  INLINE_POLICIES=$(aws iam list-role-policies --role-name "$IAM_ROLE_NAME" --query "PolicyNames" --output text 2>/dev/null || echo "")
+  if [ -n "$INLINE_POLICIES" ]; then
+    for policy in $INLINE_POLICIES; do
+      echo "Deleting inline policy: $policy"
+      aws iam delete-role-policy --role-name "$IAM_ROLE_NAME" --policy-name "$policy" || echo "Failed to delete inline policy $policy"
+    done
+  else
+    echo "No inline policies found or role does not exist"
+  fi
   
   # Delete role
   aws iam delete-role --role-name "$IAM_ROLE_NAME" || echo "IAM role not found or already deleted"
