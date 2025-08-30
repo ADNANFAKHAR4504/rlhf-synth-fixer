@@ -12,10 +12,6 @@ Parameters:
       - "prod"
     Description: Environment name
 
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
-
   WhitelistedCIDR:
     Type: String
     Default: "10.0.0.0/16"
@@ -30,15 +26,19 @@ Parameters:
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     Description: Database admin username
 
-  DBPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: "[a-zA-Z0-9]*"
-    Description: Database admin password
-
 Resources:
+  # Database Secret
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${Environment}/database/credentials
+      Description: "Database credentials"
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: "password"
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+
   # VPC and Network Configuration
   VPC:
     Type: AWS::EC2::VPC
@@ -247,8 +247,8 @@ Resources:
     Properties:
       DBName: !Sub ${Environment}database
       Engine: mysql
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
       DBInstanceClass: db.t3.medium
       AllocatedStorage: "20"
       StorageType: gp2
