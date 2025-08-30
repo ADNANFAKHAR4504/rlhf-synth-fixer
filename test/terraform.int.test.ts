@@ -306,11 +306,15 @@ describe('AWS Web App Infrastructure - Integration Tests (us-west-2)', () => {
   });
 
   describe('Regional Configuration', () => {
-    test('should be deployed in us-west-2 region', () => {
+    test('should be deployed in us-west-2 region', async () => {
       // Verify all clients are configured for us-west-2
-      expect(ec2Client.config.region).toBe('us-west-2');
-      expect(rdsClient.config.region).toBe('us-west-2');
-      expect(elbv2Client.config.region).toBe('us-west-2');
+      const ec2Region = await ec2Client.config.region();
+      const rdsRegion = await rdsClient.config.region();
+      const elbv2Region = await elbv2Client.config.region();
+      
+      expect(ec2Region).toBe('us-west-2');
+      expect(rdsRegion).toBe('us-west-2');
+      expect(elbv2Region).toBe('us-west-2');
     });
 
     test('should have us-west-2 specific availability zones', async () => {
