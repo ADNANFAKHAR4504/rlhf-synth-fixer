@@ -388,17 +388,6 @@ resource "aws_cloudtrail" "main" {
   }
 }
 
-# Check for existing Config resources
-data "aws_config_configuration_recorder" "existing" {
-  count = 1
-  name  = "default"
-}
-
-data "aws_config_delivery_channel" "existing" {
-  count = 1
-  name  = "default"
-}
-
 # AWS Config S3 Bucket
 resource "aws_s3_bucket" "config" {
   bucket        = "aws-config-${random_id.config_suffix.hex}"
@@ -561,23 +550,30 @@ resource "aws_iam_role_policy_attachment" "config" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
-# Only create Config resources if they don't exist
+# AWS Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
-  count    = length(data.aws_config_configuration_recorder.existing) == 0 ? 1 : 0
-  name     = "main-recorder"
+  name     = "terraform-config-recorder"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
   }
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
+# AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
-  count          = length(data.aws_config_delivery_channel.existing) == 0 ? 1 : 0
-  name           = "main-delivery-channel"
+  name           = "terraform-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.bucket
   s3_key_prefix  = "config"
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 # Config Rules
@@ -996,10 +992,9 @@ resource "aws_wafv2_web_acl_association" "main" {
   web_acl_arn  = aws_wafv2_web_acl.main.arn
 }
 
-# Enable Config Recorder only if we created it
+# Enable Config Recorder
 resource "aws_config_configuration_recorder_status" "main" {
-  count      = length(aws_config_configuration_recorder.main) > 0 ? 1 : 0
-  name       = aws_config_configuration_recorder.main[0].name
+  name       = aws_config_configuration_recorder.main.name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
 }
