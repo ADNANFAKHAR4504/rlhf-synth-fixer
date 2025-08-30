@@ -28,6 +28,7 @@
       "Type": "String",
       "Description": "Database administrator password",
       "NoEcho": true,
+      "Default": "TempPassword123!",
       "MinLength": "8",
       "MaxLength": "41",
       "AllowedPattern": "[a-zA-Z0-9!@#$%^&*()_+=-]*",
@@ -81,7 +82,14 @@
           "Ref": "ProductionVPC"
         },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-west-2a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -107,7 +115,14 @@
           "Ref": "ProductionVPC"
         },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-west-2b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -132,7 +147,14 @@
           "Ref": "ProductionVPC"
         },
         "CidrBlock": "10.0.3.0/24",
-        "AvailabilityZone": "us-west-2c",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -186,21 +208,7 @@
       "Type": "AWS::EC2::EIP",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "NAT-Gateway-EIP"
-          },
-          {
-            "Key": "Project",
-            "Value": "XYZ"
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          }
-        ]
+        "Domain": "vpc"
       }
     },
 
@@ -463,16 +471,6 @@
               ]
             }
           }
-        ],
-        "Tags": [
-          {
-            "Key": "Project",
-            "Value": "XYZ"
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          }
         ]
       }
     },
@@ -558,21 +556,7 @@
         "InstanceId": {
           "Ref": "WebServerInstance"
         },
-        "Domain": "vpc",
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": "WebServer-EIP"
-          },
-          {
-            "Key": "Project",
-            "Value": "XYZ"
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          }
-        ]
+        "Domain": "vpc"
       }
     },
 
@@ -611,7 +595,7 @@
         "DBInstanceIdentifier": "production-mysql-db",
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
-        "EngineVersion": "8.0",
+        "EngineVersion": "8.0.39",
         "AllocatedStorage": "20",
         "StorageType": "gp2",
         "DBName": "productiondb",
@@ -649,7 +633,8 @@
           }
         ]
       },
-      "DeletionPolicy": "Snapshot"
+      "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot"
     }
   },
 
