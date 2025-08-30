@@ -1,17 +1,19 @@
-# provider.tf
+# secure_infrastructure_setup.tf
 
 terraform {
-  required_version = ">= 1.4.0"
-
+  required_version = ">= 1.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0"
+      version = "~> 5.0"
     }
-  }
-
-  # Partial backend config: values are injected at `terraform init` time
+    # Partial backend config: values are injected at `terraform init` time
   backend "s3" {}
+  }
+}
+
+provider "aws" {
+  region = "us-west-2"
 }
 
 # Data sources
@@ -192,6 +194,41 @@ resource "aws_kms_key" "main" {
         }
         Action   = "kms:*"
         Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail to encrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail"
+          }
+        }
+      },
+      {
+        Sid    = "Allow Config to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -295,6 +332,11 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.cloudtrail.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail"
+          }
+        }
       },
       {
         Sid    = "AWSCloudTrailWrite"
@@ -307,6 +349,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail"
           }
         }
       }
@@ -336,12 +379,28 @@ resource "aws_cloudtrail" "main" {
     }
   }
 
+  depends_on = [
+    aws_s3_bucket_policy.cloudtrail,
+    aws_kms_key.main
+  ]
+
   tags = {
     Name = "main-cloudtrail"
   }
 }
 
-# AWS Config
+# Check for existing Config resources
+data "aws_config_configuration_recorder" "existing" {
+  count = 1
+  name  = "default"
+}
+
+data "aws_config_delivery_channel" "existing" {
+  count = 1
+  name  = "default"
+}
+
+# AWS Config S3 Bucket
 resource "aws_s3_bucket" "config" {
   bucket        = "aws-config-${random_id.config_suffix.hex}"
   force_destroy = true
@@ -428,6 +487,7 @@ resource "aws_s3_bucket_policy" "config" {
   })
 }
 
+# IAM Role for Config
 resource "aws_iam_role" "config" {
   name = "aws-config-role"
 
@@ -449,12 +509,62 @@ resource "aws_iam_role" "config" {
   }
 }
 
-resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+# Custom policy for Config service role
+resource "aws_iam_role_policy" "config_policy" {
+  name = "config-service-policy"
+  role = aws_iam_role.config.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketAcl",
+          "s3:ListBucket"
+        ]
+        Resource = aws_s3_bucket.config.arn
+      },
+      {
+        Effect = "Allow"
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = "s3:GetObject"
+        Resource = "${aws_s3_bucket.config.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "config:Put*",
+          "config:Get*",
+          "config:List*",
+          "config:Describe*",
+          "config:BatchGet*",
+          "config:Select*"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
+# Attach AWS managed policy for Config
+resource "aws_iam_role_policy_attachment" "config" {
+  role       = aws_iam_role.config.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+}
+
+# Only create Config resources if they don't exist
 resource "aws_config_configuration_recorder" "main" {
+  count    = length(data.aws_config_configuration_recorder.existing) == 0 ? 1 : 0
   name     = "main-recorder"
   role_arn = aws_iam_role.config.arn
 
@@ -465,6 +575,7 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count          = length(data.aws_config_delivery_channel.existing) == 0 ? 1 : 0
   name           = "main-delivery-channel"
   s3_bucket_name = aws_s3_bucket.config.bucket
   s3_key_prefix  = "config"
@@ -757,6 +868,11 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy_attachment" "lambda_vpc" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 resource "aws_lambda_function" "example" {
   filename         = "lambda_function.zip"
   function_name    = "example-function"
@@ -881,9 +997,10 @@ resource "aws_wafv2_web_acl_association" "main" {
   web_acl_arn  = aws_wafv2_web_acl.main.arn
 }
 
-# Enable Config Recorder
+# Enable Config Recorder only if we created it
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = length(aws_config_configuration_recorder.main) > 0 ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
 }
