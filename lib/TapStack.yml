@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/aws/aws-cdk/main/packages/%40aws-cdk/cfnspec/spec-source/specification/CloudFormationResource.json
 AWSTemplateFormatVersion: "2010-09-09"
 Description: "Secure and highly available AWS infrastructure with comprehensive monitoring and compliance"
 
@@ -36,11 +37,6 @@ Parameters:
     MaxLength: 41
     AllowedPattern: "[a-zA-Z0-9]*"
     Description: Database admin password
-
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI
 
 Resources:
   # VPC and Network Configuration
@@ -272,6 +268,7 @@ Resources:
   LoggingBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -291,6 +288,7 @@ Resources:
   RDSBackupBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -320,7 +318,6 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      ThresholdMetricId: e1
       ComparisonOperator: GreaterThanThreshold
       Threshold: 75
       AlarmActions:
@@ -343,7 +340,7 @@ Resources:
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
-        IncludeGlobalResources: true
+        IncludeGlobalResourceTypes: true
 
   ConfigRole:
     Type: AWS::IAM::Role
