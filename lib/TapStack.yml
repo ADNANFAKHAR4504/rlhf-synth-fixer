@@ -334,36 +334,100 @@ Resources:
       TopicName: !Sub ${Environment}-infrastructure-alarms
 
   # AWS Config
-  ConfigRecorderExists:
-    Type: Custom::ConfigRecorderExists
+  ConfigRecorderManager:
+    Type: Custom::ConfigRecorderManager
     Properties:
-      ServiceToken: !GetAtt CheckConfigRecorderFunction.Arn
-      Region: !Ref "AWS::Region"
+      ServiceToken:
+        Fn::GetAtt: [ConfigManagerFunction, Arn]
+      Region:
+        Ref: "AWS::Region"
 
-  CheckConfigRecorderFunction:
+  ConfigManagerFunction:
     Type: AWS::Lambda::Function
     Properties:
       Runtime: python3.9
       Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role:
+        Fn::GetAtt: [ConfigManagerRole, Arn]
       Code:
         ZipFile: |
           import boto3
           import cfnresponse
-          def handler(event, context):
-            if event['RequestType'] == 'Delete':
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
-              return
-            try:
-              config = boto3.client('config')
-              recorders = config.describe_configuration_recorders()
-              exists = len(recorders['ConfigurationRecorders']) > 0
-              cfnresponse.send(event, context, cfnresponse.SUCCESS, 
-                {'Exists': exists}, 'ConfigRecorderExists')
-            except Exception as e:
-              cfnresponse.send(event, context, cfnresponse.FAILED, {})
 
-  LambdaExecutionRole:
+          def create_config_role(iam):
+              try:
+                  role_name = 'AWSConfigRole'
+                  assume_role_policy = {
+                      "Version": "2012-10-17",
+                      "Statement": [{
+                          "Effect": "Allow",
+                          "Principal": {
+                              "Service": "config.amazonaws.com"
+                          },
+                          "Action": "sts:AssumeRole"
+                      }]
+                  }
+                  
+                  role = iam.create_role(
+                      RoleName=role_name,
+                      AssumeRolePolicyDocument=json.dumps(assume_role_policy)
+                  )
+                  
+                  iam.attach_role_policy(
+                      RoleName=role_name,
+                      PolicyArn='arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+                  )
+                  
+                  return role.get('Role', {}).get('Arn')
+              except iam.exceptions.EntityAlreadyExistsException:
+                  return f'arn:aws:iam::{iam.get_caller_identity()["Account"]}:role/{role_name}'
+              except Exception as e:
+                  print(f"Error creating role: {str(e)}")
+                  raise
+
+          def handler(event, context):
+              config = boto3.client('config')
+              iam = boto3.client('iam')
+              
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      recorders = config.describe_configuration_recorders()
+                      
+                      if not recorders['ConfigurationRecorders']:
+                          # Create Config Role if it doesn't exist
+                          role_arn = create_config_role(iam)
+                          
+                          # Create Config Recorder
+                          config.put_configuration_recorder(
+                              ConfigurationRecorder={
+                                  'name': 'default',
+                                  'roleARN': role_arn,
+                                  'recordingGroup': {
+                                      'allSupported': True,
+                                      'includeGlobalResources': True
+                                  }
+                              }
+                          )
+                          
+                          # Start recording
+                          config.start_configuration_recorder(
+                              ConfigurationRecorderName='default'
+                          )
+                          
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                          {'Message': 'Config Recorder setup complete'})
+                  
+                  elif event['RequestType'] == 'Delete':
+                      # We don't delete the Config Recorder on stack deletion
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                          {'Message': 'No action needed on delete'})
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, 
+                      {'Error': str(e)})
+
+  ConfigManagerRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -376,42 +440,21 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: ConfigAccess
+        - PolicyName: ConfigManager
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - config:DescribeConfigurationRecorders
+                  - config:PutConfigurationRecorder
+                  - config:StartConfigurationRecorder
+                  - iam:CreateRole
+                  - iam:GetRole
+                  - iam:AttachRolePolicy
+                  - iam:ListRoles
+                  - iam:GetCallerIdentity
                 Resource: "*"
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Condition: CreateConfigRecorder
-    Properties:
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Condition: CreateConfigRecorder
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
-
-Conditions:
-  CreateConfigRecorder:
-    Fn::Not:
-      - Fn::GetAtt: ["ConfigRecorderExists", "Exists"]
 
 Outputs:
   VPCId:
