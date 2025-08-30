@@ -334,7 +334,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName:
-        Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
+        Fn::Sub: ${Environment}-infrastructure-alarms
       TopicName:
         Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
 
