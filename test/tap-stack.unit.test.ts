@@ -35,8 +35,8 @@ describe('TapStack Infrastructure Tests', () => {
         construct: (data) => ({ 'Fn::Sub': data })
       }),
       new yaml.Type('!GetAtt', {
-        kind: 'sequence',
-        construct: (data) => ({ 'Fn::GetAtt': data })
+        kind: 'scalar',
+        construct: (data) => ({ 'Fn::GetAtt': data.split('.') })
       }),
       new yaml.Type('!Select', {
         kind: 'sequence',
@@ -45,6 +45,18 @@ describe('TapStack Infrastructure Tests', () => {
       new yaml.Type('!GetAZs', {
         kind: 'scalar',
         construct: (data) => ({ 'Fn::GetAZs': data })
+      }),
+      new yaml.Type('!Join', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Join': data })
+      }),
+      new yaml.Type('!Not', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Not': data })
+      }),
+      new yaml.Type('!Equals', {
+        kind: 'sequence',
+        construct: (data) => ({ 'Fn::Equals': data })
       })
     ];
 

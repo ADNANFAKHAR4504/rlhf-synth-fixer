@@ -31,10 +31,13 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub ${Environment}/database/credentials
-      Description: "Database credentials"
+      Name:
+        Fn::Sub: ${AWS::StackName}-${Environment}-database-credentials
+      Description:
+        Fn::Sub: "Database credentials for ${AWS::StackName} stack"
       GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        SecretStringTemplate:
+          Fn::Sub: '{"username": "${DBUsername}"}'
         GenerateStringKey: "password"
         PasswordLength: 32
         ExcludeCharacters: '"@/\'
