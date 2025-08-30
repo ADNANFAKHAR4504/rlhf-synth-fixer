@@ -1,7 +1,7 @@
 {
   "platform": "cfn",
   "language": "yaml",
-  "complexity": "medium",
+  "complexity": "Hard",
   "turn_type": "single",
   "po_id": "291587",
   "team": "3",
