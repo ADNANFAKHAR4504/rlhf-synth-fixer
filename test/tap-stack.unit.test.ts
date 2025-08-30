@@ -1,7 +1,77 @@
-import { describe, expect, test } from '@jest/globals';
+import { beforeAll, describe, expect, test } from '@jest/globals';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import * as path from 'path';
+
+interface CFResource {
+  Type: string;
+  Properties: Record<string, any>;
+  DeletionPolicy?: string;
+  UpdateReplacePolicy?: string;
+}
+
+interface CFTemplate {
+  AWSTemplateFormatVersion?: string;
+  Description?: string;
+  Parameters: Record<string, any>;
+  Resources: Record<string, CFResource>;
+  Outputs: Record<string, any>;
+}
+
+describe('TapStack Infrastructure Tests', () => {
+  let template: CFTemplate;
+  const templatePath = path.resolve(__dirname, '../lib/TapStack.yml');
+
+  beforeAll(() => {
+    // Read and parse the template with CloudFormation intrinsic functions
+    const templateContent = fs.readFileSync(templatePath, 'utf8')
+      .replace(/!Sub\s+"([^"]+)"/g, '{ "Fn::Sub": "$1" }')
+      .replace(/!Sub\s+([^\n"]+)/g, '{ "Fn::Sub": "$1" }')
+      .replace(/!Ref\s+([^\n]+)/g, '{ "Ref": "$1" }')
+      .replace(/!GetAtt\s+([^\s.]+)\.([^\s]+)/g, '{ "Fn::GetAtt": ["$1", "$2"] }')
+      .replace(/!Select\s+([^\n]+)/g, '{ "Fn::Select": "$1" }')
+      .replace(/!GetAZs\s+([^\n]+)/g, '{ "Fn::GetAZs": "$1" }');
+
+    template = yaml.load(templateContent) as CFTemplate;
+  });
+
+  test('Template has required parameters', () => {
+    const params = template.Parameters;
+    expect(params).toBeDefined();
+    expect(params).toHaveProperty('Environment');
+    expect(params).toHaveProperty('APIGatewayName');
+    expect(params).toHaveProperty('StageName');
+  });
+
+  test('Template has required resources', () => {
+    const resources = template.Resources;
+    expect(resources).toBeDefined();
+    expect(resources).toHaveProperty('TapApiGateway');
+    expect(resources).toHaveProperty('TapApiGatewayStage');
+    expect(resources).toHaveProperty('TapApiGatewayDeployment');
+  });
+
+  test('API Gateway resource is configured correctly', () => {
+    const api = template.Resources.TapApiGateway;
+    expect(api.Type).toBe('AWS::ApiGateway::RestApi');
+    expect(api.Properties).toHaveProperty('Name');
+    expect(api.Properties).toHaveProperty('EndpointConfiguration');
+  });
+
+  test('API Gateway stage is configured correctly', () => {
+    const stage = template.Resources.TapApiGatewayStage;
+    expect(stage.Type).toBe('AWS::ApiGateway::Stage');
+    expect(stage.Properties).toHaveProperty('StageName');
+    expect(stage.Properties).toHaveProperty('RestApiId');
+    expect(stage.Properties).toHaveProperty('DeploymentId');
+  });
+
+  test('API Gateway deployment is configured correctly', () => {
+    const deployment = template.Resources.TapApiGatewayDeployment;
+    expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
+    expect(deployment.Properties).toHaveProperty('RestApiId');
+  });
+});
 
 interface CFResource {
   Type: string;
