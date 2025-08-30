@@ -149,7 +149,42 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     echo "✅ IAM role deleted successfully"
   fi
   
-  echo "Step 5: Clean up Launch Templates"
+  echo "Step 5: Clean up Auto Scaling Groups"
+  WEB_ASG_NAME="web-asg-us-east-1-${ENVIRONMENT_SUFFIX}"
+  APP_ASG_NAME="app-asg-us-east-1-${ENVIRONMENT_SUFFIX}"
+  
+  echo "Deleting Auto Scaling Group: $WEB_ASG_NAME"
+  aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$WEB_ASG_NAME" --force-delete || echo "Web ASG not found or already deleted"
+  
+  echo "Deleting Auto Scaling Group: $APP_ASG_NAME"
+  aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$APP_ASG_NAME" --force-delete || echo "App ASG not found or already deleted"
+  
+  echo "Waiting for Auto Scaling Groups to delete..."
+  for i in {1..24}; do
+    WEB_ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$WEB_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+    APP_ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$APP_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+    
+    if [ -z "$WEB_ASG_EXISTS" ] && [ -z "$APP_ASG_EXISTS" ]; then
+      echo "✅ Auto Scaling Groups deleted successfully"
+      break
+    else
+      echo "ASGs still exist, waiting... ($i/24) - 5s intervals"
+      sleep 5
+    fi
+  done
+  
+  echo "Step 6: Clean up Target Groups"
+  WEB_TG_NAME="web-tg-us-east-1-${ENVIRONMENT_SUFFIX}"
+  
+  WEB_TG_ARN=$(aws elbv2 describe-target-groups --names "$WEB_TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
+  if [ "$WEB_TG_ARN" != "None" ] && [ "$WEB_TG_ARN" != "null" ]; then
+    echo "Deleting Target Group: $WEB_TG_NAME"
+    aws elbv2 delete-target-group --target-group-arn "$WEB_TG_ARN" || echo "Failed to delete target group"
+  else
+    echo "Target group not found or already deleted"
+  fi
+  
+  echo "Step 7: Clean up Launch Templates"
   WEB_LT_NAME="web-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
   APP_LT_NAME="app-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
   
@@ -159,7 +194,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   echo "Deleting Launch Template: $APP_LT_NAME"
   aws ec2 delete-launch-template --launch-template-name "$APP_LT_NAME" || echo "App launch template not found or already deleted"
   
-  echo "Step 6: Clean up Load Balancer"
+  echo "Step 8: Clean up Load Balancer"
   ALB_ARN=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
   if [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
     echo "Deleting Load Balancer: $ALB_NAME"
@@ -168,7 +203,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     echo "Load balancer not found or already deleted"
   fi
   
-  echo "Step 7: Final verification of critical resources"
+  echo "Step 9: Final verification of critical resources"
   CRITICAL_ERRORS=0
   
   # Check if any critical resources still exist
@@ -194,6 +229,26 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   
   if aws ec2 describe-launch-templates --launch-template-names "$APP_LT_NAME" >/dev/null 2>&1; then
     echo "❌ CRITICAL: App Launch template still exists: $APP_LT_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check Auto Scaling Groups
+  WEB_ASG_CHECK=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$WEB_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+  if [ -n "$WEB_ASG_CHECK" ]; then
+    echo "❌ CRITICAL: Web Auto Scaling Group still exists: $WEB_ASG_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  APP_ASG_CHECK=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$APP_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+  if [ -n "$APP_ASG_CHECK" ]; then
+    echo "❌ CRITICAL: App Auto Scaling Group still exists: $APP_ASG_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check Target Group
+  TG_CHECK=$(aws elbv2 describe-target-groups --names "$WEB_TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
+  if [ "$TG_CHECK" != "None" ] && [ "$TG_CHECK" != "null" ]; then
+    echo "❌ CRITICAL: Target Group still exists: $WEB_TG_NAME"
     CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
   fi
   

@@ -403,18 +403,16 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		Tags:        tags,
 	})
 
-	// CloudWatch Log Groups
+	// CloudWatch Log Groups (without KMS encryption for now)
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("web-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
 		Name:            jsii.String(fmt.Sprintf("/migration/web/%s-%s", region, envSuffix)),
 		RetentionInDays: jsii.Number(30),
-		KmsKeyId:        kmsKey.Arn(),
 		Tags:            tags,
 	})
 
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("app-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
 		Name:            jsii.String(fmt.Sprintf("/migration/app/%s-%s", region, envSuffix)),
 		RetentionInDays: jsii.Number(30),
-		KmsKeyId:        kmsKey.Arn(),
 		Tags:            tags,
 	})
 
