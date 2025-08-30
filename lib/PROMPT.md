@@ -1,23 +1,35 @@
 ---
+## Task
 
-**Task:**  
-Generate  the requirements and architectural constraints into Terraform code using HCL syntax.
+Generate the requirements and architectural constraints into Terraform code using HCL syntax.
 
-**Requirements:**  
-- Do **not** change, omit, or reinterpret any of the requirements listed below.  
+---
+
+## Requirements
+
+- **Do not** change, omit, or reinterpret any of the requirements listed below.
 - Produce Terraform HCL code that implements all security and compliance controls specified.
 - Output must be a complete, valid Terraform configuration that is ready to be deployed.
 - The produced Terraform code should be suitable for a multi-region AWS environment (us-west-2 region, VPC spanning two AZs, subnets as proposed).
 - The final file should be named `secure_infrastructure_setup.tf`.
 
-**Background:**  
+---
+
+## Background
+
 Security is a critical aspect of any online service. AWS offers several tools and services to ensure compliance and security of infrastructure, and automating these provides a scalable and manageable solution.
 
-**Environment:**  
+---
+
+## Environment
+
 Design and implement security configurations for a multi-region AWS setup using Terraform HCL, following AWS best practices for security and compliance.  
 The target environment includes a VPC spanning two availability zones in the us-west-2 region with necessary subnets in each zone.
 
-**Implementation Constraints:**  
+---
+
+## Implementation Constraints
+
 Your Terraform configuration **must**:
 
 1. Encrypt all Amazon S3 buckets using AWS or customer-managed keys.
@@ -35,7 +47,8 @@ Your Terraform configuration **must**:
 
 ---
 
-**Instructions for Output:**  
+## Instructions for Output
+
 - **Produce** only the Terraform HCL code.
 - Ensure all services and resources comply with the listed constraints.
 - The output file must be named `secure_infrastructure_setup.tf`.
@@ -43,7 +56,6 @@ Your Terraform configuration **must**:
 
 ---
 
-**Expected Output:**  
-A valid Terraform HCL configuration, named `secure_infrastructure_setup.tf`, that implements all the requirements above in the us-west-2 region. The configuration should be ready for deployment and must pass all security and compliance checks.
+## Expected Output
 
----
+A valid Terraform HCL configuration, named `secure_infrastructure_setup.tf`, that implements all the requirements above in the us-west-2 region. The configuration should be ready for deployment and must pass all security and compliance checks.
