@@ -409,47 +409,62 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
 
 Conditions:
-  CreateConfigRecorder: !Not [!GetAtt ConfigRecorderExists.Exists]
+  CreateConfigRecorder:
+    Fn::Not:
+      - Fn::GetAtt: ["ConfigRecorderExists", "Exists"]
 
 Outputs:
   VPCId:
     Description: VPC ID
-    Value: !Ref VPC
+    Value:
+      Ref: VPC
     Export:
-      Name: !Sub ${AWS::StackName}-VPCId
+      Name:
+        Fn::Sub: ${AWS::StackName}-VPCId
 
   PublicSubnet1Id:
     Description: Public Subnet 1 ID
-    Value: !Ref PublicSubnet1
+    Value:
+      Ref: PublicSubnet1
     Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnet1Id
+      Name:
+        Fn::Sub: ${AWS::StackName}-PublicSubnet1Id
 
   PublicSubnet2Id:
     Description: Public Subnet 2 ID
-    Value: !Ref PublicSubnet2
+    Value:
+      Ref: PublicSubnet2
     Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnet2Id
+      Name:
+        Fn::Sub: ${AWS::StackName}-PublicSubnet2Id
 
   PrivateSubnet1Id:
     Description: Private Subnet 1 ID
-    Value: !Ref PrivateSubnet1
+    Value:
+      Ref: PrivateSubnet1
     Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnet1Id
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrivateSubnet1Id
 
   PrivateSubnet2Id:
     Description: Private Subnet 2 ID
-    Value: !Ref PrivateSubnet2
+    Value:
+      Ref: PrivateSubnet2
     Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnet2Id
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrivateSubnet2Id
 
   RDSEndpoint:
     Description: RDS Instance Endpoint
-    Value: !GetAtt RDSInstance.Endpoint.Address
+    Value:
+      Fn::GetAtt: ["RDSInstance", "Endpoint.Address"]
 
   LoggingBucketName:
     Description: Name of the Logging Bucket
-    Value: !Ref LoggingBucket
+    Value:
+      Ref: LoggingBucket
 
   RDSBackupBucketName:
     Description: Name of the RDS Backup Bucket
-    Value: !Ref RDSBackupBucket
+    Value:
+      Ref: RDSBackupBucket
