@@ -453,7 +453,7 @@ Resources:
                   - iam:GetRole
                   - iam:AttachRolePolicy
                   - iam:ListRoles
-                  - iam:GetCallerIdentity
+                  - sts:GetCallerIdentity
                 Resource: "*"
 
 Outputs:
