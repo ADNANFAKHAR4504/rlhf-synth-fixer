@@ -56,7 +56,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 				"kms:GrantIsForAWSResource": jsii.String("true"),
 			},
 		},
-	}))
+	}), nil)
 
 	kmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
 		Effect: awsiam.Effect_ALLOW,
@@ -74,7 +74,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		Resources: &[]*string{
 			jsii.String("*"),
 		},
-	}))
+	}), nil)
 
 	// Add policy for AutoScaling service linked role
 	kmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
@@ -92,7 +92,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		Resources: &[]*string{
 			jsii.String("*"),
 		},
-	}))
+	}), nil)
 
 	// Create S3 bucket for logs with strict security
 	logsBucket := awss3.NewBucket(stack, jsii.String("TapLogsBucket"), &awss3.BucketProps{
