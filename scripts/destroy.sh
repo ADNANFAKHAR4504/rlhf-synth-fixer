@@ -159,8 +159,10 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   echo "Deleting Auto Scaling Group: $APP_ASG_NAME"
   aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$APP_ASG_NAME" --force-delete || echo "App ASG not found or already deleted"
   
-  echo "Waiting for Auto Scaling Groups to delete..."
-  for i in {1..24}; do
+  echo "Waiting for Auto Scaling Groups to delete (up to 10 minutes)..."
+  ASG_DELETE_TIMEOUT=120  # 10 minutes at 5-second intervals
+  
+  for i in $(seq 1 $ASG_DELETE_TIMEOUT); do
     WEB_ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$WEB_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
     APP_ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$APP_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
     
@@ -168,10 +170,22 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       echo "✅ Auto Scaling Groups deleted successfully"
       break
     else
-      echo "ASGs still exist, waiting... ($i/24) - 5s intervals"
+      echo "ASGs still exist, waiting... ($i/$ASG_DELETE_TIMEOUT) - 5s intervals"
       sleep 5
     fi
   done
+  
+  # CRITICAL: Fail if ASGs still exist after timeout
+  WEB_ASG_FINAL=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$WEB_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+  APP_ASG_FINAL=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$APP_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+  
+  if [ -n "$WEB_ASG_FINAL" ] || [ -n "$APP_ASG_FINAL" ]; then
+    echo "❌ CRITICAL: Auto Scaling Groups still exist after 10 minutes!"
+    [ -n "$WEB_ASG_FINAL" ] && echo "❌ Web ASG still exists: $WEB_ASG_NAME"
+    [ -n "$APP_ASG_FINAL" ] && echo "❌ App ASG still exists: $APP_ASG_NAME"
+    echo "❌ Cannot proceed with deployment. Manual cleanup required."
+    exit 1
+  fi
   
   echo "Step 6: Clean up Target Groups"
   WEB_TG_NAME="web-tg-us-east-1-${ENVIRONMENT_SUFFIX}"
