@@ -63,19 +63,51 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
   
   echo "🧹 Manual cleanup of orphaned AWS resources..."
-  # Clean up specific resources that might be orphaned
+  # Clean up specific resources that might be orphaned in dependency order
+  DB_INSTANCE_NAME="migration-primary-db-us-east-1-${ENVIRONMENT_SUFFIX}"
   DB_SUBNET_GROUP_NAME="migration-db-subnet-group-us-east-1-${ENVIRONMENT_SUFFIX}"
   IAM_ROLE_NAME="ec2-migration-role-us-east-1-${ENVIRONMENT_SUFFIX}"
+  IAM_PROFILE_NAME="ec2-migration-profile-us-east-1-${ENVIRONMENT_SUFFIX}"
   ALB_NAME="migration-alb-us-east-1-${ENVIRONMENT_SUFFIX}"
   
-  echo "Attempting to delete DB subnet group: $DB_SUBNET_GROUP_NAME"
+  echo "Step 1: Delete RDS Database Instance: $DB_INSTANCE_NAME"
+  aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_NAME" --skip-final-snapshot || echo "DB instance not found or already deleted"
+  
+  echo "Step 2: Wait for RDS instance deletion (checking for 60 seconds)..."
+  for i in {1..12}; do
+    if aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_NAME" >/dev/null 2>&1; then
+      echo "DB instance still exists, waiting... ($i/12)"
+      sleep 5
+    else
+      echo "DB instance deleted"
+      break
+    fi
+  done
+  
+  echo "Step 3: Delete DB subnet group: $DB_SUBNET_GROUP_NAME"
   aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" || echo "DB subnet group not found or already deleted"
   
-  echo "Attempting to delete IAM role: $IAM_ROLE_NAME"
-  # Detach policies first
+  echo "Step 4: Clean up IAM resources"
+  # Remove role from instance profile first
+  aws iam remove-role-from-instance-profile --instance-profile-name "$IAM_PROFILE_NAME" --role-name "$IAM_ROLE_NAME" || echo "Role not in instance profile or not found"
+  
+  # Delete instance profile
+  aws iam delete-instance-profile --instance-profile-name "$IAM_PROFILE_NAME" || echo "Instance profile not found or already deleted"
+  
+  # Detach policies from role
   aws iam detach-role-policy --role-name "$IAM_ROLE_NAME" --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" || echo "Policy not attached or role not found"
+  
   # Delete role
   aws iam delete-role --role-name "$IAM_ROLE_NAME" || echo "IAM role not found or already deleted"
+  
+  echo "Step 5: Clean up Load Balancer"
+  ALB_ARN=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
+  if [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
+    echo "Deleting Load Balancer: $ALB_NAME"
+    aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || echo "Failed to delete load balancer"
+  else
+    echo "Load balancer not found or already deleted"
+  fi
   
   echo "Manual cleanup completed"
 
