@@ -135,10 +135,10 @@ describe('Terraform Multi-Region High Availability Infrastructure Integration Te
 
       // Validate against actual deployment outputs
       if (deploymentOutputs.primary_asg_name) {
-        expect(deploymentOutputs.primary_asg_name).toMatch(/production-asg-primary/);
+        expect(deploymentOutputs.primary_asg_name).toMatch(/^production-asg-primary-[a-f0-9]+$/);
       }
       if (deploymentOutputs.secondary_asg_name) {
-        expect(deploymentOutputs.secondary_asg_name).toMatch(/production-asg-secondary/);
+        expect(deploymentOutputs.secondary_asg_name).toMatch(/^production-asg-secondary-[a-f0-9]+$/);
       }
     });
 
