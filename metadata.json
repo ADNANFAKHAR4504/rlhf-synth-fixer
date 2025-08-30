@@ -1,0 +1,13 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "TAP-291989",
+  "startedAt": "2025-01-27T10:00:00.000Z",
+  "team": "infrastructure",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
+}
