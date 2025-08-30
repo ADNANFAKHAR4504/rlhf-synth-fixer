@@ -261,7 +261,7 @@ func main() {
 		})
 
 		// RDS Security Group
-		rdsSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-rds-sg", projectName), &ec2.SecurityGroupArgs{
+		dbSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-rds-sg", projectName), &ec2.SecurityGroupArgs{
 			Name:        pulumi.String(fmt.Sprintf("%s-rds-sg", projectName)),
 			Description: pulumi.String("Security group for RDS instance"),
 			VpcId:       vpc.ID(),
@@ -299,7 +299,7 @@ func main() {
 		}
 
 		// 4. RDS Subnet Group
-		rdsSubnetGroup, err := rds.NewSubnetGroup(ctx, fmt.Sprintf("%s-rds-subnet-group", projectName), &rds.SubnetGroupArgs{
+		dbSubnetGroup, err := rds.NewSubnetGroup(ctx, fmt.Sprintf("%s-rds-subnet-group", projectName), &rds.SubnetGroupArgs{
 			Name:      pulumi.String(fmt.Sprintf("%s-rds-subnet-group", projectName)),
 			SubnetIds: pulumi.StringArray{privateSubnets[0].ID(), privateSubnets[1].ID()},
 			Tags:      commonTags,
@@ -333,14 +333,14 @@ func main() {
 			AllocatedStorage:        pulumi.Int(20),
 			StorageType:             pulumi.String("gp2"),
 			Engine:                  pulumi.String("mysql"),
-			EngineVersion:           pulumi.String("8.0.35"),
+			EngineVersion:           pulumi.String("8.0.32"),
 			InstanceClass:           pulumi.String("db.t3.micro"),
 			DbName:                  pulumi.String("webappdb"),
 			Username:                pulumi.String("dbadmin"),
 			Password:                cfg.GetSecret("dbPassword"),
 			ParameterGroupName:      rdsParameterGroup.Name,
-			DbSubnetGroupName:       rdsSubnetGroup.Name,
-			VpcSecurityGroupIds:     pulumi.StringArray{rdsSg.ID()},
+			DbSubnetGroupName:       dbSubnetGroup.Name,
+			VpcSecurityGroupIds:     pulumi.StringArray{dbSg.ID()},
 			StorageEncrypted:        pulumi.Bool(true),
 			KmsKeyId:                kmsKey.Arn,
 			BackupRetentionPeriod:   pulumi.Int(7),
@@ -364,6 +364,33 @@ func main() {
 			return err
 		}
 
+		// S3 Bucket Encryption
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("%s-alb-logs-encryption", projectName), &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: albLogsBucket.Bucket,
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm: pulumi.String("AES256"),
+					},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// S3 Bucket Public Access Block
+		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("%s-alb-logs-public-access-block", projectName), &s3.BucketPublicAccessBlockArgs{
+			Bucket:                albLogsBucket.Bucket,
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
+		})
+		if err != nil {
+			return err
+		}
+
 		// S3 Bucket Policy for ALB Logs
 		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("%s-alb-logs-policy", projectName), &s3.BucketPolicyArgs{
 			Bucket: albLogsBucket.Bucket,
@@ -372,12 +399,27 @@ func main() {
 					"Version": "2012-10-17",
 					"Statement": []map[string]interface{}{
 						{
+							"Sid":    "AWSLogDeliveryWrite",
 							"Effect": "Allow",
 							"Principal": map[string]interface{}{
-								"AWS": "arn:aws:iam::127311923021:root", // AWS ELB account for us-west-2
+								"Service": "delivery.logs.amazonaws.com",
 							},
-							"Action": "s3:PutObject",
+							"Action":   "s3:PutObject",
 							"Resource": fmt.Sprintf("arn:aws:s3:::%s/*", bucketName),
+							"Condition": map[string]interface{}{
+								"StringEquals": map[string]interface{}{
+									"s3:x-amz-acl": "bucket-owner-full-control",
+								},
+							},
+						},
+						{
+							"Sid":    "AWSLogDeliveryAclCheck",
+							"Effect": "Allow",
+							"Principal": map[string]interface{}{
+								"Service": "delivery.logs.amazonaws.com",
+							},
+							"Action":   "s3:GetBucketAcl",
+							"Resource": fmt.Sprintf("arn:aws:s3:::%s", bucketName),
 						},
 					},
 				}
@@ -458,7 +500,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 echo "OK" > /var/www/html/health
 `
 		userDataEncoded := base64.StdEncoding.EncodeToString([]byte(userData))
-		
+
 		_, err = ec2.NewLaunchTemplate(ctx, fmt.Sprintf("%s-lt", projectName), &ec2.LaunchTemplateArgs{
 			NamePrefix:          pulumi.String(fmt.Sprintf("%s-lt", projectName)),
 			ImageId:             pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
@@ -565,6 +607,33 @@ echo "OK" > /var/www/html/health
 		cloudTrailBucket, err := s3.NewBucket(ctx, fmt.Sprintf("%s-cloudtrail", projectName), &s3.BucketArgs{
 			Bucket: pulumi.String(fmt.Sprintf("%s-cloudtrail-%s", projectName, environment)),
 			Tags:   commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		// CloudTrail S3 Bucket Encryption
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("%s-cloudtrail-encryption", projectName), &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: cloudTrailBucket.Bucket,
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm: pulumi.String("AES256"),
+					},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// CloudTrail S3 Bucket Public Access Block
+		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("%s-cloudtrail-public-access-block", projectName), &s3.BucketPublicAccessBlockArgs{
+			Bucket:                cloudTrailBucket.Bucket,
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
 		})
 		if err != nil {
 			return err
@@ -734,7 +803,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
 echo "OK" > /var/www/html/health
 `
 		userDataWithProfileEncoded := base64.StdEncoding.EncodeToString([]byte(userDataWithProfile))
-		
+
 		_, err = ec2.NewLaunchTemplate(ctx, fmt.Sprintf("%s-lt-with-profile", projectName), &ec2.LaunchTemplateArgs{
 			NamePrefix:          pulumi.String(fmt.Sprintf("%s-lt-with-profile", projectName)),
 			ImageId:             pulumi.String("ami-0735c191cf914754d"),
