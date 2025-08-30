@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from '@jest/globals';
 import * as AWS from 'aws-sdk';
-import * as dotenv from 'dotenv';
 
+// Environment variables are set in GitHub Actions workflow
 // Type augmentations for better type safety
 declare global {
   namespace NodeJS {
@@ -36,9 +36,7 @@ const assertDefined = <T>(value: T | undefined, message?: string): T => {
   return value;
 };
 
-// Load environment variables
-dotenv.config();
-
+// Verify required environment variables
 const requiredEnvVars = [
   'AWS_REGION',
   'ENVIRONMENT',
