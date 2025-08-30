@@ -266,7 +266,7 @@ describe('TapStack Infrastructure Tests', () => {
     test('should have SNS topic for alarms', () => {
       const topic = template.Resources.AlarmTopic;
       expect(topic.Type).toBe('AWS::SNS::Topic');
-      expect(topic.Properties.DisplayName['Fn::Sub']).toBe('${Environment}-infrastructure-alarms');
+      expect(topic.Properties.DisplayName['Fn::Sub']).toBe('${AWS::StackName}-${Environment}-infrastructure-alarms');
     });
 
     test('should have properly configured AWS Config setup', () => {
