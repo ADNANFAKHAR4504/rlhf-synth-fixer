@@ -207,10 +207,10 @@ func TestLiveVPCCreation(t *testing.T) {
 		// Parse subnet IDs from the outputs - handle the format properly
 		publicSubnetIdsStr := strings.Trim(outputs.PublicSubnetIds, "[]")
 		privateSubnetIdsStr := strings.Trim(outputs.PrivateSubnetIds, "[]")
-		
+
 		var publicSubnetIds []string
 		var privateSubnetIds []string
-		
+
 		if publicSubnetIdsStr != "" {
 			publicSubnetIds = strings.Split(publicSubnetIdsStr, ",")
 			// Clean up each subnet ID
@@ -218,7 +218,7 @@ func TestLiveVPCCreation(t *testing.T) {
 				publicSubnetIds[i] = strings.TrimSpace(id)
 			}
 		}
-		
+
 		if privateSubnetIdsStr != "" {
 			privateSubnetIds = strings.Split(privateSubnetIdsStr, ",")
 			// Clean up each subnet ID
@@ -228,7 +228,7 @@ func TestLiveVPCCreation(t *testing.T) {
 		}
 
 		allSubnetIDs := append(publicSubnetIds, privateSubnetIds...)
-		
+
 		if len(allSubnetIDs) == 0 {
 			t.Skip("No subnet IDs found in outputs")
 		}
@@ -302,7 +302,7 @@ func TestLiveLoadBalancer(t *testing.T) {
 		// Find ALB by DNS name
 		result, err := albClient.DescribeLoadBalancers(context.TODO(), &elasticloadbalancingv2.DescribeLoadBalancersInput{})
 		require.NoError(t, err)
-		
+
 		// Find the ALB with matching DNS name
 		var targetALB *types.LoadBalancer
 		for _, lb := range result.LoadBalancers {
