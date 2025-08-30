@@ -342,7 +342,7 @@ func main() {
 		if dbPassword == "" {
 			dbPassword = "DevPassword123!" // Default password for development
 		}
-		
+
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("%s-rds", projectName), &rds.InstanceArgs{
 			AllocatedStorage:        pulumi.Int(20),
 			StorageType:             pulumi.String("gp3"),
