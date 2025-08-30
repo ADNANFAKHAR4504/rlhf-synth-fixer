@@ -333,8 +333,10 @@ Resources:
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
-      DisplayName: !Sub ${Environment}-infrastructure-alarms
-      TopicName: !Sub ${Environment}-infrastructure-alarms
+      DisplayName:
+        Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
+      TopicName:
+        Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
 
   # AWS Config
   ConfigRecorderManager:
@@ -504,13 +506,22 @@ Outputs:
     Description: RDS Instance Endpoint
     Value:
       Fn::GetAtt: ["RDSInstance", "Endpoint.Address"]
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-RDSEndpoint
 
   LoggingBucketName:
     Description: Name of the Logging Bucket
     Value:
       Ref: LoggingBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-LoggingBucketName
 
   RDSBackupBucketName:
     Description: Name of the RDS Backup Bucket
     Value:
       Ref: RDSBackupBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-RDSBackupBucketName
