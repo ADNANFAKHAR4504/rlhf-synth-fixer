@@ -37,6 +37,63 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		EnableKeyRotation: jsii.Bool(true),
 	})
 
+	// Add KMS key policy for AutoScaling and EC2 services
+	kmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("autoscaling.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("kms:CreateGrant"),
+			jsii.String("kms:ListGrants"),
+			jsii.String("kms:RevokeGrant"),
+		},
+		Resources: &[]*string{
+			jsii.String("*"),
+		},
+		Conditions: &map[string]interface{}{
+			"Bool": map[string]interface{}{
+				"kms:GrantIsForAWSResource": jsii.String("true"),
+			},
+		},
+	}))
+
+	kmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewServicePrincipal(jsii.String("ec2.amazonaws.com"), nil),
+		},
+		Actions: &[]*string{
+			jsii.String("kms:Encrypt"),
+			jsii.String("kms:Decrypt"),
+			jsii.String("kms:ReEncrypt*"),
+			jsii.String("kms:GenerateDataKey*"),
+			jsii.String("kms:DescribeKey"),
+			jsii.String("kms:CreateGrant"),
+		},
+		Resources: &[]*string{
+			jsii.String("*"),
+		},
+	}))
+
+	// Add policy for AutoScaling service linked role
+	kmsKey.AddToResourcePolicy(awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+		Effect: awsiam.Effect_ALLOW,
+		Principals: &[]awsiam.IPrincipal{
+			awsiam.NewArnPrincipal(jsii.String("arn:aws:iam::" + *stack.Account() + ":role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling")),
+		},
+		Actions: &[]*string{
+			jsii.String("kms:CreateGrant"),
+			jsii.String("kms:Decrypt"),
+			jsii.String("kms:DescribeKey"),
+			jsii.String("kms:GenerateDataKeyWithoutPlainText"),
+			jsii.String("kms:ReEncrypt*"),
+		},
+		Resources: &[]*string{
+			jsii.String("*"),
+		},
+	}))
+
 	// Create S3 bucket for logs with strict security
 	logsBucket := awss3.NewBucket(stack, jsii.String("TapLogsBucket"), &awss3.BucketProps{
 		BucketName:        jsii.String("tap-production-logs-" + *stack.Account() + "-" + *stack.Region()),
