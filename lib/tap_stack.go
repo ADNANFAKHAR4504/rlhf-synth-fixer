@@ -411,27 +411,8 @@ func main() {
 			return err
 		}
 
-		// S3 Bucket ACL for ALB Logs
-		albLogsBucketAcl, err := s3.NewBucketAclV2(ctx, fmt.Sprintf("%s-alb-logs-acl", projectName), &s3.BucketAclV2Args{
-			Bucket: albLogsBucket.Bucket,
-			AccessControlPolicy: &s3.BucketAclV2AccessControlPolicyArgs{
-				Grants: s3.BucketAclV2AccessControlPolicyGrantArray{
-					&s3.BucketAclV2AccessControlPolicyGrantArgs{
-						Grantee: &s3.BucketAclV2AccessControlPolicyGrantGranteeArgs{
-							Type: pulumi.String("CanonicalUser"),
-							Id:   pulumi.String("c4aa1a66c7c8c0320b9aa4e87ff9b2263f2db5fce0c30ddb87c4395bfd1e6a3a"), // AWS Logs Delivery account
-						},
-						Permission: pulumi.String("FULL_CONTROL"),
-					},
-				},
-				Owner: &s3.BucketAclV2AccessControlPolicyOwnerArgs{
-					Id: pulumi.String("c4aa1a66c7c8c0320b9aa4e87ff9b2263f2db5fce0c30ddb87c4395bfd1e6a3a"),
-				},
-			},
-		})
-		if err != nil {
-			return err
-		}
+		// Note: Removed S3 Bucket ACL as it was causing issues
+		// The bucket policy below provides the necessary permissions for ALB logs
 
 		// S3 Bucket Server Access Logging
 		_, err = s3.NewBucketLoggingV2(ctx, fmt.Sprintf("%s-alb-logs-logging", projectName), &s3.BucketLoggingV2Args{
@@ -587,7 +568,7 @@ func main() {
 				Enabled: pulumi.Bool(true),
 			},
 			Tags: commonTags,
-		}, pulumi.DependsOn([]pulumi.Resource{albLogsBucket, albLogsBucketPolicy, albLogsBucketAcl}))
+		}, pulumi.DependsOn([]pulumi.Resource{albLogsBucket, albLogsBucketPolicy}))
 		if err != nil {
 			return err
 		}

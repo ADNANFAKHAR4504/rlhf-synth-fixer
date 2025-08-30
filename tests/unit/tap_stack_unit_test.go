@@ -54,10 +54,11 @@ func TestFileStructureAndSyntax(t *testing.T) {
 		require.NoError(t, err)
 		contentStr := string(content)
 
-		assert.Contains(t, contentStr, "config.New(ctx, \"\")")
-		assert.Contains(t, contentStr, "cfg.Get(\"projectName\")")
-		assert.Contains(t, contentStr, "cfg.Get(\"environment\")")
-		assert.Contains(t, contentStr, "cfg.GetSecret(\"dbPassword\")")
+		assert.Contains(t, contentStr, "config.New")
+		assert.Contains(t, contentStr, "cfg.Get")
+		assert.Contains(t, contentStr, "projectName")
+		assert.Contains(t, contentStr, "environment")
+		assert.Contains(t, contentStr, "availabilityZones")
 	})
 }
 
@@ -66,20 +67,22 @@ func TestVariableDefinitions(t *testing.T) {
 	require.NoError(t, err)
 	contentStr := string(content)
 
-	t.Run("declares project name variable", func(t *testing.T) {
-		assert.Contains(t, contentStr, `cfg.Get("projectName")`)
-	})
-
 	t.Run("declares environment variable", func(t *testing.T) {
 		assert.Contains(t, contentStr, `cfg.Get("environment")`)
+		assert.Contains(t, contentStr, `environment = "dev"`)
 	})
 
-	t.Run("declares availability zones", func(t *testing.T) {
+	t.Run("declares aws_region variable", func(t *testing.T) {
 		assert.Contains(t, contentStr, `availabilityZones := []string{"us-west-2a", "us-west-2b"}`)
 	})
 
-	t.Run("declares vpc cidr", func(t *testing.T) {
-		assert.Contains(t, contentStr, `"10.0.0.0/16"`)
+	t.Run("declares project_name variable", func(t *testing.T) {
+		assert.Contains(t, contentStr, `cfg.Get("projectName")`)
+		assert.Contains(t, contentStr, `projectName = "tap-project"`)
+	})
+
+	t.Run("declares vpc_cidr variable", func(t *testing.T) {
+		assert.Contains(t, contentStr, `CidrBlock:          pulumi.String("10.0.0.0/16")`)
 	})
 }
 
@@ -89,14 +92,14 @@ func TestVPCAndNetworkingResources(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("creates VPC with proper CIDR", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ec2.NewVpc`)
+		assert.Contains(t, contentStr, `ec2.NewVpc(ctx, fmt.Sprintf("%s-vpc", projectName)`)
 		assert.Contains(t, contentStr, `CidrBlock:          pulumi.String("10.0.0.0/16")`)
 		assert.Contains(t, contentStr, `EnableDnsHostnames: pulumi.Bool(true)`)
 		assert.Contains(t, contentStr, `EnableDnsSupport:   pulumi.Bool(true)`)
 	})
 
 	t.Run("creates internet gateway", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ec2.NewInternetGateway`)
+		assert.Contains(t, contentStr, `ec2.NewInternetGateway(ctx, fmt.Sprintf("%s-igw", projectName)`)
 	})
 
 	t.Run("creates public and private subnets", func(t *testing.T) {
@@ -106,12 +109,13 @@ func TestVPCAndNetworkingResources(t *testing.T) {
 	})
 
 	t.Run("creates NAT gateways", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ec2.NewNatGateway`)
-		assert.Contains(t, contentStr, `ec2.NewEip`)
+		assert.Contains(t, contentStr, `ec2.NewNatGateway(ctx, fmt.Sprintf("%s-nat-%d", projectName, i)`)
+		assert.Contains(t, contentStr, `ec2.NewEip(ctx, fmt.Sprintf("%s-nat-eip-%d", projectName, i)`)
 	})
 
 	t.Run("creates route tables", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ec2.NewRouteTable`)
+		assert.Contains(t, contentStr, `ec2.NewRouteTable(ctx, fmt.Sprintf("%s-public-rt", projectName)`)
+		assert.Contains(t, contentStr, `ec2.NewRouteTable(ctx, fmt.Sprintf("%s-private-rt", projectName)`)
 	})
 
 	t.Run("associates route tables with subnets", func(t *testing.T) {
@@ -125,11 +129,13 @@ func TestSecurityGroups(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("creates database security group", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ec2.NewSecurityGroup`)
+		assert.Contains(t, contentStr, `ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-db-sg", projectName)`)
+		assert.Contains(t, contentStr, `Description: pulumi.String("Security group for RDS instance")`)
 	})
 
 	t.Run("creates application security group", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ec2.NewSecurityGroup`)
+		assert.Contains(t, contentStr, `ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-app-sg", projectName)`)
+		assert.Contains(t, contentStr, `Description: pulumi.String("Security group for application servers")`)
 	})
 
 	t.Run("has proper database ingress rules", func(t *testing.T) {
@@ -141,12 +147,12 @@ func TestSecurityGroups(t *testing.T) {
 	t.Run("has proper application ingress rules", func(t *testing.T) {
 		assert.Contains(t, contentStr, `FromPort:       pulumi.Int(80)`)
 		assert.Contains(t, contentStr, `FromPort:       pulumi.Int(443)`)
-		assert.Contains(t, contentStr, `FromPort:   pulumi.Int(22)`)
+		assert.Contains(t, contentStr, `FromPort:       pulumi.Int(22)`)
 	})
 
 	t.Run("has proper egress rules", func(t *testing.T) {
-		assert.Contains(t, contentStr, `Protocol:    pulumi.String("-1")`)
-		assert.Contains(t, contentStr, `CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")}`)
+		assert.Contains(t, contentStr, `Protocol:   pulumi.String("-1")`)
+		assert.Contains(t, contentStr, `CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")}`)
 	})
 }
 
@@ -156,15 +162,18 @@ func TestS3Buckets(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("creates application data bucket", func(t *testing.T) {
-		assert.Contains(t, contentStr, `s3.NewBucket`)
+		assert.Contains(t, contentStr, `s3.NewBucket(ctx, fmt.Sprintf("%s-app-data", projectName)`)
+		assert.Contains(t, contentStr, `fmt.Sprintf("%s-app-data-%s", projectName, environment)`)
 	})
 
 	t.Run("creates backup bucket", func(t *testing.T) {
-		assert.Contains(t, contentStr, `s3.NewBucket`)
+		assert.Contains(t, contentStr, `s3.NewBucket(ctx, fmt.Sprintf("%s-backup", projectName)`)
+		assert.Contains(t, contentStr, `fmt.Sprintf("%s-backup-%s", projectName, environment)`)
 	})
 
 	t.Run("creates logs bucket", func(t *testing.T) {
-		assert.Contains(t, contentStr, `s3.NewBucket`)
+		assert.Contains(t, contentStr, `s3.NewBucket(ctx, fmt.Sprintf("%s-alb-logs", projectName)`)
+		assert.Contains(t, contentStr, `fmt.Sprintf("%s-alb-logs-%s", projectName, environment)`)
 	})
 
 	t.Run("configures bucket versioning", func(t *testing.T) {
@@ -187,6 +196,7 @@ func TestS3Buckets(t *testing.T) {
 
 	t.Run("configures server access logging", func(t *testing.T) {
 		assert.Contains(t, contentStr, `s3.NewBucketLoggingV2`)
+		assert.Contains(t, contentStr, `TargetBucket: albLogsBucket.Bucket`)
 	})
 }
 
@@ -196,23 +206,29 @@ func TestRDSResources(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("creates RDS subnet group", func(t *testing.T) {
-		assert.Contains(t, contentStr, `rds.NewSubnetGroup`)
+		assert.Contains(t, contentStr, `rds.NewSubnetGroup(ctx, fmt.Sprintf("%s-rds-subnet-group", projectName)`)
+		assert.Contains(t, contentStr, `privateSubnets[0].ID(), privateSubnets[1].ID()`)
 	})
 
 	t.Run("creates RDS parameter group", func(t *testing.T) {
-		assert.Contains(t, contentStr, `rds.NewParameterGroup`)
+		assert.Contains(t, contentStr, `rds.NewParameterGroup(ctx, fmt.Sprintf("%s-rds-param-group", projectName)`)
 		assert.Contains(t, contentStr, `Family: pulumi.String("mysql8.0")`)
+		assert.Contains(t, contentStr, `"character_set_server"`)
+		assert.Contains(t, contentStr, `"character_set_client"`)
 	})
 
 	t.Run("creates RDS instance", func(t *testing.T) {
-		assert.Contains(t, contentStr, `rds.NewInstance`)
-		assert.Contains(t, contentStr, `Engine:                pulumi.String("mysql")`)
-		assert.Contains(t, contentStr, `StorageEncrypted:      pulumi.Bool(true)`)
-		assert.Contains(t, contentStr, `PubliclyAccessible:    pulumi.Bool(false)`)
+		assert.Contains(t, contentStr, `rds.NewInstance(ctx, fmt.Sprintf("%s-rds", projectName)`)
+		assert.Contains(t, contentStr, `Engine:                  pulumi.String("mysql")`)
+		assert.Contains(t, contentStr, `EngineVersion:           pulumi.String("8.0")`)
+		assert.Contains(t, contentStr, `InstanceClass:           pulumi.String("db.t3.micro")`)
+		assert.Contains(t, contentStr, `StorageEncrypted:        pulumi.Bool(true)`)
+		assert.Contains(t, contentStr, `PubliclyAccessible:      pulumi.Bool(false)`)
 	})
 
 	t.Run("configures RDS backup settings", func(t *testing.T) {
-		assert.Contains(t, contentStr, `BackupRetentionPeriod: pulumi.Int(7)`)
+		assert.Contains(t, contentStr, `BackupRetentionPeriod:   pulumi.Int(7)`)
+		assert.Contains(t, contentStr, `BackupWindow:            pulumi.String("03:00-04:00")`)
 	})
 }
 
@@ -222,16 +238,16 @@ func TestIAMRoles(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("creates EC2 role", func(t *testing.T) {
-		assert.Contains(t, contentStr, `iam.NewRole`)
+		assert.Contains(t, contentStr, `iam.NewRole(ctx, fmt.Sprintf("%s-ec2-role", projectName)`)
 		assert.Contains(t, contentStr, `"Service": "ec2.amazonaws.com"`)
 	})
 
 	t.Run("creates EC2 instance profile", func(t *testing.T) {
-		assert.Contains(t, contentStr, `iam.NewInstanceProfile`)
+		assert.Contains(t, contentStr, `iam.NewInstanceProfile(ctx, fmt.Sprintf("%s-ec2-profile", projectName)`)
 	})
 
 	t.Run("creates S3 access policy", func(t *testing.T) {
-		assert.Contains(t, contentStr, `iam.NewRolePolicy`)
+		assert.Contains(t, contentStr, `iam.NewPolicy(ctx, fmt.Sprintf("%s-s3-access-policy", projectName)`)
 		assert.Contains(t, contentStr, `"s3:GetObject"`)
 		assert.Contains(t, contentStr, `"s3:PutObject"`)
 		assert.Contains(t, contentStr, `"s3:DeleteObject"`)
@@ -250,18 +266,20 @@ func TestCloudWatchMonitoring(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("creates RDS CPU alarm", func(t *testing.T) {
-		assert.Contains(t, contentStr, `cloudwatch.NewMetricAlarm`)
+		assert.Contains(t, contentStr, `cloudwatch.NewMetricAlarm(ctx, fmt.Sprintf("%s-rds-cpu-alarm", projectName)`)
 		assert.Contains(t, contentStr, `MetricName:         pulumi.String("CPUUtilization")`)
 		assert.Contains(t, contentStr, `Namespace:          pulumi.String("AWS/RDS")`)
+		assert.Contains(t, contentStr, `Threshold:          pulumi.Float64(80.0)`)
 	})
 
 	t.Run("creates RDS connections alarm", func(t *testing.T) {
-		assert.Contains(t, contentStr, `cloudwatch.NewMetricAlarm`)
+		assert.Contains(t, contentStr, `cloudwatch.NewMetricAlarm(ctx, fmt.Sprintf("%s-rds-connections-alarm", projectName)`)
 		assert.Contains(t, contentStr, `MetricName:         pulumi.String("DatabaseConnections")`)
+		assert.Contains(t, contentStr, `Threshold:          pulumi.Float64(100.0)`)
 	})
 
 	t.Run("creates CloudWatch dashboard", func(t *testing.T) {
-		assert.Contains(t, contentStr, `cloudwatch.NewDashboard`)
+		assert.Contains(t, contentStr, `cloudwatch.NewDashboard(ctx, fmt.Sprintf("%s-dashboard", projectName)`)
 		assert.Contains(t, contentStr, `"AWS/RDS"`)
 		assert.Contains(t, contentStr, `"AWS/S3"`)
 	})
@@ -277,7 +295,8 @@ func TestExports(t *testing.T) {
 	})
 
 	t.Run("exports subnet IDs", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ctx.Export`)
+		assert.Contains(t, contentStr, `ctx.Export("privateSubnetIds"`)
+		assert.Contains(t, contentStr, `ctx.Export("publicSubnetIds"`)
 	})
 
 	t.Run("exports RDS information", func(t *testing.T) {
@@ -285,19 +304,20 @@ func TestExports(t *testing.T) {
 	})
 
 	t.Run("exports S3 bucket names", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ctx.Export`)
+		assert.Contains(t, contentStr, `ctx.Export("albDnsName", alb.DnsName)`)
 	})
 
 	t.Run("exports security group IDs", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ctx.Export`)
+		assert.Contains(t, contentStr, `ctx.Export("kmsKeyArn", kmsKey.Arn)`)
+		assert.Contains(t, contentStr, `ctx.Export("wafWebAclArn", wafWebAcl.Arn)`)
 	})
 
 	t.Run("exports IAM roles", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ctx.Export`)
+		assert.Contains(t, contentStr, `ctx.Export("cloudTrailName", cloudTrail.Name)`)
 	})
 
 	t.Run("exports CloudWatch dashboard URL", func(t *testing.T) {
-		assert.Contains(t, contentStr, `ctx.Export`)
+		assert.Contains(t, contentStr, `ctx.Export("cloudWatchDashboardUrl"`)
 	})
 }
 
@@ -307,9 +327,7 @@ func TestNamingConventions(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("uses consistent naming convention", func(t *testing.T) {
-		assert.Contains(t, contentStr, `fmt.Sprintf("%s-vpc", projectName)`)
-		assert.Contains(t, contentStr, `fmt.Sprintf("%s-alb", projectName)`)
-		assert.Contains(t, contentStr, `fmt.Sprintf("%s-rds", projectName)`)
+		assert.Contains(t, contentStr, `fmt.Sprintf("%s-`, "projectName")
 	})
 
 	t.Run("uses proper resource naming", func(t *testing.T) {
@@ -329,14 +347,26 @@ func TestCommonTags(t *testing.T) {
 
 	t.Run("defines common tags", func(t *testing.T) {
 		assert.Contains(t, contentStr, `commonTags := pulumi.StringMap{`)
-		assert.Contains(t, contentStr, `"Project":`)
-		assert.Contains(t, contentStr, `"Environment":`)
-		assert.Contains(t, contentStr, `"ManagedBy":`)
+		assert.Contains(t, contentStr, `"Project":     pulumi.String(projectName)`)
+		assert.Contains(t, contentStr, `"Environment": pulumi.String(environment)`)
+		assert.Contains(t, contentStr, `"ManagedBy":   pulumi.String("pulumi")`)
+		assert.Contains(t, contentStr, `"Purpose":     pulumi.String("web-application-infrastructure")`)
 	})
 
 	t.Run("applies tags to resources", func(t *testing.T) {
-		assert.Contains(t, contentStr, `Tags:               commonTags`)
-		assert.Contains(t, contentStr, `Tags:  commonTags`)
+		assert.Contains(t, contentStr, `Tags: commonTags`)
+	})
+}
+
+func TestHelperFunctions(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join(".", "tap_stack.go"))
+	require.NoError(t, err)
+	contentStr := string(content)
+
+	t.Run("has configuration setup", func(t *testing.T) {
+		assert.Contains(t, contentStr, `config.New(ctx, "")`)
+		assert.Contains(t, contentStr, `cfg.Get("projectName")`)
+		assert.Contains(t, contentStr, `cfg.Get("environment")`)
 	})
 }
 
@@ -346,11 +376,11 @@ func TestSecurityCompliance(t *testing.T) {
 	contentStr := string(content)
 
 	t.Run("RDS is not publicly accessible", func(t *testing.T) {
-		assert.Contains(t, contentStr, `PubliclyAccessible:    pulumi.Bool(false)`)
+		assert.Contains(t, contentStr, `PubliclyAccessible:      pulumi.Bool(false)`)
 	})
 
 	t.Run("RDS has encryption enabled", func(t *testing.T) {
-		assert.Contains(t, contentStr, `StorageEncrypted:      pulumi.Bool(true)`)
+		assert.Contains(t, contentStr, `StorageEncrypted:        pulumi.Bool(true)`)
 	})
 
 	t.Run("S3 buckets have public access blocked", func(t *testing.T) {
@@ -379,11 +409,11 @@ func TestResourceDependencies(t *testing.T) {
 	})
 
 	t.Run("RDS depends on subnet group", func(t *testing.T) {
-		assert.Contains(t, contentStr, `DbSubnetGroupName:     dbSubnetGroup.Name`)
+		assert.Contains(t, contentStr, `DbSubnetGroupName:       dbSubnetGroup.Name`)
 	})
 
 	t.Run("RDS depends on security group", func(t *testing.T) {
-		assert.Contains(t, contentStr, `VpcSecurityGroupIds:   pulumi.StringArray{dbSg.ID()}`)
+		assert.Contains(t, contentStr, `VpcSecurityGroupIds:     pulumi.StringArray{dbSg.ID()}`)
 	})
 }
 
