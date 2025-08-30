@@ -1,47 +1,30 @@
-Heres the latest error i got
+Error is still persistent
 
 ╷
-│ Error: Missing required argument
+│ Error: Invalid data source
 │ 
-│   on secure_infrastructure_setup.tf line 841, in resource "aws_fms_policy" "waf_policy":
-│  841: resource "aws_fms_policy" "waf_policy" {
+│   on secure_infrastructure_setup.tf line 392, in data "aws_config_configuration_recorder" "existing":
+│  392: data "aws_config_configuration_recorder" "existing" {
 │ 
-│ The argument "exclude_resource_tags" is required, but no definition was
-│ found.
+│ The provider hashicorp/aws does not support data source
+│ "aws_config_configuration_recorder".
+│ 
+│ Did you intend to use the managed resource type
+│ "aws_config_configuration_recorder"? If so, declare this using a "resource"
+│ block instead of a "data" block.
 ╵
 ╷
-│ Error: Unsupported argument
+│ Error: Invalid data source
 │ 
-│   on secure_infrastructure_setup.tf line 844, in resource "aws_fms_policy" "waf_policy":
-│  844:   security_service_type = "WAFV2"
+│   on secure_infrastructure_setup.tf line 397, in data "aws_config_delivery_channel" "existing":
+│  397: data "aws_config_delivery_channel" "existing" {
 │ 
-│ An argument named "security_service_type" is not expected here.
-╵
-Error: Terraform exited with code 1.
-⚠️ Terraform plan failed, but continuing...
-⚠️ Terraform plan file not found, but continuing...
-✅ Terraform bootstrap completed
-✅ Bootstrap completed successfully
-=== Deploy Phase ===
-✅ Terraform HCL project detected, running Terraform deploy...
-Using state key: prs/pr2486/terraform.tfstate
-⚠️ Terraform plan file not found, creating new plan and deploying...
-╷
-│ Error: Missing required argument
+│ The provider hashicorp/aws does not support data source
+│ "aws_config_delivery_channel".
 │ 
-│   on secure_infrastructure_setup.tf line 841, in resource "aws_fms_policy" "waf_policy":
-│  841: resource "aws_fms_policy" "waf_policy" {
-│ 
-│ The argument "exclude_resource_tags" is required, but no definition was
-│ found.
-╵
-╷
-│ Error: Unsupported argument
-│ 
-│   on secure_infrastructure_setup.tf line 844, in resource "aws_fms_policy" "waf_policy":
-│  844:   security_service_type = "WAFV2"
-│ 
-│ An argument named "security_service_type" is not expected here.
+│ Did you intend to use the managed resource type
+│ "aws_config_delivery_channel"? If so, declare this using a "resource" block
+│ instead of a "data" block.
 ╵
 Error: Terraform exited with code 1.
 Plan creation failed, attempting direct apply...
@@ -52,22 +35,31 @@ Plan creation failed, attempting direct apply...
 ╵
 Error: Terraform exited with code 1.
 ╷
-│ Error: Missing required argument
+│ Error: Invalid data source
 │ 
-│   on secure_infrastructure_setup.tf line 841, in resource "aws_fms_policy" "waf_policy":
-│  841: resource "aws_fms_policy" "waf_policy" {
+│   on secure_infrastructure_setup.tf line 392, in data "aws_config_configuration_recorder" "existing":
+│  392: data "aws_config_configuration_recorder" "existing" {
 │ 
-│ The argument "exclude_resource_tags" is required, but no definition was
-│ found.
+│ The provider hashicorp/aws does not support data source
+│ "aws_config_configuration_recorder".
+│ 
+│ Did you intend to use the managed resource type
+│ "aws_config_configuration_recorder"? If so, declare this using a "resource"
+│ block instead of a "data" block.
 ╵
 ╷
-│ Error: Unsupported argument
+│ Error: Invalid data source
 │ 
-│   on secure_infrastructure_setup.tf line 844, in resource "aws_fms_policy" "waf_policy":
-│  844:   security_service_type = "WAFV2"
+│   on secure_infrastructure_setup.tf line 397, in data "aws_config_delivery_channel" "existing":
+│  397: data "aws_config_delivery_channel" "existing" {
 │ 
-│ An argument named "security_service_type" is not expected here.
+│ The provider hashicorp/aws does not support data source
+│ "aws_config_delivery_channel".
+│ 
+│ Did you intend to use the managed resource type
+│ "aws_config_delivery_channel"? If so, declare this using a "resource" block
+│ instead of a "data" block.
 ╵
 Error: Terraform exited with code 1.
 
-fix the error.
+fix the error and ensure it addresses it
