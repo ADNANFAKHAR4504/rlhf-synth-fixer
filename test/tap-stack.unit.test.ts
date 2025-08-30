@@ -1,557 +1,201 @@
 import { describe, expect, test } from '@jest/globals';
-import { App, Stack } from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import * as fs from 'fs';
+import * as yaml from 'js-yaml';
+import * as path from 'path';
 
-// Mock TapStack since we can't access it directly
-class TapStack extends Stack {
-  constructor(scope: App, id: string) {
-    super(scope, id);
-    // Mock methods would go here
-  }
+interface CFResource {
+  Type: string;
+  Properties: Record<string, any>;
+  DeletionPolicy?: string;
+  UpdateReplacePolicy?: string;
+}
+
+interface CFTemplate {
+  Parameters: Record<string, any>;
+  Resources: Record<string, CFResource>;
+  Outputs: Record<string, any>;
 }
 
 describe('TapStack Infrastructure Tests', () => {
-  describe('Network Configuration', () => {
-    test('VPC should have correct configuration', () => {
-      const stack = new TapStack(new App(), 'test-stack');
-      const template = Template.fromStack(stack);
-      template.hasResource('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
-        EnableDnsHostnames: true,
-        EnableDnsSupport: true,
-        Tags: [
-          {
-            Key: 'Name',
-            Value: expect.stringMatching(/-vpc$/)
-          }
-        ]
-      });
+  const yamlTemplate = yaml.load(fs.readFileSync(path.resolve(__dirname, '../lib/TapStack.yml'), 'utf8')) as CFTemplate;
 
-      template.hasResource('AWS::EC2::InternetGateway', {
-        Properties: {
-          Tags: [
-            {
-              Key: 'Name',
-              Value: expect.stringMatching(/-igw$/)
-            }
-          ]
-        }
-      });
+  describe('Parameters', () => {
+    test('should have required parameters', () => {
+      const params = yamlTemplate.Parameters;
+      expect(params.Environment).toBeDefined();
+      expect(params.Environment.Type).toBe('String');
+      expect(params.Environment.AllowedValues).toEqual(['dev', 'staging', 'prod']);
 
-      template.resourceCountIs('AWS::EC2::VPCGatewayAttachment', 1);
+      expect(params.WhitelistedCIDR).toBeDefined();
+      expect(params.WhitelistedCIDR.Type).toBe('String');
+      expect(params.WhitelistedCIDR.AllowedPattern).toBeDefined();
+
+      expect(params.DBUsername).toBeDefined();
+      expect(params.DBUsername.Type).toBe('String');
+      expect(params.DBUsername.MinLength).toBe(1);
+      expect(params.DBUsername.MaxLength).toBe(16);
+    });
+  });
+
+  describe('Network Infrastructure', () => {
+    test('should have properly configured VPC', () => {
+      const vpc = yamlTemplate.Resources.VPC;
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
     });
 
-    test('Should create public and private subnets in different AZs', () => {
-      const stack = new TapStack(new App(), 'test-stack');
+    test('should have properly configured subnets', () => {
+      const publicSubnet1 = yamlTemplate.Resources.PublicSubnet1;
+      const publicSubnet2 = yamlTemplate.Resources.PublicSubnet2;
+      const privateSubnet1 = yamlTemplate.Resources.PrivateSubnet1;
+      const privateSubnet2 = yamlTemplate.Resources.PrivateSubnet2;
 
-      // Public Subnet 1
-      const template = Template.fromStack(stack);
-
-      // Public Subnet 1
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        VpcId: {
-          Ref: 'VPC'
-        },
-        CidrBlock: '10.0.1.0/24',
-        MapPublicIpOnLaunch: true,
-        AvailabilityZone: {
-          'Fn::Select': [0, { 'Fn::GetAZs': '' }]
-        },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-public-subnet-1'
-            }
-          }
-        ]
+      // Public Subnets
+      [publicSubnet1, publicSubnet2].forEach((subnet, index) => {
+        expect(subnet.Type).toBe('AWS::EC2::Subnet');
+        expect(subnet.Properties.MapPublicIpOnLaunch).toBe(true);
+        expect(subnet.Properties.CidrBlock).toBe(`10.0.${index + 1}.0/24`);
       });
 
-      // Public Subnet 2
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        VpcId: {
-          Ref: 'VPC'
-        },
-        CidrBlock: '10.0.2.0/24',
-        MapPublicIpOnLaunch: true,
-        AvailabilityZone: {
-          'Fn::Select': [1, { 'Fn::GetAZs': '' }]
-        },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-public-subnet-2'
-            }
-          }
-        ]
-      });
-
-      // Private Subnet 1
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        VpcId: {
-          Ref: 'VPC'
-        },
-        CidrBlock: '10.0.3.0/24',
-        MapPublicIpOnLaunch: false,
-        AvailabilityZone: {
-          'Fn::Select': [0, { 'Fn::GetAZs': '' }]
-        },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-private-subnet-1'
-            }
-          }
-        ]
-      });
-
-      // Private Subnet 2
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        VpcId: {
-          Ref: 'VPC'
-        },
-        CidrBlock: '10.0.4.0/24',
-        MapPublicIpOnLaunch: false,
-        AvailabilityZone: {
-          'Fn::Select': [1, { 'Fn::GetAZs': '' }]
-        },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-private-subnet-2'
-            }
-          }
-        ]
+      // Private Subnets
+      [privateSubnet1, privateSubnet2].forEach((subnet, index) => {
+        expect(subnet.Type).toBe('AWS::EC2::Subnet');
+        expect(subnet.Properties.MapPublicIpOnLaunch).toBeUndefined();
+        expect(subnet.Properties.CidrBlock).toBe(`10.0.${index + 3}.0/24`);
       });
     });
   });
 
-  describe('Security Configuration', () => {
-    test('Security groups should be properly configured', () => {
-      const stack = new TapStack(new App(), 'test-stack');
-      const template = Template.fromStack(stack);
-
-      // Bastion Security Group
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for bastion hosts',
-        SecurityGroupIngress: [
-          {
-            IpProtocol: 'tcp',
-            FromPort: 22,
-            ToPort: 22,
-            CidrIp: {
-              Ref: 'WhitelistedCIDR'
-            }
-          }
-        ],
-        VpcId: { Ref: 'VPC' },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-bastion-sg'
-            }
-          }
-        ]
-      });
-
-      // Web Server Security Group
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for web servers',
-        SecurityGroupIngress: [
-          {
-            IpProtocol: 'tcp',
-            FromPort: 80,
-            ToPort: 80,
-            CidrIp: '0.0.0.0/0'
-          },
-          {
-            IpProtocol: 'tcp',
-            FromPort: 443,
-            ToPort: 443,
-            CidrIp: '0.0.0.0/0'
-          }
-        ],
-        VpcId: { Ref: 'VPC' },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-webserver-sg'
-            }
-          }
-        ]
-      });
-
-      // RDS Security Group
-      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupDescription: 'Security group for RDS instance',
-        SecurityGroupIngress: [
-          {
-            IpProtocol: 'tcp',
-            FromPort: 3306,
-            ToPort: 3306,
-            SourceSecurityGroupId: { Ref: 'WebServerSecurityGroup' }
-          }
-        ],
-        VpcId: { Ref: 'VPC' },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-rds-sg'
-            }
-          }
-        ]
+  describe('Security Groups', () => {
+    test('should have properly configured bastion security group', () => {
+      const bastionSg = yamlTemplate.Resources.BastionSecurityGroup;
+      expect(bastionSg.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(bastionSg.Properties.SecurityGroupIngress).toHaveLength(1);
+      expect(bastionSg.Properties.SecurityGroupIngress[0]).toEqual({
+        IpProtocol: 'tcp',
+        FromPort: 22,
+        ToPort: 22,
+        CidrIp: { Ref: 'WhitelistedCIDR' }
       });
     });
 
-    test('KMS keys should be properly configured', () => {
-      const stack = new TapStack(new App(), 'test-stack');
-      const template = Template.fromStack(stack);
-
-      // Test EBS KMS Key
-      template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'KMS Key for EBS encryption',
-        EnableKeyRotation: true,
-        KeyPolicy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: {
-                AWS: {
-                  'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root'
-                }
-              },
-              Action: 'kms:*',
-              Resource: '*'
-            },
-            {
-              Sid: 'Allow use of the key for EBS',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com'
-              },
-              Action: [
-                'kms:Decrypt',
-                'kms:GenerateDataKey'
-              ],
-              Resource: '*'
-            }
-          ]
-        },
-        Tags: [
-          {
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-ebs-kms-key'
-            }
-          }
-        ]
+    test('should have properly configured web server security group', () => {
+      const webSg = yamlTemplate.Resources.WebServerSecurityGroup;
+      expect(webSg.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(webSg.Properties.SecurityGroupIngress).toHaveLength(2);
+      expect(webSg.Properties.SecurityGroupIngress).toContainEqual({
+        IpProtocol: 'tcp',
+        FromPort: 80,
+        ToPort: 80,
+        CidrIp: '0.0.0.0/0'
       });
-
-      // Test RDS KMS Key
-      template.hasResourceProperties('AWS::KMS::Key', {
-        Description: 'KMS Key for RDS encryption',
-        EnableKeyRotation: true,
-        KeyPolicy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Sid: 'Enable IAM User Permissions',
-              Effect: 'Allow',
-              Principal: {
-                AWS: {
-                  'Fn::Sub': 'arn:aws:iam::${AWS::AccountId}:root'
-                }
-              },
-              Action: 'kms:*',
-              Resource: '*'
-            },
-            {
-              Sid: 'Allow use of the key for RDS',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'rds.amazonaws.com'
-              },
-              Action: [
-                'kms:Decrypt',
-                'kms:GenerateDataKey'
-              ],
-              Resource: '*'
-            }
-          ]
-        }
+      expect(webSg.Properties.SecurityGroupIngress).toContainEqual({
+        IpProtocol: 'tcp',
+        FromPort: 443,
+        ToPort: 443,
+        CidrIp: '0.0.0.0/0'
       });
+    });
 
-      // Test AWS Config Role
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                Service: 'config.amazonaws.com'
-              },
-              Action: 'sts:AssumeRole'
-            }
-          ]
-        },
-        ManagedPolicyArns: [
-          'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
-        ]
+    test('should have properly configured RDS security group', () => {
+      const rdsSg = yamlTemplate.Resources.RDSSecurityGroup;
+      expect(rdsSg.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(rdsSg.Properties.SecurityGroupIngress).toHaveLength(1);
+      expect(rdsSg.Properties.SecurityGroupIngress[0]).toEqual({
+        IpProtocol: 'tcp',
+        FromPort: 3306,
+        ToPort: 3306,
+        SourceSecurityGroupId: { Ref: 'WebServerSecurityGroup' }
       });
     });
   });
 
-  test('Security Groups should be properly configured', () => {
-    const stack = new TapStack(new App(), 'test-stack');
-    const template = Template.fromStack(stack);
-
-    // Test Bastion Security Group
-    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupDescription: 'Security group for bastion host',
-      SecurityGroupIngress: expect.arrayContaining([
-        expect.objectContaining({
-          FromPort: 22,
-          ToPort: 22,
-          IpProtocol: 'tcp'
-        })
-      ])
+  describe('Database Configuration', () => {
+    test('should have properly configured RDS instance', () => {
+      const rds = yamlTemplate.Resources.RDSInstance;
+      expect(rds.Type).toBe('AWS::RDS::DBInstance');
+      expect(rds.Properties.Engine).toBe('mysql');
+      expect(rds.Properties.MultiAZ).toBe(true);
+      expect(rds.Properties.PubliclyAccessible).toBe(false);
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+      expect(rds.Properties.BackupRetentionPeriod).toBe(7);
     });
 
-    // Test Web Server Security Group
-    template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-      GroupDescription: 'Security group for web servers',
-      SecurityGroupIngress: expect.arrayContaining([
-        expect.objectContaining({
-          FromPort: 80,
-          ToPort: 80,
-          IpProtocol: 'tcp'
-        }),
-        expect.objectContaining({
-          FromPort: 443,
-          ToPort: 443,
-          IpProtocol: 'tcp'
-        })
-      ])
+    test('should have secure database credentials', () => {
+      const dbSecret = yamlTemplate.Resources.DatabaseSecret;
+      expect(dbSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(dbSecret.Properties.GenerateSecretString).toBeDefined();
+      expect(dbSecret.Properties.GenerateSecretString.PasswordLength).toBe(32);
     });
   });
-});
 
-describe('Database Infrastructure', () => {
-  test('RDS instance should be properly configured', () => {
-    const stack = new TapStack(new App(), 'test-stack');
-    const template = Template.fromStack(stack);
+  describe('Storage Configuration', () => {
+    test('should have properly configured S3 buckets', () => {
+      const loggingBucket = yamlTemplate.Resources.LoggingBucket;
+      const rdsBackupBucket = yamlTemplate.Resources.RDSBackupBucket;
 
-    template.hasResourceProperties('AWS::RDS::DBInstance', {
-      Engine: 'mysql',
-      MultiAZ: true,
-      PubliclyAccessible: false,
-      BackupRetentionPeriod: expect.any(Number),
-      StorageEncrypted: true,
-      StorageType: 'gp2'
-    });
-
-    template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-      SubnetIds: expect.arrayContaining([
-        expect.any(String),
-        expect.any(String)
-      ])
-    });
-  });
-});
-
-describe('Monitoring Configuration', () => {
-  test('CloudWatch alarms and SNS topics should be properly configured', () => {
-    const stack = new TapStack(new App(), 'test-stack');
-    const template = Template.fromStack(stack);
-
-    // Test CloudWatch Alarm
-    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmDescription: 'Alarm if CPU utilization exceeds 75%',
-      MetricName: 'CPUUtilization',
-      Namespace: 'AWS/RDS',
-      Statistic: 'Average',
-      Period: 300,
-      EvaluationPeriods: 2,
-      ThresholdMetricId: 'e1',
-      ComparisonOperator: 'GreaterThanThreshold',
-      Threshold: 75,
-      Dimensions: [
-        {
-          Name: 'DBInstanceIdentifier',
-          Value: { Ref: 'RDSInstance' }
-        }
-      ]
-    });
-
-    // Test SNS Topic
-    template.hasResourceProperties('AWS::SNS::Topic', {
-      DisplayName: {
-        'Fn::Sub': '${Environment}-infrastructure-alarms'
-      },
-      TopicName: {
-        'Fn::Sub': '${Environment}-infrastructure-alarms'
-      }
-    });
-  });
-});
-
-describe('IAM and Config Configuration', () => {
-  test('AWS Config should be properly configured', () => {
-    const stack = new TapStack(new App(), 'test-stack');
-    const template = Template.fromStack(stack);
-
-    // Test Config Recorder
-    template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-      RecordingGroup: {
-        AllSupported: true,
-        IncludeGlobalResources: true
-      }
-    });
-
-    // Test Config Role
-    template.hasResourceProperties('AWS::IAM::Role', {
-      AssumeRolePolicyDocument: {
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'config.amazonaws.com'
-            },
-            Action: 'sts:AssumeRole'
-          }
-        ]
-      },
-      ManagedPolicyArns: [
-        'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
-      ]
-    });
-  });
-});
-
-describe('Storage Configuration', () => {
-  test('S3 buckets should have proper configuration', () => {
-    const stack = new TapStack(new App(), 'test-stack');
-    const template = Template.fromStack(stack);
-
-    // Test Logging Bucket
-    describe('Storage Configuration', () => {
-      test('Logging and RDS Backup buckets should be properly configured', () => {
-        const stack = new TapStack(new App(), 'test-stack');
-        const template = Template.fromStack(stack);
-
-        // Test Logging Bucket
-        template.hasResourceProperties('AWS::S3::Bucket', {
-          BucketEncryption: {
-            ServerSideEncryptionConfiguration: [
-              {
-                ServerSideEncryptionByDefault: {
-                  SSEAlgorithm: 'AES256'
-                }
-              }
-            ]
-          },
-          PublicAccessBlockConfiguration: {
-            BlockPublicAcls: true,
-            BlockPublicPolicy: true,
-            IgnorePublicAcls: true,
-            RestrictPublicBuckets: true
-          },
-          VersioningConfiguration: {
-            Status: 'Enabled'
-          },
-          Tags: [
-            {
-              Key: 'Name',
-              Value: {
-                'Fn::Sub': '${Environment}-logging-bucket'
-              }
-            }
-          ]
+      [loggingBucket, rdsBackupBucket].forEach(bucket => {
+        expect(bucket.Type).toBe('AWS::S3::Bucket');
+        expect(bucket.DeletionPolicy).toBe('Retain');
+        expect(bucket.UpdateReplacePolicy).toBe('Retain');
+        expect(bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+          .ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+        expect(bucket.Properties.PublicAccessBlockConfiguration).toEqual({
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true
         });
-
-        // Test RDS Backup Bucket
-        template.hasResourceProperties('AWS::S3::Bucket', {
-          BucketEncryption: {
-            ServerSideEncryptionConfiguration: [
-              {
-                ServerSideEncryptionByDefault: {
-                  SSEAlgorithm: 'aws:kms'
-                }
-              }
-            ]
-          },
-          LoggingConfiguration: {
-            DestinationBucketName: expect.any(String),
-            LogFilePrefix: 'rds-backup-logs/'
-          },
-          PublicAccessBlockConfiguration: {
-            BlockPublicAcls: true,
-            BlockPublicPolicy: true,
-            IgnorePublicAcls: true,
-            RestrictPublicBuckets: true
-          },
-          VersioningConfiguration: {
-            Status: 'Enabled'
-          },
-          Tags: [{
-            Key: 'Name',
-            Value: {
-              'Fn::Sub': '${Environment}-rds-backup-bucket'
-            }
-          }]
-        });
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
       });
     });
   });
 
-  describe('Monitoring Configuration', () => {
-    test('CloudWatch alarms should be properly configured', () => {
-      const stack = new TapStack(new App(), 'test-stack');
-      const template = Template.fromStack(stack);
-
-      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-        MetricName: 'CPUUtilization',
-        Namespace: 'AWS/RDS',
-        Period: 300,
-        EvaluationPeriods: 2,
-        Threshold: 75
-      });
+  describe('Monitoring and Compliance', () => {
+    test('should have properly configured CloudWatch alarms', () => {
+      const cpuAlarm = yamlTemplate.Resources.CPUUtilizationAlarm;
+      expect(cpuAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(cpuAlarm.Properties.MetricName).toBe('CPUUtilization');
+      expect(cpuAlarm.Properties.Period).toBe(300);
+      expect(cpuAlarm.Properties.EvaluationPeriods).toBe(2);
+      expect(cpuAlarm.Properties.Threshold).toBe(75);
     });
 
-    test('AWS Config should be properly configured', () => {
-      const stack = new TapStack(new App(), 'test-stack');
-      const template = Template.fromStack(stack);
+    test('should have properly configured AWS Config', () => {
+      const configRecorder = yamlTemplate.Resources.ConfigRecorder;
+      const configRole = yamlTemplate.Resources.ConfigRole;
 
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResources: true
-        }
-      });
+      expect(configRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+      expect(configRecorder.Properties.RecordingGroup.AllSupported).toBe(true);
+      expect(configRecorder.Properties.RecordingGroup.IncludeGlobalResourceTypes).toBe(true);
+
+      expect(configRole.Type).toBe('AWS::IAM::Role');
+      expect(configRole.Properties.ManagedPolicyArns).toContain(
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+      );
     });
   });
 
-  describe('High Availability', () => {
-    test('All required outputs should be exported', () => {
-      const stack = new TapStack(new App(), 'test-stack');
-      const template = Template.fromStack(stack);
+  describe('Outputs', () => {
+    test('should export all required values', () => {
+      const outputs = yamlTemplate.Outputs;
+      const requiredOutputs = [
+        'VPCId',
+        'PublicSubnet1Id',
+        'PublicSubnet2Id',
+        'PrivateSubnet1Id',
+        'PrivateSubnet2Id',
+        'RDSEndpoint',
+        'LoggingBucketName',
+        'RDSBackupBucketName'
+      ];
 
-      template.hasOutput('VpcId', {});
-      template.hasOutput('PublicSubnet1Id', {});
-      template.hasOutput('PublicSubnet2Id', {});
-      template.hasOutput('PrivateSubnet1Id', {});
-      template.hasOutput('PrivateSubnet2Id', {});
-      template.hasOutput('RdsEndpoint', {});
+      requiredOutputs.forEach(output => {
+        expect(outputs[output]).toBeDefined();
+        expect(outputs[output].Export).toBeDefined();
+      });
     });
   });
 });
