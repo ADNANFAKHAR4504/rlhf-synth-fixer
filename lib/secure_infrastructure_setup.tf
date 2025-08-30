@@ -15,6 +15,10 @@ provider "aws" {
   region = "us-west-2"
 }
 
+locals {
+  environment = "prod" # Change as needed (e.g., "dev", "staging", "prod")
+}
+
 # Data sources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -244,11 +248,11 @@ resource "aws_kms_alias" "main" {
 
 # S3 Bucket with Encryption
 resource "aws_s3_bucket" "main" {
-  bucket        = "secure-bucket-${random_id.bucket_suffix.hex}"
+  bucket        = "secure-bucket-${local.environment}-${random_id.bucket_suffix.hex}"
   force_destroy = true
-
   tags = {
-    Name = "main-secure-bucket"
+    Name        = "main-secure-bucket-${local.environment}"
+    Environment = local.environment
   }
 }
 
@@ -285,11 +289,11 @@ resource "aws_s3_bucket_versioning" "main" {
 
 # CloudTrail
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket        = "cloudtrail-logs-${random_id.cloudtrail_suffix.hex}"
+  bucket        = "cloudtrail-logs-${local.environment}-${random_id.cloudtrail_suffix.hex}"
   force_destroy = true
-
   tags = {
-    Name = "cloudtrail-logs-bucket"
+    Name        = "cloudtrail-logs-bucket-${local.environment}"
+    Environment = local.environment
   }
 }
 
@@ -390,11 +394,11 @@ resource "aws_cloudtrail" "main" {
 
 # AWS Config S3 Bucket
 resource "aws_s3_bucket" "config" {
-  bucket        = "aws-config-${random_id.config_suffix.hex}"
+  bucket        = "aws-config-${local.environment}-${random_id.config_suffix.hex}"
   force_destroy = true
-
   tags = {
-    Name = "aws-config-bucket"
+    Name        = "aws-config-bucket-${local.environment}"
+    Environment = local.environment
   }
 }
 
@@ -694,7 +698,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier     = "main-database"
+  identifier     = "main-database-${local.environment}"
   engine         = "mysql"
   engine_version = "8.0"
   instance_class = "db.t3.micro"
@@ -720,7 +724,8 @@ resource "aws_db_instance" "main" {
   deletion_protection = false
 
   tags = {
-    Name = "main-database"
+    Name        = "main-database-${local.environment}"
+    Environment = local.environment
   }
 }
 
@@ -766,7 +771,7 @@ resource "aws_launch_template" "web" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "main-alb"
+  name               = "main-alb-${local.environment}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web.id]
@@ -775,7 +780,8 @@ resource "aws_lb" "main" {
   enable_deletion_protection = false
 
   tags = {
-    Name = "main-alb"
+    Name        = "main-alb-${local.environment}"
+    Environment = local.environment
   }
 }
 
@@ -924,7 +930,7 @@ resource "aws_security_group" "lambda" {
 
 # WAF Web ACL
 resource "aws_wafv2_web_acl" "main" {
-  name  = "main-web-acl"
+  name  = "main-web-acl-${local.environment}"
   scope = "REGIONAL"
 
   default_action {
@@ -982,7 +988,8 @@ resource "aws_wafv2_web_acl" "main" {
   }
 
   tags = {
-    Name = "main-web-acl"
+    Name        = "main-web-acl-${local.environment}"
+    Environment = local.environment
   }
 }
 
@@ -997,6 +1004,37 @@ resource "aws_config_configuration_recorder_status" "main" {
   name       = aws_config_configuration_recorder.main.name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.main]
+}
+
+resource "aws_iam_policy" "require_mfa" {
+  name        = "require-mfa-${local.environment}"
+  description = "Require MFA for all IAM users with console access"
+  policy      = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "DenyAllExceptListedIfNoMFA",
+        Effect = "Deny",
+        Action = "*",
+        Resource = "*",
+        Condition = {
+          BoolIfExists = {
+            "aws:MultiFactorAuthPresent" = "false"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Example: Attach to all users (or groups) with console access
+resource "aws_iam_group" "console_users" {
+  name = "console-users-${local.environment}"
+}
+
+resource "aws_iam_group_policy_attachment" "console_users_mfa" {
+  group      = aws_iam_group.console_users.name
+  policy_arn = aws_iam_policy.require_mfa.arn
 }
 
 # Output values
@@ -1019,4 +1057,19 @@ output "rds_endpoint" {
   description = "RDS instance endpoint"
   value       = aws_db_instance.main.endpoint
   sensitive   = true
+}
+
+output "cloudtrail_bucket_name" {
+  description = "Name of the CloudTrail S3 bucket"
+  value       = aws_s3_bucket.cloudtrail.bucket
+}
+
+output "config_bucket_name" {
+  description = "Name of the AWS Config S3 bucket"
+  value       = aws_s3_bucket.config.bucket
+}
+
+output "web_acl_arn" {
+  description = "ARN of the WAF Web ACL"
+  value       = aws_wafv2_web_acl.main.arn
 }

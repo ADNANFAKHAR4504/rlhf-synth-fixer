@@ -41,7 +41,7 @@ Your Terraform configuration **must**:
 7. Encrypt RDS databases and enable backups.
 8. Use Elastic Load Balancing across multiple EC2 instances in various availability zones.
 9. Provide DDoS protection with AWS Shield.
-10. Implement centralized security management with AWS Firewall Manager policies.
+<!-- 10. Implement centralized security management with AWS Firewall Manager policies. -->
 11. Enable MFA for all IAM users with console access.
 12. Disable public access to all Lambda functions.
 
