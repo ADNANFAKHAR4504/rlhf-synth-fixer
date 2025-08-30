@@ -61,6 +61,23 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
   echo "🚀 Running CDKTF destroy..."
   npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
+  
+  echo "🧹 Manual cleanup of orphaned AWS resources..."
+  # Clean up specific resources that might be orphaned
+  DB_SUBNET_GROUP_NAME="migration-db-subnet-group-us-east-1-${ENVIRONMENT_SUFFIX}"
+  IAM_ROLE_NAME="ec2-migration-role-us-east-1-${ENVIRONMENT_SUFFIX}"
+  ALB_NAME="migration-alb-us-east-1-${ENVIRONMENT_SUFFIX}"
+  
+  echo "Attempting to delete DB subnet group: $DB_SUBNET_GROUP_NAME"
+  aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" || echo "DB subnet group not found or already deleted"
+  
+  echo "Attempting to delete IAM role: $IAM_ROLE_NAME"
+  # Detach policies first
+  aws iam detach-role-policy --role-name "$IAM_ROLE_NAME" --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" || echo "Policy not attached or role not found"
+  # Delete role
+  aws iam delete-role --role-name "$IAM_ROLE_NAME" || echo "IAM role not found or already deleted"
+  
+  echo "Manual cleanup completed"
 
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, running CloudFormation destroy..."
