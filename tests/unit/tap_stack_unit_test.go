@@ -14,47 +14,47 @@ import (
 
 func TestFileStructureAndSyntax(t *testing.T) {
 	t.Run("tap_stack.go_exists_and_is_readable", func(t *testing.T) {
-		filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+		filePath := filepath.Join("lib", "tap_stack.go")
 		content, err := os.ReadFile(filePath)
 		assert.True(t, err == nil, "tap_stack.go should exist and be readable")
 		assert.NotEmpty(t, content, "tap_stack.go should not be empty")
 	})
 
 	t.Run("has_valid_Go_syntax_structure", func(t *testing.T) {
-		filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+		filePath := filepath.Join("lib", "tap_stack.go")
 		content, err := os.ReadFile(filePath)
 		require.NoError(t, err)
 
 		// Check for required imports
 		assert.Contains(t, content, "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2")
 		assert.Contains(t, content, "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/rds")
-		assert.Contains(t, content, "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/alb")
+		assert.Contains(t, content, "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lb")
 		assert.Contains(t, content, "github.com/pulumi/pulumi-aws/sdk/v6/go/aws/wafv2")
 		assert.Contains(t, content, "github.com/pulumi/pulumi/sdk/v3/go/pulumi")
 	})
 
 	t.Run("uses_environment_variables_for_configuration", func(t *testing.T) {
-		filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+		filePath := filepath.Join("lib", "tap_stack.go")
 		content, err := os.ReadFile(filePath)
 		require.NoError(t, err)
 
 		// Check for configuration usage
 		assert.Contains(t, content, "config.New(ctx, \"\")")
-		assert.Contains(t, content, "cfg.Require(\"projectName\")")
-		assert.Contains(t, content, "cfg.Require(\"environment\")")
-		assert.Contains(t, content, "cfg.RequireSecret(\"dbPassword\")")
+		assert.Contains(t, content, "cfg.Get(\"projectName\")")
+		assert.Contains(t, content, "cfg.Get(\"environment\")")
+		assert.Contains(t, content, "cfg.GetSecret(\"dbPassword\")")
 	})
 }
 
 func TestVariableDefinitions(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
 	t.Run("defines_required_variables", func(t *testing.T) {
-		assert.Contains(t, content, "projectName := cfg.Require(\"projectName\")")
-		assert.Contains(t, content, "environment := cfg.Require(\"environment\")")
-		assert.Contains(t, content, "region := \"us-west-2\"")
+		assert.Contains(t, content, "projectName := cfg.Get(\"projectName\")")
+		assert.Contains(t, content, "environment := cfg.Get(\"environment\")")
+		assert.Contains(t, content, "availabilityZones := []string{\"us-west-2a\", \"us-west-2b\"}")
 	})
 
 	t.Run("defines_common_tags", func(t *testing.T) {
@@ -66,7 +66,7 @@ func TestVariableDefinitions(t *testing.T) {
 }
 
 func TestVPCAndNetworkingResources(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -96,7 +96,7 @@ func TestVPCAndNetworkingResources(t *testing.T) {
 }
 
 func TestSecurityGroups(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -124,7 +124,7 @@ func TestSecurityGroups(t *testing.T) {
 }
 
 func TestRDSConfiguration(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -148,7 +148,7 @@ func TestRDSConfiguration(t *testing.T) {
 }
 
 func TestLoadBalancerConfiguration(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -172,7 +172,7 @@ func TestLoadBalancerConfiguration(t *testing.T) {
 }
 
 func TestAutoScalingConfiguration(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -190,7 +190,7 @@ func TestAutoScalingConfiguration(t *testing.T) {
 }
 
 func TestBastionHost(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -201,7 +201,7 @@ func TestBastionHost(t *testing.T) {
 }
 
 func TestWAFConfiguration(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -216,7 +216,7 @@ func TestWAFConfiguration(t *testing.T) {
 }
 
 func TestMonitoringAndLogging(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -234,7 +234,7 @@ func TestMonitoringAndLogging(t *testing.T) {
 }
 
 func TestIAMConfiguration(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -254,7 +254,7 @@ func TestIAMConfiguration(t *testing.T) {
 }
 
 func TestKMSConfiguration(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -265,7 +265,7 @@ func TestKMSConfiguration(t *testing.T) {
 }
 
 func TestS3Configuration(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -280,7 +280,7 @@ func TestS3Configuration(t *testing.T) {
 }
 
 func TestExports(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -295,7 +295,7 @@ func TestExports(t *testing.T) {
 }
 
 func TestNamingConventions(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 
@@ -307,7 +307,7 @@ func TestNamingConventions(t *testing.T) {
 }
 
 func TestCommonTags(t *testing.T) {
-	filePath := filepath.Join("..", "..", "lib", "tap_stack.go")
+	filePath := filepath.Join("lib", "tap_stack.go")
 	content, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 

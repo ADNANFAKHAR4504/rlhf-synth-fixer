@@ -19,10 +19,16 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		// Configuration
+		// Configuration with defaults
 		cfg := config.New(ctx, "")
-		projectName := cfg.Require("projectName")
-		environment := cfg.Require("environment")
+		projectName := cfg.Get("projectName")
+		if projectName == "" {
+			projectName = "tap-project"
+		}
+		environment := cfg.Get("environment")
+		if environment == "" {
+			environment = "dev"
+		}
 
 		// Common tags
 		commonTags := pulumi.StringMap{
@@ -329,7 +335,7 @@ func main() {
 			InstanceClass:           pulumi.String("db.t3.micro"),
 			DbName:                  pulumi.String("webappdb"),
 			Username:                pulumi.String("dbadmin"),
-			Password:                cfg.RequireSecret("dbPassword"),
+			Password:                cfg.GetSecret("dbPassword"),
 			ParameterGroupName:      rdsParameterGroup.Name,
 			DbSubnetGroupName:       rdsSubnetGroup.Name,
 			VpcSecurityGroupIds:     pulumi.StringArray{rdsSg.ID()},
