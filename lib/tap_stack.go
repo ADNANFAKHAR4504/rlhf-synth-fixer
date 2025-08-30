@@ -103,14 +103,18 @@ func main() {
 			privateSubnets[i] = privateSubnet
 		}
 
-		// NAT Gateway
-		natGateway, err := ec2.NewNatGateway(ctx, fmt.Sprintf("%s-nat", projectName), &ec2.NatGatewayArgs{
-			AllocationId: eip.ID(),
-			SubnetId:     publicSubnets[0].ID(),
-			Tags:         commonTags,
-		})
-		if err != nil {
-			return err
+		// NAT Gateways
+		natGateways := make([]*ec2.NatGateway, 2)
+		for i := 0; i < 2; i++ {
+			natGateway, err := ec2.NewNatGateway(ctx, fmt.Sprintf("%s-nat-%d", projectName, i), &ec2.NatGatewayArgs{
+				AllocationId: eip.ID(),
+				SubnetId:     publicSubnets[i].ID(),
+				Tags:         commonTags,
+			})
+			if err != nil {
+				return err
+			}
+			natGateways[i] = natGateway
 		}
 
 		// Route Tables
@@ -133,7 +137,7 @@ func main() {
 			Routes: ec2.RouteTableRouteArray{
 				&ec2.RouteTableRouteArgs{
 					CidrBlock:    pulumi.String("0.0.0.0/0"),
-					NatGatewayId: natGateway.ID(),
+					NatGatewayId: natGateways[0].ID(),
 				},
 			},
 			Tags: commonTags,
@@ -251,18 +255,18 @@ func main() {
 			},
 			Egress: ec2.SecurityGroupEgressArray{
 				&ec2.SecurityGroupEgressArgs{
-					Protocol:   pulumi.String("-1"),
+					Protocol:    pulumi.String("-1"),
 					FromPort:   pulumi.Int(0),
 					ToPort:     pulumi.Int(0),
-					CidrBlocks: pulumi.StringArray{pulumi.String("0.0.0.0/0")},
+					CidrBlocks:  pulumi.StringArray{pulumi.String("0.0.0.0/0")},
 				},
 			},
 			Tags: commonTags,
 		})
 
 		// RDS Security Group
-		dbSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-rds-sg", projectName), &ec2.SecurityGroupArgs{
-			Name:        pulumi.String(fmt.Sprintf("%s-rds-sg", projectName)),
+		dbSg, err := ec2.NewSecurityGroup(ctx, fmt.Sprintf("%s-db-sg", projectName), &ec2.SecurityGroupArgs{
+			Name:        pulumi.String(fmt.Sprintf("%s-db-sg", projectName)),
 			Description: pulumi.String("Security group for RDS instance"),
 			VpcId:       vpc.ID(),
 			Ingress: ec2.SecurityGroupIngressArray{
@@ -331,19 +335,20 @@ func main() {
 		// 6. RDS Instance
 		rdsInstance, err := rds.NewInstance(ctx, fmt.Sprintf("%s-rds", projectName), &rds.InstanceArgs{
 			AllocatedStorage:        pulumi.Int(20),
-			StorageType:             pulumi.String("gp2"),
-			Engine:                  pulumi.String("mysql"),
-			EngineVersion:           pulumi.String("8.0.32"),
+			StorageType:             pulumi.String("gp3"),
+			Engine:                pulumi.String("mysql"),
+			EngineVersion:           pulumi.String("8.0"),
 			InstanceClass:           pulumi.String("db.t3.micro"),
 			DbName:                  pulumi.String("webappdb"),
 			Username:                pulumi.String("dbadmin"),
 			Password:                cfg.GetSecret("dbPassword"),
 			ParameterGroupName:      rdsParameterGroup.Name,
-			DbSubnetGroupName:       dbSubnetGroup.Name,
-			VpcSecurityGroupIds:     pulumi.StringArray{dbSg.ID()},
-			StorageEncrypted:        pulumi.Bool(true),
+			DbSubnetGroupName:     dbSubnetGroup.Name,
+			VpcSecurityGroupIds:   pulumi.StringArray{dbSg.ID()},
+					StorageEncrypted:      pulumi.Bool(true),
+		PubliclyAccessible:    pulumi.Bool(false),
 			KmsKeyId:                kmsKey.Arn,
-			BackupRetentionPeriod:   pulumi.Int(7),
+			BackupRetentionPeriod: pulumi.Int(7),
 			BackupWindow:            pulumi.String("03:00-04:00"),
 			MaintenanceWindow:       pulumi.String("sun:04:00-sun:05:00"),
 			MultiAz:                 pulumi.Bool(true),
@@ -391,6 +396,27 @@ func main() {
 			return err
 		}
 
+		// S3 Bucket Versioning
+		_, err = s3.NewBucketVersioningV2(ctx, fmt.Sprintf("%s-alb-logs-versioning", projectName), &s3.BucketVersioningV2Args{
+			Bucket: albLogsBucket.Bucket,
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+				Status: pulumi.String("Enabled"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// S3 Bucket Server Access Logging
+		_, err = s3.NewBucketLoggingV2(ctx, fmt.Sprintf("%s-alb-logs-logging", projectName), &s3.BucketLoggingV2Args{
+			Bucket: albLogsBucket.Bucket,
+			TargetBucket: albLogsBucket.Bucket,
+			TargetPrefix: pulumi.String("logs/"),
+		})
+		if err != nil {
+			return err
+		}
+
 		// S3 Bucket Policy for ALB Logs
 		_, err = s3.NewBucketPolicy(ctx, fmt.Sprintf("%s-alb-logs-policy", projectName), &s3.BucketPolicyArgs{
 			Bucket: albLogsBucket.Bucket,
@@ -431,7 +457,79 @@ func main() {
 			return err
 		}
 
-		// 8. Application Load Balancer
+		// 8. S3 Bucket for Application Data
+		appDataBucket, err := s3.NewBucket(ctx, fmt.Sprintf("%s-app-data", projectName), &s3.BucketArgs{
+			Bucket: pulumi.String(fmt.Sprintf("%s-app-data-%s", projectName, environment)),
+			Tags:   commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		// S3 Bucket Encryption for App Data
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("%s-app-data-encryption", projectName), &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: appDataBucket.Bucket,
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm: pulumi.String("AES256"),
+					},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// S3 Bucket Public Access Block for App Data
+		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("%s-app-data-public-access-block", projectName), &s3.BucketPublicAccessBlockArgs{
+			Bucket:                appDataBucket.Bucket,
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
+		})
+		if err != nil {
+			return err
+		}
+
+		// 9. S3 Bucket for Backup
+		backupBucket, err := s3.NewBucket(ctx, fmt.Sprintf("%s-backup", projectName), &s3.BucketArgs{
+			Bucket: pulumi.String(fmt.Sprintf("%s-backup-%s", projectName, environment)),
+			Tags:   commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		// S3 Bucket Encryption for Backup
+		_, err = s3.NewBucketServerSideEncryptionConfigurationV2(ctx, fmt.Sprintf("%s-backup-encryption", projectName), &s3.BucketServerSideEncryptionConfigurationV2Args{
+			Bucket: backupBucket.Bucket,
+			Rules: s3.BucketServerSideEncryptionConfigurationV2RuleArray{
+				&s3.BucketServerSideEncryptionConfigurationV2RuleArgs{
+					ApplyServerSideEncryptionByDefault: &s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs{
+						SseAlgorithm: pulumi.String("AES256"),
+					},
+				},
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// S3 Bucket Public Access Block for Backup
+		_, err = s3.NewBucketPublicAccessBlock(ctx, fmt.Sprintf("%s-backup-public-access-block", projectName), &s3.BucketPublicAccessBlockArgs{
+			Bucket:                backupBucket.Bucket,
+			BlockPublicAcls:       pulumi.Bool(true),
+			BlockPublicPolicy:     pulumi.Bool(true),
+			IgnorePublicAcls:      pulumi.Bool(true),
+			RestrictPublicBuckets: pulumi.Bool(true),
+		})
+		if err != nil {
+			return err
+		}
+
+		// 10. Application Load Balancer
 		alb, err := lb.NewLoadBalancer(ctx, fmt.Sprintf("%s-alb", projectName), &lb.LoadBalancerArgs{
 			Name:                     pulumi.String(fmt.Sprintf("%s-alb", projectName)),
 			Internal:                 pulumi.Bool(false),
@@ -445,12 +543,12 @@ func main() {
 				Enabled: pulumi.Bool(true),
 			},
 			Tags: commonTags,
-		})
+		}, pulumi.DependsOn([]pulumi.Resource{albLogsBucket}))
 		if err != nil {
 			return err
 		}
 
-		// 9. ALB Target Group
+		// 11. ALB Target Group
 		targetGroup, err := lb.NewTargetGroup(ctx, fmt.Sprintf("%s-tg", projectName), &lb.TargetGroupArgs{
 			Name:       pulumi.String(fmt.Sprintf("%s-tg", projectName)),
 			Port:       pulumi.Int(80),
@@ -474,7 +572,7 @@ func main() {
 			return err
 		}
 
-		// 10. ALB Listener
+		// 12. ALB Listener
 		_, err = lb.NewListener(ctx, fmt.Sprintf("%s-listener", projectName), &lb.ListenerArgs{
 			LoadBalancerArn: alb.Arn,
 			Port:            pulumi.Int(80),
@@ -490,7 +588,7 @@ func main() {
 			return err
 		}
 
-		// 11. Launch Template for Application Servers
+		// 13. Launch Template for Application Servers
 		userData := `#!/bin/bash
 yum update -y
 yum install -y httpd
@@ -518,7 +616,7 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
-		// 12. Auto Scaling Group - Commented out due to SDK compatibility issues
+		// 14. Auto Scaling Group - Commented out due to SDK compatibility issues
 		// _, err = autoscaling.NewGroup(ctx, fmt.Sprintf("%s-asg", projectName), &autoscaling.GroupArgs{
 		// 	Name:                pulumi.String(fmt.Sprintf("%s-asg", projectName)),
 		// 	DesiredCapacity:     pulumi.Int(2),
@@ -542,7 +640,7 @@ echo "OK" > /var/www/html/health
 		// 	return err
 		// }
 
-		// 13. Bastion Host
+		// 15. Bastion Host
 		bastionInstance, err := ec2.NewInstance(ctx, fmt.Sprintf("%s-bastion", projectName), &ec2.InstanceArgs{
 			Ami:                 pulumi.String("ami-0735c191cf914754d"), // Amazon Linux 2 in us-west-2
 			InstanceType:        pulumi.String("t3.micro"),
@@ -555,7 +653,7 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
-		// 14. WAF Web ACL
+		// 16. WAF Web ACL
 		wafWebAcl, err := wafv2.NewWebAcl(ctx, fmt.Sprintf("%s-waf", projectName), &wafv2.WebAclArgs{
 			Name:        pulumi.String(fmt.Sprintf("%s-waf", projectName)),
 			Description: pulumi.String("WAF for protecting public IPs"),
@@ -594,7 +692,7 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
-		// 15. WAF Association with ALB
+		// 17. WAF Association with ALB
 		_, err = wafv2.NewWebAclAssociation(ctx, fmt.Sprintf("%s-waf-alb-assoc", projectName), &wafv2.WebAclAssociationArgs{
 			ResourceArn: alb.Arn,
 			WebAclArn:   wafWebAcl.Arn,
@@ -603,7 +701,7 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
-		// 16. CloudTrail
+		// 18. CloudTrail
 		cloudTrailBucket, err := s3.NewBucket(ctx, fmt.Sprintf("%s-cloudtrail", projectName), &s3.BucketArgs{
 			Bucket: pulumi.String(fmt.Sprintf("%s-cloudtrail-%s", projectName, environment)),
 			Tags:   commonTags,
@@ -634,6 +732,27 @@ echo "OK" > /var/www/html/health
 			BlockPublicPolicy:     pulumi.Bool(true),
 			IgnorePublicAcls:      pulumi.Bool(true),
 			RestrictPublicBuckets: pulumi.Bool(true),
+		})
+		if err != nil {
+			return err
+		}
+
+		// CloudTrail S3 Bucket Versioning
+		_, err = s3.NewBucketVersioningV2(ctx, fmt.Sprintf("%s-cloudtrail-versioning", projectName), &s3.BucketVersioningV2Args{
+			Bucket: cloudTrailBucket.Bucket,
+			VersioningConfiguration: &s3.BucketVersioningV2VersioningConfigurationArgs{
+				Status: pulumi.String("Enabled"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// CloudTrail S3 Bucket Server Access Logging
+		_, err = s3.NewBucketLoggingV2(ctx, fmt.Sprintf("%s-cloudtrail-logging", projectName), &s3.BucketLoggingV2Args{
+			Bucket: cloudTrailBucket.Bucket,
+			TargetBucket: cloudTrailBucket.Bucket,
+			TargetPrefix: pulumi.String("logs/"),
 		})
 		if err != nil {
 			return err
@@ -691,7 +810,7 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
-		// 17. CloudWatch Alarms
+		// 19. CloudWatch Alarms
 		// RDS CPU Alarm
 		rdsCpuAlarm, err := cloudwatch.NewMetricAlarm(ctx, fmt.Sprintf("%s-rds-cpu-alarm", projectName), &cloudwatch.MetricAlarmArgs{
 			Name:               pulumi.String(fmt.Sprintf("%s-rds-cpu-alarm", projectName)),
@@ -703,6 +822,26 @@ echo "OK" > /var/www/html/health
 			Statistic:          pulumi.String("Average"),
 			Threshold:          pulumi.Float64(80.0),
 			AlarmDescription:   pulumi.String("RDS CPU utilization is too high"),
+			Dimensions: pulumi.StringMap{
+				"DBInstanceIdentifier": rdsInstance.ID(),
+			},
+			Tags: commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
+		// RDS Connections Alarm
+		rdsConnectionsAlarm, err := cloudwatch.NewMetricAlarm(ctx, fmt.Sprintf("%s-rds-connections-alarm", projectName), &cloudwatch.MetricAlarmArgs{
+			Name:               pulumi.String(fmt.Sprintf("%s-rds-connections-alarm", projectName)),
+			ComparisonOperator: pulumi.String("GreaterThanThreshold"),
+			EvaluationPeriods:  pulumi.Int(2),
+			MetricName:         pulumi.String("DatabaseConnections"),
+			Namespace:          pulumi.String("AWS/RDS"),
+			Period:             pulumi.Int(300),
+			Statistic:          pulumi.String("Average"),
+			Threshold:          pulumi.Float64(100.0),
+			AlarmDescription:   pulumi.String("RDS database connections are too high"),
 			Dimensions: pulumi.StringMap{
 				"DBInstanceIdentifier": rdsInstance.ID(),
 			},
@@ -733,7 +872,70 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
-		// 18. IAM Roles and Policies
+		// 20. CloudWatch Dashboard
+		cloudWatchDashboard, err := cloudwatch.NewDashboard(ctx, fmt.Sprintf("%s-dashboard", projectName), &cloudwatch.DashboardArgs{
+			DashboardName: pulumi.String(fmt.Sprintf("%s-dashboard", projectName)),
+			DashboardBody: pulumi.String(`{
+				"widgets": [
+					{
+						"type": "metric",
+						"x": 0,
+						"y": 0,
+						"width": 12,
+						"height": 6,
+						"properties": {
+							"metrics": [
+								["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "tap-project-rds"],
+								["AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "tap-project-rds"]
+							],
+							"view": "timeSeries",
+							"stacked": false,
+							"region": "us-west-2",
+							"title": "RDS Metrics"
+						}
+					},
+					{
+						"type": "metric",
+						"x": 12,
+						"y": 0,
+						"width": 12,
+						"height": 6,
+						"properties": {
+							"metrics": [
+								["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "tap-project-alb"],
+								["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", "tap-project-alb"]
+							],
+							"view": "timeSeries",
+							"stacked": false,
+							"region": "us-west-2",
+							"title": "ALB Metrics"
+						}
+					},
+					{
+						"type": "metric",
+						"x": 0,
+						"y": 6,
+						"width": 12,
+						"height": 6,
+						"properties": {
+							"metrics": [
+								["AWS/S3", "NumberOfObjects", "BucketName", "tap-project-alb-logs-dev"],
+								["AWS/S3", "BucketSizeBytes", "BucketName", "tap-project-alb-logs-dev", "StorageType", "StandardStorage"]
+							],
+							"view": "timeSeries",
+							"stacked": false,
+							"region": "us-west-2",
+							"title": "S3 Metrics"
+						}
+					}
+				]
+			}`),
+		})
+		if err != nil {
+			return err
+		}
+
+		// 21. IAM Roles and Policies
 		// EC2 Instance Role
 		ec2Role, err := iam.NewRole(ctx, fmt.Sprintf("%s-ec2-role", projectName), &iam.RoleArgs{
 			Name: pulumi.String(fmt.Sprintf("%s-ec2-role", projectName)),
@@ -762,6 +964,33 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
+		// S3 Access Policy
+		s3AccessPolicy, err := iam.NewPolicy(ctx, fmt.Sprintf("%s-s3-access-policy", projectName), &iam.PolicyArgs{
+			Name: pulumi.String(fmt.Sprintf("%s-s3-access-policy", projectName)),
+			Policy: pulumi.String(`{
+				"Version": "2012-10-17",
+				"Statement": [
+					{
+						"Effect": "Allow",
+						"Action": [
+							"s3:GetObject",
+							"s3:PutObject",
+							"s3:DeleteObject",
+							"s3:ListBucket"
+						],
+						"Resource": [
+							"arn:aws:s3:::tap-project-app-data-dev",
+							"arn:aws:s3:::tap-project-app-data-dev/*"
+						]
+					}
+				]
+			}`),
+			Tags: commonTags,
+		})
+		if err != nil {
+			return err
+		}
+
 		// CloudWatch Logs Policy
 		cloudWatchPolicy, err := iam.NewPolicy(ctx, fmt.Sprintf("%s-cloudwatch-policy", projectName), &iam.PolicyArgs{
 			Name: pulumi.String(fmt.Sprintf("%s-cloudwatch-policy", projectName)),
@@ -784,10 +1013,19 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
-		// Attach policy to role
+		// Attach CloudWatch policy to role
 		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("%s-cloudwatch-attachment", projectName), &iam.RolePolicyAttachmentArgs{
 			Role:      ec2Role.Name,
 			PolicyArn: cloudWatchPolicy.Arn,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Attach S3 access policy to role
+		_, err = iam.NewRolePolicyAttachment(ctx, fmt.Sprintf("%s-s3-access-attachment", projectName), &iam.RolePolicyAttachmentArgs{
+			Role:      ec2Role.Name,
+			PolicyArn: s3AccessPolicy.Arn,
 		})
 		if err != nil {
 			return err
@@ -835,7 +1073,9 @@ echo "OK" > /var/www/html/health
 		ctx.Export("wafWebAclArn", wafWebAcl.Arn)
 		ctx.Export("cloudTrailName", cloudTrail.Name)
 		ctx.Export("rdsCpuAlarmArn", rdsCpuAlarm.Arn)
+		ctx.Export("rdsConnectionsAlarmArn", rdsConnectionsAlarm.Arn)
 		ctx.Export("alb5xxAlarmArn", alb5xxAlarm.Arn)
+		ctx.Export("cloudWatchDashboardUrl", cloudWatchDashboard.DashboardArn)
 
 		return nil
 	})
