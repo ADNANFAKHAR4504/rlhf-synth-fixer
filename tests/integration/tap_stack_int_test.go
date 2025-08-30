@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elasticloadbalancingv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/wafv2"
@@ -304,7 +305,7 @@ func TestLiveLoadBalancer(t *testing.T) {
 		require.NoError(t, err)
 
 		// Find the ALB with matching DNS name
-		var targetALB *types.LoadBalancer
+		var targetALB *elasticloadbalancingv2types.LoadBalancer
 		for _, lb := range result.LoadBalancers {
 			if *lb.DNSName == outputs.AlbDnsName {
 				targetALB = &lb
