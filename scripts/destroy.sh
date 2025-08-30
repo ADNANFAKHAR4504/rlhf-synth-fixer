@@ -78,19 +78,34 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   # Now delete the instance
   aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_NAME" --skip-final-snapshot || echo "DB instance not found or already deleted"
   
-  echo "Step 2: Wait for RDS instance deletion (checking for 60 seconds)..."
-  for i in {1..12}; do
+  echo "Step 2: Wait for RDS instance deletion (checking for up to 5 minutes)..."
+  for i in {1..60}; do
     if aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_NAME" >/dev/null 2>&1; then
-      echo "DB instance still exists, waiting... ($i/12)"
+      echo "DB instance still exists, waiting... ($i/60) - 5s intervals"
       sleep 5
     else
-      echo "DB instance deleted"
+      echo "✅ DB instance deleted successfully"
       break
     fi
   done
   
+  # Final check - fail if DB still exists
+  if aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: DB instance still exists after 5 minutes. Manual intervention required."
+    echo "❌ Cannot proceed with deployment until DB is fully deleted."
+    exit 1
+  fi
+  
   echo "Step 3: Delete DB subnet group: $DB_SUBNET_GROUP_NAME"
   aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" || echo "DB subnet group not found or already deleted"
+  
+  # Verify DB subnet group is gone
+  if aws rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: DB subnet group still exists. Manual intervention required."
+    exit 1
+  else
+    echo "✅ DB subnet group deleted successfully"
+  fi
   
   echo "Step 4: Clean up IAM resources"
   # Remove role from instance profile first
@@ -126,7 +141,25 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   # Delete role
   aws iam delete-role --role-name "$IAM_ROLE_NAME" || echo "IAM role not found or already deleted"
   
-  echo "Step 5: Clean up Load Balancer"
+  # Verify IAM role is gone
+  if aws iam get-role --role-name "$IAM_ROLE_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: IAM role still exists. Manual intervention required."
+    exit 1
+  else
+    echo "✅ IAM role deleted successfully"
+  fi
+  
+  echo "Step 5: Clean up Launch Templates"
+  WEB_LT_NAME="web-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
+  APP_LT_NAME="app-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
+  
+  echo "Deleting Launch Template: $WEB_LT_NAME"
+  aws ec2 delete-launch-template --launch-template-name "$WEB_LT_NAME" || echo "Web launch template not found or already deleted"
+  
+  echo "Deleting Launch Template: $APP_LT_NAME"
+  aws ec2 delete-launch-template --launch-template-name "$APP_LT_NAME" || echo "App launch template not found or already deleted"
+  
+  echo "Step 6: Clean up Load Balancer"
   ALB_ARN=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
   if [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
     echo "Deleting Load Balancer: $ALB_NAME"
@@ -135,7 +168,44 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     echo "Load balancer not found or already deleted"
   fi
   
-  echo "Manual cleanup completed"
+  echo "Step 7: Final verification of critical resources"
+  CRITICAL_ERRORS=0
+  
+  # Check if any critical resources still exist
+  if aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: DB instance still exists: $DB_INSTANCE_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if aws rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: DB subnet group still exists: $DB_SUBNET_GROUP_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if aws iam get-role --role-name "$IAM_ROLE_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: IAM role still exists: $IAM_ROLE_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if aws ec2 describe-launch-templates --launch-template-names "$WEB_LT_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: Web Launch template still exists: $WEB_LT_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if aws ec2 describe-launch-templates --launch-template-names "$APP_LT_NAME" >/dev/null 2>&1; then
+    echo "❌ CRITICAL: App Launch template still exists: $APP_LT_NAME"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if [ $CRITICAL_ERRORS -gt 0 ]; then
+    echo "❌ DESTROY FAILED: $CRITICAL_ERRORS critical resources still exist"
+    echo "❌ Cannot proceed with deployment. Manual cleanup required."
+    exit 1
+  else
+    echo "✅ All critical resources successfully deleted"
+  fi
+  
+  echo "Manual cleanup completed successfully"
 
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, running CloudFormation destroy..."
