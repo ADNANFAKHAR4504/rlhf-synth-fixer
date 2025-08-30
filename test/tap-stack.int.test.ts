@@ -626,3 +626,4 @@ describe('TapStack Integration Tests', () => {
       expect(errorCaught).toBe(true);
     });
   });
+});
