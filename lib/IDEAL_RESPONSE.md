@@ -70,7 +70,7 @@ The complete infrastructure includes all AWS resources with default values:
 - min_size = 2, max_size = 10, desired_capacity = 3
 - db_instance_class = "db.t3.micro"
 - db_allocated_storage = 20
-- key_name = "my-key-pair"
+- key_name = null (no SSH key by default)
 - notification_email = "admin@example.com"
 
 **Infrastructure Components:**
@@ -146,6 +146,8 @@ terraform apply
 - RDS password uses AWS-compliant character set (excludes /, @, ", space)
 - Target group names are truncated to stay within 32-character AWS limit
 - Default tags applied to all resources without timestamp to avoid plan inconsistencies
+- No SSH key configured by default (provide `key_name` variable for SSH access)
+- RDS Performance Insights disabled for db.t3.micro (enabled for larger instances)
 
 **Test:**
 ```bash

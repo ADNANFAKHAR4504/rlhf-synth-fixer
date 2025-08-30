@@ -73,9 +73,9 @@ variable "db_allocated_storage" {
 }
 
 variable "key_name" {
-  description = "EC2 Key Pair name"
+  description = "EC2 Key Pair name (optional)"
   type        = string
-  default     = "my-key-pair"
+  default     = null
 }
 
 variable "allowed_cidr_blocks" {
@@ -708,8 +708,8 @@ resource "aws_db_instance" "main" {
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
 
-  # Performance Insights
-  performance_insights_enabled = true
+  # Performance Insights (not supported on db.t3.micro)
+  performance_insights_enabled = var.db_instance_class != "db.t3.micro"
 
   # Deletion protection for production
   deletion_protection = false # Set to true for production
@@ -775,7 +775,8 @@ resource "aws_lb_listener" "web_http" {
   protocol          = "HTTP"
 
   default_action {
-    type = var.domain_name != "" ? "redirect" : "forward"
+    type             = var.domain_name != "" ? "redirect" : "forward"
+    target_group_arn = var.domain_name == "" ? aws_lb_target_group.web.arn : null
     
     dynamic "redirect" {
       for_each = var.domain_name != "" ? [1] : []
@@ -785,8 +786,6 @@ resource "aws_lb_listener" "web_http" {
         status_code = "HTTP_301"
       }
     }
-    
-    target_group_arn = var.domain_name == "" ? aws_lb_target_group.web.arn : null
   }
 
   tags = {

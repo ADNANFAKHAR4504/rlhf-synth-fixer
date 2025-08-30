@@ -75,7 +75,7 @@ describe('AWS Web App Infrastructure - Unit Tests', () => {
     });
 
     test('should declare key_name variable with default', () => {
-      expect(stackContent).toMatch(/variable\s+"key_name"\s*{[\s\S]*?default\s*=\s*"my-key-pair"/);
+      expect(stackContent).toMatch(/variable\s+"key_name"\s*{[\s\S]*?default\s*=\s*null/);
     });
 
     test('should declare notification_email variable with default', () => {
@@ -324,7 +324,7 @@ describe('AWS Web App Infrastructure - Unit Tests', () => {
       expect(stackContent).toMatch(/multi_az\s*=\s*true/);
       expect(stackContent).toMatch(/publicly_accessible\s*=\s*false/);
       expect(stackContent).toMatch(/backup_retention_period\s*=\s*7/);
-      expect(stackContent).toMatch(/performance_insights_enabled\s*=\s*true/);
+      expect(stackContent).toMatch(/performance_insights_enabled\s*=\s*var\.db_instance_class/);
     });
   });
 
