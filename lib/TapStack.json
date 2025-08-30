@@ -14,25 +14,6 @@
       "Default": "",
       "AllowedPattern": "^$|^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
       "ConstraintDescription": "Must be empty or a valid EC2 KeyPair name."
-    },
-    "DBUsername": {
-      "Type": "String",
-      "Description": "Database administrator username",
-      "Default": "admin",
-      "MinLength": "1",
-      "MaxLength": "16",
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
-      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
-    },
-    "DBPassword": {
-      "Type": "String",
-      "Description": "Database administrator password",
-      "NoEcho": true,
-      "Default": "TempPassword123!",
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "[a-zA-Z0-9!@#$%^&*()_+=-]*",
-      "ConstraintDescription": "Must contain 8-41 alphanumeric and special characters."
     }
   },
 
@@ -560,6 +541,46 @@
       }
     },
 
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "RDS MySQL Database Password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": " \"@/\\\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-DB-Password"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "DBPasswordSecretAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DBPasswordSecret"
+        },
+        "TargetId": {
+          "Ref": "ProductionDatabase"
+        },
+        "TargetType": "AWS::RDS::DBInstance"
+      }
+    },
+
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
@@ -599,11 +620,18 @@
         "AllocatedStorage": "20",
         "StorageType": "gp2",
         "DBName": "productiondb",
-        "MasterUsername": {
-          "Ref": "DBUsername"
-        },
+        "MasterUsername": "admin",
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "DBPasswordSecret"
+              },
+              ":SecretString:password}}"
+            ]
+          ]
         },
         "VPCSecurityGroups": [
           {

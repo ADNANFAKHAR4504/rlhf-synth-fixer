@@ -32,10 +32,10 @@ describe('TapStack CloudFormation Template - Production Web App Infrastructure',
       expect(template.Parameters.KeyPairName.Type).toBe('String');
     });
 
-    test('should have database parameters', () => {
-      expect(template.Parameters.DBUsername).toBeDefined();
-      expect(template.Parameters.DBPassword).toBeDefined();
-      expect(template.Parameters.DBPassword.NoEcho).toBe(true);
+    test('should have secrets manager for database credentials', () => {
+      expect(template.Resources.DBPasswordSecret).toBeDefined();
+      expect(template.Resources.DBPasswordSecret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(template.Resources.DBPasswordSecretAttachment).toBeDefined();
     });
   });
 

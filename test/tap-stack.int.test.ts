@@ -41,8 +41,8 @@ describe('TapStack Integration Tests - Live Infrastructure Deployment', () => {
         
         // Check for required parameters
         const paramNames = result.Parameters!.map(p => p.ParameterKey);
-        expect(paramNames).toContain('DBUsername');
-        expect(paramNames).toContain('DBPassword');
+        expect(paramNames).toContain('LatestAmiId');
+        expect(paramNames).toContain('KeyPairName');
       } catch (error) {
         throw new Error(`Template validation failed: ${error}`);
       }
