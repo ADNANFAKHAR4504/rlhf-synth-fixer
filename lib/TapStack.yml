@@ -334,8 +334,60 @@ Resources:
       TopicName: !Sub ${Environment}-infrastructure-alarms
 
   # AWS Config
+  ConfigRecorderExists:
+    Type: Custom::ConfigRecorderExists
+    Properties:
+      ServiceToken: !GetAtt CheckConfigRecorderFunction.Arn
+      Region: !Ref "AWS::Region"
+
+  CheckConfigRecorderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+            if event['RequestType'] == 'Delete':
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              return
+            try:
+              config = boto3.client('config')
+              recorders = config.describe_configuration_recorders()
+              exists = len(recorders['ConfigurationRecorders']) > 0
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                {'Exists': exists}, 'ConfigRecorderExists')
+            except Exception as e:
+              cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ConfigAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:DescribeConfigurationRecorders
+                Resource: "*"
+
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfigRecorder
     Properties:
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
@@ -344,6 +396,7 @@ Resources:
 
   ConfigRole:
     Type: AWS::IAM::Role
+    Condition: CreateConfigRecorder
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -354,6 +407,9 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+
+Conditions:
+  CreateConfigRecorder: !Not [!GetAtt ConfigRecorderExists.Exists]
 
 Outputs:
   VPCId:
