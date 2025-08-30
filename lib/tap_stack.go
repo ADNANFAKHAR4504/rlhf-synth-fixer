@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/lb"
@@ -63,8 +64,8 @@ func main() {
 
 		// NAT Gateway and Elastic IP
 		eip, err := ec2.NewEip(ctx, fmt.Sprintf("%s-nat-eip", projectName), &ec2.EipArgs{
-			Vpc:  pulumi.Bool(true),
-			Tags: commonTags,
+			Domain: pulumi.String("vpc"),
+			Tags:   commonTags,
 		})
 		if err != nil {
 			return err
@@ -540,6 +541,46 @@ echo "OK" > /var/www/html/health
 			return err
 		}
 
+		// CloudTrail S3 Bucket Policy
+		cloudTrailBucketPolicy, err := s3.NewBucketPolicy(ctx, fmt.Sprintf("%s-cloudtrail-policy", projectName), &s3.BucketPolicyArgs{
+			Bucket: cloudTrailBucket.Bucket,
+			Policy: cloudTrailBucket.Bucket.ApplyT(func(bucketName string) (string, error) {
+				policy := map[string]interface{}{
+					"Version": "2012-10-17",
+					"Statement": []map[string]interface{}{
+						{
+							"Sid":    "AWSCloudTrailAclCheck",
+							"Effect": "Allow",
+							"Principal": map[string]interface{}{
+								"Service": "cloudtrail.amazonaws.com",
+							},
+							"Action":   "s3:GetBucketAcl",
+							"Resource": fmt.Sprintf("arn:aws:s3:::%s", bucketName),
+						},
+						{
+							"Sid":    "AWSCloudTrailWrite",
+							"Effect": "Allow",
+							"Principal": map[string]interface{}{
+								"Service": "cloudtrail.amazonaws.com",
+							},
+							"Action":   "s3:PutObject",
+							"Resource": fmt.Sprintf("arn:aws:s3:::%s/AWSLogs/*", bucketName),
+							"Condition": map[string]interface{}{
+								"StringEquals": map[string]interface{}{
+									"s3:x-amz-acl": "bucket-owner-full-control",
+								},
+							},
+						},
+					},
+				}
+				policyJSON, err := json.Marshal(policy)
+				return string(policyJSON), err
+			}).(pulumi.StringOutput),
+		})
+		if err != nil {
+			return err
+		}
+
 		cloudTrail, err := cloudtrail.NewTrail(ctx, fmt.Sprintf("%s-trail", projectName), &cloudtrail.TrailArgs{
 			Name:                       pulumi.String(fmt.Sprintf("%s-trail", projectName)),
 			S3BucketName:               cloudTrailBucket.Bucket,
@@ -547,7 +588,7 @@ echo "OK" > /var/www/html/health
 			IsMultiRegionTrail:         pulumi.Bool(true),
 			EnableLogging:              pulumi.Bool(true),
 			Tags:                       commonTags,
-		})
+		}, pulumi.DependsOn([]pulumi.Resource{cloudTrailBucketPolicy}))
 		if err != nil {
 			return err
 		}
