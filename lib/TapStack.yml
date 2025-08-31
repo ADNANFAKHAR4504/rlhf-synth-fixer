@@ -525,3 +525,19 @@ Outputs:
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-RDSBackupBucketName
+
+  KMSKeyAliasEBS:
+    Description: KMS Key Alias for EBS
+    Value:
+      Ref: EBSKMSKey
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-KMSKeyAliasEBS
+
+  KMSKeyAliasRDS:
+    Description: KMS Key Alias for RDS
+    Value:
+      Ref: RDSKMSKey
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-KMSKeyAliasRDS
