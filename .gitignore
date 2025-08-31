@@ -93,6 +93,8 @@ bin/.terraform.lock.hcl
 .genpackage-lock.json
 .gen/providers/*
 src/main/java/imports/
+src/main/resources/imports/
+src/main/resources/
 
 __pycache__/
 .pulumi/
