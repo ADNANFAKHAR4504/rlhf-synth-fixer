@@ -1,0 +1,53 @@
+package imports.aws.data_aws_connect_user_hierarchy_group;
+
+@javax.annotation.Generated(value = "jsii-pacmak/1.112.0 (build de1bc80)", date = "2025-08-30T23:34:46.537Z")
+@software.amazon.jsii.Jsii(module = imports.aws.$Module.class, fqn = "aws.dataAwsConnectUserHierarchyGroup.DataAwsConnectUserHierarchyGroupHierarchyPathOutputReference")
+public class DataAwsConnectUserHierarchyGroupHierarchyPathOutputReference extends com.hashicorp.cdktf.ComplexObject {
+
+    protected DataAwsConnectUserHierarchyGroupHierarchyPathOutputReference(final software.amazon.jsii.JsiiObjectRef objRef) {
+        super(objRef);
+    }
+
+    protected DataAwsConnectUserHierarchyGroupHierarchyPathOutputReference(final software.amazon.jsii.JsiiObject.InitializationMode initializationMode) {
+        super(initializationMode);
+    }
+
+    /**
+     * @param terraformResource The parent resource. This parameter is required.
+     * @param terraformAttribute The attribute on the parent resource this class is referencing. This parameter is required.
+     * @param complexObjectIndex the index of this item in the list. This parameter is required.
+     * @param complexObjectIsFromSet whether the list is wrapping a set (will add tolist() to be able to access an item via an index). This parameter is required.
+     */
+    public DataAwsConnectUserHierarchyGroupHierarchyPathOutputReference(final @org.jetbrains.annotations.NotNull com.hashicorp.cdktf.IInterpolatingParent terraformResource, final @org.jetbrains.annotations.NotNull java.lang.String terraformAttribute, final @org.jetbrains.annotations.NotNull java.lang.Number complexObjectIndex, final @org.jetbrains.annotations.NotNull java.lang.Boolean complexObjectIsFromSet) {
+        super(software.amazon.jsii.JsiiObject.InitializationMode.JSII);
+        software.amazon.jsii.JsiiEngine.getInstance().createNewObject(this, new Object[] { java.util.Objects.requireNonNull(terraformResource, "terraformResource is required"), java.util.Objects.requireNonNull(terraformAttribute, "terraformAttribute is required"), java.util.Objects.requireNonNull(complexObjectIndex, "complexObjectIndex is required"), java.util.Objects.requireNonNull(complexObjectIsFromSet, "complexObjectIsFromSet is required") });
+    }
+
+    public @org.jetbrains.annotations.NotNull imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelFiveList getLevelFive() {
+        return software.amazon.jsii.Kernel.get(this, "levelFive", software.amazon.jsii.NativeType.forClass(imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelFiveList.class));
+    }
+
+    public @org.jetbrains.annotations.NotNull imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelFourList getLevelFour() {
+        return software.amazon.jsii.Kernel.get(this, "levelFour", software.amazon.jsii.NativeType.forClass(imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelFourList.class));
+    }
+
+    public @org.jetbrains.annotations.NotNull imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelOneList getLevelOne() {
+        return software.amazon.jsii.Kernel.get(this, "levelOne", software.amazon.jsii.NativeType.forClass(imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelOneList.class));
+    }
+
+    public @org.jetbrains.annotations.NotNull imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelThreeList getLevelThree() {
+        return software.amazon.jsii.Kernel.get(this, "levelThree", software.amazon.jsii.NativeType.forClass(imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelThreeList.class));
+    }
+
+    public @org.jetbrains.annotations.NotNull imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelTwoList getLevelTwo() {
+        return software.amazon.jsii.Kernel.get(this, "levelTwo", software.amazon.jsii.NativeType.forClass(imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPathLevelTwoList.class));
+    }
+
+    public @org.jetbrains.annotations.Nullable imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPath getInternalValue() {
+        return software.amazon.jsii.Kernel.get(this, "internalValue", software.amazon.jsii.NativeType.forClass(imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPath.class));
+    }
+
+    public void setInternalValue(final @org.jetbrains.annotations.Nullable imports.aws.data_aws_connect_user_hierarchy_group.DataAwsConnectUserHierarchyGroupHierarchyPath value) {
+        software.amazon.jsii.Kernel.set(this, "internalValue", value);
+    }
+}

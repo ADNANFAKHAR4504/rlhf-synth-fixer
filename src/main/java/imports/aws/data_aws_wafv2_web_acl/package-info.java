@@ -1,0 +1,6 @@
+/**
+ * <h1><code>data_aws_wafv2_web_acl</code></h1>
+ * <p>
+ * Refer to the Terraform Registry for docs: <a href="https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/data-sources/wafv2_web_acl"><code>data_aws_wafv2_web_acl</code></a>.
+ */
+package imports.aws.data_aws_wafv2_web_acl;

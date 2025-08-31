@@ -1,0 +1,474 @@
+package imports.aws.quicksight_iam_policy_assignment;
+
+@javax.annotation.Generated(value = "jsii-pacmak/1.112.0 (build de1bc80)", date = "2025-08-30T23:34:48.121Z")
+@software.amazon.jsii.Jsii(module = imports.aws.$Module.class, fqn = "aws.quicksightIamPolicyAssignment.QuicksightIamPolicyAssignmentConfig")
+@software.amazon.jsii.Jsii.Proxy(QuicksightIamPolicyAssignmentConfig.Jsii$Proxy.class)
+public interface QuicksightIamPolicyAssignmentConfig extends software.amazon.jsii.JsiiSerializable, com.hashicorp.cdktf.TerraformMetaArguments {
+
+    /**
+     * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#assignment_name QuicksightIamPolicyAssignment#assignment_name}.
+     */
+    @org.jetbrains.annotations.NotNull java.lang.String getAssignmentName();
+
+    /**
+     * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#assignment_status QuicksightIamPolicyAssignment#assignment_status}.
+     */
+    @org.jetbrains.annotations.NotNull java.lang.String getAssignmentStatus();
+
+    /**
+     * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#aws_account_id QuicksightIamPolicyAssignment#aws_account_id}.
+     */
+    default @org.jetbrains.annotations.Nullable java.lang.String getAwsAccountId() {
+        return null;
+    }
+
+    /**
+     * identities block.
+     * <p>
+     * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#identities QuicksightIamPolicyAssignment#identities}
+     */
+    default @org.jetbrains.annotations.Nullable java.lang.Object getIdentities() {
+        return null;
+    }
+
+    /**
+     * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#namespace QuicksightIamPolicyAssignment#namespace}.
+     */
+    default @org.jetbrains.annotations.Nullable java.lang.String getNamespace() {
+        return null;
+    }
+
+    /**
+     * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#policy_arn QuicksightIamPolicyAssignment#policy_arn}.
+     */
+    default @org.jetbrains.annotations.Nullable java.lang.String getPolicyArn() {
+        return null;
+    }
+
+    /**
+     * @return a {@link Builder} of {@link QuicksightIamPolicyAssignmentConfig}
+     */
+    static Builder builder() {
+        return new Builder();
+    }
+    /**
+     * A builder for {@link QuicksightIamPolicyAssignmentConfig}
+     */
+    public static final class Builder implements software.amazon.jsii.Builder<QuicksightIamPolicyAssignmentConfig> {
+        java.lang.String assignmentName;
+        java.lang.String assignmentStatus;
+        java.lang.String awsAccountId;
+        java.lang.Object identities;
+        java.lang.String namespace;
+        java.lang.String policyArn;
+        java.lang.Object connection;
+        java.lang.Object count;
+        java.util.List<com.hashicorp.cdktf.ITerraformDependable> dependsOn;
+        com.hashicorp.cdktf.ITerraformIterator forEach;
+        com.hashicorp.cdktf.TerraformResourceLifecycle lifecycle;
+        com.hashicorp.cdktf.TerraformProvider provider;
+        java.util.List<java.lang.Object> provisioners;
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getAssignmentName}
+         * @param assignmentName Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#assignment_name QuicksightIamPolicyAssignment#assignment_name}. This parameter is required.
+         * @return {@code this}
+         */
+        public Builder assignmentName(java.lang.String assignmentName) {
+            this.assignmentName = assignmentName;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getAssignmentStatus}
+         * @param assignmentStatus Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#assignment_status QuicksightIamPolicyAssignment#assignment_status}. This parameter is required.
+         * @return {@code this}
+         */
+        public Builder assignmentStatus(java.lang.String assignmentStatus) {
+            this.assignmentStatus = assignmentStatus;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getAwsAccountId}
+         * @param awsAccountId Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#aws_account_id QuicksightIamPolicyAssignment#aws_account_id}.
+         * @return {@code this}
+         */
+        public Builder awsAccountId(java.lang.String awsAccountId) {
+            this.awsAccountId = awsAccountId;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getIdentities}
+         * @param identities identities block.
+         *                   Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#identities QuicksightIamPolicyAssignment#identities}
+         * @return {@code this}
+         */
+        public Builder identities(com.hashicorp.cdktf.IResolvable identities) {
+            this.identities = identities;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getIdentities}
+         * @param identities identities block.
+         *                   Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#identities QuicksightIamPolicyAssignment#identities}
+         * @return {@code this}
+         */
+        public Builder identities(java.util.List<? extends imports.aws.quicksight_iam_policy_assignment.QuicksightIamPolicyAssignmentIdentities> identities) {
+            this.identities = identities;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getNamespace}
+         * @param namespace Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#namespace QuicksightIamPolicyAssignment#namespace}.
+         * @return {@code this}
+         */
+        public Builder namespace(java.lang.String namespace) {
+            this.namespace = namespace;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getPolicyArn}
+         * @param policyArn Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/quicksight_iam_policy_assignment#policy_arn QuicksightIamPolicyAssignment#policy_arn}.
+         * @return {@code this}
+         */
+        public Builder policyArn(java.lang.String policyArn) {
+            this.policyArn = policyArn;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getConnection}
+         * @param connection the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder connection(com.hashicorp.cdktf.SSHProvisionerConnection connection) {
+            this.connection = connection;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getConnection}
+         * @param connection the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder connection(com.hashicorp.cdktf.WinrmProvisionerConnection connection) {
+            this.connection = connection;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getCount}
+         * @param count the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder count(java.lang.Number count) {
+            this.count = count;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getCount}
+         * @param count the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder count(com.hashicorp.cdktf.TerraformCount count) {
+            this.count = count;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getDependsOn}
+         * @param dependsOn the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        @SuppressWarnings("unchecked")
+        public Builder dependsOn(java.util.List<? extends com.hashicorp.cdktf.ITerraformDependable> dependsOn) {
+            this.dependsOn = (java.util.List<com.hashicorp.cdktf.ITerraformDependable>)dependsOn;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getForEach}
+         * @param forEach the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder forEach(com.hashicorp.cdktf.ITerraformIterator forEach) {
+            this.forEach = forEach;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getLifecycle}
+         * @param lifecycle the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder lifecycle(com.hashicorp.cdktf.TerraformResourceLifecycle lifecycle) {
+            this.lifecycle = lifecycle;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getProvider}
+         * @param provider the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder provider(com.hashicorp.cdktf.TerraformProvider provider) {
+            this.provider = provider;
+            return this;
+        }
+
+        /**
+         * Sets the value of {@link QuicksightIamPolicyAssignmentConfig#getProvisioners}
+         * @param provisioners the value to be set.
+         * @return {@code this}
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        @SuppressWarnings("unchecked")
+        public Builder provisioners(java.util.List<? extends java.lang.Object> provisioners) {
+            this.provisioners = (java.util.List<java.lang.Object>)provisioners;
+            return this;
+        }
+
+        /**
+         * Builds the configured instance.
+         * @return a new instance of {@link QuicksightIamPolicyAssignmentConfig}
+         * @throws NullPointerException if any required attribute was not provided
+         */
+        @Override
+        public QuicksightIamPolicyAssignmentConfig build() {
+            return new Jsii$Proxy(this);
+        }
+    }
+
+    /**
+     * An implementation for {@link QuicksightIamPolicyAssignmentConfig}
+     */
+    @software.amazon.jsii.Internal
+    final class Jsii$Proxy extends software.amazon.jsii.JsiiObject implements QuicksightIamPolicyAssignmentConfig {
+        private final java.lang.String assignmentName;
+        private final java.lang.String assignmentStatus;
+        private final java.lang.String awsAccountId;
+        private final java.lang.Object identities;
+        private final java.lang.String namespace;
+        private final java.lang.String policyArn;
+        private final java.lang.Object connection;
+        private final java.lang.Object count;
+        private final java.util.List<com.hashicorp.cdktf.ITerraformDependable> dependsOn;
+        private final com.hashicorp.cdktf.ITerraformIterator forEach;
+        private final com.hashicorp.cdktf.TerraformResourceLifecycle lifecycle;
+        private final com.hashicorp.cdktf.TerraformProvider provider;
+        private final java.util.List<java.lang.Object> provisioners;
+
+        /**
+         * Constructor that initializes the object based on values retrieved from the JsiiObject.
+         * @param objRef Reference to the JSII managed object.
+         */
+        protected Jsii$Proxy(final software.amazon.jsii.JsiiObjectRef objRef) {
+            super(objRef);
+            this.assignmentName = software.amazon.jsii.Kernel.get(this, "assignmentName", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+            this.assignmentStatus = software.amazon.jsii.Kernel.get(this, "assignmentStatus", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+            this.awsAccountId = software.amazon.jsii.Kernel.get(this, "awsAccountId", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+            this.identities = software.amazon.jsii.Kernel.get(this, "identities", software.amazon.jsii.NativeType.forClass(java.lang.Object.class));
+            this.namespace = software.amazon.jsii.Kernel.get(this, "namespace", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+            this.policyArn = software.amazon.jsii.Kernel.get(this, "policyArn", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+            this.connection = software.amazon.jsii.Kernel.get(this, "connection", software.amazon.jsii.NativeType.forClass(java.lang.Object.class));
+            this.count = software.amazon.jsii.Kernel.get(this, "count", software.amazon.jsii.NativeType.forClass(java.lang.Object.class));
+            this.dependsOn = software.amazon.jsii.Kernel.get(this, "dependsOn", software.amazon.jsii.NativeType.listOf(software.amazon.jsii.NativeType.forClass(com.hashicorp.cdktf.ITerraformDependable.class)));
+            this.forEach = software.amazon.jsii.Kernel.get(this, "forEach", software.amazon.jsii.NativeType.forClass(com.hashicorp.cdktf.ITerraformIterator.class));
+            this.lifecycle = software.amazon.jsii.Kernel.get(this, "lifecycle", software.amazon.jsii.NativeType.forClass(com.hashicorp.cdktf.TerraformResourceLifecycle.class));
+            this.provider = software.amazon.jsii.Kernel.get(this, "provider", software.amazon.jsii.NativeType.forClass(com.hashicorp.cdktf.TerraformProvider.class));
+            this.provisioners = software.amazon.jsii.Kernel.get(this, "provisioners", software.amazon.jsii.NativeType.listOf(software.amazon.jsii.NativeType.forClass(java.lang.Object.class)));
+        }
+
+        /**
+         * Constructor that initializes the object based on literal property values passed by the {@link Builder}.
+         */
+        @SuppressWarnings("unchecked")
+        protected Jsii$Proxy(final Builder builder) {
+            super(software.amazon.jsii.JsiiObject.InitializationMode.JSII);
+            this.assignmentName = java.util.Objects.requireNonNull(builder.assignmentName, "assignmentName is required");
+            this.assignmentStatus = java.util.Objects.requireNonNull(builder.assignmentStatus, "assignmentStatus is required");
+            this.awsAccountId = builder.awsAccountId;
+            this.identities = builder.identities;
+            this.namespace = builder.namespace;
+            this.policyArn = builder.policyArn;
+            this.connection = builder.connection;
+            this.count = builder.count;
+            this.dependsOn = (java.util.List<com.hashicorp.cdktf.ITerraformDependable>)builder.dependsOn;
+            this.forEach = builder.forEach;
+            this.lifecycle = builder.lifecycle;
+            this.provider = builder.provider;
+            this.provisioners = (java.util.List<java.lang.Object>)builder.provisioners;
+        }
+
+        @Override
+        public final java.lang.String getAssignmentName() {
+            return this.assignmentName;
+        }
+
+        @Override
+        public final java.lang.String getAssignmentStatus() {
+            return this.assignmentStatus;
+        }
+
+        @Override
+        public final java.lang.String getAwsAccountId() {
+            return this.awsAccountId;
+        }
+
+        @Override
+        public final java.lang.Object getIdentities() {
+            return this.identities;
+        }
+
+        @Override
+        public final java.lang.String getNamespace() {
+            return this.namespace;
+        }
+
+        @Override
+        public final java.lang.String getPolicyArn() {
+            return this.policyArn;
+        }
+
+        @Override
+        public final java.lang.Object getConnection() {
+            return this.connection;
+        }
+
+        @Override
+        public final java.lang.Object getCount() {
+            return this.count;
+        }
+
+        @Override
+        public final java.util.List<com.hashicorp.cdktf.ITerraformDependable> getDependsOn() {
+            return this.dependsOn;
+        }
+
+        @Override
+        public final com.hashicorp.cdktf.ITerraformIterator getForEach() {
+            return this.forEach;
+        }
+
+        @Override
+        public final com.hashicorp.cdktf.TerraformResourceLifecycle getLifecycle() {
+            return this.lifecycle;
+        }
+
+        @Override
+        public final com.hashicorp.cdktf.TerraformProvider getProvider() {
+            return this.provider;
+        }
+
+        @Override
+        public final java.util.List<java.lang.Object> getProvisioners() {
+            return this.provisioners;
+        }
+
+        @Override
+        @software.amazon.jsii.Internal
+        public com.fasterxml.jackson.databind.JsonNode $jsii$toJson() {
+            final com.fasterxml.jackson.databind.ObjectMapper om = software.amazon.jsii.JsiiObjectMapper.INSTANCE;
+            final com.fasterxml.jackson.databind.node.ObjectNode data = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+
+            data.set("assignmentName", om.valueToTree(this.getAssignmentName()));
+            data.set("assignmentStatus", om.valueToTree(this.getAssignmentStatus()));
+            if (this.getAwsAccountId() != null) {
+                data.set("awsAccountId", om.valueToTree(this.getAwsAccountId()));
+            }
+            if (this.getIdentities() != null) {
+                data.set("identities", om.valueToTree(this.getIdentities()));
+            }
+            if (this.getNamespace() != null) {
+                data.set("namespace", om.valueToTree(this.getNamespace()));
+            }
+            if (this.getPolicyArn() != null) {
+                data.set("policyArn", om.valueToTree(this.getPolicyArn()));
+            }
+            if (this.getConnection() != null) {
+                data.set("connection", om.valueToTree(this.getConnection()));
+            }
+            if (this.getCount() != null) {
+                data.set("count", om.valueToTree(this.getCount()));
+            }
+            if (this.getDependsOn() != null) {
+                data.set("dependsOn", om.valueToTree(this.getDependsOn()));
+            }
+            if (this.getForEach() != null) {
+                data.set("forEach", om.valueToTree(this.getForEach()));
+            }
+            if (this.getLifecycle() != null) {
+                data.set("lifecycle", om.valueToTree(this.getLifecycle()));
+            }
+            if (this.getProvider() != null) {
+                data.set("provider", om.valueToTree(this.getProvider()));
+            }
+            if (this.getProvisioners() != null) {
+                data.set("provisioners", om.valueToTree(this.getProvisioners()));
+            }
+
+            final com.fasterxml.jackson.databind.node.ObjectNode struct = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+            struct.set("fqn", om.valueToTree("aws.quicksightIamPolicyAssignment.QuicksightIamPolicyAssignmentConfig"));
+            struct.set("data", data);
+
+            final com.fasterxml.jackson.databind.node.ObjectNode obj = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
+            obj.set("$jsii.struct", struct);
+
+            return obj;
+        }
+
+        @Override
+        public final boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            QuicksightIamPolicyAssignmentConfig.Jsii$Proxy that = (QuicksightIamPolicyAssignmentConfig.Jsii$Proxy) o;
+
+            if (!assignmentName.equals(that.assignmentName)) return false;
+            if (!assignmentStatus.equals(that.assignmentStatus)) return false;
+            if (this.awsAccountId != null ? !this.awsAccountId.equals(that.awsAccountId) : that.awsAccountId != null) return false;
+            if (this.identities != null ? !this.identities.equals(that.identities) : that.identities != null) return false;
+            if (this.namespace != null ? !this.namespace.equals(that.namespace) : that.namespace != null) return false;
+            if (this.policyArn != null ? !this.policyArn.equals(that.policyArn) : that.policyArn != null) return false;
+            if (this.connection != null ? !this.connection.equals(that.connection) : that.connection != null) return false;
+            if (this.count != null ? !this.count.equals(that.count) : that.count != null) return false;
+            if (this.dependsOn != null ? !this.dependsOn.equals(that.dependsOn) : that.dependsOn != null) return false;
+            if (this.forEach != null ? !this.forEach.equals(that.forEach) : that.forEach != null) return false;
+            if (this.lifecycle != null ? !this.lifecycle.equals(that.lifecycle) : that.lifecycle != null) return false;
+            if (this.provider != null ? !this.provider.equals(that.provider) : that.provider != null) return false;
+            return this.provisioners != null ? this.provisioners.equals(that.provisioners) : that.provisioners == null;
+        }
+
+        @Override
+        public final int hashCode() {
+            int result = this.assignmentName.hashCode();
+            result = 31 * result + (this.assignmentStatus.hashCode());
+            result = 31 * result + (this.awsAccountId != null ? this.awsAccountId.hashCode() : 0);
+            result = 31 * result + (this.identities != null ? this.identities.hashCode() : 0);
+            result = 31 * result + (this.namespace != null ? this.namespace.hashCode() : 0);
+            result = 31 * result + (this.policyArn != null ? this.policyArn.hashCode() : 0);
+            result = 31 * result + (this.connection != null ? this.connection.hashCode() : 0);
+            result = 31 * result + (this.count != null ? this.count.hashCode() : 0);
+            result = 31 * result + (this.dependsOn != null ? this.dependsOn.hashCode() : 0);
+            result = 31 * result + (this.forEach != null ? this.forEach.hashCode() : 0);
+            result = 31 * result + (this.lifecycle != null ? this.lifecycle.hashCode() : 0);
+            result = 31 * result + (this.provider != null ? this.provider.hashCode() : 0);
+            result = 31 * result + (this.provisioners != null ? this.provisioners.hashCode() : 0);
+            return result;
+        }
+    }
+}

@@ -1,0 +1,303 @@
+package imports.aws.elasticsearch_vpc_endpoint;
+
+/**
+ * Represents a {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint aws_elasticsearch_vpc_endpoint}.
+ */
+@javax.annotation.Generated(value = "jsii-pacmak/1.112.0 (build de1bc80)", date = "2025-08-30T23:34:47.186Z")
+@software.amazon.jsii.Jsii(module = imports.aws.$Module.class, fqn = "aws.elasticsearchVpcEndpoint.ElasticsearchVpcEndpoint")
+public class ElasticsearchVpcEndpoint extends com.hashicorp.cdktf.TerraformResource {
+
+    protected ElasticsearchVpcEndpoint(final software.amazon.jsii.JsiiObjectRef objRef) {
+        super(objRef);
+    }
+
+    protected ElasticsearchVpcEndpoint(final software.amazon.jsii.JsiiObject.InitializationMode initializationMode) {
+        super(initializationMode);
+    }
+
+    static {
+        TF_RESOURCE_TYPE = software.amazon.jsii.JsiiObject.jsiiStaticGet(imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint.class, "tfResourceType", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+    }
+
+    /**
+     * Create a new {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint aws_elasticsearch_vpc_endpoint} Resource.
+     * <p>
+     * @param scope The scope in which to define this construct. This parameter is required.
+     * @param id The scoped construct ID. This parameter is required.
+     * @param config This parameter is required.
+     */
+    public ElasticsearchVpcEndpoint(final @org.jetbrains.annotations.NotNull software.constructs.Construct scope, final @org.jetbrains.annotations.NotNull java.lang.String id, final @org.jetbrains.annotations.NotNull imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointConfig config) {
+        super(software.amazon.jsii.JsiiObject.InitializationMode.JSII);
+        software.amazon.jsii.JsiiEngine.getInstance().createNewObject(this, new Object[] { java.util.Objects.requireNonNull(scope, "scope is required"), java.util.Objects.requireNonNull(id, "id is required"), java.util.Objects.requireNonNull(config, "config is required") });
+    }
+
+    /**
+     * Generates CDKTF code for importing a ElasticsearchVpcEndpoint resource upon running "cdktf plan <stack-name>".
+     * <p>
+     * @param scope The scope in which to define this construct. This parameter is required.
+     * @param importToId The construct id used in the generated config for the ElasticsearchVpcEndpoint to import. This parameter is required.
+     * @param importFromId The id of the existing ElasticsearchVpcEndpoint that should be imported. This parameter is required.
+     * @param provider ? Optional instance of the provider where the ElasticsearchVpcEndpoint to import is found.
+     */
+    public static @org.jetbrains.annotations.NotNull com.hashicorp.cdktf.ImportableResource generateConfigForImport(final @org.jetbrains.annotations.NotNull software.constructs.Construct scope, final @org.jetbrains.annotations.NotNull java.lang.String importToId, final @org.jetbrains.annotations.NotNull java.lang.String importFromId, final @org.jetbrains.annotations.Nullable com.hashicorp.cdktf.TerraformProvider provider) {
+        return software.amazon.jsii.JsiiObject.jsiiStaticCall(imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint.class, "generateConfigForImport", software.amazon.jsii.NativeType.forClass(com.hashicorp.cdktf.ImportableResource.class), new Object[] { java.util.Objects.requireNonNull(scope, "scope is required"), java.util.Objects.requireNonNull(importToId, "importToId is required"), java.util.Objects.requireNonNull(importFromId, "importFromId is required"), provider });
+    }
+
+    /**
+     * Generates CDKTF code for importing a ElasticsearchVpcEndpoint resource upon running "cdktf plan <stack-name>".
+     * <p>
+     * @param scope The scope in which to define this construct. This parameter is required.
+     * @param importToId The construct id used in the generated config for the ElasticsearchVpcEndpoint to import. This parameter is required.
+     * @param importFromId The id of the existing ElasticsearchVpcEndpoint that should be imported. This parameter is required.
+     */
+    public static @org.jetbrains.annotations.NotNull com.hashicorp.cdktf.ImportableResource generateConfigForImport(final @org.jetbrains.annotations.NotNull software.constructs.Construct scope, final @org.jetbrains.annotations.NotNull java.lang.String importToId, final @org.jetbrains.annotations.NotNull java.lang.String importFromId) {
+        return software.amazon.jsii.JsiiObject.jsiiStaticCall(imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint.class, "generateConfigForImport", software.amazon.jsii.NativeType.forClass(com.hashicorp.cdktf.ImportableResource.class), new Object[] { java.util.Objects.requireNonNull(scope, "scope is required"), java.util.Objects.requireNonNull(importToId, "importToId is required"), java.util.Objects.requireNonNull(importFromId, "importFromId is required") });
+    }
+
+    public void putTimeouts(final @org.jetbrains.annotations.NotNull imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointTimeouts value) {
+        software.amazon.jsii.Kernel.call(this, "putTimeouts", software.amazon.jsii.NativeType.VOID, new Object[] { java.util.Objects.requireNonNull(value, "value is required") });
+    }
+
+    public void putVpcOptions(final @org.jetbrains.annotations.NotNull imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointVpcOptions value) {
+        software.amazon.jsii.Kernel.call(this, "putVpcOptions", software.amazon.jsii.NativeType.VOID, new Object[] { java.util.Objects.requireNonNull(value, "value is required") });
+    }
+
+    public void resetId() {
+        software.amazon.jsii.Kernel.call(this, "resetId", software.amazon.jsii.NativeType.VOID);
+    }
+
+    public void resetTimeouts() {
+        software.amazon.jsii.Kernel.call(this, "resetTimeouts", software.amazon.jsii.NativeType.VOID);
+    }
+
+    @Override
+    protected @org.jetbrains.annotations.NotNull java.util.Map<java.lang.String, java.lang.Object> synthesizeAttributes() {
+        return java.util.Collections.unmodifiableMap(software.amazon.jsii.Kernel.call(this, "synthesizeAttributes", software.amazon.jsii.NativeType.mapOf(software.amazon.jsii.NativeType.forClass(java.lang.Object.class))));
+    }
+
+    @Override
+    protected @org.jetbrains.annotations.NotNull java.util.Map<java.lang.String, java.lang.Object> synthesizeHclAttributes() {
+        return java.util.Collections.unmodifiableMap(software.amazon.jsii.Kernel.call(this, "synthesizeHclAttributes", software.amazon.jsii.NativeType.mapOf(software.amazon.jsii.NativeType.forClass(java.lang.Object.class))));
+    }
+
+    public final static java.lang.String TF_RESOURCE_TYPE;
+
+    public @org.jetbrains.annotations.NotNull java.lang.String getEndpoint() {
+        return software.amazon.jsii.Kernel.get(this, "endpoint", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+    }
+
+    public @org.jetbrains.annotations.NotNull imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointTimeoutsOutputReference getTimeouts() {
+        return software.amazon.jsii.Kernel.get(this, "timeouts", software.amazon.jsii.NativeType.forClass(imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointTimeoutsOutputReference.class));
+    }
+
+    public @org.jetbrains.annotations.NotNull imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointVpcOptionsOutputReference getVpcOptions() {
+        return software.amazon.jsii.Kernel.get(this, "vpcOptions", software.amazon.jsii.NativeType.forClass(imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointVpcOptionsOutputReference.class));
+    }
+
+    public @org.jetbrains.annotations.Nullable java.lang.String getDomainArnInput() {
+        return software.amazon.jsii.Kernel.get(this, "domainArnInput", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+    }
+
+    public @org.jetbrains.annotations.Nullable java.lang.String getIdInput() {
+        return software.amazon.jsii.Kernel.get(this, "idInput", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+    }
+
+    public @org.jetbrains.annotations.Nullable java.lang.Object getTimeoutsInput() {
+        return software.amazon.jsii.Kernel.get(this, "timeoutsInput", software.amazon.jsii.NativeType.forClass(java.lang.Object.class));
+    }
+
+    public @org.jetbrains.annotations.Nullable imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointVpcOptions getVpcOptionsInput() {
+        return software.amazon.jsii.Kernel.get(this, "vpcOptionsInput", software.amazon.jsii.NativeType.forClass(imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointVpcOptions.class));
+    }
+
+    public @org.jetbrains.annotations.NotNull java.lang.String getDomainArn() {
+        return software.amazon.jsii.Kernel.get(this, "domainArn", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+    }
+
+    public void setDomainArn(final @org.jetbrains.annotations.NotNull java.lang.String value) {
+        software.amazon.jsii.Kernel.set(this, "domainArn", java.util.Objects.requireNonNull(value, "domainArn is required"));
+    }
+
+    public @org.jetbrains.annotations.NotNull java.lang.String getId() {
+        return software.amazon.jsii.Kernel.get(this, "id", software.amazon.jsii.NativeType.forClass(java.lang.String.class));
+    }
+
+    public void setId(final @org.jetbrains.annotations.NotNull java.lang.String value) {
+        software.amazon.jsii.Kernel.set(this, "id", java.util.Objects.requireNonNull(value, "id is required"));
+    }
+
+    /**
+     * A fluent builder for {@link imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint}.
+     */
+    public static final class Builder implements software.amazon.jsii.Builder<imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint> {
+        /**
+         * @return a new instance of {@link Builder}.
+         * @param scope The scope in which to define this construct. This parameter is required.
+         * @param id The scoped construct ID. This parameter is required.
+         */
+        public static Builder create(final software.constructs.Construct scope, final java.lang.String id) {
+            return new Builder(scope, id);
+        }
+
+        private final software.constructs.Construct scope;
+        private final java.lang.String id;
+        private final imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointConfig.Builder config;
+
+        private Builder(final software.constructs.Construct scope, final java.lang.String id) {
+            this.scope = scope;
+            this.id = id;
+            this.config = new imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointConfig.Builder();
+        }
+
+        /**
+         * @return {@code this}
+         * @param connection This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder connection(final com.hashicorp.cdktf.SSHProvisionerConnection connection) {
+            this.config.connection(connection);
+            return this;
+        }
+        /**
+         * @return {@code this}
+         * @param connection This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder connection(final com.hashicorp.cdktf.WinrmProvisionerConnection connection) {
+            this.config.connection(connection);
+            return this;
+        }
+
+        /**
+         * @return {@code this}
+         * @param count This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder count(final java.lang.Number count) {
+            this.config.count(count);
+            return this;
+        }
+        /**
+         * @return {@code this}
+         * @param count This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder count(final com.hashicorp.cdktf.TerraformCount count) {
+            this.config.count(count);
+            return this;
+        }
+
+        /**
+         * @return {@code this}
+         * @param dependsOn This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder dependsOn(final java.util.List<? extends com.hashicorp.cdktf.ITerraformDependable> dependsOn) {
+            this.config.dependsOn(dependsOn);
+            return this;
+        }
+
+        /**
+         * @return {@code this}
+         * @param forEach This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder forEach(final com.hashicorp.cdktf.ITerraformIterator forEach) {
+            this.config.forEach(forEach);
+            return this;
+        }
+
+        /**
+         * @return {@code this}
+         * @param lifecycle This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder lifecycle(final com.hashicorp.cdktf.TerraformResourceLifecycle lifecycle) {
+            this.config.lifecycle(lifecycle);
+            return this;
+        }
+
+        /**
+         * @return {@code this}
+         * @param provider This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder provider(final com.hashicorp.cdktf.TerraformProvider provider) {
+            this.config.provider(provider);
+            return this;
+        }
+
+        /**
+         * @return {@code this}
+         * @param provisioners This parameter is required.
+         */
+        @software.amazon.jsii.Stability(software.amazon.jsii.Stability.Level.Experimental)
+        public Builder provisioners(final java.util.List<? extends java.lang.Object> provisioners) {
+            this.config.provisioners(provisioners);
+            return this;
+        }
+
+        /**
+         * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint#domain_arn ElasticsearchVpcEndpoint#domain_arn}.
+         * <p>
+         * @return {@code this}
+         * @param domainArn Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint#domain_arn ElasticsearchVpcEndpoint#domain_arn}. This parameter is required.
+         */
+        public Builder domainArn(final java.lang.String domainArn) {
+            this.config.domainArn(domainArn);
+            return this;
+        }
+
+        /**
+         * vpc_options block.
+         * <p>
+         * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint#vpc_options ElasticsearchVpcEndpoint#vpc_options}
+         * <p>
+         * @return {@code this}
+         * @param vpcOptions vpc_options block. This parameter is required.
+         */
+        public Builder vpcOptions(final imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointVpcOptions vpcOptions) {
+            this.config.vpcOptions(vpcOptions);
+            return this;
+        }
+
+        /**
+         * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint#id ElasticsearchVpcEndpoint#id}.
+         * <p>
+         * Please be aware that the id field is automatically added to all resources in Terraform providers using a Terraform provider SDK version below 2.
+         * If you experience problems setting this value it might not be settable. Please take a look at the provider documentation to ensure it should be settable.
+         * <p>
+         * @return {@code this}
+         * @param id Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint#id ElasticsearchVpcEndpoint#id}. This parameter is required.
+         */
+        public Builder id(final java.lang.String id) {
+            this.config.id(id);
+            return this;
+        }
+
+        /**
+         * timeouts block.
+         * <p>
+         * Docs at Terraform Registry: {@link https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/elasticsearch_vpc_endpoint#timeouts ElasticsearchVpcEndpoint#timeouts}
+         * <p>
+         * @return {@code this}
+         * @param timeouts timeouts block. This parameter is required.
+         */
+        public Builder timeouts(final imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpointTimeouts timeouts) {
+            this.config.timeouts(timeouts);
+            return this;
+        }
+
+        /**
+         * @return a newly built instance of {@link imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint}.
+         */
+        @Override
+        public imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint build() {
+            return new imports.aws.elasticsearch_vpc_endpoint.ElasticsearchVpcEndpoint(
+                this.scope,
+                this.id,
+                this.config.build()
+            );
+        }
+    }
+}

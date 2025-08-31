@@ -1,0 +1,6 @@
+/**
+ * <h1><code>aws_waf_size_constraint_set</code></h1>
+ * <p>
+ * Refer to the Terraform Registry for docs: <a href="https://registry.terraform.io/providers/hashicorp/aws/5.100.0/docs/resources/waf_size_constraint_set"><code>aws_waf_size_constraint_set</code></a>.
+ */
+package imports.aws.waf_size_constraint_set;
