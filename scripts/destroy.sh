@@ -60,7 +60,11 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   fi
 
   echo "🚀 Running CDKTF destroy..."
-  npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
+  # Destroy both stacks for multi-region deployment
+  echo "🌍 Destroying West region stack first..."
+  npx cdktf destroy TapStackWest$ENVIRONMENT_SUFFIX --auto-approve || echo "West stack destroy failed or no resources"
+  echo "🌍 Destroying East region stack..."
+  npx cdktf destroy TapStackEast$ENVIRONMENT_SUFFIX --auto-approve || echo "East stack destroy failed or no resources"
   
   echo "🧹 Manual cleanup of orphaned AWS resources..."
   # Clean up specific resources that might be orphaned in dependency order
