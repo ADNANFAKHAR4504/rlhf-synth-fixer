@@ -235,13 +235,6 @@ def handler(event, context):
       new s3n.LambdaDestination(tapLambda)
     );
 
-    // 8. CloudWatch Log Group for Lambda
-    new logs.LogGroup(this, 'TapLambdaLogGroup', {
-      logGroupName: `/aws/lambda/${tapLambda.functionName}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
     // 9. CloudFront Origin Access Control (OAC) for secure S3 access
     const originAccessControl = new cloudfront.S3OriginAccessControl(
       this,
