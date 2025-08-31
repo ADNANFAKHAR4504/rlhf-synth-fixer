@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2Types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go-v2/service/elbv2"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/rds"
 )
 
@@ -32,7 +32,7 @@ func TestVPCDeployment(t *testing.T) {
 		Filters: []ec2Types.Filter{
 			{
 				Name:   aws.String("tag:Name"),
-				Values: []string{aws.String("tap-vpc-" + envSuffix)},
+				Values: []string{"tap-vpc-" + envSuffix},
 			},
 		},
 	})
@@ -65,7 +65,7 @@ func TestSubnetConfiguration(t *testing.T) {
 		Filters: []ec2Types.Filter{
 			{
 				Name:   aws.String("tag:Name"),
-				Values: []string{aws.String("tap-public-subnet-1-" + envSuffix), aws.String("tap-public-subnet-2-" + envSuffix)},
+				Values: []string{"tap-public-subnet-1-" + envSuffix, "tap-public-subnet-2-" + envSuffix},
 			},
 		},
 	})
@@ -82,7 +82,7 @@ func TestSubnetConfiguration(t *testing.T) {
 		Filters: []ec2Types.Filter{
 			{
 				Name:   aws.String("tag:Name"),
-				Values: []string{aws.String("tap-private-subnet-1-" + envSuffix), aws.String("tap-private-subnet-2-" + envSuffix)},
+				Values: []string{"tap-private-subnet-1-" + envSuffix, "tap-private-subnet-2-" + envSuffix},
 			},
 		},
 	})
@@ -103,10 +103,10 @@ func TestLoadBalancerDeployment(t *testing.T) {
 		t.Fatalf("failed to load AWS config: %v", err)
 	}
 
-	elbClient := elbv2.NewFromConfig(cfg)
+	elbClient := elasticloadbalancingv2.NewFromConfig(cfg)
 
 	// Test Application Load Balancer exists
-	albs, err := elbClient.DescribeLoadBalancers(context.TODO(), &elbv2.DescribeLoadBalancersInput{
+	albs, err := elbClient.DescribeLoadBalancers(context.TODO(), &elasticloadbalancingv2.DescribeLoadBalancersInput{
 		Names: []string{"tap-alb-" + envSuffix},
 	})
 	if err != nil {
@@ -154,11 +154,11 @@ func TestDatabaseDeployment(t *testing.T) {
 		t.Errorf("expected database engine 'mysql', got %s", *db.Engine)
 	}
 
-	if !db.MultiAZ {
+	if db.MultiAZ == nil || !*db.MultiAZ {
 		t.Error("database must have Multi-AZ enabled per PROMPT.md")
 	}
 
-	if !db.StorageEncrypted {
+	if db.StorageEncrypted == nil || !*db.StorageEncrypted {
 		t.Error("database must be encrypted per PROMPT.md")
 	}
 }
@@ -186,12 +186,12 @@ func TestAutoScalingGroupDeployment(t *testing.T) {
 	}
 
 	asg := asgs.AutoScalingGroups[0]
-	if asg.MinSize < 2 {
-		t.Errorf("expected minimum size >= 2 for high availability, got %d", asg.MinSize)
+	if asg.MinSize == nil || *asg.MinSize < 2 {
+		t.Errorf("expected minimum size >= 2 for high availability, got %v", asg.MinSize)
 	}
 
-	if asg.MaxSize < 4 {
-		t.Errorf("expected maximum size >= 4 for scalability, got %d", asg.MaxSize)
+	if asg.MaxSize == nil || *asg.MaxSize < 4 {
+		t.Errorf("expected maximum size >= 4 for scalability, got %v", asg.MaxSize)
 	}
 }
 
@@ -210,7 +210,7 @@ func TestResourceTagging(t *testing.T) {
 		Filters: []ec2Types.Filter{
 			{
 				Name:   aws.String("tag:Name"),
-				Values: []string{aws.String("tap-vpc-" + envSuffix)},
+				Values: []string{"tap-vpc-" + envSuffix},
 			},
 		},
 	})
@@ -260,7 +260,7 @@ func TestMultiRegionDeployment(t *testing.T) {
 				Filters: []ec2Types.Filter{
 					{
 						Name:   aws.String("tag:Name"),
-						Values: []string{aws.String("tap-vpc-" + envSuffix)},
+						Values: []string{"tap-vpc-" + envSuffix},
 					},
 				},
 			})
