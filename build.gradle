@@ -359,13 +359,31 @@ tasks.register('testAll') {
     }
 }
 
+tasks.named("checkstyleMain") {
+    dependsOn("NormalizeCDKFImports")
+}
+
+tasks.named("checkstyleTest") {
+    dependsOn("NormalizeCDKFImports")
+}
+
 tasks.register("NormalizeCDKFImports") {
+
+    onlyIf {
+        file("$projectDir/src/main/java/imports").exists()
+                && file("$projectDir/src/main/java/imports").listFiles().length > 0
+    }
+
     doLast {
         def generatedDir = file("src/main/java/imports")
         def targetDir = file("$projectDir/imports")
 
-        if (generatedDir.exists()) {
-            mkdir(targetDir)
+        if (!targetDir.exists()) {
+            targetDir.mkdirs()
+        }
+
+        if (generatedDir.exists() && generatedDir.listFiles().length > 0) {
+            println "📦 Moving generated imports from $generatedDir to $targetDir"
             copy {
                 from(generatedDir)
                 into(targetDir)
