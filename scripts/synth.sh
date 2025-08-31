@@ -27,19 +27,20 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   # .gen should be restored via cache/artifacts; generate only if missing
 
   ensure_gen() {
-    if [ ! -d ".gen" ]; then
-      echo "❌ .gen not found; generating..."
+    if [ ! -d "imports" ] && [ ! -d ".gen" ]; then
+      echo "❌ No imports or .gen directory found; generating..."
       npx --yes cdktf get
     fi
     # --- FIX: Check for the new path OR the old path for backward compatibility ---
-    if [ ! -d ".gen/aws" ] && [ ! -d ".gen/providers/aws" ]; then
-      echo "❌ Neither .gen/aws nor .gen/providers/aws directory found after cdktf get."
-      echo "Contents of .gen:"; ls -la .gen || true
-      exit 1
+    if [ -d "imports/aws" ]; then
+        echo "✅ Found Java CDKTF generated provider directory: imports/aws"
+    elif [ -d ".gen/aws" ] || [ -d ".gen/providers/aws" ]; then
+        echo "✅ Found other language CDKTF generated provider directory in .gen"
     else
-      echo "✅ Found generated provider directory."
+        echo "❌ No generated provider directory found after cdktf get."
+        echo "Contents of project root:"; ls -la || true
+        exit 1
     fi
-    # --- END FIX ---
   }
   ensure_gen
   # Go modules are prepared during build; avoid extra operations here

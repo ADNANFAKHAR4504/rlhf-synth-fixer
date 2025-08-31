@@ -1,6 +1,6 @@
 {
   "language": "java",
-  "app": "cd lib && ./gradlew run",
+  "app": "./gradlew run",
   "sendCrashReports": "false",
   "codeMakerOutput": "imports",
   "output": "cdktf.out",
