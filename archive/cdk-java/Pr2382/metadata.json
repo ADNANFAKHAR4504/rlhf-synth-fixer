@@ -21,5 +21,10 @@
     "CloudTrail",
     "EC2"
   ],
-  "author": "Akorede28"
+  "author": "Akorede28",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
