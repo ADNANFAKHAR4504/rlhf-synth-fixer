@@ -365,10 +365,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		Tags: tags,
 	})
 
-	// Note: KMS key temporarily removed to avoid policy issues
-	// Will be re-added once CloudWatch Logs encryption is properly configured
-
-	// CloudWatch Log Groups (without KMS encryption for now)
+	// CloudWatch Log Groups (centralized logging as per PROMPT requirements)
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("web-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
 		Name:            jsii.String(fmt.Sprintf("/migration/web/%s-%s", region, envSuffix)),
 		RetentionInDays: jsii.Number(30),
@@ -378,6 +375,13 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("app-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
 		Name:            jsii.String(fmt.Sprintf("/migration/app/%s-%s", region, envSuffix)),
 		RetentionInDays: jsii.Number(30),
+		Tags:            tags,
+	})
+
+	// CloudTrail Log Group for API activity monitoring (PROMPT requirement #8)
+	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String("cloudtrail-log-group"), &cloudwatchloggroup.CloudwatchLogGroupConfig{
+		Name:            jsii.String(fmt.Sprintf("/migration/cloudtrail/%s-%s", region, envSuffix)),
+		RetentionInDays: jsii.Number(90),
 		Tags:            tags,
 	})
 
@@ -634,8 +638,14 @@ func main() {
 	}
 
 	// Deploy to us-east-1
-	NewInfrastructureStack(app, jsii.String(fmt.Sprintf("TapStack%s", envSuffix)), &InfrastructureStackConfig{
+	NewInfrastructureStack(app, jsii.String(fmt.Sprintf("TapStackEast%s", envSuffix)), &InfrastructureStackConfig{
 		Region:      "us-east-1",
+		Environment: "production",
+	})
+
+	// Deploy to us-west-2 (multi-region requirement)
+	NewInfrastructureStack(app, jsii.String(fmt.Sprintf("TapStackWest%s", envSuffix)), &InfrastructureStackConfig{
+		Region:      "us-west-2",
 		Environment: "production",
 	})
 
