@@ -1,4 +1,3 @@
-I'll fix the `environmentSuffix` error by implementing the custom props interface and updating all the necessary files. Here's the corrected implementation:
 
 ## lib/tapstack.ts
 

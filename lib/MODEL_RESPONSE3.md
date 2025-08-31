@@ -1,4 +1,4 @@
-You're absolutely right! The issue is that our current bucket policy is conflicting with the `BlockPublicAccess.BLOCK_ALL` setting. Let me fix this by removing the problematic bucket policy and using proper IAM role-based permissions instead.
+
 
 ## Updated lib/tapstack.ts
 
