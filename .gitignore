@@ -92,6 +92,7 @@ cdktf.log
 bin/.terraform.lock.hcl
 .genpackage-lock.json
 .gen/providers/*
+src/main/java/imports/
 
 __pycache__/
 .pulumi/
