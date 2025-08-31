@@ -19,7 +19,7 @@ import (
 
 func TestVPCDeployment(t *testing.T) {
 	envSuffix := getEnvironmentSuffix()
-	
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
 	if err != nil {
 		t.Fatalf("failed to load AWS config: %v", err)
@@ -52,7 +52,7 @@ func TestVPCDeployment(t *testing.T) {
 
 func TestSubnetConfiguration(t *testing.T) {
 	envSuffix := getEnvironmentSuffix()
-	
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
 	if err != nil {
 		t.Fatalf("failed to load AWS config: %v", err)
@@ -97,7 +97,7 @@ func TestSubnetConfiguration(t *testing.T) {
 
 func TestLoadBalancerDeployment(t *testing.T) {
 	envSuffix := getEnvironmentSuffix()
-	
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
 	if err != nil {
 		t.Fatalf("failed to load AWS config: %v", err)
@@ -129,7 +129,7 @@ func TestLoadBalancerDeployment(t *testing.T) {
 
 func TestDatabaseDeployment(t *testing.T) {
 	envSuffix := getEnvironmentSuffix()
-	
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
 	if err != nil {
 		t.Fatalf("failed to load AWS config: %v", err)
@@ -165,7 +165,7 @@ func TestDatabaseDeployment(t *testing.T) {
 
 func TestAutoScalingGroupDeployment(t *testing.T) {
 	envSuffix := getEnvironmentSuffix()
-	
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
 	if err != nil {
 		t.Fatalf("failed to load AWS config: %v", err)
@@ -197,7 +197,7 @@ func TestAutoScalingGroupDeployment(t *testing.T) {
 
 func TestResourceTagging(t *testing.T) {
 	envSuffix := getEnvironmentSuffix()
-	
+
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-east-1"))
 	if err != nil {
 		t.Fatalf("failed to load AWS config: %v", err)

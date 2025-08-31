@@ -37,7 +37,7 @@ func TestEnvironmentSuffixHandling(t *testing.T) {
 			// Set environment variable
 			old := os.Getenv("ENVIRONMENT_SUFFIX")
 			t.Cleanup(func() { _ = os.Setenv("ENVIRONMENT_SUFFIX", old) })
-			
+
 			if tt.envValue == "" {
 				_ = os.Unsetenv("ENVIRONMENT_SUFFIX")
 			} else {
@@ -60,14 +60,14 @@ func TestEnvironmentSuffixHandling(t *testing.T) {
 // TestRegionConfiguration tests multi-region support
 func TestRegionConfiguration(t *testing.T) {
 	requiredRegions := []string{"us-east-1", "us-west-2"}
-	
+
 	for _, region := range requiredRegions {
 		t.Run(region, func(t *testing.T) {
 			// Test that region strings are valid
 			if len(region) == 0 {
 				t.Errorf("region cannot be empty")
 			}
-			
+
 			// Test AWS region format
 			if region != "us-east-1" && region != "us-west-2" {
 				t.Errorf("unexpected region format: %s", region)
@@ -81,7 +81,7 @@ func TestTaggingStrategy(t *testing.T) {
 	requiredTags := map[string]string{
 		"Project":     "Migration",
 		"Creator":     "CloudEngineer",
-		"Environment": "production", 
+		"Environment": "production",
 		"Region":      "us-east-1",
 		"CostCenter":  "IT-Infrastructure",
 	}
@@ -92,7 +92,7 @@ func TestTaggingStrategy(t *testing.T) {
 			if tagKey == "" {
 				t.Error("tag key cannot be empty")
 			}
-			
+
 			// Verify expected value is not empty
 			if expectedValue == "" {
 				t.Error("tag value cannot be empty")
@@ -104,7 +104,7 @@ func TestTaggingStrategy(t *testing.T) {
 // TestVPCCIDRRequirement tests VPC CIDR per PROMPT.md
 func TestVPCCIDRRequirement(t *testing.T) {
 	requiredCIDR := "10.0.0.0/16"
-	
+
 	// Test CIDR format
 	if requiredCIDR != "10.0.0.0/16" {
 		t.Errorf("VPC CIDR must be 10.0.0.0/16 per PROMPT.md, got: %s", requiredCIDR)
@@ -114,7 +114,7 @@ func TestVPCCIDRRequirement(t *testing.T) {
 // TestSecurityConfiguration tests company IP ranges
 func TestSecurityConfiguration(t *testing.T) {
 	companyIpRanges := []string{
-		"203.0.113.0/24",  // Company office IP range  
+		"203.0.113.0/24",  // Company office IP range
 		"198.51.100.0/24", // Company VPN range
 	}
 
@@ -123,7 +123,7 @@ func TestSecurityConfiguration(t *testing.T) {
 			if len(ipRange) == 0 {
 				t.Error("IP range cannot be empty")
 			}
-			
+
 			// Basic CIDR format check
 			if len(ipRange) < 9 { // Minimum for x.x.x.x/x
 				t.Errorf("invalid IP range format: %s", ipRange)
