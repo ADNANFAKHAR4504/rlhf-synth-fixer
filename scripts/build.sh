@@ -29,7 +29,6 @@ case "$LANGUAGE" in
     ./gradlew assemble \
       --build-cache \
       --parallel \
-      --configure-on-demand \
       --max-workers=$(nproc) \
       --no-daemon
     echo "✅ Java build completed successfully"

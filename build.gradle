@@ -7,9 +7,9 @@ plugins {
     id 'jacoco'
 }
 
-compileJava {
-    dependsOn("NormalizeCDKFImports")
-}
+//compileJava {
+//    dependsOn("NormalizeCDKFImports")
+//}
 
 java {
     toolchain {
@@ -92,7 +92,7 @@ tasks.named('run') {
 sourceSets {
     main {
         java {
-            srcDirs = ['src/main/java', 'lib/src/main/java', "$projectDir/imports"]
+            srcDirs = ['src/main/java', 'lib/src/main/java']
         }
     }
     test {
@@ -255,7 +255,7 @@ tasks.withType(Checkstyle).configureEach {
 
     source = sourceSets.main.allJava
     exclude {
-        it.file.absolutePath.contains('/imports/')
+        it.file.absolutePath.contains('src/main/java/imports/')
     }
 }
 
@@ -359,39 +359,39 @@ tasks.register('testAll') {
     }
 }
 
-tasks.named("checkstyleMain") {
-    dependsOn("NormalizeCDKFImports")
-}
-
-tasks.named("checkstyleTest") {
-    dependsOn("NormalizeCDKFImports")
-}
-
-tasks.register("NormalizeCDKFImports") {
-
-    onlyIf {
-        file("$projectDir/src/main/java/imports").exists()
-                && file("$projectDir/src/main/java/imports").listFiles().length > 0
-    }
-
-    doLast {
-        def generatedDir = file("src/main/java/imports")
-        def targetDir = file("$projectDir/imports")
-
-        if (!targetDir.exists()) {
-            targetDir.mkdirs()
-        }
-
-        if (generatedDir.exists() && generatedDir.listFiles().length > 0) {
-            println "📦 Moving generated imports from $generatedDir to $targetDir"
-            copy {
-                from(generatedDir)
-                into(targetDir)
-            }
-            delete("src/main")
-            println "Moved Java imports into $targetDir"
-        } else {
-            println "No generated imports found in $generatedDir"
-        }
-    }
-}
+//tasks.named("checkstyleMain") {
+//    dependsOn("NormalizeCDKFImports")
+//}
+//
+//tasks.named("checkstyleTest") {
+//    dependsOn("NormalizeCDKFImports")
+//}
+//
+//tasks.register("NormalizeCDKFImports") {
+//
+//    onlyIf {
+//        file("$projectDir/src/main/java/imports").exists()
+//                && file("$projectDir/src/main/java/imports").listFiles().length > 0
+//    }
+//
+//    doLast {
+//        def generatedDir = file("src/main/java/imports")
+//        def targetDir = file("$projectDir/imports")
+//
+//        if (!targetDir.exists()) {
+//            targetDir.mkdirs()
+//        }
+//
+//        if (generatedDir.exists() && generatedDir.listFiles().length > 0) {
+//            println "📦 Moving generated imports from $generatedDir to $targetDir"
+//            copy {
+//                from(generatedDir)
+//                into(targetDir)
+//            }
+//            delete("src/main")
+//            println "Moved Java imports into $targetDir"
+//        } else {
+//            println "No generated imports found in $generatedDir"
+//        }
+//    }
+//}

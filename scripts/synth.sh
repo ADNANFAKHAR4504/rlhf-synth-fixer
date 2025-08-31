@@ -27,14 +27,12 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   # .gen should be restored via cache/artifacts; generate only if missing
 
   ensure_gen() {
-    if [ ! -d "imports" ] && [ ! -d ".gen" ] && [ ! -d "src/main/java/imports" ]; then
+    if [ ! -d ".gen" ] && [ ! -d "src/main/java/imports" ]; then
         echo "❌ No imports or .gen directory found; generating..."
         npx --yes cdktf get
     fi
-    if [ -d "imports/aws" ]; then
-        echo "✅ Found Java CDKTF generated provider directory: imports/aws"
-    elif [ -d "src/main/java/imports/aws" ]; then
-        echo "⚠️ Found CDKTF generated imports in src/main/java/imports; consider moving to root"
+    if [ -d "src/main/java/imports/aws" ]; then
+        echo "⚠️ Found CDKTF generated imports in src/main/java/imports"
     elif [ -d ".gen/aws" ] || [ -d ".gen/providers/aws" ]; then
         echo "✅ Found other language CDKTF generated provider directory in .gen"
     else
