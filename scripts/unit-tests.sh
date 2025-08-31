@@ -21,25 +21,27 @@ if [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
 fi
 
 # Run unit tests based on platform and language
-if [ "$LANGUAGE" = "java" ]  && [ "$PLATFORM" = "pulumi" ]; then
-  echo "✅ Pulumi Java project detected, running JUnit tests..."
-  chmod +x ./gradlew
-  ./gradlew test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
+if [ "$LANGUAGE" = "java" ]; then
+  case "$PLATFORM" in
+    pulumi|cdk|cdktf)
+      echo "✅ $PLATFORM Java project detected, running JUnit tests..."
 
-elif [ "$LANGUAGE" = "java" ] && [ "$PLATFORM" = "cdk" ]; then
-  echo "✅ CDK Java project detected, running JUnit tests..."
-  chmod +x ./gradlew
-  ./gradlew test --tests "*MainTest" jacocoTestReport --build-cache --no-daemon -x integrationTest
+      chmod +x ./gradlew
 
-  echo "📊 Checking for generated coverage reports..."
-  if [ -d "build/reports/jacoco" ]; then
-    echo "JaCoCo directory structure:"
-    find build/reports/jacoco -type f -name "*.xml" -o -name "*.html" | head -10
-  else
-    echo "⚠️ No JaCoCo reports directory found"
-    echo "Build directory contents:"
-    ls -la build/ 2>/dev/null || echo "No build directory found"
-  fi
+      ./gradlew test jacocoTestReport --build-cache --no-daemon
+
+      echo "📊 Checking for generated coverage reports..."
+        if [ -d "build/reports/jacoco" ]; then
+          echo "JaCoCo directory structure:"
+          find build/reports/jacoco -type f -name "*.xml" -o -name "*.html" | head -10
+        else
+          echo "⚠️ No JaCoCo reports directory found"
+          echo "Build directory contents:"
+          ls -la build/ 2>/dev/null || echo "No build directory found"
+        fi
+      ;;
+  esac
+fi
 
 elif [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ Terraform TypeScript project detected, running unit tests..."

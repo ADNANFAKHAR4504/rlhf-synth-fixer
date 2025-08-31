@@ -1,66 +1,61 @@
 package app;
 
-import com.hashicorp.cdktf.Testing;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import software.constructs.Construct;
-
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for CDKTF Java MainStack template.
- * 
- * These tests validate the stack configuration and resource creation
- * without deploying actual infrastructure using CDKTF's Testing framework.
- */
-@DisplayName("CDKTF MainStack Unit Tests")
-public class MainTest {
+import com.hashicorp.cdktf.App;
+import imports.aws.provider.AwsProvider;
+import imports.aws.s3_bucket.S3Bucket;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
-    private MainStack stack;
+import java.util.Map;
 
-    @BeforeEach
-    void setUp() {
-        // Create a test scope using CDKTF Testing framework
-        Construct scope = Testing.app();
-        stack = new MainStack(scope, "test-stack");
-    }
+class MainTest {
 
     @Test
-    @DisplayName("Should create stack with S3 bucket resource")
-    void shouldCreateStackWithS3Bucket() {
-        // Test that the stack creates an S3 bucket
-        assertNotNull(stack.getBucket(), "Stack should create an S3 bucket");
-        
-        // Verify bucket configuration
-        String bucketName = stack.getBucketName();
-        assertNotNull(bucketName, "Bucket should have a name");
-        assertTrue(bucketName.contains("cdktf-java-template-bucket"), 
-                "Bucket name should contain expected prefix");
-        
-        // Verify the bucket is properly initialized with construct tree
-        assertNotNull(stack.getBucket().getFriendlyUniqueId(), 
-                "Bucket should have a unique identifier");
-        assertEquals("test-stack", stack.getNode().getId(), 
-                "Stack should have correct construct ID");
-    }
+    void testS3BucketCreationIsMocked() {
+        // Use a real App (jsii needs it)
+        App realApp = new App();
 
-    @Test
-    @DisplayName("Should configure stack with proper resource naming")
-    void shouldConfigureProperResourceNaming() {
-        // Test that resources follow naming conventions
-        String bucketConstructId = stack.getBucket().getNode().getId();
-        assertEquals("app-storage-bucket", bucketConstructId, 
-                "Bucket construct should have expected ID");
-        
-        // Test bucket name format with timestamp pattern
-        String bucketName = stack.getBucketName();
-        assertTrue(bucketName.matches("cdktf-java-template-bucket-\\d+"), 
-                "Bucket name should follow expected pattern with timestamp");
-        
-        // Verify stack can synthesize without errors
-        assertDoesNotThrow(() -> {
-            Testing.synth(stack);
-        }, "Stack should synthesize successfully");
+        try (MockedStatic<S3Bucket.Builder> mockedBucketStatic = mockStatic(S3Bucket.Builder.class);
+             MockedStatic<AwsProvider.Builder> mockedProviderStatic = mockStatic(AwsProvider.Builder.class)) {
+
+            // Mock bucket builder
+            S3Bucket.Builder mockBucketBuilder = mock(S3Bucket.Builder.class);
+            S3Bucket mockBucket = mock(S3Bucket.class);
+
+            mockedBucketStatic.when(() -> S3Bucket.Builder.create(any(), anyString()))
+                    .thenReturn(mockBucketBuilder);
+
+            when(mockBucketBuilder.bucket(anyString())).thenReturn(mockBucketBuilder);
+            when(mockBucketBuilder.tags(anyMap())).thenReturn(mockBucketBuilder);
+            when(mockBucketBuilder.build()).thenReturn(mockBucket);
+
+            when(mockBucket.getBucket()).thenReturn("mocked-bucket-name");
+
+            // Mock AWS provider builder
+            AwsProvider.Builder mockProviderBuilder = mock(AwsProvider.Builder.class);
+            mockedProviderStatic.when(() -> AwsProvider.Builder.create(any(), anyString()))
+                    .thenReturn(mockProviderBuilder);
+            when(mockProviderBuilder.region(anyString())).thenReturn(mockProviderBuilder);
+            when(mockProviderBuilder.build()).thenReturn(mock(AwsProvider.class));
+
+            // Now create the stack with a real App
+            MainStack stack = new MainStack(realApp, "test-stack");
+
+            // Verify S3 bucket builder interactions
+            verify(mockBucketBuilder).bucket(startsWith("cdktf-java-template-bucket-"));
+            verify(mockBucketBuilder).tags(Map.of(
+                    "Environment", "development",
+                    "Project", "cdktf-java-template",
+                    "ManagedBy", "cdktf",
+                    "Purpose", "ApplicationStorage"
+            ));
+            verify(mockBucketBuilder).build();
+
+            // Ensure getBucketName() returns mocked name
+            assertEquals("mocked-bucket-name", stack.getBucketName());
+        }
     }
 }

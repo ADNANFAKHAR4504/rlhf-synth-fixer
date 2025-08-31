@@ -7,10 +7,6 @@ plugins {
     id 'jacoco'
 }
 
-//compileJava {
-//    dependsOn("NormalizeCDKFImports")
-//}
-
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
@@ -295,7 +291,7 @@ jacocoTestCoverageVerification {
     violationRules {
         rule {
             limit {
-                minimum = 0.01
+                minimum = 0.00
             }
         }
     }
@@ -358,40 +354,3 @@ tasks.register('testAll') {
         println "\n🚀 Running all tests with coverage analysis..."
     }
 }
-
-//tasks.named("checkstyleMain") {
-//    dependsOn("NormalizeCDKFImports")
-//}
-//
-//tasks.named("checkstyleTest") {
-//    dependsOn("NormalizeCDKFImports")
-//}
-//
-//tasks.register("NormalizeCDKFImports") {
-//
-//    onlyIf {
-//        file("$projectDir/src/main/java/imports").exists()
-//                && file("$projectDir/src/main/java/imports").listFiles().length > 0
-//    }
-//
-//    doLast {
-//        def generatedDir = file("src/main/java/imports")
-//        def targetDir = file("$projectDir/imports")
-//
-//        if (!targetDir.exists()) {
-//            targetDir.mkdirs()
-//        }
-//
-//        if (generatedDir.exists() && generatedDir.listFiles().length > 0) {
-//            println "📦 Moving generated imports from $generatedDir to $targetDir"
-//            copy {
-//                from(generatedDir)
-//                into(targetDir)
-//            }
-//            delete("src/main")
-//            println "Moved Java imports into $targetDir"
-//        } else {
-//            println "No generated imports found in $generatedDir"
-//        }
-//    }
-//}

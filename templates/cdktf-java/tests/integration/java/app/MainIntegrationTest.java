@@ -3,6 +3,7 @@ package app;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.GetBucketTaggingRequest;
@@ -33,7 +34,9 @@ public class MainIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        s3Client = S3Client.builder().build();
+        s3Client = S3Client.builder()
+                .region(Region.US_EAST_1)
+                .build();
         
         // In a real scenario, you would retrieve this from Terraform outputs
         // For template purposes, we'll use a pattern-based approach
