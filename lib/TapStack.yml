@@ -26,6 +26,14 @@ Parameters:
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     Description: Database admin username
 
+  AvailabilityZone1:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: "First availability zone"
+
+  AvailabilityZone2:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: "Second availability zone"
+
 Resources:
   # Database Secret
   DatabaseSecret:
@@ -51,93 +59,117 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-vpc
+          Value:
+            Fn::Sub: ${Environment}-vpc
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-igw
+          Value:
+            Fn::Sub: ${Environment}-igw
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
 
   # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone:
+        Ref: AvailabilityZone1
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-subnet-1
+          Value:
+            Fn::Sub: ${Environment}-public-subnet-1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      AvailabilityZone:
+        Ref: AvailabilityZone2
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-subnet-2
+          Value:
+            Fn::Sub: ${Environment}-public-subnet-2
 
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone:
+        Ref: AvailabilityZone1
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-private-subnet-1
+          Value:
+            Fn::Sub: ${Environment}-private-subnet-1
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      AvailabilityZone:
+        Ref: AvailabilityZone2
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-private-subnet-2
+          Value:
+            Fn::Sub: ${Environment}-private-subnet-2
 
   # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-public-rt
+          Value:
+            Fn::Sub: ${Environment}-public-rt
 
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: VPCGatewayAttachment
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId:
+        Ref: PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      GatewayId:
+        Ref: InternetGateway
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet1
+      RouteTableId:
+        Ref: PublicRouteTable
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet2
+      RouteTableId:
+        Ref: PublicRouteTable
 
   # KMS Keys
   EBSKMSKey:
@@ -151,7 +183,8 @@ Resources:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+              AWS:
+                Fn::Sub: "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
           - Sid: Allow use of the key for EBS
@@ -164,7 +197,8 @@ Resources:
             Resource: "*"
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-ebs-kms-key
+          Value:
+            Fn::Sub: ${Environment}-ebs-kms-key
 
   RDSKMSKey:
     Type: AWS::KMS::Key
@@ -177,7 +211,8 @@ Resources:
           - Sid: Enable IAM User Permissions
             Effect: Allow
             Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+              AWS:
+                Fn::Sub: "arn:aws:iam::${AWS::AccountId}:root"
             Action: "kms:*"
             Resource: "*"
           - Sid: Allow use of the key for RDS
@@ -194,21 +229,25 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for bastion hosts
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref WhitelistedCIDR
+          CidrIp:
+            Ref: WhitelistedCIDR
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-bastion-sg
+          Value:
+            Fn::Sub: ${Environment}-bastion-sg
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for web servers
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
@@ -220,52 +259,62 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-webserver-sg
+          Value:
+            Fn::Sub: ${Environment}-webserver-sg
 
   # RDS Instance
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for RDS instance
-      VpcId: !Ref VPC
+      VpcId:
+        Ref: VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+          SourceSecurityGroupId:
+            Ref: WebServerSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-rds-sg
+          Value:
+            Fn::Sub: ${Environment}-rds-sg
 
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnet group for RDS instance
       SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+        - Ref: PrivateSubnet1
+        - Ref: PrivateSubnet2
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBName: !Sub ${Environment}database
+      DBName:
+        Fn::Sub: ${Environment}database
       Engine: mysql
-      MasterUsername: !Sub "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
+      MasterUsername:
+        Fn::Sub: "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
+      MasterUserPassword:
+        Fn::Sub: "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
       DBInstanceClass: db.t3.medium
       AllocatedStorage: "20"
       StorageType: gp2
       MultiAZ: true
       PubliclyAccessible: false
-      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBSubnetGroupName:
+        Ref: DBSubnetGroup
       VPCSecurityGroups:
-        - !Ref RDSSecurityGroup
+        - Ref: RDSSecurityGroup
       BackupRetentionPeriod: 7
       StorageEncrypted: true
-      KmsKeyId: !GetAtt RDSKMSKey.Arn
+      KmsKeyId:
+        Fn::GetAtt: [RDSKMSKey, Arn]
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-rds
+          Value:
+            Fn::Sub: ${Environment}-rds
 
   # S3 Buckets
   LoggingBucket:
@@ -286,7 +335,8 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-logging-bucket
+          Value:
+            Fn::Sub: ${Environment}-logging-bucket
 
   RDSBackupBucket:
     Type: AWS::S3::Bucket
@@ -298,7 +348,8 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
       LoggingConfiguration:
-        DestinationBucketName: !Ref LoggingBucket
+        DestinationBucketName:
+          Ref: LoggingBucket
         LogFilePrefix: rds-backup-logs/
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -309,7 +360,8 @@ Resources:
         Status: Enabled
       Tags:
         - Key: Name
-          Value: !Sub ${Environment}-rds-backup-bucket
+          Value:
+            Fn::Sub: ${Environment}-rds-backup-bucket
 
   # CloudWatch Alarms
   CPUUtilizationAlarm:
@@ -324,10 +376,11 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Threshold: 75
       AlarmActions:
-        - !Ref AlarmTopic
+        - Ref: AlarmTopic
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref RDSInstance
+          Value:
+            Ref: RDSInstance
 
   # SNS Topic for Alarms
   AlarmTopic:
