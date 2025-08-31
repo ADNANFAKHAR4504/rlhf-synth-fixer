@@ -1,10 +1,13 @@
 {
   "language": "java",
-  "app": "./gradlew run",
-  "projectId": "2cf869c9-bdef-4c46-8b74-3d727bd7d226",
+  "app": "cd lib && ./gradlew run",
   "sendCrashReports": "false",
   "codeMakerOutput": "imports",
-  "terraformProviders": ["hashicorp/aws@~> 5.0"],
+  "output": "cdktf.out",
+  "terraformProviders": [
+    "hashicorp/aws@~> 5.0"
+  ],
   "terraformModules": [],
-  "context": {}
+  "context": {},
+  "projectId": "5a8d2cff-7225-400b-bfa2-0317edd5c10b"
 }

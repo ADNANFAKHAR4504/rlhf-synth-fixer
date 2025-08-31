@@ -7,6 +7,10 @@ plugins {
     id 'jacoco'
 }
 
+compileJava {
+    dependsOn("NormalizeCDKFImports")
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(17)
@@ -88,7 +92,7 @@ tasks.named('run') {
 sourceSets {
     main {
         java {
-            srcDirs = ['src/main/java', 'lib/src/main/java']
+            srcDirs = ['src/main/java', 'lib/src/main/java', "$projectDir/imports"]
         }
     }
     test {
@@ -250,7 +254,9 @@ checkstyle {
 tasks.withType(Checkstyle).configureEach {
 
     source = sourceSets.main.allJava
-    exclude("**/generated/**", "**/imports/**")
+    exclude {
+        it.file.absolutePath.contains('/imports/')
+    }
 }
 
 // JaCoCo configuration
@@ -312,7 +318,7 @@ tasks.register('showCoverage') {
         if (xmlReportFile.exists()) {
             try {
                 def parser = new XmlParser()
-                parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+                parser.setFeature("https://apache.org/xml/features/disallow-doctype-decl", false)
                 def xml = parser.parse(xmlReportFile)
 
                 def counter = xml.counter.find { it.@type == 'LINE' }
@@ -350,5 +356,24 @@ tasks.register('testAll') {
 
     doFirst {
         println "\n🚀 Running all tests with coverage analysis..."
+    }
+}
+
+tasks.register("NormalizeCDKFImports") {
+    doLast {
+        def generatedDir = file("src/main/java/imports")
+        def targetDir = file("$projectDir/imports")
+
+        if (generatedDir.exists()) {
+            mkdir(targetDir)
+            copy {
+                from(generatedDir)
+                into(targetDir)
+            }
+            delete("src/main")
+            println "Moved Java imports into $targetDir"
+        } else {
+            println "No generated imports found in $generatedDir"
+        }
     }
 }
