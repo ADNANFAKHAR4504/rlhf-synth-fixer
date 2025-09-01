@@ -840,7 +840,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secure-bucket-${AWS::AccountId}-${AWS::Region}-${Environment}'
+      BucketName: !Sub 'secure-bucket-${AWS::AccountId}-${AWS::Region}-${Environment}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -874,7 +874,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secure-access-logs-${AWS::AccountId}-${AWS::Region}-${Environment}'
+      BucketName: !Sub 'secure-access-logs-${AWS::AccountId}-${AWS::Region}-${Environment}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1183,7 +1183,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${AWS::Region}-${Environment}'
+      BucketName: !Sub 'cloudtrail-logs-${AWS::AccountId}-${AWS::Region}-${Environment}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -1282,7 +1282,7 @@ Resources:
     Condition: CreateConfigBucket
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'aws-config-${AWS::AccountId}-${AWS::Region}-${Environment}'
+      BucketName: !Sub 'aws-config-${AWS::AccountId}-${AWS::Region}-${Environment}-${AWS::StackName}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
