@@ -334,7 +334,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      AliasName: 'alias/secure-environment-key'
+      AliasName: !Sub 'alias/secure-environment-key-${AWS::StackName}'
       TargetKeyId: !Ref SecureKMSKey
 
   # =========================
@@ -365,7 +365,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'SecureVPC-IGW-${Environment}'
+          Value: !Sub 'SecureVPC-IGW-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -398,7 +398,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'Public Subnet-${Environment}'
+          Value: !Sub 'Public Subnet-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -416,7 +416,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'Private Subnet-${Environment}'
+          Value: !Sub 'Private Subnet-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -434,7 +434,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'Database Subnet 1-${Environment}'
+          Value: !Sub 'Database Subnet 1-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -452,7 +452,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub 'Database Subnet 2-${Environment}'
+          Value: !Sub 'Database Subnet 2-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -487,7 +487,7 @@ Resources:
         ]
       Tags:
         - Key: Name
-          Value: !Sub 'NAT Gateway-${Environment}'
+          Value: !Sub 'NAT Gateway-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -503,7 +503,7 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub 'Public Route Table-${Environment}'
+          Value: !Sub 'Public Route Table-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -548,7 +548,7 @@ Resources:
       VpcId: !Ref SecureVPC
       Tags:
         - Key: Name
-          Value: !Sub 'Private Route Table-${Environment}'
+          Value: !Sub 'Private Route Table-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -618,7 +618,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}'
+      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::StackName}'
       RetentionInDays: 30
       KmsKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
       Tags:
@@ -654,7 +654,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      GroupName: !Sub 'WebServerSecurityGroup-${Environment}'
+      GroupName: !Sub 'WebServerSecurityGroup-${Environment}-${AWS::StackName}'
       GroupDescription: Security group for web servers
       VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
       SecurityGroupIngress:
@@ -691,7 +691,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      GroupName: !Sub 'DatabaseSecurityGroup-${Environment}'
+      GroupName: !Sub 'DatabaseSecurityGroup-${Environment}-${AWS::StackName}'
       GroupDescription: Security group for database servers
       VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
       SecurityGroupIngress:
@@ -719,7 +719,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      GroupName: !Sub 'LambdaSecurityGroup-${Environment}'
+      GroupName: !Sub 'LambdaSecurityGroup-${Environment}-${AWS::StackName}'
       GroupDescription: Security group for Lambda functions
       VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
       SecurityGroupEgress:
@@ -935,6 +935,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
+      DBSubnetGroupName: !Sub 'DatabaseSubnetGroup-${Environment}-${AWS::StackName}'
       DBSubnetGroupDescription: Subnet group for RDS database
       SubnetIds:
         - !If [
@@ -961,7 +962,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Name: !Sub '${Environment}-database-password'
+      Name: !Sub '${Environment}-database-password-${AWS::StackName}'
       Description: Database password for secure environment
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -982,7 +983,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Sub 'secure-database-${Environment}'
+      DBInstanceIdentifier: !Sub 'secure-database-${Environment}-${AWS::StackName}'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -1030,7 +1031,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BackupVaultName: !Sub 'SecureBackupVault-${Environment}'
+      BackupVaultName: !Sub 'SecureBackupVault-${Environment}-${AWS::StackName}'
       EncryptionKeyArn:
         !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       BackupVaultTags:
@@ -1045,7 +1046,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BackupPlan:
-        BackupPlanName: !Sub 'SecureBackupPlan-${Environment}'
+        BackupPlanName: !Sub 'SecureBackupPlan-${Environment}-${AWS::StackName}'
         BackupPlanRule:
           - RuleName: DailyBackups
             TargetBackupVault:
@@ -1111,7 +1112,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}'
+      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-${AWS::StackName}'
       RetentionInDays: 90
       KmsKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
       Tags:
@@ -1155,7 +1156,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      TrailName: !Sub 'SecureEnvironmentTrail-${Environment}'
+      TrailName: !Sub 'SecureEnvironmentTrail-${Environment}-${AWS::StackName}'
       S3BucketName:
         !If [
           UseExistingCloudTrailBucket,
@@ -1341,7 +1342,7 @@ Resources:
     Condition: CreateConfigBucket
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub 'SecureEnvironmentRecorder-${Environment}'
+      Name: !Sub 'SecureEnvironmentRecorder-${Environment}-${AWS::StackName}'
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -1351,7 +1352,7 @@ Resources:
     Condition: CreateConfigBucket
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub 'SecureEnvironmentDeliveryChannel-${Environment}'
+      Name: !Sub 'SecureEnvironmentDeliveryChannel-${Environment}-${AWS::StackName}'
       S3BucketName: !Ref ConfigBucket
 
   # Config Rules
@@ -1360,7 +1361,7 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
-      ConfigRuleName: !Sub 's3-bucket-public-access-prohibited-${Environment}'
+      ConfigRuleName: !Sub 's3-bucket-public-access-prohibited-${Environment}-${AWS::StackName}'
       Description: Checks that your Amazon S3 buckets do not allow public read access
       Source:
         Owner: AWS
@@ -1371,7 +1372,7 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
-      ConfigRuleName: !Sub 'root-access-key-check-${Environment}'
+      ConfigRuleName: !Sub 'root-access-key-check-${Environment}-${AWS::StackName}'
       Description: Checks whether the root user access key is available
       Source:
         Owner: AWS
@@ -1382,7 +1383,7 @@ Resources:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
-      ConfigRuleName: !Sub 'ec2-ebs-encryption-by-default-${Environment}'
+      ConfigRuleName: !Sub 'ec2-ebs-encryption-by-default-${Environment}-${AWS::StackName}'
       Description: Check that Amazon Elastic Block Store (EBS) encryption is enabled by default
       Source:
         Owner: AWS
@@ -1421,7 +1422,7 @@ Resources:
     Condition: CreateLambdaFunction
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'SecureFunction-${Environment}'
+      FunctionName: !Sub 'SecureFunction-${Environment}-${AWS::StackName}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role:
@@ -1552,7 +1553,7 @@ Resources:
   IAMPasswordPolicyFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'IAMPasswordPolicy-${Environment}'
+      FunctionName: !Sub 'IAMPasswordPolicy-${Environment}-${AWS::StackName}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt IAMPasswordPolicyRole.Arn
@@ -1631,7 +1632,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      FunctionName: !Sub 'EBSEncryption-${Environment}'
+      FunctionName: !Sub 'EBSEncryption-${Environment}-${AWS::StackName}'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt EBSEncryptionRole.Arn
