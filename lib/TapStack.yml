@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Robust networking infrastructure in us-west-2.
-  Includes VPC, public/private subnets, IGW, NAT Gateway, EC2 Auto Scaling,
+  Includes VPC, subnets across AZs, IGW, NAT Gateway, EC2 Auto Scaling,
   IAM roles, CloudWatch alarms, and a secure S3 bucket.
 
 Parameters:
@@ -39,10 +39,20 @@ Parameters:
     Default: 203.0.113.0/24
     Description: CIDR allowed to SSH into EC2 instances.
 
+  AvailabilityZone1:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-west-2a
+    Description: First Availability Zone for subnets.
+
+  AvailabilityZone2:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-west-2b
+    Description: Second Availability Zone for subnets.
+
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: ami-0c55b159cbfafe1f0  # Amazon Linux 2 AMI (HVM), x86_64, EBS - Update as needed
+      AMI: ami-0c55b159cbfafe1f0 # Amazon Linux 2 AMI (HVM), x86_64, EBS
 
 Resources:
 
@@ -77,7 +87,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Select [0, !GetAZs "us-west-2"]
+      AvailabilityZone: !Ref AvailabilityZone1
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -88,7 +98,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [1, !GetAZs "us-west-2"]
+      AvailabilityZone: !Ref AvailabilityZone2
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -99,7 +109,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet1CIDR
-      AvailabilityZone: !Select [0, !GetAZs "us-west-2"]
+      AvailabilityZone: !Ref AvailabilityZone1
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -110,7 +120,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Select [1, !GetAZs "us-west-2"]
+      AvailabilityZone: !Ref AvailabilityZone2
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
