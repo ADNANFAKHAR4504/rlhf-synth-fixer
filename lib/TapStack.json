@@ -1,15 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Multi-AZ required (for RDS subnet group). Provisions VPC, subnets, IAM roles, S3 (SSE-KMS), EC2 with encrypted EBS, RDS in private subnets, CloudTrail, Config, CloudWatch alarms, Parameter Store, centralized logging, KMS CMKs, and Shield Advanced. Skips WAF as per constraints.\n",
-    "Metadata": {
-        "Version": "1.2.0",
-        "Compliance": [
-            "CIS AWS Foundations",
-            "PCI DSS",
-            "SOC 2"
-        ],
-        "Owner": "Security-by-Design"
-    },
+    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe: all subnets in AZ0. RDS excluded (requires ≥2 AZs).\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -38,7 +29,7 @@
         "KeyName": {
             "Type": "String",
             "Default": "",
-            "Description": "Optional EC2 KeyPair for SSH access. Leave empty to disable SSH."
+            "Description": "Optional EC2 KeyPair for SSH access."
         }
     },
     "Conditions": {
@@ -133,7 +124,7 @@
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        1,
+                        0,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -173,7 +164,7 @@
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        1,
+                        0,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -312,45 +303,6 @@
                 }
             }
         },
-        "DBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Private subnets for RDS (must span 2 AZs)",
-                "SubnetIds": [
-                    {
-                        "Ref": "PrivateSubnet1"
-                    },
-                    {
-                        "Ref": "PrivateSubnet2"
-                    }
-                ]
-            }
-        },
-        "RDSInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "Properties": {
-                "Engine": "mysql",
-                "MasterUsername": "admin",
-                "MasterUserPassword": {
-                    "Ref": "DBPassword"
-                },
-                "AllocatedStorage": 20,
-                "DBInstanceClass": "db.t3.micro",
-                "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Ref": "KmsKey"
-                },
-                "DBSubnetGroupName": {
-                    "Ref": "DBSubnetGroup"
-                },
-                "PubliclyAccessible": false,
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "WebSG"
-                    }
-                ]
-            }
-        },
         "DBPassword": {
             "Type": "AWS::SSM::Parameter",
             "Properties": {
@@ -475,14 +427,6 @@
                 "Fn::GetAtt": [
                     "SecureBucket",
                     "Arn"
-                ]
-            }
-        },
-        "RdsEndpoint": {
-            "Value": {
-                "Fn::GetAtt": [
-                    "RDSInstance",
-                    "Endpoint.Address"
                 ]
             }
         },
