@@ -707,48 +707,54 @@ class TapStack(cdk.Stack):
     def _create_outputs(self):
         """Create CloudFormation outputs."""
         
-        CfnOutput(self, "VPCId", value=self.vpc.vpc_id, description="VPC ID")
+        CfnOutput(self, "VPCId", value=self.vpc.vpc_id, description="VPC ID", export_name=f"{self.stack_name}-VPCId")
         
         # Fixed outputs to handle subnet arrays properly
         if self.vpc.public_subnets:
             CfnOutput(self, "PublicSubnetId", 
                      value=self.vpc.public_subnets[0].subnet_id, 
-                     description="Public Subnet ID")
+                     description="Public Subnet ID",
+                     export_name=f"{self.stack_name}-PublicSubnetId")
         
         if self.vpc.private_subnets:
             CfnOutput(self, "PrivateSubnetId", 
                      value=self.vpc.private_subnets[0].subnet_id, 
-                     description="Private Subnet ID")
+                     description="Private Subnet ID",
+                     export_name=f"{self.stack_name}-PrivateSubnetId")
         
-        CfnOutput(self, "EC2InstanceId", value=self.ec2_instance.instance_id, description="EC2 Instance ID")
-        CfnOutput(self, "EC2PublicIP", value=self.ec2_instance.instance_public_ip, description="EC2 Public IP")
-        CfnOutput(self, "EC2PublicDNS", value=self.ec2_instance.instance_public_dns_name, description="EC2 Public DNS")
+        CfnOutput(self, "EC2InstanceId", value=self.ec2_instance.instance_id, description="EC2 Instance ID", export_name=f"{self.stack_name}-EC2InstanceId")
+        CfnOutput(self, "EC2PublicIP", value=self.ec2_instance.instance_public_ip, description="EC2 Public IP", export_name=f"{self.stack_name}-EC2PublicIP")
+        CfnOutput(self, "EC2PublicDNS", value=self.ec2_instance.instance_public_dns_name, description="EC2 Public DNS", export_name=f"{self.stack_name}-EC2PublicDNS")
         
-        CfnOutput(self, "S3BucketName", value=self.s3_bucket.bucket_name, description="S3 Bucket Name")
-        CfnOutput(self, "S3BucketArn", value=self.s3_bucket.bucket_arn, description="S3 Bucket ARN")
+        CfnOutput(self, "S3BucketName", value=self.s3_bucket.bucket_name, description="S3 Bucket Name", export_name=f"{self.stack_name}-S3BucketName")
+        CfnOutput(self, "S3BucketArn", value=self.s3_bucket.bucket_arn, description="S3 Bucket ARN", export_name=f"{self.stack_name}-S3BucketArn")
         
         CfnOutput(self, "CloudFrontDomainName", 
                  value=self.cloudfront_distribution.distribution_domain_name, 
-                 description="CloudFront Domain Name")
+                 description="CloudFront Domain Name",
+                 export_name=f"{self.stack_name}-CloudFrontDomainName")
         CfnOutput(self, "CloudFrontDistributionId", 
                  value=self.cloudfront_distribution.distribution_id, 
-                 description="CloudFront Distribution ID")
+                 description="CloudFront Distribution ID",
+                 export_name=f"{self.stack_name}-CloudFrontDistributionId")
         
-        CfnOutput(self, "SNSTopicArn", value=self.sns_topic.topic_arn, description="SNS Topic ARN")
+        CfnOutput(self, "SNSTopicArn", value=self.sns_topic.topic_arn, description="SNS Topic ARN", export_name=f"{self.stack_name}-SNSTopicArn")
         
-        CfnOutput(self, "WebSecurityGroupId", value=self.web_sg.security_group_id, description="Web Security Group ID")
-        CfnOutput(self, "SSHSecurityGroupId", value=self.ssh_sg.security_group_id, description="SSH Security Group ID")
+        CfnOutput(self, "WebSecurityGroupId", value=self.web_sg.security_group_id, description="Web Security Group ID", export_name=f"{self.stack_name}-WebSecurityGroupId")
+        CfnOutput(self, "SSHSecurityGroupId", value=self.ssh_sg.security_group_id, description="SSH Security Group ID", export_name=f"{self.stack_name}-SSHSecurityGroupId")
         
-        CfnOutput(self, "IAMRoleArn", value=self.ec2_role.role_arn, description="EC2 IAM Role ARN")
+        CfnOutput(self, "IAMRoleArn", value=self.ec2_role.role_arn, description="EC2 IAM Role ARN", export_name=f"{self.stack_name}-IAMRoleArn")
         
         CfnOutput(
             self, "DashboardURL",
             value=f"https://{self.region}.console.aws.amazon.com/cloudwatch/home?region={self.region}#dashboards:name={self.dashboard.dashboard_name}",
-            description="CloudWatch Dashboard URL"
+            description="CloudWatch Dashboard URL",
+            export_name=f"{self.stack_name}-DashboardURL"
         )
         
         CfnOutput(
             self, "WebsiteURL",
             value=f"http://{self.ec2_instance.instance_public_ip}",
-            description="Website URL"
+            description="Website URL",
+            export_name=f"{self.stack_name}-WebsiteURL"
         )
