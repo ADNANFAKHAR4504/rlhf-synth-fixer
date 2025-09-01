@@ -19,7 +19,6 @@ export interface InfraStackProps extends cdk.StackProps {
   enableDeletionProtection?: boolean;
 }
 
-
 // TapStack implementation with enhanced security and random naming
 export class TapStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
@@ -372,7 +371,7 @@ export class TapStack extends cdk.Stack {
         role: ecsInstanceRole,
         blockDevices: [
           {
-            deviceName: "/dev/xvda",
+            deviceName: '/dev/xvda',
             volume: ec2.BlockDeviceVolume.ebs(30, {
               encrypted: true,
               kmsKey: kmsKey,
