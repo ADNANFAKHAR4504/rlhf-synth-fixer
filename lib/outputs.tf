@@ -47,8 +47,8 @@ output "route53_records" {
 }
 
 output "key_pair_name" {
-  description = "Name of the key pair used"
-  value       = local.key_pair_name
+  description = "EC2 Key Pair name in use"
+  value       = var.key_pair_name
 }
 
 output "vpc1_nat_gateway_id" {
@@ -64,4 +64,4 @@ output "vpc2_nat_gateway_id" {
 output "key_pair_guidance" {
   description = "Guidance if EC2 key pair was not created by Terraform"
   value       = var.create_key_pair ? "Key pair created by Terraform." : "Ensure the key pair '${var.key_pair_name}' exists in AWS before deploying EC2 instances."
-}
+} 
