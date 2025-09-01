@@ -41,10 +41,6 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
-data "aws_config_configuration_recorder" "existing" {
-  name = "default" # or your actual recorder name
-}
-
 # VPC Configuration
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
