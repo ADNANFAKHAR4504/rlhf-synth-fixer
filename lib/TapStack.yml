@@ -103,6 +103,27 @@ Mappings:
       SolutionStack: "64bit Amazon Linux 2023 v5.7.4 running Tomcat 11 Corretto 21"
 
 Resources:
+  # Secrets Manager secret for GitHub token
+  GitHubTokenSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: Delete
+    Properties:
+      Name: !Ref GitHubTokenSecretName
+      Description: "GitHub Personal Access Token for CI/CD Pipeline"
+      SecretString: !Sub |
+        {
+          "token": "PLACEHOLDER_TOKEN_PLEASE_UPDATE"
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref Project
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
   # KMS Key for encryption
   PipelineKMSKey:
     Type: AWS::KMS::Key
@@ -259,7 +280,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - "secretsmanager:GetSecretValue"
-                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${GitHubTokenSecretName}*"
+                Resource: !Ref GitHubTokenSecret
       Tags:
         - Key: Environment
           Value: !Ref Environment
