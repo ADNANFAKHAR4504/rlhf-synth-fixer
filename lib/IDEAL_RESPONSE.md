@@ -1,5 +1,3 @@
-Ideal Response
-
 The model should generate a complete and valid CloudFormation template in JSON that sets up a secure, production-ready AWS environment.
 
 What’s Expected
@@ -1169,3 +1167,4 @@ below is my TapStack.json:
   }
 }
 ```
+
