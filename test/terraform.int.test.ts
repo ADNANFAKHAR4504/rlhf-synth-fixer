@@ -10,7 +10,7 @@ const isNonEmptyString = (val: any): boolean =>
 
 const isValidArn = (val: any): boolean => {
   if (typeof val !== "string") return false;
-  const arnPattern = /^arn:aws:[^:]+:[^:]*:[^:]+:[^ ]+$/;
+  const arnPattern = /^arn:aws:[^:]*:[^:]*:(\d{12}|\*{3}):[^ ]+$/;
   return arnPattern.test(val);
 };
 
