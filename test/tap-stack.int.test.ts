@@ -1,40 +1,38 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeNatGatewaysCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  ListCapacityProvidersCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBClustersCommand,
-} from '@aws-sdk/client-rds';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-  DescribeSecretCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
   DescribePoliciesCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand,
-} from '@aws-sdk/client-kms';
-import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
-import { Route53Client, ListHostedZonesCommand } from '@aws-sdk/client-route-53';
+import {
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  ECSClient,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
+  KMSClient,
+  ListAliasesCommand,
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  RDSClient
+} from '@aws-sdk/client-rds';
+import { Route53Client } from '@aws-sdk/client-route-53';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient
+} from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 import path from 'path';
 
@@ -83,17 +81,39 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [outputs.VPCId],
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.Vpcs).toBeDefined();
       expect(response.Vpcs!.length).toBe(1);
-      
+
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe('available');
       expect(vpc.CidrBlock).toMatch(/^10\.0\.0\.0\/16$/);
       expect(vpc.DhcpOptionsId).toBeDefined();
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+      // Fetch VPC attributes for DNS settings
+      // Import DescribeVpcAttributeCommand at the top of the file:
+      // import { DescribeVpcAttributeCommand } from '@aws-sdk/client-ec2';
+
+      // Import DescribeVpcAttributeCommand at the top:
+      // import { DescribeVpcAttributeCommand, DescribeVpcAttributeCommandOutput } from '@aws-sdk/client-ec2';
+
+      const { DescribeVpcAttributeCommand, DescribeVpcAttributeCommandOutput } = require('@aws-sdk/client-ec2');
+
+      const dnsHostnamesAttr = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: outputs.VPCId,
+          Attribute: 'enableDnsHostnames',
+        })
+      ) as typeof DescribeVpcAttributeCommandOutput;
+      const dnsSupportAttr = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: outputs.VPCId,
+          Attribute: 'enableDnsSupport',
+        })
+      ) as typeof DescribeVpcAttributeCommandOutput;
+
+      expect(dnsHostnamesAttr.EnableDnsHostnames?.Value).toBe(true);
+      expect(dnsSupportAttr.EnableDnsSupport?.Value).toBe(true);
     }, TEST_TIMEOUT);
 
     test('should have correct subnet configuration across 2 AZs', async () => {
@@ -110,11 +130,11 @@ describe('TapStack Integration Tests', () => {
           },
         ],
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBe(6); // 2 public + 2 private + 2 isolated
-      
+
       const availabilityZones = new Set(response.Subnets!.map(s => s.AvailabilityZone));
       expect(availabilityZones.size).toBe(2); // 2 AZs
     }, TEST_TIMEOUT);
@@ -133,11 +153,11 @@ describe('TapStack Integration Tests', () => {
           },
         ],
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.NatGateways).toBeDefined();
       expect(response.NatGateways!.length).toBe(2); // One per AZ
-      
+
       response.NatGateways!.forEach(natGw => {
         expect(natGw.State).toBe('available');
       });
@@ -154,20 +174,28 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeKeyCommand({
         KeyId: outputs.KMSKeyId,
       });
-      
+
       const response = await kmsClient.send(command);
+
       expect(response.KeyMetadata).toBeDefined();
       expect(response.KeyMetadata!.Enabled).toBe(true);
-      expect(response.KeyMetadata!.KeyRotationStatus).toBe(true);
+
+      // Check key rotation status using GetKeyRotationStatusCommand
+      const rotationStatusResponse = await kmsClient.send(
+        new GetKeyRotationStatusCommand({ KeyId: outputs.KMSKeyId })
+      );
+      expect(rotationStatusResponse.KeyRotationEnabled).toBe(true);
+
       expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
+      expect(response.KeyMetadata!.KeySpec).toBe('SYMMETRIC_DEFAULT');
       expect(response.KeyMetadata!.KeySpec).toBe('SYMMETRIC_DEFAULT');
     }, TEST_TIMEOUT);
 
     test('KMS key alias should exist', async () => {
       const command = new ListAliasesCommand({});
       const response = await kmsClient.send(command);
-      
-      const infraAlias = response.Aliases?.find(alias => 
+
+      const infraAlias = response.Aliases?.find(alias =>
         alias.AliasName === 'alias/infra-encryption-key'
       );
       expect(infraAlias).toBeDefined();
@@ -191,11 +219,11 @@ describe('TapStack Integration Tests', () => {
           },
         ],
       });
-      
+
       const response = await ec2Client.send(command);
       expect(response.SecurityGroups).toBeDefined();
       expect(response.SecurityGroups!.length).toBeGreaterThan(0);
-      
+
       const dbSecurityGroup = response.SecurityGroups![0];
       expect(dbSecurityGroup.IpPermissionsEgress).toBeDefined();
       // Database security group should have restrictive egress rules
@@ -212,7 +240,7 @@ describe('TapStack Integration Tests', () => {
       const describeCommand = new DescribeSecretCommand({
         SecretId: outputs.SecretsManagerARN,
       });
-      
+
       const response = await secretsClient.send(describeCommand);
       expect(response.Name).toBeDefined();
       expect(response.Description).toBe('RDS PostgreSQL credentials');
@@ -227,15 +255,15 @@ describe('TapStack Integration Tests', () => {
 
       // Extract DB instance identifier from endpoint
       const dbInstanceId = outputs.RDSEndpoint.split('.')[0];
-      
+
       const command = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: dbInstanceId,
       });
-      
+
       const response = await rdsClient.send(command);
       expect(response.DBInstances).toBeDefined();
       expect(response.DBInstances!.length).toBe(1);
-      
+
       const dbInstance = response.DBInstances![0];
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.Engine).toBe('postgres');
@@ -257,11 +285,11 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeClustersCommand({
         clusters: [outputs.ECSClusterName],
       });
-      
+
       const response = await ecsClient.send(command);
       expect(response.clusters).toBeDefined();
       expect(response.clusters!.length).toBe(1);
-      
+
       const cluster = response.clusters![0];
       expect(cluster.status).toBe('ACTIVE');
       expect(cluster.clusterName).toBe(outputs.ECSClusterName);
@@ -271,11 +299,11 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: '/aws/ecs/production-cluster',
       });
-      
+
       const response = await logsClient.send(command);
       expect(response.logGroups).toBeDefined();
       expect(response.logGroups!.length).toBeGreaterThan(0);
-      
+
       const logGroup = response.logGroups![0];
       expect(logGroup.logGroupName).toBe('/aws/ecs/production-cluster');
       expect(logGroup.retentionInDays).toBe(7);
@@ -286,7 +314,7 @@ describe('TapStack Integration Tests', () => {
       // For now, we'll test that ASGs exist in the region
       const command = new DescribeAutoScalingGroupsCommand({});
       const response = await autoScalingClient.send(command);
-      
+
       expect(response.AutoScalingGroups).toBeDefined();
       // In a real deployment, we'd filter by tags or name to find our specific ASG
     }, TEST_TIMEOUT);
@@ -300,7 +328,7 @@ describe('TapStack Integration Tests', () => {
       expect(outputs.RDSEndpoint).toBeDefined();
       expect(outputs.SecretsManagerARN).toBeDefined();
       expect(outputs.KMSKeyId).toBeDefined();
-      
+
       // Verify all required outputs are present
       const requiredOutputs = ['VPCId', 'ECSClusterName', 'RDSEndpoint', 'SecretsManagerARN', 'KMSKeyId'];
       requiredOutputs.forEach(output => {
@@ -313,7 +341,7 @@ describe('TapStack Integration Tests', () => {
       // Check that sensitive data is properly secured
       expect(outputs.SecretsManagerARN).toMatch(/^arn:aws:secretsmanager/);
       expect(outputs.KMSKeyId).toBeDefined();
-      
+
       // Database endpoint should not be publicly accessible
       if (outputs.RDSEndpoint && !outputs.RDSEndpoint.startsWith('test-db')) {
         expect(outputs.RDSEndpoint).not.toMatch(/\.rds\.amazonaws\.com$/);
@@ -336,7 +364,7 @@ describe('TapStack Integration Tests', () => {
           },
         ],
       });
-      
+
       const response = await ec2Client.send(command);
       const availabilityZones = new Set(response.Subnets!.map(s => s.AvailabilityZone));
       expect(availabilityZones.size).toBeGreaterThanOrEqual(2);
@@ -349,10 +377,10 @@ describe('TapStack Integration Tests', () => {
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: '/aws/ecs/',
       });
-      
+
       const response = await logsClient.send(command);
       expect(response.logGroups).toBeDefined();
-      
+
       const ecsLogGroup = response.logGroups!.find(
         lg => lg.logGroupName === '/aws/ecs/production-cluster'
       );
@@ -363,7 +391,7 @@ describe('TapStack Integration Tests', () => {
       // Test that scaling policies exist
       const command = new DescribePoliciesCommand({});
       const response = await autoScalingClient.send(command);
-      
+
       expect(response.ScalingPolicies).toBeDefined();
       // In a real deployment, we'd filter by ASG name or tags
     }, TEST_TIMEOUT);

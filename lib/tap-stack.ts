@@ -93,7 +93,7 @@ export class TapStack extends cdk.Stack {
     this.dbSecret = new secretsmanager.Secret(this, `DBSecret-${this.environmentSuffix}-${this.randomSuffix}`, {
       description: `RDS PostgreSQL credentials - ${this.environmentSuffix}-${this.randomSuffix}`,
       generateSecretString: {
-        secretStringTemplate: JSON.stringify({ 
+        secretStringTemplate: JSON.stringify({
           username: `pgadmin_${this.randomSuffix}` // Unique username
         }),
         generateStringKey: 'password',
@@ -286,27 +286,27 @@ export class TapStack extends cdk.Stack {
       'set -euo pipefail', // Fail on error and undefined variables
       'yum update -y --security', // Security updates only initially
       'yum install -y amazon-cloudwatch-agent aws-cli',
-      
+
       // ECS Configuration
       `echo "ECS_CLUSTER=${this.ecsCluster.clusterName}" >> /etc/ecs/ecs.config`,
       'echo "ECS_ENABLE_CONTAINER_METADATA=true" >> /etc/ecs/ecs.config',
       'echo "ECS_ENABLE_TASK_IAM_ROLE=true" >> /etc/ecs/ecs.config',
       'echo "ECS_ENABLE_TASK_IAM_ROLE_NETWORK_HOST=true" >> /etc/ecs/ecs.config',
-      
+
       // Security hardening
       'echo "ECS_ENABLE_TASK_ENI=true" >> /etc/ecs/ecs.config',
       'echo "ECS_DISABLE_IMAGE_CLEANUP=false" >> /etc/ecs/ecs.config',
       'echo "ECS_IMAGE_CLEANUP_INTERVAL=10m" >> /etc/ecs/ecs.config',
-      
+
       // CloudWatch agent configuration
       'systemctl enable amazon-cloudwatch-agent',
       'systemctl start amazon-cloudwatch-agent',
-      
+
       // System hardening
       'chmod 600 /etc/ecs/ecs.config',
       'systemctl enable ecs',
       'systemctl start ecs',
-      
+
       // Log rotation
       'echo "/var/log/ecs/*.log {" > /etc/logrotate.d/ecs',
       'echo "  daily" >> /etc/logrotate.d/ecs',
@@ -358,7 +358,6 @@ export class TapStack extends cdk.Stack {
         maxCapacity: 10,
         desiredCapacity: 2,
         healthChecks: autoscaling.HealthChecks.ec2(), // More comprehensive health checks
-        healthCheckGracePeriod: cdk.Duration.minutes(5),
         defaultInstanceWarmup: cdk.Duration.minutes(3), // Warm-up period
         groupMetrics: [autoscaling.GroupMetrics.all()], // Enable all metrics
         newInstancesProtectedFromScaleIn: false, // Allow scale-in for cost optimization
@@ -371,7 +370,6 @@ export class TapStack extends cdk.Stack {
           minInstancesInService: 1,
           pauseTime: cdk.Duration.minutes(5),
           waitOnResourceSignals: true,
-          minSuccessfulInstancesPercent: 100,
         }),
       }
     );
