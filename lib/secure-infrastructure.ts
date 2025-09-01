@@ -513,7 +513,10 @@ export class SecureInfrastructure {
         bucket: logsBucket.id,
         acl: 'private',
       },
-      { provider: this.provider, dependsOn: [logsBucketOwnership, logsBucketPab] }
+      {
+        provider: this.provider,
+        dependsOn: [logsBucketOwnership, logsBucketPab],
+      }
     );
 
     // S3 Lifecycle Configuration for logs bucket
