@@ -1,25 +1,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Secure, compliant AWS baseline environment.
-  Provisions VPC, subnets, IAM roles, S3 (SSE-KMS), EC2 with encrypted EBS,
-  RDS in private subnets, CloudTrail, Config, CloudWatch alarms, Parameter Store,
-  centralized logging, KMS CMKs, and Shield Advanced.
-  Skips WAF as per constraints.
-
-Metadata:
-  Version: "1.1.0"
-  Compliance:
-    - CIS AWS Foundations
-    - PCI DSS
-    - SOC 2
-  Owner: "Security-by-Design"
+  Single-AZ safe: all subnets use AZ0 so template works in 1-AZ regions.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: "prod"
-    AllowedPattern: "[a-zA-Z0-9-]+"
-    Description: "Environment name for tagging and resource naming"
 
   VpcCIDR:
     Type: String
@@ -57,7 +44,7 @@ Resources:
   KmsKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: "CMK for encrypting S3, EBS, RDS, and Parameter Store"
+      Description: "CMK for encrypting resources"
       EnableKeyRotation: true
       KeyPolicy:
         Version: "2012-10-17"
@@ -77,9 +64,6 @@ Resources:
       CidrBlock: !Ref VpcCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-vpc"
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -103,7 +87,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
 
   PrivateSubnet1:
@@ -119,7 +103,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Select [1, !GetAZs ""]
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
 
   PublicRouteTable:
@@ -169,7 +153,7 @@ Resources:
           CidrIp: 0.0.0.0/0
 
   #################################
-  # S3 Bucket (Encrypted)
+  # S3 Bucket
   #################################
   SecureBucket:
     Type: AWS::S3::Bucket
@@ -183,7 +167,7 @@ Resources:
         Status: Enabled
 
   #################################
-  # EC2 Instance (Encrypted EBS)
+  # EC2 Instance
   #################################
   EC2Instance:
     Type: AWS::EC2::Instance
@@ -191,7 +175,7 @@ Resources:
       InstanceType: t3.micro
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds: [!Ref WebSG]
-      ImageId: ami-0c55b159cbfafe1f0 # Update per region
+      ImageId: ami-0c55b159cbfafe1f0 # update for your region
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -201,7 +185,7 @@ Resources:
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
 
   #################################
-  # RDS Instance (Private)
+  # RDS Instance
   #################################
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -234,7 +218,6 @@ Resources:
       Name: !Sub "/${EnvironmentName}/db/password"
       Type: String
       Value: "ChangeMe123!"
-      Description: "DB password placeholder. Convert to SecureString with KMS post-deployment via CLI/SDK."
 
   #################################
   # CloudTrail
