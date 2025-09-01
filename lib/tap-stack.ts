@@ -21,11 +21,11 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
+
     const environmentParam = new cdk.CfnParameter(this, 'Environment', {
       type: 'String',
       allowedValues: ['dev', 'stage', 'prod'],
@@ -42,7 +42,7 @@ export class TapStack extends cdk.Stack {
 
     // DynamoDB Table
     const dynamoTable = new dynamodb.Table(this, 'DataTable', {
-      tableName: `data-table-${environmentParam.valueAsString}`,
+      tableName: `data-table-${environmentParam.valueAsString}-${environmentSuffix}`,
       partitionKey: {
         name: 'id',
         type: dynamodb.AttributeType.STRING,
@@ -74,7 +74,7 @@ export class TapStack extends cdk.Stack {
 
     // CloudWatch Log Group
     const logGroup = new logs.LogGroup(this, 'LambdaLogGroup', {
-      logGroupName: `/aws/lambda/data-processor-${environmentParam.valueAsString}`,
+      logGroupName: `/aws/lambda/data-processor-${environmentParam.valueAsString}-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -82,7 +82,7 @@ export class TapStack extends cdk.Stack {
     // IAM Role for Lambda (Principle of Least Privilege)
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      roleName: `lambda-execution-role-${environmentParam.valueAsString}`,
+      roleName: `lambda-execution-role-${environmentParam.valueAsString}-${environmentSuffix}`,
       inlinePolicies: {
         CloudWatchLogsPolicy: new iam.PolicyDocument({
           statements: [
@@ -107,7 +107,7 @@ export class TapStack extends cdk.Stack {
 
     // Lambda Function
     const lambdaFunction = new lambda.Function(this, 'DataProcessorFunction', {
-      functionName: `data-processor-${environmentParam.valueAsString}`,
+      functionName: `data-processor-${environmentParam.valueAsString}-${environmentSuffix}`,
       runtime: lambda.Runtime.PYTHON_3_9,
       handler: 'index.handler',
       role: lambdaRole,
@@ -192,7 +192,7 @@ def handler(event, context):
 
     // API Gateway
     const api = new apigateway.RestApi(this, 'DataProcessorApi', {
-      restApiName: `data-processor-api-${environmentParam.valueAsString}`,
+      restApiName: `data-processor-api-${environmentParam.valueAsString}-${environmentSuffix}`,
       description: 'API Gateway for data processing Lambda function',
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
@@ -231,7 +231,7 @@ def handler(event, context):
 
     // CloudWatch Alarm for Lambda Error Rate
     const errorRateAlarm = new cloudwatch.Alarm(this, 'LambdaErrorRateAlarm', {
-      alarmName: `lambda-error-rate-${environmentParam.valueAsString}`,
+      alarmName: `lambda-error-rate-${environmentParam.valueAsString}-${environmentSuffix}`,
       alarmDescription:
         'Alarm when Lambda function error rate exceeds 5% for 5 consecutive minutes',
       metric: new cloudwatch.MathExpression({
@@ -259,25 +259,25 @@ def handler(event, context):
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
       description: 'API Gateway URL',
-      exportName: `api-gateway-url-${environmentParam.valueAsString}`,
+      exportName: `api-gateway-url-${environmentParam.valueAsString}-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'LambdaFunctionName', {
       value: lambdaFunction.functionName,
       description: 'Lambda Function Name',
-      exportName: `lambda-function-name-${environmentParam.valueAsString}`,
+      exportName: `lambda-function-name-${environmentParam.valueAsString}-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'DynamoDBTableName', {
       value: dynamoTable.tableName,
       description: 'DynamoDB Table Name',
-      exportName: `dynamodb-table-name-${environmentParam.valueAsString}`,
+      exportName: `dynamodb-table-name-${environmentParam.valueAsString}-${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'CloudWatchAlarmName', {
       value: errorRateAlarm.alarmName,
       description: 'CloudWatch Alarm Name',
-      exportName: `cloudwatch-alarm-name-${environmentParam.valueAsString}`,
+      exportName: `cloudwatch-alarm-name-${environmentParam.valueAsString}-${environmentSuffix}`,
     });
   }
 }
