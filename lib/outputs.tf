@@ -70,4 +70,4 @@ output "vpc2_nat_gateway_id" {
 output "key_pair_guidance" {
   description = "Guidance if EC2 key pair was not created by Terraform"
   value       = var.create_key_pair ? "Key pair created by Terraform." : "Ensure the key pair '${var.key_pair_name}' exists in AWS before deploying EC2 instances."
-}
+} 
