@@ -137,10 +137,6 @@ resource "aws_route_table" "private" {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-
-  tags = {
-    Name = "private-rt-${count.index + 1}"
-  }
 }
 
 resource "aws_route_table_association" "private" {
@@ -563,7 +559,8 @@ resource "aws_config_configuration_recorder" "main" {
   }
 
   lifecycle {
-    ignore_changes = [name]
+    prevent_destroy = true
+    ignore_changes  = [name]
   }
 }
 
@@ -705,7 +702,39 @@ resource "aws_db_instance" "main" {
   }
 }
 
-# Launch Template for EC2 Instances
+# IAM Role for EC2 Web Instances
+resource "aws_iam_role" "web" {
+  name = "web-instance-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        },
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+  tags = {
+    Name = "web-instance-role"
+  }
+}
+
+# Attach SSM Managed Policy (for EC2 management)
+resource "aws_iam_role_policy_attachment" "web_ssm" {
+  role       = aws_iam_role.web.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# IAM Instance Profile (update to use resource)
+resource "aws_iam_instance_profile" "web" {
+  name = "web-instance-profile"
+  role = aws_iam_role.web.name
+}
+
+# Launch Template for EC2 Instances (update to use resource)
 resource "aws_launch_template" "web" {
   name_prefix   = "web-template"
   image_id      = data.aws_ami.amazon_linux_2.id
@@ -742,6 +771,10 @@ resource "aws_launch_template" "web" {
 
   tags = {
     Name = "web-launch-template"
+  }
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.web.name
   }
 }
 
@@ -798,7 +831,7 @@ resource "aws_lb_listener" "web" {
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
   name                = "web-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
+  vpc_zone_identifier = aws_subnet.public[*].id
   target_group_arns   = [aws_lb_target_group.web.arn]
   health_check_type   = "ELB"
 
