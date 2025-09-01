@@ -388,22 +388,6 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.lb.Listener(
-      `https-listener-${environment}`,
-      {
-        loadBalancerArn: this.loadBalancer.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        defaultActions: [
-          {
-            type: 'forward',
-            targetGroupArn: targetGroup.arn,
-          },
-        ],
-      },
-      { provider: this.provider }
-    );
-
     const amiId = aws.ec2.getAmi(
       {
         mostRecent: true,

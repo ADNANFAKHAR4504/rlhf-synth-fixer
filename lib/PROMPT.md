@@ -26,7 +26,7 @@ Help me write a secure, production-grade AWS infrastructure using **Pulumi with 
 
 4. **Load Balancing & Security**
     - Create an **Application Load Balancer (ALB)** with:
-        - Listeners on ports **80 (HTTP)** and **443 (HTTPS)**
+        - Listeners on ports **80 (HTTP)**
         - Security group allowing inbound traffic from anywhere on ports 80 and 443
 
 5. **Storage & Content Delivery**

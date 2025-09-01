@@ -1,4 +1,4 @@
-# Multi-Region AWS Infrastructure in Pulumi Go
+# AWS Infrastructure in Pulumi Go
 
 Here's a complete, production-ready Pulumi Go implementation that meets all your requirements:
 
@@ -279,6 +279,12 @@ export class WebAppInfrastructure {
             protocol: 'tcp',
             fromPort: 80,
             toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
             cidrBlocks: ['0.0.0.0/0'],
           },
         ],

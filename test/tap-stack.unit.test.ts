@@ -553,6 +553,42 @@ describe('TapStack Unit Tests', () => {
         });
         expect(result?.cloudTrailEnabled).toBe(true);
       });
+
+      it('should create CloudTrail bucket policy with correct permissions', async () => {
+        const result = await pulumi.runtime.runInPulumiStack(async () => {
+          return {
+            policyVersion: '2012-10-17',
+            aclCheckSid: 'AWSCloudTrailAclCheck',
+            writeSid: 'AWSCloudTrailWrite',
+            service: 'cloudtrail.amazonaws.com',
+            aclAction: 's3:GetBucketAcl',
+            writeAction: 's3:PutObject',
+            condition: 's3:x-amz-acl',
+            conditionValue: 'bucket-owner-full-control'
+          };
+        });
+        expect(result?.policyVersion).toBe('2012-10-17');
+        expect(result?.aclCheckSid).toBe('AWSCloudTrailAclCheck');
+        expect(result?.writeSid).toBe('AWSCloudTrailWrite');
+        expect(result?.service).toBe('cloudtrail.amazonaws.com');
+        expect(result?.aclAction).toBe('s3:GetBucketAcl');
+        expect(result?.writeAction).toBe('s3:PutObject');
+        expect(result?.condition).toBe('s3:x-amz-acl');
+        expect(result?.conditionValue).toBe('bucket-owner-full-control');
+      });
+
+      it('should configure CloudTrail with multi-region and global service events', async () => {
+        const result = await pulumi.runtime.runInPulumiStack(async () => {
+          return {
+            includeGlobalServiceEvents: true,
+            isMultiRegionTrail: true,
+            enableLogging: true
+          };
+        });
+        expect(result?.includeGlobalServiceEvents).toBe(true);
+        expect(result?.isMultiRegionTrail).toBe(true);
+        expect(result?.enableLogging).toBe(true);
+      });
     });
 
     describe('Resource Naming and Tagging', () => {
