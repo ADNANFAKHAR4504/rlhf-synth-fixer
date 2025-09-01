@@ -334,7 +334,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      AliasName: 'alias/secure-environment-key-tapstack'
+      AliasName: !Sub
+        - 'alias/secure-environment-key-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       TargetKeyId: !Ref SecureKMSKey
 
   # =========================
