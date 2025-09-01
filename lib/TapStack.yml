@@ -7,7 +7,7 @@ Description: >
   Skips WAF as per constraints.
 
 Metadata:
-  Version: "1.0.2"
+  Version: "1.0.3"
   Compliance:
     - CIS AWS Foundations
     - PCI DSS
@@ -272,7 +272,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole  # FIXED
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
