@@ -98,7 +98,7 @@ resource "aws_subnet" "private" {
 resource "aws_db_instance" "main" {
   identifier              = "${var.project_name}-database"
   engine                  = "mysql"
-  engine_version          = "8.0.35"
+  engine_version          = "8.0.34"
   instance_class          = "db.t3.micro"
   allocated_storage       = 20
   max_allocated_storage   = 100
@@ -128,6 +128,13 @@ resource "aws_s3_bucket" "main" {
   tags          = local.common_tags
 }
 
+resource "aws_s3_bucket_object" "test_file" {
+  bucket  = aws_s3_bucket.main.bucket
+  key     = "test.txt"
+  content = "integration test file"
+  acl     = "private"
+}
+# S3 Bucket (updated for deprecation)
 # Security Groups
 resource "aws_security_group" "web" {
   name        = "${var.project_name}-web-sg"
