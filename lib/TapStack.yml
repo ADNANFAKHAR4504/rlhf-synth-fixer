@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Secure, compliant AWS baseline environment.
   Single-AZ safe (all subnets in AZ0).
-  EC2 uses dynamic SSM Parameter for AMI (no invalid AMI errors).
+  Includes CloudTrail bucket policy fix.
 
 Parameters:
   EnvironmentName:
@@ -191,7 +191,7 @@ Resources:
         Status: Enabled
 
   #################################
-  # CloudTrail
+  # CloudTrail (with fixed bucket policy)
   #################################
   TrailBucket:
     Type: AWS::S3::Bucket
@@ -201,6 +201,29 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref KmsKey
+
+  TrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt TrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${TrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail

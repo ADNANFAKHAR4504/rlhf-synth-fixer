@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe (all subnets in AZ0). EC2 uses dynamic SSM Parameter for AMI (no invalid AMI errors).\n",
+    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe (all subnets in AZ0). Includes CloudTrail bucket policy fix.\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -320,6 +320,49 @@
                                 "SSEAlgorithm": "aws:kms",
                                 "KMSMasterKeyID": {
                                     "Ref": "KmsKey"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "TrailBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "TrailBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "TrailBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
+                            "Sid": "AWSCloudTrailWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${TrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
                                 }
                             }
                         }
