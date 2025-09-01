@@ -292,14 +292,14 @@ describe('TapStack CloudFormation Template Tests', () => {
         expect(output.Description).toBeDefined();
         expect(output.Description.length).toBeGreaterThan(10);
         expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
+        expect(output.Export?.Name).toBeDefined();
       });
     });
 
     test('output exports should follow consistent naming pattern', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey] as Output;
-        const exportName = output.Export.Name;
+        const exportName = output.Export?.Name;
         
         // Should use Fn::Sub with stack name prefix
         expect(exportName['Fn::Sub']).toBeDefined();
