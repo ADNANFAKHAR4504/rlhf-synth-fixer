@@ -405,7 +405,7 @@
                                 "s3:PutObject"
                             ],
                             "Resource": {
-                                "Fn::Sub": "${LoggingBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "${LoggingBucket.Arn}/AWSLogs/${AWS::AccountId}/CloudTrail/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -543,7 +543,7 @@
                     "Ref": "LoggingBucket"
                 },
                 "S3KeyPrefix": {
-                    "Fn::Sub": "AWSLogs/${AWS::AccountId}/CloudTrail/"
+                    "Fn::Sub": "AWSLogs/${AWS::AccountId}/CloudTrail"
                 },
                 "IncludeGlobalServiceEvents": true,
                 "IsLogging": true,
