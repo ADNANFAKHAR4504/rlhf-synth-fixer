@@ -60,6 +60,6 @@ variable "rds_master_password" {
   description = "Master password for RDS instance"
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "ValidPass123"
 }
 
