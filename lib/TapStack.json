@@ -540,10 +540,65 @@
             "Description": "VPC ID",
             "Value": {
                 "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VpcId"
+                }
+            }
+        },
+        "VpcCidr": {
+            "Description": "CIDR block of the VPC",
+            "Value": {
+                "Ref": "VpcCIDR"
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet2"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet2"
+                }
             }
         },
         "PublicSubnets": {
-            "Description": "Public Subnet IDs",
+            "Description": "All public subnet IDs",
             "Value": {
                 "Fn::Join": [
                     ",",
@@ -559,7 +614,7 @@
             }
         },
         "PrivateSubnets": {
-            "Description": "Private Subnet IDs",
+            "Description": "All private subnet IDs",
             "Value": {
                 "Fn::Join": [
                     ",",
@@ -574,16 +629,173 @@
                 ]
             }
         },
-        "AutoScalingGroupName": {
-            "Description": "Name of the Auto Scaling Group",
+        "PublicSubnet1CIDR": {
+            "Description": "Public Subnet 1 CIDR",
             "Value": {
-                "Ref": "AutoScalingGroup"
+                "Ref": "PublicSubnet1CIDR"
+            }
+        },
+        "PublicSubnet2CIDR": {
+            "Description": "Public Subnet 2 CIDR",
+            "Value": {
+                "Ref": "PublicSubnet2CIDR"
+            }
+        },
+        "PrivateSubnet1CIDR": {
+            "Description": "Private Subnet 1 CIDR",
+            "Value": {
+                "Ref": "PrivateSubnet1CIDR"
+            }
+        },
+        "PrivateSubnet2CIDR": {
+            "Description": "Private Subnet 2 CIDR",
+            "Value": {
+                "Ref": "PrivateSubnet2CIDR"
+            }
+        },
+        "PublicRouteTableId": {
+            "Description": "Public Route Table ID",
+            "Value": {
+                "Ref": "PublicRouteTable"
+            }
+        },
+        "PrivateRouteTableId": {
+            "Description": "Private Route Table ID",
+            "Value": {
+                "Ref": "PrivateRouteTable"
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            }
+        },
+        "NatGatewayId": {
+            "Description": "NAT Gateway ID",
+            "Value": {
+                "Ref": "NatGateway"
+            }
+        },
+        "NatEIPId": {
+            "Description": "Elastic IP ID for NAT Gateway",
+            "Value": {
+                "Ref": "NatEIP"
+            }
+        },
+        "NatEIPAllocationId": {
+            "Description": "Elastic IP Allocation ID for NAT",
+            "Value": {
+                "Fn::GetAtt": [
+                    "NatEIP",
+                    "AllocationId"
+                ]
+            }
+        },
+        "InstanceSecurityGroupId": {
+            "Description": "Security Group for EC2 instances",
+            "Value": {
+                "Ref": "InstanceSG"
+            }
+        },
+        "EC2RoleName": {
+            "Description": "IAM Role for EC2",
+            "Value": {
+                "Ref": "EC2Role"
+            }
+        },
+        "EC2RoleArn": {
+            "Description": "IAM Role ARN for EC2",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Role",
+                    "Arn"
+                ]
+            }
+        },
+        "InstanceProfileName": {
+            "Description": "Instance Profile name",
+            "Value": {
+                "Ref": "InstanceProfile"
+            }
+        },
+        "InstanceProfileArn": {
+            "Description": "Instance Profile ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "InstanceProfile",
+                    "Arn"
+                ]
             }
         },
         "BucketName": {
             "Description": "Name of the managed S3 bucket",
             "Value": {
                 "Ref": "AppDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-AppDataBucketName"
+                }
+            }
+        },
+        "BucketArn": {
+            "Description": "ARN of the managed S3 bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AppDataBucket",
+                    "Arn"
+                ]
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            }
+        },
+        "LaunchTemplateLatestVersion": {
+            "Description": "Launch Template Latest Version",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LaunchTemplate",
+                    "LatestVersionNumber"
+                ]
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ASG"
+                }
+            }
+        },
+        "ScaleOutPolicyArn": {
+            "Description": "ARN of the Scale Out Policy",
+            "Value": {
+                "Ref": "ScaleOutPolicy"
+            }
+        },
+        "ScaleInPolicyArn": {
+            "Description": "ARN of the Scale In Policy",
+            "Value": {
+                "Ref": "ScaleInPolicy"
+            }
+        },
+        "CPUAlarmHighArn": {
+            "Description": "ARN of the high CPU alarm",
+            "Value": {
+                "Ref": "CPUAlarmHigh"
+            }
+        },
+        "CPUAlarmLowArn": {
+            "Description": "ARN of the low CPU alarm",
+            "Value": {
+                "Ref": "CPUAlarmLow"
             }
         }
     }
