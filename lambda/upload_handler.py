@@ -17,6 +17,8 @@ secrets_client = boto3.client('secretsmanager')
 # Environment variables
 BUCKET_NAME = os.environ['BUCKET_NAME']
 SECRETS_ARN = os.environ['SECRETS_ARN']
+# AWS_REGION is automatically available as os.environ['AWS_REGION'] in Lambda
+
 
 def lambda_handler(event, context):
     """
@@ -60,6 +62,7 @@ def lambda_handler(event, context):
         logger.error(f"Unexpected error: {str(e)}")
         return error_response(500, "Internal server error")
 
+
 def get_secrets():
     """Retrieve configuration from AWS Secrets Manager"""
     try:
@@ -68,6 +71,7 @@ def get_secrets():
     except Exception as e:
         logger.error(f"Failed to retrieve secrets: {str(e)}")
         raise
+
 
 def parse_request(event):
     """Parse and extract request data"""
@@ -95,6 +99,7 @@ def parse_request(event):
     except Exception as e:
         raise ValueError(f"Invalid request format: {str(e)}")
 
+
 def validate_upload(request_data, config):
     """Validate file size and MIME type"""
     max_size = int(config['max_file_size'])
@@ -107,6 +112,7 @@ def validate_upload(request_data, config):
     # Check MIME type
     if request_data['content_type'] not in allowed_types:
         raise ValueError(f"File type {request_data['content_type']} not allowed. Allowed types: {allowed_types}")
+
 
 def upload_to_s3(request_data, config):
     """Upload file to S3 with metadata"""
@@ -142,6 +148,7 @@ def upload_to_s3(request_data, config):
         logger.error(f"S3 upload failed: {str(e)}")
         raise
 
+
 def get_file_extension(content_type):
     """Get file extension from MIME type"""
     extensions = {
@@ -150,6 +157,7 @@ def get_file_extension(content_type):
         'image/jpeg': '.jpg'
     }
     return extensions.get(content_type, '.bin')
+
 
 def error_response(status_code, message):
     """Generate error response"""

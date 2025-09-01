@@ -123,7 +123,7 @@ class TapStack(Stack):
             )
         )
         
-        # Create Lambda function
+        # Create Lambda function - REMOVED AWS_REGION from environment variables
         upload_function = _lambda.Function(
             self, "TapUploadFunction",
             runtime=_lambda.Runtime.PYTHON_3_9,
@@ -134,8 +134,8 @@ class TapStack(Stack):
             memory_size=256,
             environment={
                 "BUCKET_NAME": self.upload_bucket.bucket_name,
-                "SECRETS_ARN": self.secrets.secret_arn,
-                "AWS_REGION": self.region
+                "SECRETS_ARN": self.secrets.secret_arn
+                # AWS_REGION is automatically available in Lambda runtime
             },
             # Deploy across multiple AZs for high availability
             reserved_concurrent_executions=100,
