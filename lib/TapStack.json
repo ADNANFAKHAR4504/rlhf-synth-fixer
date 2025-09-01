@@ -550,7 +550,7 @@
       "Properties": {
         "Description": "RDS MySQL Database Password",
         "GenerateSecretString": {
-          "SecretStringTemplate": "{}",
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
           "GenerateStringKey": "password",
           "PasswordLength": 32,
           "ExcludeCharacters": " \"@/\\\\"
@@ -626,7 +626,18 @@
         "AllocatedStorage": "20",
         "StorageType": "gp2",
         "DBName": "productiondb",
-        "MasterUsername": "admin",
+        "MasterUsername": {
+          "Fn::Join": [
+            "",
+            [
+              "{{resolve:secretsmanager:",
+              {
+                "Ref": "DBPasswordSecret"
+              },
+              ":SecretString:username}}"
+            ]
+          ]
+        },
         "MasterUserPassword": {
           "Fn::Join": [
             "",
