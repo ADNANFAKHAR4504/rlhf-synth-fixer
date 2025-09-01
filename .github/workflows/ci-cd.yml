@@ -159,20 +159,6 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-      - name: Pre-Deploy Cleanup (Destroy existing resources)
-        run: |
-          chmod +x delete_pr2472_resources.sh
-          ./delete_pr2472_resources.sh
-          ./scripts/destroy.sh
-        env:
-          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
-          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
-          PULUMI_ORG: ${{ env.PULUMI_ORG }}
-        continue-on-error: true # Continue even if destroy fails (resources might not exist)
-
       - name: Deploy
         run: ./scripts/deploy.sh
         env:
