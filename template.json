@@ -1045,7 +1045,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "Code": {
-          "S3Bucket": "cdk-hnb659fds-assets-086440326438-us-east-1",
+          "S3Bucket": "cdk-Knb659fds-assets-086440326438-us-east-1",
           "S3Key": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip"
         },
         "Timeout": 900,
@@ -2243,7 +2243,7 @@
   "Parameters": {
     "BootstrapVersion": {
       "Type": "AWS::SSM::Parameter::Value<String>",
-      "Default": "/cdk-bootstrap/hnb659fds/version",
+      "Default": "/cdk-bootstrap/Knb659fds/version",
       "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
     }
   }
