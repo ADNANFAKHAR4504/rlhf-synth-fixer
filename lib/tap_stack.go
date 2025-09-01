@@ -629,28 +629,27 @@ func NewInfrastructureStack(scope constructs.Construct, id *string, config *Infr
 	}
 }
 
-func NewMultiRegionInfrastructureStack(scope constructs.Construct, id *string, envSuffix string) *InfrastructureStack {
-	this := &InfrastructureStack{}
-	cdktf.NewTerraformStack_Override(this, scope, id)
+func NewMultiRegionInfrastructureStack(scope constructs.Construct, id *string, envSuffix string) cdktf.TerraformStack {
+	stack := cdktf.NewTerraformStack(scope, id)
 
 	// Create AWS providers for both regions
-	eastProvider := provider.NewAwsProvider(this, jsii.String("aws-east"), &provider.AwsProviderConfig{
+	eastProvider := provider.NewAwsProvider(stack, jsii.String("aws-east"), &provider.AwsProviderConfig{
 		Region: jsii.String("us-east-1"),
 		Alias:  jsii.String("east"),
 	})
 
-	westProvider := provider.NewAwsProvider(this, jsii.String("aws-west"), &provider.AwsProviderConfig{
+	westProvider := provider.NewAwsProvider(stack, jsii.String("aws-west"), &provider.AwsProviderConfig{
 		Region: jsii.String("us-west-2"),
 		Alias:  jsii.String("west"),
 	})
 
 	// Create infrastructure in us-east-1
-	CreateRegionalInfrastructure(this, "east", "us-east-1", envSuffix, eastProvider)
+	CreateRegionalInfrastructure(stack, "east", "us-east-1", envSuffix, eastProvider)
 
 	// Create infrastructure in us-west-2
-	CreateRegionalInfrastructure(this, "west", "us-west-2", envSuffix, westProvider)
+	CreateRegionalInfrastructure(stack, "west", "us-west-2", envSuffix, westProvider)
 
-	return this
+	return stack
 }
 
 func CreateRegionalInfrastructure(scope constructs.Construct, regionName string, regionCode string, envSuffix string, awsProvider provider.AwsProvider) {
@@ -691,12 +690,16 @@ func CreateRegionalInfrastructure(scope constructs.Construct, regionName string,
 		}),
 	})
 
+	// Use CDKTF Fn.element to access availability zones
+	firstAz := jsii.String(cdktf.Fn_Element(azs.Names(), jsii.Number(0)).(string))
+	secondAz := jsii.String(cdktf.Fn_Element(azs.Names(), jsii.Number(1)).(string))
+
 	// Create public subnets
 	publicSubnet1Name := fmt.Sprintf("tap-public-subnet-1-%s-%s", regionCode, envSuffix)
 	publicSubnet1 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("public-subnet-1-%s", regionName)), &subnet.SubnetConfig{
 		VpcId:               mainVpc.Id(),
 		CidrBlock:           jsii.String("10.0.1.0/24"),
-		AvailabilityZone:    (*azs.Names())[0],
+		AvailabilityZone:    firstAz,
 		MapPublicIpOnLaunch: jsii.Bool(true),
 		Provider:            awsProvider,
 		Tags: mergeTags(baseTags, &map[string]*string{
@@ -709,7 +712,7 @@ func CreateRegionalInfrastructure(scope constructs.Construct, regionName string,
 	publicSubnet2 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("public-subnet-2-%s", regionName)), &subnet.SubnetConfig{
 		VpcId:               mainVpc.Id(),
 		CidrBlock:           jsii.String("10.0.2.0/24"),
-		AvailabilityZone:    (*azs.Names())[1],
+		AvailabilityZone:    secondAz,
 		MapPublicIpOnLaunch: jsii.Bool(true),
 		Provider:            awsProvider,
 		Tags: mergeTags(baseTags, &map[string]*string{
@@ -761,7 +764,7 @@ func CreateRegionalInfrastructure(scope constructs.Construct, regionName string,
 	privateSubnet1 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("private-subnet-1-%s", regionName)), &subnet.SubnetConfig{
 		VpcId:            mainVpc.Id(),
 		CidrBlock:        jsii.String("10.0.3.0/24"),
-		AvailabilityZone: (*azs.Names())[0],
+		AvailabilityZone: firstAz,
 		Provider:         awsProvider,
 		Tags: mergeTags(baseTags, &map[string]*string{
 			"Name": jsii.String(privateSubnet1Name),
@@ -773,7 +776,7 @@ func CreateRegionalInfrastructure(scope constructs.Construct, regionName string,
 	privateSubnet2 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("private-subnet-2-%s", regionName)), &subnet.SubnetConfig{
 		VpcId:            mainVpc.Id(),
 		CidrBlock:        jsii.String("10.0.4.0/24"),
-		AvailabilityZone: (*azs.Names())[1],
+		AvailabilityZone: secondAz,
 		Provider:         awsProvider,
 		Tags: mergeTags(baseTags, &map[string]*string{
 			"Name": jsii.String(privateSubnet2Name),
@@ -786,7 +789,7 @@ func CreateRegionalInfrastructure(scope constructs.Construct, regionName string,
 	dbSubnet1 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("db-subnet-1-%s", regionName)), &subnet.SubnetConfig{
 		VpcId:            mainVpc.Id(),
 		CidrBlock:        jsii.String("10.0.5.0/24"),
-		AvailabilityZone: (*azs.Names())[0],
+		AvailabilityZone: firstAz,
 		Provider:         awsProvider,
 		Tags: mergeTags(baseTags, &map[string]*string{
 			"Name": jsii.String(dbSubnet1Name),
@@ -798,7 +801,7 @@ func CreateRegionalInfrastructure(scope constructs.Construct, regionName string,
 	dbSubnet2 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("db-subnet-2-%s", regionName)), &subnet.SubnetConfig{
 		VpcId:            mainVpc.Id(),
 		CidrBlock:        jsii.String("10.0.6.0/24"),
-		AvailabilityZone: (*azs.Names())[1],
+		AvailabilityZone: secondAz,
 		Provider:         awsProvider,
 		Tags: mergeTags(baseTags, &map[string]*string{
 			"Name": jsii.String(dbSubnet2Name),
