@@ -40,11 +40,13 @@ if not os.path.exists(flat_outputs_path) or os.path.getsize(flat_outputs_path) =
                 raw_outputs = response['Stacks'][0].get('Outputs', [])
                 flat_outputs = {}
                 for output in raw_outputs:
+                    # Remove stack prefix from key if present
                     key = output['OutputKey']
                     if '.' in key:
                         key = key.split('.')[-1]
                     flat_outputs[key] = output['OutputValue']
                 
+                # Save for future runs
                 os.makedirs(os.path.dirname(flat_outputs_path), exist_ok=True)
                 with open(flat_outputs_path, 'w') as f:
                     json.dump(flat_outputs, f, indent=2)
