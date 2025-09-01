@@ -83,18 +83,29 @@ describe("Terraform stack static validation", () => {
   });
 
   // ==== IAM Roles and Policies ====
-  ["ec2_role", "lambda_role", "s3_replication"].forEach(role => {
-   it(`declares IAM role and policies for ${role}`, () => {
-    expect(has(new RegExp(`resource\\s+"aws_iam_role"\\s+"${role}"`))).toBe(true);
-    const rolePolicies = {
-      ec2_role: "ec2_policy",
-      lambda_role: "lambda_policy",
-      s3_replication: "s3_replication"
-    };
-    const policyName = rolePolicies[role] || role;
-    expect(has(new RegExp(`resource\\s+"aws_iam_role_policy"\\s+"${policyName}"`))).toBe(true);
-   });
-  });
+  it("declares IAM role for ec2_role", () => {
+  expect(has(/resource\s+"aws_iam_role"\s+"ec2_role"/)).toBe(true);
+});
+
+it("declares IAM role policy for ec2_policy", () => {
+  expect(has(/resource\s+"aws_iam_role_policy"\s+"ec2_policy"/)).toBe(true);
+});
+
+it("declares IAM role for lambda_role", () => {
+  expect(has(/resource\s+"aws_iam_role"\s+"lambda_role"/)).toBe(true);
+});
+
+it("declares IAM role policy for lambda_policy", () => {
+  expect(has(/resource\s+"aws_iam_role_policy"\s+"lambda_policy"/)).toBe(true);
+});
+
+it("declares IAM role for s3_replication", () => {
+  expect(has(/resource\s+"aws_iam_role"\s+"s3_replication"/)).toBe(true);
+});
+
+it("declares IAM role policy for s3_replication", () => {
+  expect(has(/resource\s+"aws_iam_role_policy"\s+"s3_replication"/)).toBe(true);
+});
 
   // ==== S3 Buckets and Replication ====
   it("declares S3 buckets, versioning and replication config", () => {
