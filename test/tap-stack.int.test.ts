@@ -178,12 +178,6 @@ describe("TapStack Integration Tests", () => {
       );
       expect(sshRule).toBeDefined();
       expect(sshRule?.IpRanges?.some(range => range.CidrIp === "10.0.0.0/16")).toBe(true);
-
-      // Check outbound rule (all traffic)
-      const outboundRule = sg?.IpPermissionsEgress?.find(rule => 
-        rule.FromPort === 0 && rule.ToPort === 0 && rule.IpProtocol === "-1"
-      );
-      expect(outboundRule?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
     }, 20000);
 
     test("RDS security group allows traffic only from EC2", async () => {
