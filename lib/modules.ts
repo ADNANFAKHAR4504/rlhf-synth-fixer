@@ -28,7 +28,9 @@ export class S3Module extends Construct {
     super(scope, id);
 
     // Lowercase, hyphenated, globally unique
-    const bucketName = `${config.projectName}-${config.environment}-${config.nameSuffix}-bucket`.toLowerCase();
+    const bucketName = `${config.projectName}-${config.environment}-${
+      config.nameSuffix
+    }-bucket`.toLowerCase();
 
     this.bucket = new S3Bucket(this, 'bucket', {
       bucket: bucketName,
@@ -94,7 +96,7 @@ export class SecurityGroupModule extends Construct {
     this.securityGroup = new SecurityGroup(this, 'security-group', {
       name: sgName,
       description: `Security group for ${config.projectName} ${config.environment} environment`,
-      vpcId: (config as any).vpcId,
+      vpcId: config.vpcId,
 
       // Inbound rules - only HTTPS (port 443)
       ingress: [
@@ -196,7 +198,11 @@ export class IamRoleModule extends Construct {
         },
         {
           Effect: 'Allow',
-          Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
+          Action: [
+            'logs:CreateLogGroup',
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+          ],
           Resource: `arn:aws:logs:${currentRegion.name}:${callerIdentity.accountId}:log-group:/aws/${config.projectName}/${config.environment}/*`,
         },
       ],

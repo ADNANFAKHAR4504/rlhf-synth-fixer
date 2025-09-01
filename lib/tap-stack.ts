@@ -1,21 +1,21 @@
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 // NEW: random provider for stable, unique suffixes
-import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { Id as RandomId } from '@cdktf/provider-random/lib/id';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 
 import {
+  IamRoleModule,
+  ModuleConfig,
   S3Module,
   SecurityGroupModule,
-  IamRoleModule,
   VpcModule,
-  ModuleConfig,
 } from './modules';
 
 interface TapStackProps {
@@ -61,7 +61,7 @@ export class TapStack extends TerraformStack {
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Stable random suffix (hex) – regenerated only if this resource is destroyed
-    const nameSuffix = new RandomId(this, 'name-suffix', {
+    const nameSuffix = new RandomId(this, 'suffix-generator', {
       byteLength: 2, // 4 hex chars, e.g. "9f3a"
     }).hex;
 
@@ -103,8 +103,8 @@ export class TapStack extends TerraformStack {
       bucketArn: s3Module.bucketArn,
     });
 
-    // Outputs
-    new TerraformOutput(this, 'name-suffix', {
+    // Outputs - use unique names to avoid conflicts
+    new TerraformOutput(this, 'name-suffix-output', {
       value: nameSuffix,
       description: 'Stable random suffix used in resource names',
     });
