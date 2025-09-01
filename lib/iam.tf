@@ -1,5 +1,5 @@
 resource "aws_iam_role" "ec2_role" {
-  name = "ec2-s3-readonly-role"
+  name = "ec2-s3-readonly-role-${var.environment}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,8 +18,8 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_policy" "s3_readonly_policy" {
-  name        = "s3-readonly-policy"
-  description = "Policy for read-only access to specific S3 bucket"
+  name        = "s3-readonly-policy-${var.environment}"
+  description = "Policy for read-only access to specific S3 bucket (${var.environment})"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -43,8 +43,8 @@ resource "aws_iam_policy" "s3_readonly_policy" {
 }
 
 resource "aws_iam_policy" "cloudwatch_logs_policy" {
-  name        = "cloudwatch-logs-policy"
-  description = "Policy for CloudWatch Logs access"
+  name        = "cloudwatch-logs-policy-${var.environment}"
+  description = "Policy for CloudWatch Logs access (${var.environment})"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -77,7 +77,7 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_logs_attachment" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "ec2-instance-profile"
+  name = "ec2-instance-profile-${var.environment}"
   role = aws_iam_role.ec2_role.name
 
   tags = var.common_tags

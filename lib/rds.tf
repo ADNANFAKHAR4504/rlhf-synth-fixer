@@ -1,9 +1,9 @@
 resource "aws_db_subnet_group" "main" {
-  name       = "rds-subnet-group"
+  name       = "rds-subnet-group-${var.environment}"
   subnet_ids = [aws_subnet.vpc1_private.id, aws_subnet.vpc1_private2.id]
 
   tags = merge(var.common_tags, {
-    Name = "rds-subnet-group"
+    Name = "rds-subnet-group-${var.environment}"
   })
 }
 
