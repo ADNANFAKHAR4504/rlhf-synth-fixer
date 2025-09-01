@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Robust networking infrastructure in us-west-2.
-  Provisions a VPC, public/private subnets, IGW, NAT Gateway, EC2 instances,
-  Auto Scaling Group, IAM roles, CloudWatch alarms, and secure S3 access.
+  Includes VPC, public/private subnets, IGW, NAT Gateway, EC2 Auto Scaling,
+  IAM roles, CloudWatch alarms, and a secure S3 bucket.
 
 Parameters:
   EnvironmentName:
@@ -13,7 +13,6 @@ Parameters:
   VpcCIDR:
     Type: String
     Default: 10.0.0.0/16
-    Description: CIDR block for the VPC.
 
   PublicSubnet1CIDR:
     Type: String
@@ -35,18 +34,15 @@ Parameters:
     Type: String
     Default: t2.micro
 
-  AmiId:
-    Type: AWS::EC2::Image::Id
-    Description: AMI ID for EC2 instances.
-
   AllowedSSHRange:
     Type: String
     Default: 203.0.113.0/24
     Description: CIDR allowed to SSH into EC2 instances.
 
-  S3BucketName:
-    Type: String
-    Description: S3 bucket EC2 instances can access (must exist already).
+Mappings:
+  RegionMap:
+    us-west-2:
+      AMI: ami-0c55b159cbfafe1f0  # Amazon Linux 2 AMI (HVM), x86_64, EBS - Update as needed
 
 Resources:
 
@@ -235,7 +231,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub "arn:aws:s3:::${S3BucketName}/*"
+                Resource: !Sub "arn:aws:s3:::${AppDataBucket}/*"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -244,12 +240,29 @@ Resources:
       Roles: [!Ref EC2Role]
 
   # -------------------
+  # S3 Bucket (Managed)
+  # -------------------
+  AppDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-app-bucket-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-app-bucket"
+
+  # -------------------
   # Launch Configuration & ASG
   # -------------------
   LaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: !Ref AmiId
+      ImageId: !FindInMap [RegionMap, us-west-2, AMI]
       InstanceType: !Ref InstanceType
       SecurityGroups: [!Ref InstanceSG]
       IamInstanceProfile: !Ref InstanceProfile
@@ -338,3 +351,7 @@ Outputs:
   AutoScalingGroupName:
     Description: Name of the Auto Scaling Group
     Value: !Ref AutoScalingGroup
+
+  BucketName:
+    Description: Name of the managed S3 bucket
+    Value: !Ref AppDataBucket
