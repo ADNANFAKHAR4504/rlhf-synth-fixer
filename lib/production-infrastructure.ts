@@ -46,9 +46,9 @@ export class ProductionInfrastructure {
   public webAcl?: aws.wafv2.WebAcl;
   public cloudFrontDistribution?: aws.cloudfront.Distribution;
 
-  private environment: string;
+  private readonly environment: string;
   private provider?: aws.Provider;
-  private config: InfraConfig;
+  private readonly config: InfraConfig;
   private callerIdentity?: pulumi.Output<aws.GetCallerIdentityResult>;
 
   private constructor(environment: string) {
@@ -372,7 +372,7 @@ export class ProductionInfrastructure {
       {
         iamRoleArn: this.vpcFlowLogRole.arn,
         logDestination: this.vpcFlowLogGroup.arn,
-        vpcId: this.vpc!.id,
+        vpcId: this.vpc.id,
         trafficType: 'ALL',
         tags: {
           Name: `${this.environment}-vpc-flow-log`,
@@ -384,41 +384,20 @@ export class ProductionInfrastructure {
   }
 
   private createSecurity() {
-    // Get CloudFront prefix list dynamically
-    const cloudFrontPrefixList = aws.ec2.getPrefixList(
-      {
-        filters: [
-          {
-            name: 'prefix-list-name',
-            values: ['com.amazonaws.global.cloudfront.origin-facing'],
-          },
-        ],
-      },
-      { provider: this.provider }
-    );
-
-    // ALB Security Group (restricted to CloudFront IP ranges only)
+    // ALB Security Group (allowing all traffic as per requirement)
     this.albSecurityGroup = new aws.ec2.SecurityGroup(
       `${this.environment}-alb-sg`,
       {
         name: `${this.environment}-alb-sg`,
-        description:
-          'Security group for Application Load Balancer - CloudFront only',
+        description: 'Security group for Application Load Balancer',
         vpcId: this.vpc!.id,
         ingress: [
           {
-            description: 'HTTP from CloudFront',
+            description: 'HTTP from anywhere',
             fromPort: 80,
             toPort: 80,
             protocol: 'tcp',
-            prefixListIds: [cloudFrontPrefixList.then(pl => pl.id)],
-          },
-          {
-            description: 'HTTPS from CloudFront',
-            fromPort: 443,
-            toPort: 443,
-            protocol: 'tcp',
-            prefixListIds: [cloudFrontPrefixList.then(pl => pl.id)],
+            cidrBlocks: ['0.0.0.0/0'],
           },
         ],
         egress: [
@@ -789,7 +768,7 @@ export class ProductionInfrastructure {
         multiAz: true,
         publiclyAccessible: false,
         vpcSecurityGroupIds: [this.rdsSecurityGroup!.id],
-        dbSubnetGroupName: this.rdsSubnetGroup!.name,
+        dbSubnetGroupName: this.rdsSubnetGroup.name,
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
         maintenanceWindow: 'sun:04:00-sun:05:00',
@@ -828,7 +807,7 @@ export class ProductionInfrastructure {
         threshold: this.config.rdsConnectionsThreshold,
         alarmDescription: 'RDS database connections are high',
         dimensions: {
-          DBInstanceIdentifier: this.rdsInstance!.id,
+          DBInstanceIdentifier: this.rdsInstance.id,
         },
         tags: {
           Name: `${this.environment}-rds-connections`,
@@ -851,7 +830,7 @@ export class ProductionInfrastructure {
         threshold: this.config.rdsCpuThreshold,
         alarmDescription: 'RDS CPU utilization is high',
         dimensions: {
-          DBInstanceIdentifier: this.rdsInstance!.id,
+          DBInstanceIdentifier: this.rdsInstance.id,
         },
         tags: {
           Name: `${this.environment}-rds-cpu`,
@@ -1088,37 +1067,12 @@ echo "Application server running" >> /var/www/html/index.html
       { provider: this.provider }
     );
 
-    const config = new pulumi.Config();
-    const certArn = config.require('albAcmCertArn');
-
     this.albListener = new aws.lb.Listener(
       `${this.environment}-alb-http`,
       {
         loadBalancerArn: this.applicationLoadBalancer.arn,
         port: 80,
         protocol: 'HTTP',
-        defaultActions: [
-          {
-            type: 'redirect',
-            redirect: {
-              port: '443',
-              protocol: 'HTTPS',
-              statusCode: 'HTTP_301',
-            },
-          },
-        ],
-      },
-      { provider: this.provider }
-    );
-
-    new aws.lb.Listener(
-      `${this.environment}-alb-https`,
-      {
-        loadBalancerArn: this.applicationLoadBalancer.arn,
-        port: 443,
-        protocol: 'HTTPS',
-        sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
-        certificateArn: certArn,
         defaultActions: [
           {
             type: 'forward',
@@ -1164,7 +1118,7 @@ echo "Application server running" >> /var/www/html/index.html
   }
 
   private createWAF() {
-    // WAFv2 WebACL for CloudFront (CLOUDFRONT scope)
+    // WAFv2 WebACL for CloudFront
     this.webAcl = new aws.wafv2.WebAcl(
       `${this.environment}-web-acl`,
       {
@@ -1237,7 +1191,7 @@ echo "Application server running" >> /var/www/html/index.html
             customOriginConfig: {
               httpPort: 80,
               httpsPort: 443,
-              originProtocolPolicy: 'https-only',
+              originProtocolPolicy: 'http-only',
               originSslProtocols: ['TLSv1.2'],
             },
           },
