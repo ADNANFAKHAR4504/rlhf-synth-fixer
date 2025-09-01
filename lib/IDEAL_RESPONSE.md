@@ -7,11 +7,11 @@ Parameters:
     Default: 'prod'
     AllowedValues: ['dev', 'test', 'prod']
     Description: 'Environment designation for resource tagging and configuration'
-  
+
   KeyPairName:
     Type: AWS::EC2::KeyPair::KeyName
     Description: 'EC2 Key Pair for bastion host access'
-  
+
   AdminEmail:
     Type: String
     Description: 'Email address for security alerts'
@@ -36,9 +36,9 @@ Mappings:
       DatabaseSubnetCidr: '10.2.3.0/24'
 
 Resources:
-  # ==========================================
-  # KMS Key for Encryption
-  # ==========================================
+  # ================================
+  # KMS Key
+  # ================================
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -79,9 +79,9 @@ Resources:
       AliasName: !Sub 'alias/${Environment}-encryption-key'
       TargetKeyId: !Ref KMSKey
 
-  # ==========================================
-  # VPC and Network Infrastructure
-  # ==========================================
+  # ================================
+  # VPC & Networking
+  # ================================
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -94,7 +94,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -110,7 +109,6 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
 
-  # Public Subnet
   PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -124,7 +122,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Private Subnet
   PrivateSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -137,7 +134,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Database Subnet
   DatabaseSubnet:
     Type: AWS::EC2::Subnet
     Properties:
@@ -150,7 +146,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # NAT Gateway
   NATGatewayEIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
@@ -169,7 +164,6 @@ Resources:
         - Key: Name
           Value: !Sub '${Environment}-nat-gateway'
 
-  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -227,9 +221,9 @@ Resources:
       RouteTableId: !Ref DatabaseRouteTable
       SubnetId: !Ref DatabaseSubnet
 
-  # ==========================================
-  # Security Groups
-  # ==========================================
+  # ================================
+  # Security Groups & Rules
+  # ================================
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -240,24 +234,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0  # Restrict this to your IP range in production
+          CidrIp: 0.0.0.0/0  # tighten in production
           Description: 'SSH access from internet'
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          DestinationSecurityGroupId: !Ref PrivateSecurityGroup
-          Description: 'SSH to private instances'
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTPS for updates'
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTP for updates'
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-bastion-sg'
@@ -276,17 +254,6 @@ Resources:
           ToPort: 22
           SourceSecurityGroupId: !Ref BastionSecurityGroup
           Description: 'SSH from bastion host'
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: 'HTTPS outbound'
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-          Description: 'MySQL to database'
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-private-sg'
@@ -311,9 +278,29 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # ==========================================
+  BastionEgressToPrivate:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref BastionSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      DestinationSecurityGroupId: !Ref PrivateSecurityGroup
+      Description: 'SSH to private instances'
+
+  PrivateEgressToDB:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref PrivateSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+      Description: 'MySQL to database'
+
+  # ================================
   # Network ACLs
-  # ==========================================
+  # ================================
   PrivateNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
@@ -339,7 +326,7 @@ Resources:
       Protocol: -1
       Egress: true
       RuleAction: allow
-      CidrIb: 0.0.0.0/0
+      CidrBlock: 0.0.0.0/0
 
   PrivateSubnetNetworkAclAssociation:
     Type: AWS::EC2::SubnetNetworkAclAssociation
@@ -347,9 +334,9 @@ Resources:
       SubnetId: !Ref PrivateSubnet
       NetworkAclId: !Ref PrivateNetworkAcl
 
-  # ==========================================
-  # IAM Roles and Policies
-  # ==========================================
+  # ================================
+  # IAM and Bastion Host
+  # ================================
   BastionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -387,50 +374,40 @@ Resources:
   BastionInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles:
-        - !Ref BastionRole
+      Roles: [!Ref BastionRole]
 
-  # ==========================================
-  # Bastion Host
-  # ==========================================
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 AMI (update for your region)
+      ImageId: ami-0c02fb55956c7d316  # Update per region
       InstanceType: t3.micro
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnet
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
+      SecurityGroupIds: [!Ref BastionSecurityGroup]
       IamInstanceProfile: !Ref BastionInstanceProfile
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
           yum install -y awslogs
-          
-          # Configure CloudWatch Logs
           cat > /etc/awslogs/awslogs.conf << EOF
           [general]
           state_file = /var/lib/awslogs/agent-state
-          
+
           [/var/log/messages]
           file = /var/log/messages
           log_group_name = /aws/ec2/bastion/${Environment}
           log_stream_name = {instance_id}/messages
           datetime_format = %b %d %H:%M:%S
-          
+
           [/var/log/secure]
           file = /var/log/secure
           log_group_name = /aws/ec2/bastion/${Environment}
           log_stream_name = {instance_id}/secure
           datetime_format = %b %d %H:%M:%S
           EOF
-          
           service awslogs start
           chkconfig awslogs on
-          
-          # Harden SSH
           sed -i 's/#PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
           sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
           service sshd restart
@@ -440,55 +417,21 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # ==========================================
-  # Database Subnet Group and RDS Instance
-  # ==========================================
+  # ================================
+  # RDS & Secrets Manager
+  # ================================
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupName: !Sub '${Environment}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
-      SubnetIds:
-        - !Ref DatabaseSubnet
-        - !Ref PrivateSubnet  # Adding for multi-AZ
+      SubnetIds: [!Ref DatabaseSubnet, !Ref PrivateSubnet]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-db-subnet-group'
         - Key: Environment
           Value: !Ref Environment
 
-  DatabaseInstance:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-database'
-      DBInstanceClass: db.t3.micro
-      Engine: mysql
-      EngineVersion: '8.0.35'
-      AllocatedStorage: 20
-      StorageType: gp2
-      StorageEncrypted: true
-      KmsKeyId: !Ref KMSKey
-      MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DatabaseSubnetGroup
-      BackupRetentionPeriod: 7
-      MultiAZ: false  # Set to true for production
-      PubliclyAccessible: false
-      DeletionProtection: true
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-        - slow-query
-      Tags:
-        - Key: Name
-          Value: !Sub '${Environment}-database'
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Database Secret
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -498,15 +441,43 @@ Resources:
         SecretStringTemplate: '{"username": "admin"}'
         GenerateStringKey: 'password'
         PasswordLength: 32
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '"@/\\'
       KmsKeyId: !Ref KMSKey
       Tags:
         - Key: Environment
           Value: !Ref Environment
 
-  # ==========================================
-  # CloudTrail for Audit Logging
-  # ==========================================
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub '${Environment}-database'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.42'  # Supported — up to at least 8.0.42 :contentReference[oaicite:0]{index=0}
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !Ref KMSKey
+      MasterUsername: admin
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
+      VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: true
+      EnableCloudwatchLogsExports: [error, general, slow-query]
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ================================
+  # CloudTrail & Logging
+  # ================================
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -534,7 +505,7 @@ Resources:
         Rules:
           - Id: DeleteOldLogs
             Status: Enabled
-            ExpirationInDays: 2555  # 7 years
+            ExpirationInDays: 2555
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -561,29 +532,6 @@ Resources:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
 
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailS3BucketPolicy
-    Properties:
-      TrailName: !Sub '${Environment}-cloudtrail'
-      S3BucketName: !Ref CloudTrailS3Bucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      KMSKeyId: !Ref KMSKey
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - !Sub '${CloudTrailS3Bucket}/*'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
@@ -603,9 +551,33 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !GetAtt CloudTrailLogGroup.Arn
 
-  # ==========================================
-  # AWS Config for Compliance Monitoring
-  # ==========================================
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailS3BucketPolicy
+    Properties:
+      TrailName: !Sub '${Environment}-cloudtrail'
+      S3BucketName: !Ref CloudTrailS3Bucket
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true  # Required property :contentReference[oaicite:1]{index=1}
+      KMSKeyId: !Ref KMSKey
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${CloudTrailS3Bucket}/*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ================================
+  # AWS Config
+  # ================================
   ConfigServiceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -669,9 +641,9 @@ Resources:
       Name: !Sub '${Environment}-config-delivery-channel'
       S3BucketName: !Ref ConfigS3Bucket
 
-  # ==========================================
-  # Security Monitoring and Alerting
-  # ==========================================
+  # ================================
+  # Monitoring & Alerts
+  # ================================
   SecurityAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -688,7 +660,6 @@ Resources:
       TopicArn: !Ref SecurityAlertsTopic
       Endpoint: !Ref AdminEmail
 
-  # CloudWatch Alarms for Security Monitoring
   UnauthorizedAccessAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -701,8 +672,7 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
-      AlarmActions:
-        - !Ref SecurityAlertsTopic
+      AlarmActions: [!Ref SecurityAlertsTopic]
       TreatMissingData: notBreaching
 
   RootAccountUsageAlarm:
@@ -717,11 +687,9 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
-      AlarmActions:
-        - !Ref SecurityAlertsTopic
+      AlarmActions: [!Ref SecurityAlertsTopic]
       TreatMissingData: notBreaching
 
-  # Metric Filters for CloudTrail
   UnauthorizedAccessMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
