@@ -216,10 +216,14 @@ export class TapStack extends TerraformStack {
     });
 
     // 2. LOOK UP THE LATEST MYSQL ENGINE VERSION
-    const rdsEngineVersion = new DataAwsRdsEngineVersion(this, 'mysql-version', {
-      engine: 'mysql',
-      latest: true,
-    });
+    const rdsEngineVersion = new DataAwsRdsEngineVersion(
+      this,
+      'mysql-version',
+      {
+        engine: 'mysql',
+        latest: true,
+      }
+    );
 
     new DbInstance(this, 'rds-instance', {
       identifier: `app-db-${randomSuffix}`,
