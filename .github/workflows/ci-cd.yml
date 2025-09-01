@@ -159,19 +159,6 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-      - name: Pre-Deploy Cleanup (destroy existing resources and wait for completion)
-        run: |
-          echo "🧹 Running pre-deployment cleanup to ensure no conflicting resources exist..."
-          ./scripts/destroy.sh
-          echo "✅ Pre-deployment cleanup completed successfully - all conflicting resources removed"
-        env:
-          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
-          TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
-          PULUMI_ORG: ${{ env.PULUMI_ORG }}
-
       - name: Deploy
         run: ./scripts/deploy.sh
         env:
