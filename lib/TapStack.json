@@ -685,10 +685,28 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-                ],
                 "Policies": [
+                    {
+                        "PolicyName": "CloudWatchAgentAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams",
+                                        "cloudwatch:PutMetricData",
+                                        "ec2:DescribeTags"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
                     {
                         "PolicyName": "S3AccessPolicy",
                         "PolicyDocument": {
@@ -809,10 +827,28 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-                ],
                 "Policies": [
+                    {
+                        "PolicyName": "CloudWatchAgentAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams",
+                                        "cloudwatch:PutMetricData",
+                                        "ec2:DescribeTags"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    },
                     {
                         "PolicyName": "S3AccessPolicy",
                         "PolicyDocument": {
@@ -1017,9 +1053,6 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/ConfigRole"
-                ],
                 "Policies": [
                     {
                         "PolicyName": "ConfigS3Policy",
@@ -1054,6 +1087,52 @@
                                             "s3:x-amz-acl": "bucket-owner-full-control"
                                         }
                                     }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "ConfigServiceAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "ConfigSNSTopic"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:Describe*",
+                                        "iam:Get*",
+                                        "iam:List*",
+                                        "s3:Get*",
+                                        "s3:List*",
+                                        "rds:Describe*",
+                                        "dynamodb:List*",
+                                        "dynamodb:Describe*",
+                                        "cloudtrail:DescribeTrails",
+                                        "cloudtrail:GetTrailStatus",
+                                        "lambda:List*",
+                                        "lambda:Get*",
+                                        "logs:Describe*",
+                                        "logs:Get*",
+                                        "cloudfront:List*",
+                                        "cloudfront:Get*",
+                                        "route53:List*",
+                                        "route53:Get*",
+                                        "kms:List*",
+                                        "kms:Describe*",
+                                        "kms:GetKeyPolicy",
+                                        "elasticloadbalancing:Describe*",
+                                        "apigateway:GET"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }

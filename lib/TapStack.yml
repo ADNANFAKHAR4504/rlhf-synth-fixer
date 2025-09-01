@@ -435,10 +435,22 @@ Resources:
             Condition:
               StringEquals:
                 "aws:RequestedRegion": !Ref AWS::Region
-      ManagedPolicyArns:
-        # AWS managed policy for CloudWatch agent
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
+        # CloudWatch agent access (inline replacement for managed policy)
+        - PolicyName: CloudWatchAgentAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - cloudwatch:PutMetricData
+                  - ec2:DescribeTags
+                Resource: "*"
         # Custom policy for S3 access to specific buckets only
         - PolicyName: S3AccessPolicy
           PolicyDocument:
@@ -500,9 +512,22 @@ Resources:
             Condition:
               StringEquals:
                 "aws:RequestedRegion": !Ref AWS::Region
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
+        # CloudWatch agent access (inline replacement for managed policy)
+        - PolicyName: CloudWatchAgentAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - cloudwatch:PutMetricData
+                  - ec2:DescribeTags
+                Resource: "*"
         # S3 access for application data
         - PolicyName: S3AccessPolicy
           PolicyDocument:
@@ -606,8 +631,6 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
       Policies:
         - PolicyName: ConfigS3Policy
           PolicyDocument:
@@ -627,6 +650,42 @@ Resources:
                 Condition:
                   StringEquals:
                     "s3:x-amz-acl": bucket-owner-full-control
+        - PolicyName: ConfigServiceAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Publish to SNS for notifications
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref ConfigSNSTopic
+              # Broad read-only across common services for configuration recording
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - iam:Get*
+                  - iam:List*
+                  - s3:Get*
+                  - s3:List*
+                  - rds:Describe*
+                  - dynamodb:List*
+                  - dynamodb:Describe*
+                  - cloudtrail:DescribeTrails
+                  - cloudtrail:GetTrailStatus
+                  - lambda:List*
+                  - lambda:Get*
+                  - logs:Describe*
+                  - logs:Get*
+                  - cloudfront:List*
+                  - cloudfront:Get*
+                  - route53:List*
+                  - route53:Get*
+                  - kms:List*
+                  - kms:Describe*
+                  - kms:GetKeyPolicy
+                  - elasticloadbalancing:Describe*
+                  - apigateway:GET
+                Resource: "*"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-config-role-${Environment}"
