@@ -311,5 +311,6 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', 'Production');
     cdk.Tags.of(this).add('Project', 'Migration');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
+
   }
 }
