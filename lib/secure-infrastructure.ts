@@ -483,7 +483,7 @@ export class SecureInfrastructure {
     );
 
     // Enable ACLs for CloudFront logging
-    new aws.s3.BucketOwnershipControls(
+    const logsBucketOwnership = new aws.s3.BucketOwnershipControls(
       `logs-bucket-ownership-${this.environment}`,
       {
         bucket: logsBucket.id,
@@ -503,21 +503,7 @@ export class SecureInfrastructure {
         ignorePublicAcls: false,
         restrictPublicBuckets: true,
       },
-      {
-        provider: this.provider,
-        dependsOn: [
-          new aws.s3.BucketOwnershipControls(
-            `logs-bucket-ownership-${this.environment}`,
-            {
-              bucket: logsBucket.id,
-              rule: {
-                objectOwnership: 'BucketOwnerPreferred',
-              },
-            },
-            { provider: this.provider }
-          ),
-        ],
-      }
+      { provider: this.provider, dependsOn: [logsBucketOwnership] }
     );
 
     // Enable ACLs on the bucket
