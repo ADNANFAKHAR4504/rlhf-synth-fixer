@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Secure, compliant AWS baseline environment.
-  Single-AZ safe: all subnets in AZ0. RDS excluded (requires ≥2 AZs).
+  Single-AZ safe (all subnets in AZ0).
+  EC2 uses dynamic SSM Parameter for AMI (no invalid AMI errors).
 
 Parameters:
   EnvironmentName:
@@ -32,6 +33,11 @@ Parameters:
     Type: String
     Default: ""
     Description: "Optional EC2 KeyPair for SSH access."
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Description: "Latest Amazon Linux 2 AMI from SSM Parameter Store"
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
@@ -153,6 +159,24 @@ Resources:
           CidrIp: 0.0.0.0/0
 
   #################################
+  # EC2 Instance
+  #################################
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds: [!Ref WebSG]
+      ImageId: !Ref LatestAmiId
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            Encrypted: true
+            KmsKeyId: !Ref KmsKey
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
+
+  #################################
   # S3 Bucket
   #################################
   SecureBucket:
@@ -165,34 +189,6 @@ Resources:
               KMSMasterKeyID: !Ref KmsKey
       VersioningConfiguration:
         Status: Enabled
-
-  #################################
-  # EC2 Instance
-  #################################
-  EC2Instance:
-    Type: AWS::EC2::Instance
-    Properties:
-      InstanceType: t3.micro
-      SubnetId: !Ref PublicSubnet1
-      SecurityGroupIds: [!Ref WebSG]
-      ImageId: ami-0c55b159cbfafe1f0 # replace per region
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 8
-            Encrypted: true
-            KmsKeyId: !Ref KmsKey
-      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
-
-  #################################
-  # Parameter Store
-  #################################
-  DBPassword:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub "/${EnvironmentName}/db/password"
-      Type: String
-      Value: "ChangeMe123!"
 
   #################################
   # CloudTrail

@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe: all subnets in AZ0. RDS excluded (requires ≥2 AZs).\n",
+    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe (all subnets in AZ0). EC2 uses dynamic SSM Parameter for AMI (no invalid AMI errors).\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -30,6 +30,11 @@
             "Type": "String",
             "Default": "",
             "Description": "Optional EC2 KeyPair for SSH access."
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Description": "Latest Amazon Linux 2 AMI from SSM Parameter Store",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
         }
     },
     "Conditions": {
@@ -245,26 +250,6 @@
                 ]
             }
         },
-        "SecureBucket": {
-            "Type": "AWS::S3::Bucket",
-            "Properties": {
-                "BucketEncryption": {
-                    "ServerSideEncryptionConfiguration": [
-                        {
-                            "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "KmsKey"
-                                }
-                            }
-                        }
-                    ]
-                },
-                "VersioningConfiguration": {
-                    "Status": "Enabled"
-                }
-            }
-        },
         "EC2Instance": {
             "Type": "AWS::EC2::Instance",
             "Properties": {
@@ -277,7 +262,9 @@
                         "Ref": "WebSG"
                     }
                 ],
-                "ImageId": "ami-0c55b159cbfafe1f0",
+                "ImageId": {
+                    "Ref": "LatestAmiId"
+                },
                 "BlockDeviceMappings": [
                     {
                         "DeviceName": "/dev/xvda",
@@ -303,14 +290,24 @@
                 }
             }
         },
-        "DBPassword": {
-            "Type": "AWS::SSM::Parameter",
+        "SecureBucket": {
+            "Type": "AWS::S3::Bucket",
             "Properties": {
-                "Name": {
-                    "Fn::Sub": "/${EnvironmentName}/db/password"
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "KmsKey"
+                                }
+                            }
+                        }
+                    ]
                 },
-                "Type": "String",
-                "Value": "ChangeMe123!"
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                }
             }
         },
         "TrailBucket": {
