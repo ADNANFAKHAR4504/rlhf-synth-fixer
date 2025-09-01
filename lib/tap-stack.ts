@@ -81,14 +81,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // 3. DATABASE SETUP
-    // Create DB subnet group for RDS
-    const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
-      vpc: this.vpc,
-      description: 'Subnet group for RDS database',
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-      },
-    });
+    // (dbSubnetGroup removed, not used)
 
     // Create database credentials in Secrets Manager
     this.dbSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
@@ -318,6 +311,5 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', 'Production');
     cdk.Tags.of(this).add('Project', 'Migration');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
-
   }
 }
