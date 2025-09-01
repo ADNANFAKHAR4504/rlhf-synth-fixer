@@ -19,11 +19,6 @@ fi
 # Build the project based on language
 case "$LANGUAGE" in
   java)
-    if [ "$PLATFORM" = "cdktf" ]; then
-      echo "📦 Running cdktf get..."
-      npx cdktf get
-    fi
-
     echo "⚡ Building Java project with Gradle..."
     chmod +x ./gradlew
     ./gradlew assemble \
