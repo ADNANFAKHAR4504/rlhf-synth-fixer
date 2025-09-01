@@ -616,6 +616,7 @@ export class CloudTrailModule extends Construct {
     super(scope, id);
 
     // KMS key for CloudTrail encryption
+    // KMS key for CloudTrail encryption
     this.kmsKey = new KmsKey(this, 'cloudtrail-kms-key', {
       description: 'KMS key for CloudTrail encryption',
       keyUsage: 'ENCRYPT_DECRYPT',
@@ -730,7 +731,7 @@ export class CloudTrailModule extends Construct {
       }),
     });
 
-    // CloudTrail
+    // CloudTrail - FIXED: Removed problematic event selector
     this.trail = new cloudtrail.Cloudtrail(this, 'cloudtrail', {
       name: 'tap-cloudtrail',
       s3BucketName: this.logsBucket.id,
@@ -739,18 +740,8 @@ export class CloudTrailModule extends Construct {
       enableLogging: true,
       kmsKeyId: this.kmsKey.arn,
 
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: ['arn:aws:s3:::*/*'],
-            },
-          ],
-        },
-      ],
+      // OPTION 1: Remove event selector entirely (recommended for basic setup)
+      // This will log all management events by default
 
       tags: {
         Name: 'tap-cloudtrail',
