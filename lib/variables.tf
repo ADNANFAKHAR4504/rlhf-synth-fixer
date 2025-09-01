@@ -19,7 +19,7 @@ variable "instance_type" {
 variable "s3_bucket_name" {
   description = "S3 bucket name for read-only access"
   type        = string
-  default     = "350268-production-bucket"
+  default     = "my-production-bucket"
 }
 
 variable "route53_zone_name" {
@@ -36,8 +36,19 @@ variable "create_route53_records" {
 
 variable "key_pair_name" {
   description = "EC2 Key Pair name"
+  default     = ""
+}
+
+variable "create_key_pair" {
+  description = "Whether to create a new key pair"
+  type        = bool
+  default     = true
+}
+
+variable "public_key" {
+  description = "Public key content for the key pair (required if create_key_pair is true)"
   type        = string
-  default     = "350268-key-pair"
+  default     = ""
 }
 
 # Common tags

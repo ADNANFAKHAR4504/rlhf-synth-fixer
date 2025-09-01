@@ -1,3 +1,5 @@
+
+# VPC 1 Route Tables
 resource "aws_route_table" "vpc1_public" {
   vpc_id = aws_vpc.vpc1.id
 
@@ -34,6 +36,7 @@ resource "aws_route_table" "vpc1_private" {
   })
 }
 
+# VPC 2 Route Tables
 resource "aws_route_table" "vpc2_public" {
   vpc_id = aws_vpc.vpc2.id
 
@@ -70,6 +73,7 @@ resource "aws_route_table" "vpc2_private" {
   })
 }
 
+# Route Table Associations
 resource "aws_route_table_association" "vpc1_public" {
   subnet_id      = aws_subnet.vpc1_public.id
   route_table_id = aws_route_table.vpc1_public.id
@@ -77,6 +81,11 @@ resource "aws_route_table_association" "vpc1_public" {
 
 resource "aws_route_table_association" "vpc1_private" {
   subnet_id      = aws_subnet.vpc1_private.id
+  route_table_id = aws_route_table.vpc1_private.id
+}
+
+resource "aws_route_table_association" "vpc1_private_db" {
+  subnet_id      = aws_subnet.vpc1_private_db.id
   route_table_id = aws_route_table.vpc1_private.id
 }
 
