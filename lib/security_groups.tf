@@ -1,6 +1,6 @@
 resource "aws_security_group" "vpc1_ec2_sg" {
-  name        = "vpc1-ec2-security-group-${var.environment}"
-  description = "Security group for EC2 instances in VPC 1 (${var.environment})"
+  name        = "vpc1-ec2-security-group"
+  description = "Security group for EC2 instances in VPC 1"
   vpc_id      = aws_vpc.vpc1.id
 
   ingress {
@@ -25,13 +25,13 @@ resource "aws_security_group" "vpc1_ec2_sg" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-ec2-sg-${var.environment}"
+    Name = "vpc1-ec2-sg"
   })
 }
 
 resource "aws_security_group" "vpc2_ec2_sg" {
-  name        = "vpc2-ec2-security-group-${var.environment}"
-  description = "Security group for EC2 instances in VPC 2 (${var.environment})"
+  name        = "vpc2-ec2-security-group"
+  description = "Security group for EC2 instances in VPC 2"
   vpc_id      = aws_vpc.vpc2.id
 
   ingress {
@@ -56,13 +56,13 @@ resource "aws_security_group" "vpc2_ec2_sg" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-ec2-sg-${var.environment}"
+    Name = "vpc2-ec2-sg"
   })
 }
 
 resource "aws_security_group" "rds_sg" {
-  name        = "rds-security-group-${var.environment}"
-  description = "Security group for RDS instances (${var.environment})"
+  name        = "rds-security-group"
+  description = "Security group for RDS instances"
   vpc_id      = aws_vpc.vpc1.id
 
   ingress {
@@ -73,6 +73,6 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "rds-sg-${var.environment}"
+    Name = "rds-sg"
   })
 }

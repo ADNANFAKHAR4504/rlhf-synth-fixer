@@ -6,7 +6,7 @@ resource "aws_subnet" "vpc1_public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-public-subnet-${var.environment}"
+    Name = "vpc1-public-subnet"
     Type = "Public"
   })
 }
@@ -17,19 +17,7 @@ resource "aws_subnet" "vpc1_private" {
   availability_zone = data.aws_availability_zones.available.names[1]
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-private-subnet-${var.environment}"
-    Type = "Private"
-  })
-}
-
-# Additional private subnet in VPC 1 for RDS (different AZ)
-resource "aws_subnet" "vpc1_private_db" {
-  vpc_id            = aws_vpc.vpc1.id
-  cidr_block        = "10.0.3.0/24"
-  availability_zone = data.aws_availability_zones.available.names[2]
-
-  tags = merge(var.common_tags, {
-    Name = "vpc1-private-db-subnet"
+    Name = "vpc1-private-subnet"
     Type = "Private"
   })
 }
@@ -40,7 +28,7 @@ resource "aws_subnet" "vpc1_private2" {
   availability_zone = data.aws_availability_zones.available.names[2]
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-private-subnet-2-${var.environment}"
+    Name = "vpc1-private-subnet-2"
     Type = "Private"
   })
 }
@@ -53,7 +41,7 @@ resource "aws_subnet" "vpc2_public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-public-subnet-${var.environment}"
+    Name = "vpc2-public-subnet"
     Type = "Public"
   })
 }
@@ -64,7 +52,7 @@ resource "aws_subnet" "vpc2_private" {
   availability_zone = data.aws_availability_zones.available.names[1]
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-private-subnet-${var.environment}"
+    Name = "vpc2-private-subnet"
     Type = "Private"
   })
 }

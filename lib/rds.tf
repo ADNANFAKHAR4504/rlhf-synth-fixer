@@ -1,14 +1,14 @@
 resource "aws_db_subnet_group" "main" {
-  name       = "dbsubnet${var.environment}"
+  name       = "rds-subnet-group"
   subnet_ids = [aws_subnet.vpc1_private.id, aws_subnet.vpc1_private2.id]
 
   tags = merge(var.common_tags, {
-    Name = "dbsubnet${var.environment}"
+    Name = "rds-subnet-group"
   })
 }
 
 resource "aws_db_instance" "main" {
-  identifier             = "db${var.environment}"
+  identifier             = "main-database"
   allocated_storage      = 20
   max_allocated_storage  = 100
   storage_type           = "gp2"
@@ -34,6 +34,6 @@ resource "aws_db_instance" "main" {
   deletion_protection = false
 
   tags = merge(var.common_tags, {
-    Name = "db${var.environment}"
+    Name = "main-database"
   })
 }

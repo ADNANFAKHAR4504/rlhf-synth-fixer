@@ -4,7 +4,7 @@ resource "aws_vpc" "vpc1" {
   enable_dns_support   = true
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-${var.environment}"
+    Name = "vpc-1"
   })
 }
 
@@ -14,7 +14,7 @@ resource "aws_vpc" "vpc2" {
   enable_dns_support   = true
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-${var.environment}"
+    Name = "vpc-2"
   })
 }
 

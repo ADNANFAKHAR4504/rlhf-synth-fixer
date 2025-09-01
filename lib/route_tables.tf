@@ -13,7 +13,7 @@ resource "aws_route_table" "vpc1_public" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-public-rt-${var.environment}"
+    Name = "vpc1-public-rt"
   })
 }
 
@@ -31,7 +31,7 @@ resource "aws_route_table" "vpc1_private" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-private-rt-${var.environment}"
+    Name = "vpc1-private-rt"
   })
 }
 
@@ -50,7 +50,7 @@ resource "aws_route_table" "vpc2_public" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-public-rt-${var.environment}"
+    Name = "vpc2-public-rt"
   })
 }
 
@@ -68,7 +68,7 @@ resource "aws_route_table" "vpc2_private" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-private-rt-${var.environment}"
+    Name = "vpc2-private-rt"
   })
 }
 
