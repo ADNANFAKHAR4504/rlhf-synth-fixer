@@ -628,7 +628,8 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::StackName}'
       RetentionInDays: 30
-      KmsKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
+      KmsKeyId:
+        !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -1002,7 +1003,8 @@ Resources:
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
         RequireEachIncludedType: true
-      KmsKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
+      KmsKeyId:
+        !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -1029,7 +1031,8 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
+      KmsKeyId:
+        !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       VPCSecurityGroups:
         - !If [
             UseExistingDatabaseSecurityGroup,
@@ -1162,7 +1165,8 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${Environment}-${AWS::StackName}'
       RetentionInDays: 90
-      KmsKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
+      KmsKeyId:
+        !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -1224,7 +1228,8 @@ Resources:
       EnableLogFileValidation: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      KMSKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
+      KMSKeyId:
+        !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       IsLogging: true
       Tags:
         - Key: Name
@@ -1555,7 +1560,11 @@ Resources:
       Environment:
         Variables:
           KMS_KEY_ID:
-            !If [UseExistingKMS, !Ref ExistingKMSKeyArn, !Ref SecureKMSKey]
+            !If [
+              UseExistingKMS,
+              !Ref ExistingKMSKeyArn,
+              !GetAtt SecureKMSKey.Arn,
+            ]
       KmsKeyArn:
         !If [UseExistingKMS, !Ref ExistingKMSKeyArn, !GetAtt SecureKMSKey.Arn]
       Timeout: 30
@@ -1605,7 +1614,11 @@ Resources:
             VolumeType: gp3
             Encrypted: true
             KmsKeyId:
-              !If [UseExistingKMS, !Ref ExistingKMSKeyArn, !Ref SecureKMSKey]
+              !If [
+                UseExistingKMS,
+                !Ref ExistingKMSKeyArn,
+                !GetAtt SecureKMSKey.Arn,
+              ]
             DeleteOnTermination: true
       Tags:
         - Key: Name
@@ -1778,7 +1791,8 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       ServiceToken: !GetAtt EBSEncryptionFunction.Arn
-      KmsKeyId: !If [CreateKMS, !Ref SecureKMSKey, !Ref ExistingKMSKeyArn]
+      KmsKeyId:
+        !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
 
   # =========================
   # Billing Alarm (for Cost Explorer)
