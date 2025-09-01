@@ -41,7 +41,6 @@ if [ "$LANGUAGE" = "java" ]; then
         fi
       ;;
   esac
-fi
 
 elif [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ Terraform TypeScript project detected, running unit tests..."
