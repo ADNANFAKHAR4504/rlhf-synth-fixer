@@ -18,7 +18,7 @@ Metadata:
           - GitHubRepository
           - GitHubBranch
           - GitHubOwner
-          - GitHubTokenParameterName
+          - GitHubTokenSecretName
       - Label:
           default: "Notification Configuration"
         Parameters:
@@ -71,11 +71,11 @@ Parameters:
     Default: "my-organization"
     Description: "GitHub repository owner"
 
-  GitHubTokenParameterName:
+  GitHubTokenSecretName:
     Type: String
-    Default: "/cicd/github-token"
-    Description: "SSM Parameter Store path for GitHub personal access token"
-    ConstraintDescription: "Must be a valid SSM parameter path starting with /"
+    Default: "cicd/github-token"
+    Description: "AWS Secrets Manager secret name for GitHub personal access token"
+    ConstraintDescription: "Must be a valid Secrets Manager secret name"
 
   NotificationEmail:
     Type: String
@@ -258,9 +258,8 @@ Resources:
                 Resource: !GetAtt PipelineKMSKey.Arn
               - Effect: Allow
                 Action:
-                  - "ssm:GetParameter"
-                  - "ssm:GetParameters"
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GitHubTokenParameterName}"
+                  - "secretsmanager:GetSecretValue"
+                Resource: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${GitHubTokenSecretName}*"
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -584,7 +583,7 @@ Resources:
                 Owner: !Ref GitHubOwner
                 Repo: !Ref GitHubRepository
                 Branch: !Ref GitHubBranch
-                OAuthToken: !Sub "{{resolve:ssm-secure:${GitHubTokenParameterName}:1}}"
+                OAuthToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecretName}:SecretString:token}}"
               OutputArtifacts:
                 - Name: SourceOutput
         - Name: Build
