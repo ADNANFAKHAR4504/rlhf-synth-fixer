@@ -172,14 +172,6 @@ export class TapStack extends cdk.Stack {
     // Grant EC2 instances access to artifacts bucket
     artifactsBucket.grantRead(ec2Role);
 
-    const instanceProfile = new iam.InstanceProfile(
-      this,
-      'EC2InstanceProfile',
-      {
-        role: ec2Role,
-      }
-    );
-
     /**
      * IAM role for CodeDeploy
      */
