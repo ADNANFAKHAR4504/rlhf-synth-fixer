@@ -118,7 +118,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 3. IAM Role for EC2 instances (least privilege)
 	ec2Role := awsiam.NewRole(stack, jsii.String("tap-ec2-role"), &awsiam.RoleProps{
-		RoleName:  jsii.String("tap-ec2-role"),
+		RoleName:  jsii.String("tap-ec2-role-" + *awscdk.Aws_ACCOUNT_ID()),
 		AssumedBy: awsiam.NewServicePrincipal(jsii.String("ec2.amazonaws.com"), nil),
 		ManagedPolicies: &[]awsiam.IManagedPolicy{
 			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("AmazonSSMManagedInstanceCore")),
@@ -162,7 +162,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 5. Secrets Manager for database credentials
 	dbSecret := awssecretsmanager.NewSecret(stack, jsii.String("tap-db-secret"), &awssecretsmanager.SecretProps{
-		SecretName:  jsii.String("tap-db-credentials"),
+		SecretName:  jsii.String("tap-db-credentials-" + *awscdk.Aws_ACCOUNT_ID()),
 		Description: jsii.String("Database credentials for TAP application"),
 		GenerateSecretString: &awssecretsmanager.SecretStringGenerator{
 			SecretStringTemplate: jsii.String(`{"username": "admin"}`),
@@ -173,7 +173,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 6. RDS Database in private subnets
 	dbSubnetGroup := awsrds.NewSubnetGroup(stack, jsii.String("tap-db-subnet-group"), &awsrds.SubnetGroupProps{
-		SubnetGroupName: jsii.String("tap-db-subnet-group"),
+		SubnetGroupName: jsii.String("tap-db-subnet-group-" + *awscdk.Aws_ACCOUNT_ID()),
 		Description:     jsii.String("Subnet group for TAP database"),
 		Vpc:             vpc,
 		VpcSubnets: &awsec2.SubnetSelection{
@@ -182,7 +182,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	})
 
 	rdsInstance := awsrds.NewDatabaseInstance(stack, jsii.String("tap-database"), &awsrds.DatabaseInstanceProps{
-		InstanceIdentifier: jsii.String("tap-database"),
+		InstanceIdentifier: jsii.String("tap-database-" + *awscdk.Aws_ACCOUNT_ID()),
 		Engine: awsrds.DatabaseInstanceEngine_Mysql(&awsrds.MySqlInstanceEngineProps{
 			Version: awsrds.MysqlEngineVersion_VER_8_0_39(),
 		}),
@@ -200,7 +200,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 7. DynamoDB with point-in-time recovery
 	dynamoTable := awsdynamodb.NewTable(stack, jsii.String("tap-dynamodb-table"), &awsdynamodb.TableProps{
-		TableName:   jsii.String("tap-dynamodb-table"),
+		TableName:   jsii.String("tap-dynamodb-table-" + *awscdk.Aws_ACCOUNT_ID()),
 		BillingMode: awsdynamodb.BillingMode_PAY_PER_REQUEST,
 		PartitionKey: &awsdynamodb.Attribute{
 			Name: jsii.String("id"),
@@ -213,7 +213,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 8. Application Load Balancer
 	alb := awselasticloadbalancingv2.NewApplicationLoadBalancer(stack, jsii.String("tap-alb"), &awselasticloadbalancingv2.ApplicationLoadBalancerProps{
-		LoadBalancerName: jsii.String("tap-alb"),
+		LoadBalancerName: jsii.String("tap-alb-" + *awscdk.Aws_ACCOUNT_ID()),
 		Vpc:              vpc,
 		InternetFacing:   jsii.Bool(true),
 		SecurityGroup:    albSecurityGroup,
@@ -224,7 +224,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 9. Launch Template for EC2 instances
 	launchTemplate := awsec2.NewLaunchTemplate(stack, jsii.String("tap-launch-template"), &awsec2.LaunchTemplateProps{
-		LaunchTemplateName: jsii.String("tap-launch-template"),
+		LaunchTemplateName: jsii.String("tap-launch-template-" + *awscdk.Aws_ACCOUNT_ID()),
 		InstanceType:       awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
 		MachineImage:       awsec2.MachineImage_LatestAmazonLinux2(&awsec2.AmazonLinux2ImageSsmParameterProps{}),
 		SecurityGroup:      ec2SecurityGroup,
@@ -245,7 +245,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 10. Auto Scaling Group
 	asg := awsautoscaling.NewAutoScalingGroup(stack, jsii.String("tap-asg"), &awsautoscaling.AutoScalingGroupProps{
-		AutoScalingGroupName: jsii.String("tap-asg"),
+		AutoScalingGroupName: jsii.String("tap-asg-" + *awscdk.Aws_ACCOUNT_ID()),
 		Vpc:                  vpc,
 		LaunchTemplate:       launchTemplate,
 		MinCapacity:          jsii.Number(2),
@@ -261,7 +261,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 11. Target Group and Listener
 	targetGroup := awselasticloadbalancingv2.NewApplicationTargetGroup(stack, jsii.String("tap-target-group"), &awselasticloadbalancingv2.ApplicationTargetGroupProps{
-		TargetGroupName: jsii.String("tap-target-group"),
+		TargetGroupName: jsii.String("tap-target-group-" + *awscdk.Aws_ACCOUNT_ID()),
 		Port:            jsii.Number(80),
 		Protocol:        awselasticloadbalancingv2.ApplicationProtocol_HTTP,
 		Vpc:             vpc,
@@ -278,7 +278,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 12. WAF Web ACL
 	webAcl := awswafv2.NewCfnWebACL(stack, jsii.String("tap-waf"), &awswafv2.CfnWebACLProps{
-		Name:  jsii.String("tap-waf"),
+		Name:  jsii.String("tap-waf-" + *awscdk.Aws_ACCOUNT_ID()),
 		Scope: jsii.String("REGIONAL"),
 		DefaultAction: &awswafv2.CfnWebACL_DefaultActionProperty{
 			Allow: &awswafv2.CfnWebACL_AllowActionProperty{},

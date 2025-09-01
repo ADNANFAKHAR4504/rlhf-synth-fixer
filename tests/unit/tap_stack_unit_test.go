@@ -125,9 +125,8 @@ func TestTapStack(t *testing.T) {
 
 		// ASSERT - DynamoDB Table
 		template.ResourceCountIs(jsii.String("AWS::DynamoDB::Table"), jsii.Number(1))
-		template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
-			"TableName":   "tap-dynamodb-table",
-			"BillingMode": "PAY_PER_REQUEST",
+			template.HasResourceProperties(jsii.String("AWS::DynamoDB::Table"), map[string]interface{}{
+		"BillingMode": "PAY_PER_REQUEST",
 			"AttributeDefinitions": []interface{}{
 				map[string]interface{}{
 					"AttributeName": "id",

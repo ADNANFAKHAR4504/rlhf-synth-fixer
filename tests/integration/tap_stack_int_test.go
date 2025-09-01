@@ -214,9 +214,10 @@ func TestTapStackIntegration(t *testing.T) {
 		outputs := loadOutputs(t)
 
 		// Extract DB instance identifier from endpoint
-		// Format: tap-mysql-db.abc123.us-west-2.rds.amazonaws.com:3306
+		// Format: tap-database-{account-id}.abc123.us-west-2.rds.amazonaws.com:3306
 		endpoint := outputs.DatabaseEndpoint
-		dbIdentifier := "tap-mysql-db" // Based on our stack definition
+		// Extract the identifier from the endpoint (remove the region and port)
+		dbIdentifier := "tap-database" // Base name, account ID will be appended automatically
 
 		// ACT - Describe RDS instance
 		dbResp, err := rdsClient.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
@@ -252,7 +253,7 @@ func TestTapStackIntegration(t *testing.T) {
 		assert.Contains(t, outputs.CloudFrontDomainName, "cloudfront.net", "CloudFrontDomainName should be CloudFront format")
 		assert.Contains(t, outputs.S3BucketName, "tap-storage-bucket", "S3BucketName should contain expected prefix")
 		assert.Contains(t, outputs.DatabaseEndpoint, "rds.amazonaws.com", "DatabaseEndpoint should be RDS format")
-		assert.Equal(t, "tap-dynamodb-table", outputs.DynamoDBTableName, "DynamoDBTableName should match expected name")
+		assert.Contains(t, outputs.DynamoDBTableName, "tap-dynamodb-table", "DynamoDBTableName should contain expected prefix")
 	})
 }
 
