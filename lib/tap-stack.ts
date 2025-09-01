@@ -26,7 +26,7 @@ export class WebAppStack extends cdk.Stack {
     const desiredCapacity = isProd ? 3 : 2;
 
     // Adjust log retention based on environment
-    const logRetentionDays = isProd ? 365 : (isStaging ? 180 : 90);
+    const logRetentionDays = isProd ? 365 : isStaging ? 180 : 90;
 
     // 1. Create VPC with specified CIDR block
     const vpc = new ec2.Vpc(this, 'WebAppVPC', {
