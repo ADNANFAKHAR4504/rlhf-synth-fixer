@@ -130,7 +130,7 @@ func TestSubnetConfiguration(t *testing.T) {
 				Values: []string{"Public"},
 			},
 			{
-				Name:   aws.String("tag:Name"),
+				Name: aws.String("tag:Name"),
 				Values: []string{
 					fmt.Sprintf("public-subnet-1-us-east-1-%s", envSuffix),
 					fmt.Sprintf("public-subnet-2-us-east-1-%s", envSuffix),
