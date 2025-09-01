@@ -7,7 +7,7 @@ Description: >
   Skips WAF as per constraints.
 
 Metadata:
-  Version: "1.0.5"
+  Version: "1.0.6"
   Compliance:
     - CIS AWS Foundations
     - PCI DSS
@@ -48,7 +48,6 @@ Parameters:
 
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
-  HasTwoAZs: !Not [!Equals [!Select [1, !GetAZs ""], ""]]
 
 Resources:
 
@@ -104,10 +103,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !If
-        - HasTwoAZs
-        - !Select [1, !GetAZs ""]
-        - !Select [0, !GetAZs ""]
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
 
   PrivateSubnet1:
@@ -123,10 +119,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !If
-        - HasTwoAZs
-        - !Select [1, !GetAZs ""]
-        - !Select [0, !GetAZs ""]
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: false
 
   PublicRouteTable:
