@@ -220,12 +220,12 @@ for i, (subnet, instance_name) in enumerate(zip(subnets, instance_names)):
             "Purpose": f"Web server {i+1}",
             "Tier": "Application"
         },
+        metadata_options=aws.ec2.InstanceMetadataOptionsArgs(
+            http_tokens="required",  # Require IMDSv2
+            http_put_response_hop_limit=1
+        ),
         opts=pulumi.ResourceOptions(
-            depends_on=[security_group, subnet],
-            metadata_options=aws.ec2.InstanceMetadataOptionsArgs(
-                http_tokens="required",  # Require IMDSv2
-                http_put_response_hop_limit=1
-            )
+            depends_on=[security_group, subnet]
         )
     )
     instances.append(instance)
