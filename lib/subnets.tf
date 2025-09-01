@@ -33,6 +33,18 @@ resource "aws_subnet" "vpc1_private2" {
   })
 }
 
+resource "aws_subnet" "vpc1_private_db" {
+  vpc_id                  = aws_vpc.vpc1.id
+  cidr_block              = "10.0.4.0/24"
+  availability_zone       = data.aws_availability_zones.available.names[3]
+  map_public_ip_on_launch = false
+
+  tags = merge(var.common_tags, {
+    Name = "vpc1-private-db-subnet"
+    Type = "Private"
+  })
+}
+
 # VPC 2 Subnets
 resource "aws_subnet" "vpc2_public" {
   vpc_id                  = aws_vpc.vpc2.id

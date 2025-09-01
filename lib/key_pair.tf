@@ -1,9 +1,8 @@
-
 # Generate a key pair if needed
 resource "tls_private_key" "ec2_key" {
   count     = var.create_key_pair && var.public_key == "" ? 1 : 0
   algorithm = "RSA"
-  rsa_bits  = 2048
+  rsa_bits  = 4096
 }
 
 # Create key pair
