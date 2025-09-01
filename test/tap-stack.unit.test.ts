@@ -1,7 +1,6 @@
 // test/secure-vpc-stack.test.ts
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import * as AWS from 'aws-sdk';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { SecureVpcStack } from '../lib/secure-vpc-stack';
 
 describe('SecureVpcStack', () => {
@@ -30,7 +29,7 @@ describe('SecureVpcStack', () => {
   test('Public and Private subnets are created', () => {
     // Check for public subnets
     template.resourceCountIs('AWS::EC2::Subnet', 4); // 2 public + 2 private
-    
+
     // Verify public subnets have MapPublicIpOnLaunch
     template.hasResourceProperties('AWS::EC2::Subnet', {
       MapPublicIpOnLaunch: true,
@@ -224,7 +223,7 @@ describe('SecureVpcStack with defaults', () => {
 
   test('Uses default values when props are not provided', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
-      CidrBlock: '10.0.0.0/16',  // default vpcCidr
+      CidrBlock: '10.0.0.0/16', // default vpcCidr
     });
 
     // Check default company tags are applied
@@ -235,7 +234,10 @@ describe('SecureVpcStack with defaults', () => {
           expect.objectContaining({ Key: 'Environment', Value: 'Production' }),
           expect.objectContaining({ Key: 'Project', Value: 'SecureVPC' }),
           expect.objectContaining({ Key: 'Owner', Value: 'DevOps' }),
-          expect.objectContaining({ Key: 'CostCenter', Value: 'IT-Infrastructure' }),
+          expect.objectContaining({
+            Key: 'CostCenter',
+            Value: 'IT-Infrastructure',
+          }),
         ])
       );
     });
@@ -272,7 +274,7 @@ describe('SecureVpcStack edge cases', () => {
       SecurityGroupIngress: Match.arrayWith([
         Match.objectLike({
           CidrIp: '192.168.1.0/24',
-        })
+        }),
       ]),
     });
   });
