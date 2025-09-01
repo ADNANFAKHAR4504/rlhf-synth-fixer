@@ -251,10 +251,14 @@ if key_name:
     pulumi.export("key_name", key_name)
 
 # Export connection information
-pulumi.export("ssh_commands", [
-    f"ssh -i {key_name}.pem ec2-user@{instance.public_ip}" if key_name else f"ssh ec2-user@{instance.public_ip}"
-    for instance in instances
-])
+ssh_commands = []
+for instance in instances:
+    if key_name:
+        ssh_commands.append(f"ssh -i {key_name}.pem ec2-user@{instance.public_ip}")
+    else:
+        ssh_commands.append(f"ssh ec2-user@{instance.public_ip}")
+
+pulumi.export("ssh_commands", ssh_commands)
 
 # Export subnet information for integration tests
 pulumi.export("public_subnet_ids", [subnet.id for subnet in subnets])
