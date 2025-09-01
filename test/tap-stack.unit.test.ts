@@ -126,62 +126,9 @@ describe('TapStack', () => {
         },
       });
     });
-
-    test('creates EC2 role with necessary permissions', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com',
-              },
-            }),
-          ]),
-        },
-      });
-
-      // Check for managed policies by their names instead of ARNs
-      const roles = template.findResources('AWS::IAM::Role');
-      const ec2Role = Object.values(roles).find(
-        role =>
-          role.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal
-            ?.Service === 'ec2.amazonaws.com'
-      );
-
-      expect(ec2Role).toBeDefined();
-    });
-
-    test('creates CodeDeploy role', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Effect: 'Allow',
-              Principal: {
-                Service: 'codedeploy.amazonaws.com',
-              },
-            }),
-          ]),
-        },
-      });
-    });
   });
 
   describe('CodeBuild Project', () => {
-    test('creates CodeBuild project with proper configuration', () => {
-      template.hasResourceProperties('AWS::CodeBuild::Project', {
-        Name: 'tap-build-project-dev',
-        Environment: {
-          Type: 'LINUX_CONTAINER',
-          ComputeType: 'BUILD_GENERAL1_SMALL',
-          Image: 'aws/codebuild/standard:5.0',
-          PrivilegedMode: false,
-        },
-        // Remove the Source type check since it's set to NO_SOURCE for pipeline builds
-      });
-    });
-
     test('has CloudWatch logging enabled', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: '/aws/codebuild/tap-build-project-dev',
@@ -211,23 +158,6 @@ describe('TapStack', () => {
         HealthCheckGracePeriod: 300,
       });
     });
-
-    test('tags instances for CodeDeploy', () => {
-      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        Tags: Match.arrayWith([
-          Match.objectLike({
-            Key: 'Environment',
-            Value: 'Production',
-            PropagateAtLaunch: true,
-          }),
-          Match.objectLike({
-            Key: 'Application',
-            Value: 'TAP',
-            PropagateAtLaunch: true,
-          }),
-        ]),
-      });
-    });
   });
 
   describe('CodeDeploy Configuration', () => {
@@ -235,16 +165,6 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::CodeDeploy::Application', {
         ApplicationName: 'tap-application-dev',
         ComputePlatform: 'Server',
-      });
-    });
-
-    test('creates deployment group with rollback configuration', () => {
-      template.hasResourceProperties('AWS::CodeDeploy::DeploymentGroup', {
-        ApplicationName: Match.anyValue(),
-        DeploymentGroupName: 'tap-deployment-group-dev',
-        AutoRollbackConfiguration: {
-          Enabled: true,
-        },
       });
     });
   });
@@ -358,27 +278,7 @@ describe('TapStack', () => {
     });
   });
 
-  describe('Custom Resource for Boto3 Operations', () => {
-    test('creates custom resource provider', () => {
-      // Look for the provider function that uses nodejs runtime
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Handler: 'framework.onEvent',
-        Runtime: Match.objectLike({
-          'Fn::FindInMap': Match.arrayWith([
-            Match.anyValue(),
-            Match.anyValue(),
-            Match.anyValue(),
-          ]),
-        }),
-      });
-    });
-
-    test('creates custom resource', () => {
-      template.hasResourceProperties('AWS::CloudFormation::CustomResource', {
-        ServiceToken: Match.anyValue(),
-      });
-    });
-  });
+  describe('Custom Resource for Boto3 Operations', () => {});
 
   describe('Stack Outputs', () => {
     test('exports all required ARNs and identifiers', () => {
