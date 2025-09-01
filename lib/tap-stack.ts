@@ -37,11 +37,15 @@ export class TapStack extends cdk.Stack {
     };
 
     // 1. KMS Key for encryption at rest
-    const kmsKey = new kms.Key(this, 'TapKmsKey', {
-      alias: `tap-${environmentSuffix}-key`,
+    // Generate unique identifier to avoid conflicts with existing keys
+    const kmsKeySuffix = `${environmentSuffix}-${Date.now().toString().slice(-8)}`;
+    const kmsKey = new kms.Key(this, `TapKmsKey${kmsKeySuffix}`, {
+      alias: `alias/tap-${kmsKeySuffix}`,
       description: 'KMS key for TAP infrastructure encryption',
       enableKeyRotation: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      enabled: true,
+      pendingWindow: cdk.Duration.days(7),
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow cleanup of old keys
     });
 
     // Grant CloudWatch Logs permission to use the KMS key
@@ -71,6 +75,7 @@ export class TapStack extends cdk.Stack {
     // Grant EC2 and Auto Scaling services permission to use the KMS key for EBS volume encryption
     kmsKey.addToResourcePolicy(
       new iam.PolicyStatement({
+        sid: 'Enable use of the key via EC2',
         effect: iam.Effect.ALLOW,
         principals: [
           new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -91,6 +96,21 @@ export class TapStack extends cdk.Stack {
             'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
           },
         },
+      })
+    );
+    
+    // Additional permissions for EC2 instances to use the key directly
+    kmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Enable direct use by EC2 instances',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
+        actions: [
+          'kms:Decrypt',
+          'kms:GenerateDataKey*',
+          'kms:CreateGrant',
+        ],
+        resources: ['*'],
       })
     );
 
