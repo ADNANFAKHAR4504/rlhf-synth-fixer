@@ -1213,6 +1213,24 @@ resource "aws_sns_topic" "alerts" {
   })
 }
 
+# SNS Topic for Secondary Region
+resource "aws_sns_topic" "alerts_secondary" {
+  provider = aws.us_west_1
+  name     = "${local.name_prefix}-alerts-secondary"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-sns-alerts-secondary"
+  })
+}
+
+# SNS Topic Subscription for Secondary Region - ADD THIS
+resource "aws_sns_topic_subscription" "email_alerts_secondary" {
+  provider  = aws.us_west_1
+  topic_arn = aws_sns_topic.alerts_secondary.arn
+  protocol  = "email"
+  endpoint  = var.notification_email
+}
+
 # SNS Topic Subscription
 resource "aws_sns_topic_subscription" "email_alerts" {
   provider  = aws.us_east_2
