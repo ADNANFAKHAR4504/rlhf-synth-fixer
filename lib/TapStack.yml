@@ -874,7 +874,10 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'logs-${AWS::AccountId}-${AWS::Region}-production-tapstack'
+      BucketName:
+        !Sub
+          - 'logs-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}'
+          - { Suffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]]] }
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
