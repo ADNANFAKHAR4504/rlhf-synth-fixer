@@ -702,7 +702,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${SecureS3Bucket}/*"
+                                            "Fn::Sub": "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
                                         }
                                     ]
                                 },
@@ -827,7 +827,7 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${SecureS3Bucket}/*"
+                                            "Fn::Sub": "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
                                         }
                                     ]
                                 },
@@ -1047,7 +1047,7 @@
                                         "s3:GetObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${ConfigS3Bucket}/*"
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${ConfigS3Bucket}/*"
                                     },
                                     "Condition": {
                                         "StringEquals": {
@@ -1194,7 +1194,7 @@
                             "Principal": "*",
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${SecureS3Bucket}/*"
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
                             },
                             "Condition": {
                                 "StringNotEquals": {
@@ -1208,7 +1208,7 @@
                             "Principal": "*",
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${SecureS3Bucket}/*"
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
                             },
                             "Condition": {
                                 "StringNotEquals": {
@@ -1234,7 +1234,7 @@
                                     ]
                                 },
                                 {
-                                    "Fn::Sub": "${SecureS3Bucket}/*"
+                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
                                 }
                             ],
                             "Condition": {
@@ -1490,7 +1490,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${CloudTrailS3Bucket}/*"
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${CloudTrailS3Bucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -2259,7 +2259,7 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "arn:aws:s3:::${SecureS3Bucket}/*"
+                                        "Fn::Sub": "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
                                     }
                                 ]
                             }

@@ -449,7 +449,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource:
-                  - !Sub "${SecureS3Bucket}/*"
+                  - !Sub "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -514,7 +514,7 @@ Resources:
                   - s3:PutObject
                   - s3:DeleteObject
                 Resource:
-                  - !Sub "${SecureS3Bucket}/*"
+                  - !Sub "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -623,7 +623,7 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:GetObject
-                Resource: !Sub "${ConfigS3Bucket}/*"
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ConfigS3Bucket}/*"
                 Condition:
                   StringEquals:
                     "s3:x-amz-acl": bucket-owner-full-control
@@ -703,7 +703,7 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: s3:PutObject
-            Resource: !Sub "${SecureS3Bucket}/*"
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption": aws:kms
@@ -712,7 +712,7 @@ Resources:
             Effect: Deny
             Principal: "*"
             Action: s3:PutObject
-            Resource: !Sub "${SecureS3Bucket}/*"
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
             Condition:
               StringNotEquals:
                 "s3:x-amz-server-side-encryption-aws-kms-key-id": !GetAtt S3EncryptionKey.Arn
@@ -723,7 +723,7 @@ Resources:
             Action: "s3:*"
             Resource:
               - !GetAtt SecureS3Bucket.Arn
-              - !Sub "${SecureS3Bucket}/*"
+              - !Sub "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
             Condition:
               Bool:
                 "aws:SecureTransport": "false"
@@ -851,7 +851,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub "${CloudTrailS3Bucket}/*"
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${CloudTrailS3Bucket}/*"
             Condition:
               StringEquals:
                 "s3:x-amz-acl": bucket-owner-full-control
@@ -1241,7 +1241,7 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - !Sub "arn:aws:s3:::${SecureS3Bucket}/*"
+                - !Sub "arn:${AWS::Partition}:s3:::${SecureS3Bucket}/*"
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-cloudtrail-${Environment}"

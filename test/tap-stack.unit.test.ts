@@ -262,6 +262,86 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
     });
   });
 
+  describe('Partition-aware S3 ARNs in policies', () => {
+    test('WebTierInstanceRole S3AccessPolicy uses partition-aware S3 ARN', () => {
+      const role = template.Resources.WebTierInstanceRole;
+      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3AccessPolicy');
+      expect(policy).toBeDefined();
+      const stmt = policy.PolicyDocument.Statement.find((s: any) => Array.isArray(s.Action) && s.Action.includes('s3:GetObject'));
+      expect(stmt).toBeDefined();
+      const resource = stmt.Resource && (Array.isArray(stmt.Resource) ? stmt.Resource[0] : stmt.Resource);
+      const sub = resource && resource['Fn::Sub'];
+      expect(typeof sub).toBe('string');
+      expect(sub).toContain('arn:${AWS::Partition}:s3:::');
+      expect(sub).toContain('${SecureS3Bucket}/*');
+    });
+
+    test('ApplicationTierInstanceRole S3AccessPolicy uses partition-aware S3 ARN', () => {
+      const role = template.Resources.ApplicationTierInstanceRole;
+      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3AccessPolicy');
+      expect(policy).toBeDefined();
+      const stmt = policy.PolicyDocument.Statement.find((s: any) => Array.isArray(s.Action) && s.Action.includes('s3:GetObject'));
+      expect(stmt).toBeDefined();
+      const resource = stmt.Resource && (Array.isArray(stmt.Resource) ? stmt.Resource[0] : stmt.Resource);
+      const sub = resource && resource['Fn::Sub'];
+      expect(typeof sub).toBe('string');
+      expect(sub).toContain('arn:${AWS::Partition}:s3:::');
+      expect(sub).toContain('${SecureS3Bucket}/*');
+    });
+
+    test('ConfigRole policy uses partition-aware ARN for ConfigS3Bucket objects', () => {
+      const role = template.Resources.ConfigRole;
+      const policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'ConfigS3Policy');
+      expect(policy).toBeDefined();
+      const stmt = policy.PolicyDocument.Statement.find((s: any) => Array.isArray(s.Action) && s.Action.includes('s3:PutObject'));
+      expect(stmt).toBeDefined();
+      const resource = stmt.Resource && (Array.isArray(stmt.Resource) ? stmt.Resource[0] : stmt.Resource);
+      const sub = resource && resource['Fn::Sub'];
+      expect(typeof sub).toBe('string');
+      expect(sub).toContain('arn:${AWS::Partition}:s3:::');
+      expect(sub).toContain('${ConfigS3Bucket}/*');
+    });
+
+    test('SecureS3BucketPolicy uses partition-aware ARN for object-level statements', () => {
+      const pol = template.Resources.SecureS3BucketPolicy;
+      const statements = pol.Properties.PolicyDocument.Statement;
+      const denyUnencrypted = statements.find((s: any) => s.Sid === 'DenyUnencryptedUploads');
+      expect(denyUnencrypted).toBeDefined();
+      const res1 = Array.isArray(denyUnencrypted.Resource) ? denyUnencrypted.Resource[0] : denyUnencrypted.Resource;
+      const sub1 = res1 && res1['Fn::Sub'];
+      expect(typeof sub1).toBe('string');
+      expect(sub1).toContain('arn:${AWS::Partition}:s3:::');
+      expect(sub1).toContain('${SecureS3Bucket}/*');
+    });
+
+    test('CloudTrailS3BucketPolicy write uses partition-aware ARN', () => {
+      const pol = template.Resources.CloudTrailS3BucketPolicy;
+      const statements = pol.Properties.PolicyDocument.Statement;
+      const writeStmt = statements.find((s: any) => s.Sid === 'AWSCloudTrailWrite');
+      expect(writeStmt).toBeDefined();
+      const res = Array.isArray(writeStmt.Resource) ? writeStmt.Resource[0] : writeStmt.Resource;
+      const sub = res && res['Fn::Sub'];
+      expect(typeof sub).toBe('string');
+      expect(sub).toContain('arn:${AWS::Partition}:s3:::');
+      expect(sub).toContain('${CloudTrailS3Bucket}/*');
+    });
+  });
+
+  describe('CloudTrail S3 data events use partition-aware ARNs', () => {
+    test('CloudTrailTrail S3 DataResources Values are partition-aware', () => {
+      const trail = template.Resources.CloudTrailTrail;
+      const selectors = trail.Properties.EventSelectors;
+      expect(Array.isArray(selectors)).toBe(true);
+      const dr = selectors[0].DataResources.find((d: any) => d.Type === 'AWS::S3::Object');
+      expect(dr).toBeDefined();
+      const val = Array.isArray(dr.Values) ? dr.Values[0] : dr.Values;
+      const sub = val && val['Fn::Sub'];
+      expect(typeof sub).toBe('string');
+      expect(sub).toContain('arn:${AWS::Partition}:s3:::');
+      expect(sub).toContain('${SecureS3Bucket}/*');
+    });
+  });
+
   describe('CloudWatch Log Groups', () => {
     test('should have VPCFlowLogsGroup', () => {
       expect(template.Resources.VPCFlowLogsGroup).toBeDefined();
