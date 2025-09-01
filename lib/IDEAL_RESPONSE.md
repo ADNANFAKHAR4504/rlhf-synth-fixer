@@ -1,79 +1,105 @@
-# Ideal Response
+Ideal Response
 
-The model should output a **complete and valid CloudFormation template in JSON** that provisions a **secure, production-grade AWS environment**.
+The model should generate a complete and valid CloudFormation template in JSON that sets up a secure, production-ready AWS environment.
 
----
+What’s Expected
+Networking
 
-## ✅ Requirements
+Create a VPC with CIDR 10.0.0.0/16.
 
-### 1. Networking
+Add one public subnet (10.0.1.0/24) and one private subnet (10.0.2.0/24).
 
-- Defines a **VPC** with CIDR `10.0.0.0/16`.
-- Creates one **public subnet** (`10.0.1.0/24`) and one **private subnet** (`10.0.2.0/24`).
-- Attaches an **Internet Gateway** to the VPC.
-- Configures:
-  - A **public route table** that routes `0.0.0.0/0` to the Internet Gateway, associated with the public subnet.
-  - A **private route table** that does **not** allow internet access, associated with the private subnet.
+Attach an Internet Gateway to the VPC.
 
-### 2. S3 Logging Bucket
+Configure routing so that:
 
-- Encrypted with **SSE-KMS**.
-- Applies a **bucket policy** restricting access only to trusted CIDR ranges passed as parameters.
-- Enforces **secure transport** (`https`).
-- Integrated with **CloudTrail** for log delivery.
+The public subnet routes 0.0.0.0/0 through the Internet Gateway.
 
-### 3. IAM Roles
+The private subnet stays isolated without internet access.
 
-- Creates an **IAM role and instance profile** for EC2.
-- Grants **read-only S3 access** to the logging bucket.
+S3 Logging Bucket
 
-### 4. CloudTrail
+Must be encrypted with SSE-KMS.
 
-- Provisions a **multi-region CloudTrail** trail.
-- Sends logs to the S3 logging bucket.
-- Enables **log file validation**.
-- Uses **KMS encryption**.
+Apply a bucket policy to only allow access from trusted CIDR ranges (provided as parameters).
 
-### 5. Security
+Enforce HTTPS-only access.
 
-- Creates a **Security Group** that only allows **SSH (22)** from trusted IP ranges.
-- Uses a **KMS CMK** with proper key policy:
-  - IAM root user full access.
-  - CloudTrail permissions.
-  - S3 permissions.
+Set up integration with CloudTrail so logs are delivered securely.
 
-### 6. Best Practices
+IAM Roles
 
-- Tags all resources with:
-  - `Environment=Production`
-  - Descriptive `Name` tags.
-- Avoids hard-coded credentials.
-- Ensures CloudFormation rollback compatibility.
+Provision an IAM role and instance profile for EC2.
 
-### 7. Outputs
+Grant the role read-only access to the logging bucket.
 
-- Exposes the following values:
-  - VPC ID
-  - Public Subnet ID
-  - Private Subnet ID
-  - Security Group ID
-  - Logging Bucket Name
-  - EC2 Instance Profile ARN
-  - KMS Key ID
-  - CloudTrail ARN
+CloudTrail
 
-### 8. Format & Validity
+Deploy a multi-region CloudTrail trail.
 
-- Must be a **strictly valid JSON CloudFormation template**.
-- Must pass `aws cloudformation validate-template`.
-- Must use parameters for:
-  - Trusted IP CIDRs
-  - Bucket name prefix
-  - KMS alias
+Send all logs to the S3 logging bucket.
 
----
+Enable log file validation.
 
-## 📄 Example CloudFormation Template (YAML)
+Encrypt logs using KMS.
+
+Security
+
+Create a Security Group that only allows SSH (22) from trusted IP ranges.
+
+Provision a KMS CMK with a key policy that:
+
+Gives the IAM root user full access.
+
+Grants necessary permissions to CloudTrail.
+
+Supports S3 encryption.
+
+Best Practices
+
+Tag all resources with:
+
+Environment=Production
+
+A descriptive Name tag.
+
+Avoid any hard-coded credentials.
+
+Ensure the stack supports CloudFormation rollback.
+
+Outputs
+
+The template should return the following identifiers:
+
+VPC ID
+
+Public Subnet ID
+
+Private Subnet ID
+
+Security Group ID
+
+Logging Bucket Name
+
+EC2 Instance Profile ARN
+
+KMS Key ID
+
+CloudTrail ARN
+
+Format & Validity
+
+Output must be strictly valid JSON CloudFormation.
+
+Template must pass aws cloudformation validate-template.
+
+Use parameters for things like:
+
+Trusted IP CIDRs
+
+Bucket name prefix
+
+KMS alias
 
 Below is my tapstack.yml:
 
@@ -458,7 +484,7 @@ Outputs:
       Name: !Sub "${AWS::StackName}-CloudTrail-ARN"
 ```
 
-below is my TapStack.json file:
+below is my TapStack.json:
 
 ```json
 {
