@@ -92,6 +92,10 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   ALB_EAST="tap-alb-us-east-1-${ENVIRONMENT_SUFFIX}"
   ALB_WEST="tap-alb-us-west-2-${ENVIRONMENT_SUFFIX}"
   
+  # Target Groups
+  TARGET_GROUP_EAST="tap-tg-us-east-1-${ENVIRONMENT_SUFFIX}"
+  TARGET_GROUP_WEST="tap-tg-us-west-2-${ENVIRONMENT_SUFFIX}"
+  
   echo "Step 1: Clean up Application Load Balancers first (to free up dependencies)"
   echo "Deleting ALB: $ALB_EAST"
   ALB_ARN_EAST=$(aws elbv2 describe-load-balancers --names "$ALB_EAST" --region us-east-1 --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
@@ -103,6 +107,23 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   ALB_ARN_WEST=$(aws elbv2 describe-load-balancers --names "$ALB_WEST" --region us-west-2 --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
   if [ "$ALB_ARN_WEST" != "None" ] && [ "$ALB_ARN_WEST" != "null" ]; then
     aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN_WEST" --region us-west-2 || echo "Failed to delete West ALB"
+  fi
+  
+  # Wait a moment for ALB deletions to process
+  echo "Waiting 30 seconds for ALB deletions to process..."
+  sleep 30
+  
+  echo "Step 1.5: Clean up Target Groups (after ALB deletion)"
+  echo "Deleting Target Group: $TARGET_GROUP_EAST"
+  TG_ARN_EAST=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_EAST" --region us-east-1 --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
+  if [ "$TG_ARN_EAST" != "None" ] && [ "$TG_ARN_EAST" != "null" ]; then
+    aws elbv2 delete-target-group --target-group-arn "$TG_ARN_EAST" --region us-east-1 || echo "Failed to delete East Target Group"
+  fi
+  
+  echo "Deleting Target Group: $TARGET_GROUP_WEST"
+  TG_ARN_WEST=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_WEST" --region us-west-2 --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
+  if [ "$TG_ARN_WEST" != "None" ] && [ "$TG_ARN_WEST" != "null" ]; then
+    aws elbv2 delete-target-group --target-group-arn "$TG_ARN_WEST" --region us-west-2 || echo "Failed to delete West Target Group"
   fi
   
   echo "Step 2: Clean up CloudWatch Log Groups (no dependencies)"
@@ -224,6 +245,20 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   
   if [ "$WEST_ALB_CHECK" = "true" ]; then
     echo "❌ CRITICAL: West ALB still exists: $ALB_WEST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check Target Groups
+  EAST_TG_CHECK=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
+  WEST_TG_CHECK=$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
+  
+  if [ "$EAST_TG_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: East Target Group still exists: $TARGET_GROUP_EAST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if [ "$WEST_TG_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: West Target Group still exists: $TARGET_GROUP_WEST"
     CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
   fi
   
