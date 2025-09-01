@@ -22,10 +22,12 @@ repositories {
     mavenLocal()
 }
 
-// Version management
 ext {
+    //Dependency version management
     pulumiVersion = '1.16.1'
+    pulumiAwsVersion = '7.5.0'
     awsCdkVersion = '2.204.0'
+    awsCdkConstructsVersion = '10.4.2'
     hashicorpCdktfVersion = '0.21.0'
     hashicorpCdktfAwsVersion = '21.0.0'
     guavaVersion = '33.0.0-jre'
@@ -34,6 +36,10 @@ ext {
     junitVersion = '5.10.2'
     mockitoVersion = '5.11.0'
     assertjVersion = '3.24.2'
+    googleCodeGsonVersion = '2.10.1'
+
+    //Build settings
+    minimumTestCoverage = 50.0
 }
 
 // Resolve dependency conflicts
@@ -52,17 +58,17 @@ configurations.configureEach {
 dependencies {
     // Pulumi dependencies
     implementation "com.pulumi:pulumi:${pulumiVersion}"
-    implementation 'com.pulumi:aws:7.5.0'
+    implementation "com.pulumi:aws:${pulumiAwsVersion}"
     implementation "com.hashicorp:cdktf:${hashicorpCdktfVersion}"
     implementation "com.hashicorp:cdktf-provider-aws:${hashicorpCdktfAwsVersion}"
     implementation 'com.pulumi:tls:5.2.0'
 
     // AWS CDK dependencies
     implementation "software.amazon.awscdk:aws-cdk-lib:${awsCdkVersion}"
-    implementation "software.constructs:constructs:10.4.2"
+    implementation "software.constructs:constructs:${awsCdkConstructsVersion}"
 
     // Utilities
-    implementation "com.google.code.gson:gson:2.10.1"
+    implementation "com.google.code.gson:gson:${googleCodeGsonVersion}"
     implementation "com.google.guava:guava:${guavaVersion}"
 
     // Test dependencies
@@ -132,6 +138,15 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:sts'
     integrationTestImplementation 'software.amazon.awssdk:elasticloadbalancingv2'
     integrationTestImplementation 'software.amazon.awssdk:autoscaling'
+    integrationTestImplementation 'software.amazon.awssdk:rds'
+    integrationTestImplementation 'software.amazon.awssdk:lambda'
+    integrationTestImplementation 'software.amazon.awssdk:apigateway'
+    integrationTestImplementation 'software.amazon.awssdk:networkfirewall'
+    integrationTestImplementation 'software.amazon.awssdk:config'
+    integrationTestImplementation 'software.amazon.awssdk:secretsmanager'
+    integrationTestImplementation 'software.amazon.awssdk:codepipeline'
+    integrationTestImplementation 'software.amazon.awssdk:codebuild'
+    integrationTestImplementation 'software.amazon.awssdk:codedeploy'
 
     // JSON parsing for integration tests
     integrationTestImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
@@ -171,6 +186,16 @@ tasks.register('fatJar', Jar) {
     zip64 = true
 }
 
+// Clean task for JaCoCo execution data
+tasks.register('cleanJacocoData') {
+    group = 'verification'
+    description = 'Cleans JaCoCo execution data files'
+    doLast {
+        delete fileTree(layout.buildDirectory.dir("jacoco")).include("*.exec")
+        delete layout.buildDirectory.dir("reports/jacoco")
+    }
+}
+
 // JUnit configuration
 test {
     useJUnitPlatform()
@@ -188,10 +213,13 @@ test {
     // Enable test execution when tests are specifically requested
     systemProperty 'gradle.test.enabled', 'true'
 
-    // Run when test tasks are explicitly called
+    // Clean JaCoCo data before running tests to ensure fresh coverage data
+    dependsOn cleanJacocoData
+
     onlyIf {
         isCoverageTaskRequested()
     }
+
 }
 
 // Integration test task
@@ -212,6 +240,12 @@ tasks.register('integrationTest', Test) {
     }
 
     shouldRunAfter test
+
+    // Enable JaCoCo for integration tests
+    jacoco {
+        enabled = true
+        destinationFile = layout.buildDirectory.file("jacoco/integrationTest.exec").get().asFile
+    }
 
     onlyIf {
         isTestTaskRequested()
@@ -245,8 +279,9 @@ def isCoverageTaskRequested() {
 checkstyle {
     toolVersion = '10.12.7'
     configFile = file('config/checkstyle/checkstyle.xml')
-    ignoreFailures = true
-    maxWarnings = 100
+    ignoreFailures = false
+    maxWarnings = 0
+    maxErrors = 0
 }
 
 tasks.withType(Checkstyle).configureEach {
@@ -271,15 +306,8 @@ jacocoTestReport {
         csv.required = false
     }
 
-    executionData fileTree(layout.buildDirectory.dir("jacoco")).include("*.exec")
-
-    afterEvaluate {
-        classDirectories.setFrom(files(classDirectories.files.collect {
-            fileTree(dir: it, exclude: [
-                    '**/Main.class'
-            ])
-        }))
-    }
+    // Only include unit test execution data
+    executionData layout.buildDirectory.file("jacoco/test.exec")
 
     finalizedBy jacocoTestCoverageVerification
 
@@ -288,35 +316,151 @@ jacocoTestReport {
     }
 }
 
-jacocoTestCoverageVerification {
-    dependsOn jacocoTestReport
-    violationRules {
-        rule {
-            limit {
-                minimum = 0.00
-            }
-        }
+// Integration test JaCoCo report
+tasks.register('jacocoIntegrationTestReport', JacocoReport) {
+    dependsOn integrationTest
+    group = 'verification'
+    description = 'Generate JaCoCo coverage report for integration tests'
+
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
     }
+
+    // Only include integration test execution data
+    executionData layout.buildDirectory.file("jacoco/integrationTest.exec")
+
+    finalizedBy jacocoIntegrationTestCoverageVerification
 
     onlyIf {
         isTestTaskRequested()
     }
 }
 
-// Enhanced coverage summary task
+// Integration test coverage verification
+tasks.register('jacocoIntegrationTestCoverageVerification', JacocoCoverageVerification) {
+    dependsOn jacocoIntegrationTestReport
+    group = 'verification'
+    description = 'Verify integration test coverage meets minimum requirements'
+
+    violationRules {
+        rule {
+            limit {
+                minimum = minimumTestCoverage / 100.0
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+            }
+        }
+    }
+
+    executionData layout.buildDirectory.file("jacoco/integrationTest.exec")
+
+    onlyIf {
+        isTestTaskRequested()
+    }
+}
+
+// Configure JaCoCo reports and trigger coverage summaries
+afterEvaluate {
+    // Configure unit test report
+    jacocoTestReport.configure {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/Main.class',
+                '**/imports/**'
+            ])
+        }))
+        sourceDirectories.setFrom(files(sourceSets.main.allJava.srcDirs))
+    }
+    
+    // Configure integration test report
+    jacocoIntegrationTestReport.configure {
+        classDirectories.setFrom(files(sourceSets.main.output.classesDirs.collect {
+            fileTree(dir: it, exclude: [
+                '**/Main.class',
+                '**/imports/**'
+            ])
+        }))
+        sourceDirectories.setFrom(files(sourceSets.main.allJava.srcDirs))
+    }
+    
+    // Set up coverage summary triggers
+    jacocoTestReport.finalizedBy(showCoverage)
+    jacocoIntegrationTestReport.finalizedBy(showIntegrationCoverage)
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            limit {
+                minimum = minimumTestCoverage / 100.0
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+            }
+        }
+    }
+
+    // Uses only unit test execution data
+    executionData layout.buildDirectory.file("jacoco/test.exec")
+
+    onlyIf {
+        isTestTaskRequested()
+    }
+}
+
+// Unit test coverage summary task
 tasks.register('showCoverage') {
     dependsOn jacocoTestReport
     group = 'verification'
-    description = 'Shows test coverage summary'
+    description = 'Shows unit test execution and coverage summary'
 
     doLast {
         def xmlReportFile = layout.buildDirectory.file("reports/jacoco/test/jacocoTestReport.xml").get().asFile
         def htmlReportFile = layout.buildDirectory.file("reports/jacoco/test/html/index.html").get().asFile
+        def unitTestResultsDir = layout.buildDirectory.dir("test-results/test").get().asFile
 
+        // Parse unit test execution results only
+        def testStats = [total: 0, passed: 0, failed: 0, skipped: 0]
+
+        if (unitTestResultsDir.exists()) {
+            unitTestResultsDir.listFiles().each { file ->
+                if (file.name.endsWith('.xml')) {
+                    try {
+                        def parser = new XmlParser()
+                        parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+                        parser.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+                        def xml = parser.parse(file)
+
+                        testStats.total += (xml.@tests as Integer) ?: 0
+                        testStats.failed += (xml.@failures as Integer) ?: 0
+                        testStats.failed += (xml.@errors as Integer) ?: 0
+                        testStats.skipped += (xml.@skipped as Integer) ?: 0
+                        testStats.passed = testStats.total - testStats.failed - testStats.skipped
+                    } catch (Exception ignored) {
+                        // Ignore parsing errors for individual test files
+                    }
+                }
+            }
+        }
+
+        // Display unit test execution summary
+        println "\n🧪 Unit Test Execution Summary:"
+        if (testStats.total > 0) {
+            println "Tests Run: ${testStats.total}"
+            println "Passed: ${testStats.passed}, Failed: ${testStats.failed}, Skipped: ${testStats.skipped}"
+            println "Test Status: ${testStats.failed == 0 ? '✅ PASSED' : '❌ FAILED'}"
+        } else {
+            println "No unit tests found"
+        }
+
+        // Display coverage summary
         if (xmlReportFile.exists()) {
             try {
                 def parser = new XmlParser()
-                parser.setFeature("https://apache.org/xml/features/disallow-doctype-decl", false)
+                parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+                parser.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
                 def xml = parser.parse(xmlReportFile)
 
                 def counter = xml.counter.find { it.@type == 'LINE' }
@@ -326,23 +470,116 @@ tasks.register('showCoverage') {
                     def total = covered + missed
                     def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
 
-                    println "\n📊 Code Coverage Summary:"
+                    println "\n📊 Unit Test Coverage Summary:"
                     println "Lines Covered: ${covered}/${total} (${percentage}%)"
-                    println "Coverage Status: ${percentage >= 9 ? '✅ PASSED' : '❌ FAILED'} (minimum: 9%)"
+                    println "Coverage Status: ${percentage >= minimumTestCoverage ? '✅ PASSED' : '❌ FAILED'} " +
+                            "(minimum: ${minimumTestCoverage}%)"
 
                     if (htmlReportFile.exists()) {
                         println "📄 Detailed HTML Report: file://${htmlReportFile.absolutePath}"
                     }
                 } else {
-                    println "\n📊 Code Coverage: Report generated successfully"
+                    println "\n📊 Unit Test Coverage: Report generated successfully"
                 }
             } catch (Exception e) {
-                println "\n📊 Code Coverage: Tests completed successfully"
+                println "\n📊 Unit Test Coverage: Tests completed successfully"
                 println "⚠️  Coverage report parsing failed: ${e.message}"
             }
         } else {
-            println "\n📊 Code Coverage: No coverage data found"
+            println "\n📊 Unit Test Coverage: No coverage data found"
         }
+    }
+}
+
+// Integration test coverage summary task
+tasks.register('showIntegrationCoverage') {
+    dependsOn jacocoIntegrationTestReport
+    group = 'verification'
+    description = 'Shows integration test execution and coverage summary'
+
+    doLast {
+        def xmlReportFile = layout.buildDirectory.file("reports/jacoco/integrationTest/jacocoIntegrationTestReport.xml").get().asFile
+        def htmlReportFile = layout.buildDirectory.file("reports/jacoco/integrationTest/html/index.html").get().asFile
+        def integrationTestResultsDir = layout.buildDirectory.dir("test-results/integrationTest").get().asFile
+
+        // Parse integration test execution results only
+        def testStats = [total: 0, passed: 0, failed: 0, skipped: 0]
+
+        if (integrationTestResultsDir.exists()) {
+            integrationTestResultsDir.listFiles().each { file ->
+                if (file.name.endsWith('.xml')) {
+                    try {
+                        def parser = new XmlParser()
+                        parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+                        parser.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+                        def xml = parser.parse(file)
+
+                        testStats.total += (xml.@tests as Integer) ?: 0
+                        testStats.failed += (xml.@failures as Integer) ?: 0
+                        testStats.failed += (xml.@errors as Integer) ?: 0
+                        testStats.skipped += (xml.@skipped as Integer) ?: 0
+                        testStats.passed = testStats.total - testStats.failed - testStats.skipped
+                    } catch (Exception ignored) {
+                        // Ignore parsing errors for individual test files
+                    }
+                }
+            }
+        }
+
+        // Display integration test execution summary
+        println "\n🧪 Integration Test Execution Summary:"
+        if (testStats.total > 0) {
+            println "Tests Run: ${testStats.total}"
+            println "Passed: ${testStats.passed}, Failed: ${testStats.failed}, Skipped: ${testStats.skipped}"
+            println "Test Status: ${testStats.failed == 0 ? '✅ PASSED' : '❌ FAILED'}"
+        } else {
+            println "No integration tests found"
+        }
+
+        // Display coverage summary
+        if (xmlReportFile.exists()) {
+            try {
+                def parser = new XmlParser()
+                parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+                parser.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+                def xml = parser.parse(xmlReportFile)
+
+                def counter = xml.counter.find { it.@type == 'LINE' }
+                if (counter) {
+                    def covered = counter.@covered.toInteger()
+                    def missed = counter.@missed.toInteger()
+                    def total = covered + missed
+                    def percentage = total > 0 ? (covered * 100 / total).round(1) : 0
+
+                    println "\n📊 Integration Test Coverage Summary:"
+                    println "Lines Covered: ${covered}/${total} (${percentage}%)"
+                    println "Coverage Status: ${percentage >= minimumTestCoverage ? '✅ PASSED' : '❌ FAILED'} " +
+                            "(minimum: ${minimumTestCoverage}%)"
+
+                    if (htmlReportFile.exists()) {
+                        println "📄 Detailed HTML Report: file://${htmlReportFile.absolutePath}"
+                    }
+                } else {
+                    println "\n📊 Integration Test Coverage: Report generated successfully"
+                }
+            } catch (Exception e) {
+                println "\n📊 Integration Test Coverage: Tests completed successfully"
+                println "⚠️  Coverage report parsing failed: ${e.message}"
+            }
+        } else {
+            println "\n📊 Integration Test Coverage: No coverage data found"
+        }
+    }
+}
+
+// Integration test with coverage task
+tasks.register('integrationTestWithCoverage') {
+    dependsOn integrationTest, jacocoIntegrationTestReport
+    group = 'verification'
+    description = 'Runs integration tests and displays coverage summary'
+
+    doFirst {
+        println "\n🚀 Running integration tests with coverage analysis..."
     }
 }
 
