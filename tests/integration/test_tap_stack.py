@@ -6,19 +6,62 @@ from botocore.exceptions import ClientError
 from pytest import mark
 import time
 
+# FIXED: Explicitly set the region
+AWS_REGION = 'us-west-2'
+
 # Open file cfn-outputs/flat-outputs.json
 base_dir = os.path.dirname(os.path.abspath(__file__))
 flat_outputs_path = os.path.join(
     base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
 )
 
-if os.path.exists(flat_outputs_path):
-    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-        flat_outputs = f.read()
+# Try to fetch outputs from deployed stack if file doesn't exist
+if not os.path.exists(flat_outputs_path) or os.path.getsize(flat_outputs_path) == 0:
+    print(f"Attempting to fetch stack outputs from AWS in region {AWS_REGION}...")
+    try:
+        cf_client = boto3.client('cloudformation', region_name=AWS_REGION)
+        
+        # Find any TapStack* in the region
+        stacks = cf_client.list_stacks(
+            StackStatusFilter=['CREATE_COMPLETE', 'UPDATE_COMPLETE']
+        )
+        
+        tap_stack = None
+        for stack in stacks['StackSummaries']:
+            if stack['StackName'].startswith('TapStack'):
+                tap_stack = stack['StackName']
+                print(f"Found stack: {tap_stack}")
+                break
+        
+        if tap_stack:
+            # Get outputs
+            response = cf_client.describe_stacks(StackName=tap_stack)
+            if response['Stacks']:
+                raw_outputs = response['Stacks'][0].get('Outputs', [])
+                flat_outputs = {}
+                for output in raw_outputs:
+                    # Remove stack prefix from key if present
+                    key = output['OutputKey']
+                    if '.' in key:
+                        key = key.split('.')[-1]
+                    flat_outputs[key] = output['OutputValue']
+                
+                # Save for future runs
+                os.makedirs(os.path.dirname(flat_outputs_path), exist_ok=True)
+                with open(flat_outputs_path, 'w') as f:
+                    json.dump(flat_outputs, f, indent=2)
+                print(f"Saved {len(flat_outputs)} outputs to {flat_outputs_path}")
+        else:
+            print("No TapStack found in AWS")
+            flat_outputs = {}
+    except Exception as e:
+        print(f"Could not fetch from AWS: {e}")
+        flat_outputs = {}
 else:
-    flat_outputs = '{}'
+    with open(flat_outputs_path, 'r', encoding='utf-8') as f:
+        flat_outputs = json.loads(f.read())
 
-flat_outputs = json.loads(flat_outputs)
+print(f"Loaded {len(flat_outputs)} outputs for testing")
 
 
 @mark.describe("TapStack")
@@ -28,16 +71,18 @@ class TestTapStack(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and stack outputs once for all tests"""
-        cls.ec2_client = boto3.client('ec2')
-        cls.s3_client = boto3.client('s3')
-        cls.cloudfront_client = boto3.client('cloudfront')
-        cls.sns_client = boto3.client('sns')
-        cls.cloudwatch_client = boto3.client('cloudwatch')
-        cls.iam_client = boto3.client('iam')
-        cls.logs_client = boto3.client('logs')
+        # FIXED: Explicitly specify us-west-2 region for all clients
+        cls.ec2_client = boto3.client('ec2', region_name=AWS_REGION)
+        cls.s3_client = boto3.client('s3', region_name=AWS_REGION)
+        cls.cloudfront_client = boto3.client('cloudfront', region_name=AWS_REGION)  # CloudFront is global
+        cls.sns_client = boto3.client('sns', region_name=AWS_REGION)
+        cls.cloudwatch_client = boto3.client('cloudwatch', region_name=AWS_REGION)
+        cls.iam_client = boto3.client('iam', region_name=AWS_REGION)  # IAM is global
+        cls.logs_client = boto3.client('logs', region_name=AWS_REGION)
         
         # Store stack outputs for testing
         cls.outputs = flat_outputs
+        cls.region = AWS_REGION
 
     def setUp(self):
         """Set up for each test"""
@@ -196,6 +241,7 @@ class TestTapStack(unittest.TestCase):
         self.assertIsNotNone(distribution_id, "CloudFront Distribution ID not found")
         
         # ACT
+        # CloudFront is a global service, doesn't need region
         response = self.cloudfront_client.get_distribution(Id=distribution_id)
         distribution = response['Distribution']
         
@@ -260,6 +306,7 @@ class TestTapStack(unittest.TestCase):
         
         # ACT
         try:
+            # IAM is a global service
             role = self.iam_client.get_role(RoleName=role_name)['Role']
             
             # ASSERT
