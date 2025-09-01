@@ -1349,6 +1349,7 @@ Resources:
   S3BucketPublicAccessProhibitedRule:
     Condition: CreateConfigBucket
     Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: !Sub 's3-bucket-public-access-prohibited-${Environment}'
       Description: Checks that your Amazon S3 buckets do not allow public read access
@@ -1359,6 +1360,7 @@ Resources:
   RootAccessKeyCheckRule:
     Condition: CreateConfigBucket
     Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: !Sub 'root-access-key-check-${Environment}'
       Description: Checks whether the root user access key is available
@@ -1367,7 +1369,9 @@ Resources:
         SourceIdentifier: ROOT_ACCESS_KEY_CHECK
 
   EBSEncryptionByDefaultRule:
+    Condition: CreateConfigBucket
     Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
     Properties:
       ConfigRuleName: !Sub 'ec2-ebs-encryption-by-default-${Environment}'
       Description: Check that Amazon Elastic Block Store (EBS) encryption is enabled by default
