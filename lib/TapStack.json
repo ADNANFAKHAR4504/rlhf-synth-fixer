@@ -2,6 +2,15 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Production-grade AWS infrastructure with VPC, S3 logging, CloudTrail, IAM roles, and security groups in us-east-1",
   "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Description": "Environment suffix for resource naming",
+      "Default": "dev",
+      "MinLength": 1,
+      "MaxLength": 10,
+      "AllowedPattern": "^[a-z0-9]+$",
+      "ConstraintDescription": "Must be lowercase alphanumeric, 1-10 characters"
+    },
     "TrustedIpCidrs": {
       "Type": "CommaDelimitedList",
       "Description": "List of trusted IP CIDRs for S3 bucket access and SSH access (comma-separated)",
@@ -62,7 +71,16 @@
           "Ref": "SecureVPC"
         },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": "us-east-1a",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
@@ -91,7 +109,16 @@
           "Ref": "SecureVPC"
         },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": "us-east-1b",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": {
+                "Ref": "AWS::Region"
+              }
+            }
+          ]
+        },
         "MapPublicIpOnLaunch": false,
         "Tags": [
           {
@@ -302,7 +329,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${BucketNamePrefix}-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "${BucketNamePrefix}-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -451,7 +478,7 @@
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "${AWS::StackName}-EC2-Logging-Role"
+          "Fn::Sub": "${AWS::StackName}-EC2-Logging-Role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -516,7 +543,7 @@
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
         "InstanceProfileName": {
-          "Fn::Sub": "${AWS::StackName}-EC2-Instance-Profile"
+          "Fn::Sub": "${AWS::StackName}-EC2-Instance-Profile-${EnvironmentSuffix}"
         },
         "Roles": [
           {
@@ -530,7 +557,7 @@
       "DependsOn": "LoggingBucketPolicy",
       "Properties": {
         "TrailName": {
-          "Fn::Sub": "${AWS::StackName}-CloudTrail"
+          "Fn::Sub": "${AWS::StackName}-CloudTrail-${EnvironmentSuffix}"
         },
         "S3BucketName": {
           "Ref": "LoggingBucket"
@@ -549,7 +576,7 @@
             "IncludeManagementEvents": true,
             "DataResources": [
               {
-                "Type": "S3::Object",
+                "Type": "AWS::S3::Object",
                 "Values": ["arn:aws:s3:::*/*"]
               }
             ]
@@ -575,7 +602,7 @@
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupName": {
-          "Fn::Sub": "${AWS::StackName}-EC2-SecurityGroup"
+          "Fn::Sub": "${AWS::StackName}-EC2-SecurityGroup-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for EC2 instances with restricted SSH access",
         "VpcId": {
