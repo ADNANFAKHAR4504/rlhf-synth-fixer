@@ -4,7 +4,7 @@ import * as path from 'path';
 import { TapStack } from '../lib/tap-stack';
 import { WebAppInfrastructure } from '../lib/webappinfra';
 
-const region = process.env.AWS_REGION || 'us-east-1';
+const region = 'ap-south-1';
 const environment = process.env.ENVIRONMENT_SUFFIX || 'integration-test';
 
 AWS.config.update({ region });
