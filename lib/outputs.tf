@@ -64,4 +64,4 @@ output "vpc2_nat_gateway_id" {
 output "key_pair_guidance" {
   description = "Guidance for EC2 key pair usage"
   value       = "Ensure the key pair '${var.key_pair_name}' exists in AWS before deploying EC2 instances."
-}
+} 
