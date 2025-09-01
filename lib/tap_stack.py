@@ -256,6 +256,12 @@ pulumi.export("ssh_commands", [
     for instance in instances
 ])
 
+# Export subnet information for integration tests
+pulumi.export("public_subnet_ids", [subnet.id for subnet in subnets])
+pulumi.export("private_subnet_id", None)  # We don't have private subnets in this setup
+pulumi.export("public_security_group_id", security_group.id)
+pulumi.export("private_security_group_id", None)  # We don't have private security groups
+
 # Export web access URLs
 pulumi.export("web_urls", [
     f"http://{instance.public_ip}" 
