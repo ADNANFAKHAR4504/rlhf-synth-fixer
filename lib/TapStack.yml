@@ -1231,8 +1231,6 @@ Resources:
   CloudTrailBucketPolicy:
     Condition: CreateCloudTrailBucket
     Type: AWS::S3::BucketPolicy
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
@@ -1282,8 +1280,6 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
       Policies:
         - PolicyName: ConfigBucketPolicy
           PolicyDocument:
@@ -1299,6 +1295,17 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                 Resource: !Sub '${ConfigBucket.Arn}/*'
+        - PolicyName: AWSConfigCorePermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:BatchGet*
+                  - config:Get*
+                  - config:Describe*
+                  - config:Put*
+                Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
