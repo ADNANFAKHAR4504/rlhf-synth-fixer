@@ -89,7 +89,7 @@
         },
         "NumberOfAZs": {
             "Type": "Number",
-            "Default": 2,
+            "Default": 1,
             "AllowedValues": [
                 1,
                 2,
@@ -1758,14 +1758,6 @@
                     "Ref": "SecureVPC"
                 },
                 "CidrBlock": "10.0.2.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
                 "MapPublicIpOnLaunch": true,
                 "Tags": [
                     {
@@ -1859,14 +1851,6 @@
                     "Ref": "SecureVPC"
                 },
                 "CidrBlock": "10.0.11.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {
@@ -1960,14 +1944,6 @@
                     "Ref": "SecureVPC"
                 },
                 "CidrBlock": "10.0.21.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
                 "MapPublicIpOnLaunch": false,
                 "Tags": [
                     {

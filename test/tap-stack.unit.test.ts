@@ -38,7 +38,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
         'VpcCidr',
         'TrustedIpRange',
         'ComplianceRetentionDays',
-        'CloudWatchRetentionInDays'
+        'CloudWatchRetentionInDays',
+        'NumberOfAZs'
       ];
 
       expectedParams.forEach(paramName => {
@@ -81,6 +82,13 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(retentionParam.Default).toBe(2555);
       expect(retentionParam.MinValue).toBe(365);
       expect(retentionParam.MaxValue).toBe(3653);
+    });
+
+    test('NumberOfAZs parameter should have correct properties', () => {
+      const azParam = template.Parameters.NumberOfAZs;
+      expect(azParam.Type).toBe('Number');
+      expect(azParam.Default).toBe(1);
+      expect(azParam.AllowedValues).toEqual([1, 2, 3]);
     });
   });
 
@@ -423,7 +431,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6); // + CloudWatchRetentionInDays
+      expect(parameterCount).toBe(7); // + CloudWatchRetentionInDays + NumberOfAZs
     });
   });
 
