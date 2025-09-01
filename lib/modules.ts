@@ -1,14 +1,14 @@
-import { Construct } from 'constructs';
-import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { Construct } from 'constructs';
 
 export interface ModuleConfig {
   environment: string;
@@ -28,9 +28,8 @@ export class S3Module extends Construct {
     super(scope, id);
 
     // Lowercase, hyphenated, globally unique
-    const bucketName = `${config.projectName}-${config.environment}-${
-      config.nameSuffix
-    }-bucket`.toLowerCase();
+    const bucketName = `${config.projectName}-${config.environment}-${config.nameSuffix
+      }-bucket`.toLowerCase();
 
     this.bucket = new S3Bucket(this, 'bucket', {
       bucket: bucketName,
