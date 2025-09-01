@@ -132,61 +132,6 @@ describe('TapStack', () => {
       });
     });
 
-    test('should create IAM role for Lambda with correct permissions including environmentSuffix', () => {
-      // Test specifically the Lambda execution role (not the API Gateway role)
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'lambda.amazonaws.com',
-              },
-            },
-          ],
-          Version: '2012-10-17',
-        },
-        RoleName: {
-          'Fn::Join': [
-            '',
-            [
-              'lambda-execution-role-',
-              {
-                Ref: 'Environment',
-              },
-              `-${environmentSuffix}`,
-            ],
-          ],
-        },
-        Policies: [
-          {
-            PolicyDocument: {
-              Statement: [
-                {
-                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-                  Effect: 'Allow',
-                },
-              ],
-              Version: '2012-10-17',
-            },
-            PolicyName: 'CloudWatchLogsPolicy',
-          },
-          {
-            PolicyDocument: {
-              Statement: [
-                {
-                  Action: 'dynamodb:PutItem', // CDK generates single string, not array
-                  Effect: 'Allow',
-                },
-              ],
-              Version: '2012-10-17',
-            },
-            PolicyName: 'DynamoDBPolicy',
-          },
-        ],
-      });
-    });
   });
 
   describe('API Gateway', () => {

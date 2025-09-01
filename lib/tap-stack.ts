@@ -82,7 +82,6 @@ export class TapStack extends cdk.Stack {
     // IAM Role for Lambda (Principle of Least Privilege)
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      roleName: `lambda-execution-role-${environmentParam.valueAsString}-${environmentSuffix}`,
       inlinePolicies: {
         CloudWatchLogsPolicy: new iam.PolicyDocument({
           statements: [
