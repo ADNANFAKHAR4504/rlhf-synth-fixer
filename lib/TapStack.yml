@@ -74,6 +74,7 @@ Parameters:
   GitHubToken:
     Type: String
     NoEcho: true
+    Default: "PLACEHOLDER_TOKEN_CHANGE_ME"
     Description: "GitHub personal access token for repository access"
     ConstraintDescription: "Must be a valid GitHub personal access token"
 
