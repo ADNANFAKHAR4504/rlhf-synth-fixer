@@ -8,6 +8,11 @@ LOG_GROUPS=(
   "/aws/ec2/tap-log-group-us-west-2-pr2472"
 )
 
+DB_INSTANCES=(
+  "tap-database-us-east-1-pr2472"
+  "tap-database-us-west-2-pr2472"
+)
+
 DB_SUBNET_GROUPS=(
   "tap-db-subnet-group-us-east-1-pr2472"
   "tap-db-subnet-group-us-west-2-pr2472"
@@ -39,7 +44,29 @@ for log_group in "${LOG_GROUPS[@]}"; do
   fi
 done
 
-# Delete RDS Subnet Groups
+# Delete RDS Database Instances first
+echo "Deleting RDS Database Instances..."
+for db_instance in "${DB_INSTANCES[@]}"; do
+  if aws rds describe-db-instances --db-instance-identifier "$db_instance" &>/dev/null; then
+    echo "Deleting database instance: $db_instance"
+    aws rds delete-db-instance --db-instance-identifier "$db_instance" --skip-final-snapshot
+    echo "Requested delete: $db_instance"
+  else
+    echo "Not found: $db_instance"
+  fi
+done
+
+# Wait for RDS instances to be deleted
+echo "Waiting for RDS instances to be deleted..."
+for db_instance in "${DB_INSTANCES[@]}"; do
+  if aws rds describe-db-instances --db-instance-identifier "$db_instance" &>/dev/null; then
+    echo "Waiting for $db_instance to be deleted..."
+    aws rds wait db-instance-deleted --db-instance-identifier "$db_instance"
+    echo "Deleted: $db_instance"
+  fi
+done
+
+# Delete RDS Subnet Groups (after databases are deleted)
 echo "Deleting RDS Subnet Groups..."
 for subnet_group in "${DB_SUBNET_GROUPS[@]}"; do
   if aws rds describe-db-subnet-groups --db-subnet-group-name "$subnet_group" &>/dev/null; then
