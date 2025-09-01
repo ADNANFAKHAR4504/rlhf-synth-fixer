@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-function getAlbServiceAccountId(region: string): string {
+export function getAlbServiceAccountId(region: string): string {
   const albAccounts: Record<string, string> = {
     'us-east-1': '127311923021',
     'us-east-2': '033677994240',
@@ -839,5 +839,41 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       },
       { provider: this.provider }
     );
+  }
+
+  public get outputs() {
+    return {
+      // VPC and Networking
+      vpcId: this.vpc.id,
+      VPCId: this.vpc.id, // Alternative naming for compatibility
+      publicSubnetIds: this.publicSubnets.map(subnet => subnet.id),
+      privateSubnetIds: this.privateSubnets.map(subnet => subnet.id),
+      internetGatewayId: this.internetGateway.id,
+      natGatewayIds: this.natGateways.map(nat => nat.id),
+
+      // Load Balancer
+      loadBalancerArn: this.loadBalancer.arn,
+      loadBalancerDnsName: this.loadBalancer.dnsName,
+      albDnsName: this.loadBalancer.dnsName, // Alternative naming for compatibility
+      LoadBalancerDNS: this.loadBalancer.dnsName, // Alternative naming for compatibility
+
+      // Auto Scaling Group
+      autoScalingGroupId: this.autoScalingGroup.id,
+      asgId: this.autoScalingGroup.id, // Alternative naming for compatibility
+      AutoScalingGroupId: this.autoScalingGroup.id, // Alternative naming for compatibility
+
+      // S3 Bucket
+      s3BucketName: this.s3Bucket.id,
+      S3BucketName: this.s3Bucket.id, // Alternative naming for compatibility
+      s3BucketArn: this.s3Bucket.arn,
+
+      // CloudFront Distribution
+      cloudFrontDistributionId: this.cloudFrontDistribution.id,
+      cloudfrontDistributionId: this.cloudFrontDistribution.id, // Alternative naming for compatibility
+      CloudFrontDistributionId: this.cloudFrontDistribution.id, // Alternative naming for compatibility
+      cloudFrontDistributionDomainName: this.cloudFrontDistribution.domainName,
+      cloudfrontDomainName: this.cloudFrontDistribution.domainName, // Alternative naming for compatibility
+      CloudFrontDomainName: this.cloudFrontDistribution.domainName, // Alternative naming for compatibility
+    };
   }
 }

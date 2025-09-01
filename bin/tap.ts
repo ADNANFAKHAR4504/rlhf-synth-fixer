@@ -35,11 +35,52 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
+const stack = new TapStack('pulumi-infra', {
   tags: defaultTags,
   environmentSuffix: environmentSuffix,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export stack outputs for use by other stacks or external systems
+// VPC and Networking outputs
+export const vpcId = stack.infrastructure.vpc.id;
+export const VPCId = stack.infrastructure.vpc.id;
+export const publicSubnetIds = stack.infrastructure.publicSubnets.map(
+  subnet => subnet.id
+);
+export const privateSubnetIds = stack.infrastructure.privateSubnets.map(
+  subnet => subnet.id
+);
+export const internetGatewayId = stack.infrastructure.internetGateway.id;
+export const natGatewayIds = stack.infrastructure.natGateways.map(
+  nat => nat.id
+);
+
+// Load Balancer outputs
+export const loadBalancerArn = stack.infrastructure.loadBalancer.arn;
+export const loadBalancerDnsName = stack.infrastructure.loadBalancer.dnsName;
+export const albDnsName = stack.infrastructure.loadBalancer.dnsName;
+export const LoadBalancerDNS = stack.infrastructure.loadBalancer.dnsName;
+
+// Auto Scaling Group outputs
+export const autoScalingGroupId = stack.infrastructure.autoScalingGroup.id;
+export const asgId = stack.infrastructure.autoScalingGroup.id;
+export const AutoScalingGroupId = stack.infrastructure.autoScalingGroup.id;
+
+// S3 Bucket outputs
+export const s3BucketName = stack.infrastructure.s3Bucket.id;
+export const S3BucketName = stack.infrastructure.s3Bucket.id;
+export const s3BucketArn = stack.infrastructure.s3Bucket.arn;
+
+// CloudFront Distribution outputs
+export const cloudFrontDistributionId =
+  stack.infrastructure.cloudFrontDistribution.id;
+export const cloudfrontDistributionId =
+  stack.infrastructure.cloudFrontDistribution.id;
+export const CloudFrontDistributionId =
+  stack.infrastructure.cloudFrontDistribution.id;
+export const cloudFrontDistributionDomainName =
+  stack.infrastructure.cloudFrontDistribution.domainName;
+export const cloudfrontDomainName =
+  stack.infrastructure.cloudFrontDistribution.domainName;
+export const CloudFrontDomainName =
+  stack.infrastructure.cloudFrontDistribution.domainName;

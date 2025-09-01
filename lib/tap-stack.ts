@@ -42,8 +42,7 @@ export interface TapStackArgs {
  * - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
  */
 export class TapStack extends pulumi.ComponentResource {
-  // Example of a public property for a nested resource's output.
-  // public readonly table: pulumi.Output<string>;
+  public readonly infrastructure: WebAppInfrastructure;
 
   /**
    * Creates a new TapStack component.
@@ -84,11 +83,52 @@ export class TapStack extends pulumi.ComponentResource {
     // Make outputs from your nested components available as outputs of this main stack.
     // this.table = dynamoDBStack.table;
 
-    new WebAppInfrastructure('ap-south-1', environmentSuffix, tags);
+    this.infrastructure = new WebAppInfrastructure(
+      'ap-south-1',
+      environmentSuffix,
+      tags
+    );
 
     // Register the outputs of this component.
     this.registerOutputs({
-      // infrastructure: this.infrastructure,
+      // VPC and Networking outputs
+      vpcId: this.infrastructure.vpc.id,
+      VPCId: this.infrastructure.vpc.id,
+      publicSubnetIds: this.infrastructure.publicSubnets.map(
+        subnet => subnet.id
+      ),
+      privateSubnetIds: this.infrastructure.privateSubnets.map(
+        subnet => subnet.id
+      ),
+      internetGatewayId: this.infrastructure.internetGateway.id,
+      natGatewayIds: this.infrastructure.natGateways.map(nat => nat.id),
+
+      // Load Balancer outputs
+      loadBalancerArn: this.infrastructure.loadBalancer.arn,
+      loadBalancerDnsName: this.infrastructure.loadBalancer.dnsName,
+      albDnsName: this.infrastructure.loadBalancer.dnsName,
+      LoadBalancerDNS: this.infrastructure.loadBalancer.dnsName,
+
+      // Auto Scaling Group outputs
+      autoScalingGroupId: this.infrastructure.autoScalingGroup.id,
+      asgId: this.infrastructure.autoScalingGroup.id,
+      AutoScalingGroupId: this.infrastructure.autoScalingGroup.id,
+
+      // S3 Bucket outputs
+      s3BucketName: this.infrastructure.s3Bucket.id,
+      S3BucketName: this.infrastructure.s3Bucket.id,
+      s3BucketArn: this.infrastructure.s3Bucket.arn,
+
+      // CloudFront Distribution outputs
+      cloudFrontDistributionId: this.infrastructure.cloudFrontDistribution.id,
+      cloudfrontDistributionId: this.infrastructure.cloudFrontDistribution.id,
+      CloudFrontDistributionId: this.infrastructure.cloudFrontDistribution.id,
+      cloudFrontDistributionDomainName:
+        this.infrastructure.cloudFrontDistribution.domainName,
+      cloudfrontDomainName:
+        this.infrastructure.cloudFrontDistribution.domainName,
+      CloudFrontDomainName:
+        this.infrastructure.cloudFrontDistribution.domainName,
     });
   }
 }
