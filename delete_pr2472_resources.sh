@@ -125,7 +125,7 @@ if aws autoscaling describe-auto-scaling-groups --region us-east-1 --auto-scalin
   echo "Waiting for instances to terminate..."
   sleep 10
   aws autoscaling delete-auto-scaling-group --region us-east-1 --auto-scaling-group-name "tap-asg-us-east-1-pr2472" --force-delete
-  echo "Deleted: tap-asg-us-east-1-pr2472"
+  echo "Requested delete: tap-asg-us-east-1-pr2472"
 else
   echo "Not found: tap-asg-us-east-1-pr2472"
 fi
@@ -137,10 +137,30 @@ if aws autoscaling describe-auto-scaling-groups --region us-west-2 --auto-scalin
   echo "Waiting for instances to terminate..."
   sleep 10
   aws autoscaling delete-auto-scaling-group --region us-west-2 --auto-scaling-group-name "tap-asg-us-west-2-pr2472" --force-delete
-  echo "Deleted: tap-asg-us-west-2-pr2472"
+  echo "Requested delete: tap-asg-us-west-2-pr2472"
 else
   echo "Not found: tap-asg-us-west-2-pr2472"
 fi
+
+# Wait for ASG deletions to complete
+echo "Waiting for Auto Scaling Groups to be completely deleted..."
+while true; do
+  asg_east=$(aws autoscaling describe-auto-scaling-groups --region us-east-1 --auto-scaling-group-names "tap-asg-us-east-1-pr2472" --query 'AutoScalingGroups[0].AutoScalingGroupName' --output text 2>/dev/null || echo "None")
+  asg_west=$(aws autoscaling describe-auto-scaling-groups --region us-west-2 --auto-scaling-group-names "tap-asg-us-west-2-pr2472" --query 'AutoScalingGroups[0].AutoScalingGroupName' --output text 2>/dev/null || echo "None")
+  
+  if [[ "$asg_east" == "None" && "$asg_west" == "None" ]]; then
+    echo "Both ASGs have been completely deleted"
+    break
+  else
+    if [[ "$asg_east" != "None" ]]; then
+      echo "Still waiting for tap-asg-us-east-1-pr2472 to finish deletion..."
+    fi
+    if [[ "$asg_west" != "None" ]]; then
+      echo "Still waiting for tap-asg-us-west-2-pr2472 to finish deletion..."
+    fi
+    sleep 30
+  fi
+done
 
 # Delete Launch Templates (after ASGs are deleted)
 echo "Deleting EC2 Launch Templates..."
