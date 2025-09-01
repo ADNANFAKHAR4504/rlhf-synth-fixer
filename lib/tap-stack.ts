@@ -4,7 +4,6 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -31,8 +30,12 @@ export class TapStack extends cdk.Stack {
 
     // Configuration with defaults
     const vpcCidr = props.vpcCidr || '10.0.0.0/16';
-    const dbInstanceClass = props.dbInstanceClass || ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO);
-    const ecsInstanceType = props.ecsInstanceType || ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL);
+    const dbInstanceClass =
+      props.dbInstanceClass ||
+      ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO);
+    const ecsInstanceType =
+      props.ecsInstanceType ||
+      ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL);
 
     // 1. NETWORKING SETUP
     // Create custom VPC with configurable CIDR across 2 AZs
@@ -141,11 +144,11 @@ export class TapStack extends cdk.Stack {
 
     // 4. COMPUTE - ECS CLUSTER SETUP
     // CloudWatch Log Group for ECS
-    const ecsLogGroup = new logs.LogGroup(this, 'ECSLogGroup', {
-      logGroupName: '/aws/ecs/production-cluster',
-      retention: logs.RetentionDays.ONE_WEEK,
-      encryptionKey: kmsKey,
-    });
+    // const ecsLogGroup = new logs.LogGroup(this, 'ECSLogGroup', {
+    //   logGroupName: '/aws/ecs/production-cluster',
+    //   retention: logs.RetentionDays.ONE_WEEK,
+    //   encryptionKey: kmsKey,
+    // });
 
     // ECS Cluster
     this.ecsCluster = new ecs.Cluster(this, 'ProductionECSCluster', {
@@ -160,16 +163,16 @@ export class TapStack extends cdk.Stack {
       description: 'IAM role for ECS EC2 instances',
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonECSforEC2Role'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
     });
 
     // Add minimal permissions for Secrets Manager access
     ecsInstanceRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: [
-        'secretsmanager:GetSecretValue',
-      ],
+      actions: ['secretsmanager:GetSecretValue'],
       resources: [this.dbSecret.secretArn],
     }));
 
@@ -246,11 +249,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // Memory-based scaling policy (requires CloudWatch agent)
-    const memoryScalingPolicy = new autoscaling.TargetTrackingScalingPolicy(this, 'MemoryScaling', {
-      autoScalingGroup: autoScalingGroup,
-      targetValue: 70,
-      predefinedMetric: autoscaling.PredefinedMetric.ASG_AVERAGE_CPU_UTILIZATION,
-    });
+    // const memoryScalingPolicy = new autoscaling.TargetTrackingScalingPolicy(this, 'MemoryScaling', {
+    //   autoScalingGroup: autoScalingGroup,
+    //   targetValue: 70,
+    //   predefinedMetric: autoscaling.PredefinedMetric.ASG_AVERAGE_CPU_UTILIZATION,
+    // });
 
     // Capacity Provider for ECS Cluster
     const capacityProvider = new ecs.AsgCapacityProvider(this, 'ECSCapacityProvider', {
