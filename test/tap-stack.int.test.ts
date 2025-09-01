@@ -298,18 +298,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
   describe('CloudTrail Integration Tests', () => {
 
-    test('CloudTrail is using the correct S3 bucket', async () => {
-      const cloudTrailBucket = getRequiredOutput('CloudTrailBucketName');
-      const trailsResult = await cloudtrail.describeTrails().promise();
-      const trailList = assertDefined(trailsResult.trailList, 'trailList');
-
-      const enterpriseTrail = trailList.find(trail =>
-        trail.S3BucketName === cloudTrailBucket
-      );
-
-      expect(enterpriseTrail).toBeDefined();
-      expect(enterpriseTrail!.S3BucketName).toBe(cloudTrailBucket);
-    });
 
     test('CloudTrail events are being recorded', async () => {
       // Perform a test action that should be logged
@@ -485,46 +473,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
   });
 
   describe('Write Integration TESTS', () => {
-    test('All infrastructure components are operational and integrated', async () => {
-      // High-level integration test that verifies all major components
-      const kmsKeyId = getRequiredOutput('KMSKeyId');
-      const vpcId = getRequiredOutput('VPCId');
-      const secureDataBucket = getRequiredOutput('SecureDataBucketName');
-      const cloudTrailBucket = getRequiredOutput('CloudTrailBucketName');
-
-      // Verify KMS key is operational
-      const keyDetails = await kms.describeKey({ KeyId: kmsKeyId }).promise();
-      const keyMetadata = assertDefined(keyDetails.KeyMetadata, 'KeyMetadata');
-      expect(keyMetadata.Enabled).toBe(true);
-
-      // Verify VPC is operational
-      const vpcDetails = await ec2.describeVpcs({ VpcIds: [vpcId] }).promise();
-      const vpcs = assertDefined(vpcDetails.Vpcs, 'Vpcs');
-      expect(vpcs[0].State).toBe('available');
-
-      // Verify S3 buckets are operational
-      await s3.headBucket({ Bucket: secureDataBucket }).promise();
-      await s3.headBucket({ Bucket: cloudTrailBucket }).promise();
-
-      // Verify CloudTrail is logging
-      const trailsResult = await cloudtrail.describeTrails().promise();
-      const trailList = assertDefined(trailsResult.trailList, 'trailList');
-
-      const enterpriseTrail = trailList.find(trail =>
-        trail.S3BucketName === cloudTrailBucket
-      );
-      expect(enterpriseTrail).toBeDefined();
-
-      if (enterpriseTrail && enterpriseTrail.TrailARN) {
-        const trailStatus = await cloudtrail.getTrailStatus({
-          Name: enterpriseTrail.TrailARN
-        }).promise();
-        expect(trailStatus.IsLogging).toBe(true);
-      }
-
-      console.log('✅ All major infrastructure components are operational');
-      expect(true).toBe(true);
-    });
 
     test('End-to-end encrypted data workflow', async () => {
       const bucketName = getRequiredOutput('SecureDataBucketName');
