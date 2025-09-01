@@ -438,7 +438,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [3, !Cidr [!Ref VpcCIDR, 6, 8]]
       MapPublicIpOnLaunch: false
       Tags:
