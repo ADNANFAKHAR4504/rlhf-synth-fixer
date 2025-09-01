@@ -396,16 +396,28 @@
                             }
                         },
                         {
+                            "Sid": "AllowCloudTrailAclCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "LoggingBucket",
+                                    "Arn"
+                                ]
+                            }
+                        },
+                        {
                             "Sid": "AllowCloudTrailWrite",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
-                            "Action": [
-                                "s3:PutObject"
-                            ],
+                            "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${LoggingBucket.Arn}/AWSLogs/${AWS::AccountId}/CloudTrail/*"
+                                "Fn::Sub": "${LoggingBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -414,12 +426,12 @@
                             }
                         },
                         {
-                            "Sid": "AllowCloudTrailAclCheck",
+                            "Sid": "AllowCloudTrailLocationCheck",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
                             },
-                            "Action": "s3:GetBucketAcl",
+                            "Action": "s3:GetBucketLocation",
                             "Resource": {
                                 "Fn::GetAtt": [
                                     "LoggingBucket",
