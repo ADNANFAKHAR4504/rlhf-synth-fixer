@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"github.com/aws/constructs-go/constructs/v10"
 	"github.com/aws/jsii-runtime-go"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/acmcertificate"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/acmcertificatevalidation"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/autoscalinggroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudtrail"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchloggroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchmetricalarm"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsavailabilityzones"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsroute53zone"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbinstance"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbsubnetgroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
@@ -15,16 +20,29 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrole"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/iamrolepolicyattachment"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/internetgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/kmskey"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/launchtemplate"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lb"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lblistener"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/lbtargetgroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/natgateway"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/networkacl"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/networkaclassociation"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/networkaclrule"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53healthcheck"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53hostedzone"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53record"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketencryption"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpublicaccessblock"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/secretsmanagersecret"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/secretsmanagersecretversion"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/ssmparameter"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/subnet"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/vpc"
 	"github.com/hashicorp/terraform-cdk-go/cdktf"
@@ -41,11 +59,18 @@ type InfrastructureStack struct {
 }
 
 type CompleteInfrastructure struct {
-	VPC          vpc.Vpc
-	LoadBalancer lb.Lb
-	Database     dbinstance.DbInstance
-	WebASG       autoscalinggroup.AutoscalingGroup
-	AppASG       autoscalinggroup.AutoscalingGroup
+	VPC                vpc.Vpc
+	LoadBalancer       lb.Lb
+	Database           dbinstance.DbInstance
+	ReadReplica        dbinstance.DbInstance
+	WebASG             autoscalinggroup.AutoscalingGroup
+	AppASG             autoscalinggroup.AutoscalingGroup
+	S3Bucket           s3bucket.S3Bucket
+	KMSKey             kmskey.KmsKey
+	DatabaseSecret     secretsmanagersecret.SecretsManagerSecret
+	HostedZone         route53hostedzone.Route53HostedZone
+	Certificate        acmcertificate.AcmCertificate
+	HealthCheck        route53healthcheck.Route53HealthCheck
 }
 
 // Helper function to merge tags
@@ -76,10 +101,100 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 
 	// Configuration
 	vpcCidr := "10.0.0.0/16"
+	domainName := fmt.Sprintf("migration-%s.example.com", region) // Replace with your domain
 	companyIpRanges := []*string{
 		jsii.String("203.0.113.0/24"),  // Company office IP range
 		jsii.String("198.51.100.0/24"), // Company VPN range
 	}
+
+	// Create KMS Key for encryption
+	kmsKey := kmskey.NewKmsKey(scope, jsii.String("migration-kms-key"), &kmskey.KmsKeyConfig{
+		Description: jsii.String(fmt.Sprintf("KMS key for migration resources in %s", region)),
+		Policy: jsii.String(`{
+			"Version": "2012-10-17",
+			"Statement": [
+				{
+					"Sid": "Enable IAM User Permissions",
+					"Effect": "Allow",
+					"Principal": {
+						"AWS": "arn:aws:iam::*:root"
+					},
+					"Action": "kms:*",
+					"Resource": "*"
+				},
+				{
+					"Sid": "Allow CloudTrail to encrypt logs",
+					"Effect": "Allow",
+					"Principal": {
+						"Service": "cloudtrail.amazonaws.com"
+					},
+					"Action": [
+						"kms:GenerateDataKey*",
+						"kms:DescribeKey"
+					],
+					"Resource": "*"
+				}
+			]
+		}`),
+		Tags: tags,
+	})
+
+	// Create S3 bucket for CloudTrail and application data
+	s3Bucket := s3bucket.NewS3Bucket(scope, jsii.String("migration-s3-bucket"), &s3bucket.S3BucketConfig{
+		Bucket: jsii.String(fmt.Sprintf("migration-bucket-%s-%s-%d", region, envSuffix, 12345)), // Add random suffix in production
+		Tags:   tags,
+	})
+
+	// Configure S3 bucket encryption
+	s3bucketencryption.NewS3BucketEncryption(scope, jsii.String("s3-bucket-encryption"), &s3bucketencryption.S3BucketEncryptionConfig{
+		Bucket: s3Bucket.Id(),
+		ServerSideEncryptionConfiguration: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfiguration{
+			Rule: &[]*s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRule{
+				{
+					ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
+						KmsMasterKeyId: kmsKey.Arn(),
+						SseAlgorithm:   jsii.String("aws:kms"),
+					},
+				},
+			},
+		},
+	})
+
+	// Block public access to S3 bucket
+	s3bucketpublicaccessblock.NewS3BucketPublicAccessBlock(scope, jsii.String("s3-bucket-pab"), &s3bucketpublicaccessblock.S3BucketPublicAccessBlockConfig{
+		Bucket:                s3Bucket.Id(),
+		BlockPublicAcls:       jsii.Bool(true),
+		BlockPublicPolicy:     jsii.Bool(true),
+		IgnorePublicAcls:      jsii.Bool(true),
+		RestrictPublicBuckets: jsii.Bool(true),
+	})
+
+	// Create database password in Secrets Manager
+	dbSecret := secretsmanagersecret.NewSecretsManagerSecret(scope, jsii.String("db-secret"), &secretsmanagersecret.SecretsManagerSecretConfig{
+		Name:        jsii.String(fmt.Sprintf("migration/database/%s-%s", region, envSuffix)),
+		Description: jsii.String("Database master password for migration infrastructure"),
+		Tags:        tags,
+	})
+
+	secretsmanagersecretversion.NewSecretsManagerSecretVersion(scope, jsii.String("db-secret-version"), &secretsmanagersecretversion.SecretsManagerSecretVersionConfig{
+		SecretId:     dbSecret.Id(),
+		SecretString: jsii.String(`{"password":"TempPassword123#"}`),
+	})
+
+	// Store configuration in Parameter Store
+	ssmparameter.NewSsmParameter(scope, jsii.String("vpc-cidr-param"), &ssmparameter.SsmParameterConfig{
+		Name:  jsii.String(fmt.Sprintf("/migration/%s/vpc-cidr", region)),
+		Type:  jsii.String("String"),
+		Value: jsii.String(vpcCidr),
+		Tags:  tags,
+	})
+
+	ssmparameter.NewSsmParameter(scope, jsii.String("domain-param"), &ssmparameter.SsmParameterConfig{
+		Name:  jsii.String(fmt.Sprintf("/migration/%s/domain", region)),
+		Type:  jsii.String("String"),
+		Value: jsii.String(domainName),
+		Tags:  tags,
+	})
 
 	// Get availability zones
 	azs := dataawsavailabilityzones.NewDataAwsAvailabilityZones(scope, jsii.String("azs"), &dataawsavailabilityzones.DataAwsAvailabilityZonesConfig{
@@ -102,6 +217,89 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		Tags: mergeTags(tags, &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("migration-igw-%s-%s", region, envSuffix)),
 		}),
+	})
+
+	// Create Network ACLs for additional security
+	publicNetworkAcl := networkacl.NewNetworkAcl(scope, jsii.String("public-network-acl"), &networkacl.NetworkAclConfig{
+		VpcId: mainVpc.Id(),
+		Tags: mergeTags(tags, &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("public-network-acl-%s-%s", region, envSuffix)),
+		}),
+	})
+
+	// Public Network ACL Rules
+	networkaclrule.NewNetworkAclRule(scope, jsii.String("public-nacl-inbound-http"), &networkaclrule.NetworkAclRuleConfig{
+		NetworkAclId: publicNetworkAcl.Id(),
+		RuleNumber:   jsii.Number(100),
+		Protocol:     jsii.String("tcp"),
+		RuleAction:   jsii.String("allow"),
+		FromPort:     jsii.Number(80),
+		ToPort:       jsii.Number(80),
+		CidrBlock:    jsii.String("0.0.0.0/0"),
+	})
+
+	networkaclrule.NewNetworkAclRule(scope, jsii.String("public-nacl-inbound-https"), &networkaclrule.NetworkAclRuleConfig{
+		NetworkAclId: publicNetworkAcl.Id(),
+		RuleNumber:   jsii.Number(110),
+		Protocol:     jsii.String("tcp"),
+		RuleAction:   jsii.String("allow"),
+		FromPort:     jsii.Number(443),
+		ToPort:       jsii.Number(443),
+		CidrBlock:    jsii.String("0.0.0.0/0"),
+	})
+
+	networkaclrule.NewNetworkAclRule(scope, jsii.String("public-nacl-inbound-ephemeral"), &networkaclrule.NetworkAclRuleConfig{
+		NetworkAclId: publicNetworkAcl.Id(),
+		RuleNumber:   jsii.Number(120),
+		Protocol:     jsii.String("tcp"),
+		RuleAction:   jsii.String("allow"),
+		FromPort:     jsii.Number(1024),
+		ToPort:       jsii.Number(65535),
+		CidrBlock:    jsii.String("0.0.0.0/0"),
+	})
+
+	networkaclrule.NewNetworkAclRule(scope, jsii.String("public-nacl-outbound-all"), &networkaclrule.NetworkAclRuleConfig{
+		NetworkAclId: publicNetworkAcl.Id(),
+		RuleNumber:   jsii.Number(100),
+		Protocol:     jsii.String("-1"),
+		RuleAction:   jsii.String("allow"),
+		CidrBlock:    jsii.String("0.0.0.0/0"),
+		Egress:       jsii.Bool(true),
+	})
+
+	privateNetworkAcl := networkacl.NewNetworkAcl(scope, jsii.String("private-network-acl"), &networkacl.NetworkAclConfig{
+		VpcId: mainVpc.Id(),
+		Tags: mergeTags(tags, &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("private-network-acl-%s-%s", region, envSuffix)),
+		}),
+	})
+
+	// Private Network ACL Rules - Allow from VPC CIDR
+	networkaclrule.NewNetworkAclRule(scope, jsii.String("private-nacl-inbound-vpc"), &networkaclrule.NetworkAclRuleConfig{
+		NetworkAclId: privateNetworkAcl.Id(),
+		RuleNumber:   jsii.Number(100),
+		Protocol:     jsii.String("-1"),
+		RuleAction:   jsii.String("allow"),
+		CidrBlock:    jsii.String(vpcCidr),
+	})
+
+	networkaclrule.NewNetworkAclRule(scope, jsii.String("private-nacl-inbound-ephemeral"), &networkaclrule.NetworkAclRuleConfig{
+		NetworkAclId: privateNetworkAcl.Id(),
+		RuleNumber:   jsii.Number(110),
+		Protocol:     jsii.String("tcp"),
+		RuleAction:   jsii.String("allow"),
+		FromPort:     jsii.Number(1024),
+		ToPort:       jsii.Number(65535),
+		CidrBlock:    jsii.String("0.0.0.0/0"),
+	})
+
+	networkaclrule.NewNetworkAclRule(scope, jsii.String("private-nacl-outbound-all"), &networkaclrule.NetworkAclRuleConfig{
+		NetworkAclId: privateNetworkAcl.Id(),
+		RuleNumber:   jsii.Number(100),
+		Protocol:     jsii.String("-1"),
+		RuleAction:   jsii.String("allow"),
+		CidrBlock:    jsii.String("0.0.0.0/0"),
+		Egress:       jsii.Bool(true),
 	})
 
 	// Create subnets
@@ -214,6 +412,27 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		routetableassociation.NewRouteTableAssociation(scope, jsii.String(fmt.Sprintf("public-rta-%d", i)), &routetableassociation.RouteTableAssociationConfig{
 			SubnetId:     pubSubnet.Id(),
 			RouteTableId: publicRouteTable.Id(),
+		})
+
+		// Associate public subnets with public Network ACL
+		networkaclassociation.NewNetworkAclAssociation(scope, jsii.String(fmt.Sprintf("public-nacl-assoc-%d", i)), &networkaclassociation.NetworkAclAssociationConfig{
+			NetworkAclId: publicNetworkAcl.Id(),
+			SubnetId:     pubSubnet.Id(),
+		})
+	}
+
+	// Associate private and database subnets with private Network ACL
+	for i, privSubnet := range privateSubnets {
+		networkaclassociation.NewNetworkAclAssociation(scope, jsii.String(fmt.Sprintf("private-nacl-assoc-%d", i)), &networkaclassociation.NetworkAclAssociationConfig{
+			NetworkAclId: privateNetworkAcl.Id(),
+			SubnetId:     privSubnet.Id(),
+		})
+	}
+
+	for i, dbSubnet := range databaseSubnets {
+		networkaclassociation.NewNetworkAclAssociation(scope, jsii.String(fmt.Sprintf("database-nacl-assoc-%d", i)), &networkaclassociation.NetworkAclAssociationConfig{
+			NetworkAclId: privateNetworkAcl.Id(),
+			SubnetId:     dbSubnet.Id(),
 		})
 	}
 
@@ -394,7 +613,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		}),
 	})
 
-	// RDS Database
+	// RDS Database with Secrets Manager and KMS encryption
 	database := dbinstance.NewDbInstance(scope, jsii.String("primary-database"), &dbinstance.DbInstanceConfig{
 		Identifier:       jsii.String(fmt.Sprintf("migration-primary-db-%s-%s", region, envSuffix)),
 		Engine:           jsii.String("mysql"),
@@ -403,11 +622,12 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		AllocatedStorage: jsii.Number(20),
 		StorageType:      jsii.String("gp2"),
 		StorageEncrypted: jsii.Bool(true),
-		// KmsKeyId temporarily removed
+		KmsKeyId:         kmsKey.Arn(),
 
-		DbName:   jsii.String("migrationdb"),
-		Username: jsii.String("admin"),
-		Password: jsii.String("TempPassword123#"),
+		DbName:                     jsii.String("migrationdb"),
+		Username:                   jsii.String("admin"),
+		ManageMasterUserPassword:   jsii.Bool(true),
+		MasterUserSecretKmsKeyId:   kmsKey.Arn(),
 
 		VpcSecurityGroupIds: &[]*string{dbSG.Id()},
 		DbSubnetGroupName:   dbSubnetGroup.Name(),
@@ -426,6 +646,24 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 			"Name": jsii.String(fmt.Sprintf("primary-database-%s-%s", region, envSuffix)),
 		}),
 	})
+
+	// Create read replica for cross-region disaster recovery (will be created in other region)
+	var readReplica dbinstance.DbInstance
+	if region == "us-west-2" {
+		// Create read replica pointing to us-east-1 primary
+		readReplica = dbinstance.NewDbInstance(scope, jsii.String("read-replica-database"), &dbinstance.DbInstanceConfig{
+			Identifier:               jsii.String(fmt.Sprintf("migration-read-replica-%s-%s", region, envSuffix)),
+			ReplicateSourceDb:        jsii.String(fmt.Sprintf("migration-primary-db-us-east-1-%s", envSuffix)),
+			InstanceClass:            jsii.String("db.t3.micro"),
+			PubliclyAccessible:       jsii.Bool(false),
+			AutoMinorVersionUpgrade:  jsii.Bool(true),
+			StorageEncrypted:         jsii.Bool(true),
+			KmsKeyId:                 kmsKey.Arn(),
+			Tags: mergeTags(tags, &map[string]*string{
+				"Name": jsii.String(fmt.Sprintf("read-replica-database-%s-%s", region, envSuffix)),
+			}),
+		})
+	}
 
 	// Get latest Amazon Linux 2 AMI
 	ami := dataawsami.NewDataAwsAmi(scope, jsii.String("amazon-linux"), &dataawsami.DataAwsAmiConfig{
@@ -484,6 +722,34 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		UserData: cdktf.Fn_Base64encode(cdktf.Fn_RawString(jsii.String(appUserData))),
 	})
 
+	// Create Route 53 Hosted Zone
+	hostedZone := route53hostedzone.NewRoute53HostedZone(scope, jsii.String("hosted-zone"), &route53hostedzone.Route53HostedZoneConfig{
+		Name: jsii.String(domainName),
+		Tags: tags,
+	})
+
+	// Create ACM Certificate
+	certificate := acmcertificate.NewAcmCertificate(scope, jsii.String("ssl-certificate"), &acmcertificate.AcmCertificateConfig{
+		DomainName:       jsii.String(domainName),
+		ValidationMethod: jsii.String("DNS"),
+		SubjectAlternativeNames: &[]*string{
+			jsii.String(fmt.Sprintf("*.%s", domainName)),
+		},
+		Lifecycle: &cdktf.TerraformResourceLifecycle{
+			CreateBeforeDestroy: jsii.Bool(true),
+		},
+		Tags: tags,
+	})
+
+	// DNS validation for ACM certificate
+	certificateValidation := acmcertificatevalidation.NewAcmCertificateValidation(scope, jsii.String("cert-validation"), &acmcertificatevalidation.AcmCertificateValidationConfig{
+		CertificateArn: certificate.Arn(),
+		ValidationRecordFqdns: &[]*string{
+			// This would normally be populated by certificate validation records
+			jsii.String(fmt.Sprintf("_validation.%s", domainName)),
+		},
+	})
+
 	// Application Load Balancer
 	alb := lb.NewLb(scope, jsii.String("application-load-balancer"), &lb.LbConfig{
 		Name:             jsii.String(fmt.Sprintf("migration-alb-%s-%s", region, envSuffix)),
@@ -515,11 +781,30 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		}),
 	})
 
-	// ALB Listener
-	lblistener.NewLbListener(scope, jsii.String("alb-listener"), &lblistener.LbListenerConfig{
+	// HTTP Listener (redirect to HTTPS)
+	lblistener.NewLbListener(scope, jsii.String("alb-listener-http"), &lblistener.LbListenerConfig{
 		LoadBalancerArn: alb.Arn(),
 		Port:            jsii.Number(80),
 		Protocol:        jsii.String("HTTP"),
+		DefaultAction: &[]*lblistener.LbListenerDefaultAction{
+			{
+				Type: jsii.String("redirect"),
+				Redirect: &lblistener.LbListenerDefaultActionRedirect{
+					Port:       jsii.String("443"),
+					Protocol:   jsii.String("HTTPS"),
+					StatusCode: jsii.String("HTTP_301"),
+				},
+			},
+		},
+	})
+
+	// HTTPS Listener
+	lblistener.NewLbListener(scope, jsii.String("alb-listener-https"), &lblistener.LbListenerConfig{
+		LoadBalancerArn: alb.Arn(),
+		Port:            jsii.Number(443),
+		Protocol:        jsii.String("HTTPS"),
+		CertificateArn:  certificate.Arn(),
+		SslPolicy:       jsii.String("ELBSecurityPolicy-TLS-1-2-2017-01"),
 		DefaultAction: &[]*lblistener.LbListenerDefaultAction{
 			{
 				Type:           jsii.String("forward"),
@@ -573,14 +858,136 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		},
 	})
 
+	// Create Route 53 health check for the ALB
+	healthCheck := route53healthcheck.NewRoute53HealthCheck(scope, jsii.String("alb-health-check"), &route53healthcheck.Route53HealthCheckConfig{
+		Fqdn:            alb.DnsName(),
+		Port:            jsii.Number(443),
+		Type:            jsii.String("HTTPS"),
+		ResourcePath:    jsii.String("/"),
+		RequestInterval: jsii.Number(30),
+		FailureThreshold: jsii.Number(3),
+		Tags: mergeTags(tags, &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("alb-health-check-%s-%s", region, envSuffix)),
+		}),
+	})
+
+	// Create Route 53 DNS record
+	route53record.NewRoute53Record(scope, jsii.String("dns-record"), &route53record.Route53RecordConfig{
+		ZoneId: hostedZone.ZoneId(),
+		Name:   jsii.String(domainName),
+		Type:   jsii.String("A"),
+		Alias: &route53record.Route53RecordAlias{
+			Name:                 alb.DnsName(),
+			ZoneId:               alb.ZoneId(),
+			EvaluateTargetHealth: jsii.Bool(true),
+		},
+		SetIdentifier: jsii.String(region),
+		Failover: &route53record.Route53RecordFailover{
+			Type: jsii.String(func() string {
+				if region == "us-east-1" {
+					return "PRIMARY"
+				}
+				return "SECONDARY"
+			}()),
+		},
+		HealthCheckId: healthCheck.Id(),
+	})
+
+	// CloudWatch Alarms for monitoring
+	cloudwatchmetricalarm.NewCloudwatchMetricAlarm(scope, jsii.String("high-cpu-alarm"), &cloudwatchmetricalarm.CloudwatchMetricAlarmConfig{
+		AlarmName:          jsii.String(fmt.Sprintf("high-cpu-alarm-%s-%s", region, envSuffix)),
+		ComparisonOperator: jsii.String("GreaterThanThreshold"),
+		EvaluationPeriods:  jsii.Number(2),
+		MetricName:         jsii.String("CPUUtilization"),
+		Namespace:          jsii.String("AWS/EC2"),
+		Period:             jsii.Number(120),
+		Statistic:          jsii.String("Average"),
+		Threshold:          jsii.Number(80),
+		AlarmDescription:   jsii.String("This metric monitors ec2 cpu utilization"),
+		Dimensions: &map[string]*string{
+			"AutoScalingGroupName": webASG.Name(),
+		},
+		Tags: tags,
+	})
+
+	cloudwatchmetricalarm.NewCloudwatchMetricAlarm(scope, jsii.String("alb-target-response-time"), &cloudwatchmetricalarm.CloudwatchMetricAlarmConfig{
+		AlarmName:          jsii.String(fmt.Sprintf("alb-response-time-%s-%s", region, envSuffix)),
+		ComparisonOperator: jsii.String("GreaterThanThreshold"),
+		EvaluationPeriods:  jsii.Number(2),
+		MetricName:         jsii.String("TargetResponseTime"),
+		Namespace:          jsii.String("AWS/ApplicationELB"),
+		Period:             jsii.Number(300),
+		Statistic:          jsii.String("Average"),
+		Threshold:          jsii.Number(2),
+		AlarmDescription:   jsii.String("This metric monitors ALB target response time"),
+		Dimensions: &map[string]*string{
+			"LoadBalancer": alb.ArnSuffix(),
+		},
+		Tags: tags,
+	})
+
+	cloudwatchmetricalarm.NewCloudwatchMetricAlarm(scope, jsii.String("database-cpu-alarm"), &cloudwatchmetricalarm.CloudwatchMetricAlarmConfig{
+		AlarmName:          jsii.String(fmt.Sprintf("database-cpu-alarm-%s-%s", region, envSuffix)),
+		ComparisonOperator: jsii.String("GreaterThanThreshold"),
+		EvaluationPeriods:  jsii.Number(2),
+		MetricName:         jsii.String("CPUUtilization"),
+		Namespace:          jsii.String("AWS/RDS"),
+		Period:             jsii.Number(300),
+		Statistic:          jsii.String("Average"),
+		Threshold:          jsii.Number(75),
+		AlarmDescription:   jsii.String("This metric monitors RDS CPU utilization"),
+		Dimensions: &map[string]*string{
+			"DBInstanceIdentifier": database.Id(),
+		},
+		Tags: tags,
+	})
+
+	// CloudTrail for API activity monitoring
+	cloudTrailBucket := s3bucket.NewS3Bucket(scope, jsii.String("cloudtrail-bucket"), &s3bucket.S3BucketConfig{
+		Bucket: jsii.String(fmt.Sprintf("migration-cloudtrail-%s-%s-%d", region, envSuffix, 54321)),
+		Tags:   tags,
+	})
+
+	s3bucketencryption.NewS3BucketEncryption(scope, jsii.String("cloudtrail-bucket-encryption"), &s3bucketencryption.S3BucketEncryptionConfig{
+		Bucket: cloudTrailBucket.Id(),
+		ServerSideEncryptionConfiguration: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfiguration{
+			Rule: &[]*s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRule{
+				{
+					ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
+						KmsMasterKeyId: kmsKey.Arn(),
+						SseAlgorithm:   jsii.String("aws:kms"),
+					},
+				},
+			},
+		},
+	})
+
+	cloudtrail.NewCloudtrail(scope, jsii.String("migration-cloudtrail"), &cloudtrail.CloudtrailConfig{
+		Name:           jsii.String(fmt.Sprintf("migration-cloudtrail-%s-%s", region, envSuffix)),
+		S3BucketName:   cloudTrailBucket.Id(),
+		IncludeGlobalServiceEvents: jsii.Bool(true),
+		IsMultiRegionTrail:         jsii.Bool(false), // Per-region trail
+		EnableLogging:              jsii.Bool(true),
+		KmsKeyId:                   kmsKey.Arn(),
+		CloudWatchLogsGroupArn:     jsii.String(fmt.Sprintf("%s:*", fmt.Sprintf("/migration/cloudtrail/%s-%s", region, envSuffix))),
+		Tags: tags,
+	})
+
 	// Target group attachment is handled via TargetGroupArns in the ASG configuration above
 
 	return &CompleteInfrastructure{
-		VPC:          mainVpc,
-		LoadBalancer: alb,
-		Database:     database,
-		WebASG:       webASG,
-		AppASG:       appASG,
+		VPC:                mainVpc,
+		LoadBalancer:       alb,
+		Database:           database,
+		ReadReplica:        readReplica,
+		WebASG:             webASG,
+		AppASG:             appASG,
+		S3Bucket:           s3Bucket,
+		KMSKey:             kmsKey,
+		DatabaseSecret:     dbSecret,
+		HostedZone:         hostedZone,
+		Certificate:        certificate,
+		HealthCheck:        healthCheck,
 	}
 }
 
