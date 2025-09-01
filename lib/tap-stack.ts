@@ -8,23 +8,26 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import { Construct } from 'constructs';
 
-export interface InfraStackProps extends cdk.StackProps {
+export interface TapStackProps extends cdk.StackProps {
+  environmentSuffix: string;
   vpcCidr?: string;
   domainName?: string;
   dbInstanceClass?: ec2.InstanceType;
   ecsInstanceType?: ec2.InstanceType;
+  // Add custom properties here if needed
 }
 
-export class InfraStack extends cdk.Stack {
+export class TapStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly ecsCluster: ecs.Cluster;
   public readonly database: rds.DatabaseInstance;
   public readonly dbSecret: secretsmanager.Secret;
+  public readonly props: TapStackProps;
 
-  constructor(scope: Construct, id: string, props: InfraStackProps = {}) {
+  constructor(scope: cdk.App, id: string, props: TapStackProps) {
     super(scope, id, props);
+    this.props = props;
 
     // Configuration with defaults
     const vpcCidr = props.vpcCidr || '10.0.0.0/16';
