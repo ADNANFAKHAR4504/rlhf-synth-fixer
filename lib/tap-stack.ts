@@ -85,7 +85,9 @@ export class WebAppStack extends cdk.Stack {
 
     const elbServiceAccountId = elbServiceAccountIds[this.region];
     if (!elbServiceAccountId) {
-      throw new Error(`ELB service account ID not found for region: ${this.region}. Please add the service account ID for this region.`);
+      throw new Error(
+        `ELB service account ID not found for region: ${this.region}. Please add the service account ID for this region.`
+      );
     }
 
     const elbServiceAccount = new iam.AccountPrincipal(elbServiceAccountId);
