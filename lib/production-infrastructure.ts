@@ -1118,7 +1118,11 @@ echo "Application server running" >> /var/www/html/index.html
   }
 
   private createWAF() {
-    // WAFv2 WebACL for CloudFront
+    // Create US East 1 provider for CloudFront WAF
+    const usEast1Provider = new aws.Provider('us-east-1-provider', {
+      region: 'us-east-1',
+    });
+
     this.webAcl = new aws.wafv2.WebAcl(
       `${this.environment}-web-acl`,
       {
@@ -1147,24 +1151,6 @@ echo "Application server running" >> /var/www/html/index.html
               sampledRequestsEnabled: true,
             },
           },
-          {
-            name: 'AWSManagedRulesKnownBadInputsRuleSet',
-            priority: 2,
-            overrideAction: {
-              none: {},
-            },
-            statement: {
-              managedRuleGroupStatement: {
-                name: 'AWSManagedRulesKnownBadInputsRuleSet',
-                vendorName: 'AWS',
-              },
-            },
-            visibilityConfig: {
-              cloudwatchMetricsEnabled: true,
-              metricName: 'KnownBadInputsRuleSetMetric',
-              sampledRequestsEnabled: true,
-            },
-          },
         ],
         visibilityConfig: {
           cloudwatchMetricsEnabled: true,
@@ -1176,7 +1162,7 @@ echo "Application server running" >> /var/www/html/index.html
           environment: this.environment,
         },
       },
-      { provider: this.provider }
+      { provider: usEast1Provider }
     );
   }
 
