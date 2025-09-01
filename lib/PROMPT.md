@@ -4,13 +4,17 @@ Create a single Terraform configuration file named tap_stack.tf containing all v
 3. Create auto scaling group using launch template to manage the instances across these two regions for high availability. Minimum 2 instance in each region and maximum 4 instances in each region
 4. Also create ELB for to distribute traffic among the instances.
 5. EC2 instances should use latest amazon linux2 ami. Also Implement security groups to allow only HTTPS and SSH connections from specific CIDRs only.
-6.Implement cross-region RDS read replicas for the application's database in the above regions. Use  random master user name of length 8 without special characters and it should start with alphabet.  and master random password of length 16 with special characters. Make sure not sure use any special characters which aws doesn't allow for RDS. Also Use encryption for both primary and secondary database.  Also snapshot or deletion protection is not needed for RDS.
+6.Implement Individual RDS in each region but with multiple AZ support for respective regions. Use  random master user name of length 8 without special characters and it should start with alphabet.  and master random password of length 16 with special characters. Make sure not to use any special characters which aws doesn't allow for RDS.  Also snapshot or deletion protection is not needed for RDS.
 7. Create Specific security groups  for RDS allowing traffic only from EC2 instances.
-8.  Setup CloudFront distribution for S3 bucket, Create S3 bucket as well with encryption for data at rest with AWS managed key. 
-9. CloudWatch monitoring to maintain healthy service levels and efficient resource utilization.
-10. Tag all resources with 'Environment:Production' .
-11 . Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
-12. Define provider block with each resource to avoid region conflicts
+8. Utilize Amazon S3 for storing static content, enabling cross-region replication to ensure data resilience.
+9. Follow IAM best practices, ensuring all policies are based on the principle of least privilege.
+10 Configure Amazon Route 53 for DNS management that is capable of automatic failover using health checks. Keep the hosted zone as 'taskloadnew.com' as default.
+11. Include AWS Lambda functions for orchestrating backup operations in each region for RDS.
+12. Integrate Amazon CloudWatch to monitor the health of the services with predefined alarms for CPU, memory, and disk I/O metrics.
+13. Set up Amazon SNS to send notifications to the operations team in case of a failover or other critical events.
+14. Tag all resources with 'Environment:Production' .
+15 . Use consistent, descriptive naming conventions defined by locals or input variables for all resources for easier management.
+16. Define provider block with each resource to avoid region conflicts
 Eg
 provider      = aws.us_east_2
 provider      = aws.us_west_1
