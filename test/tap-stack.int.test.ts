@@ -195,8 +195,10 @@ describe('TapStack Integration Tests', () => {
       const command = new ListAliasesCommand({});
       const response = await kmsClient.send(command);
 
+      // The alias is created as alias/infra-encryption-key-<environmentSuffix>-<randomSuffix>
+      const expectedPrefix = `alias/infra-encryption-key-${environmentSuffix}-`;
       const infraAlias = response.Aliases?.find(alias =>
-        alias.AliasName === 'alias/infra-encryption-key'
+        alias.AliasName?.startsWith(expectedPrefix)
       );
       expect(infraAlias).toBeDefined();
     }, TEST_TIMEOUT);
@@ -296,27 +298,28 @@ describe('TapStack Integration Tests', () => {
     }, TEST_TIMEOUT);
 
     test('CloudWatch log group should exist for ECS', async () => {
+      const logGroupName = `/aws/ecs/${outputs.ECSClusterName}`;
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/ecs/production-cluster',
+        logGroupNamePrefix: logGroupName,
       });
-
       const response = await logsClient.send(command);
       expect(response.logGroups).toBeDefined();
-      expect(response.logGroups!.length).toBeGreaterThan(0);
-
-      const logGroup = response.logGroups![0];
-      expect(logGroup.logGroupName).toBe('/aws/ecs/production-cluster');
-      expect(logGroup.retentionInDays).toBe(7);
+      const logGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
+      expect(logGroup).toBeDefined();
+      expect(logGroup!.retentionInDays).toBe(7);
     }, TEST_TIMEOUT);
 
     test('Auto Scaling Group should be configured correctly', async () => {
-      // This test would need the ASG name from outputs or tags
-      // For now, we'll test that ASGs exist in the region
-      const command = new DescribeAutoScalingGroupsCommand({});
-      const response = await autoScalingClient.send(command);
-
-      expect(response.AutoScalingGroups).toBeDefined();
-      // In a real deployment, we'd filter by tags or name to find our specific ASG
+      // Find Auto Scaling Group for ECS cluster by name pattern
+      const asgResponse = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({}));
+      expect(asgResponse.AutoScalingGroups).toBeDefined();
+      const ecsAsg = asgResponse.AutoScalingGroups!.find(
+        asg => asg.AutoScalingGroupName?.includes(outputs.ECSClusterName)
+      );
+      expect(ecsAsg).toBeDefined();
+      expect(ecsAsg!.MinSize).toBe(2);
+      expect(ecsAsg!.MaxSize).toBe(10);
+      expect(ecsAsg!.DesiredCapacity).toBe(2);
     }, TEST_TIMEOUT);
   });
 
@@ -373,27 +376,55 @@ describe('TapStack Integration Tests', () => {
 
   describe('Performance and Monitoring', () => {
     test('should verify monitoring and logging are configured', async () => {
-      // Check CloudWatch log groups exist
+      // Check CloudWatch log group for ECS cluster exists and has correct retention
+      const logGroupName = `/aws/ecs/${outputs.ECSClusterName}`;
       const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/ecs/',
+        logGroupNamePrefix: logGroupName,
       });
-
       const response = await logsClient.send(command);
       expect(response.logGroups).toBeDefined();
-
       const ecsLogGroup = response.logGroups!.find(
-        lg => lg.logGroupName === '/aws/ecs/production-cluster'
+        lg => lg.logGroupName === logGroupName
       );
       expect(ecsLogGroup).toBeDefined();
+      expect(ecsLogGroup!.retentionInDays).toBe(7);
+
+      // Check RDS monitoring interval and performance insights
+      if (!outputs.RDSEndpoint || outputs.RDSEndpoint.startsWith('test-db')) {
+        console.log('⏭️  Skipping RDS monitoring test - no real deployment outputs available');
+        return;
+      }
+      const dbInstanceId = outputs.RDSEndpoint.split('.')[0];
+      const rdsResponse = await rdsClient.send(new DescribeDBInstancesCommand({
+        DBInstanceIdentifier: dbInstanceId,
+      }));
+      expect(rdsResponse.DBInstances).toBeDefined();
+      const dbInstance = rdsResponse.DBInstances![0];
+      expect(dbInstance.MonitoringInterval).toBe(60);
+      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
     }, TEST_TIMEOUT);
 
     test('should validate auto-scaling configuration', async () => {
-      // Test that scaling policies exist
-      const command = new DescribePoliciesCommand({});
-      const response = await autoScalingClient.send(command);
+      // Find Auto Scaling Group for ECS cluster by tag or name pattern
+      const asgResponse = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({}));
+      expect(asgResponse.AutoScalingGroups).toBeDefined();
+      const ecsAsg = asgResponse.AutoScalingGroups!.find(
+        asg => asg.AutoScalingGroupName?.includes(outputs.ECSClusterName)
+      );
+      expect(ecsAsg).toBeDefined();
+      expect(ecsAsg!.MinSize).toBe(2);
+      expect(ecsAsg!.MaxSize).toBe(10);
+      expect(ecsAsg!.DesiredCapacity).toBe(2);
 
-      expect(response.ScalingPolicies).toBeDefined();
-      // In a real deployment, we'd filter by ASG name or tags
+      // Validate scaling policy for CPU utilization
+      const scalingPolicyResponse = await autoScalingClient.send(new DescribePoliciesCommand({
+        AutoScalingGroupName: ecsAsg!.AutoScalingGroupName,
+      }));
+      expect(scalingPolicyResponse.ScalingPolicies).toBeDefined();
+      const cpuPolicy = scalingPolicyResponse.ScalingPolicies!.find(
+        p => p.PolicyType === 'TargetTrackingScaling'
+      );
+      expect(cpuPolicy).toBeDefined();
     }, TEST_TIMEOUT);
   });
 });

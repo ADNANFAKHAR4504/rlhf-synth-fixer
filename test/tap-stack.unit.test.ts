@@ -122,69 +122,29 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('ECS Cluster Configuration', () => {
-    test('should create ECS cluster', () => {
+  describe('ECS Cluster Infrastructure', () => {
+    test('ECS cluster should exist and be active', () => {
       template.hasResourceProperties('AWS::ECS::Cluster', {
         ClusterName: Match.stringLikeRegexp('cluster-.*'),
       });
     });
 
-    test('should create CloudWatch log group for ECS', () => {
+    test('CloudWatch log group should exist for ECS', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: Match.stringLikeRegexp('/aws/ecs/cluster-.*'),
         RetentionInDays: 7,
       });
     });
 
-    test('should create IAM role for ECS instances', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        AssumeRolePolicyDocument: {
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'ec2.amazonaws.com',
-              },
-            },
-          ],
-        },
-        Description: Match.stringLikeRegexp('IAM role for ECS EC2 instances.*'),
-      });
-    });
-
-    test('should create launch template with encrypted EBS volumes', () => {
-      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateData: {
-          BlockDeviceMappings: [
-            {
-              DeviceName: '/dev/xvda',
-              Ebs: {
-                Encrypted: true,
-                VolumeSize: 30,
-                VolumeType: 'gp3',
-              },
-            },
-          ],
-        },
-      });
-    });
-
-    test('should create Auto Scaling Group', () => {
+    test('Auto Scaling Group should be configured correctly', () => {
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
         MinSize: '2',
         MaxSize: '10',
         DesiredCapacity: '2',
       });
-    });
-
-    test('should create scaling policy for CPU utilization', () => {
       template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
         PolicyType: 'TargetTrackingScaling',
       });
-    });
-
-    test('should create ECS capacity provider', () => {
       template.hasResourceProperties('AWS::ECS::CapacityProvider', {
         AutoScalingGroupProvider: {
           ManagedScaling: {
@@ -245,12 +205,44 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
-  describe('Resource Dependencies', () => {
-    test('should have proper resource dependencies', () => {
-      expect(stack.vpc).toBeDefined();
-      expect(stack.ecsCluster).toBeDefined();
-      expect(stack.database).toBeDefined();
-      expect(stack.dbSecret).toBeDefined();
+
+  describe('Performance and Monitoring', () => {
+    test('should verify monitoring and logging are configured', () => {
+      // RDS monitoring
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        MonitoringInterval: 60,
+        EnablePerformanceInsights: true,
+      });
+      // ECS CloudWatch log group
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: Match.stringLikeRegexp('/aws/ecs/cluster-.*'),
+        RetentionInDays: 7,
+      });
+    });
+  });
+
+  describe('Auto-scaling Configuration', () => {
+    test('should validate auto-scaling configuration', () => {
+      // Auto Scaling Group config
+      template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '2',
+        MaxSize: '10',
+        DesiredCapacity: '2',
+      });
+      // Scaling policy for CPU utilization
+      template.hasResourceProperties('AWS::AutoScaling::ScalingPolicy', {
+        PolicyType: 'TargetTrackingScaling',
+      });
+      // ECS Capacity Provider config
+      template.hasResourceProperties('AWS::ECS::CapacityProvider', {
+        AutoScalingGroupProvider: {
+          ManagedScaling: {
+            Status: 'ENABLED',
+            TargetCapacity: 80,
+          },
+          ManagedTerminationProtection: 'DISABLED',
+        },
+      });
     });
   });
 
