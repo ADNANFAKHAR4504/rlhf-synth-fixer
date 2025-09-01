@@ -33,10 +33,6 @@ vpc_cidr = "10.0.0.0/16"
 subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
 region = "us-east-1"
 
-# Instance Configuration
-instance_type = "t2.micro"
-key_name = config.get("key_name") or "default-key"
-
 # Tags Configuration
 common_tags = {
     "Environment": "production",
@@ -44,6 +40,10 @@ common_tags = {
     "ManagedBy": "Pulumi",
     "Team": "Infrastructure"
 }
+
+# Instance Configuration
+instance_type = "t2.micro"
+key_name = config.get("key_name")  # Make key_name optional - can be None
 
 # VPC Resource
 # ============
@@ -216,7 +216,7 @@ for i, (subnet, instance_name) in enumerate(zip(subnets, instance_names)):
         instance_type=instance_type,
         subnet_id=subnet.id,
         vpc_security_group_ids=[security_group.id],
-        key_name=key_name if key_name else None,
+        key_name=key_name,
         user_data=user_data_script,
         tags={
             **common_tags,
@@ -247,9 +247,13 @@ pulumi.export("instance_ids", [instance.id for instance in instances])
 pulumi.export("instance_public_ips", [instance.public_ip for instance in instances])
 pulumi.export("instance_private_ips", [instance.private_ip for instance in instances])
 
+# Export key pair information if specified
+if key_name:
+    pulumi.export("key_name", key_name)
+
 # Export connection information
 pulumi.export("ssh_commands", [
-    f"ssh -i {key_name}.pem ec2-user@{instance.public_ip}" if key_name and key_name != "default-key" else f"ssh ec2-user@{instance.public_ip}"
+    f"ssh -i {key_name}.pem ec2-user@{instance.public_ip}" if key_name else f"ssh ec2-user@{instance.public_ip}"
     for instance in instances
 ])
 

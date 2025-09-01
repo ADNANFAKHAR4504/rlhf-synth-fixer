@@ -42,21 +42,7 @@ common_tags = {
 
 # Instance Configuration
 instance_type = "t2.micro"
-key_name = config.get("key_name") or "default-key"
-
-# Create Key Pair if not specified
-if not config.get("key_name"):
-    # Create a new key pair
-    key_pair = aws.ec2.KeyPair(
-        "DefaultKeyPair",
-        key_name="default-key",
-        tags={
-            **common_tags,
-            "Name": "DefaultKeyPair",
-            "Purpose": "Default SSH key for EC2 instances"
-        }
-    )
-    key_name = key_pair.key_name
+key_name = config.get("key_name")  # Make key_name optional - can be None
 
 # VPC Resource
 # ============
@@ -229,7 +215,7 @@ for i, (subnet, instance_name) in enumerate(zip(subnets, instance_names)):
         instance_type=instance_type,
         subnet_id=subnet.id,
         vpc_security_group_ids=[security_group.id],
-        key_name=key_name if key_name else None,
+        key_name=key_name,
         user_data=user_data_script,
         tags={
             **common_tags,
@@ -242,7 +228,7 @@ for i, (subnet, instance_name) in enumerate(zip(subnets, instance_names)):
             http_put_response_hop_limit=1
         ),
         opts=pulumi.ResourceOptions(
-            depends_on=[security_group, subnet] + ([key_pair] if 'key_pair' in locals() else [])
+            depends_on=[security_group, subnet]
         )
     )
     instances.append(instance)
@@ -260,11 +246,9 @@ pulumi.export("instance_ids", [instance.id for instance in instances])
 pulumi.export("instance_public_ips", [instance.public_ip for instance in instances])
 pulumi.export("instance_private_ips", [instance.private_ip for instance in instances])
 
-# Export key pair information if created
-if 'key_pair' in locals():
-    pulumi.export("key_pair_id", key_pair.id)
-    pulumi.export("key_pair_name", key_pair.key_name)
-    pulumi.export("private_key_pem", key_pair.private_key_pem)
+# Export key pair information if specified
+if key_name:
+    pulumi.export("key_name", key_name)
 
 # Export connection information
 pulumi.export("ssh_commands", [
