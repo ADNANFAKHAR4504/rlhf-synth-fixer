@@ -1,7 +1,7 @@
-// test/secure-vpc-stack.test.ts
+// test/tap-stack.unit.test.ts
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { SecureVpcStack } from '../lib/secure-vpc-stack';
+import { SecureVpcStack } from '../lib/tap-stack';
 
 describe('SecureVpcStack', () => {
   let template: Template;
