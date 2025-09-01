@@ -1,8 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
+import { SecureVpcStack } from './secure-vpc-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -19,8 +17,17 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // ? Add your stack instantiations here
-    // ! Do NOT create resources directly in this stack.
-    // ! Instead, create separate stacks for each resource type.
+    // Create the secure VPC stack
+    new SecureVpcStack(this, 'SecureVpc', {
+      environmentSuffix,
+      vpcCidr: '10.0.0.0/16',
+      allowedSshCidr: '10.0.0.0/8',
+      companyTags: {
+        Environment: 'Production',
+        Project: 'SecureVPC',
+        Owner: 'DevOps',
+        CostCenter: 'IT-Infrastructure',
+      },
+    });
   }
 }
