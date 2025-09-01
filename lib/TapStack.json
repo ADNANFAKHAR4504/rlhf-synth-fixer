@@ -1,6 +1,15 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe: all subnets use AZ0 so template works in 1-AZ regions.\n",
+    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Multi-AZ required (for RDS subnet group). Provisions VPC, subnets, IAM roles, S3 (SSE-KMS), EC2 with encrypted EBS, RDS in private subnets, CloudTrail, Config, CloudWatch alarms, Parameter Store, centralized logging, KMS CMKs, and Shield Advanced. Skips WAF as per constraints.\n",
+    "Metadata": {
+        "Version": "1.2.0",
+        "Compliance": [
+            "CIS AWS Foundations",
+            "PCI DSS",
+            "SOC 2"
+        ],
+        "Owner": "Security-by-Design"
+    },
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -124,7 +133,7 @@
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        0,
+                        1,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -164,7 +173,7 @@
                 },
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        0,
+                        1,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -306,7 +315,7 @@
         "DBSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
-                "DBSubnetGroupDescription": "Private subnets for RDS",
+                "DBSubnetGroupDescription": "Private subnets for RDS (must span 2 AZs)",
                 "SubnetIds": [
                     {
                         "Ref": "PrivateSubnet1"
