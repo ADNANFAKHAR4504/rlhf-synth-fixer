@@ -7,7 +7,7 @@ Description: >
   Skips WAF as per constraints.
 
 Metadata:
-  Version: "1.0.3"
+  Version: "1.0.5"
   Compliance:
     - CIS AWS Foundations
     - PCI DSS
@@ -48,6 +48,7 @@ Parameters:
 
 Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
+  HasTwoAZs: !Not [!Equals [!Select [1, !GetAZs ""], ""]]
 
 Resources:
 
@@ -95,7 +96,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
 
   PublicSubnet2:
@@ -103,7 +104,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      AvailabilityZone: !If
+        - HasTwoAZs
+        - !Select [1, !GetAZs ""]
+        - !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
 
   PrivateSubnet1:
@@ -111,7 +115,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet1CIDR
-      AvailabilityZone: !Select [ 0, !GetAZs "" ]
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
 
   PrivateSubnet2:
@@ -119,7 +123,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Select [ 1, !GetAZs "" ]
+      AvailabilityZone: !If
+        - HasTwoAZs
+        - !Select [1, !GetAZs ""]
+        - !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
 
   PublicRouteTable:
@@ -272,7 +279,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole  # FIXED
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
@@ -304,8 +311,12 @@ Outputs:
     Value: !Ref VPC
   PublicSubnet1Id:
     Value: !Ref PublicSubnet1
+  PublicSubnet2Id:
+    Value: !Ref PublicSubnet2
   PrivateSubnet1Id:
     Value: !Ref PrivateSubnet1
+  PrivateSubnet2Id:
+    Value: !Ref PrivateSubnet2
   S3BucketArn:
     Value: !GetAtt SecureBucket.Arn
   RdsEndpoint:
