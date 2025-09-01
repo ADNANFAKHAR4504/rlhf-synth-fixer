@@ -1681,7 +1681,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      AlarmName: !Sub 'HighBillingAlarm-${Environment}'
+      AlarmName: !Sub 'HighBillingAlarm-${Environment}-${AWS::StackName}'
       AlarmDescription: Alarm for high billing costs
       MetricName: EstimatedCharges
       Namespace: AWS/Billing
