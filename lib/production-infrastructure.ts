@@ -53,15 +53,17 @@ export class ProductionInfrastructure {
 
   private constructor(environment: string) {
     this.environment = environment;
-    
+
     const pulumiConfig = new pulumi.Config();
     this.config = {
       allowedSshCidr: pulumiConfig.get('allowedSshCidr') || '10.0.0.0/8',
-      rdsConnectionsThreshold: pulumiConfig.getNumber('rdsConnectionsThreshold') || 80,
+      rdsConnectionsThreshold:
+        pulumiConfig.getNumber('rdsConnectionsThreshold') || 80,
       rdsCpuThreshold: pulumiConfig.getNumber('rdsCpuThreshold') || 75,
       asgCpuHighThreshold: pulumiConfig.getNumber('asgCpuHighThreshold') || 80,
       asgCpuLowThreshold: pulumiConfig.getNumber('asgCpuLowThreshold') || 10,
-      asgTargetCpuUtilization: pulumiConfig.getNumber('asgTargetCpuUtilization') || 50,
+      asgTargetCpuUtilization:
+        pulumiConfig.getNumber('asgTargetCpuUtilization') || 50,
     };
   }
 
@@ -69,7 +71,9 @@ export class ProductionInfrastructure {
     this.provider = new aws.Provider('production-provider', {
       region: region,
     });
-    this.callerIdentity = pulumi.output(aws.getCallerIdentity({}, { provider: this.provider }));
+    this.callerIdentity = pulumi.output(
+      aws.getCallerIdentity({}, { provider: this.provider })
+    );
     this.region = region;
   }
 
@@ -398,7 +402,8 @@ export class ProductionInfrastructure {
       `${this.environment}-alb-sg`,
       {
         name: `${this.environment}-alb-sg`,
-        description: 'Security group for Application Load Balancer - CloudFront only',
+        description:
+          'Security group for Application Load Balancer - CloudFront only',
         vpcId: this.vpc!.id,
         ingress: [
           {
@@ -504,48 +509,48 @@ export class ProductionInfrastructure {
       {
         description: 'KMS key for encryption at rest',
         enableKeyRotation: true,
-        policy: this.callerIdentity!.apply((identity) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Id: 'key-default-1',
-              Statement: [
-                {
-                  Sid: 'EnableRoot',
-                  Effect: 'Allow',
-                  Principal: { AWS: `arn:aws:iam::${identity.accountId}:root` },
-                  Action: 'kms:*',
-                  Resource: '*',
+        policy: this.callerIdentity!.apply(identity =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Id: 'key-default-1',
+            Statement: [
+              {
+                Sid: 'EnableRoot',
+                Effect: 'Allow',
+                Principal: { AWS: `arn:aws:iam::${identity.accountId}:root` },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'AllowServicesViaRegion',
+                Effect: 'Allow',
+                Principal: {
+                  Service: [
+                    'rds.amazonaws.com',
+                    's3.amazonaws.com',
+                    'logs.amazonaws.com',
+                  ],
                 },
-                {
-                  Sid: 'AllowServicesViaRegion',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: [
-                      'rds.amazonaws.com',
-                      's3.amazonaws.com',
-                      'logs.amazonaws.com',
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'kms:ViaService': [
+                      `rds.${this.region}.amazonaws.com`,
+                      `s3.${this.region}.amazonaws.com`,
+                      `logs.${this.region}.amazonaws.com`,
                     ],
                   },
-                  Action: [
-                    'kms:Encrypt',
-                    'kms:Decrypt',
-                    'kms:GenerateDataKey*',
-                    'kms:DescribeKey',
-                  ],
-                  Resource: '*',
-                  Condition: {
-                    StringEquals: {
-                      'kms:ViaService': [
-                        `rds.${this.region}.amazonaws.com`,
-                        `s3.${this.region}.amazonaws.com`,
-                        `logs.${this.region}.amazonaws.com`,
-                      ],
-                    },
-                  },
                 },
-              ],
-            })
-          ),
+              },
+            ],
+          })
+        ),
         tags: {
           Name: `${this.environment}-kms-key`,
           environment: this.environment,
@@ -636,78 +641,83 @@ export class ProductionInfrastructure {
     );
 
     // S3 Bucket Policy for secure transport and ALB access logs
-    const elbServiceAccount = aws.elb.getServiceAccount({}, { provider: this.provider });
+    const elbServiceAccount = aws.elb.getServiceAccount(
+      {},
+      { provider: this.provider }
+    );
     new aws.s3.BucketPolicy(
       `${this.environment}-s3-policy`,
       {
         bucket: this.s3Bucket.id,
-        policy: pulumi.all([this.s3Bucket.arn, elbServiceAccount]).apply(([bucketArn, elbAccount]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Sid: 'DenyInsecureTransport',
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:*',
-                Resource: [bucketArn, `${bucketArn}/*`],
-                Condition: {
-                  Bool: {
-                    'aws:SecureTransport': 'false',
+        policy: pulumi
+          .all([this.s3Bucket.arn, elbServiceAccount])
+          .apply(([bucketArn, elbAccount]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'DenyInsecureTransport',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:*',
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                  Condition: {
+                    Bool: {
+                      'aws:SecureTransport': 'false',
+                    },
                   },
                 },
-              },
-              {
-                Sid: 'AllowALBAccessLogs',
-                Effect: 'Allow',
-                Principal: {
-                  AWS: `arn:aws:iam::${elbAccount.arn}:root`,
+                {
+                  Sid: 'AllowALBAccessLogs',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: `arn:aws:iam::${elbAccount.arn}:root`,
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/AWSLogs/*`,
                 },
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/AWSLogs/*`,
-              },
-              {
-                Sid: 'AllowALBLogDeliveryWrite',
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'delivery.logs.amazonaws.com',
-                },
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/AWSLogs/*`,
-                Condition: {
-                  StringEquals: {
-                    's3:x-amz-acl': 'bucket-owner-full-control',
+                {
+                  Sid: 'AllowALBLogDeliveryWrite',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'delivery.logs.amazonaws.com',
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/AWSLogs/*`,
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                    },
                   },
                 },
-              },
-              {
-                Sid: 'AllowALBLogDeliveryCheck',
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'delivery.logs.amazonaws.com',
+                {
+                  Sid: 'AllowALBLogDeliveryCheck',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'delivery.logs.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
                 },
-                Action: 's3:GetBucketAcl',
-                Resource: bucketArn,
-              },
-              {
-                Sid: 'DenyUnencryptedUploads',
-                Effect: 'Deny',
-                Principal: '*',
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/*`,
-                Condition: {
-                  StringNotEquals: {
-                    's3:x-amz-server-side-encryption': 'AES256',
+                {
+                  Sid: 'DenyUnencryptedUploads',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringNotEquals: {
+                      's3:x-amz-server-side-encryption': 'AES256',
+                    },
+                  },
+                  NotPrincipal: {
+                    AWS: `arn:aws:iam::${elbAccount.arn}:root`,
+                    Service: 'delivery.logs.amazonaws.com',
                   },
                 },
-                NotPrincipal: {
-                  AWS: `arn:aws:iam::${elbAccount.arn}:root`,
-                  Service: 'delivery.logs.amazonaws.com',
-                },
-              },
-            ],
-          })
-        ),
+              ],
+            })
+          ),
       },
       { provider: this.provider }
     );
@@ -1236,7 +1246,15 @@ echo "Application server running" >> /var/www/html/index.html
         defaultCacheBehavior: {
           targetOriginId: 'ALB',
           viewerProtocolPolicy: 'redirect-to-https',
-          allowedMethods: ['DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'],
+          allowedMethods: [
+            'DELETE',
+            'GET',
+            'HEAD',
+            'OPTIONS',
+            'PATCH',
+            'POST',
+            'PUT',
+          ],
           cachedMethods: ['GET', 'HEAD'],
           compress: true,
           forwardedValues: {

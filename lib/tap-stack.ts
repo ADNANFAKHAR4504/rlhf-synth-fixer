@@ -66,7 +66,10 @@ interface InfrastructureOutputs {
  * This component orchestrates the instantiation of other resource-specific components
  * and manages the environment suffix used for naming and configuration.
  */
-export class TapStack extends pulumi.ComponentResource implements InfrastructureOutputs {
+export class TapStack
+  extends pulumi.ComponentResource
+  implements InfrastructureOutputs
+{
   public readonly vpcId!: pulumi.Output<string>;
   public readonly publicSubnetIds!: pulumi.Output<string[]>;
   public readonly privateSubnetIds!: pulumi.Output<string[]>;
