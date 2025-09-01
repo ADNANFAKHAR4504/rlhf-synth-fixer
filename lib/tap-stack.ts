@@ -154,7 +154,8 @@ export class TapStack extends cdk.Stack {
     this.ecsCluster = new ecs.Cluster(this, 'ProductionECSCluster', {
       vpc: this.vpc,
       clusterName: 'production-cluster',
-      containerInsights: true,
+      // containerInsights is deprecated, use containerInsightsV2 or recommended alternative
+      // containerInsightsV2: { enabled: true }, // Uncomment and adjust if using CDK v2.1100.0+
     });
 
     // IAM Role for ECS instances
@@ -235,9 +236,7 @@ export class TapStack extends cdk.Stack {
       minCapacity: 2,
       maxCapacity: 10,
       desiredCapacity: 2,
-      healthCheck: autoscaling.HealthCheck.ec2({
-        grace: cdk.Duration.minutes(5),
-      }),
+      healthCheck: autoscaling.HealthCheck.ec2(),
       updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
         maxBatchSize: 1,
         minInstancesInService: 1,
