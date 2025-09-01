@@ -26,6 +26,21 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
 # VPC Configuration
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -479,32 +494,15 @@ resource "aws_s3_bucket_policy" "config" {
   })
 }
 
-# IAM Role for Config
-resource "aws_iam_role" "config" {
+# IAM Role for Config (replace resource with data source)
+data "aws_iam_role" "config" {
   name = "aws-config-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "aws-config-role"
-  }
 }
 
 # Custom policy for Config service role
 resource "aws_iam_role_policy" "config_policy" {
   name = "config-service-policy"
-  role = aws_iam_role.config.id
+  role = data.aws_iam_role.config.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -550,14 +548,14 @@ resource "aws_iam_role_policy" "config_policy" {
 
 # Attach AWS managed policy for Config
 resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
+  role       = data.aws_iam_role.config.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # AWS Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
   name     = "terraform-config-recorder"
-  role_arn = aws_iam_role.config.arn
+  role_arn = data.aws_iam_role.config.arn
 
   recording_group {
     all_supported                 = true
@@ -637,36 +635,14 @@ resource "aws_iam_account_password_policy" "strict" {
   password_reuse_prevention      = 12
 }
 
-# Cross-Account Access Role
-resource "aws_iam_role" "cross_account" {
+# Cross-Account Access Role (replace resource with data source)
+data "aws_iam_role" "cross_account" {
   name = "cross-account-access-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-        }
-        Condition = {
-          Bool = {
-            "aws:MultiFactorAuthPresent" = "true"
-          }
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "cross-account-access-role"
-  }
 }
 
 resource "aws_iam_role_policy" "cross_account" {
   name = "cross-account-policy"
-  role = aws_iam_role.cross_account.id
+  role = data.aws_iam_role.cross_account.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -732,7 +708,7 @@ resource "aws_db_instance" "main" {
 # Launch Template for EC2 Instances
 resource "aws_launch_template" "web" {
   name_prefix   = "web-template"
-  image_id      = "ami-0c02fb55956c7d316" # Amazon Linux 2 AMI
+  image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
 
   vpc_security_group_ids = [aws_security_group.web.id]
@@ -843,44 +819,27 @@ resource "aws_autoscaling_group" "web" {
 }
 
 # Lambda Function (with private access)
-resource "aws_iam_role" "lambda" {
+data "aws_iam_role" "lambda" {
   name = "lambda-execution-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-
-  tags = {
-    Name = "lambda-execution-role"
-  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
-  role       = aws_iam_role.lambda.name
+  role       = data.aws_iam_role.lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_vpc" {
-  role       = aws_iam_role.lambda.name
+  role       = data.aws_iam_role.lambda.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 resource "aws_lambda_function" "example" {
   filename         = "lambda_function.zip"
   function_name    = "example-function"
-  role            = aws_iam_role.lambda.arn
-  handler         = "index.handler"
+  role             = data.aws_iam_role.lambda.arn
+  handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.9"
+  runtime          = "python3.9"
 
   kms_key_arn = aws_kms_key.main.arn
 
