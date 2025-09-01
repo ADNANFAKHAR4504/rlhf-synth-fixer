@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 
 export function getAlbServiceAccountId(region: string): string {
   const albAccounts: Record<string, string> = {
@@ -33,15 +34,24 @@ export class WebAppInfrastructure {
   public readonly provider: aws.Provider;
   public readonly albSecurityGroup: aws.ec2.SecurityGroup;
   public readonly ec2SecurityGroup: aws.ec2.SecurityGroup;
+  public readonly webSecurityGroup: aws.ec2.SecurityGroup;
+  public readonly vpcEndpointSecurityGroup: aws.ec2.SecurityGroup;
+  private readonly caller: pulumi.Output<aws.GetCallerIdentityResult>;
+  private readonly region: string;
+  private readonly environment: string;
 
   constructor(
     region: string,
     environment: string,
     tags: pulumi.Input<Record<string, string>>
   ) {
+    this.region = region;
+    this.environment = environment;
     this.provider = new aws.Provider(`provider-${environment}`, {
       region: region,
     });
+
+    this.caller = pulumi.output(aws.getCallerIdentity({}, { provider: this.provider }));
 
     const resourceTags = pulumi.output(tags).apply(t => ({
       ...t,
@@ -328,6 +338,72 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
+    // Dedicated security group for web traffic (used by ALB)
+    this.webSecurityGroup = new aws.ec2.SecurityGroup(
+      `web-sg-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for web traffic',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `web-sg-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // Dedicated security group for VPC endpoints
+    this.vpcEndpointSecurityGroup = new aws.ec2.SecurityGroup(
+      `vpc-endpoint-sg-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for VPC endpoints',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            securityGroups: [this.ec2SecurityGroup.id],
+          },
+        ],
+        egress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `vpc-endpoint-sg-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
     this.loadBalancer = new aws.lb.LoadBalancer(
       `alb-${environment}`,
       {
@@ -402,6 +478,155 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
+    // KMS Key for encryption
+    const kmsKey = new aws.kms.Key(
+      `app-key-${environment}`,
+      {
+        description: `KMS key for ${environment} application`,
+        policy: pulumi.all([this.caller]).apply(([caller]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${caller.accountId}:root`,
+                },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow use of the key for RDS',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'rds.amazonaws.com',
+                },
+                Action: [
+                  'kms:Decrypt',
+                  'kms:GenerateDataKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:SourceAccount': caller.accountId,
+                  },
+                },
+              },
+              {
+                Sid: 'Allow use of the key for Secrets Manager',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'secretsmanager.amazonaws.com',
+                },
+                Action: [
+                  'kms:Decrypt',
+                  'kms:GenerateDataKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:SourceAccount': caller.accountId,
+                  },
+                },
+              },
+            ],
+          })
+        ),
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    new aws.kms.Alias(
+      `app-key-alias-${environment}`,
+      {
+        name: `alias/app-key-${environment}`,
+        targetKeyId: kmsKey.keyId,
+      },
+      { provider: this.provider }
+    );
+
+    // Database credentials secret
+    const dbSecret = new aws.secretsmanager.Secret(
+      `db-credentials-${environment}`,
+      {
+        description: `Database credentials for ${environment}`,
+        kmsKeyId: kmsKey.keyId,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    const dbPassword = new random.RandomPassword(
+      `db-password-${environment}`,
+      {
+        length: 32,
+        special: true,
+        overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+      }
+    );
+
+    new aws.secretsmanager.SecretVersion(
+      `db-credentials-version-${environment}`,
+      {
+        secretId: dbSecret.id,
+        secretString: pulumi.interpolate`{"username":"admin","password":"${dbPassword.result}"}`,
+      },
+      { provider: this.provider }
+    );
+
+    // Application secrets
+    const appSecret = new aws.secretsmanager.Secret(
+      `app-secrets-${environment}`,
+      {
+        description: `Application secrets for ${environment}`,
+        kmsKeyId: kmsKey.keyId,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    const jwtSecret = new random.RandomPassword(
+      `jwt-secret-${environment}`,
+      {
+        length: 64,
+        special: false,
+      }
+    );
+
+    const apiKey = new random.RandomPassword(
+      `api-key-${environment}`,
+      {
+        length: 32,
+        special: false,
+      }
+    );
+
+    new aws.secretsmanager.SecretVersion(
+      `app-secrets-version-${environment}`,
+      {
+        secretId: appSecret.id,
+        secretString: pulumi.interpolate`{"api_key":"${apiKey.result}","database_url":"placeholder","jwt_secret":"${jwtSecret.result}"}`,
+      },
+      { provider: this.provider }
+    );
+
+    // VPC Endpoint for Secrets Manager
+    new aws.ec2.VpcEndpoint(
+      `secretsmanager-endpoint-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        serviceName: `com.amazonaws.${region}.secretsmanager`,
+        vpcEndpointType: 'Interface',
+        subnetIds: this.privateSubnets.map(subnet => subnet.id),
+        securityGroupIds: [this.vpcEndpointSecurityGroup.id],
+        privateDnsEnabled: true,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
     const instanceRole = new aws.iam.Role(
       `instance-role-${environment}`,
       {
@@ -425,11 +650,69 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
+    // Custom policy for EC2 instances with least privilege
+    new aws.iam.RolePolicy(
+      `instance-policy-${environment}`,
+      {
+        role: instanceRole.id,
+        policy: pulumi.all([this.caller]).apply(([caller]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:/ec2/app-logs/${environment}:*`,
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'secretsmanager:GetSecretValue',
+                ],
+                Resource: [
+                  `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:app-secrets-${environment}-*`,
+                  `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:db-credentials-${environment}-*`,
+                ],
+              },
+              {
+                Effect: 'Allow',
+                Action: [
+                  'kms:Decrypt',
+                ],
+                Resource: pulumi.interpolate`${kmsKey.arn}`,
+                Condition: {
+                  StringEquals: {
+                    'kms:ViaService': `secretsmanager.${region}.amazonaws.com`,
+                  },
+                },
+              },
+            ],
+          })
+        ),
+      },
+      { provider: this.provider }
+    );
+
     new aws.iam.RolePolicyAttachment(
       `instance-role-policy-${environment}`,
       {
         role: instanceRole.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+      },
+      { provider: this.provider }
+    );
+
+    // CloudWatch Log Group for EC2 instances
+    new aws.cloudwatch.LogGroup(
+      `ec2-app-logs-${environment}`,
+      {
+        name: `/ec2/app-logs/${environment}`,
+        retentionInDays: 30,
+        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        tags: resourceTags,
       },
       { provider: this.provider }
     );
@@ -710,18 +993,28 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
     const flowLogRole = new aws.iam.Role(
       `vpc-flow-log-role-${environment}`,
       {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
+        assumeRolePolicy: pulumi.all([this.caller]).apply(([caller]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Action: 'sts:AssumeRole',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'vpc-flow-logs.amazonaws.com',
+                },
+                Condition: {
+                  StringEquals: {
+                    'aws:SourceAccount': caller.accountId,
+                  },
+                  ArnLike: {
+                    'aws:SourceArn': `arn:aws:ec2:${region}:${caller.accountId}:vpc-flow-log/*`,
+                  },
+                },
               },
-            },
-          ],
-        }),
+            ],
+          })
+        ),
       },
       { provider: this.provider }
     );
@@ -730,22 +1023,24 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       `vpc-flow-log-policy-${environment}`,
       {
         role: flowLogRole.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: pulumi.all([this.caller]).apply(([caller]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:vpc-flow-logs-${environment}:*`,
+              },
+            ],
+          })
+        ),
       },
       { provider: this.provider }
     );
@@ -753,7 +1048,9 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
     const flowLogGroup = new aws.cloudwatch.LogGroup(
       `vpc-flow-logs-${environment}`,
       {
+        name: `vpc-flow-logs-${environment}`,
         retentionInDays: 30,
+        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
         tags: resourceTags,
       },
       { provider: this.provider }
@@ -847,6 +1144,75 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       },
       { provider: this.provider }
     );
+
+    // RDS Subnet Group
+    const dbSubnetGroup = new aws.rds.SubnetGroup(
+      `db-subnet-group-${environment}`,
+      {
+        subnetIds: this.privateSubnets.map(subnet => subnet.id),
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `db-subnet-group-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // RDS Security Group
+    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+      `rds-sg-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for RDS database',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 3306,
+            toPort: 3306,
+            securityGroups: [this.ec2SecurityGroup.id],
+          },
+        ],
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `rds-sg-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // RDS Instance with secrets from Secrets Manager
+    const dbCredentials = pulumi.output(aws.secretsmanager.getSecretVersion({
+      secretId: dbSecret.id,
+    }, { provider: this.provider }));
+
+    const rdsInstance = new aws.rds.Instance(
+      `db-${environment}`,
+      {
+        identifier: `db-${environment}`,
+        engine: 'mysql',
+        engineVersion: '8.0',
+        instanceClass: 'db.t3.micro',
+        allocatedStorage: 20,
+        storageType: 'gp2',
+        storageEncrypted: true,
+        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        dbName: 'appdb',
+        username: dbCredentials.apply(creds => JSON.parse(creds.secretString).username),
+        password: dbCredentials.apply(creds => JSON.parse(creds.secretString).password),
+        vpcSecurityGroupIds: [rdsSecurityGroup.id],
+        dbSubnetGroupName: dbSubnetGroup.name,
+        backupRetentionPeriod: 7,
+        backupWindow: '03:00-04:00',
+        maintenanceWindow: 'sun:04:00-sun:05:00',
+        skipFinalSnapshot: true,
+        deletionProtection: false,
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `db-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
   }
 
   public get outputs() {
@@ -886,6 +1252,8 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       // Security Groups
       albSecurityGroupId: this.albSecurityGroup.id,
       ec2SecurityGroupId: this.ec2SecurityGroup.id,
+      webSecurityGroupId: this.webSecurityGroup.id,
+      vpcEndpointSecurityGroupId: this.vpcEndpointSecurityGroup.id,
     };
   }
 }
