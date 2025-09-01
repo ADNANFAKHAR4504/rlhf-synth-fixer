@@ -2,7 +2,7 @@
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Provisions VPC, subnets, IAM roles, S3 (SSE-KMS), EC2 with encrypted EBS, RDS in private subnets, CloudTrail, Config, CloudWatch alarms, Parameter Store, centralized logging, KMS CMKs, and Shield Advanced. Skips WAF as per constraints.\n",
     "Metadata": {
-        "Version": "1.0.1",
+        "Version": "1.0.2",
         "Compliance": [
             "CIS AWS Foundations",
             "PCI DSS",
@@ -38,8 +38,23 @@
             "Default": "10.0.4.0/24"
         },
         "KeyName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Existing EC2 KeyPair for SSH access"
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional EC2 KeyPair for SSH access. Leave empty to disable SSH."
+        }
+    },
+    "Conditions": {
+        "HasKeyName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyName"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -273,9 +288,6 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "InstanceType": "t3.micro",
-                "KeyName": {
-                    "Ref": "KeyName"
-                },
                 "SubnetId": {
                     "Ref": "PublicSubnet1"
                 },
@@ -296,7 +308,18 @@
                             }
                         }
                     }
-                ]
+                ],
+                "KeyName": {
+                    "Fn::If": [
+                        "HasKeyName",
+                        {
+                            "Ref": "KeyName"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
             }
         },
         "DBSubnetGroup": {

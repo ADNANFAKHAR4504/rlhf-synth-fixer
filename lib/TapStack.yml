@@ -7,7 +7,7 @@ Description: >
   Skips WAF as per constraints.
 
 Metadata:
-  Version: "1.0.1"
+  Version: "1.0.2"
   Compliance:
     - CIS AWS Foundations
     - PCI DSS
@@ -42,8 +42,12 @@ Parameters:
     Default: 10.0.4.0/24
 
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "Existing EC2 KeyPair for SSH access"
+    Type: String
+    Default: ""
+    Description: "Optional EC2 KeyPair for SSH access. Leave empty to disable SSH."
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, ""]]
 
 Resources:
 
@@ -185,16 +189,16 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: !Ref KeyName
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds: [!Ref WebSG]
-      ImageId: ami-0c55b159cbfafe1f0 # Amazon Linux 2 (replace per region)
+      ImageId: ami-0c55b159cbfafe1f0 # Update per region
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeSize: 8
             Encrypted: true
             KmsKeyId: !Ref KmsKey
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
 
   #################################
   # RDS Instance (Private)
@@ -228,7 +232,7 @@ Resources:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub "/${EnvironmentName}/db/password"
-      Type: String  # FIXED
+      Type: String
       Value: "ChangeMe123!"
       Description: "DB password placeholder. Convert to SecureString with KMS post-deployment via CLI/SDK."
 
@@ -252,7 +256,7 @@ Resources:
       IsMultiRegionTrail: true
       IncludeGlobalServiceEvents: true
       EnableLogFileValidation: true
-      IsLogging: true  # FIXED
+      IsLogging: true
 
   #################################
   # AWS Config
