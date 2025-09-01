@@ -444,7 +444,7 @@ export class SecureInfrastructure {
     const logsBucket = new aws.s3.Bucket(
       `cloudfront-logs-bucket-${this.environment}`,
       {
-        bucket: `cloudfront-logs-bucket-${this.environment}-${Math.random().toString(36).substring(7)}`,
+        bucket: `cloudfront-logs-bucket-${this.environment}`,
 
         tags: {
           ...this.tags,
