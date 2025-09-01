@@ -48,6 +48,11 @@ done
 echo "Deleting RDS Database Instances..."
 for db_instance in "${DB_INSTANCES[@]}"; do
   if aws rds describe-db-instances --db-instance-identifier "$db_instance" &>/dev/null; then
+    echo "Disabling deletion protection for: $db_instance"
+    aws rds modify-db-instance --db-instance-identifier "$db_instance" --no-deletion-protection --apply-immediately
+    echo "Waiting for modification to complete..."
+    aws rds wait db-instance-available --db-instance-identifier "$db_instance"
+    
     echo "Deleting database instance: $db_instance"
     aws rds delete-db-instance --db-instance-identifier "$db_instance" --skip-final-snapshot
     echo "Requested delete: $db_instance"
