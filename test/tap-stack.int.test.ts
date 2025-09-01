@@ -467,7 +467,8 @@ describe("LIVE: TapStack CloudFormation Integration Tests", () => {
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
       expect(trail.IsMultiRegionTrail).toBe(true);
       expect(trail.LogFileValidationEnabled).toBe(true);
-      expect(trail.KmsKeyId).toBe(outputs.KMSKeyId);
+      const receivedKmsKeyId = trail.KmsKeyId?.split("/").pop();
+      expect(receivedKmsKeyId).toBe(outputs.KMSKeyId);
     });
 
     test("CloudTrail is actively logging", async () => {
