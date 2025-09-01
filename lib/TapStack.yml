@@ -840,16 +840,19 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'secure-${AWS::AccountId}-${AWS::Region}-production-tapstack'
+      BucketName: !Sub
+        - 'secure-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
       LoggingConfiguration:
@@ -860,6 +863,11 @@ Resources:
             !Ref S3AccessLogsBucket,
           ]
         LogFilePrefix: access-logs/
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       Tags:
         - Key: Name
           Value: !Sub 'SecureS3Bucket-${Environment}'
@@ -1192,11 +1200,21 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'trail-${AWS::AccountId}-${AWS::Region}-production-tapstack'
+      BucketName: !Sub
+        - 'trail-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -1290,8 +1308,18 @@ Resources:
   ConfigBucket:
     Condition: CreateConfigBucket
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'config-${AWS::AccountId}-${AWS::Region}-production-tapstack'
+      BucketName: !Sub
+        - 'config-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
