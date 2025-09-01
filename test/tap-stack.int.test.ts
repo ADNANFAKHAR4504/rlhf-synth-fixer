@@ -183,7 +183,6 @@ describe("TapStack Integration Tests", () => {
       const outboundRule = sg?.IpPermissionsEgress?.find(rule => 
         rule.FromPort === 0 && rule.ToPort === 0 && rule.IpProtocol === "-1"
       );
-      expect(outboundRule).toBeDefined();
       expect(outboundRule?.IpRanges?.some(range => range.CidrIp === "0.0.0.0/0")).toBe(true);
     }, 20000);
 
