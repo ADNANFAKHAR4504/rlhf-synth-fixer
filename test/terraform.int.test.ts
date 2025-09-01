@@ -48,7 +48,7 @@ function readStructuredOutputs() {
   const vpcId = out.vpc_id.value;
   const securityGroupId = out.alb_security_group_id.value;
   const autoscalingGroupName = out.autoscaling_group_name.value;
-  const region = process.env.AWS_REGION || 'us-west-2';
+  const region = "us-west-2"
 
   return { domain, vpcId, securityGroupId, autoscalingGroupName, region };
 }
@@ -216,9 +216,7 @@ async function verifySecurityGroupExists(securityGroupId: string, region: string
       vpcId: sg.VpcId
     };
   } catch (error: any) {
-    if (error.name === 'InvalidGroupId.NotFound' || 
-        error.message?.includes('does not exist') ||
-        error.name === 'InvalidGroup.NotFound') {
+    if (error.name === 'InvalidGroupId.NotFound') {
       return { exists: false, state: 'not-found' };
     }
     throw error;
@@ -249,33 +247,12 @@ async function verifyAutoScalingGroupExists(asgName: string, region: string): Pr
     if (error.name === 'ValidationError' && error.message.includes('does not exist')) {
       return { exists: false };
     }
-    if (error.name === 'AutoScalingGroupNotFound' || 
-        error.message?.includes('AutoScaling Group name not found') ||
-        error.message?.includes('does not exist')) {
-      return { exists: false };
-    }
     throw error;
   }
 }
 
 // Initialize outputs and URLs at module level (before describe block)
-let testOutputs: any;
-try {
-  testOutputs = readStructuredOutputs();
-} catch (error) {
-  console.error('Failed to read structured outputs:', error);
-  process.exit(1);
-}
-
-const { domain: albDomain, vpcId, securityGroupId, autoscalingGroupName, region } = testOutputs;
-
-console.log('🔍 Integration Test Configuration:');
-console.log(`   Region: ${region}`);
-console.log(`   ALB Domain: ${albDomain}`);
-console.log(`   VPC ID: ${vpcId}`);
-console.log(`   Security Group ID: ${securityGroupId}`);
-console.log(`   Auto Scaling Group: ${autoscalingGroupName}`);
-console.log('');
+const { domain: albDomain, vpcId, securityGroupId, autoscalingGroupName, region } = readStructuredOutputs();
 
 describe("LIVE: Infrastructure verification from Terraform structured outputs", () => {
   
@@ -399,13 +376,32 @@ describe("LIVE: Infrastructure verification from Terraform structured outputs", 
 
   // VPC Module Tests
   describe("VPC Module Tests", () => {
+    test("VPC exists and is in available state", async () => {
+      const vpcInfo = await retry(async () => {
+        const result = await verifyVpcExists(vpcId, region);
+        
+        if (!result.exists) {
+          throw new Error(`VPC ${vpcId} does not exist`);
+        }
+        
+        if (result.state !== 'available') {
+          throw new Error(`VPC ${vpcId} is in state: ${result.state}, expected: available`);
+        }
+        
+        return result;
+      }, 8, 2000);
+
+      expect(vpcInfo.exists).toBe(true);
+      expect(vpcInfo.state).toBe('available');
+      expect(vpcInfo.cidr).toBeTruthy();
+      
+      // Validate CIDR format
+      const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/;
+      expect(cidrRegex.test(vpcInfo.cidr!)).toBe(true);
+    }, 60000);
+
     test("VPC has valid CIDR block configuration", async () => {
       const vpcInfo = await verifyVpcExists(vpcId, region);
-      
-      // If VPC doesn't exist, skip CIDR validation
-      if (!vpcInfo.exists) {
-        return; // Skip silently
-      }
       
       expect(vpcInfo.exists).toBe(true);
       expect(vpcInfo.cidr).toBeTruthy();
@@ -427,29 +423,35 @@ describe("LIVE: Infrastructure verification from Terraform structured outputs", 
       const subnetMask = parseInt(cidrParts[1]);
       expect(subnetMask).toBeGreaterThanOrEqual(16);
       expect(subnetMask).toBeLessThanOrEqual(28);
-    }, 45000);
+    }, 30000);
   });
 
   // Security Module Tests  
   describe("Security Module Tests", () => {
+    test("ALB security group exists and is properly configured", async () => {
+      const sgInfo = await retry(async () => {
+        const result = await verifySecurityGroupExists(securityGroupId, region);
+        
+        if (!result.exists) {
+          throw new Error(`Security Group ${securityGroupId} does not exist`);
+        }
+        
+        return result;
+      }, 8, 2000);
+
+      expect(sgInfo.exists).toBe(true);
+      expect(sgInfo.state).toBe('available');
+      expect(sgInfo.vpcId).toBeTruthy();
+    }, 60000);
+
     test("Security group is associated with the correct VPC", async () => {
       const sgInfo = await verifySecurityGroupExists(securityGroupId, region);
       
-      if (!sgInfo.exists) {
-        return; // Skip silently
-      }
-      
       expect(sgInfo.exists).toBe(true);
       expect(sgInfo.vpcId).toBe(vpcId);
-    }, 45000);
+    }, 30000);
 
     test("Security group has valid configuration", async () => {
-      // First check if the security group exists
-      const sgExists = await verifySecurityGroupExists(securityGroupId, region);
-      if (!sgExists.exists) {
-        return; // Skip silently
-      }
-
       const ec2Client = new EC2Client({ region });
       
       const command = new DescribeSecurityGroupsCommand({
@@ -471,36 +473,21 @@ describe("LIVE: Infrastructure verification from Terraform structured outputs", 
       const ports = sg.IpPermissions!.map(rule => rule.FromPort).filter(port => port !== undefined);
       const hasHttpPorts = ports.some(port => port === 80 || port === 443);
       expect(hasHttpPorts).toBe(true);
-    }, 60000);
+    }, 45000);
   });
 
   // EC2 Module Tests
   describe("EC2 Module Tests", () => {
     test("Auto Scaling Group exists and has desired configuration", async () => {
-      console.log(`🔎 Checking Auto Scaling Group ${autoscalingGroupName} in region ${region}...`);
-      
       const asgInfo = await retry(async () => {
         const result = await verifyAutoScalingGroupExists(autoscalingGroupName, region);
         
         if (!result.exists) {
-          console.log(`❌ Auto Scaling Group ${autoscalingGroupName} does not exist in ${region}`);
-          return { exists: false, message: `Auto Scaling Group ${autoscalingGroupName} not found in ${region}` };
+          throw new Error(`Auto Scaling Group ${autoscalingGroupName} does not exist`);
         }
         
-        console.log(`✅ Auto Scaling Group ${autoscalingGroupName} found`);
         return result;
-      }, 6, 5000);
-
-      if (!asgInfo.exists) {
-        console.warn(`⚠️  Auto Scaling Group test failed: ${autoscalingGroupName} does not exist in region ${region}`);
-        console.warn(`   This could indicate:`);
-        console.warn(`   - Infrastructure not deployed to ${region}`);
-        console.warn(`   - Incorrect ASG name in outputs file`);
-        console.warn(`   - ASG is still being created`);
-        console.warn(`   - AWS credentials/permissions issue`);
-        expect(asgInfo.exists).toBe(false); // Document the failure
-        return;
-      }
+      }, 10, 3000);
 
       expect(asgInfo.exists).toBe(true);
       expect(asgInfo.desiredCapacity).toBeDefined();
@@ -509,7 +496,7 @@ describe("LIVE: Infrastructure verification from Terraform structured outputs", 
       // Desired capacity should be reasonable (1-10 for typical setups)
       expect(asgInfo.desiredCapacity!).toBeGreaterThanOrEqual(1);
       expect(asgInfo.desiredCapacity!).toBeLessThanOrEqual(10);
-    }, 120000);
+    }, 90000);
 
     test("Auto Scaling Group has healthy instances", async () => {
       const asgClient = new AutoScalingClient({ region });
@@ -562,39 +549,25 @@ describe("LIVE: Infrastructure verification from Terraform structured outputs", 
         AutoScalingGroupNames: [autoscalingGroupName]
       });
       
-      try {
-        const response = await asgClient.send(command);
-        
-        if (!response.AutoScalingGroups || response.AutoScalingGroups.length === 0) {
-          console.warn(`Auto Scaling Group ${autoscalingGroupName} not found, skipping configuration test`);
-          return;
-        }
-        
-        const asg = response.AutoScalingGroups[0];
-        
-        // Basic ASG configuration validation
-        expect(asg.AutoScalingGroupName).toBe(autoscalingGroupName);
-        expect(asg.MinSize).toBeDefined();
-        expect(asg.MaxSize).toBeDefined();
-        expect(asg.DesiredCapacity).toBeDefined();
-        
-        // Logical size constraints
-        expect(asg.MinSize!).toBeLessThanOrEqual(asg.DesiredCapacity!);
-        expect(asg.DesiredCapacity!).toBeLessThanOrEqual(asg.MaxSize!);
-        
-        // Should have at least one availability zone
-        expect(asg.AvailabilityZones).toBeTruthy();
-        expect(asg.AvailabilityZones!.length).toBeGreaterThan(0);
-        
-        // Should have launch template or launch configuration
-        expect(asg.LaunchTemplate || asg.LaunchConfigurationName).toBeTruthy();
-      } catch (error: any) {
-        if (error.name === 'ValidationError' || error.message?.includes('does not exist')) {
-          console.warn(`Auto Scaling Group ${autoscalingGroupName} not found, skipping configuration test`);
-          return;
-        }
-        throw error;
-      }
-    }, 60000);
+      const response = await asgClient.send(command);
+      const asg = response.AutoScalingGroups![0];
+      
+      // Basic ASG configuration validation
+      expect(asg.AutoScalingGroupName).toBe(autoscalingGroupName);
+      expect(asg.MinSize).toBeDefined();
+      expect(asg.MaxSize).toBeDefined();
+      expect(asg.DesiredCapacity).toBeDefined();
+      
+      // Logical size constraints
+      expect(asg.MinSize!).toBeLessThanOrEqual(asg.DesiredCapacity!);
+      expect(asg.DesiredCapacity!).toBeLessThanOrEqual(asg.MaxSize!);
+      
+      // Should have at least one availability zone
+      expect(asg.AvailabilityZones).toBeTruthy();
+      expect(asg.AvailabilityZones!.length).toBeGreaterThan(0);
+      
+      // Should have launch template or launch configuration
+      expect(asg.LaunchTemplate || asg.LaunchConfigurationName).toBeTruthy();
+    }, 45000);
   });
 });
