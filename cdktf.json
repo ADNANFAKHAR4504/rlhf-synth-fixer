@@ -3,11 +3,5 @@
   "app": "./gradlew run",
   "sendCrashReports": "false",
   "codeMakerOutput": "imports",
-  "output": "cdktf.out",
-  "terraformProviders": [
-    "hashicorp/aws@~> 5.0"
-  ],
-  "terraformModules": [],
-  "context": {},
-  "projectId": "5a8d2cff-7225-400b-bfa2-0317edd5c10b"
+  "terraformProviders": []
 }
