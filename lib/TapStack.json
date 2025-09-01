@@ -3,7 +3,7 @@
   "Description": "Production-grade web application infrastructure with VPC, EC2, RDS, and security configurations - Final working version",
   "Metadata": {
     "LastUpdated": "2025-09-01",
-    "Version": "1.0.1"
+    "Version": "1.0.2"
   },
 
   "Parameters": {
