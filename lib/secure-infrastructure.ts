@@ -24,6 +24,8 @@ export class SecureInfrastructure {
   private masterKey!: aws.kms.Key;
   private rdsInstance!: aws.rds.Instance;
   private cloudFrontDistribution!: aws.cloudfront.Distribution;
+  private vpcFlowLog!: aws.ec2.FlowLog;
+  private apiSecret!: aws.secretsmanager.Secret;
 
   // Public outputs
   public readonly vpcId: pulumi.Output<string>;
@@ -34,6 +36,8 @@ export class SecureInfrastructure {
   public readonly webSecurityGroupId: pulumi.Output<string>;
   public readonly dbSecurityGroupId: pulumi.Output<string>;
   public readonly cloudFrontDomainName: pulumi.Output<string>;
+  public readonly vpcFlowLogId: pulumi.Output<string>;
+  public readonly apiSecretName: pulumi.Output<string>;
 
   constructor(
     region: string,
@@ -93,6 +97,8 @@ export class SecureInfrastructure {
     this.webSecurityGroupId = this.webSecurityGroup.id;
     this.dbSecurityGroupId = this.dbSecurityGroup.id;
     this.cloudFrontDomainName = this.cloudFrontDistribution.domainName;
+    this.vpcFlowLogId = this.vpcFlowLog.id;
+    this.apiSecretName = this.apiSecret.name;
   }
 
   private createKMSKey(): aws.kms.Key {
@@ -806,7 +812,7 @@ export class SecureInfrastructure {
 
   private createSecretsManager(): void {
     // API Keys secret only - RDS manages its own credentials
-    const apiSecret = new aws.secretsmanager.Secret(
+    this.apiSecret = new aws.secretsmanager.Secret(
       `api-keys-${this.environment}`,
       {
         name: `api-keys-${this.environment}`,
@@ -824,7 +830,7 @@ export class SecureInfrastructure {
     new aws.secretsmanager.SecretVersion(
       `api-keys-version-${this.environment}`,
       {
-        secretId: apiSecret.id,
+        secretId: this.apiSecret.id,
         secretString: JSON.stringify({
           stripe_key: 'sk_test_...',
           sendgrid_key: 'SG...',
@@ -1166,7 +1172,7 @@ export class SecureInfrastructure {
     );
 
     // VPC Flow Logs
-    new aws.ec2.FlowLog(
+    this.vpcFlowLog = new aws.ec2.FlowLog(
       `vpc-flow-log-${this.environment}`,
       {
         iamRoleArn: this.flowLogsRole.arn,

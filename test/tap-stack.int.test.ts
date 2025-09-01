@@ -354,24 +354,10 @@ describe('TAP Infrastructure Integration Tests - PROMPT.md Compliance', () => {
 
   describe('PROMPT.md Requirement 4.4: VPC Flow Logs', () => {
     test('e2e: VPC Flow Logs are configured and active', async () => {
-      let vpcId = outputs.vpcId;
-
-      if (!vpcId) {
-        const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
-          Filters: [{ Name: 'tag:Name', Values: [`secure-vpc-${environment}`] }]
-        }));
-
-        if (vpcResponse.Vpcs && vpcResponse.Vpcs.length > 0) {
-          vpcId = vpcResponse.Vpcs[0].VpcId;
-        }
-      }
-
-      if (vpcId) {
+      if (outputs.vpcFlowLogId) {
+        // Use the specific flow log ID from outputs
         const flowLogsResponse = await ec2Client.send(new DescribeFlowLogsCommand({
-          Filter: [
-            { Name: 'resource-id', Values: [vpcId] },
-            { Name: 'resource-type', Values: ['VPC'] }
-          ]
+          FlowLogIds: [outputs.vpcFlowLogId]
         }));
 
         expect(flowLogsResponse.FlowLogs).toBeDefined();
@@ -381,7 +367,36 @@ describe('TAP Infrastructure Integration Tests - PROMPT.md Compliance', () => {
         expect(flowLog.FlowLogStatus).toBe('ACTIVE');
         expect(flowLog.TrafficType).toBe('ALL');
       } else {
-        console.log('VPC not found, skipping Flow Logs test');
+        // Fallback to VPC-based search
+        let vpcId = outputs.vpcId;
+
+        if (!vpcId) {
+          const vpcResponse = await ec2Client.send(new DescribeVpcsCommand({
+            Filters: [{ Name: 'tag:Name', Values: [`secure-vpc-${environment}`] }]
+          }));
+
+          if (vpcResponse.Vpcs && vpcResponse.Vpcs.length > 0) {
+            vpcId = vpcResponse.Vpcs[0].VpcId;
+          }
+        }
+
+        if (vpcId) {
+          const flowLogsResponse = await ec2Client.send(new DescribeFlowLogsCommand({
+            Filter: [
+              { Name: 'resource-id', Values: [vpcId] },
+              { Name: 'resource-type', Values: ['VPC'] }
+            ]
+          }));
+
+          expect(flowLogsResponse.FlowLogs).toBeDefined();
+          expect(flowLogsResponse.FlowLogs!.length).toBeGreaterThanOrEqual(1);
+
+          const flowLog = flowLogsResponse.FlowLogs![0];
+          expect(flowLog.FlowLogStatus).toBe('ACTIVE');
+          expect(flowLog.TrafficType).toBe('ALL');
+        } else {
+          console.log('VPC not found, skipping Flow Logs test');
+        }
       }
     });
 
@@ -558,39 +573,8 @@ describe('TAP Infrastructure Integration Tests - PROMPT.md Compliance', () => {
   });
 
   describe('PROMPT.md Requirement 4.8: AWS Secrets Manager', () => {
-    test('e2e: Database credentials are stored in Secrets Manager', async () => {
-      const secretName = `app-secrets-${environment}`;
-
-      try {
-        const response = await secretsClient.send(new DescribeSecretCommand({
-          SecretId: secretName
-        }));
-
-        expect(response.Name).toBe(secretName);
-        expect(response.KmsKeyId).toBeDefined();
-        expect(response.Description).toContain('Database credentials');
-
-        // Verify secret can be retrieved
-        const valueResponse = await secretsClient.send(new GetSecretValueCommand({
-          SecretId: secretName
-        }));
-
-        expect(valueResponse.SecretString).toBeDefined();
-        const secretData = JSON.parse(valueResponse.SecretString!);
-        expect(secretData.username).toBeDefined();
-        expect(secretData.password).toBeDefined();
-        expect(secretData.engine).toBe('mysql');
-      } catch (error: any) {
-        if (error.name === 'ResourceNotFoundException') {
-          console.log('Database secret not found, may not be deployed yet');
-        } else {
-          throw error;
-        }
-      }
-    });
-
     test('e2e: API keys are stored in Secrets Manager', async () => {
-      const secretName = `api-keys-${environment}`;
+      const secretName = outputs.apiSecretName || `api-keys-${environment}`;
 
       try {
         const response = await secretsClient.send(new DescribeSecretCommand({
@@ -600,9 +584,45 @@ describe('TAP Infrastructure Integration Tests - PROMPT.md Compliance', () => {
         expect(response.Name).toBe(secretName);
         expect(response.KmsKeyId).toBeDefined();
         expect(response.Description).toContain('API keys');
+
+        // Verify secret can be retrieved
+        const valueResponse = await secretsClient.send(new GetSecretValueCommand({
+          SecretId: secretName
+        }));
+
+        expect(valueResponse.SecretString).toBeDefined();
+        const secretData = JSON.parse(valueResponse.SecretString!);
+        expect(secretData.stripe_key).toBeDefined();
+        expect(secretData.sendgrid_key).toBeDefined();
+        expect(secretData.jwt_secret).toBeDefined();
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {
           console.log('API keys secret not found, may not be deployed yet');
+        } else if (error.name === 'InvalidRequestException' && error.message.includes('marked for deletion')) {
+          console.log('Secret is marked for deletion, skipping test');
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    test('e2e: RDS credentials are managed by AWS', async () => {
+      const dbIdentifier = `mysql-db-${environment}`;
+
+      try {
+        const response = await rdsClient.send(new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier
+        }));
+
+        if (response.DBInstances && response.DBInstances.length > 0) {
+          const db = response.DBInstances[0];
+          // RDS should manage its own master user password
+          expect(db.MasterUserSecret).toBeDefined();
+          expect(db.MasterUserSecret!.KmsKeyId).toBeDefined();
+        }
+      } catch (error: any) {
+        if (error.name === 'DBInstanceNotFoundFault') {
+          console.log('Database not found, may not be deployed yet');
         } else {
           throw error;
         }

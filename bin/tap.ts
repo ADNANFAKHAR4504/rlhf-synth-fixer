@@ -49,3 +49,5 @@ export const kmsKeyId = stack.kmsKeyId;
 export const webSecurityGroupId = stack.webSecurityGroupId;
 export const dbSecurityGroupId = stack.dbSecurityGroupId;
 export const cloudFrontDomainName = stack.cloudFrontDomainName;
+export const vpcFlowLogId = stack.vpcFlowLogId;
+export const apiSecretName = stack.apiSecretName;

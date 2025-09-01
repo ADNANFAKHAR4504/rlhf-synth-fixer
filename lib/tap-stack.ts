@@ -58,6 +58,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly webSecurityGroupId: pulumi.Output<string>;
   public readonly dbSecurityGroupId: pulumi.Output<string>;
   public readonly cloudFrontDomainName: pulumi.Output<string>;
+  public readonly vpcFlowLogId: pulumi.Output<string>;
+  public readonly apiSecretName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -93,6 +95,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.webSecurityGroupId = this.infrastructure.webSecurityGroupId;
     this.dbSecurityGroupId = this.infrastructure.dbSecurityGroupId;
     this.cloudFrontDomainName = this.infrastructure.cloudFrontDomainName;
+    this.vpcFlowLogId = this.infrastructure.vpcFlowLogId;
+    this.apiSecretName = this.infrastructure.apiSecretName;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -104,6 +108,8 @@ export class TapStack extends pulumi.ComponentResource {
       webSecurityGroupId: this.webSecurityGroupId,
       dbSecurityGroupId: this.dbSecurityGroupId,
       cloudFrontDomainName: this.cloudFrontDomainName,
+      vpcFlowLogId: this.vpcFlowLogId,
+      apiSecretName: this.apiSecretName,
     });
   }
 }
