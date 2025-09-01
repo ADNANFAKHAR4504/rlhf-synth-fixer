@@ -626,7 +626,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      LogGroupName: !Sub '/aws/vpc/flowlogs/${Environment}-${AWS::StackName}'
+      LogGroupName: !Sub
+        - '/aws/vpc/flowlogs/${Environment}-${AWS::StackName}-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       RetentionInDays: 30
       KmsKeyId:
         !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
@@ -1163,7 +1171,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-${AWS::StackName}'
+      LogGroupName: !Sub
+        - '/aws/cloudtrail/${Environment}-${AWS::StackName}-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       RetentionInDays: 90
       KmsKeyId:
         !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
