@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Robust networking infrastructure in us-west-2.
-  Includes VPC, subnets across AZs, IGW, NAT Gateway, EC2 Auto Scaling,
+  Includes VPC, public/private subnets, IGW, NAT Gateway, EC2 Auto Scaling,
   IAM roles, CloudWatch alarms, and a secure S3 bucket.
 
 Parameters:
@@ -38,16 +38,6 @@ Parameters:
     Type: String
     Default: 203.0.113.0/24
     Description: CIDR allowed to SSH into EC2 instances.
-
-  AvailabilityZone1:
-    Type: AWS::EC2::AvailabilityZone::Name
-    Default: us-west-2a
-    Description: First Availability Zone for subnets.
-
-  AvailabilityZone2:
-    Type: AWS::EC2::AvailabilityZone::Name
-    Default: us-west-2b
-    Description: Second Availability Zone for subnets.
 
 Mappings:
   RegionMap:
@@ -87,7 +77,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet1CIDR
-      AvailabilityZone: !Ref AvailabilityZone1
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -98,7 +88,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet2CIDR
-      AvailabilityZone: !Ref AvailabilityZone2
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -109,7 +99,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet1CIDR
-      AvailabilityZone: !Ref AvailabilityZone1
+      AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
@@ -120,7 +110,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet2CIDR
-      AvailabilityZone: !Ref AvailabilityZone2
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
