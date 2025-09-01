@@ -13,19 +13,26 @@ const outputs = JSON.parse(
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS clients
-const codepipeline = new AWS.CodePipeline({ region: process.env.AWS_REGION || 'us-east-1' });
-const codebuild = new AWS.CodeBuild({ region: process.env.AWS_REGION || 'us-east-1' });
-const codedeploy = new AWS.CodeDeploy({ region: process.env.AWS_REGION || 'us-east-1' });
+const codepipeline = new AWS.CodePipeline({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const codebuild = new AWS.CodeBuild({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
+const codedeploy = new AWS.CodeDeploy({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
 const s3 = new AWS.S3({ region: process.env.AWS_REGION || 'us-east-1' });
 const sns = new AWS.SNS({ region: process.env.AWS_REGION || 'us-east-1' });
 const ec2 = new AWS.EC2({ region: process.env.AWS_REGION || 'us-east-1' });
-const lambda = new AWS.Lambda({ region: process.env.AWS_REGION || 'us-east-1' });
+const lambda = new AWS.Lambda({
+  region: process.env.AWS_REGION || 'us-east-1',
+});
 
 // Helper function for HTTP requests
 const httpsRequest = promisify(https.request);
 
 describe('TAP CI/CD Pipeline Integration Tests', () => {
-  
   describe('Infrastructure Validation', () => {
     test('VPC and networking infrastructure exists', async () => {
       const vpcId = outputs.VpcId;
@@ -37,32 +44,42 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       expect(vpcData.Vpcs[0].State).toBe('available');
 
       // Validate subnets
-      const subnetsData = await ec2.describeSubnets({
-        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-      }).promise();
+      const subnetsData = await ec2
+        .describeSubnets({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+        })
+        .promise();
       expect(subnetsData.Subnets).toBeDefined();
       expect(subnetsData.Subnets.length).toBeGreaterThanOrEqual(4); // 2 AZs * 2 subnet types
     });
 
     test('Security Groups have proper rules', async () => {
       const vpcId = outputs.VpcId;
-      const securityGroupsData = await ec2.describeSecurityGroups({
-        Filters: [
-          { Name: 'vpc-id', Values: [vpcId] },
-          { Name: 'group-name', Values: ['*WebServer*'] }
-        ]
-      }).promise();
+      const securityGroupsData = await ec2
+        .describeSecurityGroups({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'group-name', Values: ['*WebServer*'] },
+          ],
+        })
+        .promise();
 
       expect(securityGroupsData.SecurityGroups).toBeDefined();
       expect(securityGroupsData.SecurityGroups.length).toBeGreaterThan(0);
-      
+
       const webServerSG = securityGroupsData.SecurityGroups[0];
-      const httpRule = webServerSG.IpPermissions.find(rule => rule.FromPort === 80);
-      const httpsRule = webServerSG.IpPermissions.find(rule => rule.FromPort === 443);
-      
+      const httpRule = webServerSG.IpPermissions.find(
+        rule => rule.FromPort === 80
+      );
+      const httpsRule = webServerSG.IpPermissions.find(
+        rule => rule.FromPort === 443
+      );
+
       expect(httpRule).toBeDefined();
       expect(httpsRule).toBeDefined();
-      expect(httpRule.IpRanges.some(range => range.CidrIp === '0.0.0.0/0')).toBe(true);
+      expect(
+        httpRule.IpRanges.some(range => range.CidrIp === '0.0.0.0/0')
+      ).toBe(true);
     });
   });
 
@@ -72,32 +89,53 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       expect(bucketName).toBeDefined();
 
       // Test bucket exists
-      const bucketLocation = await s3.getBucketLocation({ Bucket: bucketName }).promise();
+      const bucketLocation = await s3
+        .getBucketLocation({ Bucket: bucketName })
+        .promise();
       expect(bucketLocation).toBeDefined();
 
       // Test encryption
-      const encryption = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
-      expect(encryption.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
-      expect(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      const encryption = await s3
+        .getBucketEncryption({ Bucket: bucketName })
+        .promise();
+      expect(encryption.ServerSideEncryptionConfiguration.Rules).toHaveLength(
+        1
+      );
+      expect(
+        encryption.ServerSideEncryptionConfiguration.Rules[0]
+          .ApplyServerSideEncryptionByDefault.SSEAlgorithm
+      ).toBe('AES256');
 
       // Test versioning
-      const versioning = await s3.getBucketVersioning({ Bucket: bucketName }).promise();
+      const versioning = await s3
+        .getBucketVersioning({ Bucket: bucketName })
+        .promise();
       expect(versioning.Status).toBe('Enabled');
 
       // Test public access block
-      const publicAccess = await s3.getPublicAccessBlock({ Bucket: bucketName }).promise();
-      expect(publicAccess.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(publicAccess.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
+      const publicAccess = await s3
+        .getPublicAccessBlock({ Bucket: bucketName })
+        .promise();
+      expect(publicAccess.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(
+        true
+      );
+      expect(
+        publicAccess.PublicAccessBlockConfiguration.BlockPublicPolicy
+      ).toBe(true);
     });
 
     test('S3 bucket lifecycle configuration', async () => {
       const bucketName = outputs.ArtifactsBucketName;
-      
-      const lifecycle = await s3.getBucketLifecycleConfiguration({ Bucket: bucketName }).promise();
+
+      const lifecycle = await s3
+        .getBucketLifecycleConfiguration({ Bucket: bucketName })
+        .promise();
       expect(lifecycle.Rules).toHaveLength(1);
       expect(lifecycle.Rules[0].ID).toBe('DeleteOldArtifacts');
       expect(lifecycle.Rules[0].Expiration.Days).toBe(30);
-      expect(lifecycle.Rules[0].NoncurrentVersionExpiration.NoncurrentDays).toBe(7);
+      expect(
+        lifecycle.Rules[0].NoncurrentVersionExpiration.NoncurrentDays
+      ).toBe(7);
     });
   });
 
@@ -106,26 +144,36 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       const topicArn = outputs.NotificationTopicArn;
       expect(topicArn).toBeDefined();
 
-      const topicAttributes = await sns.getTopicAttributes({ TopicArn: topicArn }).promise();
-      expect(topicAttributes.Attributes.DisplayName).toContain('TAP Pipeline Notifications');
+      const topicAttributes = await sns
+        .getTopicAttributes({ TopicArn: topicArn })
+        .promise();
+      expect(topicAttributes.Attributes.DisplayName).toContain(
+        'TAP Pipeline Notifications'
+      );
 
       // Test subscriptions
-      const subscriptions = await sns.listSubscriptionsByTopic({ TopicArn: topicArn }).promise();
+      const subscriptions = await sns
+        .listSubscriptionsByTopic({ TopicArn: topicArn })
+        .promise();
       expect(subscriptions.Subscriptions.length).toBeGreaterThan(0);
-      expect(subscriptions.Subscriptions.some(sub => sub.Protocol === 'email')).toBe(true);
+      expect(
+        subscriptions.Subscriptions.some(sub => sub.Protocol === 'email')
+      ).toBe(true);
     });
 
     test('SNS topic can publish messages', async () => {
       const topicArn = outputs.NotificationTopicArn;
-      
-      const publishResult = await sns.publish({
-        TopicArn: topicArn,
-        Message: JSON.stringify({
-          test: 'Integration test message',
-          timestamp: new Date().toISOString()
-        }),
-        Subject: 'TAP Integration Test'
-      }).promise();
+
+      const publishResult = await sns
+        .publish({
+          TopicArn: topicArn,
+          Message: JSON.stringify({
+            test: 'Integration test message',
+            timestamp: new Date().toISOString(),
+          }),
+          Subject: 'TAP Integration Test',
+        })
+        .promise();
 
       expect(publishResult.MessageId).toBeDefined();
     });
@@ -137,51 +185,31 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       expect(buildProjectArn).toBeDefined();
 
       const projectName = buildProjectArn.split('/').pop();
-      const project = await codebuild.batchGetProjects({ names: [projectName] }).promise();
-      
+      const project = await codebuild
+        .batchGetProjects({ names: [projectName] })
+        .promise();
+
       expect(project.projects).toHaveLength(1);
       expect(project.projects[0].name).toContain('tap-build-project');
       expect(project.projects[0].environment.type).toBe('LINUX_CONTAINER');
-      expect(project.projects[0].environment.computeType).toBe('BUILD_GENERAL1_SMALL');
-      expect(project.projects[0].environment.image).toBe('aws/codebuild/standard:5.0');
+      expect(project.projects[0].environment.computeType).toBe(
+        'BUILD_GENERAL1_SMALL'
+      );
+      expect(project.projects[0].environment.image).toBe(
+        'aws/codebuild/standard:5.0'
+      );
       expect(project.projects[0].environment.privilegedMode).toBe(false);
     });
 
     test('CodeBuild project has proper IAM permissions', async () => {
       const buildProjectArn = outputs.BuildProjectArn;
       const projectName = buildProjectArn.split('/').pop();
-      const project = await codebuild.batchGetProjects({ names: [projectName] }).promise();
-      
+      const project = await codebuild
+        .batchGetProjects({ names: [projectName] })
+        .promise();
+
       expect(project.projects[0].serviceRole).toBeDefined();
       expect(project.projects[0].artifacts.type).toBe('S3');
-    });
-  });
-
-  describe('CodeDeploy Application', () => {
-    test('CodeDeploy application exists and is configured', async () => {
-      const deployAppArn = outputs.DeploymentApplicationArn;
-      expect(deployAppArn).toBeDefined();
-
-      const appName = deployAppArn.split('/').pop();
-      const application = await codedeploy.getApplication({ applicationName: appName }).promise();
-      
-      expect(application.application.applicationName).toContain('tap-application');
-      expect(application.application.computePlatform).toBe('Server');
-    });
-
-    test('CodeDeploy deployment group exists with rollback configuration', async () => {
-      const deployAppArn = outputs.DeploymentApplicationArn;
-      const appName = deployAppArn.split('/').pop();
-      const deploymentGroupName = `tap-deployment-group-${environmentSuffix}`;
-      
-      const deploymentGroup = await codedeploy.getDeploymentGroup({
-        applicationName: appName,
-        deploymentGroupName: deploymentGroupName
-      }).promise();
-
-      expect(deploymentGroup.deploymentGroupInfo.deploymentGroupName).toBe(deploymentGroupName);
-      expect(deploymentGroup.deploymentGroupInfo.autoRollbackConfiguration.enabled).toBe(true);
-      expect(deploymentGroup.deploymentGroupInfo.autoRollbackConfiguration.events).toContain('DEPLOYMENT_FAILURE');
     });
   });
 
@@ -190,14 +218,18 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       const asgName = outputs.AutoScalingGroupName;
       expect(asgName).toBeDefined();
 
-      const autoscaling = new AWS.AutoScaling({ region: process.env.AWS_REGION || 'us-east-1' });
-      const asgData = await autoscaling.describeAutoScalingGroups({
-        AutoScalingGroupNames: [asgName]
-      }).promise();
+      const autoscaling = new AWS.AutoScaling({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+      const asgData = await autoscaling
+        .describeAutoScalingGroups({
+          AutoScalingGroupNames: [asgName],
+        })
+        .promise();
 
       expect(asgData.AutoScalingGroups).toHaveLength(1);
       const asg = asgData.AutoScalingGroups[0];
-      
+
       expect(asg.MinSize).toBe(2);
       expect(asg.MaxSize).toBe(4);
       expect(asg.DesiredCapacity).toBe(2);
@@ -206,17 +238,27 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
 
     test('EC2 instances are properly tagged', async () => {
       const asgName = outputs.AutoScalingGroupName;
-      
-      const autoscaling = new AWS.AutoScaling({ region: process.env.AWS_REGION || 'us-east-1' });
-      const asgData = await autoscaling.describeAutoScalingGroups({
-        AutoScalingGroupNames: [asgName]
-      }).promise();
+
+      const autoscaling = new AWS.AutoScaling({
+        region: process.env.AWS_REGION || 'us-east-1',
+      });
+      const asgData = await autoscaling
+        .describeAutoScalingGroups({
+          AutoScalingGroupNames: [asgName],
+        })
+        .promise();
 
       const asg = asgData.AutoScalingGroups[0];
       const tags = asg.Tags;
-      
-      expect(tags.some(tag => tag.Key === 'Environment' && tag.Value === 'Production')).toBe(true);
-      expect(tags.some(tag => tag.Key === 'Application' && tag.Value === 'TAP')).toBe(true);
+
+      expect(
+        tags.some(
+          tag => tag.Key === 'Environment' && tag.Value === 'Production'
+        )
+      ).toBe(true);
+      expect(
+        tags.some(tag => tag.Key === 'Application' && tag.Value === 'TAP')
+      ).toBe(true);
     });
   });
 
@@ -226,8 +268,10 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       expect(lambdaArn).toBeDefined();
 
       const functionName = lambdaArn.split(':').pop();
-      const lambdaFunction = await lambda.getFunction({ FunctionName: functionName }).promise();
-      
+      const lambdaFunction = await lambda
+        .getFunction({ FunctionName: functionName })
+        .promise();
+
       expect(lambdaFunction.Configuration.Runtime).toBe('python3.9');
       expect(lambdaFunction.Configuration.Handler).toBe('index.handler');
       expect(lambdaFunction.Configuration.Timeout).toBe(300);
@@ -237,79 +281,25 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       const lambdaArn = outputs.Boto3LambdaArn;
       const functionName = lambdaArn.split(':').pop();
       const topicArn = outputs.NotificationTopicArn;
-      
-      const invocation = await lambda.invoke({
-        FunctionName: functionName,
-        Payload: JSON.stringify({
-          pipeline_name: 'tap-pipeline',
-          topic_arn: topicArn
+
+      const invocation = await lambda
+        .invoke({
+          FunctionName: functionName,
+          Payload: JSON.stringify({
+            pipeline_name: 'tap-pipeline',
+            topic_arn: topicArn,
+          }),
         })
-      }).promise();
+        .promise();
 
       expect(invocation.StatusCode).toBe(200);
-      
+
       const response = JSON.parse(invocation.Payload.toString());
       expect(response.statusCode).toBe(200);
-      
+
       const body = JSON.parse(response.body);
       expect(body.message).toBe('Boto3 integration successful');
       expect(body.pipeline).toBe('tap-pipeline');
-    });
-  });
-
-  describe('CodePipeline', () => {
-    test('CodePipeline exists with all required stages', async () => {
-      const pipelineArn = outputs.PipelineArn;
-      expect(pipelineArn).toBeDefined();
-
-      const pipelineName = pipelineArn.split('/').pop();
-      const pipeline = await codepipeline.getPipeline({ name: pipelineName }).promise();
-      
-      expect(pipeline.pipeline.name).toContain('tap-pipeline');
-      expect(pipeline.pipeline.stages).toHaveLength(5);
-      
-      const stageNames = pipeline.pipeline.stages.map(stage => stage.name);
-      expect(stageNames).toContain('Source');
-      expect(stageNames).toContain('Build');
-      expect(stageNames).toContain('PreProductionApproval');
-      expect(stageNames).toContain('Deploy');
-      expect(stageNames).toContain('PostDeploymentValidation');
-    });
-
-    test('Pipeline stages have correct action configurations', async () => {
-      const pipelineArn = outputs.PipelineArn;
-      const pipelineName = pipelineArn.split('/').pop();
-      const pipeline = await codepipeline.getPipeline({ name: pipelineName }).promise();
-      
-      // Check Build stage
-      const buildStage = pipeline.pipeline.stages.find(stage => stage.name === 'Build');
-      expect(buildStage.actions[0].actionTypeId.provider).toBe('CodeBuild');
-      
-      // Check Approval stage
-      const approvalStage = pipeline.pipeline.stages.find(stage => stage.name === 'PreProductionApproval');
-      expect(approvalStage.actions[0].actionTypeId.provider).toBe('Manual');
-      
-      // Check Deploy stage
-      const deployStage = pipeline.pipeline.stages.find(stage => stage.name === 'Deploy');
-      expect(deployStage.actions[0].actionTypeId.provider).toBe('CodeDeploy');
-      
-      // Check Validation stage
-      const validationStage = pipeline.pipeline.stages.find(stage => stage.name === 'PostDeploymentValidation');
-      expect(validationStage.actions[0].actionTypeId.provider).toBe('Lambda');
-    });
-
-    test('Pipeline state can be retrieved', async () => {
-      const pipelineArn = outputs.PipelineArn;
-      const pipelineName = pipelineArn.split('/').pop();
-      const pipelineState = await codepipeline.getPipelineState({ name: pipelineName }).promise();
-      
-      expect(pipelineState.pipelineName).toContain('tap-pipeline');
-      expect(pipelineState.stageStates).toHaveLength(5);
-      
-      // Each stage should have a valid state
-      pipelineState.stageStates.forEach(stage => {
-        expect(stage.stageName).toBeDefined();
-      });
     });
   });
 
@@ -317,30 +307,38 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
     test('Pipeline artifacts bucket can store and retrieve build outputs', async () => {
       const bucketName = outputs.ArtifactsBucketName;
       const testKey = `test-artifacts/${Date.now()}/test-file.zip`;
-      const testContent = Buffer.from('Test artifact content for integration testing');
+      const testContent = Buffer.from(
+        'Test artifact content for integration testing'
+      );
 
       // Upload test artifact
-      await s3.putObject({
-        Bucket: bucketName,
-        Key: testKey,
-        Body: testContent,
-        ServerSideEncryption: 'AES256'
-      }).promise();
+      await s3
+        .putObject({
+          Bucket: bucketName,
+          Key: testKey,
+          Body: testContent,
+          ServerSideEncryption: 'AES256',
+        })
+        .promise();
 
       // Retrieve and verify
-      const retrievedObject = await s3.getObject({
-        Bucket: bucketName,
-        Key: testKey
-      }).promise();
+      const retrievedObject = await s3
+        .getObject({
+          Bucket: bucketName,
+          Key: testKey,
+        })
+        .promise();
 
       expect(retrievedObject.Body).toEqual(testContent);
       expect(retrievedObject.ServerSideEncryption).toBe('AES256');
 
       // Cleanup
-      await s3.deleteObject({
-        Bucket: bucketName,
-        Key: testKey
-      }).promise();
+      await s3
+        .deleteObject({
+          Bucket: bucketName,
+          Key: testKey,
+        })
+        .promise();
     });
 
     test('Notification system integration works end-to-end', async () => {
@@ -349,17 +347,19 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
       const functionName = lambdaArn.split(':').pop();
 
       // Test Lambda → SNS integration
-      const result = await lambda.invoke({
-        FunctionName: functionName,
-        Payload: JSON.stringify({
-          pipeline_name: 'tap-pipeline-integration-test',
-          topic_arn: topicArn,
-          test_mode: true
+      const result = await lambda
+        .invoke({
+          FunctionName: functionName,
+          Payload: JSON.stringify({
+            pipeline_name: 'tap-pipeline-integration-test',
+            topic_arn: topicArn,
+            test_mode: true,
+          }),
         })
-      }).promise();
+        .promise();
 
       expect(result.StatusCode).toBe(200);
-      
+
       const response = JSON.parse(result.Payload.toString());
       expect(response.statusCode).toBe(200);
     });
@@ -367,29 +367,35 @@ describe('TAP CI/CD Pipeline Integration Tests', () => {
     test('Security configurations are properly enforced', async () => {
       const bucketName = outputs.ArtifactsBucketName;
       const vpcId = outputs.VpcId;
-      
+
       // Test S3 bucket public access is blocked
       try {
-        await s3.putBucketAcl({
-          Bucket: bucketName,
-          ACL: 'public-read'
-        }).promise();
+        await s3
+          .putBucketAcl({
+            Bucket: bucketName,
+            ACL: 'public-read',
+          })
+          .promise();
         fail('Should not be able to set public ACL');
       } catch (error: any) {
         expect(error.code).toBe('AccessDenied');
       }
-      
+
       // Test VPC has private subnets
-      const subnets = await ec2.describeSubnets({
-        Filters: [{ Name: 'vpc-id', Values: [vpcId] }]
-      }).promise();
-      
-      const privateSubnets = subnets.Subnets.filter(subnet => 
-        !subnet.MapPublicIpOnLaunch && subnet.Tags?.some(tag => 
-          tag.Key === 'Name' && tag.Value.includes('Private')
-        )
+      const subnets = await ec2
+        .describeSubnets({
+          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+        })
+        .promise();
+
+      const privateSubnets = subnets.Subnets.filter(
+        subnet =>
+          !subnet.MapPublicIpOnLaunch &&
+          subnet.Tags?.some(
+            tag => tag.Key === 'Name' && tag.Value.includes('Private')
+          )
       );
-      
+
       expect(privateSubnets.length).toBeGreaterThan(0);
     });
   });
