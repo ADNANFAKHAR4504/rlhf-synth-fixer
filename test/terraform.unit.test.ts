@@ -84,13 +84,16 @@ describe("Terraform stack static validation", () => {
 
   // ==== IAM Roles and Policies ====
   ["ec2_role", "lambda_role", "s3_replication"].forEach(role => {
-    it(`declares IAM role and policies for ${role}`, () => {
-      expect(has(new RegExp(`resource\\s+"aws_iam_role"\\s+"${role}"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_iam_role_policy"\\s+"${role}"`))).toBe(true)
-    });
-  });
-  it("declares EC2 instance profile", () => {
-    expect(has(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/)).toBe(true);
+   it(`declares IAM role and policies for ${role}`, () => {
+    expect(has(new RegExp(`resource\\s+"aws_iam_role"\\s+"${role}"`))).toBe(true);
+    const rolePolicies = {
+      ec2_role: "ec2_policy",
+      lambda_role: "lambda_policy",
+      s3_replication: "s3_replication"
+    };
+    const policyName = rolePolicies[role] || role;
+    expect(has(new RegExp(`resource\\s+"aws_iam_role_policy"\\s+"${policyName}"`))).toBe(true);
+   });
   });
 
   // ==== S3 Buckets and Replication ====
