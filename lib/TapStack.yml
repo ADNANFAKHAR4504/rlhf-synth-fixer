@@ -210,7 +210,6 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub "CodePipelineRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -272,7 +271,6 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub "CodeBuildRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -391,7 +389,6 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub "EBServiceRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -417,7 +414,6 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Delete
     Properties:
-      RoleName: !Sub "EBInstanceRole-${EnvironmentSuffix}"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -443,7 +439,6 @@ Resources:
     Type: AWS::IAM::InstanceProfile
     DeletionPolicy: Delete
     Properties:
-      InstanceProfileName: !Sub "EBInstanceProfile-${EnvironmentSuffix}"
       Roles:
         - !Ref EBInstanceRole
 
