@@ -1,3 +1,18 @@
+# Secure CI/CD Pipeline with CodePipeline, CodeBuild, and Elastic Beanstalk
+
+This CloudFormation template creates a comprehensive CI/CD pipeline with multiple environments and security best practices.
+
+## Architecture Overview
+
+- **CodePipeline**: Orchestrates the entire CI/CD workflow
+- **CodeBuild**: Builds and tests the application
+- **Elastic Beanstalk**: Hosts the application across multiple environments (Dev, Test, Prod)
+- **KMS Encryption**: Secures all artifacts and data
+- **SNS Notifications**: Alerts on pipeline state changes
+
+## CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure CI/CD Pipeline with CodePipeline, CodeBuild, and Elastic Beanstalk deployment across multiple environments and regions'
 
@@ -7,57 +22,57 @@ Parameters:
     Type: String
     Description: GitHub repository owner/organization name
     Default: 'your-org'
-  
+
   GitHubRepoName:
     Type: String
     Description: GitHub repository name
     Default: 'your-app'
-  
+
   GitHubBranch:
     Type: String
     Description: GitHub branch to track
     Default: 'main'
-  
+
   GitHubToken:
     Type: String
     Description: GitHub personal access token (stored in Systems Manager Parameter Store)
     Default: '/cicd/github-token'
     NoEcho: true
-  
+
   # Application Configuration
   ApplicationName:
     Type: String
     Description: Name of the application
     Default: 'MyWebApp'
-  
+
   SolutionStackName:
     Type: String
     Description: Elastic Beanstalk solution stack
     Default: '64bit Amazon Linux 2 v5.8.0 running Node.js 18'
-  
+
   # Notification Configuration
   NotificationEmail:
     Type: String
     Description: Email address for pipeline notifications
     Default: 'devteam@company.com'
-  
+
   # Tagging Configuration
   Environment:
     Type: String
     Description: Environment designation
     Default: 'cicd'
     AllowedValues: ['dev', 'test', 'prod', 'cicd']
-  
+
   Project:
     Type: String
     Description: Project name
     Default: 'WebApplication'
-  
+
   Owner:
     Type: String
     Description: Resource owner
     Default: 'DevOps Team'
-  
+
   CostCenter:
     Type: String
     Description: Cost center for billing
@@ -573,7 +588,7 @@ Resources:
                 PollForSourceChanges: false
               OutputArtifacts:
                 - Name: SourceOutput
-        
+
         - Name: Build
           Actions:
             - Name: BuildAction
@@ -588,7 +603,7 @@ Resources:
                 - Name: SourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
-        
+
         - Name: DeployToDev
           Actions:
             - Name: DeployToDevAction
@@ -603,7 +618,7 @@ Resources:
               InputArtifacts:
                 - Name: BuildOutput
               RunOrder: 1
-        
+
         - Name: DeployToTest
           Actions:
             - Name: ApprovalForTest
@@ -628,7 +643,7 @@ Resources:
               InputArtifacts:
                 - Name: BuildOutput
               RunOrder: 2
-        
+
         - Name: DeployToProd
           Actions:
             - Name: ApprovalForProd
@@ -727,3 +742,79 @@ Outputs:
     Value: !Ref PipelineNotificationTopic
     Export:
       Name: !Sub '${AWS::StackName}-NotificationTopic'
+```
+
+## Features
+
+### Security
+
+- **KMS Encryption**: All artifacts, logs, and SNS topics are encrypted
+- **IAM Least Privilege**: Minimal permissions for each service role
+- **S3 Security**: Public access blocked, versioning enabled, lifecycle policies
+
+### Multi-Environment Deployment
+
+- **Development Environment**: Auto-deployment for rapid iteration
+- **Testing Environment**: Manual approval required
+- **Production Environment**: Manual approval with rolling deployment strategy
+
+### Monitoring & Notifications
+
+- **CloudWatch Logs**: Centralized logging for CodeBuild
+- **SNS Notifications**: Email alerts for pipeline state changes
+- **EventBridge Rules**: Automated pipeline monitoring
+
+### CI/CD Pipeline Stages
+
+1. **Source**: GitHub integration with webhook triggers
+2. **Build**: Automated testing and artifact creation
+3. **Deploy to Dev**: Automatic deployment to development environment
+4. **Deploy to Test**: Manual approval + deployment to testing environment
+5. **Deploy to Prod**: Manual approval + rolling deployment to production
+
+## Deployment Instructions
+
+1. **Prerequisites**:
+   - GitHub repository with your application code
+   - GitHub personal access token stored in Systems Manager Parameter Store
+   - Notification email address
+
+2. **Parameters to Configure**:
+   - `GitHubRepoOwner`: Your GitHub username/organization
+   - `GitHubRepoName`: Repository name
+   - `GitHubBranch`: Branch to track (default: main)
+   - `ApplicationName`: Name for your application
+   - `NotificationEmail`: Email for pipeline notifications
+
+3. **Deploy the Stack**:
+   ```bash
+   aws cloudformation create-stack \
+     --stack-name my-cicd-pipeline \
+     --template-body file://pipeline-template.yaml \
+     --parameters ParameterKey=GitHubRepoOwner,ParameterValue=your-username \
+                  ParameterKey=GitHubRepoName,ParameterValue=your-repo \
+                  ParameterKey=NotificationEmail,ParameterValue=your-email@company.com \
+     --capabilities CAPABILITY_NAMED_IAM
+   ```
+
+## Outputs
+
+The template provides the following outputs:
+
+- Pipeline name and ARN
+- Artifacts bucket name
+- Application name
+- Environment URLs (Dev, Test, Prod)
+- KMS key ID
+- Notification topic ARN
+
+## Best Practices Implemented
+
+- ✅ Encryption at rest and in transit
+- ✅ Least privilege IAM policies
+- ✅ Manual approvals for production deployments
+- ✅ Rolling deployment strategy for zero downtime
+- ✅ Automated testing in build phase
+- ✅ Centralized logging and monitoring
+- ✅ Cost optimization with artifact lifecycle policies
+- ✅ Tagged resources for cost allocation
