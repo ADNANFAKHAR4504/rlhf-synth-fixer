@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Robust networking infrastructure in us-west-2. Includes VPC, subnets, IGW, NAT Gateway, EC2 Auto Scaling (via LaunchTemplate), IAM roles, CloudWatch alarms, and a secure S3 bucket.\n",
+    "Description": "TapStack.yml — Robust networking infrastructure in us-west-2. Includes VPC, subnets, IGW, NAT Gateway, EC2 Auto Scaling (LaunchTemplate with SSM AMI), IAM roles, CloudWatch alarms, and a secure S3 bucket.\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -33,13 +33,10 @@
         "AllowedSSHRange": {
             "Type": "String",
             "Default": "203.0.113.0/24"
-        }
-    },
-    "Mappings": {
-        "RegionMap": {
-            "us-west-2": {
-                "AMI": "ami-0c55b159cbfafe1f0"
-            }
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
         }
     },
     "Resources": {
@@ -406,11 +403,7 @@
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionMap",
-                            "us-west-2",
-                            "AMI"
-                        ]
+                        "Ref": "LatestAmiId"
                     },
                     "InstanceType": {
                         "Ref": "InstanceType"
