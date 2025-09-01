@@ -17,6 +17,7 @@ from aws_cdk import (
     NestedStack,
     Duration,
     RemovalPolicy,
+    Environment,
     aws_ec2 as ec2,
     aws_iam as iam,
     aws_s3 as s3,
@@ -76,6 +77,15 @@ class TapStack(cdk.Stack):
             self,
             scope: Construct,
             construct_id: str, props: Optional[TapStackProps] = None, **kwargs):
+        # Ensure the stack uses us-west-2 region
+        if 'env' not in kwargs:
+            kwargs['env'] = cdk.Environment(region='us-west-2')
+        elif not kwargs['env'].region:
+            kwargs['env'] = cdk.Environment(
+                account=kwargs['env'].account if 'account' in kwargs['env'].__dict__ else None,
+                region='us-west-2'
+            )
+        
         super().__init__(scope, construct_id, **kwargs)
 
         # Get environment suffix from props, context, or use 'dev' as default
