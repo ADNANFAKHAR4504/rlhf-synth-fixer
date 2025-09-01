@@ -161,7 +161,9 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for ECS EC2 instances',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2ContainerServiceforEC2Role'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonEC2ContainerServiceforEC2Role'
+        ),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'CloudWatchAgentServerPolicy'
         ),
@@ -310,6 +312,5 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', 'Production');
     cdk.Tags.of(this).add('Project', 'Migration');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
-
   }
 }
