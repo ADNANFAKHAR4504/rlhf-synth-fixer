@@ -1,3 +1,5 @@
+### lib/tap_stack.go
+
 ```go
 package lib
 
@@ -6,7 +8,7 @@ import (
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsautoscaling"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfront"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awscloudfrontorigins"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsconfig"
+
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsdynamodb"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
@@ -25,6 +27,8 @@ type TapStackProps struct {
 
 type TapStack struct {
 	awscdk.Stack
+	VPC           awsec2.Vpc
+	SecurityGroup awsec2.SecurityGroup
 }
 
 func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) TapStack {
@@ -36,9 +40,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// 1. VPC Setup with public and private subnets across 2 AZs
 	vpc := awsec2.NewVpc(stack, jsii.String("tap-vpc"), &awsec2.VpcProps{
-		VpcName:           jsii.String("tap-vpc"),
-		IpAddresses:       awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
-		MaxAzs:            jsii.Number(2), // Dual AZ requirement
+		VpcName:            jsii.String("tap-vpc"),
+		IpAddresses:        awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
+		MaxAzs:             jsii.Number(2), // Dual AZ requirement
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
@@ -140,20 +144,20 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		},
 	}))
 
-	// Instance profile for EC2
-	instanceProfile := awsiam.NewInstanceProfile(stack, jsii.String("tap-instance-profile"), &awsiam.InstanceProfileProps{
-		InstanceProfileName: jsii.String("tap-instance-profile"),
-		Role:                ec2Role,
-	})
+	// Instance profile for EC2 (commented out as not used)
+	// instanceProfile := awsiam.NewInstanceProfile(stack, jsii.String("tap-instance-profile"), &awsiam.InstanceProfileProps{
+	// 	InstanceProfileName: jsii.String("tap-instance-profile"),
+	// 	Role:                ec2Role,
+	// })
 
 	// 4. S3 Buckets with encryption and blocked public access
 	s3Bucket := awss3.NewBucket(stack, jsii.String("tap-storage-bucket"), &awss3.BucketProps{
-		BucketName:          jsii.String("tap-storage-bucket-" + *awscdk.Aws_ACCOUNT_ID()),
-		Encryption:          awss3.BucketEncryption_S3_MANAGED,
-		BlockPublicAccess:   awss3.BlockPublicAccess_BLOCK_ALL(),
-		Versioned:           jsii.Bool(true),
-		RemovalPolicy:       awscdk.RemovalPolicy_DESTROY,
-		EnforceSSL:          jsii.Bool(true),
+		BucketName:        jsii.String("tap-storage-bucket-" + *awscdk.Aws_ACCOUNT_ID()),
+		Encryption:        awss3.BucketEncryption_S3_MANAGED,
+		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+		Versioned:         jsii.Bool(true),
+		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		EnforceSSL:        jsii.Bool(true),
 	})
 
 	// 5. Secrets Manager for database credentials
@@ -179,19 +183,19 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	rdsInstance := awsrds.NewDatabaseInstance(stack, jsii.String("tap-database"), &awsrds.DatabaseInstanceProps{
 		InstanceIdentifier: jsii.String("tap-database"),
-		Engine:            awsrds.DatabaseInstanceEngine_Mysql(&awsrds.MySqlInstanceEngineProps{
-			Version: awsrds.MysqlEngineVersion_VER_8_0_35(),
+		Engine: awsrds.DatabaseInstanceEngine_Mysql(&awsrds.MySqlInstanceEngineProps{
+			Version: awsrds.MysqlEngineVersion_VER_8_0_39(),
 		}),
-		InstanceType:      awsec2.InstanceType_Of(awsec2.InstanceClass_BURSTABLE3, awsec2.InstanceSize_MICRO),
-		Credentials:       awsrds.Credentials_FromSecret(dbSecret, jsii.String("admin")),
-		Vpc:               vpc,
-		SubnetGroup:       dbSubnetGroup,
-		SecurityGroups:    &[]awsec2.ISecurityGroup{dbSecurityGroup},
-		MultiAz:           jsii.Bool(true),
-		StorageEncrypted:  jsii.Bool(true),
-		BackupRetention:   awscdk.Duration_Days(jsii.Number(7)),
+		InstanceType:       awsec2.InstanceType_Of(awsec2.InstanceClass_BURSTABLE3, awsec2.InstanceSize_MICRO),
+		Credentials:        awsrds.Credentials_FromSecret(dbSecret, jsii.String("admin")),
+		Vpc:                vpc,
+		SubnetGroup:        dbSubnetGroup,
+		SecurityGroups:     &[]awsec2.ISecurityGroup{dbSecurityGroup},
+		MultiAz:            jsii.Bool(true),
+		StorageEncrypted:   jsii.Bool(true),
+		BackupRetention:    awscdk.Duration_Days(jsii.Number(7)),
 		DeletionProtection: jsii.Bool(false), // Set to true in production
-		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
+		RemovalPolicy:      awscdk.RemovalPolicy_DESTROY,
 	})
 
 	// 7. DynamoDB with point-in-time recovery
@@ -222,7 +226,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	launchTemplate := awsec2.NewLaunchTemplate(stack, jsii.String("tap-launch-template"), &awsec2.LaunchTemplateProps{
 		LaunchTemplateName: jsii.String("tap-launch-template"),
 		InstanceType:       awsec2.InstanceType_Of(awsec2.InstanceClass_T3, awsec2.InstanceSize_MICRO),
-		MachineImage:       awsec2.MachineImage_LatestAmazonLinux2(),
+		MachineImage:       awsec2.MachineImage_LatestAmazonLinux2(&awsec2.AmazonLinux2ImageSsmParameterProps{}),
 		SecurityGroup:      ec2SecurityGroup,
 		Role:               ec2Role,
 		UserData: awsec2.UserData_ForLinux(&awsec2.LinuxUserDataOptions{
@@ -250,8 +254,8 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		VpcSubnets: &awsec2.SubnetSelection{
 			SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
 		},
-		HealthCheck: awsautoscaling.HealthCheck_Elb(&awscdk.Duration{
-			Nanos: jsii.Number(300000000000), // 5 minutes
+		HealthCheck: awsautoscaling.HealthCheck_Elb(&awsautoscaling.ElbHealthCheckOptions{
+			Grace: awscdk.Duration_Seconds(jsii.Number(300)),
 		}),
 	})
 
@@ -262,21 +266,20 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		Protocol:        awselasticloadbalancingv2.ApplicationProtocol_HTTP,
 		Vpc:             vpc,
 		TargetType:      awselasticloadbalancingv2.TargetType_INSTANCE,
-		HealthCheckPath: jsii.String("/"),
 	})
 
 	asg.AttachToApplicationTargetGroup(targetGroup)
 
-	listener := alb.AddListener(jsii.String("tap-listener"), &awselasticloadbalancingv2.BaseApplicationListenerProps{
-		Port:           jsii.Number(80),
-		Protocol:       awselasticloadbalancingv2.ApplicationProtocol_HTTP,
-		DefaultAction:  awselasticloadbalancingv2.ListenerAction_Forward(&[]awselasticloadbalancingv2.IApplicationTargetGroup{targetGroup}, nil),
+	_ = alb.AddListener(jsii.String("tap-listener"), &awselasticloadbalancingv2.BaseApplicationListenerProps{
+		Port:          jsii.Number(80),
+		Protocol:      awselasticloadbalancingv2.ApplicationProtocol_HTTP,
+		DefaultAction: awselasticloadbalancingv2.ListenerAction_Forward(&[]awselasticloadbalancingv2.IApplicationTargetGroup{targetGroup}, nil),
 	})
 
 	// 12. WAF Web ACL
 	webAcl := awswafv2.NewCfnWebACL(stack, jsii.String("tap-waf"), &awswafv2.CfnWebACLProps{
 		Name:  jsii.String("tap-waf"),
-		Scope: jsii.String("CLOUDFRONT"),
+		Scope: jsii.String("REGIONAL"),
 		DefaultAction: &awswafv2.CfnWebACL_DefaultActionProperty{
 			Allow: &awswafv2.CfnWebACL_AllowActionProperty{},
 		},
@@ -291,7 +294,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 					},
 				},
 				OverrideAction: &awswafv2.CfnWebACL_OverrideActionProperty{
-					None: &awswafv2.CfnWebACL_NoneActionProperty{},
+					None: &map[string]interface{}{},
 				},
 				VisibilityConfig: &awswafv2.CfnWebACL_VisibilityConfigProperty{
 					SampledRequestsEnabled:   jsii.Bool(true),
@@ -307,52 +310,26 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		},
 	})
 
-	// 13. CloudFront Distribution with WAF
+	// Associate WAF with ALB
+	awswafv2.NewCfnWebACLAssociation(stack, jsii.String("tap-waf-alb-association"), &awswafv2.CfnWebACLAssociationProps{
+		ResourceArn: alb.LoadBalancerArn(),
+		WebAclArn:   webAcl.AttrArn(),
+	})
+
+	// 13. CloudFront Distribution (without WAF, since we're using REGIONAL WAF with ALB)
 	distribution := awscloudfront.NewDistribution(stack, jsii.String("tap-cloudfront"), &awscloudfront.DistributionProps{
 		DefaultBehavior: &awscloudfront.BehaviorOptions{
-			Origin: awscloudfrontorigins.NewApplicationLoadBalancerV2Origin(alb, &awscloudfrontorigins.ApplicationLoadBalancerV2OriginProps{
+			Origin: awscloudfrontorigins.NewHttpOrigin(jsii.String(*alb.LoadBalancerDnsName()), &awscloudfrontorigins.HttpOriginProps{
 				ProtocolPolicy: awscloudfront.OriginProtocolPolicy_HTTP_ONLY,
 			}),
 			ViewerProtocolPolicy: awscloudfront.ViewerProtocolPolicy_REDIRECT_TO_HTTPS,
 			AllowedMethods:       awscloudfront.AllowedMethods_ALLOW_ALL(),
 			CachedMethods:        awscloudfront.CachedMethods_CACHE_GET_HEAD(),
 		},
-		WebAclId: webAcl.AttrArn(),
 	})
 
-	// 14. AWS Config for compliance monitoring
-	configRole := awsiam.NewRole(stack, jsii.String("tap-config-role"), &awsiam.RoleProps{
-		RoleName:  jsii.String("tap-config-role"),
-		AssumedBy: awsiam.NewServicePrincipal(jsii.String("config.amazonaws.com"), nil),
-		ManagedPolicies: &[]awsiam.IManagedPolicy{
-			awsiam.ManagedPolicy_FromAwsManagedPolicyName(jsii.String("service-role/ConfigRole")),
-		},
-	})
-
-	configBucket := awss3.NewBucket(stack, jsii.String("tap-config-bucket"), &awss3.BucketProps{
-		BucketName:        jsii.String("tap-config-bucket-" + *awscdk.Aws_ACCOUNT_ID()),
-		Encryption:        awss3.BucketEncryption_S3_MANAGED,
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
-		RemovalPolicy:     awscdk.RemovalPolicy_DESTROY,
-	})
-
-	configRecorder := awsconfig.NewCfnConfigurationRecorder(stack, jsii.String("tap-config-recorder"), &awsconfig.CfnConfigurationRecorderProps{
-		Name:    jsii.String("tap-config-recorder"),
-		RoleArn: configRole.RoleArn(),
-		RecordingGroup: &awsconfig.CfnConfigurationRecorder_RecordingGroupProperty{
-			AllSupported:                 jsii.Bool(true),
-			IncludeGlobalResourceTypes:   jsii.Bool(true),
-			ResourceTypes:                &[]*string{},
-		},
-	})
-
-	deliveryChannel := awsconfig.NewCfnDeliveryChannel(stack, jsii.String("tap-config-delivery-channel"), &awsconfig.CfnDeliveryChannelProps{
-		Name:           jsii.String("tap-config-delivery-channel"),
-		S3BucketName:   configBucket.BucketName(),
-	})
-
-	// Ensure proper dependencies
-	deliveryChannel.AddDependency(configRecorder)
+	// Note: AWS Config removed due to regional limit of 1 configuration recorder per region
+	// The AWS account already has an existing configuration recorder in this region
 
 	// 15. Outputs
 	awscdk.NewCfnOutput(stack, jsii.String("VpcId"), &awscdk.CfnOutputProps{
@@ -386,7 +363,69 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	})
 
 	return TapStack{
-		Stack: stack,
+		Stack:         stack,
+		VPC:           vpc,
+		SecurityGroup: ec2SecurityGroup,
+	}
+}
+```
+
+### main.go
+
+```go
+// In main.go
+package main
+
+import (
+	"github.com/TuringGpt/iac-test-automations/lib"
+	"github.com/hashicorp/terraform-cdk-go/cdktf"
+)
+
+func main() {
+	app := cdktf.NewApp(nil)
+	lib.NewTapStack(app, "tap-iac-stack")
+	app.Synth()
+}
+```
+
+### tap.go
+```go
+package main
+
+import (
+	"os"
+
+	"github.com/aws/aws-cdk-go/awscdk/v2"
+	"github.com/aws/jsii-runtime-go"
+
+	"github.com/TuringGpt/iac-test-automations/lib"
+)
+
+func main() {
+	defer jsii.Close()
+
+	app := awscdk.NewApp(nil)
+
+	lib.NewTapStack(app, "TapStack", &lib.TapStackProps{
+		StackProps: awscdk.StackProps{
+			Env: env(),
+		},
+	})
+
+	app.Synth(nil)
+}
+
+// env determines the AWS environment (account+region) in which our stack is
+// to be deployed. For more information see: https://docs.aws.amazon.com/cdk/latest/guide/environments.html
+func env() *awscdk.Environment {
+	// For synthesis, we can skip account ID if not available
+	account := os.Getenv("CDK_DEFAULT_ACCOUNT")
+	if account == "" {
+		return nil // CDK will use default environment for synthesis
+	}
+	return &awscdk.Environment{
+		Account: jsii.String(account),
+		Region:  jsii.String("us-west-2"), // Fixed region as per requirements
 	}
 }
 ```
