@@ -18,6 +18,7 @@ Metadata:
           - GitHubRepository
           - GitHubBranch
           - GitHubOwner
+          - GitHubToken
       - Label:
           default: "Notification Configuration"
         Parameters:
@@ -69,6 +70,12 @@ Parameters:
     Type: String
     Default: "my-organization"
     Description: "GitHub repository owner"
+
+  GitHubToken:
+    Type: String
+    NoEcho: true
+    Description: "GitHub personal access token for repository access"
+    ConstraintDescription: "Must be a valid GitHub personal access token"
 
   NotificationEmail:
     Type: String
@@ -563,8 +570,8 @@ Resources:
           Id: !GetAtt PipelineKMSKey.Arn
           Type: KMS
       Stages:
-        # Source stage - requires GitHub OAuth token in Systems Manager Parameter Store
-        # Create parameter: aws ssm put-parameter --name "/cicd/github-token" --value "your-github-token" --type "SecureString"
+        # Source stage - requires GitHub OAuth token passed as parameter
+        # No longer using SSM parameter store as CodePipeline doesn't support SSM secure references
         - Name: Source
           Actions:
             - Name: SourceAction
@@ -577,7 +584,7 @@ Resources:
                 Owner: !Ref GitHubOwner
                 Repo: !Ref GitHubRepository
                 Branch: !Ref GitHubBranch
-                OAuthToken: "{{resolve:ssm-secure:/cicd/github-token}}"
+                OAuthToken: !Ref GitHubToken
               OutputArtifacts:
                 - Name: SourceOutput
         - Name: Build
