@@ -21,13 +21,13 @@ interface TapStackProps extends cdk.StackProps {
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
-    
+
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // ==============================================
     // VPC and Networking Setup
     // ==============================================
-    
+
     /**
      * Create a VPC with public and private subnets for secure EC2 deployment
      */
@@ -51,16 +51,20 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // Security Groups
     // ==============================================
-    
+
     /**
      * Security group for EC2 instances - follows least privilege principle
      * Only allows HTTP/HTTPS traffic and SSH from specific sources
      */
-    const webServerSecurityGroup = new ec2.SecurityGroup(this, 'WebServerSecurityGroup', {
-      vpc,
-      description: 'Security group for web servers',
-      allowAllOutbound: true,
-    });
+    const webServerSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'WebServerSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for web servers',
+        allowAllOutbound: true,
+      }
+    );
 
     // Allow HTTP traffic from anywhere
     webServerSecurityGroup.addIngressRule(
@@ -86,7 +90,7 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // S3 Bucket for Artifacts
     // ==============================================
-    
+
     /**
      * Encrypted S3 bucket to store build artifacts securely
      */
@@ -108,7 +112,7 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // SNS Topic for Notifications
     // ==============================================
-    
+
     /**
      * SNS topic for pipeline notifications and alerts
      */
@@ -125,7 +129,7 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // IAM Roles
     // ==============================================
-    
+
     /**
      * IAM role for CodeBuild with least privilege permissions
      */
@@ -156,17 +160,25 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'EC2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
     // Grant EC2 instances access to artifacts bucket
     artifactsBucket.grantRead(ec2Role);
 
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role,
-    });
+    const instanceProfile = new iam.InstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        role: ec2Role,
+      }
+    );
 
     /**
      * IAM role for CodeDeploy
@@ -174,14 +186,16 @@ export class TapStack extends cdk.Stack {
     const codeDeployRole = new iam.Role(this, 'CodeDeployRole', {
       assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSCodeDeployRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSCodeDeployRole'
+        ),
       ],
     });
 
     // ==============================================
     // CloudWatch Log Groups
     // ==============================================
-    
+
     /**
      * CloudWatch log group for CodeBuild with detailed logging
      */
@@ -194,7 +208,7 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // CodeBuild Project
     // ==============================================
-    
+
     /**
      * CodeBuild project for compiling and testing the application
      */
@@ -213,10 +227,7 @@ export class TapStack extends cdk.Stack {
             'runtime-versions': {
               nodejs: '16',
             },
-            commands: [
-              'echo Installing dependencies...',
-              'npm install',
-            ],
+            commands: ['echo Installing dependencies...', 'npm install'],
           },
           pre_build: {
             commands: [
@@ -240,13 +251,8 @@ export class TapStack extends cdk.Stack {
           },
         },
         artifacts: {
-          files: [
-            '**/*',
-          ],
-          'exclude-paths': [
-            'node_modules/**/*',
-            '.git/**/*',
-          ],
+          files: ['**/*'],
+          'exclude-paths': ['node_modules/**/*', '.git/**/*'],
         },
       }),
       artifacts: codebuild.Artifacts.s3({
@@ -264,20 +270,27 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // EC2 Launch Template and Auto Scaling Group
     // ==============================================
-    
+
     /**
      * Launch template for EC2 instances with CodeDeploy agent
      */
-    const launchTemplate = new ec2.LaunchTemplate(this, 'WebServerLaunchTemplate', {
-      launchTemplateName: `tap-web-server-template-${environmentSuffix}`,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      machineImage: ec2.MachineImage.latestAmazonLinux({
-        generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
-      }),
-      securityGroup: webServerSecurityGroup,
-      role: ec2Role,
-      userData: ec2.UserData.forLinux(),
-    });
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'WebServerLaunchTemplate',
+      {
+        launchTemplateName: `tap-web-server-template-${environmentSuffix}`,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux({
+          generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
+        }),
+        securityGroup: webServerSecurityGroup,
+        role: ec2Role,
+        userData: ec2.UserData.forLinux(),
+      }
+    );
 
     // Add user data to install CodeDeploy agent and web server
     launchTemplate.userData?.addCommands(
@@ -286,7 +299,7 @@ export class TapStack extends cdk.Stack {
       'yum install -y httpd',
       'systemctl start httpd',
       'systemctl enable httpd',
-      
+
       // Install CodeDeploy agent
       'yum install -y ruby wget',
       'cd /home/ec2-user',
@@ -294,30 +307,36 @@ export class TapStack extends cdk.Stack {
       'chmod +x ./install',
       './install auto',
       'service codedeploy-agent start',
-      
+
       // Install CloudWatch agent
       'wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm',
       'rpm -U ./amazon-cloudwatch-agent.rpm',
-      
+
       // Create a simple index.html
       'echo "<h1>TAP Application - Version 1.0</h1>" > /var/www/html/index.html',
-      'echo "<p>Deployed via CodeDeploy</p>" >> /var/www/html/index.html',
+      'echo "<p>Deployed via CodeDeploy</p>" >> /var/www/html/index.html'
     );
 
     /**
      * Auto Scaling Group for high availability
      */
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'WebServerASG', {
-      vpc,
-      launchTemplate,
-      minCapacity: 2,
-      maxCapacity: 4,
-      desiredCapacity: 2,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(5) }),
-    });
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'WebServerASG',
+      {
+        vpc,
+        launchTemplate,
+        minCapacity: 2,
+        maxCapacity: 4,
+        desiredCapacity: 2,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        healthCheck: autoscaling.HealthCheck.ec2({
+          grace: cdk.Duration.minutes(5),
+        }),
+      }
+    );
 
     // Tag instances for CodeDeploy
     cdk.Tags.of(autoScalingGroup).add('Environment', 'Production');
@@ -326,34 +345,42 @@ export class TapStack extends cdk.Stack {
     // ==============================================
     // CodeDeploy Application and Deployment Group
     // ==============================================
-    
+
     /**
      * CodeDeploy application for managing deployments
      */
-    const codeDeployApplication = new codedeploy.ServerApplication(this, 'TapCodeDeployApp', {
-      applicationName: `tap-application-${environmentSuffix}`,
-    });
+    const codeDeployApplication = new codedeploy.ServerApplication(
+      this,
+      'TapCodeDeployApp',
+      {
+        applicationName: `tap-application-${environmentSuffix}`,
+      }
+    );
 
     /**
      * CodeDeploy deployment group with rollback configuration
      */
-    const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'TapDeploymentGroup', {
-      application: codeDeployApplication,
-      deploymentGroupName: `tap-deployment-group-${environmentSuffix}`,
-      role: codeDeployRole,
-      autoScalingGroups: [autoScalingGroup],
-      deploymentConfig: codedeploy.ServerDeploymentConfig.ALL_AT_ONCE,
-      autoRollback: {
-        failedDeployment: true,
-        stoppedDeployment: true,
-      },
-      ignoreAlarmConfiguration: false,
-    });
+    const deploymentGroup = new codedeploy.ServerDeploymentGroup(
+      this,
+      'TapDeploymentGroup',
+      {
+        application: codeDeployApplication,
+        deploymentGroupName: `tap-deployment-group-${environmentSuffix}`,
+        role: codeDeployRole,
+        autoScalingGroups: [autoScalingGroup],
+        deploymentConfig: codedeploy.ServerDeploymentConfig.ALL_AT_ONCE,
+        autoRollback: {
+          failedDeployment: true,
+          stoppedDeployment: true,
+        },
+        ignoreAlarmConfiguration: false,
+      }
+    );
 
     // ==============================================
     // Lambda Function for Boto3 Integration
     // ==============================================
-    
+
     /**
      * Lambda function demonstrating Boto3 usage for custom resource operations
      */
@@ -420,18 +447,20 @@ def handler(event, context):
 
     // Grant permissions to Lambda
     notificationTopic.grantPublish(boto3Lambda);
-    boto3Lambda.addToRolePolicy(new iam.PolicyStatement({
-      actions: [
-        'codepipeline:GetPipelineExecution',
-        'codepipeline:GetPipelineState',
-      ],
-      resources: ['*'],
-    }));
+    boto3Lambda.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'codepipeline:GetPipelineExecution',
+          'codepipeline:GetPipelineState',
+        ],
+        resources: ['*'],
+      })
+    );
 
     // ==============================================
     // CodePipeline
     // ==============================================
-    
+
     /**
      * Artifacts for pipeline stages
      */
@@ -475,7 +504,8 @@ def handler(event, context):
             new codepipeline_actions.ManualApprovalAction({
               actionName: 'Manual_Approval',
               notificationTopic: notificationTopic,
-              additionalInformation: 'Please review the build artifacts and approve deployment to production.',
+              additionalInformation:
+                'Please review the build artifacts and approve deployment to production.',
             }),
           ],
         },
@@ -508,7 +538,7 @@ def handler(event, context):
     // ==============================================
     // Pipeline Event Rules for Notifications
     // ==============================================
-    
+
     /**
      * CloudWatch Event Rules for pipeline state changes
      */
@@ -520,13 +550,17 @@ def handler(event, context):
     // ==============================================
     // Custom Resource for Additional Boto3 Operations
     // ==============================================
-    
+
     /**
      * Custom resource using Boto3 for operations not supported by CloudFormation
      */
-    const customResourceProvider = new cr.Provider(this, 'CustomResourceProvider', {
-      onEventHandler: boto3Lambda,
-    });
+    const customResourceProvider = new cr.Provider(
+      this,
+      'CustomResourceProvider',
+      {
+        onEventHandler: boto3Lambda,
+      }
+    );
 
     new cdk.CustomResource(this, 'PipelineCustomResource', {
       serviceToken: customResourceProvider.serviceToken,
@@ -539,7 +573,7 @@ def handler(event, context):
     // ==============================================
     // Stack Outputs for Auditing
     // ==============================================
-    
+
     /**
      * Output important ARNs and identifiers for auditing and monitoring
      */
