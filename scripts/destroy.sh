@@ -60,246 +60,128 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   fi
 
   echo "🚀 Running CDKTF destroy..."
-  # Destroy both stacks for multi-region deployment
-  echo "🌍 Destroying West region stack first..."
+  # Try to destroy single stack first (new architecture)
+  echo "🌍 Destroying single multi-region stack..."
+  npx cdktf destroy TapStack$ENVIRONMENT_SUFFIX --auto-approve || echo "Single stack destroy failed or no resources"
+  
+  # Fallback: Destroy both stacks for backwards compatibility with old architecture
+  echo "🌍 Destroying West region stack (fallback)..."
   npx cdktf destroy TapStackWest$ENVIRONMENT_SUFFIX --auto-approve || echo "West stack destroy failed or no resources"
-  echo "🌍 Destroying East region stack..."
+  echo "🌍 Destroying East region stack (fallback)..."
   npx cdktf destroy TapStackEast$ENVIRONMENT_SUFFIX --auto-approve || echo "East stack destroy failed or no resources"
   
   echo "🧹 Manual cleanup of orphaned AWS resources..."
   # Clean up specific resources that might be orphaned in dependency order
-  DB_INSTANCE_NAME="migration-primary-db-us-east-1-${ENVIRONMENT_SUFFIX}"
-  DB_SUBNET_GROUP_NAME="migration-db-subnet-group-us-east-1-${ENVIRONMENT_SUFFIX}"
-  IAM_ROLE_NAME="ec2-migration-role-us-east-1-${ENVIRONMENT_SUFFIX}"
-  IAM_PROFILE_NAME="ec2-migration-profile-us-east-1-${ENVIRONMENT_SUFFIX}"
-  ALB_NAME="migration-alb-us-east-1-${ENVIRONMENT_SUFFIX}"
+  # East region resources
+  DB_INSTANCE_EAST="tap-database-us-east-1-${ENVIRONMENT_SUFFIX}"
+  DB_SUBNET_GROUP_EAST="tap-db-subnet-group-us-east-1-${ENVIRONMENT_SUFFIX}"
+  LOG_GROUP_EAST="/aws/ec2/tap-log-group-us-east-1-${ENVIRONMENT_SUFFIX}"
+  ASG_EAST="tap-asg-us-east-1-${ENVIRONMENT_SUFFIX}"
   
-  echo "Step 1: Disable RDS deletion protection and delete instance: $DB_INSTANCE_NAME"
-  # First disable deletion protection
-  aws rds modify-db-instance --db-instance-identifier "$DB_INSTANCE_NAME" --no-deletion-protection --apply-immediately || echo "Failed to modify DB instance or not found"
-  # Wait a moment for the modification to take effect
-  sleep 10
-  # Now delete the instance
-  aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_NAME" --skip-final-snapshot || echo "DB instance not found or already deleted"
+  # West region resources
+  DB_INSTANCE_WEST="tap-database-us-west-2-${ENVIRONMENT_SUFFIX}"
+  DB_SUBNET_GROUP_WEST="tap-db-subnet-group-us-west-2-${ENVIRONMENT_SUFFIX}"
+  LOG_GROUP_WEST="/aws/ec2/tap-log-group-us-west-2-${ENVIRONMENT_SUFFIX}"
+  ASG_WEST="tap-asg-us-west-2-${ENVIRONMENT_SUFFIX}"
   
-  echo "Step 2: Wait for RDS instance deletion (checking for up to 5 minutes)..."
+  echo "Step 1: Clean up CloudWatch Log Groups first (no dependencies)"
+  echo "Deleting CloudWatch Log Group: $LOG_GROUP_EAST"
+  aws logs delete-log-group --log-group-name "$LOG_GROUP_EAST" --region us-east-1 || echo "East log group not found or already deleted"
+  
+  echo "Deleting CloudWatch Log Group: $LOG_GROUP_WEST"
+  aws logs delete-log-group --log-group-name "$LOG_GROUP_WEST" --region us-west-2 || echo "West log group not found or already deleted"
+  
+  echo "Step 2: Clean up Auto Scaling Groups"
+  echo "Deleting Auto Scaling Group: $ASG_EAST"
+  aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$ASG_EAST" --force-delete --region us-east-1 || echo "East ASG not found or already deleted"
+  
+  echo "Deleting Auto Scaling Group: $ASG_WEST"
+  aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$ASG_WEST" --force-delete --region us-west-2 || echo "West ASG not found or already deleted"
+  
+  echo "Step 3: Disable RDS deletion protection and delete instances"
+  # East region database
+  echo "Processing East region database: $DB_INSTANCE_EAST"
+  aws rds modify-db-instance --db-instance-identifier "$DB_INSTANCE_EAST" --no-deletion-protection --apply-immediately --region us-east-1 || echo "Failed to modify East DB instance or not found"
+  aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_EAST" --skip-final-snapshot --region us-east-1 || echo "East DB instance not found or already deleted"
+  
+  # West region database  
+  echo "Processing West region database: $DB_INSTANCE_WEST"
+  aws rds modify-db-instance --db-instance-identifier "$DB_INSTANCE_WEST" --no-deletion-protection --apply-immediately --region us-west-2 || echo "Failed to modify West DB instance or not found"
+  aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_WEST" --skip-final-snapshot --region us-west-2 || echo "West DB instance not found or already deleted"
+  
+  echo "Step 4: Wait for RDS instance deletion (checking for up to 5 minutes)..."
   for i in {1..60}; do
-    if aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_NAME" >/dev/null 2>&1; then
-      echo "DB instance still exists, waiting... ($i/60) - 5s intervals"
-      sleep 5
-    else
-      echo "✅ DB instance deleted successfully"
-      break
-    fi
-  done
-  
-  # Final check - fail if DB still exists
-  if aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: DB instance still exists after 5 minutes. Manual intervention required."
-    echo "❌ Cannot proceed with deployment until DB is fully deleted."
-    exit 1
-  fi
-  
-  echo "Step 3: Delete DB subnet group: $DB_SUBNET_GROUP_NAME"
-  aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" || echo "DB subnet group not found or already deleted"
-  
-  # Verify DB subnet group is gone
-  if aws rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: DB subnet group still exists. Manual intervention required."
-    exit 1
-  else
-    echo "✅ DB subnet group deleted successfully"
-  fi
-  
-  echo "Step 4: Clean up IAM resources"
-  # Remove role from instance profile first
-  aws iam remove-role-from-instance-profile --instance-profile-name "$IAM_PROFILE_NAME" --role-name "$IAM_ROLE_NAME" || echo "Role not in instance profile or not found"
-  
-  # Delete instance profile
-  aws iam delete-instance-profile --instance-profile-name "$IAM_PROFILE_NAME" || echo "Instance profile not found or already deleted"
-  
-  # List and detach all policies from role
-  echo "Listing and detaching all policies from role: $IAM_ROLE_NAME"
-  ATTACHED_POLICIES=$(aws iam list-attached-role-policies --role-name "$IAM_ROLE_NAME" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null || echo "")
-  if [ -n "$ATTACHED_POLICIES" ]; then
-    for policy in $ATTACHED_POLICIES; do
-      echo "Detaching policy: $policy"
-      aws iam detach-role-policy --role-name "$IAM_ROLE_NAME" --policy-arn "$policy" || echo "Failed to detach policy $policy"
-    done
-  else
-    echo "No attached policies found or role does not exist"
-  fi
-  
-  # List and delete inline policies
-  echo "Listing and deleting inline policies from role: $IAM_ROLE_NAME"
-  INLINE_POLICIES=$(aws iam list-role-policies --role-name "$IAM_ROLE_NAME" --query "PolicyNames" --output text 2>/dev/null || echo "")
-  if [ -n "$INLINE_POLICIES" ]; then
-    for policy in $INLINE_POLICIES; do
-      echo "Deleting inline policy: $policy"
-      aws iam delete-role-policy --role-name "$IAM_ROLE_NAME" --policy-name "$policy" || echo "Failed to delete inline policy $policy"
-    done
-  else
-    echo "No inline policies found or role does not exist"
-  fi
-  
-  # Delete role
-  aws iam delete-role --role-name "$IAM_ROLE_NAME" || echo "IAM role not found or already deleted"
-  
-  # Verify IAM role is gone
-  if aws iam get-role --role-name "$IAM_ROLE_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: IAM role still exists. Manual intervention required."
-    exit 1
-  else
-    echo "✅ IAM role deleted successfully"
-  fi
-  
-  echo "Step 5: Clean up Auto Scaling Groups"
-  WEB_ASG_NAME="web-asg-us-east-1-${ENVIRONMENT_SUFFIX}"
-  APP_ASG_NAME="app-asg-us-east-1-${ENVIRONMENT_SUFFIX}"
-  
-  echo "Deleting Auto Scaling Group: $WEB_ASG_NAME"
-  aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$WEB_ASG_NAME" --force-delete || echo "Web ASG not found or already deleted"
-  
-  echo "Deleting Auto Scaling Group: $APP_ASG_NAME"
-  aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$APP_ASG_NAME" --force-delete || echo "App ASG not found or already deleted"
-  
-  echo "Waiting for Auto Scaling Groups to delete (up to 10 minutes)..."
-  ASG_DELETE_TIMEOUT=120  # 10 minutes at 5-second intervals
-  
-  for i in $(seq 1 $ASG_DELETE_TIMEOUT); do
-    WEB_ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$WEB_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
-    APP_ASG_EXISTS=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$APP_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+    EAST_DB_EXISTS=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
+    WEST_DB_EXISTS=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
     
-    if [ -z "$WEB_ASG_EXISTS" ] && [ -z "$APP_ASG_EXISTS" ]; then
-      echo "✅ Auto Scaling Groups deleted successfully"
+    if [ "$EAST_DB_EXISTS" = "false" ] && [ "$WEST_DB_EXISTS" = "false" ]; then
+      echo "✅ Both DB instances deleted successfully"
       break
     else
-      echo "ASGs still exist, waiting... ($i/$ASG_DELETE_TIMEOUT) - 5s intervals"
+      echo "DB instances still exist (East: $EAST_DB_EXISTS, West: $WEST_DB_EXISTS), waiting... ($i/60) - 5s intervals"
       sleep 5
     fi
   done
   
-  # CRITICAL: Fail if ASGs still exist after timeout
-  WEB_ASG_FINAL=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$WEB_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
-  APP_ASG_FINAL=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$APP_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
+  # Final check - fail if any DB still exists
+  FINAL_EAST_DB=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
+  FINAL_WEST_DB=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
   
-  if [ -n "$WEB_ASG_FINAL" ] || [ -n "$APP_ASG_FINAL" ]; then
-    echo "❌ CRITICAL: Auto Scaling Groups still exist after 10 minutes!"
-    [ -n "$WEB_ASG_FINAL" ] && echo "❌ Web ASG still exists: $WEB_ASG_NAME"
-    [ -n "$APP_ASG_FINAL" ] && echo "❌ App ASG still exists: $APP_ASG_NAME"
-    echo "❌ Cannot proceed with deployment. Manual cleanup required."
+  if [ "$FINAL_EAST_DB" = "true" ] || [ "$FINAL_WEST_DB" = "true" ]; then
+    echo "❌ CRITICAL: DB instances still exist after 5 minutes (East: $FINAL_EAST_DB, West: $FINAL_WEST_DB)"
+    echo "❌ Cannot proceed with deployment until all DBs are fully deleted."
     exit 1
   fi
   
-  echo "Step 6: Clean up Load Balancer (must be first to free target groups)"
-  ALB_ARN=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
-  if [ "$ALB_ARN" != "None" ] && [ "$ALB_ARN" != "null" ]; then
-    echo "Deleting Load Balancer: $ALB_NAME"
-    aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN" || echo "Failed to delete load balancer"
-    
-    echo "Waiting for Load Balancer to be deleted..."
-    for i in {1..24}; do
-      ALB_CHECK=$(aws elbv2 describe-load-balancers --names "$ALB_NAME" --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
-      if [ "$ALB_CHECK" = "None" ] || [ "$ALB_CHECK" = "null" ]; then
-        echo "✅ Load Balancer deleted successfully"
-        break
-      else
-        echo "Load Balancer still exists, waiting... ($i/24) - 5s intervals"
-        sleep 5
-      fi
-    done
-  else
-    echo "Load balancer not found or already deleted"
-  fi
+  echo "Step 5: Delete DB subnet groups"
+  echo "Deleting East DB subnet group: $DB_SUBNET_GROUP_EAST"
+  aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_EAST" --region us-east-1 || echo "East DB subnet group not found or already deleted"
   
-  echo "Step 7: Clean up Target Groups (now safe to delete)"
-  WEB_TG_NAME="web-tg-us-east-1-${ENVIRONMENT_SUFFIX}"
+  echo "Deleting West DB subnet group: $DB_SUBNET_GROUP_WEST"
+  aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_WEST" --region us-west-2 || echo "West DB subnet group not found or already deleted"
   
-  WEB_TG_ARN=$(aws elbv2 describe-target-groups --names "$WEB_TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
-  if [ "$WEB_TG_ARN" != "None" ] && [ "$WEB_TG_ARN" != "null" ]; then
-    echo "Deleting Target Group: $WEB_TG_NAME"
-    aws elbv2 delete-target-group --target-group-arn "$WEB_TG_ARN" || echo "Failed to delete target group"
-  else
-    echo "Target group not found or already deleted"
-  fi
-  
-  echo "Step 8: Clean up CloudWatch Log Groups"
-  WEB_LOG_GROUP="/migration/web/us-east-1-${ENVIRONMENT_SUFFIX}"
-  APP_LOG_GROUP="/migration/app/us-east-1-${ENVIRONMENT_SUFFIX}"
-  
-  echo "Deleting CloudWatch Log Group: $WEB_LOG_GROUP"
-  aws logs delete-log-group --log-group-name "$WEB_LOG_GROUP" || echo "Web log group not found or already deleted"
-  
-  echo "Deleting CloudWatch Log Group: $APP_LOG_GROUP"
-  aws logs delete-log-group --log-group-name "$APP_LOG_GROUP" || echo "App log group not found or already deleted"
-  
-  echo "Step 9: Clean up Launch Templates"
-  WEB_LT_NAME="web-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
-  APP_LT_NAME="app-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
-  
-  echo "Deleting Launch Template: $WEB_LT_NAME"
-  aws ec2 delete-launch-template --launch-template-name "$WEB_LT_NAME" || echo "Web launch template not found or already deleted"
-  
-  echo "Deleting Launch Template: $APP_LT_NAME"
-  aws ec2 delete-launch-template --launch-template-name "$APP_LT_NAME" || echo "App launch template not found or already deleted"
-  
-  echo "Step 10: Final verification of critical resources"
+  echo "Step 6: Final verification of critical resources"
   CRITICAL_ERRORS=0
   
-  # Check if any critical resources still exist
-  if aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: DB instance still exists: $DB_INSTANCE_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
-  if aws rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GROUP_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: DB subnet group still exists: $DB_SUBNET_GROUP_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
-  if aws iam get-role --role-name "$IAM_ROLE_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: IAM role still exists: $IAM_ROLE_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
-  if aws ec2 describe-launch-templates --launch-template-names "$WEB_LT_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: Web Launch template still exists: $WEB_LT_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
-  if aws ec2 describe-launch-templates --launch-template-names "$APP_LT_NAME" >/dev/null 2>&1; then
-    echo "❌ CRITICAL: App Launch template still exists: $APP_LT_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
-  # Check Auto Scaling Groups
-  WEB_ASG_CHECK=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$WEB_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
-  if [ -n "$WEB_ASG_CHECK" ]; then
-    echo "❌ CRITICAL: Web Auto Scaling Group still exists: $WEB_ASG_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
-  APP_ASG_CHECK=$(aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$APP_ASG_NAME" --query "AutoScalingGroups" --output text 2>/dev/null || echo "")
-  if [ -n "$APP_ASG_CHECK" ]; then
-    echo "❌ CRITICAL: App Auto Scaling Group still exists: $APP_ASG_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
-  # Check Target Group
-  TG_CHECK=$(aws elbv2 describe-target-groups --names "$WEB_TG_NAME" --query "TargetGroups[0].TargetGroupArn" --output text 2>/dev/null || echo "None")
-  if [ "$TG_CHECK" != "None" ] && [ "$TG_CHECK" != "null" ]; then
-    echo "❌ CRITICAL: Target Group still exists: $WEB_TG_NAME"
-    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
-  fi
-  
   # Check CloudWatch Log Groups
-  if aws logs describe-log-groups --log-group-name-prefix "$WEB_LOG_GROUP" --query "logGroups[?logGroupName=='$WEB_LOG_GROUP']" --output text | grep -q .; then
-    echo "❌ CRITICAL: Web Log Group still exists: $WEB_LOG_GROUP"
+  EAST_LOG_CHECK=$(aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP_EAST" --region us-east-1 --query "logGroups[?logGroupName=='$LOG_GROUP_EAST']" --output text 2>/dev/null || echo "")
+  WEST_LOG_CHECK=$(aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP_WEST" --region us-west-2 --query "logGroups[?logGroupName=='$LOG_GROUP_WEST']" --output text 2>/dev/null || echo "")
+  
+  if [ -n "$EAST_LOG_CHECK" ]; then
+    echo "❌ CRITICAL: East CloudWatch Log Group still exists: $LOG_GROUP_EAST"
     CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
   fi
   
-  if aws logs describe-log-groups --log-group-name-prefix "$APP_LOG_GROUP" --query "logGroups[?logGroupName=='$APP_LOG_GROUP']" --output text | grep -q .; then
-    echo "❌ CRITICAL: App Log Group still exists: $APP_LOG_GROUP"
+  if [ -n "$WEST_LOG_CHECK" ]; then
+    echo "❌ CRITICAL: West CloudWatch Log Group still exists: $LOG_GROUP_WEST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check DB Subnet Groups
+  EAST_SUBNET_CHECK=$(aws rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GROUP_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
+  WEST_SUBNET_CHECK=$(aws rds describe-db-subnet-groups --db-subnet-group-name "$DB_SUBNET_GROUP_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
+  
+  if [ "$EAST_SUBNET_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: East DB subnet group still exists: $DB_SUBNET_GROUP_EAST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if [ "$WEST_SUBNET_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: West DB subnet group still exists: $DB_SUBNET_GROUP_WEST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check DB instances (should be deleted by now)
+  FINAL_EAST_DB_CHECK=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
+  FINAL_WEST_DB_CHECK=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
+  
+  if [ "$FINAL_EAST_DB_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: East DB instance still exists: $DB_INSTANCE_EAST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if [ "$FINAL_WEST_DB_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: West DB instance still exists: $DB_INSTANCE_WEST"
     CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
   fi
   
@@ -309,9 +191,8 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     exit 1
   else
     echo "✅ All critical resources successfully deleted"
+    echo "✅ Manual cleanup completed successfully - ready for deployment"
   fi
-  
-  echo "Manual cleanup completed successfully"
 
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, running CloudFormation destroy..."
