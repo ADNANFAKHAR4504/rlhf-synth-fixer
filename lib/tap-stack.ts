@@ -47,8 +47,17 @@ export interface TapStackArgs {
  * - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
  */
 export class TapStack extends pulumi.ComponentResource {
-  // Example of a public property for a nested resource's output.
-  // public readonly table: pulumi.Output<string>;
+  private infrastructure: SecureInfrastructure;
+
+  // Public outputs
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly appBucketName: pulumi.Output<string>;
+  public readonly logsBucketName: pulumi.Output<string>;
+  public readonly dbEndpoint: pulumi.Output<string>;
+  public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly webSecurityGroupId: pulumi.Output<string>;
+  public readonly dbSecurityGroupId: pulumi.Output<string>;
+  public readonly cloudFrontDomainName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -68,11 +77,32 @@ export class TapStack extends pulumi.ComponentResource {
       ...((args.tags as any) || {}),
     };
 
-    new SecureInfrastructure(region, environment, defaultTags);
+    this.infrastructure = new SecureInfrastructure(
+      region,
+      environment,
+      defaultTags
+    );
+
+    // Initialize outputs
+    this.vpcId = this.infrastructure.vpcId;
+    this.appBucketName = this.infrastructure.appBucketName;
+    this.logsBucketName = this.infrastructure.logsBucketName;
+    this.dbEndpoint = this.infrastructure.dbEndpoint;
+    this.kmsKeyId = this.infrastructure.kmsKeyId;
+    this.webSecurityGroupId = this.infrastructure.webSecurityGroupId;
+    this.dbSecurityGroupId = this.infrastructure.dbSecurityGroupId;
+    this.cloudFrontDomainName = this.infrastructure.cloudFrontDomainName;
 
     // Register the outputs of this component.
     this.registerOutputs({
-      // infrastructure: this.infrastructure,
+      vpcId: this.vpcId,
+      appBucketName: this.appBucketName,
+      logsBucketName: this.logsBucketName,
+      dbEndpoint: this.dbEndpoint,
+      kmsKeyId: this.kmsKeyId,
+      webSecurityGroupId: this.webSecurityGroupId,
+      dbSecurityGroupId: this.dbSecurityGroupId,
+      cloudFrontDomainName: this.cloudFrontDomainName,
     });
   }
 }

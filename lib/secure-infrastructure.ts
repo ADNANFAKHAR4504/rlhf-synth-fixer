@@ -20,6 +20,18 @@ export class SecureInfrastructure {
   private appBucket!: aws.s3.Bucket;
   private logsBucket!: aws.s3.Bucket;
   private masterKey!: aws.kms.Key;
+  private rdsInstance!: aws.rds.Instance;
+  private cloudFrontDistribution!: aws.cloudfront.Distribution;
+
+  // Public outputs
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly appBucketName: pulumi.Output<string>;
+  public readonly logsBucketName: pulumi.Output<string>;
+  public readonly dbEndpoint: pulumi.Output<string>;
+  public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly webSecurityGroupId: pulumi.Output<string>;
+  public readonly dbSecurityGroupId: pulumi.Output<string>;
+  public readonly cloudFrontDomainName: pulumi.Output<string>;
 
   constructor(
     region: string,
@@ -68,6 +80,16 @@ export class SecureInfrastructure {
     this.createCloudFront();
     this.createVPCFlowLogs();
     this.createVPCEndpoints();
+
+    // Initialize outputs
+    this.vpcId = this.vpc.id;
+    this.appBucketName = this.appBucket.id;
+    this.logsBucketName = this.logsBucket.id;
+    this.dbEndpoint = this.rdsInstance.endpoint;
+    this.kmsKeyId = this.masterKey.id;
+    this.webSecurityGroupId = this.webSecurityGroup.id;
+    this.dbSecurityGroupId = this.dbSecurityGroup.id;
+    this.cloudFrontDomainName = this.cloudFrontDistribution.domainName;
   }
 
   private createKMSKey(): aws.kms.Key {
@@ -767,7 +789,7 @@ export class SecureInfrastructure {
     );
 
     // RDS Instance
-    const rdsInstance = new aws.rds.Instance(
+    this.rdsInstance = new aws.rds.Instance(
       `mysql-db-${this.environment}`,
       {
         identifier: `mysql-db-${this.environment}`,
@@ -806,7 +828,7 @@ export class SecureInfrastructure {
     new aws.rds.Snapshot(
       `db-snapshot-${this.environment}`,
       {
-        dbInstanceIdentifier: rdsInstance.identifier,
+        dbInstanceIdentifier: this.rdsInstance.identifier,
         dbSnapshotIdentifier: `mysql-db-${this.environment}-snapshot-${Date.now()}`,
         tags: {
           ...this.tags,
@@ -939,7 +961,7 @@ export class SecureInfrastructure {
     );
 
     // CloudFront Distribution
-    new aws.cloudfront.Distribution(
+    this.cloudFrontDistribution = new aws.cloudfront.Distribution(
       `cdn-${this.environment}`,
       {
         comment: `CDN for ${this.environment} environment`,
