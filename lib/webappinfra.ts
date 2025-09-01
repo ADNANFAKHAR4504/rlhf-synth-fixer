@@ -276,6 +276,12 @@ export class WebAppInfrastructure {
             toPort: 80,
             cidrBlocks: ['0.0.0.0/0'],
           },
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
         ],
         egress: [
           {
@@ -372,6 +378,22 @@ export class WebAppInfrastructure {
         loadBalancerArn: this.loadBalancer.arn,
         port: 80,
         protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
+          },
+        ],
+      },
+      { provider: this.provider }
+    );
+
+    new aws.lb.Listener(
+      `https-listener-${environment}`,
+      {
+        loadBalancerArn: this.loadBalancer.arn,
+        port: 443,
+        protocol: 'HTTPS',
         defaultActions: [
           {
             type: 'forward',
