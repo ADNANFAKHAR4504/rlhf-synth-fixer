@@ -58,33 +58,6 @@ locals {
 # Data Sources (CI/CD Read-Only)
 ########################################
 
-# VPC
-data "aws_vpc" "main" {
-  filter {
-    name   = "tag:Name"
-    values = ["${var.project_name}-vpc"]
-  }
-  filter {
-    name   = "isDefault"
-    values = ["false"]
-  }
-  # Optionally, add more filters or use 'id' if you know the VPC ID
-}
-
-# Public Subnets
-data "aws_subnet" "public" {
-  for_each   = toset(var.public_subnet_cidrs)
-  cidr_block = each.value
-  vpc_id     = data.aws_vpc.main.id
-}
-
-# Private Subnets
-data "aws_subnet" "private" {
-  for_each   = toset(var.private_subnet_cidrs)
-  cidr_block = each.value
-  vpc_id     = data.aws_vpc.main.id
-}
-
 # Security Groups
 data "aws_security_group" "web" {
   name   = "${var.project_name}-web-sg"
@@ -111,11 +84,68 @@ data "aws_lb_target_group" "app" {
   name = "${var.project_name}-app-tg"
 }
 
-# RDS Database
-data "aws_db_instance" "main" {
-  db_instance_identifier = "${var.project_name}-database"
+########################################
+# Resources
+########################################
+
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags                 = local.common_tags
 }
 
+# Public Subnets
+resource "aws_subnet" "public" {
+  count             = length(var.public_subnet_cidrs)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.public_subnet_cidrs[count.index]
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-public-subnet-${count.index + 1}"
+    Type = "public"
+  })
+}
+
+# Private Subnets
+resource "aws_subnet" "private" {
+  count             = length(var.private_subnet_cidrs)
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
+  tags = merge(local.common_tags, {
+    Name = "${var.project_name}-private-subnet-${count.index + 1}"
+    Type = "private"
+  })
+}
+
+# RDS Instance
+resource "aws_db_instance" "main" {
+  identifier              = "${var.project_name}-database"
+  engine                  = "mysql"
+  engine_version          = "8.0.35"
+  instance_class          = "db.t3.micro"
+  allocated_storage       = 20
+  max_allocated_storage   = 100
+  storage_type            = "gp2"
+  storage_encrypted       = true
+  db_name                 = "myappdb"
+  username                = "admin"
+  password                = "changeme123!" # Use a secure value or variable in production
+  vpc_security_group_ids  = []             # Add security group IDs as needed
+  db_subnet_group_name    = aws_db_subnet_group.main.name
+  backup_retention_period = 7
+  skip_final_snapshot     = true
+  deletion_protection     = false
+  tags                    = local.common_tags
+}
+
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.project_name}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+  tags       = local.common_tags
+}
 
 # S3 Bucket
 resource "aws_s3_bucket" "main" {
@@ -130,39 +160,19 @@ resource "aws_s3_bucket" "main" {
 ########################################
 
 output "vpc_id" {
-  value = data.aws_vpc.main.id
+  value = aws_vpc.main.id
 }
 
 output "public_subnet_ids" {
-  value = [for s in data.aws_subnet.public : s.id]
+  value = aws_subnet.public[*].id
 }
 
 output "private_subnet_ids" {
-  value = [for s in data.aws_subnet.private : s.id]
-}
-
-output "web_security_group_id" {
-  value = data.aws_security_group.web.id
-}
-
-output "app_security_group_id" {
-  value = data.aws_security_group.app.id
-}
-
-output "database_security_group_id" {
-  value = data.aws_security_group.database.id
-}
-
-output "alb_arn" {
-  value = data.aws_lb.main.arn
-}
-
-output "app_target_group_arn" {
-  value = data.aws_lb_target_group.app.arn
+  value = aws_subnet.private[*].id
 }
 
 output "db_instance_endpoint" {
-  value     = data.aws_db_instance.main.endpoint
+  value     = aws_db_instance.main.endpoint
   sensitive = true
 }
 
