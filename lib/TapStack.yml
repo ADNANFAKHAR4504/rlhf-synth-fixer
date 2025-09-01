@@ -110,7 +110,7 @@ Resources:
     Properties:
       Name: !Ref GitHubTokenSecretName
       Description: "GitHub Personal Access Token for CI/CD Pipeline"
-      SecretString: !Sub |
+      SecretString: |
         {
           "token": "PLACEHOLDER_TOKEN_PLEASE_UPDATE"
         }
