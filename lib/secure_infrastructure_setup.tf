@@ -41,6 +41,10 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
+data "aws_config_configuration_recorder" "existing" {
+  name = "default" # or your actual recorder name
+}
+
 # VPC Configuration
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -548,22 +552,6 @@ resource "aws_iam_role_policy_attachment" "config" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
-# AWS Config Configuration Recorder
-resource "aws_config_configuration_recorder" "main" {
-  name     = "terraform-config-recorder"
-  role_arn = data.aws_iam_role.config.arn
-
-  recording_group {
-    all_supported                 = true
-    include_global_resource_types = true
-  }
-
-  lifecycle {
-    prevent_destroy = true
-    ignore_changes  = [name]
-  }
-}
-
 # AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
   name           = "terraform-delivery-channel"
@@ -583,8 +571,6 @@ resource "aws_config_config_rule" "s3_bucket_public_access_prohibited" {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
   }
-
-  depends_on = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
@@ -594,8 +580,6 @@ resource "aws_config_config_rule" "encrypted_volumes" {
     owner             = "AWS"
     source_identifier = "ENCRYPTED_VOLUMES"
   }
-
-  depends_on = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_config_config_rule" "rds_storage_encrypted" {
@@ -605,8 +589,6 @@ resource "aws_config_config_rule" "rds_storage_encrypted" {
     owner             = "AWS"
     source_identifier = "RDS_STORAGE_ENCRYPTED"
   }
-
-  depends_on = [aws_config_configuration_recorder.main]
 }
 
 resource "aws_config_config_rule" "cloudtrail_enabled" {
@@ -616,8 +598,6 @@ resource "aws_config_config_rule" "cloudtrail_enabled" {
     owner             = "AWS"
     source_identifier = "CLOUD_TRAIL_ENABLED"
   }
-
-  depends_on = [aws_config_configuration_recorder.main]
 }
 
 # IAM Password Policy
@@ -754,6 +734,8 @@ resource "aws_launch_template" "web" {
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
+    exec > /var/log/user-data.log 2>&1
+    set -x
     yum update -y
     yum install -y httpd
     systemctl start httpd
@@ -989,13 +971,6 @@ resource "aws_wafv2_web_acl" "main" {
 resource "aws_wafv2_web_acl_association" "main" {
   resource_arn = aws_lb.main.arn
   web_acl_arn  = aws_wafv2_web_acl.main.arn
-}
-
-# Enable Config Recorder
-resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
-  is_enabled = true
-  depends_on = [aws_config_delivery_channel.main]
 }
 
 resource "aws_iam_policy" "require_mfa" {
