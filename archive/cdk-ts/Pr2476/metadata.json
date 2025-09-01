@@ -32,5 +32,11 @@
     "NAT Gateway",
     "Internet Gateway",
     "Security Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
 }
