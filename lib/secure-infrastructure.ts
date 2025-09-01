@@ -482,18 +482,6 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.s3.BucketPublicAccessBlock(
-      `logs-bucket-pab-${this.environment}`,
-      {
-        bucket: logsBucket.id,
-        blockPublicAcls: true,
-        blockPublicPolicy: true,
-        ignorePublicAcls: true,
-        restrictPublicBuckets: true,
-      },
-      { provider: this.provider }
-    );
-
     // Enable ACLs for CloudFront logging
     new aws.s3.BucketOwnershipControls(
       `logs-bucket-ownership-${this.environment}`,
@@ -504,6 +492,32 @@ export class SecureInfrastructure {
         },
       },
       { provider: this.provider }
+    );
+
+    new aws.s3.BucketPublicAccessBlock(
+      `logs-bucket-pab-${this.environment}`,
+      {
+        bucket: logsBucket.id,
+        blockPublicAcls: false,
+        blockPublicPolicy: true,
+        ignorePublicAcls: false,
+        restrictPublicBuckets: true,
+      },
+      {
+        provider: this.provider,
+        dependsOn: [
+          new aws.s3.BucketOwnershipControls(
+            `logs-bucket-ownership-${this.environment}`,
+            {
+              bucket: logsBucket.id,
+              rule: {
+                objectOwnership: 'BucketOwnerPreferred',
+              },
+            },
+            { provider: this.provider }
+          ),
+        ],
+      }
     );
 
     // Enable ACLs on the bucket

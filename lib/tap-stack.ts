@@ -47,7 +47,7 @@ export interface TapStackArgs {
  * - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
  */
 export class TapStack extends pulumi.ComponentResource {
-  private infrastructure: SecureInfrastructure;
+  public infrastructure: SecureInfrastructure;
 
   // Public outputs
   public readonly vpcId: pulumi.Output<string>;
@@ -69,7 +69,8 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const region = args.awsRegion || 'ap-south-1';
-    const environment = args.environmentSuffix !== undefined ? args.environmentSuffix : 'dev';
+    const environment =
+      args.environmentSuffix !== undefined ? args.environmentSuffix : 'dev';
     const defaultTags = {
       Project: 'MyApp',
       Owner: 'DevOps Team',
