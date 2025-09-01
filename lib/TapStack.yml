@@ -334,7 +334,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      AliasName: !Sub 'alias/secure-environment-key-${AWS::StackName}'
+      AliasName: 'alias/secure-environment-key-tapstack'
       TargetKeyId: !Ref SecureKMSKey
 
   # =========================
@@ -962,7 +962,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Name: !Sub '${Environment}-database-password-${AWS::StackName}'
+      Name: 'production-database-password-tapstack'
       Description: Database password for secure environment
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -983,7 +983,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      DBInstanceIdentifier: !Sub 'secure-database-${Environment}-${AWS::StackName}'
+      DBInstanceIdentifier: 'secure-database-production-tapstack'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.43'
@@ -1031,7 +1031,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BackupVaultName: !Sub 'SecureBackupVault-${Environment}-${AWS::StackName}'
+      BackupVaultName: 'SecureBackupVault-production-tapstack'
       EncryptionKeyArn:
         !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       BackupVaultTags:
@@ -1046,7 +1046,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BackupPlan:
-        BackupPlanName: !Sub 'SecureBackupPlan-${Environment}-${AWS::StackName}'
+        BackupPlanName: 'SecureBackupPlan-production-tapstack'
         BackupPlanRule:
           - RuleName: DailyBackups
             TargetBackupVault:
@@ -1156,7 +1156,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      TrailName: !Sub 'SecureEnvironmentTrail-${Environment}-${AWS::StackName}'
+      TrailName: 'SecureEnvironmentTrail-production-tapstack'
       S3BucketName:
         !If [
           UseExistingCloudTrailBucket,
@@ -1422,7 +1422,7 @@ Resources:
     Condition: CreateLambdaFunction
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'SecureFunction-${Environment}-${AWS::StackName}'
+      FunctionName: 'SecureFunction-production-tapstack'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role:
@@ -1553,7 +1553,7 @@ Resources:
   IAMPasswordPolicyFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub 'IAMPasswordPolicy-${Environment}-${AWS::StackName}'
+      FunctionName: 'IAMPasswordPolicy-production-tapstack'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt IAMPasswordPolicyRole.Arn
@@ -1632,7 +1632,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      FunctionName: !Sub 'EBSEncryption-${Environment}-${AWS::StackName}'
+      FunctionName: 'EBSEncryption-production-tapstack'
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt EBSEncryptionRole.Arn
