@@ -51,12 +51,6 @@ output "key_pair_name" {
   value       = local.key_pair_name
 }
 
-output "ec2_private_key" {
-  description = "Private key for EC2 instances (if created by Terraform)"
-  value       = var.create_key_pair ? tls_private_key.ec2.private_key_pem : ""
-  sensitive   = true
-}
-
 output "vpc1_nat_gateway_id" {
   description = "ID of NAT Gateway in VPC 1"
   value       = aws_nat_gateway.vpc1_nat.id
