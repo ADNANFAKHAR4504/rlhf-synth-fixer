@@ -706,7 +706,12 @@ class TapStack(cdk.Stack):
 
     def _create_outputs(self):
         """Create CloudFormation outputs."""
-        
+        CfnOutput(
+            self, "DeploymentRegion",
+            value=self.region,
+            description="AWS Region where stack is deployed",
+            export_name=f"{self.stack_name}-DeploymentRegion"
+        )
         CfnOutput(self, "VPCId", value=self.vpc.vpc_id, description="VPC ID", export_name=f"{self.stack_name}-VPCId")
         
         # Fixed outputs to handle subnet arrays properly
