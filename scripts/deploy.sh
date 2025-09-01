@@ -77,11 +77,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
 
-  # Deploy both stacks for multi-region deployment
-  echo "🌍 Deploying East region stack..."
-  npx cdktf deploy TapStackEast$ENVIRONMENT_SUFFIX --auto-approve
-  echo "🌍 Deploying West region stack..."
-  npx cdktf deploy TapStackWest$ENVIRONMENT_SUFFIX --auto-approve
+  npm run cdktf:deploy
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."

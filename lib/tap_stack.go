@@ -629,6 +629,583 @@ func NewInfrastructureStack(scope constructs.Construct, id *string, config *Infr
 	}
 }
 
+func NewMultiRegionInfrastructureStack(scope constructs.Construct, id *string, envSuffix string) *InfrastructureStack {
+	this := &InfrastructureStack{}
+	cdktf.NewTerraformStack_Override(this, scope, id)
+
+	// Create AWS providers for both regions
+	eastProvider := provider.NewAwsProvider(this, jsii.String("aws-east"), &provider.AwsProviderConfig{
+		Region: jsii.String("us-east-1"),
+		Alias:  jsii.String("east"),
+	})
+
+	westProvider := provider.NewAwsProvider(this, jsii.String("aws-west"), &provider.AwsProviderConfig{
+		Region: jsii.String("us-west-2"),
+		Alias:  jsii.String("west"),
+	})
+
+	// Create infrastructure in us-east-1
+	CreateRegionalInfrastructure(this, "east", "us-east-1", envSuffix, eastProvider)
+	
+	// Create infrastructure in us-west-2
+	CreateRegionalInfrastructure(this, "west", "us-west-2", envSuffix, westProvider)
+
+	return this
+}
+
+func CreateRegionalInfrastructure(scope constructs.Construct, regionName string, regionCode string, envSuffix string, awsProvider provider.AwsProvider) {
+	// Base tags for all resources
+	baseTags := &map[string]*string{
+		"Project":     jsii.String("Migration"),
+		"Creator":     jsii.String("CloudEngineer"),
+		"Environment": jsii.String("production"),
+		"Region":      jsii.String(regionCode),
+		"CostCenter":  jsii.String("IT-Infrastructure"),
+	}
+
+	// Create VPC with the required CIDR block
+	vpcName := fmt.Sprintf("tap-vpc-%s-%s", regionCode, envSuffix)
+	mainVpc := vpc.NewVpc(scope, jsii.String(fmt.Sprintf("vpc-%s", regionName)), &vpc.VpcConfig{
+		CidrBlock:          jsii.String("10.0.0.0/16"),
+		EnableDnsHostnames: jsii.Bool(true),
+		EnableDnsSupport:   jsii.Bool(true),
+		Provider:           &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(vpcName),
+		}),
+	})
+
+	// Get availability zones for this region
+	azs := dataawsavailabilityzones.NewDataAwsAvailabilityZones(scope, jsii.String(fmt.Sprintf("azs-%s", regionName)), &dataawsavailabilityzones.DataAwsAvailabilityZonesConfig{
+		State:    jsii.String("available"),
+		Provider: &awsProvider,
+	})
+
+	// Create Internet Gateway
+	igwName := fmt.Sprintf("tap-igw-%s-%s", regionCode, envSuffix)
+	igw := internetgateway.NewInternetGateway(scope, jsii.String(fmt.Sprintf("igw-%s", regionName)), &internetgateway.InternetGatewayConfig{
+		VpcId:    mainVpc.Id(),
+		Provider: &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(igwName),
+		}),
+	})
+
+	// Create public subnets
+	publicSubnet1Name := fmt.Sprintf("tap-public-subnet-1-%s-%s", regionCode, envSuffix)
+	publicSubnet1 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("public-subnet-1-%s", regionName)), &subnet.SubnetConfig{
+		VpcId:               mainVpc.Id(),
+		CidrBlock:          jsii.String("10.0.1.0/24"),
+		AvailabilityZone:   jsii.String(*azs.Names()[0]),
+		MapPublicIpOnLaunch: jsii.Bool(true),
+		Provider:           &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(publicSubnet1Name),
+			"Type": jsii.String("public"),
+		}),
+	})
+
+	publicSubnet2Name := fmt.Sprintf("tap-public-subnet-2-%s-%s", regionCode, envSuffix)
+	publicSubnet2 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("public-subnet-2-%s", regionName)), &subnet.SubnetConfig{
+		VpcId:               mainVpc.Id(),
+		CidrBlock:          jsii.String("10.0.2.0/24"),
+		AvailabilityZone:   jsii.String(*azs.Names()[1]),
+		MapPublicIpOnLaunch: jsii.Bool(true),
+		Provider:           &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(publicSubnet2Name),
+			"Type": jsii.String("public"),
+		}),
+	})
+
+	// Create EIPs for NAT Gateways
+	eip1 := eip.NewEip(scope, jsii.String(fmt.Sprintf("eip-1-%s", regionName)), &eip.EipConfig{
+		Domain:   jsii.String("vpc"),
+		Provider: &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("tap-eip-1-%s-%s", regionCode, envSuffix)),
+		}),
+	})
+
+	eip2 := eip.NewEip(scope, jsii.String(fmt.Sprintf("eip-2-%s", regionName)), &eip.EipConfig{
+		Domain:   jsii.String("vpc"),
+		Provider: &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(fmt.Sprintf("tap-eip-2-%s-%s", regionCode, envSuffix)),
+		}),
+	})
+
+	// Create NAT Gateways
+	natGw1Name := fmt.Sprintf("tap-nat-gw-1-%s-%s", regionCode, envSuffix)
+	natGw1 := natgateway.NewNatGateway(scope, jsii.String(fmt.Sprintf("nat-gw-1-%s", regionName)), &natgateway.NatGatewayConfig{
+		AllocationId: eip1.Id(),
+		SubnetId:     publicSubnet1.Id(),
+		Provider:     &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(natGw1Name),
+		}),
+	})
+
+	natGw2Name := fmt.Sprintf("tap-nat-gw-2-%s-%s", regionCode, envSuffix)
+	natGw2 := natgateway.NewNatGateway(scope, jsii.String(fmt.Sprintf("nat-gw-2-%s", regionName)), &natgateway.NatGatewayConfig{
+		AllocationId: eip2.Id(),
+		SubnetId:     publicSubnet2.Id(),
+		Provider:     &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(natGw2Name),
+		}),
+	})
+
+	// Create private subnets
+	privateSubnet1Name := fmt.Sprintf("tap-private-subnet-1-%s-%s", regionCode, envSuffix)
+	privateSubnet1 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("private-subnet-1-%s", regionName)), &subnet.SubnetConfig{
+		VpcId:            mainVpc.Id(),
+		CidrBlock:       jsii.String("10.0.3.0/24"),
+		AvailabilityZone: jsii.String(*azs.Names()[0]),
+		Provider:        &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(privateSubnet1Name),
+			"Type": jsii.String("private"),
+		}),
+	})
+
+	privateSubnet2Name := fmt.Sprintf("tap-private-subnet-2-%s-%s", regionCode, envSuffix)
+	privateSubnet2 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("private-subnet-2-%s", regionName)), &subnet.SubnetConfig{
+		VpcId:            mainVpc.Id(),
+		CidrBlock:       jsii.String("10.0.4.0/24"),
+		AvailabilityZone: jsii.String(*azs.Names()[1]),
+		Provider:        &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(privateSubnet2Name),
+			"Type": jsii.String("private"),
+		}),
+	})
+
+	// Create database subnets
+	dbSubnet1Name := fmt.Sprintf("tap-db-subnet-1-%s-%s", regionCode, envSuffix)
+	dbSubnet1 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("db-subnet-1-%s", regionName)), &subnet.SubnetConfig{
+		VpcId:            mainVpc.Id(),
+		CidrBlock:       jsii.String("10.0.5.0/24"),
+		AvailabilityZone: jsii.String(*azs.Names()[0]),
+		Provider:        &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(dbSubnet1Name),
+			"Type": jsii.String("database"),
+		}),
+	})
+
+	dbSubnet2Name := fmt.Sprintf("tap-db-subnet-2-%s-%s", regionCode, envSuffix)
+	dbSubnet2 := subnet.NewSubnet(scope, jsii.String(fmt.Sprintf("db-subnet-2-%s", regionName)), &subnet.SubnetConfig{
+		VpcId:            mainVpc.Id(),
+		CidrBlock:       jsii.String("10.0.6.0/24"),
+		AvailabilityZone: jsii.String(*azs.Names()[1]),
+		Provider:        &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(dbSubnet2Name),
+			"Type": jsii.String("database"),
+		}),
+	})
+
+	// Create route tables
+	publicRtName := fmt.Sprintf("tap-public-rt-%s-%s", regionCode, envSuffix)
+	publicRt := routetable.NewRouteTable(scope, jsii.String(fmt.Sprintf("public-rt-%s", regionName)), &routetable.RouteTableConfig{
+		VpcId:    mainVpc.Id(),
+		Provider: &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(publicRtName),
+		}),
+	})
+
+	// Add route to internet gateway
+	route.NewRoute(scope, jsii.String(fmt.Sprintf("public-route-%s", regionName)), &route.RouteConfig{
+		RouteTableId:         publicRt.Id(),
+		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
+		GatewayId:            igw.Id(),
+		Provider:             &awsProvider,
+	})
+
+	privateRt1Name := fmt.Sprintf("tap-private-rt-1-%s-%s", regionCode, envSuffix)
+	privateRt1 := routetable.NewRouteTable(scope, jsii.String(fmt.Sprintf("private-rt-1-%s", regionName)), &routetable.RouteTableConfig{
+		VpcId:    mainVpc.Id(),
+		Provider: &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(privateRt1Name),
+		}),
+	})
+
+	// Add route to NAT gateway
+	route.NewRoute(scope, jsii.String(fmt.Sprintf("private-route-1-%s", regionName)), &route.RouteConfig{
+		RouteTableId:         privateRt1.Id(),
+		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
+		NatGatewayId:         natGw1.Id(),
+		Provider:             &awsProvider,
+	})
+
+	privateRt2Name := fmt.Sprintf("tap-private-rt-2-%s-%s", regionCode, envSuffix)
+	privateRt2 := routetable.NewRouteTable(scope, jsii.String(fmt.Sprintf("private-rt-2-%s", regionName)), &routetable.RouteTableConfig{
+		VpcId:    mainVpc.Id(),
+		Provider: &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(privateRt2Name),
+		}),
+	})
+
+	// Add route to NAT gateway
+	route.NewRoute(scope, jsii.String(fmt.Sprintf("private-route-2-%s", regionName)), &route.RouteConfig{
+		RouteTableId:         privateRt2.Id(),
+		DestinationCidrBlock: jsii.String("0.0.0.0/0"),
+		NatGatewayId:         natGw2.Id(),
+		Provider:             &awsProvider,
+	})
+
+	// Associate route tables with subnets
+	routetableassociation.NewRouteTableAssociation(scope, jsii.String(fmt.Sprintf("public-rta-1-%s", regionName)), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     publicSubnet1.Id(),
+		RouteTableId: publicRt.Id(),
+		Provider:     &awsProvider,
+	})
+
+	routetableassociation.NewRouteTableAssociation(scope, jsii.String(fmt.Sprintf("public-rta-2-%s", regionName)), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     publicSubnet2.Id(),
+		RouteTableId: publicRt.Id(),
+		Provider:     &awsProvider,
+	})
+
+	routetableassociation.NewRouteTableAssociation(scope, jsii.String(fmt.Sprintf("private-rta-1-%s", regionName)), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     privateSubnet1.Id(),
+		RouteTableId: privateRt1.Id(),
+		Provider:     &awsProvider,
+	})
+
+	routetableassociation.NewRouteTableAssociation(scope, jsii.String(fmt.Sprintf("private-rta-2-%s", regionName)), &routetableassociation.RouteTableAssociationConfig{
+		SubnetId:     privateSubnet2.Id(),
+		RouteTableId: privateRt2.Id(),
+		Provider:     &awsProvider,
+	})
+
+	// Create Security Groups
+	albSgName := fmt.Sprintf("tap-alb-sg-%s-%s", regionCode, envSuffix)
+	albSg := securitygroup.NewSecurityGroup(scope, jsii.String(fmt.Sprintf("alb-sg-%s", regionName)), &securitygroup.SecurityGroupConfig{
+		Name:        jsii.String(albSgName),
+		Description: jsii.String("Security group for ALB"),
+		VpcId:       mainVpc.Id(),
+		Provider:    &awsProvider,
+		Ingress: &[]*securitygroup.SecurityGroupIngress{
+			{
+				Description: jsii.String("HTTP from company IP ranges"),
+				FromPort:    jsii.Number(80),
+				ToPort:      jsii.Number(80),
+				Protocol:    jsii.String("tcp"),
+				CidrBlocks:  &[]*string{jsii.String("203.0.113.0/24"), jsii.String("198.51.100.0/24")},
+			},
+			{
+				Description: jsii.String("HTTPS from company IP ranges"),
+				FromPort:    jsii.Number(443),
+				ToPort:      jsii.Number(443),
+				Protocol:    jsii.String("tcp"),
+				CidrBlocks:  &[]*string{jsii.String("203.0.113.0/24"), jsii.String("198.51.100.0/24")},
+			},
+		},
+		Egress: &[]*securitygroup.SecurityGroupEgress{
+			{
+				Description: jsii.String("All outbound traffic"),
+				FromPort:    jsii.Number(0),
+				ToPort:      jsii.Number(0),
+				Protocol:    jsii.String("-1"),
+				CidrBlocks:  &[]*string{jsii.String("0.0.0.0/0")},
+			},
+		},
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(albSgName),
+		}),
+	})
+
+	webSgName := fmt.Sprintf("tap-web-sg-%s-%s", regionCode, envSuffix)
+	webSg := securitygroup.NewSecurityGroup(scope, jsii.String(fmt.Sprintf("web-sg-%s", regionName)), &securitygroup.SecurityGroupConfig{
+		Name:        jsii.String(webSgName),
+		Description: jsii.String("Security group for web servers"),
+		VpcId:       mainVpc.Id(),
+		Provider:    &awsProvider,
+		Ingress: &[]*securitygroup.SecurityGroupIngress{
+			{
+				Description:     jsii.String("HTTP from ALB"),
+				FromPort:        jsii.Number(80),
+				ToPort:          jsii.Number(80),
+				Protocol:        jsii.String("tcp"),
+				SecurityGroups:  &[]*string{albSg.Id()},
+			},
+			{
+				Description: jsii.String("SSH from company IP ranges"),
+				FromPort:    jsii.Number(22),
+				ToPort:      jsii.Number(22),
+				Protocol:    jsii.String("tcp"),
+				CidrBlocks:  &[]*string{jsii.String("203.0.113.0/24"), jsii.String("198.51.100.0/24")},
+			},
+		},
+		Egress: &[]*securitygroup.SecurityGroupEgress{
+			{
+				Description: jsii.String("All outbound traffic"),
+				FromPort:    jsii.Number(0),
+				ToPort:      jsii.Number(0),
+				Protocol:    jsii.String("-1"),
+				CidrBlocks:  &[]*string{jsii.String("0.0.0.0/0")},
+			},
+		},
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(webSgName),
+		}),
+	})
+
+	dbSgName := fmt.Sprintf("tap-db-sg-%s-%s", regionCode, envSuffix)
+	dbSg := securitygroup.NewSecurityGroup(scope, jsii.String(fmt.Sprintf("db-sg-%s", regionName)), &securitygroup.SecurityGroupConfig{
+		Name:        jsii.String(dbSgName),
+		Description: jsii.String("Security group for database"),
+		VpcId:       mainVpc.Id(),
+		Provider:    &awsProvider,
+		Ingress: &[]*securitygroup.SecurityGroupIngress{
+			{
+				Description:    jsii.String("MySQL from web servers"),
+				FromPort:       jsii.Number(3306),
+				ToPort:         jsii.Number(3306),
+				Protocol:       jsii.String("tcp"),
+				SecurityGroups: &[]*string{webSg.Id()},
+			},
+		},
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(dbSgName),
+		}),
+	})
+
+	// Create Database Subnet Group
+	dbSubnetGroupName := fmt.Sprintf("tap-db-subnet-group-%s-%s", regionCode, envSuffix)
+	dbSubnetGroup := dbsubnetgroup.NewDbSubnetGroup(scope, jsii.String(fmt.Sprintf("db-subnet-group-%s", regionName)), &dbsubnetgroup.DbSubnetGroupConfig{
+		Name:      jsii.String(dbSubnetGroupName),
+		SubnetIds: &[]*string{dbSubnet1.Id(), dbSubnet2.Id()},
+		Provider:  &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(dbSubnetGroupName),
+		}),
+	})
+
+	// Create RDS MySQL Database
+	dbName := fmt.Sprintf("tap-database-%s-%s", regionCode, envSuffix)
+	database := dbinstance.NewDbInstance(scope, jsii.String(fmt.Sprintf("mysql-database-%s", regionName)), &dbinstance.DbInstanceConfig{
+		Identifier:             jsii.String(dbName),
+		Engine:                 jsii.String("mysql"),
+		EngineVersion:          jsii.String("8.0"),
+		InstanceClass:          jsii.String("db.t3.micro"),
+		AllocatedStorage:       jsii.Number(20),
+		StorageType:           jsii.String("gp2"),
+		StorageEncrypted:      jsii.Bool(true),
+		DbName:                jsii.String("applicationdb"),
+		Username:              jsii.String("admin"),
+		ManageGlobalSecretPassword: jsii.Bool(true),
+		VpcSecurityGroupIds:   &[]*string{dbSg.Id()},
+		DbSubnetGroupName:     dbSubnetGroup.Name(),
+		BackupRetentionPeriod: jsii.Number(7),
+		BackupWindow:          jsii.String("03:00-04:00"),
+		MaintenanceWindow:     jsii.String("sun:04:00-sun:05:00"),
+		MultiAz:               jsii.Bool(true),
+		SkipFinalSnapshot:     jsii.Bool(true),
+		DeletionProtection:    jsii.Bool(true),
+		Provider:              &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(dbName),
+		}),
+	})
+
+	// Get Amazon Linux 2023 AMI
+	amiData := dataawsami.NewDataAwsAmi(scope, jsii.String(fmt.Sprintf("amazon-linux-%s", regionName)), &dataawsami.DataAwsAmiConfig{
+		MostRecent: jsii.Bool(true),
+		Owners:     &[]*string{jsii.String("amazon")},
+		Provider:   &awsProvider,
+		Filter: &[]*dataawsami.DataAwsAmiFilter{
+			{
+				Name:   jsii.String("name"),
+				Values: &[]*string{jsii.String("al2023-ami-*-x86_64")},
+			},
+			{
+				Name:   jsii.String("virtualization-type"),
+				Values: &[]*string{jsii.String("hvm")},
+			},
+		},
+	})
+
+	// User data script
+	userData := `#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo '<h1>Hello from TAP Infrastructure in ` + regionCode + `!</h1>' > /var/www/html/index.html`
+
+	// Create Launch Template
+	ltName := fmt.Sprintf("tap-lt-%s-%s", regionCode, envSuffix)
+	launchTemplate := launchtemplate.NewLaunchTemplate(scope, jsii.String(fmt.Sprintf("web-launch-template-%s", regionName)), &launchtemplate.LaunchTemplateConfig{
+		Name:        jsii.String(ltName),
+		ImageId:     amiData.Id(),
+		InstanceType: jsii.String("t3.micro"),
+		KeyName:     jsii.String("my-key-pair"),
+		VpcSecurityGroupIds: &[]*string{webSg.Id()},
+		UserData:    cdktf.Fn_Base64encode(cdktf.Fn_RawString(&userData)),
+		Provider:    &awsProvider,
+		TagSpecification: &[]*launchtemplate.LaunchTemplateTagSpecification{
+			{
+				ResourceType: jsii.String("instance"),
+				Tags: mergeTags(baseTags, &map[string]*string{
+					"Name": jsii.String(fmt.Sprintf("tap-web-server-%s-%s", regionCode, envSuffix)),
+				}),
+			},
+		},
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(ltName),
+		}),
+	})
+
+	// Create Application Load Balancer
+	albName := fmt.Sprintf("tap-alb-%s-%s", regionCode, envSuffix)
+	alb := lb.NewLb(scope, jsii.String(fmt.Sprintf("application-alb-%s", regionName)), &lb.LbConfig{
+		Name:           jsii.String(albName),
+		LoadBalancerType: jsii.String("application"),
+		Subnets:        &[]*string{publicSubnet1.Id(), publicSubnet2.Id()},
+		SecurityGroups: &[]*string{albSg.Id()},
+		EnableDeletionProtection: jsii.Bool(false),
+		Provider:       &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(albName),
+		}),
+	})
+
+	// Create Target Group
+	tgName := fmt.Sprintf("tap-tg-%s-%s", regionCode, envSuffix)
+	targetGroup := lbtargetgroup.NewLbTargetGroup(scope, jsii.String(fmt.Sprintf("web-tg-%s", regionName)), &lbtargetgroup.LbTargetGroupConfig{
+		Name:       jsii.String(tgName),
+		Port:       jsii.Number(80),
+		Protocol:   jsii.String("HTTP"),
+		VpcId:      mainVpc.Id(),
+		TargetType: jsii.String("instance"),
+		Provider:   &awsProvider,
+		HealthCheck: &lbtargetgroup.LbTargetGroupHealthCheck{
+			Enabled:            jsii.Bool(true),
+			HealthyThreshold:   jsii.Number(2),
+			Interval:           jsii.Number(30),
+			Matcher:            jsii.String("200"),
+			Path:               jsii.String("/"),
+			Port:               jsii.String("traffic-port"),
+			Protocol:           jsii.String("HTTP"),
+			Timeout:            jsii.Number(5),
+			UnhealthyThreshold: jsii.Number(2),
+		},
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(tgName),
+		}),
+	})
+
+	// Create ALB Listener
+	lblistener.NewLbListener(scope, jsii.String(fmt.Sprintf("web-listener-%s", regionName)), &lblistener.LbListenerConfig{
+		LoadBalancerArn: alb.Arn(),
+		Port:            jsii.String("80"),
+		Protocol:        jsii.String("HTTP"),
+		Provider:        &awsProvider,
+		DefaultAction: &[]*lblistener.LbListenerDefaultAction{
+			{
+				Type:           jsii.String("forward"),
+				TargetGroupArn: targetGroup.Arn(),
+			},
+		},
+	})
+
+	// Create Auto Scaling Group
+	asgName := fmt.Sprintf("tap-asg-%s-%s", regionCode, envSuffix)
+	asg := autoscalinggroup.NewAutoscalingGroup(scope, jsii.String(fmt.Sprintf("web-asg-%s", regionName)), &autoscalinggroup.AutoscalingGroupConfig{
+		Name:                jsii.String(asgName),
+		VpcZoneIdentifier:   &[]*string{privateSubnet1.Id(), privateSubnet2.Id()},
+		TargetGroupArns:     &[]*string{targetGroup.Arn()},
+		HealthCheckType:     jsii.String("ELB"),
+		HealthCheckGracePeriod: jsii.Number(300),
+		MinSize:             jsii.Number(2),
+		MaxSize:             jsii.Number(6),
+		DesiredCapacity:     jsii.Number(2),
+		Provider:            &awsProvider,
+		EnabledMetrics: &[]*string{
+			jsii.String("GroupMinSize"),
+			jsii.String("GroupMaxSize"),
+			jsii.String("GroupDesiredCapacity"),
+			jsii.String("GroupInServiceInstances"),
+			jsii.String("GroupTotalInstances"),
+		},
+		LaunchTemplate: &autoscalinggroup.AutoscalingGroupLaunchTemplate{
+			Id:      launchTemplate.Id(),
+			Version: jsii.String("$Latest"),
+		},
+		Tag: &[]*autoscalinggroup.AutoscalingGroupTag{
+			{
+				Key:               jsii.String("Name"),
+				Value:             jsii.String(asgName),
+				PropagateAtLaunch: jsii.Bool(true),
+			},
+			{
+				Key:               jsii.String("Project"),
+				Value:             jsii.String("Migration"),
+				PropagateAtLaunch: jsii.Bool(true),
+			},
+			{
+				Key:               jsii.String("Creator"),
+				Value:             jsii.String("CloudEngineer"),
+				PropagateAtLaunch: jsii.Bool(true),
+			},
+			{
+				Key:               jsii.String("Environment"),
+				Value:             jsii.String("production"),
+				PropagateAtLaunch: jsii.Bool(true),
+			},
+			{
+				Key:               jsii.String("Region"),
+				Value:             jsii.String(regionCode),
+				PropagateAtLaunch: jsii.Bool(true),
+			},
+			{
+				Key:               jsii.String("CostCenter"),
+				Value:             jsii.String("IT-Infrastructure"),
+				PropagateAtLaunch: jsii.Bool(true),
+			},
+		},
+	})
+
+	// Create CloudWatch Log Group for application logs
+	logGroupName := fmt.Sprintf("tap-log-group-%s-%s", regionCode, envSuffix)
+	cloudwatchloggroup.NewCloudwatchLogGroup(scope, jsii.String(fmt.Sprintf("app-log-group-%s", regionName)), &cloudwatchloggroup.CloudwatchLogGroupConfig{
+		Name:             jsii.String(fmt.Sprintf("/aws/ec2/%s", logGroupName)),
+		RetentionInDays:  jsii.Number(14),
+		Provider:         &awsProvider,
+		Tags: mergeTags(baseTags, &map[string]*string{
+			"Name": jsii.String(logGroupName),
+		}),
+	})
+
+	// Outputs for this region
+	cdktf.NewTerraformOutput(scope, jsii.String(fmt.Sprintf("vpc_id_%s", regionName)), &cdktf.TerraformOutputConfig{
+		Value:       mainVpc.Id(),
+		Description: jsii.String(fmt.Sprintf("ID of the VPC in %s", regionCode)),
+	})
+
+	cdktf.NewTerraformOutput(scope, jsii.String(fmt.Sprintf("alb_dns_name_%s", regionName)), &cdktf.TerraformOutputConfig{
+		Value:       alb.DnsName(),
+		Description: jsii.String(fmt.Sprintf("DNS name of the Application Load Balancer in %s", regionCode)),
+	})
+
+	cdktf.NewTerraformOutput(scope, jsii.String(fmt.Sprintf("database_endpoint_%s", regionName)), &cdktf.TerraformOutputConfig{
+		Value:       database.Endpoint(),
+		Description: jsii.String(fmt.Sprintf("RDS instance endpoint in %s", regionCode)),
+		Sensitive:   jsii.Bool(true),
+	})
+
+	cdktf.NewTerraformOutput(scope, jsii.String(fmt.Sprintf("asg_name_%s", regionName)), &cdktf.TerraformOutputConfig{
+		Value:       asg.Name(),
+		Description: jsii.String(fmt.Sprintf("Name of the Auto Scaling Group in %s", regionCode)),
+	})
+}
+
 func main() {
 	app := cdktf.NewApp(nil)
 
@@ -637,17 +1214,8 @@ func main() {
 		envSuffix = "dev"
 	}
 
-	// Deploy to us-east-1
-	NewInfrastructureStack(app, jsii.String(fmt.Sprintf("TapStackEast%s", envSuffix)), &InfrastructureStackConfig{
-		Region:      "us-east-1",
-		Environment: "production",
-	})
-
-	// Deploy to us-west-2 (multi-region requirement)
-	NewInfrastructureStack(app, jsii.String(fmt.Sprintf("TapStackWest%s", envSuffix)), &InfrastructureStackConfig{
-		Region:      "us-west-2",
-		Environment: "production",
-	})
+	// Single stack with multi-region deployment
+	NewMultiRegionInfrastructureStack(app, jsii.String(fmt.Sprintf("TapStack%s", envSuffix)), envSuffix)
 
 	app.Synth()
 }
