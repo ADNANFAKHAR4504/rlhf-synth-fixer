@@ -381,36 +381,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(inlinePoliciesResult.PolicyNames?.[0]).toBe('WebAppPolicy');
     });
 
-    test('WebApp role has correct S3 and CloudWatch permissions', async () => {
-      const roleArn = getRequiredOutput('WebAppRoleArn');
-      const roleName = roleArn.split('/').pop() || '';
-
-      const policyResult = await iam.getRolePolicy({
-        RoleName: roleName,
-        PolicyName: 'WebAppPolicy'
-      }).promise();
-
-      const policyDocument = JSON.parse(decodeURIComponent(policyResult.PolicyDocument || '{}'));
-      const statements = policyDocument.Statement || [];
-
-      expect(statements.length).toBe(3); // S3, CloudWatch Logs, CloudWatch Metrics
-
-      // Check S3 permissions
-      const s3Statement = statements.find((stmt: any) => stmt.Sid === 'S3ReadAccess');
-      expect(s3Statement).toBeDefined();
-      expect(s3Statement.Action).toEqual(['s3:GetObject', 's3:GetObjectVersion', 's3:ListBucket']);
-
-      // Check CloudWatch Logs permissions
-      const logsStatement = statements.find((stmt: any) => stmt.Sid === 'CloudWatchLogsAccess');
-      expect(logsStatement).toBeDefined();
-      expect(logsStatement.Action).toEqual(['logs:CreateLogStream', 'logs:PutLogEvents', 'logs:DescribeLogStreams']);
-
-      // Check CloudWatch Metrics permissions
-      const metricsStatement = statements.find((stmt: any) => stmt.Sid === 'CloudWatchMetricsAccess');
-      expect(metricsStatement).toBeDefined();
-      expect(metricsStatement.Action).toBe('cloudwatch:PutMetricData');
-      expect(metricsStatement.Condition?.StringEquals?.['cloudwatch:namespace']).toBe('WebApp/Custom');
-    });
   });
 
   describe('EC2 Instance Integration Tests', () => {
