@@ -1055,7 +1055,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BackupVaultName: 'SecureBackupVault-production-tapstack'
+      BackupVaultName: !Sub
+        - 'SecureBackupVault-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       EncryptionKeyArn:
         !If [CreateKMS, !GetAtt SecureKMSKey.Arn, !Ref ExistingKMSKeyArn]
       BackupVaultTags:
@@ -1070,7 +1078,15 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BackupPlan:
-        BackupPlanName: 'SecureBackupPlan-production-tapstack'
+        BackupPlanName: !Sub
+          - 'SecureBackupPlan-production-tapstack-${Suffix}'
+          - {
+              Suffix:
+                !Select [
+                  0,
+                  !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+                ],
+            }
         BackupPlanRule:
           - RuleName: DailyBackups
             TargetBackupVault:
@@ -1180,7 +1196,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      TrailName: 'SecureEnvironmentTrail-production-tapstack'
+      TrailName: !Sub
+        - 'SecureEnvironmentTrail-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       S3BucketName:
         !If [
           UseExistingCloudTrailBucket,
@@ -1473,7 +1497,15 @@ Resources:
     Condition: CreateLambdaFunction
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: 'SecureFunction-production-tapstack'
+      FunctionName: !Sub
+        - 'SecureFunction-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       Runtime: python3.9
       Handler: index.lambda_handler
       Role:
@@ -1604,7 +1636,15 @@ Resources:
   IAMPasswordPolicyFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: 'IAMPasswordPolicy-production-tapstack'
+      FunctionName: !Sub
+        - 'IAMPasswordPolicy-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt IAMPasswordPolicyRole.Arn
@@ -1683,7 +1723,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      FunctionName: 'EBSEncryption-production-tapstack'
+      FunctionName: !Sub
+        - 'EBSEncryption-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       Runtime: python3.9
       Handler: index.lambda_handler
       Role: !GetAtt EBSEncryptionRole.Arn
