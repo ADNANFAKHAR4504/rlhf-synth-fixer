@@ -1,11 +1,10 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Robust networking infrastructure in us-west-2. Includes VPC, public/private subnets, IGW, NAT Gateway, EC2 Auto Scaling, IAM roles, CloudWatch alarms, and a secure S3 bucket.\n",
+    "Description": "TapStack.yml — Robust networking infrastructure in us-west-2. Includes VPC, subnets, IGW, NAT Gateway, EC2 Auto Scaling (via LaunchTemplate), IAM roles, CloudWatch alarms, and a secure S3 bucket.\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
-            "Default": "tapstack",
-            "Description": "Environment name prefix for resources."
+            "Default": "tapstack"
         },
         "VpcCIDR": {
             "Type": "String",
@@ -33,8 +32,7 @@
         },
         "AllowedSSHRange": {
             "Type": "String",
-            "Default": "203.0.113.0/24",
-            "Description": "CIDR allowed to SSH into EC2 instances."
+            "Default": "203.0.113.0/24"
         }
     },
     "Mappings": {
@@ -400,26 +398,36 @@
                 ]
             }
         },
-        "LaunchConfig": {
-            "Type": "AWS::AutoScaling::LaunchConfiguration",
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
-                "ImageId": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        "us-west-2",
-                        "AMI"
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${EnvironmentName}-launch-template"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Fn::FindInMap": [
+                            "RegionMap",
+                            "us-west-2",
+                            "AMI"
+                        ]
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "InstanceSG"
+                        }
                     ]
-                },
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "SecurityGroups": [
-                    {
-                        "Ref": "InstanceSG"
-                    }
-                ],
-                "IamInstanceProfile": {
-                    "Ref": "InstanceProfile"
                 }
             }
         },
@@ -434,12 +442,20 @@
                         "Ref": "PrivateSubnet2"
                     }
                 ],
-                "LaunchConfigurationName": {
-                    "Ref": "LaunchConfig"
-                },
                 "MinSize": 1,
                 "MaxSize": 4,
                 "DesiredCapacity": 2,
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
                 "Tags": [
                     {
                         "Key": "Name",

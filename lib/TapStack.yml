@@ -1,14 +1,13 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Robust networking infrastructure in us-west-2.
-  Includes VPC, public/private subnets, IGW, NAT Gateway, EC2 Auto Scaling,
+  Includes VPC, subnets, IGW, NAT Gateway, EC2 Auto Scaling (via LaunchTemplate),
   IAM roles, CloudWatch alarms, and a secure S3 bucket.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: tapstack
-    Description: Environment name prefix for resources.
 
   VpcCIDR:
     Type: String
@@ -37,12 +36,11 @@ Parameters:
   AllowedSSHRange:
     Type: String
     Default: 203.0.113.0/24
-    Description: CIDR allowed to SSH into EC2 instances.
 
 Mappings:
   RegionMap:
     us-west-2:
-      AMI: ami-0c55b159cbfafe1f0 # Amazon Linux 2 AMI (HVM), x86_64, EBS
+      AMI: ami-0c55b159cbfafe1f0 # Amazon Linux 2 AMI (HVM), x86_64
 
 Resources:
 
@@ -55,16 +53,12 @@ Resources:
       CidrBlock: !Ref VpcCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-vpc"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-vpc" }]
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-igw"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-igw" }]
 
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -78,9 +72,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet1CIDR
       MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-public-1"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-public-1" }]
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -88,9 +80,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PublicSubnet2CIDR
       MapPublicIpOnLaunch: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-public-2"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-public-2" }]
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -98,9 +88,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet1CIDR
       MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-private-1"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-private-1" }]
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -108,9 +96,7 @@ Resources:
       VpcId: !Ref VPC
       CidrBlock: !Ref PrivateSubnet2CIDR
       MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-private-2"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-private-2" }]
 
   # -------------------
   # Route Tables
@@ -119,9 +105,7 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-public-rt"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-public-rt" }]
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -147,9 +131,7 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-private-rt"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-private-rt" }]
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -168,17 +150,14 @@ Resources:
   # -------------------
   NatEIP:
     Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
+    Properties: { Domain: vpc }
 
   NatGateway:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt NatEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-natgw"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-natgw" }]
 
   PrivateRoute:
     Type: AWS::EC2::Route
@@ -200,9 +179,7 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AllowedSSHRange
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-instance-sg"
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-instance-sg" }]
 
   # -------------------
   # IAM Role for EC2
@@ -214,8 +191,7 @@ Resources:
         Version: "2012-10-17"
         Statement:
           - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
+            Principal: { Service: ec2.amazonaws.com }
             Action: sts:AssumeRole
       Path: /
       Policies:
@@ -224,19 +200,15 @@ Resources:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
+                Action: [ "s3:GetObject", "s3:PutObject" ]
                 Resource: !Sub "arn:aws:s3:::${AppDataBucket}/*"
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
-    Properties:
-      Path: /
-      Roles: [!Ref EC2Role]
+    Properties: { Path: "/", Roles: [!Ref EC2Role] }
 
   # -------------------
-  # S3 Bucket (Managed)
+  # S3 Bucket
   # -------------------
   AppDataBucket:
     Type: AWS::S3::Bucket
@@ -244,35 +216,33 @@ Resources:
       BucketName: !Sub "${EnvironmentName}-app-bucket-${AWS::AccountId}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Name
-          Value: !Sub "${EnvironmentName}-app-bucket"
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      VersioningConfiguration: { Status: Enabled }
+      Tags: [{ Key: Name, Value: !Sub "${EnvironmentName}-app-bucket" }]
 
   # -------------------
-  # Launch Configuration & ASG
+  # Launch Template & ASG
   # -------------------
-  LaunchConfig:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      ImageId: !FindInMap [RegionMap, us-west-2, AMI]
-      InstanceType: !Ref InstanceType
-      SecurityGroups: [!Ref InstanceSG]
-      IamInstanceProfile: !Ref InstanceProfile
+      LaunchTemplateName: !Sub "${EnvironmentName}-launch-template"
+      LaunchTemplateData:
+        ImageId: !FindInMap [RegionMap, us-west-2, AMI]
+        InstanceType: !Ref InstanceType
+        IamInstanceProfile: { Arn: !GetAtt InstanceProfile.Arn }
+        SecurityGroupIds: [!Ref InstanceSG]
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      LaunchConfigurationName: !Ref LaunchConfig
+      VPCZoneIdentifier: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
       MinSize: 1
       MaxSize: 4
       DesiredCapacity: 2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
       Tags:
         - Key: Name
           Value: !Sub "${EnvironmentName}-asg-instance"
@@ -295,8 +265,7 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleOutPolicy
+      AlarmActions: [!Ref ScaleOutPolicy]
 
   CPUAlarmLow:
     Type: AWS::CloudWatch::Alarm
@@ -312,8 +281,7 @@ Resources:
       Dimensions:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
-      AlarmActions:
-        - !Ref ScaleInPolicy
+      AlarmActions: [!Ref ScaleInPolicy]
 
   ScaleOutPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -332,22 +300,16 @@ Resources:
       Cooldown: 300
 
 Outputs:
-  VpcId:
-    Description: VPC ID
-    Value: !Ref VPC
-
-  PublicSubnets:
+  VpcId: { Description: VPC ID, Value: !Ref VPC }
+  PublicSubnets: 
     Description: Public Subnet IDs
     Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
-
-  PrivateSubnets:
+  PrivateSubnets: 
     Description: Private Subnet IDs
     Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
-
-  AutoScalingGroupName:
+  AutoScalingGroupName: 
     Description: Name of the Auto Scaling Group
     Value: !Ref AutoScalingGroup
-
   BucketName:
     Description: Name of the managed S3 bucket
     Value: !Ref AppDataBucket
