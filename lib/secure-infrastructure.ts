@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import * as crypto from 'crypto';
 
 export class SecureInfrastructure {
   private provider: aws.Provider;
@@ -14,6 +15,7 @@ export class SecureInfrastructure {
   private dbSubnetGroup: aws.rds.SubnetGroup;
   private webSecurityGroup!: aws.ec2.SecurityGroup;
   private dbSecurityGroup!: aws.ec2.SecurityGroup;
+  private vpceSecurityGroup!: aws.ec2.SecurityGroup;
   private ec2Role!: aws.iam.Role;
   private flowLogsRole!: aws.iam.Role;
   private instanceProfile!: aws.iam.InstanceProfile;
@@ -67,6 +69,7 @@ export class SecureInfrastructure {
     const securityGroups = this.createSecurityGroups();
     this.webSecurityGroup = securityGroups.web;
     this.dbSecurityGroup = securityGroups.db;
+    this.vpceSecurityGroup = securityGroups.vpce;
     const buckets = this.createS3Buckets();
     this.appBucket = buckets.app;
     this.logsBucket = buckets.logs;
@@ -93,11 +96,47 @@ export class SecureInfrastructure {
   }
 
   private createKMSKey(): aws.kms.Key {
+    const caller = aws.getCallerIdentity({}, { provider: this.provider });
+
     return new aws.kms.Key(
       `master-key-${this.environment}`,
       {
         description: `Master key for RDS and SecretsManager - ${this.environment}`,
         enableKeyRotation: true,
+        policy: caller.then(c =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: { AWS: `arn:aws:iam::${c.accountId}:root` },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow RDS Service',
+                Effect: 'Allow',
+                Principal: { Service: 'rds.amazonaws.com' },
+                Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+                Resource: '*',
+                Condition: {
+                  StringEquals: { 'aws:SourceAccount': c.accountId },
+                },
+              },
+              {
+                Sid: 'Allow Secrets Manager Service',
+                Effect: 'Allow',
+                Principal: { Service: 'secretsmanager.amazonaws.com' },
+                Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+                Resource: '*',
+                Condition: {
+                  StringEquals: { 'aws:SourceAccount': c.accountId },
+                },
+              },
+            ],
+          })
+        ),
         tags: {
           ...this.tags,
           Name: `master-key-${this.environment}`,
@@ -210,9 +249,12 @@ export class SecureInfrastructure {
     );
   }
 
+  private publicRouteTable!: aws.ec2.RouteTable;
+  private privateRouteTable!: aws.ec2.RouteTable;
+
   private createRouteTables(): void {
     // Public Route Table
-    const publicRouteTable = new aws.ec2.RouteTable(
+    this.publicRouteTable = new aws.ec2.RouteTable(
       `public-rt-${this.environment}`,
       {
         vpcId: this.vpc.id,
@@ -227,7 +269,7 @@ export class SecureInfrastructure {
     new aws.ec2.Route(
       `public-route-${this.environment}`,
       {
-        routeTableId: publicRouteTable.id,
+        routeTableId: this.publicRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
         gatewayId: this.internetGateway.id,
       },
@@ -240,14 +282,14 @@ export class SecureInfrastructure {
         `public-rta-${index + 1}-${this.environment}`,
         {
           subnetId: subnet.id,
-          routeTableId: publicRouteTable.id,
+          routeTableId: this.publicRouteTable.id,
         },
         { provider: this.provider }
       );
     });
 
     // Private Route Table
-    const privateRouteTable = new aws.ec2.RouteTable(
+    this.privateRouteTable = new aws.ec2.RouteTable(
       `private-rt-${this.environment}`,
       {
         vpcId: this.vpc.id,
@@ -262,7 +304,7 @@ export class SecureInfrastructure {
     new aws.ec2.Route(
       `private-route-${this.environment}`,
       {
-        routeTableId: privateRouteTable.id,
+        routeTableId: this.privateRouteTable.id,
         destinationCidrBlock: '0.0.0.0/0',
         natGatewayId: this.natGateway.id,
       },
@@ -275,7 +317,7 @@ export class SecureInfrastructure {
         `private-rta-${index + 1}-${this.environment}`,
         {
           subnetId: subnet.id,
-          routeTableId: privateRouteTable.id,
+          routeTableId: this.privateRouteTable.id,
         },
         { provider: this.provider }
       );
@@ -299,6 +341,7 @@ export class SecureInfrastructure {
   private createSecurityGroups(): {
     web: aws.ec2.SecurityGroup;
     db: aws.ec2.SecurityGroup;
+    vpce: aws.ec2.SecurityGroup;
   } {
     // Web Security Group
     const webSecurityGroup = new aws.ec2.SecurityGroup(
@@ -380,7 +423,44 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    return { web: webSecurityGroup, db: dbSecurityGroup };
+    // VPC Endpoint Security Group
+    const vpceSecurityGroup = new aws.ec2.SecurityGroup(
+      `vpce-sg-${this.environment}`,
+      {
+        name: `vpce-sg-${this.environment}`,
+        description: 'Security group for VPC endpoints',
+        vpcId: this.vpc.id,
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['10.0.0.0/16'],
+            description: 'HTTPS access from VPC',
+          },
+        ],
+        egress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTPS outbound',
+          },
+        ],
+        tags: {
+          ...this.tags,
+          Name: `vpce-sg-${this.environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    return {
+      web: webSecurityGroup,
+      db: dbSecurityGroup,
+      vpce: vpceSecurityGroup,
+    };
   }
 
   private createS3Buckets(): { app: aws.s3.Bucket; logs: aws.s3.Bucket } {
@@ -596,37 +676,42 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
+    // Get current AWS account ID for policy restrictions
+    const caller = aws.getCallerIdentity({}, { provider: this.provider });
+
     // EC2 Instance Policy with minimal privileges
     const ec2Policy = new aws.iam.Policy(
       `ec2-policy-${this.environment}`,
       {
         description: 'Minimal policy for EC2 instances',
-        policy: pulumi.all([this.appBucket.arn]).apply(([bucketArn]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
-                Resource: `${bucketArn}/*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue'],
-                Resource: `arn:aws:secretsmanager:${this.region}:*:secret:app-secrets-${this.environment}-*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: [
-                  'logs:CreateLogGroup',
-                  'logs:CreateLogStream',
-                  'logs:PutLogEvents',
-                ],
-                Resource: '*',
-              },
-            ],
-          })
-        ),
+        policy: pulumi
+          .all([this.appBucket.arn, caller])
+          .apply(([bucketArn, c]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+                  Resource: `${bucketArn}/*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: `arn:aws:secretsmanager:${this.region}:${c.accountId}:secret:api-keys-${this.environment}-*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream',
+                    'logs:PutLogEvents',
+                  ],
+                  Resource: `arn:aws:logs:${this.region}:${c.accountId}:log-group:/ec2/app-logs/${this.environment}:*`,
+                },
+              ],
+            })
+          ),
         tags: {
           ...this.tags,
           Name: `ec2-policy-${this.environment}`,
@@ -656,9 +741,6 @@ export class SecureInfrastructure {
       },
       { provider: this.provider }
     );
-
-    // Get current AWS account ID
-    const caller = aws.getCallerIdentity({}, { provider: this.provider });
 
     // VPC Flow Logs Role with proper trust policy
     const flowLogsRole = new aws.iam.Role(
@@ -699,20 +781,22 @@ export class SecureInfrastructure {
       `flow-logs-policy-${this.environment}`,
       {
         role: flowLogsRole.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-              ],
-              Resource: `arn:aws:logs:${this.region}:*:log-group:/aws/vpc/flowlogs/${this.environment}*`,
-            },
-          ],
-        }),
+        policy: caller.then(c =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                ],
+                Resource: `arn:aws:logs:${this.region}:${c.accountId}:log-group:/aws/vpc/flowlogs/${this.environment}*`,
+              },
+            ],
+          })
+        ),
       },
       { provider: this.provider }
     );
@@ -721,39 +805,7 @@ export class SecureInfrastructure {
   }
 
   private createSecretsManager(): void {
-    // Database credentials
-    const dbSecret = new aws.secretsmanager.Secret(
-      `db-credentials-${this.environment}`,
-      {
-        name: `app-secrets-${this.environment}`,
-        description: 'Database credentials for the application',
-        kmsKeyId: this.masterKey.arn,
-        tags: {
-          ...this.tags,
-          Name: `db-credentials-${this.environment}`,
-          Purpose: 'Database Credentials',
-        },
-      },
-      { provider: this.provider }
-    );
-
-    new aws.secretsmanager.SecretVersion(
-      `db-credentials-version-${this.environment}`,
-      {
-        secretId: dbSecret.id,
-        secretString: JSON.stringify({
-          username: 'admin',
-          password: 'ChangeMe123!',
-          engine: 'mysql',
-          host: 'localhost',
-          port: 3306,
-          dbname: `appdb_${this.environment}`,
-        }),
-      },
-      { provider: this.provider }
-    );
-
-    // API Keys
+    // API Keys secret only - RDS manages its own credentials
     const apiSecret = new aws.secretsmanager.Secret(
       `api-keys-${this.environment}`,
       {
@@ -776,7 +828,7 @@ export class SecureInfrastructure {
         secretString: JSON.stringify({
           stripe_key: 'sk_test_...',
           sendgrid_key: 'SG...',
-          jwt_secret: 'your-jwt-secret-key',
+          jwt_secret: crypto.randomBytes(32).toString('hex'),
         }),
       },
       { provider: this.provider }
@@ -804,7 +856,7 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    // RDS Instance
+    // RDS Instance with credentials from Secrets Manager
     this.rdsInstance = new aws.rds.Instance(
       `mysql-db-${this.environment}`,
       {
@@ -818,8 +870,9 @@ export class SecureInfrastructure {
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
         dbName: `appdb${this.environment.replace(/[^a-zA-Z0-9]/g, '')}`,
+        manageMasterUserPassword: true,
+        masterUserSecretKmsKeyId: this.masterKey.arn,
         username: 'admin',
-        password: 'ChangeMe123!',
         parameterGroupName: parameterGroup.name,
         dbSubnetGroupName: this.dbSubnetGroup.name,
         vpcSecurityGroupIds: [this.dbSecurityGroup.id],
@@ -1127,7 +1180,7 @@ export class SecureInfrastructure {
           Purpose: 'Network Monitoring',
         },
       },
-      { provider: this.provider }
+      { provider: this.provider, dependsOn: [this.flowLogsRole, logGroup] }
     );
   }
 
@@ -1139,7 +1192,7 @@ export class SecureInfrastructure {
         vpcId: this.vpc.id,
         serviceName: `com.amazonaws.${this.region}.s3`,
         vpcEndpointType: 'Gateway',
-        routeTableIds: [],
+        routeTableIds: [this.publicRouteTable.id, this.privateRouteTable.id],
         tags: {
           ...this.tags,
           Name: `s3-endpoint-${this.environment}`,
@@ -1156,7 +1209,7 @@ export class SecureInfrastructure {
         serviceName: `com.amazonaws.${this.region}.secretsmanager`,
         vpcEndpointType: 'Interface',
         subnetIds: this.privateSubnets.map(s => s.id),
-        securityGroupIds: [this.webSecurityGroup.id],
+        securityGroupIds: [this.vpceSecurityGroup.id],
         tags: {
           ...this.tags,
           Name: `secrets-endpoint-${this.environment}`,

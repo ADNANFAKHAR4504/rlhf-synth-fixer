@@ -751,14 +751,14 @@ describe('TAP Infrastructure Integration Tests - PROMPT.md Compliance', () => {
           const s3Endpoint = endpoints.find(ep =>
             ep.ServiceName?.includes('s3') && ep.VpcEndpointType === 'Gateway'
           );
-          expect(s3Endpoint?.State).toBe('Available');
+          expect(s3Endpoint?.State?.toLowerCase()).toBe('available');
 
           // Should have Secrets Manager interface endpoint
           const secretsEndpoint = endpoints.find(ep =>
             ep.ServiceName?.includes('secretsmanager') && ep.VpcEndpointType === 'Interface'
           );
           if (secretsEndpoint) {
-            expect(secretsEndpoint.State).toBe('Available');
+            expect(secretsEndpoint.State?.toLowerCase()).toBe('available');
           }
         }
       }
