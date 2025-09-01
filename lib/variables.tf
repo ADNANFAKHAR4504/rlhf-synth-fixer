@@ -28,6 +28,12 @@ variable "route53_zone_name" {
   default     = "example.com"
 }
 
+variable "create_route53_records" {
+  description = "Whether to create Route 53 DNS records"
+  type        = bool
+  default     = false
+}
+
 variable "key_pair_name" {
   description = "EC2 Key Pair name"
   type        = string

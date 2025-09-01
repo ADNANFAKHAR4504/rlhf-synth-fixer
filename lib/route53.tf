@@ -1,5 +1,6 @@
 resource "aws_route53_record" "vpc1_ec2" {
-  zone_id = data.aws_route53_zone.main.zone_id
+  count   = var.create_route53_records ? 1 : 0
+  zone_id = data.aws_route53_zone.main[0].zone_id
   name    = "vpc1-app.${var.route53_zone_name}"
   type    = "A"
   ttl     = 300
@@ -9,7 +10,8 @@ resource "aws_route53_record" "vpc1_ec2" {
 }
 
 resource "aws_route53_record" "vpc2_ec2" {
-  zone_id = data.aws_route53_zone.main.zone_id
+  count   = var.create_route53_records ? 1 : 0
+  zone_id = data.aws_route53_zone.main[0].zone_id
   name    = "vpc2-app.${var.route53_zone_name}"
   type    = "A"
   ttl     = 300

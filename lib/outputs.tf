@@ -40,8 +40,8 @@ output "rds_endpoint" {
 
 output "route53_records" {
   description = "Route 53 DNS records"
-  value = {
-    vpc1_app = aws_route53_record.vpc1_ec2.fqdn
-    vpc2_app = aws_route53_record.vpc2_ec2.fqdn
-  }
+  value = var.create_route53_records ? {
+    vpc1_app = aws_route53_record.vpc1_ec2[0].fqdn
+    vpc2_app = aws_route53_record.vpc2_ec2[0].fqdn
+  } : {}
 }
