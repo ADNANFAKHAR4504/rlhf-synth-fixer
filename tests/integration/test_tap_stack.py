@@ -32,38 +32,17 @@ except ImportError as e:
 
 
 def get_stack_outputs() -> Dict:
-    """Get stack outputs from cfn-outputs/flat-outputs.json or environment variables"""
-    # First try to read from the outputs file
-    outputs_file = "cfn-outputs/flat-outputs.json"
-    
-    if os.path.exists(outputs_file):
-        try:
-            with open(outputs_file, 'r') as f:
-                outputs = json.load(f)
-                if outputs:
-                    print(f"Using outputs from {outputs_file}")
-                    return outputs
-        except Exception as e:
-            print(f"Error reading {outputs_file}: {e}")
-    
-    # Fallback to all-outputs.json
-    all_outputs_file = "cfn-outputs/all-outputs.json"
-    if os.path.exists(all_outputs_file):
-        try:
-            with open(all_outputs_file, 'r') as f:
-                outputs = json.load(f)
-                if outputs:
-                    print(f"Using outputs from {all_outputs_file}")
-                    # Convert to flat format
-                    flat_outputs = {}
-                    for key, value in outputs.items():
-                        if isinstance(value, dict) and 'value' in value:
-                            flat_outputs[key] = value['value']
-                        else:
-                            flat_outputs[key] = value
-                    return flat_outputs
-        except Exception as e:
-            print(f"Error reading {all_outputs_file}: {e}")
+    """Get stack outputs from various sources, prioritizing current stack outputs"""
+    # First try Pulumi CLI (most current)
+    try:
+        result = subprocess.run(['pulumi', 'stack', 'output', '--json'], 
+                              capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            outputs = json.loads(result.stdout)
+            print("Using outputs from Pulumi CLI (current stack)")
+            return outputs
+    except Exception as e:
+        print(f"Error getting Pulumi outputs: {e}")
     
     # Fallback to environment variables
     env_outputs = {}
@@ -92,16 +71,36 @@ def get_stack_outputs() -> Dict:
         print("Using outputs from environment variables")
         return env_outputs
     
-    # Last resort: try Pulumi CLI
-    try:
-        result = subprocess.run(['pulumi', 'stack', 'output', '--json'], 
-                              capture_output=True, text=True)
-        if result.returncode == 0:
-            outputs = json.loads(result.stdout)
-            print("Using outputs from Pulumi CLI")
-            return outputs
-    except Exception as e:
-        print(f"Error getting Pulumi outputs: {e}")
+    # Fallback to flat-outputs.json
+    outputs_file = "cfn-outputs/flat-outputs.json"
+    if os.path.exists(outputs_file):
+        try:
+            with open(outputs_file, 'r') as f:
+                outputs = json.load(f)
+                if outputs:
+                    print(f"Using outputs from {outputs_file}")
+                    return outputs
+        except Exception as e:
+            print(f"Error reading {outputs_file}: {e}")
+    
+    # Last resort: try all-outputs.json
+    all_outputs_file = "cfn-outputs/all-outputs.json"
+    if os.path.exists(all_outputs_file):
+        try:
+            with open(all_outputs_file, 'r') as f:
+                outputs = json.load(f)
+                if outputs:
+                    print(f"Using outputs from {all_outputs_file}")
+                    # Convert to flat format
+                    flat_outputs = {}
+                    for key, value in outputs.items():
+                        if isinstance(value, dict) and 'value' in value:
+                            flat_outputs[key] = value['value']
+                        else:
+                            flat_outputs[key] = value
+                    return flat_outputs
+        except Exception as e:
+            print(f"Error reading {all_outputs_file}: {e}")
     
     return {}
 
