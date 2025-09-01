@@ -256,12 +256,12 @@ describe('AWS CI/CD Pipeline CloudFormation Template', () => {
 
     test('should have correct number of resources for CI/CD pipeline', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(17); // All CI/CD resources
+      expect(resourceCount).toBe(18); // All CI/CD resources
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(10); // All required parameters
+      expect(parameterCount).toBe(11); // All required parameters
     });
 
     test('should have correct number of outputs', () => {
