@@ -27,6 +27,7 @@ ext {
     pulumiVersion = '1.16.1'
     awsCdkVersion = '2.204.0'
     hashicorpCdktfVersion = '0.21.0'
+    hashicorpCdktfAwsVersion = '21.0.0'
     guavaVersion = '33.0.0-jre'
     jacksonVersion = '2.17.1'
     awsSdkVersion = '2.25.16'
@@ -53,6 +54,7 @@ dependencies {
     implementation "com.pulumi:pulumi:${pulumiVersion}"
     implementation 'com.pulumi:aws:7.5.0'
     implementation "com.hashicorp:cdktf:${hashicorpCdktfVersion}"
+    implementation "com.hashicorp:cdktf-provider-aws:${hashicorpCdktfAwsVersion}"
     implementation 'com.pulumi:tls:5.2.0'
 
     // AWS CDK dependencies

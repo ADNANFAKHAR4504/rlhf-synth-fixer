@@ -2,8 +2,8 @@ package app;
 
 import software.constructs.Construct;
 import com.hashicorp.cdktf.TerraformStack;
-import imports.aws.provider.AwsProvider;
-import imports.aws.s3_bucket.S3Bucket;
+import com.hashicorp.cdktf.providers.aws.provider.AwsProvider;
+import com.hashicorp.cdktf.providers.aws.s3_bucket.S3Bucket;
 
 import java.util.Map;
 

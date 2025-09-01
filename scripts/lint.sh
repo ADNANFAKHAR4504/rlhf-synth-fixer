@@ -85,12 +85,6 @@ elif [ "$LANGUAGE" = "py" ]; then
     fi
 
 elif [ "$LANGUAGE" = "java" ]; then
-    if [ "$PLATFORM" = "cdktf" ]; then
-        if [ ! -d "src/main/java/imports" ]; then
-            echo "🛠 Running cdktf get..."
-            npx --yes cdktf get
-        fi
-    fi
     echo "✅ Java project detected, running Checkstyle..."
     chmod +x ./gradlew
     ./gradlew check --build-cache --no-daemon

@@ -75,16 +75,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       exit 1
     fi
     # Go modules are prepared during build; avoid cache-clearing and extra tidying here
-  elif [ "$LANGUAGE" = "java" ]; then
-    if [ ! -d "src/main/java/imports" ] || [ -d "src/main/java/imports/aws" ]; then
-      echo "Running cdktf get to generate imports for Java"
-      npm run cdktf:get || npx --yes cdktf get
-    fi
   fi
-
-
-
-
   npm run cdktf:deploy
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then

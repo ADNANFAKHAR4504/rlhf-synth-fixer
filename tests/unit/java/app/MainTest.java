@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.hashicorp.cdktf.App;
-import imports.aws.provider.AwsProvider;
-import imports.aws.s3_bucket.S3Bucket;
+import com.hashicorp.cdktf.providers.aws.provider.AwsProvider;
+import com.hashicorp.cdktf.providers.aws.s3_bucket.S3Bucket;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
