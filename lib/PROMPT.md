@@ -21,7 +21,7 @@ Include both manual and automatic approval stages before production deployment.
 
 AWS CodeBuild
 
-Compile and test the application.
+Compile & test the application.
 
 Store build artifacts securely in an S3 bucket with encryption enabled.
 
