@@ -1,0 +1,147 @@
+import {
+  AwsProvider,
+  AwsProviderDefaultTags,
+} from '@cdktf/provider-aws/lib/provider';
+import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { Construct } from 'constructs';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+
+// NEW: random provider for stable, unique suffixes
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
+import { Id as RandomId } from '@cdktf/provider-random/lib/id';
+
+import {
+  S3Module,
+  SecurityGroupModule,
+  IamRoleModule,
+  VpcModule,
+  ModuleConfig,
+} from './modules';
+
+interface TapStackProps {
+  environmentSuffix?: string;
+  stateBucket?: string;
+  stateBucketRegion?: string;
+  awsRegion?: string;
+  defaultTags?: AwsProviderDefaultTags;
+  projectName?: string;
+}
+
+const AWS_REGION_OVERRIDE = 'us-east-1'; // stick to us-east-1
+
+export class TapStack extends TerraformStack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id);
+
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+    const awsRegion = AWS_REGION_OVERRIDE
+      ? AWS_REGION_OVERRIDE
+      : props?.awsRegion || 'us-east-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+    const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+    const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
+    const projectName = props?.projectName || 'tap-project';
+
+    // Providers
+    new AwsProvider(this, 'aws', {
+      region: awsRegion,
+      defaultTags: defaultTags,
+    });
+
+    // Random provider for name suffixes
+    new RandomProvider(this, 'random');
+
+    // Remote state (can stay in us-east-1 even if you deploy elsewhere)
+    new S3Backend(this, {
+      bucket: stateBucket,
+      key: `${environmentSuffix}/${id}.tfstate`,
+      region: stateBucketRegion,
+      encrypt: true,
+    });
+    this.addOverride('terraform.backend.s3.use_lockfile', true);
+
+    // Stable random suffix (hex) – regenerated only if this resource is destroyed
+    const nameSuffix = new RandomId(this, 'name-suffix', {
+      byteLength: 2, // 4 hex chars, e.g. "9f3a"
+    }).hex;
+
+    // Caller identity for outputs
+    const current = new DataAwsCallerIdentity(this, 'current');
+
+    // Common module config (now includes the suffix)
+    const moduleConfig: ModuleConfig = {
+      environment: environmentSuffix,
+      projectName: projectName,
+      nameSuffix: nameSuffix, // <--- pass suffix to modules
+      tags: {
+        Environment: environmentSuffix,
+        Project: projectName,
+        ManagedBy: 'terraform',
+        ...(props?.defaultTags?.tags || {}),
+      },
+    };
+
+    // VPC (default VPC data source)
+    const vpcModule = new VpcModule(this, 'vpc', moduleConfig);
+
+    // S3 (unique bucket name due to suffix)
+    const s3Module = new S3Module(this, 's3', moduleConfig);
+
+    // Security Group (unique name due to suffix)
+    const securityGroupModule = new SecurityGroupModule(
+      this,
+      'security-group',
+      {
+        ...moduleConfig,
+        vpcId: vpcModule.vpcId,
+      }
+    );
+
+    // IAM Role (unique name due to suffix)
+    const iamRoleModule = new IamRoleModule(this, 'iam-role', {
+      ...moduleConfig,
+      bucketArn: s3Module.bucketArn,
+    });
+
+    // Outputs
+    new TerraformOutput(this, 'name-suffix', {
+      value: nameSuffix,
+      description: 'Stable random suffix used in resource names',
+    });
+
+    new TerraformOutput(this, 'vpc-id', {
+      value: vpcModule.vpcId,
+      description: 'Default VPC ID',
+    });
+
+    new TerraformOutput(this, 's3-bucket-name', {
+      value: s3Module.bucketName,
+      description: 'S3 bucket name',
+    });
+
+    new TerraformOutput(this, 's3-bucket-arn', {
+      value: s3Module.bucketArn,
+      description: 'S3 bucket ARN',
+    });
+
+    new TerraformOutput(this, 'security-group-id', {
+      value: securityGroupModule.securityGroupId,
+      description: 'Security Group ID',
+    });
+
+    new TerraformOutput(this, 'iam-role-arn', {
+      value: iamRoleModule.roleArn,
+      description: 'IAM Role ARN',
+    });
+
+    new TerraformOutput(this, 'iam-role-name', {
+      value: iamRoleModule.roleName,
+      description: 'IAM Role name',
+    });
+
+    new TerraformOutput(this, 'aws-account-id', {
+      value: current.accountId,
+      description: 'Current AWS Account ID',
+    });
+  }
+}
