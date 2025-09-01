@@ -177,9 +177,11 @@ export class TapStack extends cdk.Stack {
     }));
 
     // Instance Profile for ECS instances
-    const ecsInstanceProfile = new iam.InstanceProfile(this, 'ECSInstanceProfile', {
-      role: ecsInstanceRole,
-    });
+    // Instance Profile for ECS instances
+    // (variable ecsInstanceProfile is not used, so it is commented out to avoid unused variable error)
+    // const ecsInstanceProfile = new iam.InstanceProfile(this, 'ECSInstanceProfile', {
+    //   role: ecsInstanceRole,
+    // });
 
     // Security Group for ECS instances
     const ecsSecurityGroup = new ec2.SecurityGroup(this, 'ECSSecurityGroup', {
