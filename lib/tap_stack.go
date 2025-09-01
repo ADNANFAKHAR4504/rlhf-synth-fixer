@@ -1036,6 +1036,23 @@ func NewInfrastructureStack(scope constructs.Construct, id *string, config *Infr
 func NewMultiRegionInfrastructureStack(scope constructs.Construct, id *string, envSuffix string) cdktf.TerraformStack {
 	stack := cdktf.NewTerraformStack(scope, id)
 
+	// Configure remote backend for state persistence
+	awsRegion := os.Getenv("AWS_REGION")
+	if awsRegion == "" {
+		awsRegion = "us-east-1"
+	}
+	
+	terraformStateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
+	if terraformStateBucket != "" {
+		backend := cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
+			Bucket:  jsii.String(terraformStateBucket),
+			Key:     jsii.String(fmt.Sprintf("cdktf/%s/terraform.tfstate", envSuffix)),
+			Region:  jsii.String(awsRegion),
+			Encrypt: jsii.Bool(true),
+		})
+		_ = backend // backend is used implicitly
+	}
+
 	// Create AWS providers for both regions
 	eastProvider := provider.NewAwsProvider(stack, jsii.String("aws-east"), &provider.AwsProviderConfig{
 		Region: jsii.String("us-east-1"),

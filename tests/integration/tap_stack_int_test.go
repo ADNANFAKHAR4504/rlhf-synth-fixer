@@ -385,7 +385,7 @@ func TestCloudWatchLogging(t *testing.T) {
 
 func TestMultiRegionDeployment(t *testing.T) {
 	envSuffix := getEnvironmentSuffix()
-	
+
 	// Test us-west-2 region
 	cfgWest, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-west-2"))
 	if err != nil {
@@ -425,3 +425,4 @@ func getEnvironmentSuffix() string {
 	}
 	return envSuffix
 }
+

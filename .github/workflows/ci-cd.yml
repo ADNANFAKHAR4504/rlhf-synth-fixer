@@ -159,6 +159,12 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+      - name: Fix Resource Conflicts
+        run: ./scripts/fix-resource-conflicts.sh cleanup ${{ env.ENVIRONMENT_SUFFIX }}
+        env:
+          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+        continue-on-error: true
+
       - name: Deploy
         run: ./scripts/deploy.sh
         env:
