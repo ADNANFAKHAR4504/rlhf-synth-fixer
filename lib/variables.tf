@@ -51,6 +51,12 @@ variable "public_key" {
   default     = ""
 }
 
+variable "environment" {
+  description = "Environment name (used as suffix for resources)"
+  type        = string
+  default     = "prod"
+}
+
 # Common tags
 variable "common_tags" {
   description = "Common tags for all resources"
@@ -60,3 +66,11 @@ variable "common_tags" {
     Department  = "IT"
   }
 }
+
+variable "rds_master_password" {
+  description = "Master password for RDS instance"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+

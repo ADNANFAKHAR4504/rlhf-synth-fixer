@@ -21,8 +21,3 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
-
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
-}

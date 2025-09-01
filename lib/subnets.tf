@@ -6,7 +6,7 @@ resource "aws_subnet" "vpc1_public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-public-subnet"
+    Name = "vpc1-public-subnet-${var.environment}"
     Type = "Public"
   })
 }
@@ -17,7 +17,7 @@ resource "aws_subnet" "vpc1_private" {
   availability_zone = data.aws_availability_zones.available.names[1]
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-private-subnet"
+    Name = "vpc1-private-subnet-${var.environment}"
     Type = "Private"
   })
 }
@@ -34,6 +34,17 @@ resource "aws_subnet" "vpc1_private_db" {
   })
 }
 
+resource "aws_subnet" "vpc1_private2" {
+  vpc_id            = aws_vpc.vpc1.id
+  cidr_block        = "10.0.3.0/24"
+  availability_zone = data.aws_availability_zones.available.names[2]
+
+  tags = merge(var.common_tags, {
+    Name = "vpc1-private-subnet-2-${var.environment}"
+    Type = "Private"
+  })
+}
+
 # VPC 2 Subnets
 resource "aws_subnet" "vpc2_public" {
   vpc_id                  = aws_vpc.vpc2.id
@@ -42,7 +53,7 @@ resource "aws_subnet" "vpc2_public" {
   map_public_ip_on_launch = true
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-public-subnet"
+    Name = "vpc2-public-subnet-${var.environment}"
     Type = "Public"
   })
 }
@@ -53,7 +64,7 @@ resource "aws_subnet" "vpc2_private" {
   availability_zone = data.aws_availability_zones.available.names[1]
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-private-subnet"
+    Name = "vpc2-private-subnet-${var.environment}"
     Type = "Private"
   })
 }

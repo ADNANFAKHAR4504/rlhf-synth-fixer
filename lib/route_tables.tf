@@ -1,4 +1,3 @@
-
 # VPC 1 Route Tables
 resource "aws_route_table" "vpc1_public" {
   vpc_id = aws_vpc.vpc1.id
@@ -14,7 +13,7 @@ resource "aws_route_table" "vpc1_public" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-public-rt"
+    Name = "vpc1-public-rt-${var.environment}"
   })
 }
 
@@ -32,7 +31,7 @@ resource "aws_route_table" "vpc1_private" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc1-private-rt"
+    Name = "vpc1-private-rt-${var.environment}"
   })
 }
 
@@ -51,7 +50,7 @@ resource "aws_route_table" "vpc2_public" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-public-rt"
+    Name = "vpc2-public-rt-${var.environment}"
   })
 }
 
@@ -69,7 +68,7 @@ resource "aws_route_table" "vpc2_private" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "vpc2-private-rt"
+    Name = "vpc2-private-rt-${var.environment}"
   })
 }
 
