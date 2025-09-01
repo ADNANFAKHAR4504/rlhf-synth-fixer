@@ -69,7 +69,7 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const region = args.awsRegion || 'ap-south-1';
-    const environment = args.environmentSuffix || 'dev';
+    const environment = args.environmentSuffix !== undefined ? args.environmentSuffix : 'dev';
     const defaultTags = {
       Project: 'MyApp',
       Owner: 'DevOps Team',
