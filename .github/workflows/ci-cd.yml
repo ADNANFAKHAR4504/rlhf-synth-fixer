@@ -160,7 +160,51 @@ jobs:
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Pre-Deploy Cleanup (Destroy existing resources)
-        run: ./scripts/destroy.sh
+        run: |
+          aws ec2 delete-route-table --route-table-id rtb-09cb254a079b13d931080289494
+          aws logs delete-log-group --log-group-name /aws/ec2/tap-log-group-us-east-1-pr2472
+          aws logs delete-log-group --log-group-name /aws/ec2/tap-log-group-us-west-2-pr2472
+          aws rds delete-db-subnet-group --db-subnet-group-name tap-db-subnet-group-us-east-1-pr2472
+          aws rds delete-db-subnet-group --db-subnet-group-name tap-db-subnet-group-us-west-2-pr2472
+          aws ec2 delete-launch-template --launch-template-name tap-lt-us-east-1-pr2472
+          aws ec2 delete-launch-template --launch-template-name tap-lt-us-west-2-pr2472
+
+
+          #!/bin/bash
+
+          # Set ALB and Target Group names
+          ALB_NAMES=("tap-alb-us-east-1-pr2472" "tap-alb-us-west-2-pr2472")
+          TG_NAMES=("tap-tg-us-east-1-pr2472" "tap-tg-us-west-2-pr2472")
+
+          # Delete ALBs
+          for alb_name in "${ALB_NAMES[@]}"; do
+              echo "Looking up ALB ARN for $alb_name..."
+              alb_arn=$(aws elbv2 describe-load-balancers --names "$alb_name" \
+                  --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null)
+
+              if [[ "$alb_arn" != "None" && -n "$alb_arn" ]]; then
+                  echo "Deleting ALB: $alb_name ($alb_arn)"
+                  aws elbv2 delete-load-balancer --load-balancer-arn "$alb_arn"
+              else
+                  echo "ALB not found: $alb_name"
+              fi
+          done
+
+          # Delete Target Groups
+          for tg_name in "${TG_NAMES[@]}"; do
+              echo "Looking up Target Group ARN for $tg_name..."
+              tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" \
+                  --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null)
+
+              if [[ "$tg_arn" != "None" && -n "$tg_arn" ]]; then
+                  echo "Deleting Target Group: $tg_name ($tg_arn)"
+                  aws elbv2 delete-target-group --target-group-arn "$tg_arn"
+              else
+                  echo "Target Group not found: $tg_name"
+              fi
+          done
+
+          ./scripts/destroy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
@@ -168,7 +212,7 @@ jobs:
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
-        continue-on-error: true  # Continue even if destroy fails (resources might not exist)
+        continue-on-error: true # Continue even if destroy fails (resources might not exist)
 
       - name: Deploy
         run: ./scripts/deploy.sh
