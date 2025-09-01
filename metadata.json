@@ -16,7 +16,7 @@
     "Resource Scaling",
     "Monitoring Setup"
   ],
-  "training_quality": 8,
+  "training_quality": 9,
   "aws_services": [
     "VPC",
     "EC2",
