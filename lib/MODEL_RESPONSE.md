@@ -1,3 +1,10 @@
+# AWS CDK TypeScript Stack Implementation
+
+This document contains the complete implementation of the secure VPC stack in AWS CDK TypeScript.
+
+## Secure VPC Stack Implementation
+
+```typescript
 // lib/secure-vpc-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -32,7 +39,7 @@ export class SecureVpcStack extends cdk.Stack {
       Environment: 'Production',
       Project: 'SecureVPC',
       Owner: 'DevOps',
-      CostCenter: 'IT-Infrastructure'
+      CostCenter: 'IT-Infrastructure',
     };
 
     // Apply tags to all resources in the stack
@@ -56,7 +63,7 @@ export class SecureVpcStack extends cdk.Stack {
           cidrMask: 24,
           name: 'PrivateSubnet',
           subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
-        }
+        },
       ],
       natGateways: 1, // Single NAT Gateway for cost optimization
     });
@@ -64,10 +71,11 @@ export class SecureVpcStack extends cdk.Stack {
     // Get subnet references
     this.publicSubnets = this.vpc.publicSubnets;
     this.privateSubnets = this.vpc.privateSubnets;
-    
+
     // Get NAT Gateway reference (created automatically by VPC)
-    this.natGateway = this.vpc.publicSubnets[0].node.children
-      .find(child => child.node.id.includes('NATGateway')) as ec2.NatGateway;
+    this.natGateway = this.vpc.publicSubnets[0].node.children.find(child =>
+      child.node.id.includes('NATGateway')
+    ) as ec2.NatGateway;
 
     // Create Security Group for EC2 instances
     const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
@@ -95,28 +103,32 @@ export class SecureVpcStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances with S3 access',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
       ],
     });
 
     // Add S3 access policy
-    ec2Role.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-        's3:ListBucket'
-      ],
-      resources: [
-        'arn:aws:s3:::company-bucket/*',
-        'arn:aws:s3:::company-bucket'
-      ],
-    }));
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject', 's3:ListBucket'],
+        resources: [
+          'arn:aws:s3:::company-bucket/*',
+          'arn:aws:s3:::company-bucket',
+        ],
+      })
+    );
 
     // Create Instance Profile
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role,
-    });
+    const instanceProfile = new iam.InstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        role: ec2Role,
+      }
+    );
 
     // Get latest Amazon Linux 2 AMI
     const amzn2Ami = ec2.MachineImage.latestAmazonLinux({
@@ -129,7 +141,10 @@ export class SecureVpcStack extends cdk.Stack {
       const instance = new ec2.Instance(this, `WebServer${index + 1}`, {
         vpc: this.vpc,
         vpcSubnets: { subnets: [subnet] },
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
         machineImage: amzn2Ami,
         securityGroup: webSecurityGroup,
         role: ec2Role,
@@ -170,15 +185,21 @@ export class SecureVpcStack extends cdk.Stack {
         alarmDescription: `CPU utilization alarm for ${instance.instanceId}`,
       });
 
-      alarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alertTopic));
+      alarm.addAlarmAction(
+        new cdk.aws_cloudwatch_actions.SnsAction(alertTopic)
+      );
     });
 
     // VPC Peering (conditional)
     if (props?.existingVpcId) {
-      const peeringConnection = new ec2.CfnVPCPeeringConnection(this, 'VPCPeering', {
-        vpcId: this.vpc.vpcId,
-        peerVpcId: props.existingVpcId,
-      });
+      const peeringConnection = new ec2.CfnVPCPeeringConnection(
+        this,
+        'VPCPeering',
+        {
+          vpcId: this.vpc.vpcId,
+          peerVpcId: props.existingVpcId,
+        }
+      );
 
       // Add routes for peering connection
       this.vpc.publicSubnets.forEach((subnet, index) => {
@@ -217,10 +238,24 @@ export class SecureVpcStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'NATGatewayId', {
-      value: this.vpc.publicSubnets[0].node.children
-        .find(child => child.node.id.includes('NATGateway'))?.node.id || 'Not Found',
+      value:
+        this.vpc.publicSubnets[0].node.children.find(child =>
+          child.node.id.includes('NATGateway')
+        )?.node.id || 'Not Found',
       description: 'NAT Gateway ID',
       exportName: 'SecureVPC-NATGateway',
     });
   }
 }
+```
+
+## Implementation Notes
+
+This stack provides a complete, secure VPC implementation with:
+
+- High availability across 2 AZs
+- Proper security group configurations
+- CloudWatch monitoring and alerting
+- IAM roles with least privilege access
+- Company-standard tagging
+- CloudFormation outputs for integration
