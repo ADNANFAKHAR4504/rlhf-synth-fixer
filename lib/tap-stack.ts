@@ -129,6 +129,10 @@ export class TapStack extends pulumi.ComponentResource {
         this.infrastructure.cloudFrontDistribution.domainName,
       CloudFrontDomainName:
         this.infrastructure.cloudFrontDistribution.domainName,
+
+      // Security Group outputs
+      albSecurityGroupId: this.infrastructure.albSecurityGroup.id,
+      ec2SecurityGroupId: this.infrastructure.ec2SecurityGroup.id,
     });
   }
 }

@@ -84,3 +84,6 @@ export const cloudfrontDomainName =
   stack.infrastructure.cloudFrontDistribution.domainName;
 export const CloudFrontDomainName =
   stack.infrastructure.cloudFrontDistribution.domainName;
+
+export const albSecurityGroupId = stack.infrastructure.albSecurityGroup.id;
+export const ec2SecurityGroupId = stack.infrastructure.ec2SecurityGroup.id;

@@ -1,8 +1,6 @@
 import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { TapStack } from '../lib/tap-stack';
-import { WebAppInfrastructure } from '../lib/webappinfra';
 
 const region = 'ap-south-1';
 const environment = process.env.ENVIRONMENT_SUFFIX || 'integration-test';
@@ -27,55 +25,12 @@ const outputsPath = path.join(
 let outputs: any = {};
 
 describe('TapStack Integration Tests', () => {
-  let stack: TapStack;
-  let infrastructure: WebAppInfrastructure;
-
   beforeAll(async () => {
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
       outputs = JSON.parse(outputsContent);
     }
-
-    stack = new TapStack('IntegrationTestStack', {
-      environmentSuffix: environment,
-    });
-
-    infrastructure = new WebAppInfrastructure(region, environment, {
-      Project: 'IntegrationTest',
-      Environment: environment,
-      ManagedBy: 'Jest',
-    });
   }, 60000);
-
-  describe('TapStack Structure', () => {
-    it('should create stack successfully', () => {
-      expect(stack).toBeDefined();
-    });
-
-    it('should have infrastructure component', () => {
-      expect(stack.infrastructure).toBeDefined();
-    });
-
-    it('should have VPC created', () => {
-      expect(stack.infrastructure.vpc).toBeDefined();
-    });
-
-    it('should have load balancer created', () => {
-      expect(stack.infrastructure.loadBalancer).toBeDefined();
-    });
-
-    it('should have S3 bucket created', () => {
-      expect(stack.infrastructure.s3Bucket).toBeDefined();
-    });
-
-    it('should have CloudFront distribution created', () => {
-      expect(stack.infrastructure.cloudFrontDistribution).toBeDefined();
-    });
-
-    it('should have auto scaling group created', () => {
-      expect(stack.infrastructure.autoScalingGroup).toBeDefined();
-    });
-  });
 
   describe('VPC and Networking Infrastructure', () => {
     it('should create VPC with correct configuration', async () => {
@@ -464,32 +419,24 @@ describe('TapStack Integration Tests', () => {
 
   describe('Security Groups Configuration', () => {
     it('should create security groups with correct rules', async () => {
-      const vpcId = outputs.vpcId || outputs.VPCId;
-      if (!vpcId) {
-        console.log('Skipping security group test - no VPC ID in outputs');
+      const albSgId = outputs.albSecurityGroupId;
+      const ec2SgId = outputs.ec2SecurityGroupId;
+      
+      if (!albSgId || !ec2SgId) {
+        console.log('Skipping security group test - no security group IDs in outputs');
         return;
       }
 
       const response = await ec2
         .describeSecurityGroups({
-          Filters: [
-            { Name: 'vpc-id', Values: [vpcId] },
-            {
-              Name: 'group-name',
-              Values: [`alb-sg-${environment}`, `ec2-sg-${environment}`],
-            },
-          ],
+          GroupIds: [albSgId, ec2SgId],
         })
         .promise();
 
       expect(response.SecurityGroups).toHaveLength(2);
 
-      const albSg = response.SecurityGroups!.find(
-        sg => sg.GroupName === `alb-sg-${environment}`
-      );
-      const ec2Sg = response.SecurityGroups!.find(
-        sg => sg.GroupName === `ec2-sg-${environment}`
-      );
+      const albSg = response.SecurityGroups!.find(sg => sg.GroupId === albSgId);
+      const ec2Sg = response.SecurityGroups!.find(sg => sg.GroupId === ec2SgId);
 
       expect(albSg?.IpPermissions).toContainEqual(
         expect.objectContaining({
@@ -702,21 +649,19 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('e2e: Security groups should follow least privilege principle', async () => {
-      const vpcId = outputs.vpcId || outputs.VPCId;
-      if (!vpcId) {
-        console.log('Skipping e2e security group test - no VPC ID in outputs');
+      const albSgId = outputs.albSecurityGroupId;
+      if (!albSgId) {
+        console.log('Skipping e2e security group test - no ALB security group ID in outputs');
         return;
       }
 
       const response = await ec2
         .describeSecurityGroups({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
+          GroupIds: [albSgId],
         })
         .promise();
 
-      const albSg = response.SecurityGroups!.find(sg =>
-        sg.GroupName?.includes('alb-sg')
-      );
+      const albSg = response.SecurityGroups![0];
 
       if (albSg) {
         const httpRule = albSg.IpPermissions!.find(
@@ -752,10 +697,19 @@ describe('TapStack Integration Tests', () => {
     });
   });
 
-  describe('Requirement Validation Tests', () => {
-    it('should validate Requirement 1: Code Structure', () => {
-      expect(stack.infrastructure).toBeInstanceOf(WebAppInfrastructure);
+  describe('Stack Outputs', () => {
+    it('should provide all required stack outputs', async () => {
+      expect(outputs.vpcId || outputs.VPCId).toBeDefined();
+      expect(outputs.albDnsName || outputs.LoadBalancerDNS).toBeDefined();
+      expect(outputs.s3BucketName || outputs.S3BucketName).toBeDefined();
+      expect(
+        outputs.cloudfrontDomainName || outputs.CloudFrontDomainName
+      ).toBeDefined();
+      expect(outputs.asgId || outputs.AutoScalingGroupId).toBeDefined();
     });
+  });
+
+  describe('Requirement Validation Tests', () => {
 
     it('should validate Requirement 2: Networking - VPC with subnets across AZs', async () => {
       const vpcId = outputs.vpcId || outputs.VPCId;

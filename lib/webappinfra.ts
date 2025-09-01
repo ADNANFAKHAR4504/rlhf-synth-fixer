@@ -31,6 +31,8 @@ export class WebAppInfrastructure {
   public readonly s3Bucket: aws.s3.Bucket;
   public readonly cloudFrontDistribution: aws.cloudfront.Distribution;
   public readonly provider: aws.Provider;
+  public readonly albSecurityGroup: aws.ec2.SecurityGroup;
+  public readonly ec2SecurityGroup: aws.ec2.SecurityGroup;
 
   constructor(
     region: string,
@@ -262,7 +264,7 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
-    const albSecurityGroup = new aws.ec2.SecurityGroup(
+    this.albSecurityGroup = new aws.ec2.SecurityGroup(
       `alb-sg-${environment}`,
       {
         vpcId: this.vpc.id,
@@ -291,7 +293,7 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
-    const ec2SecurityGroup = new aws.ec2.SecurityGroup(
+    this.ec2SecurityGroup = new aws.ec2.SecurityGroup(
       `ec2-sg-${environment}`,
       {
         vpcId: this.vpc.id,
@@ -301,7 +303,7 @@ export class WebAppInfrastructure {
             protocol: 'tcp',
             fromPort: 80,
             toPort: 80,
-            securityGroups: [albSecurityGroup.id],
+            securityGroups: [this.albSecurityGroup.id],
           },
         ],
         egress: [
@@ -325,7 +327,7 @@ export class WebAppInfrastructure {
       {
         loadBalancerType: 'application',
         subnets: this.publicSubnets.map(subnet => subnet.id),
-        securityGroups: [albSecurityGroup.id],
+        securityGroups: [this.albSecurityGroup.id],
         accessLogs: {
           bucket: albLogsBucket.bucket,
           enabled: true,
@@ -439,7 +441,7 @@ export class WebAppInfrastructure {
       {
         imageId: amiId.then(ami => ami.id),
         instanceType: 't3.micro',
-        vpcSecurityGroupIds: [ec2SecurityGroup.id],
+        vpcSecurityGroupIds: [this.ec2SecurityGroup.id],
         iamInstanceProfile: {
           name: instanceProfile.name,
         },
@@ -874,6 +876,10 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       cloudFrontDistributionDomainName: this.cloudFrontDistribution.domainName,
       cloudfrontDomainName: this.cloudFrontDistribution.domainName, // Alternative naming for compatibility
       CloudFrontDomainName: this.cloudFrontDistribution.domainName, // Alternative naming for compatibility
+
+      // Security Groups
+      albSecurityGroupId: this.albSecurityGroup.id,
+      ec2SecurityGroupId: this.ec2SecurityGroup.id,
     };
   }
 }
