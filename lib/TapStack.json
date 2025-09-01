@@ -396,7 +396,7 @@
                             }
                         },
                         {
-                            "Sid": "AllowCloudTrailAclCheck",
+                            "Sid": "AWSCloudTrailAclCheck",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
@@ -407,10 +407,17 @@
                                     "LoggingBucket",
                                     "Arn"
                                 ]
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-CloudTrail"
+                                    }
+                                }
                             }
                         },
                         {
-                            "Sid": "AllowCloudTrailWrite",
+                            "Sid": "AWSCloudTrailWrite",
                             "Effect": "Allow",
                             "Principal": {
                                 "Service": "cloudtrail.amazonaws.com"
@@ -421,22 +428,11 @@
                             },
                             "Condition": {
                                 "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${AWS::StackName}-CloudTrail"
+                                    }
                                 }
-                            }
-                        },
-                        {
-                            "Sid": "AllowCloudTrailLocationCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketLocation",
-                            "Resource": {
-                                "Fn::GetAtt": [
-                                    "LoggingBucket",
-                                    "Arn"
-                                ]
                             }
                         },
                         {
@@ -547,6 +543,7 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
+            "DependsOn": "LoggingBucketPolicy",
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "${AWS::StackName}-CloudTrail"
