@@ -179,6 +179,11 @@ Parameters:
     Default: ''
     Description: Optional existing EC2 Instance ID to reuse
 
+  ExistingBillingAlarmName:
+    Type: String
+    Default: ''
+    Description: Optional existing CloudWatch Billing Alarm name to reuse
+
 Conditions:
   # KMS Conditions
   UseExistingKMS: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
@@ -271,6 +276,10 @@ Conditions:
   CreateLambdaFunction: !Equals [!Ref ExistingLambdaFunctionName, '']
   UseExistingEC2Instance: !Not [!Equals [!Ref ExistingEC2InstanceId, '']]
   CreateEC2Instance: !Equals [!Ref ExistingEC2InstanceId, '']
+
+  # Billing Alarm Conditions
+  UseExistingBillingAlarm: !Not [!Equals [!Ref ExistingBillingAlarmName, '']]
+  CreateBillingAlarm: !Equals [!Ref ExistingBillingAlarmName, '']
 
   # General Conditions
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
@@ -1667,6 +1676,7 @@ Resources:
   # Billing Alarm (for Cost Explorer)
   # =========================
   BillingAlarm:
+    Condition: CreateBillingAlarm
     Type: AWS::CloudWatch::Alarm
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -1781,6 +1791,11 @@ Outputs:
 
   BillingAlarmName:
     Description: Billing Alarm Name
-    Value: !Ref BillingAlarm
+    Value:
+      !If [
+        UseExistingBillingAlarm,
+        !Ref ExistingBillingAlarmName,
+        !Ref BillingAlarm,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-Billing-Alarm-Name'
