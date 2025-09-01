@@ -388,7 +388,7 @@ export class SecureInfrastructure {
     const appBucket = new aws.s3.Bucket(
       `secure-app-bucket-${this.environment}`,
       {
-        bucket: `secure-app-bucket-${this.environment}-${Math.random().toString(36).substring(7)}`,
+        bucket: `secure-app-bucket-${this.environment}`,
         tags: {
           ...this.tags,
           Name: `secure-app-bucket-${this.environment}`,
