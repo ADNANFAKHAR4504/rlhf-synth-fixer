@@ -176,7 +176,7 @@ describe('TapStack Integration Tests', () => {
           expect(roleDetails.Role!.Arn).toBe(roleArn);
           
           // Check trust policy
-          const trustPolicy = JSON.parse(roleDetails.Role!.AssumeRolePolicyDocument!);
+          const trustPolicy = JSON.parse(decodeURIComponent(roleDetails.Role!.AssumeRolePolicyDocument!));
           expect(trustPolicy.Statement).toBeDefined();
           expect(trustPolicy.Statement).toHaveLength(1);
           expect(trustPolicy.Statement[0].Effect).toBe('Allow');
@@ -213,7 +213,7 @@ describe('TapStack Integration Tests', () => {
       'should have CloudWatch Log Group with proper configuration',
       async () => {
         // Extract log group name from the stack outputs or construct it
-        const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+        const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2541'; // Use actual environment suffix
         const logGroupName = `/aws/tapstack/${environmentSuffix}/${region}`;
         
         // Check if log group exists
@@ -283,7 +283,7 @@ describe('TapStack Integration Tests', () => {
             PolicyName: policyName
           }).promise();
           
-          const policyDocument = JSON.parse(policyDetails.PolicyDocument!);
+          const policyDocument = JSON.parse(decodeURIComponent(policyDetails.PolicyDocument!));
           
           // Verify policy has specific resource ARNs, not wildcards
           policyDocument.Statement.forEach((statement: any) => {
