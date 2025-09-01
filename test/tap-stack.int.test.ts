@@ -52,8 +52,8 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 
-const region = process.env.AWS_REGION || 'ap-south-1';
-const environment = process.env.ENVIRONMENT_SUFFIX || 'synthtrainr99';
+const region = 'ap-south-1';
+const environment = process.env.ENVIRONMENT_SUFFIX || 'test';
 
 // Initialize AWS service clients
 const ec2Client = new EC2Client({ region });
