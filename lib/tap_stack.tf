@@ -54,35 +54,9 @@ locals {
 ########################################
 # Data Sources (CI/CD Read-Only)
 ########################################
-########################################
-# Data Sources (CI/CD Read-Only)
-########################################
 
-# Security Groups
-data "aws_security_group" "web" {
-  name   = "${var.project_name}-web-sg"
-  vpc_id = data.aws_vpc.main.id
-}
-
-data "aws_security_group" "app" {
-  name   = "${var.project_name}-app-sg"
-  vpc_id = data.aws_vpc.main.id
-}
-
-data "aws_security_group" "database" {
-  name   = "${var.project_name}-db-sg"
-  vpc_id = data.aws_vpc.main.id
-}
-
-# Application Load Balancer
-data "aws_lb" "main" {
-  name = "${var.project_name}-alb"
-}
-
-# Target Group
-data "aws_lb_target_group" "app" {
-  name = "${var.project_name}-app-tg"
-}
+# Availability Zones
+data "aws_availability_zones" "available" {}
 
 ########################################
 # Resources
@@ -101,7 +75,7 @@ resource "aws_subnet" "public" {
   count             = length(var.public_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.public_subnet_cidrs[count.index]
-  availability_zone = element(data.aws_availability_zones.available.names, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-public-subnet-${count.index + 1}"
     Type = "public"
@@ -113,7 +87,7 @@ resource "aws_subnet" "private" {
   count             = length(var.private_subnet_cidrs)
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = element(data.aws_availability_zones.available.names, count.index)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-private-subnet-${count.index + 1}"
     Type = "private"
@@ -154,6 +128,27 @@ resource "aws_s3_bucket" "main" {
   tags          = local.common_tags
 }
 
+# Security Groups
+resource "aws_security_group" "web" {
+  name        = "${var.project_name}-web-sg"
+  description = "Web security group"
+  vpc_id      = aws_vpc.main.id
+  tags        = local.common_tags
+}
+
+resource "aws_security_group" "app" {
+  name        = "${var.project_name}-app-sg"
+  description = "App security group"
+  vpc_id      = aws_vpc.main.id
+  tags        = local.common_tags
+}
+
+resource "aws_security_group" "database" {
+  name        = "${var.project_name}-db-sg"
+  description = "Database security group"
+  vpc_id      = aws_vpc.main.id
+  tags        = local.common_tags
+}
 
 ########################################
 # Outputs
@@ -178,4 +173,16 @@ output "db_instance_endpoint" {
 
 output "s3_bucket_name" {
   value = aws_s3_bucket.main.bucket
+}
+
+output "web_security_group_id" {
+  value = aws_security_group.web.id
+}
+
+output "app_security_group_id" {
+  value = aws_security_group.app.id
+}
+
+output "database_security_group_id" {
+  value = aws_security_group.database.id
 }
