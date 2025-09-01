@@ -606,7 +606,7 @@ resource "aws_security_group" "secondary_rds" {
 
 # EC2 Instance Role
 resource "aws_iam_role" "ec2_role" {
-  name = "${local.name_prefix}-ec2-role"
+  name = "${local.name_prefix}-ec2-role-new2"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -720,7 +720,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "sns:Publish"
         ]
         Resource = [
-          aws_sns_topic.alerts.arn
+          aws_sns_topic.alerts.arn,
+          aws_sns_topic.alerts_secondary.arn
         ]
       }
     ]
@@ -777,7 +778,7 @@ resource "aws_s3_bucket_versioning" "secondary" {
 # S3 Bucket Cross-Region Replication Configuration
 resource "aws_s3_bucket_replication_configuration" "primary_to_secondary" {
   provider   = aws.us_east_2
-  depends_on = [aws_s3_bucket_versioning.primary]
+  depends_on = [aws_s3_bucket_versioning.primary,aws_s3_bucket_versioning.secondary]
 
   role   = aws_iam_role.s3_replication.arn
   bucket = aws_s3_bucket.primary.id
@@ -1259,7 +1260,7 @@ resource "aws_lambda_function" "secondary_backup" {
   environment {
     variables = {
       DB_IDENTIFIER = aws_db_instance.secondary.id
-      SNS_TOPIC_ARN = aws_sns_topic.alerts.arn
+      SNS_TOPIC_ARN = aws_sns_topic.alerts_secondary.arn
     }
   }
 
@@ -1359,7 +1360,7 @@ resource "aws_cloudwatch_metric_alarm" "secondary_cpu" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.secondary.name
@@ -1401,7 +1402,7 @@ resource "aws_cloudwatch_metric_alarm" "secondary_rds_cpu" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors RDS cpu utilization"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
+  alarm_actions       = [aws_sns_topic.alerts_secondary.arn]
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.secondary.id
@@ -2093,4 +2094,17 @@ output "secondary_private_route_table_ids" {
   description = "IDs of the secondary private route tables"
   value       = aws_route_table.secondary_private[*].id
 }
+output "sns_topic_secondary_id" {
+  description = "ID of the secondary SNS topic"
+  value       = aws_sns_topic.alerts_secondary.id
+}
 
+output "sns_topic_secondary_arn" {
+  description = "ARN of the secondary SNS topic"
+  value       = aws_sns_topic.alerts_secondary.arn
+}
+
+output "sns_topic_secondary_name" {
+  description = "Name of the secondary SNS topic"
+  value       = aws_sns_topic.alerts_secondary.name
+}
