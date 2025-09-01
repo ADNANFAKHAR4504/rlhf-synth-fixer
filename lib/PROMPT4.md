@@ -44,4 +44,13 @@ Error: Terraform exited with code 1.
 ╵
 Error: Terraform exited with code 1.
 All deployment attempts failed. Check for state lock issues.
+
+│ Error: attaching IAM Policy (arn:aws:iam::aws:policy/service-role/ConfigRole) to IAM Role (tap-stack-config-role): operation error IAM: AttachRolePolicy, https response error StatusCode: 404, RequestID: b3c1936f-cac5-4a99-8808-987c4a80aa01, NoSuchEntity: Policy arn:aws:iam::aws:policy/service-role/ConfigRole does not exist or is not attachable.
+│ 
+│   with aws_iam_role_policy_attachment.config_role_policy,
+│   on tap_stack.tf line 1459, in resource "aws_iam_role_policy_attachment" "config_role_policy":
+│ 1459: resource "aws_iam_role_policy_attachment" "config_role_policy" {
+│ 
+╵
+Error: Terraform exited with code 1.
 ```

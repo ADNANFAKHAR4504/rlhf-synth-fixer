@@ -1036,6 +1036,7 @@ resource "aws_s3_bucket_replication_configuration" "primary_to_secondary" {
 # ============================================================================
 
 # Launch template for primary region
+# Launch template for primary region (updated user_data)
 resource "aws_launch_template" "primary" {
   provider      = aws.us_east_2
   name          = "${local.project_name}-primary-lt"
@@ -1049,9 +1050,70 @@ resource "aws_launch_template" "primary" {
     name = aws_iam_instance_profile.ec2_profile.name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    region = var.primary_region
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y amazon-cloudwatch-agent httpd
+    systemctl start httpd
+    systemctl enable httpd
+
+    # Create a simple web page
+    echo "<h1>Hello from ${var.primary_region}</h1>" > /var/www/html/index.html
+    echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+    echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+
+    # Install and configure CloudWatch agent
+    wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+    rpm -U ./amazon-cloudwatch-agent.rpm
+
+    # Configure CloudWatch agent
+    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWEOF'
+{
+    "metrics": {
+        "namespace": "CWAgent",
+        "metrics_collected": {
+            "cpu": {
+                "measurement": [
+                    "cpu_usage_idle",
+                    "cpu_usage_iowait",
+                    "cpu_usage_user",
+                    "cpu_usage_system"
+                ],
+                "metrics_collection_interval": 60
+            },
+            "disk": {
+                "measurement": [
+                    "used_percent"
+                ],
+                "metrics_collection_interval": 60,
+                "resources": [
+                    "*"
+                ]
+            },
+            "diskio": {
+                "measurement": [
+                    "io_time"
+                ],
+                "metrics_collection_interval": 60,
+                "resources": [
+                    "*"
+                ]
+            },
+            "mem": {
+                "measurement": [
+                    "mem_used_percent"
+                ],
+                "metrics_collection_interval": 60
+            }
+        }
+    }
+}
+CWEOF
+
+    # Start CloudWatch agent
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+  EOF
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -1065,7 +1127,7 @@ resource "aws_launch_template" "primary" {
   })
 }
 
-# Launch template for secondary region
+# Launch template for secondary region (updated user_data)
 resource "aws_launch_template" "secondary" {
   provider      = aws.us_west_1
   name          = "${local.project_name}-secondary-lt"
@@ -1079,9 +1141,70 @@ resource "aws_launch_template" "secondary" {
     name = aws_iam_instance_profile.ec2_profile.name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    region = var.secondary_region
-  }))
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    yum update -y
+    yum install -y amazon-cloudwatch-agent httpd
+    systemctl start httpd
+    systemctl enable httpd
+
+    # Create a simple web page
+    echo "<h1>Hello from ${var.secondary_region}</h1>" > /var/www/html/index.html
+    echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
+    echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+
+    # Install and configure CloudWatch agent
+    wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+    rpm -U ./amazon-cloudwatch-agent.rpm
+
+    # Configure CloudWatch agent
+    cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'CWEOF'
+{
+    "metrics": {
+        "namespace": "CWAgent",
+        "metrics_collected": {
+            "cpu": {
+                "measurement": [
+                    "cpu_usage_idle",
+                    "cpu_usage_iowait",
+                    "cpu_usage_user",
+                    "cpu_usage_system"
+                ],
+                "metrics_collection_interval": 60
+            },
+            "disk": {
+                "measurement": [
+                    "used_percent"
+                ],
+                "metrics_collection_interval": 60,
+                "resources": [
+                    "*"
+                ]
+            },
+            "diskio": {
+                "measurement": [
+                    "io_time"
+                ],
+                "metrics_collection_interval": 60,
+                "resources": [
+                    "*"
+                ]
+            },
+            "mem": {
+                "measurement": [
+                    "mem_used_percent"
+                ],
+                "metrics_collection_interval": 60
+            }
+        }
+    }
+}
+CWEOF
+
+    # Start CloudWatch agent
+    /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+  EOF
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -1094,7 +1217,6 @@ resource "aws_launch_template" "secondary" {
     Name = "${local.project_name}-secondary-lt"
   })
 }
-
 # ============================================================================
 # APPLICATION LOAD BALANCERS
 # ============================================================================
@@ -1458,7 +1580,46 @@ resource "aws_iam_role" "config_role" {
 # Attach AWS managed policy to Config role
 resource "aws_iam_role_policy_attachment" "config_role_policy" {
   role       = aws_iam_role.config_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+}
+
+# Add S3 delivery permissions for Config
+resource "aws_iam_role_policy" "config_s3_policy" {
+  name = "${local.project_name}-config-s3-policy"
+  role = aws_iam_role.config_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketAcl",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.config_primary.arn,
+          aws_s3_bucket.config_secondary.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.config_primary.arn}/*",
+          "${aws_s3_bucket.config_secondary.arn}/*"
+        ]
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # S3 bucket for Config in primary region
