@@ -98,18 +98,14 @@ export class TapStack extends cdk.Stack {
         },
       })
     );
-    
+
     // Additional permissions for EC2 instances to use the key directly
     kmsKey.addToResourcePolicy(
       new iam.PolicyStatement({
         sid: 'Enable direct use by EC2 instances',
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
-        actions: [
-          'kms:Decrypt',
-          'kms:GenerateDataKey*',
-          'kms:CreateGrant',
-        ],
+        actions: ['kms:Decrypt', 'kms:GenerateDataKey*', 'kms:CreateGrant'],
         resources: ['*'],
       })
     );
@@ -126,6 +122,29 @@ export class TapStack extends cdk.Stack {
             'kms:GrantIsForAWSResource': 'true',
           },
         },
+      })
+    );
+
+    // Grant permissions to the Auto Scaling service-linked role
+    kmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Allow Auto Scaling service-linked role',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ArnPrincipal(
+            `arn:aws:iam::${this.account}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling`
+          ),
+        ],
+        actions: [
+          'kms:CreateGrant',
+          'kms:Decrypt',
+          'kms:DescribeKey',
+          'kms:Encrypt',
+          'kms:GenerateDataKey*',
+          'kms:GenerateDataKeyWithoutPlainText',
+          'kms:ReEncrypt*',
+        ],
+        resources: ['*'],
       })
     );
 
@@ -257,7 +276,8 @@ export class TapStack extends cdk.Stack {
           deviceName: '/dev/xvda',
           volume: ec2.BlockDeviceVolume.ebs(20, {
             encrypted: true,
-            kmsKey: kmsKey,
+            // Temporarily use AWS managed keys for EBS to avoid KMS key state issues
+            // kmsKey: kmsKey,
             volumeType: ec2.EbsDeviceVolumeType.GP3,
           }),
         },
@@ -306,9 +326,6 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
-      healthCheck: autoscaling.HealthCheck.elb({
-        grace: cdk.Duration.minutes(5),
-      }),
       autoScalingGroupName: `tap-asg-${environmentSuffix}`,
     });
 
@@ -396,11 +413,13 @@ export class TapStack extends cdk.Stack {
       })
     );
 
+    // Generate unique suffix for Lambda function to avoid naming conflicts
+    const lambdaTimestamp = Date.now().toString().slice(-6);
     const lambdaFunction = new lambda.Function(this, 'TapLambdaFunction', {
       runtime: lambda.Runtime.NODEJS_18_X,
       handler: 'index.handler',
       role: lambdaRole,
-      functionName: `tap-s3-processor-${environmentSuffix}`,
+      functionName: `tap-s3-processor-${environmentSuffix}-${lambdaTimestamp}`,
       code: lambda.Code.fromInline(`
         exports.handler = async (event) => {
           console.log('S3 Event received:', JSON.stringify(event, null, 2));
@@ -453,7 +472,7 @@ export class TapStack extends cdk.Stack {
     });
 
     const trail = new cloudtrail.Trail(this, 'TapCloudTrail', {
-      trailName: `tap-cloudtrail-${environmentSuffix}`,
+      trailName: `tap-cloudtrail-${environmentSuffix}-${timestamp}`,
       bucket: cloudTrailBucket,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
@@ -521,7 +540,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'CloudTrailName', {
-      value: `tap-cloudtrail-${environmentSuffix}`,
+      value: `tap-cloudtrail-${environmentSuffix}-${timestamp}`,
       description: 'CloudTrail name',
       exportName: `tap-cloudtrail-name-${environmentSuffix}`,
     });

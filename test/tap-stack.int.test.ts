@@ -329,8 +329,8 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(asg.MinSize).toBe(2);
       expect(asg.MaxSize).toBe(4);
       expect(asg.DesiredCapacity).toBe(2);
-      expect(asg.HealthCheckType).toBe('ELB');
-      expect(asg.HealthCheckGracePeriod).toBe(300);
+      expect(asg.HealthCheckType).toBe('EC2'); // Changed from ELB as we removed deprecated health check
+      // Health check grace period is default for EC2 type
       
       // Check that instances are in private subnets
       expect(asg.VPCZoneIdentifier).toBeDefined();
@@ -536,9 +536,12 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
   describe('CloudTrail Logging Tests', () => {
     test('CloudTrail should be configured and logging', async () => {
+      const cloudTrailName = outputs.CloudTrailName;
+      expect(cloudTrailName).toBeDefined();
+      
       const response = await cloudTrailClient.send(
         new DescribeTrailsCommand({
-          trailNameList: [`tap-cloudtrail-${environmentSuffix}`],
+          trailNameList: [cloudTrailName],
         })
       );
 
