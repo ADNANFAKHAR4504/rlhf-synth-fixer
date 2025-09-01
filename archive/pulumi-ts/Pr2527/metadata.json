@@ -53,5 +53,11 @@
     "Flow logs",
     "S3 bucket policies",
     "IAM roles"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
 }
