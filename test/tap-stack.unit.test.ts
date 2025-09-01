@@ -23,7 +23,7 @@ jest.mock("../lib/modules", () => ({
     },
     ec2InstanceProfile: { name: `${id}-instance-profile` },
   })),
-  S3Module: jest.fn().mockImplementation((scope: any, id: string, suffix: string) => ({
+  S3Module: jest.fn().mockImplementation((scope: any, id: string, suffix: string, accountId: string) => ({
     bucket: { 
       bucket: `${id}-bucket-${suffix}`,
       arn: `arn:aws:s3:::${id}-bucket-${suffix}`
@@ -39,7 +39,7 @@ jest.mock("../lib/modules", () => ({
       privateIp: "10.0.1.100"
     },
   })),
-  RdsModule: jest.fn().mockImplementation((scope: any, id: string, sgId: string) => ({
+  RdsModule: jest.fn().mockImplementation((scope: any, id: string, sgId: string, accountId: string) => ({
     database: {
       endpoint: `${id}-db.cluster-xyz.us-east-1.rds.amazonaws.com:3306`
     },
@@ -54,7 +54,7 @@ jest.mock("../lib/modules", () => ({
       }
     }
   })),
-  CloudTrailModule: jest.fn().mockImplementation((scope: any, id: string, suffix: string) => ({
+  CloudTrailModule: jest.fn().mockImplementation((scope: any, id: string, suffix: string, accountId: string) => ({
     trail: {
       arn: `arn:aws:cloudtrail:us-east-1:123456789012:trail/${id}-trail-${suffix}`
     },
@@ -276,11 +276,12 @@ describe("TapStack Unit Tests", () => {
         "vpc-vpc-id"
       );
 
-      // Verify S3 module gets bucket suffix
+      // Verify S3 module gets bucket suffix and accountId
       expect(S3Module).toHaveBeenCalledWith(
         expect.anything(),
         "s3",
-        "abcd1234"
+        "abcd1234",
+        "123456789012"
       );
 
       // Verify EC2 module gets correct dependencies
@@ -292,18 +293,20 @@ describe("TapStack Unit Tests", () => {
         "security-instance-profile"
       );
 
-      // Verify RDS module gets security group
+      // Verify RDS module gets security group and accountId
       expect(RdsModule).toHaveBeenCalledWith(
         expect.anything(),
         "rds",
-        "security-rds-sg-id"
+        "security-rds-sg-id",
+        "123456789012"
       );
 
-      // Verify CloudTrail module gets bucket suffix
+      // Verify CloudTrail module gets bucket suffix and accountId
       expect(CloudTrailModule).toHaveBeenCalledWith(
         expect.anything(),
         "cloudtrail",
-        "abcd1234"
+        "abcd1234",
+        "123456789012"
       );
     });
   });

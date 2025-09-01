@@ -1,45 +1,45 @@
 import { Construct } from 'constructs';
 
 // VPC & Networking
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 
 // Security Groups
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 
 // EC2
-import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { Instance } from '@cdktf/provider-aws/lib/instance';
 
 // S3
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
-import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
-import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
+import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
+import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 
 // RDS
-import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
+import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 
 // IAM
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
-import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 
 // CloudTrail
 import { cloudtrail } from '@cdktf/provider-aws';
 
 // KMS
-import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
+import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 
 // Secrets Manager
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
@@ -317,7 +317,12 @@ export class S3Module extends Construct {
   public readonly bucket: S3Bucket;
   public readonly kmsKey: KmsKey;
 
-  constructor(scope: Construct, id: string, bucketSuffix: string) {
+  constructor(
+    scope: Construct,
+    id: string,
+    bucketSuffix: string,
+    accountId: string
+  ) {
     super(scope, id);
 
     // KMS key for S3 encryption
@@ -331,7 +336,7 @@ export class S3Module extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::*:root',
+              AWS: `arn:aws:iam::${accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
@@ -502,7 +507,12 @@ export class RdsModule extends Construct {
   public readonly kmsKey: KmsKey;
   public readonly secretsManager: SecretsManagerModule;
 
-  constructor(scope: Construct, id: string, securityGroupId: string) {
+  constructor(
+    scope: Construct,
+    id: string,
+    securityGroupId: string,
+    accountId: string
+  ) {
     super(scope, id);
 
     // KMS key for RDS encryption
@@ -516,7 +526,7 @@ export class RdsModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::*:root',
+              AWS: `arn:aws:iam::${accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
@@ -597,7 +607,12 @@ export class CloudTrailModule extends Construct {
   public readonly logsBucket: S3Bucket;
   public readonly kmsKey: KmsKey;
 
-  constructor(scope: Construct, id: string, bucketSuffix: string) {
+  constructor(
+    scope: Construct,
+    id: string,
+    bucketSuffix: string,
+    accountId: string
+  ) {
     super(scope, id);
 
     // KMS key for CloudTrail encryption
@@ -611,7 +626,7 @@ export class CloudTrailModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::*:root',
+              AWS: `arn:aws:iam::${accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',

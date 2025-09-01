@@ -82,8 +82,13 @@ export class TapStack extends TerraformStack {
       vpcModule.vpc.id
     );
 
-    // Create encrypted S3 bucket
-    const s3Module = new S3Module(this, 's3', bucketSuffix.hex);
+    // Create encrypted S3 bucket (passing accountId as fourth parameter)
+    const s3Module = new S3Module(
+      this,
+      's3',
+      bucketSuffix.hex,
+      current.accountId
+    );
 
     // Create EC2 instance
     const ec2Module = new Ec2Module(
@@ -94,11 +99,12 @@ export class TapStack extends TerraformStack {
       securityModule.ec2InstanceProfile.name
     );
 
-    // Create RDS database with Secrets Manager
+    // Create RDS database with Secrets Manager (passing accountId as fourth parameter)
     const rdsModule = new RdsModule(
       this,
       'rds',
-      securityModule.rdsSecurityGroup.id
+      securityModule.rdsSecurityGroup.id,
+      current.accountId
     );
 
     // Add IAM policy for EC2 to access Secrets Manager
@@ -127,11 +133,12 @@ export class TapStack extends TerraformStack {
       }),
     });
 
-    // Create CloudTrail for logging
+    // Create CloudTrail module (passing accountId as fourth parameter)
     const cloudTrailModule = new CloudTrailModule(
       this,
       'cloudtrail',
-      bucketSuffix.hex
+      bucketSuffix.hex,
+      current.accountId
     );
 
     // Terraform Outputs for reference
