@@ -84,21 +84,49 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   LOG_GROUP_WEST="/aws/ec2/tap-log-group-us-west-2-${ENVIRONMENT_SUFFIX}"
   ASG_WEST="tap-asg-us-west-2-${ENVIRONMENT_SUFFIX}"
   
-  echo "Step 1: Clean up CloudWatch Log Groups first (no dependencies)"
+  # Launch Templates
+  LAUNCH_TEMPLATE_EAST="tap-lt-us-east-1-${ENVIRONMENT_SUFFIX}"
+  LAUNCH_TEMPLATE_WEST="tap-lt-us-west-2-${ENVIRONMENT_SUFFIX}"
+  
+  # Application Load Balancers
+  ALB_EAST="tap-alb-us-east-1-${ENVIRONMENT_SUFFIX}"
+  ALB_WEST="tap-alb-us-west-2-${ENVIRONMENT_SUFFIX}"
+  
+  echo "Step 1: Clean up Application Load Balancers first (to free up dependencies)"
+  echo "Deleting ALB: $ALB_EAST"
+  ALB_ARN_EAST=$(aws elbv2 describe-load-balancers --names "$ALB_EAST" --region us-east-1 --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
+  if [ "$ALB_ARN_EAST" != "None" ] && [ "$ALB_ARN_EAST" != "null" ]; then
+    aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN_EAST" --region us-east-1 || echo "Failed to delete East ALB"
+  fi
+  
+  echo "Deleting ALB: $ALB_WEST"
+  ALB_ARN_WEST=$(aws elbv2 describe-load-balancers --names "$ALB_WEST" --region us-west-2 --query "LoadBalancers[0].LoadBalancerArn" --output text 2>/dev/null || echo "None")
+  if [ "$ALB_ARN_WEST" != "None" ] && [ "$ALB_ARN_WEST" != "null" ]; then
+    aws elbv2 delete-load-balancer --load-balancer-arn "$ALB_ARN_WEST" --region us-west-2 || echo "Failed to delete West ALB"
+  fi
+  
+  echo "Step 2: Clean up CloudWatch Log Groups (no dependencies)"
   echo "Deleting CloudWatch Log Group: $LOG_GROUP_EAST"
   aws logs delete-log-group --log-group-name "$LOG_GROUP_EAST" --region us-east-1 || echo "East log group not found or already deleted"
   
   echo "Deleting CloudWatch Log Group: $LOG_GROUP_WEST"
   aws logs delete-log-group --log-group-name "$LOG_GROUP_WEST" --region us-west-2 || echo "West log group not found or already deleted"
   
-  echo "Step 2: Clean up Auto Scaling Groups"
+  echo "Step 3: Clean up Auto Scaling Groups"
   echo "Deleting Auto Scaling Group: $ASG_EAST"
   aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$ASG_EAST" --force-delete --region us-east-1 || echo "East ASG not found or already deleted"
   
   echo "Deleting Auto Scaling Group: $ASG_WEST"
   aws autoscaling delete-auto-scaling-group --auto-scaling-group-name "$ASG_WEST" --force-delete --region us-west-2 || echo "West ASG not found or already deleted"
   
-  echo "Step 3: Disable RDS deletion protection and delete instances"
+  echo "Step 4: Clean up Launch Templates"
+  echo "Deleting Launch Template: $LAUNCH_TEMPLATE_EAST"
+  aws ec2 delete-launch-template --launch-template-name "$LAUNCH_TEMPLATE_EAST" --region us-east-1 || echo "East launch template not found or already deleted"
+  
+  echo "Deleting Launch Template: $LAUNCH_TEMPLATE_WEST" 
+  aws ec2 delete-launch-template --launch-template-name "$LAUNCH_TEMPLATE_WEST" --region us-west-2 || echo "West launch template not found or already deleted"
+  
+  echo "Step 5: Disable RDS deletion protection and delete instances"
   # East region database
   echo "Processing East region database: $DB_INSTANCE_EAST"
   aws rds modify-db-instance --db-instance-identifier "$DB_INSTANCE_EAST" --no-deletion-protection --apply-immediately --region us-east-1 || echo "Failed to modify East DB instance or not found"
@@ -109,7 +137,7 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   aws rds modify-db-instance --db-instance-identifier "$DB_INSTANCE_WEST" --no-deletion-protection --apply-immediately --region us-west-2 || echo "Failed to modify West DB instance or not found"
   aws rds delete-db-instance --db-instance-identifier "$DB_INSTANCE_WEST" --skip-final-snapshot --region us-west-2 || echo "West DB instance not found or already deleted"
   
-  echo "Step 4: Wait for RDS instance deletion (checking for up to 5 minutes)..."
+  echo "Step 6: Wait for RDS instance deletion (checking for up to 5 minutes)..."
   for i in {1..60}; do
     EAST_DB_EXISTS=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
     WEST_DB_EXISTS=$(aws rds describe-db-instances --db-instance-identifier "$DB_INSTANCE_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
@@ -133,14 +161,14 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     exit 1
   fi
   
-  echo "Step 5: Delete DB subnet groups"
+  echo "Step 7: Delete DB subnet groups"
   echo "Deleting East DB subnet group: $DB_SUBNET_GROUP_EAST"
   aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_EAST" --region us-east-1 || echo "East DB subnet group not found or already deleted"
   
   echo "Deleting West DB subnet group: $DB_SUBNET_GROUP_WEST"
   aws rds delete-db-subnet-group --db-subnet-group-name "$DB_SUBNET_GROUP_WEST" --region us-west-2 || echo "West DB subnet group not found or already deleted"
   
-  echo "Step 6: Final verification of critical resources"
+  echo "Step 8: Final verification of critical resources"
   CRITICAL_ERRORS=0
   
   # Check CloudWatch Log Groups
@@ -168,6 +196,34 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   
   if [ "$WEST_SUBNET_CHECK" = "true" ]; then
     echo "❌ CRITICAL: West DB subnet group still exists: $DB_SUBNET_GROUP_WEST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check Launch Templates
+  EAST_LT_CHECK=$(aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
+  WEST_LT_CHECK=$(aws ec2 describe-launch-templates --launch-template-names "$LAUNCH_TEMPLATE_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
+  
+  if [ "$EAST_LT_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: East Launch Template still exists: $LAUNCH_TEMPLATE_EAST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if [ "$WEST_LT_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: West Launch Template still exists: $LAUNCH_TEMPLATE_WEST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  # Check Application Load Balancers
+  EAST_ALB_CHECK=$(aws elbv2 describe-load-balancers --names "$ALB_EAST" --region us-east-1 >/dev/null 2>&1 && echo "true" || echo "false")
+  WEST_ALB_CHECK=$(aws elbv2 describe-load-balancers --names "$ALB_WEST" --region us-west-2 >/dev/null 2>&1 && echo "true" || echo "false")
+  
+  if [ "$EAST_ALB_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: East ALB still exists: $ALB_EAST"
+    CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
+  fi
+  
+  if [ "$WEST_ALB_CHECK" = "true" ]; then
+    echo "❌ CRITICAL: West ALB still exists: $ALB_WEST"
     CRITICAL_ERRORS=$((CRITICAL_ERRORS + 1))
   fi
   
