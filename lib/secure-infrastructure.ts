@@ -483,7 +483,7 @@ export class SecureInfrastructure {
     );
 
     // Enable ACLs for CloudFront logging
-    const logsBucketOwnership = new aws.s3.BucketOwnershipControls(
+    new aws.s3.BucketOwnershipControls(
       `logs-bucket-ownership-${this.environment}`,
       {
         bucket: logsBucket.id,
@@ -494,29 +494,42 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    const logsBucketPab = new aws.s3.BucketPublicAccessBlock(
+    // Block public access but allow CloudFront service
+    new aws.s3.BucketPublicAccessBlock(
       `logs-bucket-pab-${this.environment}`,
       {
         bucket: logsBucket.id,
-        blockPublicAcls: false,
+        blockPublicAcls: true,
         blockPublicPolicy: true,
-        ignorePublicAcls: false,
+        ignorePublicAcls: true,
         restrictPublicBuckets: true,
       },
-      { provider: this.provider, dependsOn: [logsBucketOwnership] }
+      { provider: this.provider }
     );
 
-    // Enable ACLs on the bucket
-    new aws.s3.BucketAcl(
-      `logs-bucket-acl-${this.environment}`,
+    // CloudFront logging bucket policy
+    new aws.s3.BucketPolicy(
+      `logs-bucket-policy-${this.environment}`,
       {
         bucket: logsBucket.id,
-        acl: 'private',
+        policy: pulumi.all([logsBucket.arn]).apply(([bucketArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'AllowCloudFrontLogging',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'cloudfront.amazonaws.com',
+                },
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/cloudfront-logs-${this.environment}/*`,
+              },
+            ],
+          })
+        ),
       },
-      {
-        provider: this.provider,
-        dependsOn: [logsBucketOwnership, logsBucketPab],
-      }
+      { provider: this.provider }
     );
 
     // S3 Lifecycle Configuration for logs bucket
@@ -844,6 +857,60 @@ export class SecureInfrastructure {
   }
 
   private createEC2Instances(): void {
+    // Application Load Balancer
+    const alb = new aws.lb.LoadBalancer(
+      `web-alb-${this.environment}`,
+      {
+        name: `web-alb-${this.environment}`,
+        loadBalancerType: 'application',
+        subnets: this.publicSubnets.map(subnet => subnet.id),
+        securityGroups: [this.webSecurityGroup.id],
+        tags: {
+          ...this.tags,
+          Name: `web-alb-${this.environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    // Target Group
+    const targetGroup = new aws.lb.TargetGroup(
+      `web-tg-${this.environment}`,
+      {
+        name: `web-tg-${this.environment}`,
+        port: 80,
+        protocol: 'HTTP',
+        vpcId: this.vpc.id,
+        healthCheck: {
+          enabled: true,
+          path: '/',
+          protocol: 'HTTP',
+        },
+        tags: {
+          ...this.tags,
+          Name: `web-tg-${this.environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    // ALB Listener
+    new aws.lb.Listener(
+      `web-listener-${this.environment}`,
+      {
+        loadBalancerArn: alb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
+          },
+        ],
+      },
+      { provider: this.provider }
+    );
+
     // Get latest Amazon Linux 2 AMI
     const ami = aws.ec2.getAmi(
       {
@@ -900,7 +967,8 @@ export class SecureInfrastructure {
       {
         name: `web-asg-${this.environment}`,
         vpcZoneIdentifiers: this.privateSubnets.map(subnet => subnet.id),
-        healthCheckType: 'EC2',
+        targetGroupArns: [targetGroup.arn],
+        healthCheckType: 'ELB',
         healthCheckGracePeriod: 300,
         minSize: 1,
         maxSize: 3,
