@@ -68,11 +68,14 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Grant EC2 service permission to use the KMS key for EBS volume encryption
+    // Grant EC2 and Auto Scaling services permission to use the KMS key for EBS volume encryption
     kmsKey.addToResourcePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
+        principals: [
+          new iam.ServicePrincipal('ec2.amazonaws.com'),
+          new iam.ServicePrincipal('autoscaling.amazonaws.com'),
+        ],
         actions: [
           'kms:Encrypt',
           'kms:Decrypt',
@@ -91,28 +94,21 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Grant Auto Scaling service permission to use the KMS key
+    // Additional grant permissions for Auto Scaling to create grants without ViaService condition
     kmsKey.addToResourcePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         principals: [new iam.ServicePrincipal('autoscaling.amazonaws.com')],
-        actions: [
-          'kms:Encrypt',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-          'kms:GenerateDataKey*',
-          'kms:GenerateDataKeyWithoutPlaintext',
-          'kms:CreateGrant',
-          'kms:DescribeKey',
-        ],
+        actions: ['kms:CreateGrant', 'kms:ListGrants', 'kms:RevokeGrant'],
         resources: ['*'],
         conditions: {
-          StringEquals: {
-            'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
+          Bool: {
+            'kms:GrantIsForAWSResource': 'true',
           },
         },
       })
     );
+
 
     // Tag KMS key
     cdk.Tags.of(kmsKey).add('Environment', 'Production');
@@ -224,11 +220,6 @@ export class TapStack extends cdk.Stack {
           'kms:GenerateDataKey*',
         ],
         resources: [kmsKey.keyArn],
-        conditions: {
-          StringEquals: {
-            'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
-          },
-        },
       })
     );
 
@@ -301,6 +292,9 @@ export class TapStack extends cdk.Stack {
       }),
       autoScalingGroupName: `tap-asg-${environmentSuffix}`,
     });
+
+    // Grant the Auto Scaling Group permission to use the KMS key
+    kmsKey.grantEncryptDecrypt(autoScalingGroup.role);
 
     // Tag Auto Scaling Group
     cdk.Tags.of(autoScalingGroup).add('Environment', 'Production');
