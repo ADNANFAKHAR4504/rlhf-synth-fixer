@@ -494,7 +494,7 @@ export class SecureInfrastructure {
       { provider: this.provider }
     );
 
-    new aws.s3.BucketPublicAccessBlock(
+    const logsBucketPab = new aws.s3.BucketPublicAccessBlock(
       `logs-bucket-pab-${this.environment}`,
       {
         bucket: logsBucket.id,
@@ -513,7 +513,7 @@ export class SecureInfrastructure {
         bucket: logsBucket.id,
         acl: 'private',
       },
-      { provider: this.provider }
+      { provider: this.provider, dependsOn: [logsBucketOwnership, logsBucketPab] }
     );
 
     // S3 Lifecycle Configuration for logs bucket
