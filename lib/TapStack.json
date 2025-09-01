@@ -617,7 +617,9 @@
     "ProductionDatabase": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": "production-mysql-db",
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "production-mysql-db-${AWS::StackName}"
+        },
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
