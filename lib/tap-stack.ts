@@ -154,7 +154,6 @@ export class TapStack extends cdk.Stack {
     this.ecsCluster = new ecs.Cluster(this, 'ProductionECSCluster', {
       vpc: this.vpc,
       clusterName: 'production-cluster',
-      containerInsights: true,
     });
 
     // IAM Role for ECS instances
@@ -162,7 +161,7 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for ECS EC2 instances',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonECSforEC2Role'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2ContainerServiceforEC2Role'),
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'CloudWatchAgentServerPolicy'
         ),
