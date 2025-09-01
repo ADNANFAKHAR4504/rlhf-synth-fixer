@@ -78,6 +78,10 @@ internet_gateway = aws.ec2.InternetGateway(
 # Get available AZs in the region
 azs = aws.get_availability_zones(state="available")
 
+# Validate we have enough AZs for our subnets
+if len(azs.names) < len(subnet_cidrs):
+    raise ValueError(f"Not enough availability zones. Need {len(subnet_cidrs)}, got {len(azs.names)}")
+
 # Create subnets in different availability zones
 subnets = []
 for i, cidr in enumerate(subnet_cidrs):
@@ -211,7 +215,7 @@ for i, (subnet, instance_name) in enumerate(zip(subnets, instance_names)):
         instance_type=instance_type,
         subnet_id=subnet.id,
         vpc_security_group_ids=[security_group.id],
-        key_name=key_name,
+        key_name=key_name if key_name else None,
         user_data=user_data_script,
         tags={
             **common_tags,
@@ -244,7 +248,7 @@ pulumi.export("instance_private_ips", [instance.private_ip for instance in insta
 
 # Export connection information
 pulumi.export("ssh_commands", [
-    f"ssh -i {key_name}.pem ec2-user@{instance.public_ip}" 
+    f"ssh -i {key_name}.pem ec2-user@{instance.public_ip}" if key_name and key_name != "default-key" else f"ssh ec2-user@{instance.public_ip}"
     for instance in instances
 ])
 
@@ -271,7 +275,7 @@ pulumi.export("metadata", {
     "description": "TAP Stack - Secure Cloud Network Environment",
     "version": "1.0.0",
     "author": "Infrastructure Team",
-    "last_updated": "2024",
+    "last_updated": "2025",
     "requirements": {
         "pulumi_version": ">=3.0.0",
         "pulumi_aws_version": ">=5.0.0",

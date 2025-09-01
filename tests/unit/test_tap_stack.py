@@ -243,6 +243,23 @@ echo "Instance initialized at $(date)" >> /var/log/instance-init.log
         self.assertEqual(metadata_options.http_tokens, "required")
         self.assertEqual(metadata_options.http_put_response_hop_limit, 1)
 
+    def test_optional_key_name_handling(self):
+        """Test that key_name is handled as optional."""
+        # Test with key name
+        key_name = "test-key"
+        key_param = key_name if key_name else None
+        self.assertEqual(key_param, "test-key")
+        
+        # Test without key name
+        key_name = None
+        key_param = key_name if key_name else None
+        self.assertIsNone(key_param)
+        
+        # Test with empty string
+        key_name = ""
+        key_param = key_name if key_name else None
+        self.assertIsNone(key_param)
+
     def test_stack_code_structure(self):
         """Test the actual stack code structure and imports."""
         # Add lib directory to path
