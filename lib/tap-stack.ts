@@ -40,7 +40,7 @@ export class TapStack extends TerraformStack {
 
     new AwsProvider(this, 'aws', { region });
 
-    // --- VPC and Networking Setup (No Changes) ---
+    // --- VPC and Networking Setup ---
     const vpc = new Vpc(this, 'main-vpc', {
       cidrBlock: '10.0.0.0/16',
       enableDnsHostnames: true,
@@ -94,7 +94,7 @@ export class TapStack extends TerraformStack {
       routeTableId: privateRouteTableA.id,
     });
 
-    // --- Security Groups (No Changes) ---
+    // --- Security Groups ---
     const albSg = new SecurityGroup(this, 'alb-sg', {
       name: `alb-sg-${randomSuffix}`,
       vpcId: vpc.id,
@@ -147,7 +147,7 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // --- CloudWatch and IAM (No Changes) ---
+    // --- CloudWatch and IAM ---
     const logGroup = new CloudwatchLogGroup(this, 'app-log-group', {
       name: `/app/logs-${randomSuffix}`,
       retentionInDays: 7,
@@ -191,19 +191,19 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // 5. RDS Database (Multi-AZ with Backups)
+    // 5. RDS Database
     const dbSubnetGroup = new DbSubnetGroup(this, 'rds-subnet-group', {
       name: `rds-subnet-group-${randomSuffix}`,
       subnetIds: [privateSubnetA.id, privateSubnetB.id],
     });
 
-    // **FIX**: Use a data source to find the latest applicable MySQL 8.0.x version
+    // **FIX:** Use a data source to dynamically find the latest stable MySQL 8.0.x version
     const dbEngineVersion = new DataAwsRdsEngineVersion(
       this,
       'mysql-engine-version',
       {
         engine: 'mysql',
-        // Specify the major version prefix, AWS will provide the latest minor version
+        // This tells AWS to find its recommended version for the 8.0 major release series.
         version: '8.0',
       }
     );
@@ -212,7 +212,7 @@ export class TapStack extends TerraformStack {
       identifier: `app-db-${randomSuffix}`,
       allocatedStorage: 20,
       instanceClass: 'db.t3.micro',
-      // Use the dynamically looked-up engine and version
+      // Use the dynamically looked-up engine and version from the data source
       engine: dbEngineVersion.engine,
       engineVersion: dbEngineVersion.version,
       username: 'adminUser',
@@ -224,7 +224,7 @@ export class TapStack extends TerraformStack {
       skipFinalSnapshot: true,
     });
 
-    // --- ALB and Auto Scaling (No Changes) ---
+    // --- ALB and Auto Scaling ---
     const alb = new Lb(this, 'alb', {
       name: `app-lb-${randomSuffix}`,
       internal: false,
