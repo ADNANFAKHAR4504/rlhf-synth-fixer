@@ -1578,7 +1578,7 @@ resource "aws_config_delivery_channel" "primary" {
   s3_bucket_name     = aws_s3_bucket.config_primary.bucket
   s3_key_prefix      = "config"
   snapshot_delivery_properties {
-    delivery_frequency = "Daily"
+    delivery_frequency = "TwentyFour_Hours"
   }
 
   depends_on = [aws_config_configuration_recorder.primary]
@@ -1591,7 +1591,7 @@ resource "aws_config_delivery_channel" "secondary" {
   s3_bucket_name     = aws_s3_bucket.config_secondary.bucket
   s3_key_prefix      = "config"
   snapshot_delivery_properties {
-    delivery_frequency = "Daily"
+    delivery_frequency = "TwentyFour_Hours"
   }
 
   depends_on = [aws_config_configuration_recorder.secondary]
