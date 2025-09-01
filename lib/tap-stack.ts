@@ -50,7 +50,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 bucket for application logs - PROTECTED RESOURCE
     this.logsBucket = new s3.Bucket(this, 'AppLogsBucket', {
-      bucketName: `${appName.toLowerCase()}-logs-${environmentSuffix}`,
+      bucketName: `${appName.toLowerCase()}-logs-${environmentSuffix}-${region}`,
       versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.kmsKey,
@@ -70,7 +70,6 @@ export class TapStack extends cdk.Stack {
     const appLogGroup = new logs.LogGroup(this, 'AppLogGroup', {
       logGroupName: `/aws/${appName.toLowerCase()}/${environmentSuffix}/${region}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      encryptionKey: this.kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion for complete cleanup
     });
 

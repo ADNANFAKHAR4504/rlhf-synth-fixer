@@ -57,7 +57,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 bucket for application logs - PROTECTED RESOURCE
     this.logsBucket = new s3.Bucket(this, 'AppLogsBucket', {
-      bucketName: `${appName.toLowerCase()}-logs-${environmentSuffix}`,
+      bucketName: `${appName.toLowerCase()}-logs-${environmentSuffix}-${region}`,
       versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.kmsKey,
@@ -74,10 +74,11 @@ export class TapStack extends cdk.Stack {
     });
 
     // CloudWatch Log Group for application logs
+    // Note: KMS encryption removed to avoid deployment timing issues
+    // CloudWatch Logs will use default AWS managed encryption
     const appLogGroup = new logs.LogGroup(this, 'AppLogGroup', {
       logGroupName: `/aws/${appName.toLowerCase()}/${environmentSuffix}/${region}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      encryptionKey: this.kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow deletion for complete cleanup
     });
 

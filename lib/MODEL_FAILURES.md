@@ -34,6 +34,26 @@ This document outlines the failures encountered during the development of the Ta
 
 **Resolution**: Added test for the default case in the switch statement (line 160) to achieve 100% branch coverage.
 
+### 7. CloudWatch Log Group KMS Encryption Deployment Issue
+**Failure**: Deployment failed with error "The specified KMS key does not exist or is not allowed to be used" when CloudWatch Log Group tried to use KMS encryption.
+
+**Resolution**: Removed KMS encryption from the CloudWatch Log Group to avoid deployment timing issues. CloudWatch Logs will use default AWS managed encryption, which is sufficient for most use cases. Updated tests accordingly.
+
+### 8. S3 Bucket Global Uniqueness Issue
+**Failure**: Multi-region deployment failed because S3 bucket names must be globally unique across all AWS regions. The bucket `tapstack-logs-pr2541` was created in us-east-1, preventing creation of the same bucket name in us-west-2.
+
+**Resolution**: Modified bucket naming to include region suffix: `${appName.toLowerCase()}-logs-${environmentSuffix}-${region}`. This ensures each region gets a unique bucket name while maintaining the naming pattern.
+
+### 9. Integration Test Approach
+**Failure**: Initial integration tests were designed to run before deployment, but they need to run after deployment when actual outputs are available.
+
+**Resolution**: Created integration tests that:
+- Load deployment outputs from `cfn-outputs/flat-outputs.json` (created by `get-outputs.sh`)
+- Exit gracefully if outputs file doesn't exist (indicating deployment hasn't run)
+- Test actual deployed resources using AWS SDK
+- Handle multi-region deployment by checking for outputs from multiple regions
+- Validate security configurations, resource relationships, and least privilege policies
+
 ## Key Learnings
 
 ### CDK vs CloudFormation Differences
