@@ -407,7 +407,7 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 
 		DbName:   jsii.String("migrationdb"),
 		Username: jsii.String("admin"),
-		Password: jsii.String("TempPassword123!"),
+		Password: jsii.String("TempPassword123#"),
 
 		VpcSecurityGroupIds: &[]*string{dbSG.Id()},
 		DbSubnetGroupName:   dbSubnetGroup.Name(),
@@ -993,16 +993,16 @@ func CreateRegionalInfrastructure(scope constructs.Construct, regionName string,
 	// Create RDS MySQL Database
 	dbName := fmt.Sprintf("tap-database-%s-%s", regionCode, envSuffix)
 	database := dbinstance.NewDbInstance(scope, jsii.String(fmt.Sprintf("mysql-database-%s", regionName)), &dbinstance.DbInstanceConfig{
-		Identifier:       jsii.String(dbName),
-		Engine:           jsii.String("mysql"),
-		EngineVersion:    jsii.String("8.0"),
-		InstanceClass:    jsii.String("db.t3.micro"),
-		AllocatedStorage: jsii.Number(20),
-		StorageType:      jsii.String("gp2"),
-		StorageEncrypted: jsii.Bool(true),
-		DbName:           jsii.String("applicationdb"),
-		Username:         jsii.String("admin"),
-		// Password will be managed through AWS Secrets Manager by default
+		Identifier:            jsii.String(dbName),
+		Engine:                jsii.String("mysql"),
+		EngineVersion:         jsii.String("8.0"),
+		InstanceClass:         jsii.String("db.t3.micro"),
+		AllocatedStorage:      jsii.Number(20),
+		StorageType:           jsii.String("gp2"),
+		StorageEncrypted:      jsii.Bool(true),
+		DbName:                jsii.String("applicationdb"),
+		Username:              jsii.String("admin"),
+		Password:              jsii.String("TempPassword123#"),
 		VpcSecurityGroupIds:   &[]*string{dbSg.Id()},
 		DbSubnetGroupName:     dbSubnetGroup.Name(),
 		BackupRetentionPeriod: jsii.Number(7),
@@ -1048,7 +1048,6 @@ echo '<h1>Hello from TAP Infrastructure in ` + regionCode + `!</h1>' > /var/www/
 		Name:                jsii.String(ltName),
 		ImageId:             amiData.Id(),
 		InstanceType:        jsii.String("t3.micro"),
-		KeyName:             jsii.String("my-key-pair"),
 		VpcSecurityGroupIds: &[]*string{webSg.Id()},
 		UserData:            cdktf.Fn_Base64encode(cdktf.Fn_RawString(&userData)),
 		Provider:            awsProvider,
