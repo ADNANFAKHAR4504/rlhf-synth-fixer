@@ -109,7 +109,6 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-
     // Tag KMS key
     cdk.Tags.of(kmsKey).add('Environment', 'Production');
 
