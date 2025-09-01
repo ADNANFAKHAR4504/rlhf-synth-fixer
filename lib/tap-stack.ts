@@ -14,9 +14,15 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as cr from 'aws-cdk-lib/custom-resources';
 import { Construct } from 'constructs';
 
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
 export class TapStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
+    
+    const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // ==============================================
     // VPC and Networking Setup
@@ -85,7 +91,7 @@ export class TapStack extends cdk.Stack {
      * Encrypted S3 bucket to store build artifacts securely
      */
     const artifactsBucket = new s3.Bucket(this, 'ArtifactsBucket', {
-      bucketName: `tap-pipeline-artifacts-${this.account}-${this.region}`,
+      bucketName: `tap-pipeline-artifacts-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
@@ -107,8 +113,8 @@ export class TapStack extends cdk.Stack {
      * SNS topic for pipeline notifications and alerts
      */
     const notificationTopic = new sns.Topic(this, 'PipelineNotifications', {
-      displayName: 'TAP Pipeline Notifications',
-      topicName: 'tap-pipeline-notifications',
+      displayName: `TAP Pipeline Notifications ${environmentSuffix}`,
+      topicName: `tap-pipeline-notifications-${environmentSuffix}`,
     });
 
     // Add email subscription (replace with actual email)
@@ -180,7 +186,7 @@ export class TapStack extends cdk.Stack {
      * CloudWatch log group for CodeBuild with detailed logging
      */
     const codeBuildLogGroup = new logs.LogGroup(this, 'CodeBuildLogGroup', {
-      logGroupName: '/aws/codebuild/tap-build-project',
+      logGroupName: `/aws/codebuild/tap-build-project-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -193,7 +199,7 @@ export class TapStack extends cdk.Stack {
      * CodeBuild project for compiling and testing the application
      */
     const buildProject = new codebuild.Project(this, 'TapBuildProject', {
-      projectName: 'tap-build-project',
+      projectName: `tap-build-project-${environmentSuffix}`,
       role: codeBuildRole,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
@@ -263,7 +269,7 @@ export class TapStack extends cdk.Stack {
      * Launch template for EC2 instances with CodeDeploy agent
      */
     const launchTemplate = new ec2.LaunchTemplate(this, 'WebServerLaunchTemplate', {
-      launchTemplateName: 'tap-web-server-template',
+      launchTemplateName: `tap-web-server-template-${environmentSuffix}`,
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       machineImage: ec2.MachineImage.latestAmazonLinux({
         generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
@@ -274,7 +280,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Add user data to install CodeDeploy agent and web server
-    launchTemplate.userData.addCommands(
+    launchTemplate.userData?.addCommands(
       '#!/bin/bash',
       'yum update -y',
       'yum install -y httpd',
@@ -310,8 +316,7 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
-      healthCheckType: autoscaling.HealthCheckType.EC2,
-      healthCheckGracePeriod: cdk.Duration.minutes(5),
+      healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(5) }),
     });
 
     // Tag instances for CodeDeploy
@@ -326,7 +331,7 @@ export class TapStack extends cdk.Stack {
      * CodeDeploy application for managing deployments
      */
     const codeDeployApplication = new codedeploy.ServerApplication(this, 'TapCodeDeployApp', {
-      applicationName: 'tap-application',
+      applicationName: `tap-application-${environmentSuffix}`,
     });
 
     /**
@@ -334,18 +339,15 @@ export class TapStack extends cdk.Stack {
      */
     const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'TapDeploymentGroup', {
       application: codeDeployApplication,
-      deploymentGroupName: 'tap-deployment-group',
+      deploymentGroupName: `tap-deployment-group-${environmentSuffix}`,
       role: codeDeployRole,
       autoScalingGroups: [autoScalingGroup],
-      deploymentConfig: codedeploy.ServerDeploymentConfig.ALL_AT_ONCE_HALF_AT_A_TIME,
+      deploymentConfig: codedeploy.ServerDeploymentConfig.ALL_AT_ONCE,
       autoRollback: {
         failedDeployment: true,
         stoppedDeployment: true,
       },
-      alarmConfiguration: {
-        enabled: true,
-        ignorePollAlarmFailure: false,
-      },
+      ignoreAlarmConfiguration: false,
     });
 
     // ==============================================
@@ -440,20 +442,18 @@ def handler(event, context):
      * Main CI/CD Pipeline with multiple stages and approval gates
      */
     const pipeline = new codepipeline.Pipeline(this, 'TapPipeline', {
-      pipelineName: 'tap-pipeline',
+      pipelineName: `tap-pipeline-${environmentSuffix}`,
       role: codePipelineRole,
       artifactBucket: artifactsBucket,
       stages: [
         {
           stageName: 'Source',
           actions: [
-            // Using GitHub as source (can be changed to CodeCommit)
-            new codepipeline_actions.GitHubSourceAction({
-              actionName: 'GitHub_Source',
-              owner: 'your-github-username', // Replace with actual GitHub username
-              repo: 'your-repo-name', // Replace with actual repository name
-              branch: 'main',
-              oauthToken: cdk.SecretValue.secretsManager('github-token'), // Store GitHub token in Secrets Manager
+            // Using S3 as source for demo compatibility
+            new codepipeline_actions.S3SourceAction({
+              actionName: 'S3_Source',
+              bucket: artifactsBucket,
+              bucketKey: 'source/source.zip',
               output: sourceOutput,
             }),
           ],
@@ -496,7 +496,7 @@ def handler(event, context):
               actionName: 'Custom_Validation',
               lambda: boto3Lambda,
               userParameters: {
-                pipeline_name: 'tap-pipeline',
+                pipeline_name: `tap-pipeline-${environmentSuffix}`,
                 topic_arn: notificationTopic.topicArn,
               },
             }),
@@ -546,46 +546,49 @@ def handler(event, context):
     new cdk.CfnOutput(this, 'PipelineArn', {
       value: pipeline.pipelineArn,
       description: 'ARN of the main CI/CD pipeline',
-      exportName: 'TapPipelineArn',
+      exportName: `TapPipelineArn${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'BuildProjectArn', {
       value: buildProject.projectArn,
       description: 'ARN of the CodeBuild project',
-      exportName: 'TapBuildProjectArn',
+      exportName: `TapBuildProjectArn${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'DeploymentApplicationArn', {
       value: codeDeployApplication.applicationArn,
       description: 'ARN of the CodeDeploy application',
-      exportName: 'TapDeployApplicationArn',
+      exportName: `TapDeployApplicationArn${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'NotificationTopicArn', {
       value: notificationTopic.topicArn,
       description: 'ARN of the SNS notification topic',
-      exportName: 'TapNotificationTopicArn',
+      exportName: `TapNotificationTopicArn${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'ArtifactsBucketName', {
       value: artifactsBucket.bucketName,
       description: 'Name of the encrypted S3 artifacts bucket',
-      exportName: 'TapArtifactsBucketName',
+      exportName: `TapArtifactsBucketName${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'ID of the VPC hosting the infrastructure',
-      exportName: 'TapVpcId',
+      exportName: `TapVpcId${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'AutoScalingGroupName', {
       value: autoScalingGroup.autoScalingGroupName,
       description: 'Name of the Auto Scaling Group',
-      exportName: 'TapAutoScalingGroupName',
+      exportName: `TapAutoScalingGroupName${environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'Boto3LambdaArn', {
       value: boto3Lambda.functionArn,
       description: 'ARN of the Boto3 integration Lambda function',
-      exportName: 
+      exportName: `TapBoto3LambdaArn${environmentSuffix}`,
+    });
+  }
+}

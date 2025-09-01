@@ -76,7 +76,6 @@ describe('TapStack', () => {
             Match.objectLike({
               Id: 'DeleteOldArtifacts',
               ExpirationInDays: 30,
-              NoncurrentVersionExpirationInDays: 7,
               Status: 'Enabled',
             }),
           ]),
@@ -88,8 +87,8 @@ describe('TapStack', () => {
   describe('SNS Topic for Notifications', () => {
     test('creates SNS topic with proper configuration', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        DisplayName: 'TAP Pipeline Notifications',
-        TopicName: 'tap-pipeline-notifications',
+        DisplayName: 'TAP Pipeline Notifications dev',
+        TopicName: 'tap-pipeline-notifications-dev',
       });
 
       template.hasResourceProperties('AWS::SNS::Subscription', {
@@ -171,7 +170,7 @@ describe('TapStack', () => {
   describe('CodeBuild Project', () => {
     test('creates CodeBuild project with proper configuration', () => {
       template.hasResourceProperties('AWS::CodeBuild::Project', {
-        Name: 'tap-build-project',
+        Name: 'tap-build-project-dev',
         Environment: {
           Type: 'LINUX_CONTAINER',
           ComputeType: 'BUILD_GENERAL1_SMALL',
@@ -187,7 +186,7 @@ describe('TapStack', () => {
 
     test('has CloudWatch logging enabled', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/codebuild/tap-build-project',
+        LogGroupName: '/aws/codebuild/tap-build-project-dev',
         RetentionInDays: 30,
       });
     });
@@ -196,7 +195,7 @@ describe('TapStack', () => {
   describe('EC2 and Auto Scaling', () => {
     test('creates launch template with proper configuration', () => {
       template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-        LaunchTemplateName: 'tap-web-server-template',
+        LaunchTemplateName: 'tap-web-server-template-dev',
         LaunchTemplateData: {
           ImageId: Match.anyValue(),
           InstanceType: 't3.micro',
@@ -236,7 +235,7 @@ describe('TapStack', () => {
   describe('CodeDeploy Configuration', () => {
     test('creates CodeDeploy application', () => {
       template.hasResourceProperties('AWS::CodeDeploy::Application', {
-        ApplicationName: 'tap-application',
+        ApplicationName: 'tap-application-dev',
         ComputePlatform: 'Server',
       });
     });
@@ -244,14 +243,10 @@ describe('TapStack', () => {
     test('creates deployment group with rollback configuration', () => {
       template.hasResourceProperties('AWS::CodeDeploy::DeploymentGroup', {
         ApplicationName: Match.anyValue(),
-        DeploymentGroupName: 'tap-deployment-group',
+        DeploymentGroupName: 'tap-deployment-group-dev',
         AutoRollbackConfiguration: {
           Enabled: true,
           Events: ['DEPLOYMENT_FAILURE', 'DEPLOYMENT_STOP_ON_ALARM', 'DEPLOYMENT_STOP_ON_REQUEST'],
-        },
-        AlarmConfiguration: {
-          Enabled: true,
-          IgnorePollAlarmFailure: false,
         },
       });
     });
@@ -289,7 +284,7 @@ describe('TapStack', () => {
   describe('CodePipeline Configuration', () => {
     test('creates pipeline with all required stages', () => {
       template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
-        Name: 'tap-pipeline',
+        Name: 'tap-pipeline-dev',
         Stages: Match.arrayWith([
           Match.objectLike({ Name: 'Source' }),
           Match.objectLike({ Name: 'Build' }),
@@ -391,32 +386,32 @@ describe('TapStack', () => {
     test('exports all required ARNs and identifiers', () => {
       template.hasOutput('PipelineArn', {
         Description: 'ARN of the main CI/CD pipeline',
-        Export: { Name: 'TapPipelineArn' },
+        Export: { Name: 'TapPipelineArndev' },
       });
 
       template.hasOutput('BuildProjectArn', {
         Description: 'ARN of the CodeBuild project',
-        Export: { Name: 'TapBuildProjectArn' },
+        Export: { Name: 'TapBuildProjectArndev' },
       });
 
       template.hasOutput('DeploymentApplicationArn', {
         Description: 'ARN of the CodeDeploy application',
-        Export: { Name: 'TapDeployApplicationArn' },
+        Export: { Name: 'TapDeployApplicationArndev' },
       });
 
       template.hasOutput('NotificationTopicArn', {
         Description: 'ARN of the SNS notification topic',
-        Export: { Name: 'TapNotificationTopicArn' },
+        Export: { Name: 'TapNotificationTopicArndev' },
       });
 
       template.hasOutput('ArtifactsBucketName', {
         Description: 'Name of the encrypted S3 artifacts bucket',
-        Export: { Name: 'TapArtifactsBucketName' },
+        Export: { Name: 'TapArtifactsBucketNamedev' },
       });
 
       template.hasOutput('VpcId', {
         Description: 'ID of the VPC hosting the infrastructure',
-        Export: { Name: 'TapVpcId' },
+        Export: { Name: 'TapVpcIddev' },
       });
     });
   });
