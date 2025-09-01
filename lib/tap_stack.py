@@ -2,6 +2,7 @@ from aws_cdk import (
     Stack,
     Duration,
     RemovalPolicy,
+    SecretValue,
     aws_s3 as s3,
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
@@ -69,18 +70,21 @@ class TapStack(Stack):
 
     def _create_secrets(self) -> secretsmanager.Secret:
         """Create secrets manager for sensitive configuration"""
+        # Create the secret object value using SecretValue
+        secret_object = {
+            "max_file_size": SecretValue.unsafe_plain_text("5242880"),  # 5MB in bytes
+            "allowed_mime_types": SecretValue.unsafe_plain_text(json.dumps([
+                "image/png",
+                "image/jpg", 
+                "image/jpeg"
+            ])),
+            "upload_prefix": SecretValue.unsafe_plain_text("uploads/")
+        }
+        
         secrets = secretsmanager.Secret(
             self, "TapUploadSecrets",
             description="Configuration secrets for TAP upload service",
-            secret_object_value={
-                "max_file_size": "5242880",  # 5MB in bytes
-                "allowed_mime_types": json.dumps([
-                    "image/png",
-                    "image/jpg", 
-                    "image/jpeg"
-                ]),
-                "upload_prefix": "uploads/"
-            }
+            secret_object_value=secret_object
         )
         return secrets
 

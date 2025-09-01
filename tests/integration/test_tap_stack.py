@@ -1,34 +1,43 @@
-import json
-import os
-import unittest
-
-from pytest import mark
-
-# Open file cfn-outputs/flat-outputs.json
-base_dir = os.path.dirname(os.path.abspath(__file__))
-flat_outputs_path = os.path.join(
-    base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
-)
-
-if os.path.exists(flat_outputs_path):
-  with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-    flat_outputs = f.read()
-else:
-  flat_outputs = '{}'
-
-flat_outputs = json.loads(flat_outputs)
+import boto3
+import pytest
+import aws_cdk as core
+from lib.tap_stack import TapStack
 
 
-@mark.describe("TapStack")
-class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+@pytest.fixture
+def stack():
+    app = core.App()
+    return TapStack(app, "tap-integration-test")
 
-  def setUp(self):
-    """Set up a fresh CDK app for each test"""
 
-  @mark.it("Write Integration Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+def test_stack_synthesis(stack):
+    # Test that the stack can be synthesized without errors
+    app = stack.node.root
+    cloud_assembly = app.synth()
+    assert cloud_assembly is not None
+
+
+def test_stack_resources_count(stack):
+    template = core.assertions.Template.from_stack(stack)
+    
+    # Verify expected number of resources
+    resources = template.to_json()["Resources"]
+    
+    # Should have at least: S3 bucket, Lambda function, API Gateway, IAM roles, etc.
+    assert len(resources) >= 10
+
+
+def test_iam_roles_have_policies(stack):
+    template = core.assertions.Template.from_stack(stack)
+    
+    # Test that IAM roles have appropriate policies
+    template.has_resource_properties("AWS::IAM::Role", {
+        "AssumeRolePolicyDocument": {
+            "Statement": [{
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "lambda.amazonaws.com"
+                }
+            }]
+        }
+    })
