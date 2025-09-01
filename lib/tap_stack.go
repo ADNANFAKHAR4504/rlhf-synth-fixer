@@ -12,7 +12,6 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/cloudwatchmetricalarm"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsami"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsavailabilityzones"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dataawsroute53zone"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbinstance"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/dbsubnetgroup"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/eip"
@@ -32,13 +31,13 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53healthcheck"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53hostedzone"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53zone"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53record"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketencryption"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketpublicaccessblock"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucketserversideencryptionconfiguration"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/secretsmanagersecret"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/secretsmanagersecretversion"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/securitygroup"
@@ -59,18 +58,19 @@ type InfrastructureStack struct {
 }
 
 type CompleteInfrastructure struct {
-	VPC                vpc.Vpc
-	LoadBalancer       lb.Lb
-	Database           dbinstance.DbInstance
-	ReadReplica        dbinstance.DbInstance
-	WebASG             autoscalinggroup.AutoscalingGroup
-	AppASG             autoscalinggroup.AutoscalingGroup
-	S3Bucket           s3bucket.S3Bucket
-	KMSKey             kmskey.KmsKey
-	DatabaseSecret     secretsmanagersecret.SecretsManagerSecret
-	HostedZone         route53hostedzone.Route53HostedZone
-	Certificate        acmcertificate.AcmCertificate
-	HealthCheck        route53healthcheck.Route53HealthCheck
+	VPC             vpc.Vpc
+	LoadBalancer    lb.Lb
+	Database        dbinstance.DbInstance
+	ReadReplica     dbinstance.DbInstance
+	WebASG          autoscalinggroup.AutoscalingGroup
+	AppASG          autoscalinggroup.AutoscalingGroup
+	S3Bucket        s3bucket.S3Bucket
+	KMSKey          kmskey.KmsKey
+	DatabaseSecret  secretsmanagersecret.SecretsmanagerSecret
+	HostedZone           route53zone.Route53Zone
+	Certificate          acmcertificate.AcmCertificate
+	CertificateValidation acmcertificatevalidation.AcmCertificateValidation
+	HealthCheck          route53healthcheck.Route53HealthCheck
 }
 
 // Helper function to merge tags
@@ -146,15 +146,13 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	})
 
 	// Configure S3 bucket encryption
-	s3bucketencryption.NewS3BucketEncryption(scope, jsii.String("s3-bucket-encryption"), &s3bucketencryption.S3BucketEncryptionConfig{
+	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfigurationA(scope, jsii.String("s3-bucket-encryption"), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationAConfig{
 		Bucket: s3Bucket.Id(),
-		ServerSideEncryptionConfiguration: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfiguration{
-			Rule: &[]*s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRule{
-				{
-					ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
-						KmsMasterKeyId: kmsKey.Arn(),
-						SseAlgorithm:   jsii.String("aws:kms"),
-					},
+		Rule: &[]*s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleA{
+			{
+				ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
+					KmsMasterKeyId: kmsKey.Arn(),
+					SseAlgorithm:   jsii.String("aws:kms"),
 				},
 			},
 		},
@@ -170,13 +168,13 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	})
 
 	// Create database password in Secrets Manager
-	dbSecret := secretsmanagersecret.NewSecretsManagerSecret(scope, jsii.String("db-secret"), &secretsmanagersecret.SecretsManagerSecretConfig{
+	dbSecret := secretsmanagersecret.NewSecretsmanagerSecret(scope, jsii.String("db-secret"), &secretsmanagersecret.SecretsmanagerSecretConfig{
 		Name:        jsii.String(fmt.Sprintf("migration/database/%s-%s", region, envSuffix)),
 		Description: jsii.String("Database master password for migration infrastructure"),
 		Tags:        tags,
 	})
 
-	secretsmanagersecretversion.NewSecretsManagerSecretVersion(scope, jsii.String("db-secret-version"), &secretsmanagersecretversion.SecretsManagerSecretVersionConfig{
+	secretsmanagersecretversion.NewSecretsmanagerSecretVersion(scope, jsii.String("db-secret-version"), &secretsmanagersecretversion.SecretsmanagerSecretVersionConfig{
 		SecretId:     dbSecret.Id(),
 		SecretString: jsii.String(`{"password":"TempPassword123#"}`),
 	})
@@ -723,7 +721,7 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 	})
 
 	// Create Route 53 Hosted Zone
-	hostedZone := route53hostedzone.NewRoute53HostedZone(scope, jsii.String("hosted-zone"), &route53hostedzone.Route53HostedZoneConfig{
+	hostedZone := route53zone.NewRoute53Zone(scope, jsii.String("hosted-zone"), &route53zone.Route53ZoneConfig{
 		Name: jsii.String(domainName),
 		Tags: tags,
 	})
@@ -882,7 +880,7 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 			EvaluateTargetHealth: jsii.Bool(true),
 		},
 		SetIdentifier: jsii.String(region),
-		Failover: &route53record.Route53RecordFailover{
+		FailoverRoutingPolicy: &route53record.Route53RecordFailoverRoutingPolicy{
 			Type: jsii.String(func() string {
 				if region == "us-east-1" {
 					return "PRIMARY"
@@ -948,15 +946,13 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		Tags:   tags,
 	})
 
-	s3bucketencryption.NewS3BucketEncryption(scope, jsii.String("cloudtrail-bucket-encryption"), &s3bucketencryption.S3BucketEncryptionConfig{
+	s3bucketserversideencryptionconfiguration.NewS3BucketServerSideEncryptionConfigurationA(scope, jsii.String("cloudtrail-bucket-encryption"), &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationAConfig{
 		Bucket: cloudTrailBucket.Id(),
-		ServerSideEncryptionConfiguration: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfiguration{
-			Rule: &[]*s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRule{
-				{
-					ApplyServerSideEncryptionByDefault: &s3bucketencryption.S3BucketEncryptionServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{
-						KmsMasterKeyId: kmsKey.Arn(),
-						SseAlgorithm:   jsii.String("aws:kms"),
-					},
+		Rule: &[]*s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleA{
+			{
+				ApplyServerSideEncryptionByDefault: &s3bucketserversideencryptionconfiguration.S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA{
+					KmsMasterKeyId: kmsKey.Arn(),
+					SseAlgorithm:   jsii.String("aws:kms"),
 				},
 			},
 		},
@@ -985,9 +981,10 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 		S3Bucket:           s3Bucket,
 		KMSKey:             kmsKey,
 		DatabaseSecret:     dbSecret,
-		HostedZone:         hostedZone,
-		Certificate:        certificate,
-		HealthCheck:        healthCheck,
+		HostedZone:           hostedZone,
+		Certificate:          certificate,
+		CertificateValidation: certificateValidation,
+		HealthCheck:          healthCheck,
 	}
 }
 
