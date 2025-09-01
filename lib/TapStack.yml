@@ -85,6 +85,18 @@ Parameters:
       - 3653
     Description: Retention period (days) for CloudWatch Logs groups (must use supported values)
 
+  NumberOfAZs:
+    Type: Number
+    Default: 2
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+    Description: Number of Availability Zones to use (set 1 for single-AZ regions)
+
+Conditions:
+  CreateAz2: !Not [!Equals [!Ref NumberOfAZs, 1]]
+
 Resources:
   # ================================
   # KMS ENCRYPTION KEYS
@@ -971,6 +983,7 @@ Resources:
 
   # Public Subnet 2
   PublicSubnet2:
+    Condition: CreateAz2
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
@@ -1015,6 +1028,7 @@ Resources:
 
   # Private Subnet 2
   PrivateSubnet2:
+    Condition: CreateAz2
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
@@ -1059,6 +1073,7 @@ Resources:
 
   # Data Tier Subnet 2
   DataSubnet2:
+    Condition: CreateAz2
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref SecureVPC
@@ -1173,6 +1188,7 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
 
   PublicSubnet2RouteTableAssociation:
+    Condition: CreateAz2
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet2
@@ -1185,6 +1201,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
 
   PrivateSubnet2RouteTableAssociation:
+    Condition: CreateAz2
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet2
@@ -1197,6 +1214,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
 
   DataSubnet2RouteTableAssociation:
+    Condition: CreateAz2
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref DataSubnet2
@@ -1367,19 +1385,34 @@ Outputs:
 
   PublicSubnetIds:
     Description: "IDs of the public subnets"
-    Value: !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Value:
+      !If [
+        CreateAz2,
+        !Join [",", [!Ref PublicSubnet1, !Ref PublicSubnet2]],
+        !Ref PublicSubnet1,
+      ]
     Export:
       Name: !Sub "${ProjectName}-public-subnet-ids-${Environment}"
 
   PrivateSubnetIds:
     Description: "IDs of the private subnets"
-    Value: !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Value:
+      !If [
+        CreateAz2,
+        !Join [",", [!Ref PrivateSubnet1, !Ref PrivateSubnet2]],
+        !Ref PrivateSubnet1,
+      ]
     Export:
       Name: !Sub "${ProjectName}-private-subnet-ids-${Environment}"
 
   DataSubnetIds:
     Description: "IDs of the data tier subnets"
-    Value: !Join [",", [!Ref DataSubnet1, !Ref DataSubnet2]]
+    Value:
+      !If [
+        CreateAz2,
+        !Join [",", [!Ref DataSubnet1, !Ref DataSubnet2]],
+        !Ref DataSubnet1,
+      ]
     Export:
       Name: !Sub "${ProjectName}-data-subnet-ids-${Environment}"
 
