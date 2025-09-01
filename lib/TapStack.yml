@@ -978,7 +978,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      Name: 'production-database-password-tapstack'
+      Name: !Sub
+        - 'production-database-password-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       Description: Database password for secure environment
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
