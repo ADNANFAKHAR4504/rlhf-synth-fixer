@@ -6,7 +6,7 @@ I need a Pulumi TypeScript implementation that provisions a production-ready, se
 
 - **Pulumi AWS Provider** must be defined and passed to every resource so that deployment is region-bound and configurable
 - All resources should be **prefixed with the environment name** (e.g., `production-*`) for clarity and separation
-- All resources must be tagged with `'environment': 'production'`
+- All resources must be tagged with `'environment': 'production'` or whatever the environemtn value is set in config
 
 ### Networking:
 
@@ -14,14 +14,14 @@ I need a Pulumi TypeScript implementation that provisions a production-ready, se
 - Inside the VPC:
   - Create **2 public subnets** and **2 private subnets** in separate Availability Zones
   - Attach an **Internet Gateway** for the public subnets
-  - Deploy a **NAT Gateway** in one of the public subnets and route private subnet traffic through it
+  - Deploy **NAT Gateways** in one per AZ
 - VPC flow logs should be enabled and directed to a CloudWatch Log Group
 
 ### Compute:
 
-- Deploy **EC2 instances (Amazon Linux 2)** in the public subnets inside an **Auto Scaling Group**
+- Deploy **EC2 instances (Amazon Linux 2023)** in the public subnets inside an **Auto Scaling Group**
   - Allow **SSH only from a specified IP range** take that from config
-  - Set up **launch templates** using the latest Amazon Linux 2 AMI dynamically fetched
+  - Set up **launch templates** using the latest Amazon Linux 2023 AMI dynamically fetched
   - The ASG should **scale based on CPU utilization thresholds**
 
 ### Database:
