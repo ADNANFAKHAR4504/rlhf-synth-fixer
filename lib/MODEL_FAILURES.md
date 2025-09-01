@@ -1,5 +1,3 @@
-# Model Failures
-
 These are common ways the model might fail to meet the requirements:
 
 1. **Wrong Format**
@@ -54,3 +52,4 @@ These are common ways the model might fail to meet the requirements:
 
 - Produces JSON that fails `aws cloudformation validate-template`.
 - Includes comments or trailing commas (invalid JSON).
+
