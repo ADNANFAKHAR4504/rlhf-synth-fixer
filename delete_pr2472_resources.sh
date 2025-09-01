@@ -33,91 +33,175 @@ TG_NAMES=(
   "tap-tg-us-west-2-pr2472"
 )
 
+ASG_NAMES=(
+  "tap-asg-us-east-1-pr2472"
+  "tap-asg-us-west-2-pr2472"
+)
+
 # Delete CloudWatch Log Groups
 echo "Deleting CloudWatch Log Groups..."
-for log_group in "${LOG_GROUPS[@]}"; do
-  if aws logs describe-log-groups --log-group-name-prefix "$log_group" --query 'logGroups[0].logGroupName' --output text 2>/dev/null | grep -q "$log_group"; then
-    aws logs delete-log-group --log-group-name "$log_group"
-    echo "Deleted: $log_group"
-  else
-    echo "Not found: $log_group"
-  fi
-done
+# us-east-1 log groups
+if aws logs describe-log-groups --region us-east-1 --log-group-name-prefix "/aws/ec2/tap-log-group-us-east-1-pr2472" --query 'logGroups[0].logGroupName' --output text 2>/dev/null | grep -q "tap-log-group-us-east-1-pr2472"; then
+  aws logs delete-log-group --region us-east-1 --log-group-name "/aws/ec2/tap-log-group-us-east-1-pr2472"
+  echo "Deleted: /aws/ec2/tap-log-group-us-east-1-pr2472"
+else
+  echo "Not found: /aws/ec2/tap-log-group-us-east-1-pr2472"
+fi
+
+# us-west-2 log groups
+if aws logs describe-log-groups --region us-west-2 --log-group-name-prefix "/aws/ec2/tap-log-group-us-west-2-pr2472" --query 'logGroups[0].logGroupName' --output text 2>/dev/null | grep -q "tap-log-group-us-west-2-pr2472"; then
+  aws logs delete-log-group --region us-west-2 --log-group-name "/aws/ec2/tap-log-group-us-west-2-pr2472"
+  echo "Deleted: /aws/ec2/tap-log-group-us-west-2-pr2472"
+else
+  echo "Not found: /aws/ec2/tap-log-group-us-west-2-pr2472"
+fi
 
 # Delete RDS Database Instances first
 echo "Deleting RDS Database Instances..."
-for db_instance in "${DB_INSTANCES[@]}"; do
-  if aws rds describe-db-instances --db-instance-identifier "$db_instance" &>/dev/null; then
-    echo "Disabling deletion protection for: $db_instance"
-    aws rds modify-db-instance --db-instance-identifier "$db_instance" --no-deletion-protection --apply-immediately
-    echo "Waiting for modification to complete..."
-    aws rds wait db-instance-available --db-instance-identifier "$db_instance"
-    
-    echo "Deleting database instance: $db_instance"
-    aws rds delete-db-instance --db-instance-identifier "$db_instance" --skip-final-snapshot
-    echo "Requested delete: $db_instance"
-  else
-    echo "Not found: $db_instance"
-  fi
-done
+# us-east-1 database
+if aws rds describe-db-instances --region us-east-1 --db-instance-identifier "tap-database-us-east-1-pr2472" &>/dev/null; then
+  echo "Disabling deletion protection for: tap-database-us-east-1-pr2472"
+  aws rds modify-db-instance --region us-east-1 --db-instance-identifier "tap-database-us-east-1-pr2472" --no-deletion-protection --apply-immediately
+  echo "Waiting for modification to complete..."
+  aws rds wait db-instance-available --region us-east-1 --db-instance-identifier "tap-database-us-east-1-pr2472"
+  
+  echo "Deleting database instance: tap-database-us-east-1-pr2472"
+  aws rds delete-db-instance --region us-east-1 --db-instance-identifier "tap-database-us-east-1-pr2472" --skip-final-snapshot
+  echo "Requested delete: tap-database-us-east-1-pr2472"
+else
+  echo "Not found: tap-database-us-east-1-pr2472"
+fi
+
+# us-west-2 database
+if aws rds describe-db-instances --region us-west-2 --db-instance-identifier "tap-database-us-west-2-pr2472" &>/dev/null; then
+  echo "Disabling deletion protection for: tap-database-us-west-2-pr2472"
+  aws rds modify-db-instance --region us-west-2 --db-instance-identifier "tap-database-us-west-2-pr2472" --no-deletion-protection --apply-immediately
+  echo "Waiting for modification to complete..."
+  aws rds wait db-instance-available --region us-west-2 --db-instance-identifier "tap-database-us-west-2-pr2472"
+  
+  echo "Deleting database instance: tap-database-us-west-2-pr2472"
+  aws rds delete-db-instance --region us-west-2 --db-instance-identifier "tap-database-us-west-2-pr2472" --skip-final-snapshot
+  echo "Requested delete: tap-database-us-west-2-pr2472"
+else
+  echo "Not found: tap-database-us-west-2-pr2472"
+fi
 
 # Wait for RDS instances to be deleted
 echo "Waiting for RDS instances to be deleted..."
-for db_instance in "${DB_INSTANCES[@]}"; do
-  if aws rds describe-db-instances --db-instance-identifier "$db_instance" &>/dev/null; then
-    echo "Waiting for $db_instance to be deleted..."
-    aws rds wait db-instance-deleted --db-instance-identifier "$db_instance"
-    echo "Deleted: $db_instance"
-  fi
-done
+if aws rds describe-db-instances --region us-east-1 --db-instance-identifier "tap-database-us-east-1-pr2472" &>/dev/null; then
+  echo "Waiting for tap-database-us-east-1-pr2472 to be deleted..."
+  aws rds wait db-instance-deleted --region us-east-1 --db-instance-identifier "tap-database-us-east-1-pr2472"
+  echo "Deleted: tap-database-us-east-1-pr2472"
+fi
+
+if aws rds describe-db-instances --region us-west-2 --db-instance-identifier "tap-database-us-west-2-pr2472" &>/dev/null; then
+  echo "Waiting for tap-database-us-west-2-pr2472 to be deleted..."
+  aws rds wait db-instance-deleted --region us-west-2 --db-instance-identifier "tap-database-us-west-2-pr2472"
+  echo "Deleted: tap-database-us-west-2-pr2472"
+fi
 
 # Delete RDS Subnet Groups (after databases are deleted)
 echo "Deleting RDS Subnet Groups..."
-for subnet_group in "${DB_SUBNET_GROUPS[@]}"; do
-  if aws rds describe-db-subnet-groups --db-subnet-group-name "$subnet_group" &>/dev/null; then
-    aws rds delete-db-subnet-group --db-subnet-group-name "$subnet_group"
-    echo "Deleted: $subnet_group"
-  else
-    echo "Not found: $subnet_group"
-  fi
-done
+if aws rds describe-db-subnet-groups --region us-east-1 --db-subnet-group-name "tap-db-subnet-group-us-east-1-pr2472" &>/dev/null; then
+  aws rds delete-db-subnet-group --region us-east-1 --db-subnet-group-name "tap-db-subnet-group-us-east-1-pr2472"
+  echo "Deleted: tap-db-subnet-group-us-east-1-pr2472"
+else
+  echo "Not found: tap-db-subnet-group-us-east-1-pr2472"
+fi
 
-# Delete Launch Templates
+if aws rds describe-db-subnet-groups --region us-west-2 --db-subnet-group-name "tap-db-subnet-group-us-west-2-pr2472" &>/dev/null; then
+  aws rds delete-db-subnet-group --region us-west-2 --db-subnet-group-name "tap-db-subnet-group-us-west-2-pr2472"
+  echo "Deleted: tap-db-subnet-group-us-west-2-pr2472"
+else
+  echo "Not found: tap-db-subnet-group-us-west-2-pr2472"
+fi
+
+# Delete Auto Scaling Groups first (they depend on Launch Templates)
+echo "Deleting Auto Scaling Groups..."
+# us-east-1 ASG
+if aws autoscaling describe-auto-scaling-groups --region us-east-1 --auto-scaling-group-names "tap-asg-us-east-1-pr2472" --query 'AutoScalingGroups[0].AutoScalingGroupName' --output text 2>/dev/null | grep -q "tap-asg-us-east-1-pr2472"; then
+  echo "Deleting ASG: tap-asg-us-east-1-pr2472"
+  aws autoscaling update-auto-scaling-group --region us-east-1 --auto-scaling-group-name "tap-asg-us-east-1-pr2472" --desired-capacity 0 --min-size 0 --max-size 0
+  echo "Waiting for instances to terminate..."
+  sleep 10
+  aws autoscaling delete-auto-scaling-group --region us-east-1 --auto-scaling-group-name "tap-asg-us-east-1-pr2472" --force-delete
+  echo "Deleted: tap-asg-us-east-1-pr2472"
+else
+  echo "Not found: tap-asg-us-east-1-pr2472"
+fi
+
+# us-west-2 ASG
+if aws autoscaling describe-auto-scaling-groups --region us-west-2 --auto-scaling-group-names "tap-asg-us-west-2-pr2472" --query 'AutoScalingGroups[0].AutoScalingGroupName' --output text 2>/dev/null | grep -q "tap-asg-us-west-2-pr2472"; then
+  echo "Deleting ASG: tap-asg-us-west-2-pr2472"
+  aws autoscaling update-auto-scaling-group --region us-west-2 --auto-scaling-group-name "tap-asg-us-west-2-pr2472" --desired-capacity 0 --min-size 0 --max-size 0
+  echo "Waiting for instances to terminate..."
+  sleep 10
+  aws autoscaling delete-auto-scaling-group --region us-west-2 --auto-scaling-group-name "tap-asg-us-west-2-pr2472" --force-delete
+  echo "Deleted: tap-asg-us-west-2-pr2472"
+else
+  echo "Not found: tap-asg-us-west-2-pr2472"
+fi
+
+# Delete Launch Templates (after ASGs are deleted)
 echo "Deleting EC2 Launch Templates..."
-for lt_name in "${LAUNCH_TEMPLATES[@]}"; do
-  if aws ec2 describe-launch-templates --launch-template-names "$lt_name" &>/dev/null; then
-    aws ec2 delete-launch-template --launch-template-name "$lt_name"
-    echo "Deleted: $lt_name"
-  else
-    echo "Not found: $lt_name"
-  fi
-done
+if aws ec2 describe-launch-templates --region us-east-1 --launch-template-names "tap-lt-us-east-1-pr2472" &>/dev/null; then
+  aws ec2 delete-launch-template --region us-east-1 --launch-template-name "tap-lt-us-east-1-pr2472"
+  echo "Deleted: tap-lt-us-east-1-pr2472"
+else
+  echo "Not found: tap-lt-us-east-1-pr2472"
+fi
+
+if aws ec2 describe-launch-templates --region us-west-2 --launch-template-names "tap-lt-us-west-2-pr2472" &>/dev/null; then
+  aws ec2 delete-launch-template --region us-west-2 --launch-template-name "tap-lt-us-west-2-pr2472"
+  echo "Deleted: tap-lt-us-west-2-pr2472"
+else
+  echo "Not found: tap-lt-us-west-2-pr2472"
+fi
 
 # Delete ALBs and wait for deletion
 echo "Deleting Load Balancers..."
-for alb_name in "${ALB_NAMES[@]}"; do
-  alb_arn=$(aws elbv2 describe-load-balancers --names "$alb_name" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
-  if [[ -n "$alb_arn" && "$alb_arn" != "None" ]]; then
-    aws elbv2 delete-load-balancer --load-balancer-arn "$alb_arn"
-    echo "Requested delete: $alb_name"
-    echo "Waiting for ALB to be deleted..."
-    aws elbv2 wait load-balancers-deleted --load-balancer-arns "$alb_arn"
-    echo "Deleted: $alb_name"
-  else
-    echo "Not found: $alb_name"
-  fi
-done
+# us-east-1 ALB
+alb_arn_east=$(aws elbv2 describe-load-balancers --region us-east-1 --names "tap-alb-us-east-1-pr2472" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
+if [[ -n "$alb_arn_east" && "$alb_arn_east" != "None" ]]; then
+  aws elbv2 delete-load-balancer --region us-east-1 --load-balancer-arn "$alb_arn_east"
+  echo "Requested delete: tap-alb-us-east-1-pr2472"
+  echo "Waiting for ALB to be deleted..."
+  aws elbv2 wait load-balancers-deleted --region us-east-1 --load-balancer-arns "$alb_arn_east"
+  echo "Deleted: tap-alb-us-east-1-pr2472"
+else
+  echo "Not found: tap-alb-us-east-1-pr2472"
+fi
+
+# us-west-2 ALB
+alb_arn_west=$(aws elbv2 describe-load-balancers --region us-west-2 --names "tap-alb-us-west-2-pr2472" --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo "")
+if [[ -n "$alb_arn_west" && "$alb_arn_west" != "None" ]]; then
+  aws elbv2 delete-load-balancer --region us-west-2 --load-balancer-arn "$alb_arn_west"
+  echo "Requested delete: tap-alb-us-west-2-pr2472"
+  echo "Waiting for ALB to be deleted..."
+  aws elbv2 wait load-balancers-deleted --region us-west-2 --load-balancer-arns "$alb_arn_west"
+  echo "Deleted: tap-alb-us-west-2-pr2472"
+else
+  echo "Not found: tap-alb-us-west-2-pr2472"
+fi
 
 # Delete Target Groups (after ALBs are deleted)
 echo "Deleting Target Groups..."
-for tg_name in "${TG_NAMES[@]}"; do
-  tg_arn=$(aws elbv2 describe-target-groups --names "$tg_name" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
-  if [[ -n "$tg_arn" && "$tg_arn" != "None" ]]; then
-    aws elbv2 delete-target-group --target-group-arn "$tg_arn"
-    echo "Deleted: $tg_name"
-  else
-    echo "Not found: $tg_name"
-  fi
-done
+# us-east-1 Target Group
+tg_arn_east=$(aws elbv2 describe-target-groups --region us-east-1 --names "tap-tg-us-east-1-pr2472" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
+if [[ -n "$tg_arn_east" && "$tg_arn_east" != "None" ]]; then
+  aws elbv2 delete-target-group --region us-east-1 --target-group-arn "$tg_arn_east"
+  echo "Deleted: tap-tg-us-east-1-pr2472"
+else
+  echo "Not found: tap-tg-us-east-1-pr2472"
+fi
+
+# us-west-2 Target Group
+tg_arn_west=$(aws elbv2 describe-target-groups --region us-west-2 --names "tap-tg-us-west-2-pr2472" --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
+if [[ -n "$tg_arn_west" && "$tg_arn_west" != "None" ]]; then
+  aws elbv2 delete-target-group --region us-west-2 --target-group-arn "$tg_arn_west"
+  echo "Deleted: tap-tg-us-west-2-pr2472"
+else
+  echo "Not found: tap-tg-us-west-2-pr2472"
+fi
 
 echo "✅ All deletions completed."
