@@ -477,9 +477,6 @@
     "EC2LoggingRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${AWS::StackName}-EC2-Logging-Role-${EnvironmentSuffix}"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -542,9 +539,6 @@
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {
-          "Fn::Sub": "${AWS::StackName}-EC2-Instance-Profile-${EnvironmentSuffix}"
-        },
         "Roles": [
           {
             "Ref": "EC2LoggingRole"
@@ -556,9 +550,6 @@
       "Type": "AWS::CloudTrail::Trail",
       "DependsOn": "LoggingBucketPolicy",
       "Properties": {
-        "TrailName": {
-          "Fn::Sub": "${AWS::StackName}-CloudTrail-${EnvironmentSuffix}"
-        },
         "S3BucketName": {
           "Ref": "LoggingBucket"
         },
@@ -601,9 +592,6 @@
     "EC2SecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {
-          "Fn::Sub": "${AWS::StackName}-EC2-SecurityGroup-${EnvironmentSuffix}"
-        },
         "GroupDescription": "Security group for EC2 instances with restricted SSH access",
         "VpcId": {
           "Ref": "SecureVPC"
