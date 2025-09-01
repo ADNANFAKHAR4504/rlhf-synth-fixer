@@ -542,9 +542,6 @@
                 "S3BucketName": {
                     "Ref": "LoggingBucket"
                 },
-                "S3KeyPrefix": {
-                    "Fn::Sub": "AWSLogs/${AWS::AccountId}/CloudTrail"
-                },
                 "IncludeGlobalServiceEvents": true,
                 "IsLogging": true,
                 "IsMultiRegionTrail": true,

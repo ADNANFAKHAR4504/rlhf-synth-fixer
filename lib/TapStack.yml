@@ -293,7 +293,7 @@ Resources:
     Properties:
       TrailName: !Sub "${AWS::StackName}-CloudTrail"
       S3BucketName: !Ref LoggingBucket
-      S3KeyPrefix: !Sub "AWSLogs/${AWS::AccountId}/CloudTrail"
+      # S3KeyPrefix: !Sub "AWSLogs/${AWS::AccountId}/CloudTrail"
       IncludeGlobalServiceEvents: true
       IsLogging: true
       IsMultiRegionTrail: true
