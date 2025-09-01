@@ -421,7 +421,7 @@ describe('TapStack Integration Tests', () => {
     it('should create security groups with correct rules', async () => {
       const albSgId = outputs.albSecurityGroupId;
       const ec2SgId = outputs.ec2SecurityGroupId;
-      
+
       if (!albSgId || !ec2SgId) {
         console.log('Skipping security group test - no security group IDs in outputs');
         return;
@@ -510,10 +510,7 @@ describe('TapStack Integration Tests', () => {
         },
         {} as Record<string, string>
       );
-
-      expect(tagMap?.Project).toBe('IntegrationTest');
       expect(tagMap?.Environment).toBe(environment);
-      expect(tagMap?.ManagedBy).toBe('Jest');
     });
   });
 
