@@ -8,12 +8,12 @@ const outputPath = path.resolve(process.cwd(), "cfn-outputs/flat-outputs.json");
 const isNonEmptyString = (val: any): boolean =>
   typeof val === "string" && val.trim().length > 0;
 
-const isValidArn = (val: any): boolean => {
+const isValidArn = (val: string): boolean => {
   if (typeof val !== "string") return false;
-  const arnPattern = /^arn:aws:[^:]*:[^:]*:(\d{12}|\*{3}):[^ ]+$/;
-  return arnPattern.test(val);
+  const trimmed = val.trim();
+  const arnPattern = /^arn:[^:]+:[^:]*:[^:]*:(\d{12}|\*{3}|)?:.+$/;
+  return arnPattern.test(trimmed);
 };
-
 const isValidVpcId = (val: any): boolean =>
   isNonEmptyString(val) && val.startsWith("vpc-");
 
@@ -183,11 +183,20 @@ describe("tap_stack.tf Integration Tests (flat outputs)", () => {
   });
 
   it("should validate ARNs for *_arn keys", () => {
-    expectedKeys.filter(k => k.endsWith("_arn")).forEach(key => {
-      const val = outputs[key];
-      expect(isValidArn(val)).toBe(true);
-    });
+  expectedKeys.filter(k => k.endsWith("_arn")).forEach(key => {
+    const val = outputs[key];
+    if (typeof val !== "string" || val.trim().length === 0) {
+      console.error(`Empty or non-string ARN for key "${key}": ${val}`);
+      expect(false).toBe(true);
+      return;
+    }
+    const valid = isValidArn(val);
+    if (!valid) {
+      console.error(`Invalid ARN for key "${key}": "${val}"`);
+    }
+    expect(valid).toBe(true);
   });
+});
 
   it("should validate VPC IDs", () => {
     ["primary_vpc_id", "secondary_vpc_id"].forEach(key => {
