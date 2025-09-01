@@ -45,7 +45,9 @@ def get_stack_outputs() -> Dict:
             for key, value in outputs.items():
                 if isinstance(value, str) and value.startswith('[') and value.endswith(']'):
                     try:
-                        outputs[key] = json.loads(value)
+                        parsed_value = json.loads(value)
+                        outputs[key] = parsed_value
+                        print(f"Parsed {key}: {value} -> {parsed_value}")
                     except json.JSONDecodeError:
                         pass  # Keep as string if parsing fails
             
@@ -239,9 +241,18 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         public_subnet_ids = self.stack_outputs.get('public_subnet_ids', [])
         private_subnet_id = self.stack_outputs.get('private_subnet_id')
         
+        # Ensure public_subnet_ids is a list
+        if isinstance(public_subnet_ids, str):
+            try:
+                public_subnet_ids = json.loads(public_subnet_ids)
+            except json.JSONDecodeError:
+                public_subnet_ids = [public_subnet_ids]
+        elif not isinstance(public_subnet_ids, list):
+            public_subnet_ids = []
+    
         if not public_subnet_ids and not private_subnet_id:
             self.skipTest("Subnet IDs not found in stack outputs")
-        
+    
         try:
             all_subnet_ids = []
             if public_subnet_ids:
@@ -412,9 +423,18 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         public_subnet_ids = self.stack_outputs.get('public_subnet_ids', [])
         private_subnet_id = self.stack_outputs.get('private_subnet_id')
         
+        # Ensure public_subnet_ids is a list
+        if isinstance(public_subnet_ids, str):
+            try:
+                public_subnet_ids = json.loads(public_subnet_ids)
+            except json.JSONDecodeError:
+                public_subnet_ids = [public_subnet_ids]
+        elif not isinstance(public_subnet_ids, list):
+            public_subnet_ids = []
+    
         if not public_subnet_ids and not private_subnet_id:
             self.skipTest("Subnet IDs not found in stack outputs")
-        
+    
         try:
             all_subnet_ids = []
             if public_subnet_ids:
