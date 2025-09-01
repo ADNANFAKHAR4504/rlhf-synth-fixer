@@ -32,6 +32,14 @@ vpc_cidr = "10.0.0.0/16"
 subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
 region = "us-east-1"
 
+# Tags Configuration
+common_tags = {
+    "Environment": "production",
+    "Project": "TAP-Infrastructure",
+    "ManagedBy": "Pulumi",
+    "Team": "Infrastructure"
+}
+
 # Instance Configuration
 instance_type = "t2.micro"
 key_name = config.get("key_name") or "default-key"
@@ -49,14 +57,6 @@ if not config.get("key_name"):
         }
     )
     key_name = key_pair.key_name
-
-# Tags Configuration
-common_tags = {
-    "Environment": "production",
-    "Project": "TAP-Infrastructure",
-    "ManagedBy": "Pulumi",
-    "Team": "Infrastructure"
-}
 
 # VPC Resource
 # ============
