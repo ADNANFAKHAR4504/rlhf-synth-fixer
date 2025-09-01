@@ -31,8 +31,8 @@ import (
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/provider"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53healthcheck"
-	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53zone"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53record"
+	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/route53zone"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetable"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/routetableassociation"
 	"github.com/cdktf/cdktf-provider-aws-go/aws/v19/s3bucket"
@@ -58,19 +58,19 @@ type InfrastructureStack struct {
 }
 
 type CompleteInfrastructure struct {
-	VPC             vpc.Vpc
-	LoadBalancer    lb.Lb
-	Database        dbinstance.DbInstance
-	ReadReplica     dbinstance.DbInstance
-	WebASG          autoscalinggroup.AutoscalingGroup
-	AppASG          autoscalinggroup.AutoscalingGroup
-	S3Bucket        s3bucket.S3Bucket
-	KMSKey          kmskey.KmsKey
-	DatabaseSecret  secretsmanagersecret.SecretsmanagerSecret
-	HostedZone           route53zone.Route53Zone
-	Certificate          acmcertificate.AcmCertificate
+	VPC                   vpc.Vpc
+	LoadBalancer          lb.Lb
+	Database              dbinstance.DbInstance
+	ReadReplica           dbinstance.DbInstance
+	WebASG                autoscalinggroup.AutoscalingGroup
+	AppASG                autoscalinggroup.AutoscalingGroup
+	S3Bucket              s3bucket.S3Bucket
+	KMSKey                kmskey.KmsKey
+	DatabaseSecret        secretsmanagersecret.SecretsmanagerSecret
+	HostedZone            route53zone.Route53Zone
+	Certificate           acmcertificate.AcmCertificate
 	CertificateValidation acmcertificatevalidation.AcmCertificateValidation
-	HealthCheck          route53healthcheck.Route53HealthCheck
+	HealthCheck           route53healthcheck.Route53HealthCheck
 }
 
 // Helper function to merge tags
@@ -622,10 +622,10 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 		StorageEncrypted: jsii.Bool(true),
 		KmsKeyId:         kmsKey.Arn(),
 
-		DbName:                     jsii.String("migrationdb"),
-		Username:                   jsii.String("admin"),
-		ManageMasterUserPassword:   jsii.Bool(true),
-		MasterUserSecretKmsKeyId:   kmsKey.Arn(),
+		DbName:                   jsii.String("migrationdb"),
+		Username:                 jsii.String("admin"),
+		ManageMasterUserPassword: jsii.Bool(true),
+		MasterUserSecretKmsKeyId: kmsKey.Arn(),
 
 		VpcSecurityGroupIds: &[]*string{dbSG.Id()},
 		DbSubnetGroupName:   dbSubnetGroup.Name(),
@@ -650,13 +650,13 @@ func NewCompleteInfrastructure(scope constructs.Construct, id *string, region st
 	if region == "us-west-2" {
 		// Create read replica pointing to us-east-1 primary
 		readReplica = dbinstance.NewDbInstance(scope, jsii.String("read-replica-database"), &dbinstance.DbInstanceConfig{
-			Identifier:               jsii.String(fmt.Sprintf("migration-read-replica-%s-%s", region, envSuffix)),
-			ReplicateSourceDb:        jsii.String(fmt.Sprintf("migration-primary-db-us-east-1-%s", envSuffix)),
-			InstanceClass:            jsii.String("db.t3.micro"),
-			PubliclyAccessible:       jsii.Bool(false),
-			AutoMinorVersionUpgrade:  jsii.Bool(true),
-			StorageEncrypted:         jsii.Bool(true),
-			KmsKeyId:                 kmsKey.Arn(),
+			Identifier:              jsii.String(fmt.Sprintf("migration-read-replica-%s-%s", region, envSuffix)),
+			ReplicateSourceDb:       jsii.String(fmt.Sprintf("migration-primary-db-us-east-1-%s", envSuffix)),
+			InstanceClass:           jsii.String("db.t3.micro"),
+			PubliclyAccessible:      jsii.Bool(false),
+			AutoMinorVersionUpgrade: jsii.Bool(true),
+			StorageEncrypted:        jsii.Bool(true),
+			KmsKeyId:                kmsKey.Arn(),
 			Tags: mergeTags(tags, &map[string]*string{
 				"Name": jsii.String(fmt.Sprintf("read-replica-database-%s-%s", region, envSuffix)),
 			}),
@@ -858,11 +858,11 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 
 	// Create Route 53 health check for the ALB
 	healthCheck := route53healthcheck.NewRoute53HealthCheck(scope, jsii.String("alb-health-check"), &route53healthcheck.Route53HealthCheckConfig{
-		Fqdn:            alb.DnsName(),
-		Port:            jsii.Number(443),
-		Type:            jsii.String("HTTPS"),
-		ResourcePath:    jsii.String("/"),
-		RequestInterval: jsii.Number(30),
+		Fqdn:             alb.DnsName(),
+		Port:             jsii.Number(443),
+		Type:             jsii.String("HTTPS"),
+		ResourcePath:     jsii.String("/"),
+		RequestInterval:  jsii.Number(30),
 		FailureThreshold: jsii.Number(3),
 		Tags: mergeTags(tags, &map[string]*string{
 			"Name": jsii.String(fmt.Sprintf("alb-health-check-%s-%s", region, envSuffix)),
@@ -959,32 +959,32 @@ echo 'Application Server - $(hostname -f)' > /tmp/app-status.txt`
 	})
 
 	cloudtrail.NewCloudtrail(scope, jsii.String("migration-cloudtrail"), &cloudtrail.CloudtrailConfig{
-		Name:           jsii.String(fmt.Sprintf("migration-cloudtrail-%s-%s", region, envSuffix)),
-		S3BucketName:   cloudTrailBucket.Id(),
+		Name:                       jsii.String(fmt.Sprintf("migration-cloudtrail-%s-%s", region, envSuffix)),
+		S3BucketName:               cloudTrailBucket.Id(),
 		IncludeGlobalServiceEvents: jsii.Bool(true),
 		IsMultiRegionTrail:         jsii.Bool(false), // Per-region trail
 		EnableLogging:              jsii.Bool(true),
 		KmsKeyId:                   kmsKey.Arn(),
 		CloudWatchLogsGroupArn:     jsii.String(fmt.Sprintf("%s:*", fmt.Sprintf("/migration/cloudtrail/%s-%s", region, envSuffix))),
-		Tags: tags,
+		Tags:                       tags,
 	})
 
 	// Target group attachment is handled via TargetGroupArns in the ASG configuration above
 
 	return &CompleteInfrastructure{
-		VPC:                mainVpc,
-		LoadBalancer:       alb,
-		Database:           database,
-		ReadReplica:        readReplica,
-		WebASG:             webASG,
-		AppASG:             appASG,
-		S3Bucket:           s3Bucket,
-		KMSKey:             kmsKey,
-		DatabaseSecret:     dbSecret,
-		HostedZone:           hostedZone,
-		Certificate:          certificate,
+		VPC:                   mainVpc,
+		LoadBalancer:          alb,
+		Database:              database,
+		ReadReplica:           readReplica,
+		WebASG:                webASG,
+		AppASG:                appASG,
+		S3Bucket:              s3Bucket,
+		KMSKey:                kmsKey,
+		DatabaseSecret:        dbSecret,
+		HostedZone:            hostedZone,
+		Certificate:           certificate,
 		CertificateValidation: certificateValidation,
-		HealthCheck:          healthCheck,
+		HealthCheck:           healthCheck,
 	}
 }
 

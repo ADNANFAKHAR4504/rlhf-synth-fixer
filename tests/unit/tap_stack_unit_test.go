@@ -191,7 +191,7 @@ func TestSecurityConfiguration(t *testing.T) {
 	// Test network security layers
 	t.Run("defense_in_depth", func(t *testing.T) {
 		securityLayers := []string{"NetworkACLs", "SecurityGroups", "NACLs"}
-		
+
 		for _, layer := range securityLayers {
 			if len(layer) == 0 {
 				t.Errorf("security layer name cannot be empty")
@@ -203,13 +203,13 @@ func TestSecurityConfiguration(t *testing.T) {
 // TestDatabaseConfiguration tests RDS MySQL requirements
 func TestDatabaseConfiguration(t *testing.T) {
 	dbConfig := map[string]interface{}{
-		"engine":         "mysql",
-		"engine_version": "8.0",
-		"instance_class": "db.t3.micro",
-		"multi_az":       true,
-		"encrypted":      true,
-		"kms_encrypted":  true,
-		"secrets_manager": true,
+		"engine":           "mysql",
+		"engine_version":   "8.0",
+		"instance_class":   "db.t3.micro",
+		"multi_az":         true,
+		"encrypted":        true,
+		"kms_encrypted":    true,
+		"secrets_manager":  true,
 		"backup_retention": 7,
 	}
 
@@ -235,7 +235,7 @@ func TestDatabaseConfiguration(t *testing.T) {
 		if dbConfig["encrypted"] != true {
 			t.Error("database must be encrypted per PROMPT.md")
 		}
-		
+
 		if dbConfig["kms_encrypted"] != true {
 			t.Error("database must use KMS encryption")
 		}
@@ -258,12 +258,12 @@ func TestDatabaseConfiguration(t *testing.T) {
 // TestLoadBalancerConfiguration tests ALB requirements
 func TestLoadBalancerConfiguration(t *testing.T) {
 	albConfig := map[string]interface{}{
-		"type":           "application",
-		"scheme":         "internet-facing",
-		"https_enabled":  true,
-		"http_redirect":  true,
-		"ssl_policy":     "ELBSecurityPolicy-TLS-1-2-2017-01",
-		"certificate":    true,
+		"type":          "application",
+		"scheme":        "internet-facing",
+		"https_enabled": true,
+		"http_redirect": true,
+		"ssl_policy":    "ELBSecurityPolicy-TLS-1-2-2017-01",
+		"certificate":   true,
 	}
 
 	t.Run("load_balancer_type", func(t *testing.T) {
@@ -276,11 +276,11 @@ func TestLoadBalancerConfiguration(t *testing.T) {
 		if albConfig["https_enabled"] != true {
 			t.Error("ALB must have HTTPS enabled per PROMPT.md")
 		}
-		
+
 		if albConfig["http_redirect"] != true {
 			t.Error("ALB must redirect HTTP to HTTPS")
 		}
-		
+
 		if albConfig["ssl_policy"] != "ELBSecurityPolicy-TLS-1-2-2017-01" {
 			t.Error("ALB must use secure TLS policy")
 		}
@@ -296,16 +296,16 @@ func TestLoadBalancerConfiguration(t *testing.T) {
 // TestKMSEncryptionConfiguration tests KMS requirements
 func TestKMSEncryptionConfiguration(t *testing.T) {
 	kmsConfig := map[string]interface{}{
-		"enabled":           true,
-		"s3_encryption":     true,
-		"rds_encryption":    true,
-		"secrets_encryption": true,
+		"enabled":               true,
+		"s3_encryption":         true,
+		"rds_encryption":        true,
+		"secrets_encryption":    true,
 		"cloudtrail_encryption": true,
 	}
 
 	encryptionRequirements := []string{
 		"s3_encryption",
-		"rds_encryption", 
+		"rds_encryption",
 		"secrets_encryption",
 		"cloudtrail_encryption",
 	}
@@ -331,7 +331,7 @@ func TestRoute53Configuration(t *testing.T) {
 	dnsRequirements := []string{
 		"hosted_zone",
 		"health_checks",
-		"failover", 
+		"failover",
 		"dns_validation",
 	}
 
@@ -355,10 +355,10 @@ func TestRoute53Configuration(t *testing.T) {
 // TestNetworkACLConfiguration tests Network ACL requirements
 func TestNetworkACLConfiguration(t *testing.T) {
 	networkConfig := map[string]interface{}{
-		"public_nacl":  true,
-		"private_nacl": true,
-		"http_rule":    80,
-		"https_rule":   443,
+		"public_nacl":     true,
+		"private_nacl":    true,
+		"http_rule":       80,
+		"https_rule":      443,
 		"ephemeral_ports": "1024-65535",
 	}
 
@@ -366,7 +366,7 @@ func TestNetworkACLConfiguration(t *testing.T) {
 		if networkConfig["public_nacl"] != true {
 			t.Error("public Network ACL must be configured")
 		}
-		
+
 		if networkConfig["private_nacl"] != true {
 			t.Error("private Network ACL must be configured")
 		}
@@ -375,11 +375,11 @@ func TestNetworkACLConfiguration(t *testing.T) {
 	t.Run("port_configurations", func(t *testing.T) {
 		httpPort := networkConfig["http_rule"].(int)
 		httpsPort := networkConfig["https_rule"].(int)
-		
+
 		if httpPort != 80 {
 			t.Errorf("HTTP port must be 80, got %d", httpPort)
 		}
-		
+
 		if httpsPort != 443 {
 			t.Errorf("HTTPS port must be 443, got %d", httpsPort)
 		}
@@ -407,11 +407,11 @@ func TestAutoScalingConfiguration(t *testing.T) {
 		t.Run(tier, func(t *testing.T) {
 			minSize := config["min_size"].(int)
 			maxSize := config["max_size"].(int)
-			
+
 			if minSize < 2 {
 				t.Errorf("%s tier minimum size must be >= 2 for HA, got %d", tier, minSize)
 			}
-			
+
 			if maxSize <= minSize {
 				t.Errorf("%s tier max size must be > min size, got max:%d min:%d", tier, maxSize, minSize)
 			}
@@ -462,14 +462,14 @@ func TestComplianceRequirements(t *testing.T) {
 		"encryption_in_transit":      true,
 		"secrets_management":         true,
 		"parameter_store":            true,
-		"dns_failover":              true,
+		"dns_failover":               true,
 		"monitoring_enabled":         true,
 		"backup_configured":          true,
 		"tagging_compliant":          true,
 	}
 
 	failedChecks := []string{}
-	
+
 	for check, passed := range complianceChecklist {
 		if !passed {
 			failedChecks = append(failedChecks, check)
@@ -490,7 +490,7 @@ func TestComplianceRequirements(t *testing.T) {
 	}
 
 	compliancePercentage := (float64(passedChecks) / float64(totalChecks)) * 100
-	
+
 	if compliancePercentage < 95.0 {
 		t.Errorf("compliance percentage %.1f%% is below required 95%%", compliancePercentage)
 	}
