@@ -23,7 +23,7 @@ describe('TapStack', () => {
   test('should create TapStack with correct environmentSuffix', () => {
     expect(stack).toBeInstanceOf(TapStack);
     expect(stack.node.tryGetContext('environmentSuffix')).toBeUndefined(); // context not set by default
-    expect(stack.props.environmentSuffix).toBe(environmentSuffix);
+    expect(stack.environmentSuffix).toBe(environmentSuffix);
   });
 
   test('should include DdbStack as a nested stack', () => {
@@ -44,8 +44,8 @@ describe('TapStack', () => {
   test('should pass environmentSuffix to nested stacks', () => {
     // Assuming TapStack passes environmentSuffix to nested stacks
     // You may need to spy on constructors if you want to verify arguments
-    // For now, just check that the stack prop exists
-    expect(stack.props.environmentSuffix).toBe(environmentSuffix);
+    // For now, just check that the environmentSuffix property exists
+    expect(stack.environmentSuffix).toBe(environmentSuffix);
   });
 
   test('should synthesize without errors', () => {

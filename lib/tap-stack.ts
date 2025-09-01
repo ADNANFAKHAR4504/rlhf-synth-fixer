@@ -4,29 +4,31 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import { Construct } from 'constructs';
 
-export interface TapStackProps extends cdk.StackProps {
-  environmentSuffix: string;
+export interface InfraStackProps extends cdk.StackProps {
   vpcCidr?: string;
   domainName?: string;
   dbInstanceClass?: ec2.InstanceType;
   ecsInstanceType?: ec2.InstanceType;
-  // Add custom properties here if needed
+  environmentSuffix: string;
 }
 
+// TapStack implementation
 export class TapStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly ecsCluster: ecs.Cluster;
   public readonly database: rds.DatabaseInstance;
   public readonly dbSecret: secretsmanager.Secret;
-  public readonly props: TapStackProps;
+  public readonly environmentSuffix: string;
 
-  constructor(scope: cdk.App, id: string, props: TapStackProps) {
+  constructor(scope: Construct, id: string, props: InfraStackProps) {
     super(scope, id, props);
-    this.props = props;
+    this.environmentSuffix = props.environmentSuffix;
 
     // Configuration with defaults
     const vpcCidr = props.vpcCidr || '10.0.0.0/16';
@@ -102,20 +104,25 @@ export class TapStack extends cdk.Stack {
     });
 
     // Database security group - restrictive access
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc: this.vpc,
-      description: 'Security group for RDS database',
-      allowAllOutbound: false, // Explicit outbound rules
-    });
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc: this.vpc,
+        description: 'Security group for RDS database',
+        allowAllOutbound: false, // Explicit outbound rules
+      }
+    );
 
     // RDS PostgreSQL instance with Multi-AZ for automatic failover
     this.database = new rds.DatabaseInstance(this, 'PostgreSQLDatabase', {
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
-      }),
-      instanceType: dbInstanceClass,
       vpc: this.vpc,
-      subnetGroup: dbSubnetGroup,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
+      engine: rds.DatabaseInstanceEngine.postgres({
+        version: rds.PostgresEngineVersion.VER_16_1,
+      }),
       securityGroups: [dbSecurityGroup],
       credentials: rds.Credentials.fromSecret(this.dbSecret),
       multiAz: true, // Enable automatic failover
@@ -144,18 +151,17 @@ export class TapStack extends cdk.Stack {
 
     // 4. COMPUTE - ECS CLUSTER SETUP
     // CloudWatch Log Group for ECS
-    // const ecsLogGroup = new logs.LogGroup(this, 'ECSLogGroup', {
-    //   logGroupName: '/aws/ecs/production-cluster',
-    //   retention: logs.RetentionDays.ONE_WEEK,
-    //   encryptionKey: kmsKey,
-    // });
+    const ecsLogGroup = new logs.LogGroup(this, 'ECSLogGroup', {
+      logGroupName: '/aws/ecs/production-cluster',
+      retention: logs.RetentionDays.ONE_WEEK,
+      encryptionKey: kmsKey,
+    });
 
     // ECS Cluster
     this.ecsCluster = new ecs.Cluster(this, 'ProductionECSCluster', {
       vpc: this.vpc,
       clusterName: 'production-cluster',
-      // containerInsights is deprecated, use containerInsightsV2 or recommended alternative
-      // containerInsightsV2: { enabled: true }, // Uncomment and adjust if using CDK v2.1100.0+
+      containerInsights: true,
     });
 
     // IAM Role for ECS instances
@@ -171,18 +177,13 @@ export class TapStack extends cdk.Stack {
     });
 
     // Add minimal permissions for Secrets Manager access
-    ecsInstanceRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ['secretsmanager:GetSecretValue'],
-      resources: [this.dbSecret.secretArn],
-    }));
-
-    // Instance Profile for ECS instances
-    // Instance Profile for ECS instances
-    // (variable ecsInstanceProfile is not used, so it is commented out to avoid unused variable error)
-    // const ecsInstanceProfile = new iam.InstanceProfile(this, 'ECSInstanceProfile', {
-    //   role: ecsInstanceRole,
-    // });
+    ecsInstanceRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['secretsmanager:GetSecretValue'],
+        resources: [this.dbSecret.secretArn],
+      })
+    );
 
     // Security Group for ECS instances
     const ecsSecurityGroup = new ec2.SecurityGroup(this, 'ECSSecurityGroup', {
@@ -216,53 +217,53 @@ export class TapStack extends cdk.Stack {
       securityGroup: ecsSecurityGroup,
       userData: userData,
       role: ecsInstanceRole,
-      blockDevices: [{
-        deviceName: '/dev/xvda',
-        volume: ec2.BlockDeviceVolume.ebs(30, {
-          encrypted: true,
-          kmsKey: kmsKey,
-          volumeType: ec2.EbsDeviceVolumeType.GP3,
-        }),
-      }],
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(30, {
+            encrypted: true,
+            kmsKey: kmsKey,
+            volumeType: ec2.EbsDeviceVolumeType.GP3,
+          }),
+        },
+      ],
     });
-
     // Auto Scaling Group for ECS instances
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'ECSAutoScalingGroup', {
-      vpc: this.vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      launchTemplate: launchTemplate,
-      minCapacity: 2,
-      maxCapacity: 10,
-      desiredCapacity: 2,
-      healthCheck: autoscaling.HealthCheck.ec2(),
-      updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
-        maxBatchSize: 1,
-        minInstancesInService: 1,
-        pauseTime: cdk.Duration.minutes(5),
-      }),
-    });
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'ECSAutoScalingGroup',
+      {
+        vpc: this.vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        launchTemplate: launchTemplate,
+        minCapacity: 2,
+        maxCapacity: 10,
+        desiredCapacity: 2,
+        healthChecks: autoscaling.HealthChecks.ec2(),
+      }
+    );
 
     // CPU-based scaling policy
     autoScalingGroup.scaleOnCpuUtilization('CPUScaling', {
-      targetUtilizationPercent: 70
+      targetUtilizationPercent: 70,
     });
 
-    // Memory-based scaling policy (requires CloudWatch agent)
-    // const memoryScalingPolicy = new autoscaling.TargetTrackingScalingPolicy(this, 'MemoryScaling', {
-    //   autoScalingGroup: autoScalingGroup,
-    //   targetValue: 70,
-    //   predefinedMetric: autoscaling.PredefinedMetric.ASG_AVERAGE_CPU_UTILIZATION,
-    // });
+    // Memory-based scaling policy is not supported directly by AutoScalingGroup.
+    // To scale based on memory, use custom CloudWatch alarms and scaling policies.
 
     // Capacity Provider for ECS Cluster
-    const capacityProvider = new ecs.AsgCapacityProvider(this, 'ECSCapacityProvider', {
-      autoScalingGroup: autoScalingGroup,
-      enableManagedScaling: true,
-      enableManagedTerminationProtection: false,
-      targetCapacityPercent: 80,
-    });
+    const capacityProvider = new ecs.AsgCapacityProvider(
+      this,
+      'ECSCapacityProvider',
+      {
+        autoScalingGroup: autoScalingGroup,
+        enableManagedScaling: true,
+        enableManagedTerminationProtection: false,
+        targetCapacityPercent: 80,
+      }
+    );
 
     this.ecsCluster.addAsgCapacityProvider(capacityProvider);
 
@@ -310,30 +311,13 @@ export class TapStack extends cdk.Stack {
       exportName: `${this.stackName}-KMSKeyId`,
     });
 
+    // Add the log group as a dependency to ensure proper cleanup order
+    this.ecsCluster.node.addDependency(ecsLogGroup);
+
     // Tags for all resources
     cdk.Tags.of(this).add('Environment', 'Production');
     cdk.Tags.of(this).add('Project', 'Migration');
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
+
   }
 }
-
-// Example usage in app.ts
-/*
-import * as cdk from 'aws-cdk-lib';
-import { InfraStack } from './infra-stack';
-
-const app = new cdk.App();
-
-new InfraStack(app, 'ProductionInfraStack', {
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1',
-  },
-  vpcCidr: '10.0.0.0/16',
-  domainName: 'example.com', // Optional
-  dbInstanceClass: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
-  ecsInstanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
-});
-
-app.synth();
-*/
