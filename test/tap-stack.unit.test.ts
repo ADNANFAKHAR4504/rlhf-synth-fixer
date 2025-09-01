@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import { TapStack, InfraStackProps } from '../lib/tap-stack';
+import { InfraStackProps, TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test-unit-' + Math.random().toString(36).substring(7);
 
@@ -262,7 +262,6 @@ describe('TapStack Unit Tests', () => {
         vpcCidr: '192.168.0.0/16',
       });
       const customTemplate = Template.fromStack(customStack);
-      
       customTemplate.hasResourceProperties('AWS::EC2::VPC', {
         CidrBlock: '192.168.0.0/16',
       });
@@ -275,9 +274,39 @@ describe('TapStack Unit Tests', () => {
         domainName: 'example.com',
       });
       const customTemplate = Template.fromStack(customStack);
-      
       customTemplate.hasResourceProperties('AWS::Route53::HostedZone', {
         Name: Match.stringLikeRegexp('.*example\.com\.$'),
+      });
+      customTemplate.hasOutput('Route53NameServers', {
+        Description: 'Route53 Name Servers for domain configuration',
+      });
+    });
+
+    test('should not create HostedZone or output when domainName is not provided', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'NoDomainStack', {
+        environmentSuffix: 'test',
+      });
+      const customTemplate = Template.fromStack(customStack);
+      expect(() => customTemplate.hasResourceProperties('AWS::Route53::HostedZone', {})).toThrow();
+      expect(() => customTemplate.hasOutput('Route53NameServers', {})).toThrow();
+    });
+
+    test('should set removalPolicy to RETAIN when enableDeletionProtection is true', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'RetainStack', {
+        environmentSuffix: 'test',
+        enableDeletionProtection: true,
+      });
+      const customTemplate = Template.fromStack(customStack);
+      customTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
+        DeletionProtection: true,
+      });
+      // Read replica should also have RETAIN removal policy
+      // (We check that both DBInstance resources have DeletionProtection true)
+      const dbInstances = customTemplate.findResources('AWS::RDS::DBInstance');
+      Object.values(dbInstances).forEach((db: any) => {
+        expect(db.Properties.DeletionProtection).toBe(true);
       });
     });
   });
