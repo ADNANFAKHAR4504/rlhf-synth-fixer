@@ -10,6 +10,24 @@ export class WebAppStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // Environment-specific configurations
+    const environment = this.node.tryGetContext('environment') || 'development';
+    const isProd = environment === 'production';
+    const isStaging = environment === 'staging';
+
+    // Adjust instance sizes based on environment
+    const instanceType = isProd
+      ? ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL)
+      : ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO);
+
+    // Adjust capacity based on environment
+    const minCapacity = isProd ? 3 : 2;
+    const maxCapacity = isProd ? 20 : 10;
+    const desiredCapacity = isProd ? 3 : 2;
+
+    // Adjust log retention based on environment
+    const logRetentionDays = isProd ? 365 : (isStaging ? 180 : 90);
+
     // 1. Create VPC with specified CIDR block
     const vpc = new ec2.Vpc(this, 'WebAppVPC', {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -40,7 +58,7 @@ export class WebAppStack extends cdk.Stack {
         {
           id: 'DeleteOldLogs',
           enabled: true,
-          expiration: cdk.Duration.days(90), // Retain logs for 90 days
+          expiration: cdk.Duration.days(logRetentionDays), // Environment-specific retention
         },
       ],
       removalPolicy: cdk.RemovalPolicy.DESTROY, // For demo purposes
@@ -125,6 +143,15 @@ export class WebAppStack extends cdk.Stack {
       'Allow HTTP traffic'
     );
 
+    // Add HTTPS support for production environments
+    if (isProd) {
+      albSecurityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        ec2.Port.tcp(443),
+        'Allow HTTPS traffic'
+      );
+    }
+
     // Allow outbound to EC2 instances
     albSecurityGroup.addEgressRule(
       ec2.Peer.anyIpv4(),
@@ -176,10 +203,7 @@ export class WebAppStack extends cdk.Stack {
       this,
       'WebAppLaunchTemplate',
       {
-        instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.MICRO
-        ),
+        instanceType: instanceType,
         machineImage: ec2.MachineImage.latestAmazonLinux2(),
         securityGroup: ec2SecurityGroup,
         role: ec2Role,
@@ -275,9 +299,9 @@ EOF
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, // Deploy in private subnets only
         },
-        minCapacity: 2, // Minimum instances for high availability
-        maxCapacity: 10, // Maximum instances for scalability
-        desiredCapacity: 2, // Initial desired capacity
+        minCapacity: minCapacity, // Minimum instances for high availability
+        maxCapacity: maxCapacity, // Maximum instances for scalability
+        desiredCapacity: desiredCapacity, // Initial desired capacity
         healthCheck: autoscaling.HealthCheck.elb({
           grace: cdk.Duration.minutes(5),
         }),
@@ -358,7 +382,12 @@ EOF
 
     // Add tags to all resources
     cdk.Tags.of(this).add('Project', 'ScalableWebApp');
-    cdk.Tags.of(this).add('Environment', 'Production');
+    cdk.Tags.of(this).add('Environment', environment);
     cdk.Tags.of(this).add('ManagedBy', 'CDK');
+
+    // Add cost center tag for production
+    if (isProd) {
+      cdk.Tags.of(this).add('CostCenter', 'Production');
+    }
   }
 }

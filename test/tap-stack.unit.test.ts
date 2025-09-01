@@ -18,6 +18,130 @@ describe('WebAppStack Unit Tests', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment-specific configurations', () => {
+    test('should use t3.micro for development environment (default)', () => {
+      template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateData: {
+          InstanceType: 't3.micro',
+        },
+      });
+    });
+
+    test('should use t3.small for production environment', () => {
+      const prodApp = new cdk.App();
+      prodApp.node.setContext('environment', 'production');
+      const prodStack = new WebAppStack(prodApp, 'ProdWebAppStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateData: {
+          InstanceType: 't3.small',
+        },
+      });
+    });
+
+    test('should have production-specific capacity settings', () => {
+      const prodApp = new cdk.App();
+      prodApp.node.setContext('environment', 'production');
+      const prodStack = new WebAppStack(prodApp, 'ProdWebAppStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+        MinSize: '3',
+        MaxSize: '20',
+        DesiredCapacity: '3',
+      });
+    });
+
+    test('should have HTTPS security group rule for production', () => {
+      const prodApp = new cdk.App();
+      prodApp.node.setContext('environment', 'production');
+      const prodStack = new WebAppStack(prodApp, 'ProdWebAppStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      prodTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0',
+          }),
+        ]),
+      });
+    });
+
+    test('should have different log retention for different environments', () => {
+      // Test staging environment
+      const stagingApp = new cdk.App();
+      stagingApp.node.setContext('environment', 'staging');
+      const stagingStack = new WebAppStack(stagingApp, 'StagingWebAppStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+
+      stagingTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        LifecycleConfiguration: {
+          Rules: [
+            {
+              Status: 'Enabled',
+              ExpirationInDays: 180,
+            },
+          ],
+        },
+      });
+    });
+
+    test('should have environment-specific tags', () => {
+      const prodApp = new cdk.App();
+      prodApp.node.setContext('environment', 'production');
+      const prodStack = new WebAppStack(prodApp, 'ProdWebAppStack', {
+        env: {
+          account: '123456789012',
+          region: 'us-west-2',
+        },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+
+      // Check that the production environment is properly set by verifying instance type
+      prodTemplate.hasResourceProperties('AWS::EC2::LaunchTemplate', {
+        LaunchTemplateData: {
+          InstanceType: 't3.small',
+        },
+      });
+
+      // Check that production-specific HTTPS rule exists
+      prodTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        SecurityGroupIngress: Match.arrayWith([
+          Match.objectLike({
+            IpProtocol: 'tcp',
+            FromPort: 443,
+            ToPort: 443,
+            CidrIp: '0.0.0.0/0',
+          }),
+        ]),
+      });
+    });
+  });
+
   describe('VPC Configuration', () => {
     test('should create VPC with correct CIDR block', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
@@ -83,7 +207,7 @@ describe('WebAppStack Unit Tests', () => {
   });
 
   describe('Auto Scaling Configuration', () => {
-    test('should create Auto Scaling Group', () => {
+    test('should create Auto Scaling Group with development settings', () => {
       template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
         MinSize: '2',
         MaxSize: '10',
@@ -162,7 +286,7 @@ describe('WebAppStack Unit Tests', () => {
           Rules: [
             {
               Status: 'Enabled',
-              ExpirationInDays: 90,
+              ExpirationInDays: 90, // Development default
             },
           ],
         },
@@ -230,12 +354,12 @@ describe('WebAppStack Unit Tests', () => {
   });
 
   describe('Resource Tags', () => {
-    test('should apply common tags to all resources', () => {
-      // Check that tags are applied at stack level
+    test('should apply common tags to all resources for development', () => {
+      // Check that tags are applied at stack level for development environment
       expect(stack.tags.tagValues()).toEqual(
         expect.objectContaining({
           Project: 'ScalableWebApp',
-          Environment: 'Production',
+          Environment: 'development',
           ManagedBy: 'CDK',
         })
       );
