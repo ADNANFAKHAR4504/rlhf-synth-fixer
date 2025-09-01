@@ -53,7 +53,7 @@ output "key_pair_name" {
 
 output "ec2_private_key" {
   description = "Private key for EC2 instances (if created by Terraform)"
-  value       = var.create_key_pair ? tls_private_key.ec2[0].private_key_pem : ""
+  value       = var.create_key_pair ? tls_private_key.ec2.private_key_pem : ""
   sensitive   = true
 }
 
@@ -70,4 +70,4 @@ output "vpc2_nat_gateway_id" {
 output "key_pair_guidance" {
   description = "Guidance if EC2 key pair was not created by Terraform"
   value       = var.create_key_pair ? "Key pair created by Terraform." : "Ensure the key pair '${var.key_pair_name}' exists in AWS before deploying EC2 instances."
-} 
+}

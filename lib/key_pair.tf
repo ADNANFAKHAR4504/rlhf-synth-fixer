@@ -6,13 +6,8 @@ resource "tls_private_key" "ec2" {
 
 # Create key pair
 resource "aws_key_pair" "ec2_key_pair" {
-  count      = var.create_key_pair ? 1 : 0
-  key_name   = var.key_pair_name != "" ? var.key_pair_name : "terraform-generated-key"
-  public_key = var.public_key != "" ? var.public_key : tls_private_key.ec2[0].public_key_openssh
-
-  tags = merge(var.common_tags, {
-    Name = "EC2 Key Pair"
-  })
+  key_name   = "${var.environment}-key-pair"
+  public_key = var.public_key != "" ? var.public_key : tls_private_key.ec2.public_key_openssh
 }
 
 # Local value for key pair name
