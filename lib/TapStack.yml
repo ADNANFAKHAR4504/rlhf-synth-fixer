@@ -1,199 +1,66 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Production-grade, SOC2-compliant AWS infrastructure with VPC, ECS, RDS, and comprehensive security"
+Description: "SOC2-Compliant Production Environment with VPC, RDS, ECS, and Monitoring"
 
 Parameters:
   Environment:
     Type: String
-    Default: prod
-    AllowedValues: [dev, staging, prod]
-    Description: Environment name for resource tagging
-
+    Default: production
+    AllowedValues: [production, staging, development]
+    Description: Deployment environment
   CompanyName:
     Type: String
-    Default: company
-    Description: Company name for resource naming conventions
-
-  ProjectName:
+    Default: mycompany
+    Description: Company name for resource naming
+  DatabaseUsername:
     Type: String
-    Default: webapp
-    Description: Project name for resource identification
-
-  # DBUsername:
-  #   Type: String
-  #   Default: dbadmin
-  #   NoEcho: true
-  #   Description: Database administrator username
-
-  # DBPassword:
-  #   Type: String
-  #   NoEcho: true
-  #   MinLength: 12
-  #   Description: Database administrator password (min 12 characters)
-  #   ConstraintDescription: Must be at least 12 characters long
-
-Conditions:
-  IsProd: !Equals [!Ref Environment, prod]
+    Description: Master username for RDS database
+    NoEcho: true
+  DatabasePassword:
+    Type: String
+    Description: Master password for RDS database
+    NoEcho: true
+  DatabaseName:
+    Type: String
+    Default: appdb
+    Description: Name of the application database
 
 Mappings:
-  EnvironmentConfig:
-    dev:
-      VpcCidr: "10.0.0.0/16"
-      PublicSubnet1Cidr: "10.0.1.0/24"
-      PublicSubnet2Cidr: "10.0.2.0/24"
-      PrivateSubnet1Cidr: "10.0.11.0/24"
-      PrivateSubnet2Cidr: "10.0.12.0/24"
-      DBInstanceClass: "db.t3.micro"
-      ECSInstanceType: "t3.small"
+  EnvironmentMap:
+    production:
+      InstanceType: "m5.large"
+      DesiredCapacity: "2"
+      MaxCapacity: "4"
+      MinCapacity: "1"
+      DBInstanceClass: "db.t3.medium"
     staging:
-      VpcCidr: "10.1.0.0/16"
-      PublicSubnet1Cidr: "10.1.1.0/24"
-      PublicSubnet2Cidr: "10.1.2.0/24"
-      PrivateSubnet1Cidr: "10.1.11.0/24"
-      PrivateSubnet2Cidr: "10.1.12.0/24"
+      InstanceType: "m5.large"
+      DesiredCapacity: "1"
+      MaxCapacity: "2"
+      MinCapacity: "1"
       DBInstanceClass: "db.t3.small"
-      ECSInstanceType: "t3.medium"
-    prod:
-      VpcCidr: "10.2.0.0/16"
-      PublicSubnet1Cidr: "10.2.1.0/24"
-      PublicSubnet2Cidr: "10.2.2.0/24"
-      PrivateSubnet1Cidr: "10.2.11.0/24"
-      PrivateSubnet2Cidr: "10.2.12.0/24"
-      DBInstanceClass: "db.r5.large"
-      ECSInstanceType: "m5.large"
+    development:
+      InstanceType: "t3.medium"
+      DesiredCapacity: "1"
+      MaxCapacity: "1"
+      MinCapacity: "1"
+      DBInstanceClass: "db.t3.micro"
+
+Conditions:
+  IsProduction: !Equals [!Ref Environment, production]
 
 Resources:
-  # ============================================================================
-  # KMS Keys for Encryption
-  # ============================================================================
-  RDSKMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: !Sub "${CompanyName}-${ProjectName}-${Environment}-rds-encryption-key"
-      KeyPolicy:
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
-            Action: "kms:*"
-            Resource: "*"
-          - Sid: Allow RDS Service
-            Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: "*"
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-rds-kms-key"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  RDSKMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub "alias/${CompanyName}-${ProjectName}-${Environment}-rds"
-      TargetKeyId: !Ref RDSKMSKey
-
-  S3KMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: !Sub "${CompanyName}-${ProjectName}-${Environment}-s3-encryption-key"
-      KeyPolicy:
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
-            Action: "kms:*"
-            Resource: "*"
-          - Sid: Allow S3 Service
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: "*"
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-s3-kms-key"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  S3KMSKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub "alias/${CompanyName}-${ProjectName}-${Environment}-s3"
-      TargetKeyId: !Ref S3KMSKey
-
-  # ============================================================================
-  # S3 Bucket for Logging
-  # ============================================================================
-  LoggingBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "${CompanyName}-${ProjectName}-${Environment}-logs-${AWS::AccountId}"
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref S3KMSKey
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldVersions
-            Status: Enabled
-            NoncurrentVersionExpirationInDays: 30
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-logs"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  # ============================================================================
   # VPC and Networking
-  # ============================================================================
   VPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, VpcCidr]
-      EnableDnsHostnames: true
+      CidrBlock: 10.0.0.0/16
       EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-vpc"
+          Value: !Sub ${CompanyName}-${Environment}-vpc
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
         - Key: Company
           Value: !Ref CompanyName
         - Key: Compliance
@@ -204,15 +71,11 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-igw"
+          Value: !Sub ${CompanyName}-${Environment}-igw
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
 
-  AttachGateway:
+  VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
@@ -223,96 +86,63 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock:
-        !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet1Cidr]
+      CidrBlock: 10.0.1.0/24
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-public-subnet-1"
+          Value: !Sub ${CompanyName}-${Environment}-public-subnet-1
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Type
-          Value: Public
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock:
-        !FindInMap [EnvironmentConfig, !Ref Environment, PublicSubnet2Cidr]
+      CidrBlock: 10.0.2.0/24
       AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-public-subnet-2"
+          Value: !Sub ${CompanyName}-${Environment}-public-subnet-2
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Type
-          Value: Public
 
   # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock:
-        !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet1Cidr]
+      CidrBlock: 10.0.3.0/24
       AvailabilityZone: !Select [0, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-private-subnet-1"
+          Value: !Sub ${CompanyName}-${Environment}-private-subnet-1
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Type
-          Value: Private
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock:
-        !FindInMap [EnvironmentConfig, !Ref Environment, PrivateSubnet2Cidr]
+      CidrBlock: 10.0.4.0/24
       AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-private-subnet-2"
+          Value: !Sub ${CompanyName}-${Environment}-private-subnet-2
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Type
-          Value: Private
 
-  # NAT Gateway
+  # NAT Gateway and EIP
   NATGatewayEIP:
     Type: AWS::EC2::EIP
-    DependsOn: AttachGateway
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-nat-eip"
+          Value: !Sub ${CompanyName}-${Environment}-nat-eip
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
 
   NATGateway:
     Type: AWS::EC2::NatGateway
@@ -321,13 +151,9 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-nat-gateway"
+          Value: !Sub ${CompanyName}-${Environment}-nat-gw
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
 
   # Route Tables
   PublicRouteTable:
@@ -336,17 +162,12 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-public-rt"
+          Value: !Sub ${CompanyName}-${Environment}-public-rt
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
 
-  DefaultPublicRoute:
+  PublicRoute:
     Type: AWS::EC2::Route
-    DependsOn: AttachGateway
     Properties:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -355,14 +176,14 @@ Resources:
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PublicRouteTable
       SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -370,15 +191,11 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-private-rt"
+          Value: !Sub ${CompanyName}-${Environment}-private-rt
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
 
-  DefaultPrivateRoute:
+  PrivateRoute:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref PrivateRouteTable
@@ -388,232 +205,136 @@ Resources:
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
 
-  # ============================================================================
   # Security Groups
-  # ============================================================================
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub "${CompanyName}-${ProjectName}-${Environment}-bastion-sg"
-      GroupDescription: Security group for bastion host
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-          Description: SSH access (restrict to company IP ranges in production)
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-bastion-sg"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${CompanyName}-${ProjectName}-${Environment}-alb-sg"
-      GroupDescription: Security group for Application Load Balancer
+      GroupName: !Sub ${CompanyName}-${Environment}-alb-sg
+      GroupDescription: Security group for ALB
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-          Description: HTTP traffic from internet
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: HTTPS traffic from internet
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-alb-sg"
+          Value: !Sub ${CompanyName}-${Environment}-alb-sg
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
 
   ECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-sg"
-      GroupDescription: Security group for ECS containers
+      GroupName: !Sub ${CompanyName}-${Environment}-ecs-sg
+      GroupDescription: Security group for ECS tasks
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: HTTP from ALB
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: Application port from ALB
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-          Description: SSH from bastion host
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-          Description: HTTPS to internet for updates
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-sg"
+          Value: !Sub ${CompanyName}-${Environment}-ecs-sg
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub "${CompanyName}-${ProjectName}-${Environment}-rds-sg"
-      GroupDescription: Security group for RDS database
+      GroupName: !Sub ${CompanyName}-${Environment}-rds-sg
+      GroupDescription: Security group for RDS
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
           SourceSecurityGroupId: !Ref ECSSecurityGroup
-          Description: MySQL from ECS containers
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-rds-sg"
+          Value: !Sub ${CompanyName}-${Environment}-rds-sg
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
+
+  # RDS Database
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub ${CompanyName}-${Environment}-db-subnet-group
+        - Key: Environment
+          Value: !Ref Environment
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub ${CompanyName}-${Environment}-rds
+      DBName: !Ref DatabaseName
+      Engine: mysql
+      EngineVersion: "8.0.43"
+      DBInstanceClass:
+        !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]
+      MasterUsername: !Ref DatabaseUsername
+      MasterUserPassword: !Ref DatabasePassword
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageEncrypted: true
+      StorageType: gp2
+      MultiAZ: !If [IsProduction, true, false]
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
+      BackupRetentionPeriod: 7
+      DeletionProtection: !If [IsProduction, true, false]
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - slowquery
+      Tags:
+        - Key: Name
+          Value: !Sub ${CompanyName}-${Environment}-rds
+        - Key: Environment
+          Value: !Ref Environment
         - Key: Compliance
           Value: SOC2
 
-  # Security Group Rules to avoid circular dependencies
-  ALBToECSRule1:
-    Type: AWS::EC2::SecurityGroupEgress
+  # ECS Cluster and Services
+  ECSCluster:
+    Type: AWS::ECS::Cluster
     Properties:
-      GroupId: !Ref ALBSecurityGroup
-      IpProtocol: tcp
-      FromPort: 80
-      ToPort: 80
-      DestinationSecurityGroupId: !Ref ECSSecurityGroup
-      Description: HTTP to ECS containers
-
-  ALBToECSRule2:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref ALBSecurityGroup
-      IpProtocol: tcp
-      FromPort: 8080
-      ToPort: 8080
-      DestinationSecurityGroupId: !Ref ECSSecurityGroup
-      Description: Application port to ECS containers
-
-  ECSToRDSRule:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref ECSSecurityGroup
-      IpProtocol: tcp
-      FromPort: 3306
-      ToPort: 3306
-      DestinationSecurityGroupId: !Ref RDSSecurityGroup
-      Description: MySQL to RDS
-
-  BastionToECSRule:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref BastionSecurityGroup
-      IpProtocol: tcp
-      FromPort: 22
-      ToPort: 22
-      DestinationSecurityGroupId: !Ref ECSSecurityGroup
-      Description: SSH to ECS instances
-
-  # ============================================================================
-  # Network ACLs
-  # ============================================================================
-  PrivateNetworkAcl:
-    Type: AWS::EC2::NetworkAcl
-    Properties:
-      VpcId: !Ref VPC
+      ClusterName: !Sub ${CompanyName}-${Environment}-ecs-cluster
+      CapacityProviders:
+        - FARGATE
       Tags:
         - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-private-nacl"
+          Value: !Sub ${CompanyName}-${Environment}-ecs-cluster
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
 
-  PrivateInboundRule:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
-      Protocol: -1
-      RuleAction: allow
-      CidrBlock: !FindInMap [EnvironmentConfig, !Ref Environment, VpcCidr]
-
-  PrivateOutboundRule:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      NetworkAclId: !Ref PrivateNetworkAcl
-      RuleNumber: 100
-      Protocol: -1
-      Egress: true
-      RuleAction: allow
-      CidrBlock: 0.0.0.0/0
-
-  PrivateSubnet1NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      NetworkAclId: !Ref PrivateNetworkAcl
-
-  PrivateSubnet2NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      NetworkAclId: !Ref PrivateNetworkAcl
-
-  # ============================================================================
-  # IAM Roles and Policies
-  # ============================================================================
-  ECSTaskExecutionRole:
+  ECSExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-task-execution-role"
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -621,76 +342,265 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-      Policies:
-        - PolicyName: CloudWatchLogsPolicy
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
       Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-task-execution-role"
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
 
   ECSTaskRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-task-role"
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ecs-tasks.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: S3AccessPolicy
+        - PolicyName: !Sub ${CompanyName}-${Environment}-ecs-task-policy
           PolicyDocument:
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource:
-                  - !Sub "${LoggingBucket}/*"
+                Resource: !Sub ${ApplicationLogsBucket.Arn}/*
               - Effect: Allow
                 Action:
-                  - s3:ListBucket
-                Resource: !GetAtt LoggingBucket.Arn
-        - PolicyName: CloudWatchMetricsPolicy
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
                 Resource: "*"
       Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-task-role"
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
+
+  # Application Load Balancer
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${CompanyName}-${Environment}-alb
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Type: application
+      Tags:
+        - Key: Name
+          Value: !Sub ${CompanyName}-${Environment}-alb
+        - Key: Environment
+          Value: !Ref Environment
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ECSTargetGroup
+
+  ECSTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${CompanyName}-${Environment}-tg
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: !Sub ${CompanyName}-${Environment}-tg
+        - Key: Environment
+          Value: !Ref Environment
+
+  # CloudWatch Logs
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/ecs/${CompanyName}-${Environment}
+      RetentionInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # S3 Buckets for Logs
+  ApplicationLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${CompanyName}-${Environment}-app-logs-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: MoveToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 60
+                StorageClass: GLACIER
+            ExpirationInDays: 365
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${CompanyName}-${Environment}-app-logs
+        - Key: Environment
+          Value: !Ref Environment
         - Key: Compliance
           Value: SOC2
+
+  ApplicationLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ApplicationLogsBucket
+      PolicyDocument:
+        Statement:
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt ApplicationLogsBucket.Arn
+              - !Sub "${ApplicationLogsBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+  # CloudTrail
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${CompanyName}-${Environment}-cloudtrail-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${CompanyName}-${Environment}-cloudtrail
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Compliance
+          Value: SOC2
+
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt CloudTrailBucket.Arn
+            Condition:
+              StringEquals:
+                "AWS:SourceArn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${CompanyName}-${Environment}-trail"
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${CloudTrailBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": bucket-owner-full-control
+                "AWS:SourceArn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${CompanyName}-${Environment}-trail"
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt CloudTrailBucket.Arn
+              - !Sub "${CloudTrailBucket.Arn}/*"
+            Condition:
+              Bool:
+                "aws:SecureTransport": "false"
+
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub ${CompanyName}-${Environment}-trail
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      IsLogging: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Auto Scaling Group for ECS instances (using the mapping)
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub ${CompanyName}-${Environment}-ecs-asg
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref ECSLaunchTemplate
+        Version: !GetAtt ECSLaunchTemplate.LatestVersionNumber
+      MinSize: !FindInMap [EnvironmentMap, !Ref Environment, MinCapacity]
+      MaxSize: !FindInMap [EnvironmentMap, !Ref Environment, MaxCapacity]
+      DesiredCapacity:
+        !FindInMap [EnvironmentMap, !Ref Environment, DesiredCapacity]
+      TargetGroupARNs:
+        - !Ref ECSTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub ${CompanyName}-${Environment}-ecs-instance
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref Environment
+          PropagateAtLaunch: true
+
+  ECSLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${CompanyName}-${Environment}-ecs-lt
+      LaunchTemplateData:
+        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 ECS-optimized
+        InstanceType:
+          !FindInMap [EnvironmentMap, !Ref Environment, InstanceType]
+        SecurityGroupIds:
+          - !Ref ECSSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt ECSInstanceProfile.Arn
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+            yum update -y
 
   ECSInstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-instance-role"
       AssumeRolePolicyDocument:
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -698,18 +608,9 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-instance-role"
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
 
   ECSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -717,404 +618,43 @@ Resources:
       Roles:
         - !Ref ECSInstanceRole
 
-  # ============================================================================
-  # RDS Database
-  # ============================================================================
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
+  # RAM Resource Share (example)
+  RAMShare:
+    Type: AWS::RAM::ResourceShare
     Properties:
-      DBSubnetGroupName: !Sub "${CompanyName}-${ProjectName}-${Environment}-db-subnet-group"
-      DBSubnetGroupDescription: Subnet group for RDS database
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-db-subnet-group"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      DBInstanceIdentifier: !Sub "${CompanyName}-${ProjectName}-${Environment}-db"
-      DBInstanceClass:
-        !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
-      Engine: mysql
-      EngineVersion: "8.0.43"
-      AllocatedStorage: 100
-      StorageType: gp3
-      StorageEncrypted: true
-      KmsKeyId: !Ref RDSKMSKey
-      MasterUsername: "{{resolve:secretsmanager:/prod/rds/credentials:SecretString:username}}"
-      MasterUserPassword: "{{resolve:secretsmanager:/prod/rds/masterpassword:SecretString:password}}"
-      VPCSecurityGroups:
-        - !Ref RDSSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      BackupRetentionPeriod: 30
-      PreferredBackupWindow: "03:00-04:00"
-      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
-      MultiAZ: !If [IsProd, true, false]
-      DeletionProtection: !If [IsProd, true, false]
-      EnablePerformanceInsights: true
-      MonitoringInterval: 60
-      MonitoringRoleArn: !GetAtt RDSEnhancedMonitoringRole.Arn
-      EnableCloudwatchLogsExports:
-        - error
-        - general
-        - slow-query
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-db"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  RDSEnhancedMonitoringRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: monitoring.rds.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Name: !Sub ${CompanyName}-${Environment}-share
+      AllowExternalPrincipals: false
       Tags:
         - Key: Environment
           Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-
-  # ============================================================================
-  # Application Load Balancer
-  # ============================================================================
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-alb"
-      Scheme: internet-facing
-      Type: application
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-alb"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-tg"
-      Port: 8080
-      Protocol: HTTP
-      VpcId: !Ref VPC
-      TargetType: instance
-      HealthCheckPath: /health
-      HealthCheckProtocol: HTTP
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-tg"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  # ============================================================================
-  # ECS Cluster and Services
-  # ============================================================================
-  ECSCluster:
-    Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: !Sub "${CompanyName}-${ProjectName}-${Environment}-cluster"
-      CapacityProviders:
-        - EC2
-      DefaultCapacityProviderStrategy:
-        - CapacityProvider: EC2
-          Weight: 1
-      ClusterSettings:
-        - Name: containerInsights
-          Value: enabled
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-cluster"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  ECSLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-lt"
-      LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 ECS-optimized AMI
-        InstanceType:
-          !FindInMap [EnvironmentConfig, !Ref Environment, ECSInstanceType]
-        IamInstanceProfile:
-          Arn: !GetAtt ECSInstanceProfile.Arn
-        SecurityGroupIds:
-          - !Ref ECSSecurityGroup
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
-            echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config
-            yum update -y
-            yum install -y awslogs
-            # Configure CloudWatch agent
-            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-                -a fetch-config -m ec2 -c ssm:${CloudWatchAgentConfig} -s
-
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: !Sub "${CompanyName}-${ProjectName}-${Environment}-asg"
-      LaunchTemplate:
-        LaunchTemplateId: !Ref ECSLaunchTemplate
-        Version: !GetAtt ECSLaunchTemplate.LatestVersionNumber
-      MinSize: !If [IsProd, 2, 1]
-      MaxSize: !If [IsProd, 10, 3]
-      DesiredCapacity: !If [IsProd, 2, 1]
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-instance"
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref Environment
-          PropagateAtLaunch: true
-        - Key: Project
-          Value: !Ref ProjectName
-          PropagateAtLaunch: true
-        - Key: Company
-          Value: !Ref CompanyName
-          PropagateAtLaunch: true
-        - Key: Compliance
-          Value: SOC2
-          PropagateAtLaunch: true
-
-  # ============================================================================
-  # CloudWatch Log Groups
-  # ============================================================================
-  ApplicationLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/ecs/${CompanyName}-${ProjectName}-${Environment}"
-      RetentionInDays: !If [IsProd, 365, 30]
-      KmsKeyId: !GetAtt CloudWatchKMSKey.Arn
-      Tags:
-        - Key: Name
-          Value: !Sub "${CompanyName}-${ProjectName}-${Environment}-app-logs"
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Company
-          Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
-
-  CloudWatchKMSKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: !Sub "${CompanyName}-${ProjectName}-${Environment}-cloudwatch-encryption-key"
-      KeyPolicy:
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
-            Action: "kms:*"
-            Resource: "*"
-          - Sid: Allow CloudWatch Logs
-            Effect: Allow
-            Principal:
-              Service: !Sub "logs.${AWS::Region}.amazonaws.com"
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-            Resource: "*"
-            Condition:
-              ArnEquals:
-                "kms:EncryptionContext:aws:logs:arn": !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
-
-  CloudWatchAgentConfig:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub "/${CompanyName}/${ProjectName}/${Environment}/cloudwatch-config"
-      Type: String
-      Value: !Sub |
-        {
-          "metrics": {
-            "namespace": "${CompanyName}/${ProjectName}/${Environment}",
-            "metrics_collected": {
-              "cpu": {
-                "measurement": ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
-                "metrics_collection_interval": 60
-              },
-              "disk": {
-                "measurement": ["used_percent"],
-                "metrics_collection_interval": 60,
-                "resources": ["*"]
-              },
-              "mem": {
-                "measurement": ["mem_used_percent"],
-                "metrics_collection_interval": 60
-              }
-            }
-          },
-          "logs": {
-            "logs_collected": {
-              "files": {
-                "collect_list": [
-                  {
-                    "file_path": "/var/log/ecs/ecs-agent.log",
-                    "log_group_name": "${ApplicationLogGroup}",
-                    "log_stream_name": "{instance_id}/ecs-agent"
-                  }
-                ]
-              }
-            }
-          }
-        }
 
 Outputs:
   VPCId:
     Description: VPC ID
     Value: !Ref VPC
     Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-vpc-id"
+      Name: !Sub ${CompanyName}-${Environment}-VPCId
 
-  PrivateSubnet1Id:
-    Description: Private Subnet 1 ID
-    Value: !Ref PrivateSubnet1
+  ALBDNSName:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ALB.DNSName
     Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-private-subnet-1-id"
+      Name: !Sub ${CompanyName}-${Environment}-ALBDNSName
 
-  PrivateSubnet2Id:
-    Description: Private Subnet 2 ID
-    Value: !Ref PrivateSubnet2
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-private-subnet-2-id"
-
-  PublicSubnet1Id:
-    Description: Public Subnet 1 ID
-    Value: !Ref PublicSubnet1
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-public-subnet-1-id"
-
-  PublicSubnet2Id:
-    Description: Public Subnet 2 ID
-    Value: !Ref PublicSubnet2
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-public-subnet-2-id"
-
-  ALBSecurityGroupId:
-    Description: ALB Security Group ID
-    Value: !Ref ALBSecurityGroup
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-alb-sg-id"
-
-  ECSSecurityGroupId:
-    Description: ECS Security Group ID
-    Value: !Ref ECSSecurityGroup
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-sg-id"
-
-  RDSSecurityGroupId:
-    Description: RDS Security Group ID
-    Value: !Ref RDSSecurityGroup
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-rds-sg-id"
-
-  DatabaseEndpoint:
-    Description: RDS Database Endpoint
+  RDSEndpoint:
+    Description: RDS Endpoint
     Value: !GetAtt RDSInstance.Endpoint.Address
     Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-db-endpoint"
+      Name: !Sub ${CompanyName}-${Environment}-RDSEndpoint
 
-  DatabasePort:
-    Description: RDS Database Port
-    Value: !GetAtt RDSInstance.Endpoint.Port
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
     Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-db-port"
+      Name: !Sub ${CompanyName}-${Environment}-ECSClusterName
 
-  LoadBalancerDNS:
-    Description: Application Load Balancer DNS Name
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
+  ApplicationLogsBucketName:
+    Description: Application Logs S3 Bucket
+    Value: !Ref ApplicationLogsBucket
     Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-alb-dns"
-
-  LoadBalancerZone:
-    Description: Application Load Balancer Hosted Zone
-    Value: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-alb-zone"
-
-  ECSClusterArn:
-    Description: ECS Cluster ARN
-    Value: !GetAtt ECSCluster.Arn
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-ecs-cluster-arn"
-
-  LoggingBucketName:
-    Description: S3 Logging Bucket Name
-    Value: !Ref LoggingBucket
-    Export:
-      Name: !Sub "${CompanyName}-${ProjectName}-${Environment}-logging-bucket"
+      Name: !Sub ${CompanyName}-${Environment}-AppLogsBucket
