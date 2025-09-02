@@ -14,6 +14,7 @@ export interface SecureVpcStackProps extends cdk.StackProps {
   allowedSshCidr?: string;
   existingVpcId?: string;
   companyTags?: { [key: string]: string };
+  createNatGateway?: boolean;
 }
 
 export class SecureVpcStack extends cdk.Stack {
@@ -32,8 +33,10 @@ export class SecureVpcStack extends cdk.Stack {
       'dev';
 
     // Default values
+    const createNatGateway = props?.createNatGateway ?? true;
     const vpcCidr = props?.vpcCidr || '10.0.0.0/16';
     const allowedSshCidr = props?.allowedSshCidr || '0.0.0.0/0';
+    const existingVpcId = props?.existingVpcId;
     const companyTags = props?.companyTags || {
       Environment: 'Production',
       Project: 'SecureVPC',
@@ -47,24 +50,30 @@ export class SecureVpcStack extends cdk.Stack {
     });
 
     // Create VPC with DNS support
+    const subnetConfiguration = [
+      {
+        cidrMask: 24,
+        name: 'PublicSubnet',
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+    ];
+
+    // Only add private subnets if NAT Gateway is enabled
+    if (createNatGateway) {
+      subnetConfiguration.push({
+        cidrMask: 24,
+        name: 'PrivateSubnet',
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      });
+    }
+
     this.vpc = new ec2.Vpc(this, `SecureVPC${environmentSuffix}`, {
       ipAddresses: ec2.IpAddresses.cidr(vpcCidr),
       enableDnsHostnames: true,
       enableDnsSupport: true,
       maxAzs: 2,
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'PublicSubnet',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'PrivateSubnet',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      ],
-      natGateways: 1,
+      subnetConfiguration,
+      natGateways: createNatGateway ? 1 : 0,
     });
 
     // Get subnet references
