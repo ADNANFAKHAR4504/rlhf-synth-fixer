@@ -30,7 +30,8 @@ export class TapStack extends TerraformStack {
       ? AWS_REGION_OVERRIDE
       : props?.awsRegion || 'us-west-2';
     const stateBucketRegion = props?.stateBucketRegion || 'us-west-2';
-    const stateBucket = props?.stateBucket || 'prod-config-logs-us-west-2-a8e48bba';
+    const stateBucket =
+      props?.stateBucket || 'prod-config-logs-us-west-2-a8e48bba';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
     // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
