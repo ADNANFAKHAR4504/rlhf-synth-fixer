@@ -629,7 +629,7 @@ export class RdsModule extends Construct {
     });
 
     this.dbInstance = new DbInstance(this, 'db-instance', {
-      identifier: `${props.project}-${props.environment}-db`,
+      identifier: `${props.project}-${props.environment}-db-ts`,
       engine: props.engine,
       engineVersion: props.engineVersion,
       instanceClass: props.instanceClass,
