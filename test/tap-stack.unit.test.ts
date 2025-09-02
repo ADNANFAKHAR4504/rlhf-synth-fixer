@@ -120,6 +120,22 @@ describe("TapStack Unit Tests", () => {
       );
     });
 
+    test("should create AWS Provider with custom region", () => {
+      const app = new App();
+      new TapStack(app, "TestStackCustomRegion", {
+        awsRegion: 'eu-west-1',
+      });
+
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-east-1', // AWS_REGION_OVERRIDE takes precedence
+          defaultTags: [],
+        })
+      );
+    });
+
     test("should create AWS Provider with custom default tags", () => {
       const app = new App();
       const customTags = {
@@ -158,6 +174,26 @@ describe("TapStack Unit Tests", () => {
         'aws',
         expect.objectContaining({
           region: 'us-east-1',
+        })
+      );
+    });
+  });
+
+  describe("Random Suffix Provider", () => {
+    test("should initialize RandomProvider and RandomId", () => {
+      const app = new App();
+      new TapStack(app, "TestStackRandom");
+
+      expect(RandomProvider).toHaveBeenCalledTimes(1);
+      expect(RandomProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'random'
+      );
+      expect(RandomId).toHaveBeenCalledWith(
+        expect.anything(),
+        'suffix-generator',
+        expect.objectContaining({
+          byteLength: 2,
         })
       );
     });
