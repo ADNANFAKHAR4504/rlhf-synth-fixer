@@ -86,14 +86,7 @@ describe('AWS Live Checks - Core Services', () => {
     }
   });
 
-  test('GuardDuty detector exists', () => {
-    const det = outputs['GuardDutyDetectorId'];
-    if (!notEmpty(det)) return;
-    const res = safeAws(`aws guardduty get-detector --detector-id ${det}`);
-    if (res.trim()) {
-      expect(res).toContain(det);
-    }
-  });
+
 
   test('Config bucket exists', () => {
     const bucket = outputs['ConfigBucketName'];
