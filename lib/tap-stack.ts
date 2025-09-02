@@ -301,6 +301,9 @@ export class TapStack extends cdk.Stack {
           iam.ManagedPolicy.fromAwsManagedPolicyName(
             'CloudWatchAgentServerPolicy'
           ),
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'AmazonSSMManagedInstanceCore'
+          ),
         ],
       }
     );
