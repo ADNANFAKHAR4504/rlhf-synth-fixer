@@ -152,7 +152,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         alarm_arn = self.stack_outputs.get('access_error_alarm_arn')
         
         if not alarm_arn or 'mock' in alarm_arn:
-            self.skipTest(f"CloudWatch alarm not deployed - "
+            self.skipTest("CloudWatch alarm not deployed - "
                           "deployment required for live testing")
         
         try:

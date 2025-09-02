@@ -97,18 +97,41 @@ class TapStack(pulumi.ComponentResource):
         # Create logs bucket first (for server access logging)
         logs_bucket = s3.Bucket(
             f"prod-logs-{self.environment_suffix}",
+            tags=base_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create ACL for logs bucket
+        logs_bucket_acl = s3.BucketAclV2(
+            f"tap-logs-bucket-acl-{self.environment_suffix}",
+            bucket=logs_bucket.id,
             acl="log-delivery-write",
-            versioning=s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=s3.BucketServerSideEncryptionConfigurationRuleArgs(
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create versioning for logs bucket
+        logs_bucket_versioning = s3.BucketVersioningV2(
+            f"tap-logs-bucket-versioning-{self.environment_suffix}",
+            bucket=logs_bucket.id,
+            versioning_configuration=s3.BucketVersioningV2VersioningConfigurationArgs(
+                status="Enabled"
+            ),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create encryption for logs bucket
+        logs_bucket_encryption = s3.BucketServerSideEncryptionConfigurationV2(
+            f"tap-logs-bucket-encryption-{self.environment_suffix}",
+            bucket=logs_bucket.id,
+            rules=[
+                s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=(
                         s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                             sse_algorithm="AES256"
                         )
                     )
                 )
-            ),
-            tags=base_tags,
+            ],
             opts=ResourceOptions(parent=self)
         )
 
@@ -126,9 +149,26 @@ class TapStack(pulumi.ComponentResource):
         # Create main data bucket
         data_bucket = s3.Bucket(
             f"prod-{self.bucket_name_suffix}-{self.environment_suffix}",
-            versioning=s3.BucketVersioningArgs(enabled=True),
-            server_side_encryption_configuration=s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=s3.BucketServerSideEncryptionConfigurationRuleArgs(
+            tags=base_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create versioning for data bucket
+        data_bucket_versioning = s3.BucketVersioningV2(
+            f"tap-data-bucket-versioning-{self.environment_suffix}",
+            bucket=data_bucket.id,
+            versioning_configuration=s3.BucketVersioningV2VersioningConfigurationArgs(
+                status="Enabled"
+            ),
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create encryption for data bucket
+        data_bucket_encryption = s3.BucketServerSideEncryptionConfigurationV2(
+            f"tap-data-bucket-encryption-{self.environment_suffix}",
+            bucket=data_bucket.id,
+            rules=[
+                s3.BucketServerSideEncryptionConfigurationRuleArgs(
                     apply_server_side_encryption_by_default=(
                         s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                             kms_master_key_id=kms_key.arn,
@@ -136,14 +176,20 @@ class TapStack(pulumi.ComponentResource):
                         )
                     )
                 )
-            ),
-            logging=s3.BucketLoggingArgs(
-                target_bucket=logs_bucket.id,
-                target_prefix=f"logs/{self.environment_suffix}/"
-            ) if self.enable_server_access_logs else None,
-            tags=base_tags,
+            ],
             opts=ResourceOptions(parent=self)
         )
+
+        # Create logging configuration for data bucket (if enabled)
+        data_bucket_logging = None
+        if self.enable_server_access_logs:
+            data_bucket_logging = s3.BucketLoggingV2(
+                f"tap-data-bucket-logging-{self.environment_suffix}",
+                bucket=data_bucket.id,
+                target_bucket=logs_bucket.id,
+                target_prefix=f"logs/{self.environment_suffix}/",
+                opts=ResourceOptions(parent=self)
+            )
 
         # Create public access block for data bucket
         data_bucket_public_access_block = s3.BucketPublicAccessBlock(
@@ -237,6 +283,17 @@ class TapStack(pulumi.ComponentResource):
         self.data_bucket = data_bucket
         self.bucket_policy = bucket_policy
         self.access_error_alarm = access_error_alarm
+        
+        # Store additional resource references
+        self.logs_bucket_acl = logs_bucket_acl
+        self.logs_bucket_versioning = logs_bucket_versioning
+        self.logs_bucket_encryption = logs_bucket_encryption
+        self.logs_bucket_public_access_block = logs_bucket_public_access_block
+        self.data_bucket_versioning = data_bucket_versioning
+        self.data_bucket_encryption = data_bucket_encryption
+        self.data_bucket_public_access_block = data_bucket_public_access_block
+        self.data_bucket_logging = data_bucket_logging
+        self.bucket_policy_attachment = bucket_policy_attachment
 
         # Register outputs
         self.register_outputs({
