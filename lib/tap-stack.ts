@@ -101,7 +101,9 @@ export class TapStack extends cdk.Stack {
               sid: 'AllowCloudWatchLogsAccess',
               effect: iam.Effect.ALLOW,
               principals: [
-                new iam.ServicePrincipal(`logs.${cdk.Stack.of(this).region}.amazonaws.com`)
+                new iam.ServicePrincipal(
+                  `logs.${cdk.Stack.of(this).region}.amazonaws.com`
+                ),
               ],
               actions: [
                 'kms:Encrypt',
