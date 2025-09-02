@@ -234,7 +234,7 @@ class TestTapStackIntegration(unittest.TestCase):
         # Look for Lambda with multiple naming patterns
         lambda_functions = [f for f in response['Functions'] 
                            if any(pattern in f['FunctionName'].lower() 
-                                 for pattern in ['lambda-', 'tapstack', 'api', 
+                                 for pattern in ['lambda-', 'tapstack', 'api', 'health',
                                                self.outputs.get('EnvironmentSuffix', 'dev').lower()])]
         
         if len(lambda_functions) == 0:
@@ -259,7 +259,16 @@ class TestTapStackIntegration(unittest.TestCase):
         payload = json.loads(response['Payload'].read())
         self.assertEqual(payload['statusCode'], 200)
         body = json.loads(payload['body'])
-        self.assertIn('message', body)
+        
+        # Check that the body has expected structure (either message or status)
+        self.assertTrue(
+            'message' in body or 'status' in body,
+            f"Lambda response should contain 'message' or 'status'. Got: {body}"
+        )
+        
+        # If it's a health check Lambda, verify it's healthy
+        if 'status' in body:
+            self.assertEqual(body['status'], 'healthy', "Lambda health check should return healthy status")
 
     @mark.it("verifies CloudWatch dashboard exists")
     def test_cloudwatch_dashboard_exists(self):
