@@ -243,6 +243,22 @@ resource "aws_kms_key" "main" {
           "kms:ReEncrypt*"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "AllowEC2RoleUsageForEBS"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.web.arn
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -1036,4 +1052,27 @@ output "config_bucket_name" {
 output "web_acl_arn" {
   description = "ARN of the WAF Web ACL"
   value       = aws_wafv2_web_acl.main.arn
+}
+
+resource "aws_iam_role_policy" "web_kms_access" {
+  name = "web-instance-kms-access"
+  role = aws_iam_role.web.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ],
+        Resource = aws_kms_key.main.arn
+      }
+    ]
+  })
 }
