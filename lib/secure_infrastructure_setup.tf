@@ -16,7 +16,8 @@ provider "aws" {
 }
 
 locals {
-  environment = "prod" # Change as needed (e.g., "dev", "staging", "prod")
+  environment = "prod"
+  suffix      = random_id.resource_suffix.hex
 }
 
 # Data sources
@@ -653,11 +654,10 @@ resource "aws_iam_role_policy" "cross_account" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "main-db-subnet-group"
+  name       = "main-db-subnet-group-${local.suffix}"
   subnet_ids = aws_subnet.private[*].id
-
   tags = {
-    Name = "main-db-subnet-group"
+    Name = "main-db-subnet-group-${local.suffix}"
   }
 }
 
@@ -696,7 +696,7 @@ resource "aws_db_instance" "main" {
 
 # IAM Role for EC2 Web Instances
 resource "aws_iam_role" "web" {
-  name = "web-instance-role"
+  name = "web-instance-role-${local.suffix}"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -722,7 +722,7 @@ resource "aws_iam_role_policy_attachment" "web_ssm" {
 
 # IAM Instance Profile (update to use resource)
 resource "aws_iam_instance_profile" "web" {
-  name = "web-instance-profile"
+  name = "web-instance-profile-${local.suffix}"
   role = aws_iam_role.web.name
 }
 
@@ -774,7 +774,7 @@ resource "aws_launch_template" "web" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "main-alb-${local.environment}"
+  name               = "main-alb-${local.environment}-${local.suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web.id]
@@ -789,7 +789,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "web-tg"
+  name     = "web-tg-${local.suffix}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -921,7 +921,7 @@ resource "aws_security_group" "lambda" {
 
 # WAF Web ACL
 resource "aws_wafv2_web_acl" "main" {
-  name  = "main-web-acl-${local.environment}"
+  name  = "main-web-acl-${local.environment}-${local.suffix}"
   scope = "REGIONAL"
 
   default_action {
@@ -991,7 +991,7 @@ resource "aws_wafv2_web_acl_association" "main" {
 }
 
 resource "aws_iam_policy" "require_mfa" {
-  name        = "require-mfa-${local.environment}"
+  name        = "require-mfa-${local.environment}-${local.suffix}"
   description = "Require MFA for all IAM users with console access"
   policy      = jsonencode({
     Version = "2012-10-17",
@@ -1013,7 +1013,7 @@ resource "aws_iam_policy" "require_mfa" {
 
 # Example: Attach to all users (or groups) with console access
 resource "aws_iam_group" "console_users" {
-  name = "console-users-${local.environment}"
+  name = "console-users-${local.environment}-${local.suffix}"
 }
 
 resource "aws_iam_group_policy_attachment" "console_users_mfa" {
@@ -1079,4 +1079,8 @@ resource "aws_iam_role_policy" "web_kms_access" {
       }
     ]
   })
+}
+
+resource "random_id" "resource_suffix" {
+  byte_length = 4
 }
