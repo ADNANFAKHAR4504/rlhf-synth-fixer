@@ -59,6 +59,15 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: Whether to create AWS Shield Advanced protection for the ALB (requires subscription)
 
+  # Choose AZs explicitly to avoid Fn::Select errors
+  AZ1:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: First Availability Zone (e.g., us-east-1a)
+
+  AZ2:
+    Type: AWS::EC2::AvailabilityZone::Name
+    Description: Second Availability Zone (must be different from AZ1)
+
 Mappings:
   EnvironmentMap:
     development:
@@ -71,6 +80,12 @@ Mappings:
       InstanceType: t3.medium
       DBInstanceClass: db.t3.medium
 
+Rules:
+  RequireDistinctAZs:
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AZ1, !Ref AZ2]]
+        AssertDescription: AZ1 and AZ2 must be different Availability Zones.
+
 Conditions:
   IsProduction: !Equals [!Ref Environment, production]
   CreateLogsBucket: !Equals [!Ref UseExistingLogsBucket, 'false']
@@ -80,6 +95,9 @@ Conditions:
   HasAnyLogsBucket: !Or [!Condition CreateLogsBucket, !Condition HasLogsBucketName]
 
 Resources:
+  # ----------------------
+  # KMS Key (with rotation)
+  # ----------------------
   TapStackKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -90,57 +108,33 @@ Resources:
         Statement:
           - Sid: EnableIAMUserPermissions
             Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
           - Sid: AllowCloudTrail
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
-              - kms:Decrypt
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: [kms:GenerateDataKey*, kms:DescribeKey, kms:Decrypt]
             Resource: '*'
           - Sid: AllowS3
             Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+            Principal: { Service: s3.amazonaws.com }
+            Action: [kms:Decrypt, kms:GenerateDataKey*, kms:DescribeKey]
             Resource: '*'
           - Sid: AllowCloudWatchLogs
             Effect: Allow
-            Principal:
-              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+            Principal: { Service: !Sub 'logs.${AWS::Region}.amazonaws.com' }
+            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
             Resource: '*'
           - Sid: AllowRDS
             Effect: Allow
-            Principal:
-              Service: rds.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:GenerateDataKey*
-              - kms:DescribeKey
+            Principal: { Service: rds.amazonaws.com }
+            Action: [kms:Encrypt, kms:Decrypt, kms:GenerateDataKey*, kms:DescribeKey]
             Resource: '*'
           - Sid: AllowSecretsManager
             Effect: Allow
-            Principal:
-              Service: secretsmanager.amazonaws.com
-            Action:
-              - kms:GenerateDataKey*
-              - kms:Decrypt
-              - kms:DescribeKey
+            Principal: { Service: secretsmanager.amazonaws.com }
+            Action: [kms:GenerateDataKey*, kms:Decrypt, kms:DescribeKey]
             Resource: '*'
 
   TapStackKMSKeyAlias:
@@ -149,6 +143,9 @@ Resources:
       AliasName: !Sub 'alias/tapstack-${Environment}'
       TargetKeyId: !Ref TapStackKMSKey
 
+  # ------------------------
+  # Logs bucket (optional)
+  # ------------------------
   TapStackLogsBucket:
     Type: AWS::S3::Bucket
     Condition: CreateLogsBucket
@@ -166,9 +163,7 @@ Resources:
         RestrictPublicBuckets: true
       LifecycleConfiguration:
         Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 90
+          - { Id: DeleteOldLogs, Status: Enabled, ExpirationInDays: 90 }
 
   TapStackLogsBucketPolicyNew:
     Type: AWS::S3::BucketPolicy
@@ -186,11 +181,7 @@ Resources:
               - !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
               - !Sub 'arn:aws:s3:::${TapStackLogsBucket}/*'
             Condition:
-              StringEquals:
-                's3:x-amz-acl':
-                  - public-read
-                  - public-read-write
-                  - authenticated-read
+              StringEquals: { 's3:x-amz-acl': [public-read, public-read-write, authenticated-read] }
           - Sid: DenyUnSecureCommunications
             Effect: Deny
             Principal: '*'
@@ -199,12 +190,10 @@ Resources:
               - !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
               - !Sub 'arn:aws:s3:::${TapStackLogsBucket}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
+            Principal: { Service: cloudtrail.amazonaws.com }
             Action: s3:GetBucketAcl
             Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
             Condition:
@@ -212,8 +201,7 @@ Resources:
                 aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
+            Principal: { Service: cloudtrail.amazonaws.com }
             Action: s3:PutObject
             Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
@@ -237,11 +225,7 @@ Resources:
               - !Sub 'arn:aws:s3:::${LogsBucketName}'
               - !Sub 'arn:aws:s3:::${LogsBucketName}/*'
             Condition:
-              StringEquals:
-                's3:x-amz-acl':
-                  - public-read
-                  - public-read-write
-                  - authenticated-read
+              StringEquals: { 's3:x-amz-acl': [public-read, public-read-write, authenticated-read] }
           - Sid: DenyUnSecureCommunications
             Effect: Deny
             Principal: '*'
@@ -250,12 +234,10 @@ Resources:
               - !Sub 'arn:aws:s3:::${LogsBucketName}'
               - !Sub 'arn:aws:s3:::${LogsBucketName}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
+            Principal: { Service: cloudtrail.amazonaws.com }
             Action: s3:GetBucketAcl
             Resource: !Sub 'arn:aws:s3:::${LogsBucketName}'
             Condition:
@@ -263,8 +245,7 @@ Resources:
                 aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
+            Principal: { Service: cloudtrail.amazonaws.com }
             Action: s3:PutObject
             Resource: !Sub 'arn:aws:s3:::${LogsBucketName}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
@@ -272,6 +253,9 @@ Resources:
                 's3:x-amz-acl': 'bucket-owner-full-control'
                 aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
 
+  # ------------------------------
+  # Secure S3 bucket for workloads
+  # ------------------------------
   TapStackSecureBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -286,8 +270,7 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
+      VersioningConfiguration: { Status: Enabled }
       LoggingConfiguration:
         DestinationBucketName: !If [CreateLogsBucket, !Ref TapStackLogsBucket, !Ref LogsBucketName]
         LogFilePrefix: access-logs/
@@ -307,11 +290,7 @@ Resources:
               - !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
               - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
             Condition:
-              StringEquals:
-                's3:x-amz-acl':
-                  - public-read
-                  - public-read-write
-                  - authenticated-read
+              StringEquals: { 's3:x-amz-acl': [public-read, public-read-write, authenticated-read] }
           - Sid: DenyUnSecureCommunications
             Effect: Deny
             Principal: '*'
@@ -320,9 +299,11 @@ Resources:
               - !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
               - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
 
+  # ----------------
+  # CloudWatch Logs
+  # ----------------
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -330,6 +311,9 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt TapStackKMSKey.Arn
 
+  # -----------
+  # CloudTrail
+  # -----------
   TapStackCloudTrail:
     Type: AWS::CloudTrail::Trail
     Condition: HasAnyLogsBucket
@@ -347,9 +331,11 @@ Resources:
           IncludeManagementEvents: true
           DataResources:
             - Type: AWS::S3::Object
-              Values:
-                - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
+              Values: [!Sub 'arn:aws:s3:::${TapStackSecureBucket}/*']
 
+  # -----------
+  # Networking
+  # -----------
   VPCWest:
     Type: AWS::EC2::VPC
     Properties:
@@ -357,75 +343,52 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-VPC-West-${Environment}'
-        - Key: Environment
-          Value: !Ref Environment
+        - { Key: Name, Value: !Sub 'TapStack-VPC-West-${Environment}' }
+        - { Key: Environment, Value: !Ref Environment }
 
   PublicSubnetWest1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Fn::GetAZs:
-              Ref: AWS::Region
+      AvailabilityZone: !Ref AZ1
       CidrBlock: !Select [0, !Cidr [!Ref VPCCidrWest, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Public-Subnet-West-1-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-Public-Subnet-West-1-${Environment}' }
 
   PublicSubnetWest2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Fn::GetAZs:
-              Ref: AWS::Region
+      AvailabilityZone: !Ref AZ2
       CidrBlock: !Select [1, !Cidr [!Ref VPCCidrWest, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Public-Subnet-West-2-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-Public-Subnet-West-2-${Environment}' }
 
   PrivateSubnetWest1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Fn::GetAZs:
-              Ref: AWS::Region
+      AvailabilityZone: !Ref AZ1
       CidrBlock: !Select [2, !Cidr [!Ref VPCCidrWest, 6, 8]]
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Private-Subnet-West-1-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-Private-Subnet-West-1-${Environment}' }
 
   PrivateSubnetWest2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Fn::GetAZs:
-              Ref: AWS::Region
+      AvailabilityZone: !Ref AZ2
       CidrBlock: !Select [3, !Cidr [!Ref VPCCidrWest, 6, 8]]
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Private-Subnet-West-2-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-Private-Subnet-West-2-${Environment}' }
 
   InternetGatewayWest:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-IGW-West-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-IGW-West-${Environment}' }
 
   AttachGatewayWest:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -444,24 +407,21 @@ Resources:
       AllocationId: !GetAtt EIPNATWest.AllocationId
       SubnetId: !Ref PublicSubnetWest1
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-NAT-West-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-NAT-West-${Environment}' }
 
   PublicRouteTableWest:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPCWest
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Public-RT-West-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-Public-RT-West-${Environment}' }
 
   PrivateRouteTableWest:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPCWest
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Private-RT-West-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-Private-RT-West-${Environment}' }
 
   PublicRouteWest:
     Type: AWS::EC2::Route
@@ -502,23 +462,20 @@ Resources:
       SubnetId: !Ref PrivateSubnetWest2
       RouteTableId: !Ref PrivateRouteTableWest
 
+  # ----------------
+  # Security Groups
+  # ----------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPCWest
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-          Description: HTTP traffic
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: HTTP traffic }
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0 }
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-ALB-SG-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-ALB-SG-${Environment}' }
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -526,19 +483,10 @@ Resources:
       GroupDescription: Security group for web servers
       VpcId: !Ref VPCWest
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: HTTP from ALB
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref VPNTunnelCIDR
-          Description: SSH from VPN tunnel only
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref ALBSecurityGroup, Description: HTTP from ALB }
+        - { IpProtocol: tcp, FromPort: 22, ToPort: 22, CidrIp: !Ref VPNTunnelCIDR, Description: SSH from VPN tunnel only }
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-WebServer-SG-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-WebServer-SG-${Environment}' }
 
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -546,15 +494,13 @@ Resources:
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPCWest
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: MySQL from web servers
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref WebServerSecurityGroup, Description: MySQL from web servers }
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Database-SG-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-Database-SG-${Environment}' }
 
+  # --------------------------
+  # Optional cross-account IAM
+  # --------------------------
   CrossAccountAccessRole:
     Type: AWS::IAM::Role
     Condition: CreateCrossAccountRole
@@ -564,14 +510,11 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              AWS: !Ref CrossAccountPrincipal
+            Principal: { AWS: !Ref CrossAccountPrincipal }
             Action: sts:AssumeRole
             Condition:
-              Bool:
-                'aws:MultiFactorAuthPresent': 'true'
-              NumericLessThan:
-                'aws:MultiFactorAuthAge': '3600'
+              Bool: { 'aws:MultiFactorAuthPresent': 'true' }
+              NumericLessThan: { 'aws:MultiFactorAuthAge': '3600' }
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/ReadOnlyAccess
       Policies:
@@ -579,16 +522,12 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
-              - Effect: Allow
-                Action:
-                  - s3:ListBucket
-                Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
+              - { Effect: Allow, Action: [s3:GetObject, s3:PutObject], Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*' }
+              - { Effect: Allow, Action: [s3:ListBucket], Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}' }
 
+  # -----------------------
+  # EC2 role & instance prof (SINGLE DEFINITION — no duplicates)
+  # -----------------------
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -596,10 +535,7 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
+          - { Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: sts:AssumeRole }
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Policies:
@@ -607,17 +543,12 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
+              - { Effect: Allow, Action: [s3:GetObject, s3:PutObject], Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*' }
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles:
-        - !Ref EC2InstanceRole
+      Roles: [!Ref EC2InstanceRole]
 
   RDSMonitoringRole:
     Type: AWS::IAM::Role
@@ -626,27 +557,23 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
-            Principal:
-              Service: monitoring.rds.amazonaws.com
-            Action: sts:AssumeRole
+          - { Effect: Allow, Principal: { Service: monitoring.rds.amazonaws.com }, Action: sts:AssumeRole }
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
 
+  # ----------------------------
+  # ALB, Target Group & Listener
+  # ----------------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub 'TapStack-ALB-${Environment}'
       Scheme: internet-facing
       Type: application
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Subnets:
-        - !Ref PublicSubnetWest1
-        - !Ref PublicSubnetWest2
+      SecurityGroups: [!Ref ALBSecurityGroup]
+      Subnets: [!Ref PublicSubnetWest1, !Ref PublicSubnetWest2]
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-ALB-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-ALB-${Environment}' }
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -665,25 +592,24 @@ Resources:
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
+      DefaultActions: [{ Type: forward, TargetGroupArn: !Ref ALBTargetGroup }]
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
 
+  # --------------
+  # WAF v2 WebACL
+  # --------------
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name: !Sub 'TapStack-WAF-${Environment}'
       Scope: REGIONAL
-      DefaultAction:
-        Allow: {}
+      DefaultAction: { Allow: {} }
       Rules:
         - Name: AWSManagedRulesCommonRuleSet
           Priority: 1
-          OverrideAction:
-            None: {}
+          OverrideAction: { None: {} }
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
@@ -694,8 +620,7 @@ Resources:
             MetricName: CommonRuleSetMetric
         - Name: AWSManagedRulesKnownBadInputsRuleSet
           Priority: 2
-          OverrideAction:
-            None: {}
+          OverrideAction: { None: {} }
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
@@ -706,8 +631,7 @@ Resources:
             MetricName: KnownBadInputsRuleSetMetric
         - Name: RateLimitRule
           Priority: 3
-          Action:
-            Block: {}
+          Action: { Block: {} }
           Statement:
             RateBasedStatement:
               Limit: 2000
@@ -727,16 +651,16 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
+  # --------------------------
+  # RDS subnet group & secret
+  # --------------------------
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnet group for RDS database
-      SubnetIds:
-        - !Ref PrivateSubnetWest1
-        - !Ref PrivateSubnetWest2
+      SubnetIds: [!Ref PrivateSubnetWest1, !Ref PrivateSubnetWest2]
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-DB-SubnetGroup-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-DB-SubnetGroup-${Environment}' }
 
   RDSSecret:
     Type: AWS::SecretsManager::Secret
@@ -750,8 +674,7 @@ Resources:
         ExcludeCharacters: '"@/\\'
       KmsKeyId: !Ref TapStackKMSKey
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-DB-Secret-${Environment}'
+        - { Key: Name, Value: !Sub 'TapStack-DB-Secret-${Environment}' }
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -767,8 +690,7 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !Ref TapStackKMSKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
+      VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: !If [IsProduction, true, false]
@@ -779,11 +701,12 @@ Resources:
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-RDS-${Environment}'
-        - Key: Environment
-          Value: !Ref Environment
+        - { Key: Name, Value: !Sub 'TapStack-RDS-${Environment}' }
+        - { Key: Environment, Value: !Ref Environment }
 
+  # ----------------
+  # Compute (ASG/LT)
+  # ----------------
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -791,10 +714,8 @@ Resources:
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
         InstanceType: !FindInMap [EnvironmentMap, !Ref Environment, InstanceType]
-        SecurityGroupIds:
-          - !Ref WebServerSecurityGroup
-        IamInstanceProfile:
-          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds: [!Ref WebServerSecurityGroup]
+        IamInstanceProfile: { Arn: !GetAtt EC2InstanceProfile.Arn }
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -833,21 +754,17 @@ Resources:
       MinSize: !If [IsProduction, '2', '1']
       MaxSize: !If [IsProduction, '6', '3']
       DesiredCapacity: !If [IsProduction, '2', '1']
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnetWest1
-        - !Ref PrivateSubnetWest2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
+      VPCZoneIdentifier: [!Ref PrivateSubnetWest1, !Ref PrivateSubnetWest2]
+      TargetGroupARNs: [!Ref ALBTargetGroup]
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       Tags:
-        - Key: Name
-          Value: !Sub 'TapStack-Instance-${Environment}'
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref Environment
-          PropagateAtLaunch: true
+        - { Key: Name, Value: !Sub 'TapStack-Instance-${Environment}', PropagateAtLaunch: true }
+        - { Key: Environment, Value: !Ref Environment, PropagateAtLaunch: true }
 
+  # ----------------------------
+  # Optional Shield for the ALB
+  # ----------------------------
   ShieldProtection:
     Type: AWS::Shield::Protection
     Condition: EnableShield
