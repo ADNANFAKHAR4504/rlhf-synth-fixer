@@ -45,7 +45,6 @@ export class TapStack extends TerraformStack {
               Environment: environmentSuffix,
               ManagedBy: 'CDKTF',
               Owner: 'DevOps-Team',
-              CreatedAt: new Date().toISOString(),
             },
           },
         ];
@@ -54,38 +53,18 @@ export class TapStack extends TerraformStack {
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
-      // Add retry configuration for better reliability
-      maxRetries: 3,
     });
 
-    // Configure S3 Backend with enhanced state locking configuration
+    // Configure S3 Backend with native state locking
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
       region: stateBucketRegion,
       encrypt: true,
-      // Add DynamoDB table for state locking (recommended)
-      dynamodbTable: 'terraform-state-locks',
-      // Add workspace configuration for better isolation
-      workspaceKeyPrefix: 'workspaces',
     });
-
-    // Enhanced state locking configuration
-    this.addOverride('terraform.backend.s3', {
-      bucket: stateBucket,
-      key: `${environmentSuffix}/${id}.tfstate`,
-      region: stateBucketRegion,
-      encrypt: true,
-      dynamodb_table: 'terraform-state-locks',
-      workspace_key_prefix: 'workspaces',
-      // Add retry and timeout configurations
-      max_retries: 5,
-      skip_credentials_validation: false,
-      skip_metadata_api_check: false,
-      skip_region_validation: false,
-      // Force path style for compatibility
-      force_path_style: false,
-    });
+    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
+    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
+    this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Add your stack instantiations here
     // Terraform Variables for sensitive data
@@ -94,12 +73,6 @@ export class TapStack extends TerraformStack {
       description: 'Database username',
       default: 'admin',
       sensitive: false,
-      validation: [
-        {
-          condition: 'length(var.db_username) >= 3',
-          errorMessage: 'Database username must be at least 3 characters long.',
-        },
-      ],
     });
 
     const allowedCidrBlocks = new TerraformVariable(
@@ -108,50 +81,29 @@ export class TapStack extends TerraformStack {
       {
         type: 'list(string)',
         description: 'CIDR blocks allowed to access the application',
-        default:
-          environmentSuffix === 'prod' || environmentSuffix === 'production'
-            ? ['10.0.0.0/8'] // More restrictive for production
-            : ['0.0.0.0/0'], // Open for development
-        validation: [
-          {
-            condition: 'length(var.allowed_cidr_blocks) > 0',
-            errorMessage: 'At least one CIDR block must be specified.',
-          },
-        ],
+        default: ['0.0.0.0/0'], // Should be restricted in production
       }
     );
 
-    // Configuration parameters with error handling
-    let dbPasswordSecret;
-    try {
-      dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
-        this,
-        'db-password-secret',
-        {
-          secretId: `secureapp-db-password-${environmentSuffix}`,
-          // Add version stage for better secret management
-          versionStage: 'AWSCURRENT',
-        }
-      );
-    } catch (error) {
-      // Fallback to a default secret if the environment-specific one doesn't exist
-      dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
-        this,
-        'db-password-secret-fallback',
-        {
-          secretId: 'my-db-password',
-          versionStage: 'AWSCURRENT',
-        }
-      );
-    }
+    // Configuration parameters
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+      this,
+      'db-password-secret',
+      {
+        secretId: 'my-db-password',
+      }
+    );
 
-    // Environment-specific configuration with validation
+    // Environment-specific configuration
     const config: SecureAppModulesConfig = {
       environment: environmentSuffix,
       allowedCidrBlocks: allowedCidrBlocks.listValue,
       dbUsername: dbUsername.stringValue,
       dbPassword: dbPasswordSecret.secretString,
-      instanceType: this.getInstanceType(environmentSuffix),
+      instanceType:
+        environmentSuffix === 'production' || environmentSuffix === 'prod'
+          ? 't3.medium'
+          : 't3.micro',
     };
 
     // Create all infrastructure using the SecureApp modules
@@ -162,24 +114,6 @@ export class TapStack extends TerraformStack {
     );
 
     // Terraform Outputs for important resource information
-    this.createOutputs(secureAppModules);
-  }
-
-  private getInstanceType(environmentSuffix: string): string {
-    const prodEnvironments = ['production', 'prod', 'prd'];
-    const stagingEnvironments = ['staging', 'stage', 'stg'];
-
-    if (prodEnvironments.includes(environmentSuffix.toLowerCase())) {
-      return 't3.medium';
-    } else if (stagingEnvironments.includes(environmentSuffix.toLowerCase())) {
-      return 't3.small';
-    } else {
-      return 't3.micro';
-    }
-  }
-
-  private createOutputs(secureAppModules: SecureAppModules): void {
-    // Infrastructure Outputs
     new TerraformOutput(this, 'vpc_id', {
       value: secureAppModules.vpc.id,
       description: 'ID of the VPC',
@@ -205,7 +139,6 @@ export class TapStack extends TerraformStack {
       description: 'ID of private subnet B',
     });
 
-    // Security Outputs
     new TerraformOutput(this, 'web_security_group_id', {
       value: secureAppModules.webSecurityGroup.id,
       description: 'ID of the web security group',
@@ -216,7 +149,6 @@ export class TapStack extends TerraformStack {
       description: 'ID of the database security group',
     });
 
-    // Encryption Outputs
     new TerraformOutput(this, 'kms_key_id', {
       value: secureAppModules.kmsKey.keyId,
       description: 'ID of the KMS key',
@@ -227,7 +159,6 @@ export class TapStack extends TerraformStack {
       description: 'ARN of the KMS key',
     });
 
-    // Storage Outputs
     new TerraformOutput(this, 's3_bucket_name', {
       value: secureAppModules.s3Bucket.bucket,
       description: 'Name of the S3 bucket',
@@ -238,7 +169,6 @@ export class TapStack extends TerraformStack {
       description: 'ARN of the S3 bucket',
     });
 
-    // Database Outputs
     new TerraformOutput(this, 'rds_endpoint', {
       value: secureAppModules.rdsInstance.endpoint,
       description: 'RDS instance endpoint',
@@ -250,7 +180,6 @@ export class TapStack extends TerraformStack {
       description: 'RDS instance identifier',
     });
 
-    // Compute Outputs
     new TerraformOutput(this, 'ec2_instance_id', {
       value: secureAppModules.ec2Instance.id,
       description: 'EC2 instance ID',
@@ -266,27 +195,14 @@ export class TapStack extends TerraformStack {
       description: 'EC2 instance public DNS',
     });
 
-    // Monitoring Outputs
     new TerraformOutput(this, 'cloudwatch_log_group_name', {
       value: secureAppModules.cloudwatchLogGroup.name,
       description: 'CloudWatch log group name',
     });
 
-    // Application Outputs
     new TerraformOutput(this, 'application_url', {
       value: `http://${secureAppModules.ec2Instance.publicDns}`,
       description: 'URL to access the application',
-    });
-
-    // Additional useful outputs
-    new TerraformOutput(this, 'deployment_timestamp', {
-      value: new Date().toISOString(),
-      description: 'Timestamp of deployment',
-    });
-
-    new TerraformOutput(this, 'environment', {
-      value: secureAppModules.vpc.tags.Environment,
-      description: 'Environment name',
     });
   }
 }
