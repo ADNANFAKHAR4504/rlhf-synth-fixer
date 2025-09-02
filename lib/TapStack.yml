@@ -1,338 +1,498 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "SOC2-Compliant Production Environment with VPC, RDS, ECS, and Monitoring"
+Description: "Production-grade SOC2-compliant AWS infrastructure with VPC, ECS, RDS, ALB, and comprehensive security"
 
 Parameters:
-  Environment:
+  EnvironmentName:
+    Description: Environment name prefix for all resources
     Type: String
-    Default: production
-    AllowedValues: [production, staging, development]
-    Description: Deployment environment
+    Default: "tapstack-prod"
+    AllowedPattern: "^[a-zA-Z0-9-]*$"
+
   CompanyName:
+    Description: Company name for tagging
     Type: String
-    Default: mycompany
-    Description: Company name for resource naming
-  DatabaseUsername:
-    Type: String
-    Description: Master username for RDS database
-    NoEcho: true
-  DatabasePassword:
-    Type: String
-    Description: Master password for RDS database
-    NoEcho: true
-  DatabaseName:
-    Type: String
-    Default: appdb
-    Description: Name of the application database
+    Default: "tapstack"
+
+  # DBUsername:
+  #   Description: Database master username
+  #   Type: String
+  #   Default: "dbadmin"
+  #   NoEcho: true
+
+  # DBPassword:
+  #   Description: Database master password
+  #   Type: String
+  #   MinLength: 12
+  #   NoEcho: true
+
+  KeyPairName:
+    Description: EC2 Key Pair for ECS instances
+    Type: AWS::EC2::KeyPair::KeyName
 
 Mappings:
-  EnvironmentMap:
-    production:
-      InstanceType: "m5.large"
-      DesiredCapacity: "2"
-      MaxCapacity: "4"
-      MinCapacity: "1"
-      DBInstanceClass: "db.t3.medium"
-    staging:
-      InstanceType: "m5.large"
-      DesiredCapacity: "1"
-      MaxCapacity: "2"
-      MinCapacity: "1"
-      DBInstanceClass: "db.t3.small"
-    development:
-      InstanceType: "t3.medium"
-      DesiredCapacity: "1"
-      MaxCapacity: "1"
-      MinCapacity: "1"
-      DBInstanceClass: "db.t3.micro"
-
-Conditions:
-  IsProduction: !Equals [!Ref Environment, production]
+  SubnetConfig:
+    VPC:
+      CIDR: "10.0.0.0/16"
+    PublicSubnet1:
+      CIDR: "10.0.1.0/24"
+    PublicSubnet2:
+      CIDR: "10.0.2.0/24"
+    PrivateSubnet1:
+      CIDR: "10.0.3.0/24"
+    PrivateSubnet2:
+      CIDR: "10.0.4.0/24"
+    DatabaseSubnet1:
+      CIDR: "10.0.5.0/24"
+    DatabaseSubnet2:
+      CIDR: "10.0.6.0/24"
 
 Resources:
-  # VPC and Networking
-  VPC:
-    Type: AWS::EC2::VPC
+  # ==============================================
+  # KMS ENCRYPTION
+  # ==============================================
+
+  TapstackKMSKey:
+    Type: AWS::KMS::Key
     Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
+      Description: "Tapstack KMS key for encryption at rest"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: Allow CloudTrail to encrypt logs
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - "kms:GenerateDataKey*"
+              - "kms:DescribeKey"
+            Resource: "*"
+          - Sid: Allow RDS to use the key
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - "kms:Decrypt"
+              - "kms:GenerateDataKey"
+            Resource: "*"
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-vpc
+          Value: !Sub "${EnvironmentName}-kms-key"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
         - Key: Company
           Value: !Ref CompanyName
-        - Key: Compliance
-          Value: SOC2
+        - Key: SOC2-Compliant
+          Value: "true"
 
-  InternetGateway:
+  TapstackKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${EnvironmentName}-encryption-key"
+      TargetKeyId: !Ref TapstackKMSKey
+
+  # ==============================================
+  # NETWORKING
+  # ==============================================
+
+  TapstackVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-vpc"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  # Internet Gateway
+  TapstackIGW:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-igw
+          Value: !Sub "${EnvironmentName}-igw"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  VPCGatewayAttachment:
+  TapstackIGWAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId: !Ref TapstackIGW
+      VpcId: !Ref TapstackVPC
 
   # Public Subnets
-  PublicSubnet1:
+  TapstackPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref TapstackVPC
       AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-public-subnet-1
+          Value: !Sub "${EnvironmentName}-public-subnet-1"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: Type
+          Value: "Public"
 
-  PublicSubnet2:
+  TapstackPublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
+      VpcId: !Ref TapstackVPC
       AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-public-subnet-2
+          Value: !Sub "${EnvironmentName}-public-subnet-2"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: Type
+          Value: "Public"
 
   # Private Subnets
-  PrivateSubnet1:
+  TapstackPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
+      VpcId: !Ref TapstackVPC
       AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-private-subnet-1
+          Value: !Sub "${EnvironmentName}-private-subnet-1"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: Type
+          Value: "Private"
 
-  PrivateSubnet2:
+  TapstackPrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.4.0/24
+      VpcId: !Ref TapstackVPC
       AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-private-subnet-2
+          Value: !Sub "${EnvironmentName}-private-subnet-2"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: Type
+          Value: "Private"
 
-  # NAT Gateway and EIP
-  NATGatewayEIP:
+  # Database Subnets
+  TapstackDatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapstackVPC
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet1, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-database-subnet-1"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: Type
+          Value: "Database"
+
+  TapstackDatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref TapstackVPC
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !FindInMap [SubnetConfig, DatabaseSubnet2, CIDR]
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-database-subnet-2"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: Type
+          Value: "Database"
+
+  # NAT Gateway
+  TapstackNATGateway1EIP:
     Type: AWS::EC2::EIP
+    DependsOn: TapstackIGWAttachment
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-nat-eip
+          Value: !Sub "${EnvironmentName}-nat-gateway-1-eip"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  NATGateway:
+  TapstackNATGateway1:
     Type: AWS::EC2::NatGateway
     Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
+      AllocationId: !GetAtt TapstackNATGateway1EIP.AllocationId
+      SubnetId: !Ref TapstackPublicSubnet1
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-nat-gw
+          Value: !Sub "${EnvironmentName}-nat-gateway-1"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
   # Route Tables
-  PublicRouteTable:
+  TapstackPublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref TapstackVPC
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-public-rt
+          Value: !Sub "${EnvironmentName}-public-routes"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  PublicRoute:
+  TapstackDefaultPublicRoute:
     Type: AWS::EC2::Route
+    DependsOn: TapstackIGWAttachment
     Properties:
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref TapstackPublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      GatewayId: !Ref TapstackIGW
 
-  PublicSubnet1RouteTableAssociation:
+  TapstackPublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref TapstackPublicRouteTable
+      SubnetId: !Ref TapstackPublicSubnet1
 
-  PublicSubnet2RouteTableAssociation:
+  TapstackPublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
+      RouteTableId: !Ref TapstackPublicRouteTable
+      SubnetId: !Ref TapstackPublicSubnet2
 
-  PrivateRouteTable:
+  TapstackPrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref TapstackVPC
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-private-rt
+          Value: !Sub "${EnvironmentName}-private-routes-1"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  PrivateRoute:
+  TapstackDefaultPrivateRoute1:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref TapstackPrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
+      NatGatewayId: !Ref TapstackNATGateway1
 
-  PrivateSubnet1RouteTableAssociation:
+  TapstackPrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref TapstackPrivateRouteTable1
+      SubnetId: !Ref TapstackPrivateSubnet1
 
-  PrivateSubnet2RouteTableAssociation:
+  TapstackPrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref TapstackPrivateRouteTable1
+      SubnetId: !Ref TapstackPrivateSubnet2
 
-  # Security Groups
-  ALBSecurityGroup:
+  # ==============================================
+  # SECURITY GROUPS
+  # ==============================================
+
+  TapstackALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub ${CompanyName}-${Environment}-alb-sg
-      GroupDescription: Security group for ALB
-      VpcId: !Ref VPC
+      GroupName: !Sub "${EnvironmentName}-alb-sg"
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref TapstackVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
+          Description: "HTTP from anywhere"
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
+          Description: "HTTPS from anywhere"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: "All outbound traffic"
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-alb-sg
+          Value: !Sub "${EnvironmentName}-alb-sg"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  ECSSecurityGroup:
+  TapstackECSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub ${CompanyName}-${Environment}-ecs-sg
-      GroupDescription: Security group for ECS tasks
-      VpcId: !Ref VPC
+      GroupName: !Sub "${EnvironmentName}-ecs-sg"
+      GroupDescription: Security group for ECS instances
+      VpcId: !Ref TapstackVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref TapstackALBSecurityGroup
+          Description: "HTTP from ALB"
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref TapstackBastionSecurityGroup
+          Description: "SSH from Bastion"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: "All outbound traffic"
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-ecs-sg
+          Value: !Sub "${EnvironmentName}-ecs-sg"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  RDSSecurityGroup:
+  TapstackRDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub ${CompanyName}-${Environment}-rds-sg
-      GroupDescription: Security group for RDS
-      VpcId: !Ref VPC
+      GroupName: !Sub "${EnvironmentName}-rds-sg"
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref TapstackVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref ECSSecurityGroup
+          SourceSecurityGroupId: !Ref TapstackECSSecurityGroup
+          Description: "MySQL from ECS"
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref TapstackBastionSecurityGroup
+          Description: "MySQL from Bastion"
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-rds-sg
+          Value: !Sub "${EnvironmentName}-rds-sg"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  # RDS Database
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
+  TapstackBastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      DBSubnetGroupDescription: Subnet group for RDS
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+      GroupName: !Sub "${EnvironmentName}-bastion-sg"
+      GroupDescription: Security group for Bastion Host
+      VpcId: !Ref TapstackVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: "SSH from anywhere (restrict in production)"
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: "All outbound traffic"
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-db-subnet-group
+          Value: !Sub "${EnvironmentName}-bastion-sg"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  RDSInstance:
-    Type: AWS::RDS::DBInstance
+  # ==============================================
+  # NETWORK ACLs
+  # ==============================================
+
+  TapstackPrivateNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
     Properties:
-      DBInstanceIdentifier: !Sub ${CompanyName}-${Environment}-rds
-      DBName: !Ref DatabaseName
-      Engine: mysql
-      EngineVersion: "8.0.43"
-      DBInstanceClass:
-        !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]
-      MasterUsername: !Ref DatabaseUsername
-      MasterUserPassword: !Ref DatabasePassword
-      AllocatedStorage: 20
-      MaxAllocatedStorage: 100
-      StorageEncrypted: true
-      StorageType: gp2
-      MultiAZ: !If [IsProduction, true, false]
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      VPCSecurityGroups:
-        - !GetAtt RDSSecurityGroup.GroupId
-      BackupRetentionPeriod: 7
-      DeletionProtection: !If [IsProduction, true, false]
-      EnableCloudwatchLogsExports:
-        - audit
-        - error
-        - slowquery
+      VpcId: !Ref TapstackVPC
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-rds
+          Value: !Sub "${EnvironmentName}-private-nacl"
         - Key: Environment
-          Value: !Ref Environment
-        - Key: Compliance
-          Value: SOC2
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  # ECS Cluster and Services
-  ECSCluster:
-    Type: AWS::ECS::Cluster
+  TapstackPrivateInboundRule:
+    Type: AWS::EC2::NetworkAclEntry
     Properties:
-      ClusterName: !Sub ${CompanyName}-${Environment}-ecs-cluster
-      CapacityProviders:
-        - FARGATE
-      Tags:
-        - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-ecs-cluster
-        - Key: Environment
-          Value: !Ref Environment
+      NetworkAclId: !Ref TapstackPrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      RuleAction: allow
+      CidrBlock: 10.0.0.0/16
 
-  ECSExecutionRole:
+  TapstackPrivateOutboundRule:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      NetworkAclId: !Ref TapstackPrivateNetworkAcl
+      RuleNumber: 100
+      Protocol: -1
+      Egress: true
+      RuleAction: allow
+      CidrBlock: 0.0.0.0/0
+
+  TapstackPrivateSubnetNetworkAclAssociation1:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref TapstackPrivateSubnet1
+      NetworkAclId: !Ref TapstackPrivateNetworkAcl
+
+  TapstackPrivateSubnetNetworkAclAssociation2:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref TapstackPrivateSubnet2
+      NetworkAclId: !Ref TapstackPrivateNetworkAcl
+
+  # ==============================================
+  # IAM ROLES AND POLICIES
+  # ==============================================
+
+  TapstackECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${EnvironmentName}-ecs-task-execution-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -342,263 +502,29 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  ECSTaskRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ecs-tasks.amazonaws.com
-            Action: sts:AssumeRole
       Policies:
-        - PolicyName: !Sub ${CompanyName}-${Environment}-ecs-task-policy
+        - PolicyName: CloudWatchLogsPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: !Sub ${ApplicationLogsBucket.Arn}/*
-              - Effect: Allow
-                Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: "*"
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Application Load Balancer
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub ${CompanyName}-${Environment}-alb
-      Scheme: internet-facing
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Type: application
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
       Tags:
         - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-alb
+          Value: !Sub "${EnvironmentName}-ecs-task-execution-role"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ALB
-      Protocol: HTTP
-      Port: 80
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ECSTargetGroup
-
-  ECSTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      Name: !Sub ${CompanyName}-${Environment}-tg
-      Port: 80
-      Protocol: HTTP
-      VpcId: !Ref VPC
-      TargetType: ip
-      HealthCheckPath: /health
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      Tags:
-        - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-tg
-        - Key: Environment
-          Value: !Ref Environment
-
-  # CloudWatch Logs
-  ApplicationLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/ecs/${CompanyName}-${Environment}
-      RetentionInDays: 90
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # S3 Buckets for Logs
-  ApplicationLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub ${CompanyName}-${Environment}-app-logs-${AWS::AccountId}
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      LifecycleConfiguration:
-        Rules:
-          - Id: MoveToGlacier
-            Status: Enabled
-            Transitions:
-              - TransitionInDays: 60
-                StorageClass: GLACIER
-            ExpirationInDays: 365
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-app-logs
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Compliance
-          Value: SOC2
-
-  ApplicationLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ApplicationLogsBucket
-      PolicyDocument:
-        Statement:
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: "*"
-            Action: "s3:*"
-            Resource:
-              - !GetAtt ApplicationLogsBucket.Arn
-              - !Sub "${ApplicationLogsBucket.Arn}/*"
-            Condition:
-              Bool:
-                "aws:SecureTransport": "false"
-
-  # CloudTrail
-  CloudTrailBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub ${CompanyName}-${Environment}-cloudtrail-${AWS::AccountId}
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-cloudtrail
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Compliance
-          Value: SOC2
-
-  CloudTrailBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CloudTrailBucket
-      PolicyDocument:
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailBucket.Arn
-            Condition:
-              StringEquals:
-                "AWS:SourceArn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${CompanyName}-${Environment}-trail"
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub "${CloudTrailBucket.Arn}/*"
-            Condition:
-              StringEquals:
-                "s3:x-amz-acl": bucket-owner-full-control
-                "AWS:SourceArn": !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${CompanyName}-${Environment}-trail"
-          - Sid: DenyInsecureConnections
-            Effect: Deny
-            Principal: "*"
-            Action: "s3:*"
-            Resource:
-              - !GetAtt CloudTrailBucket.Arn
-              - !Sub "${CloudTrailBucket.Arn}/*"
-            Condition:
-              Bool:
-                "aws:SecureTransport": "false"
-
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailBucketPolicy
-    Properties:
-      TrailName: !Sub ${CompanyName}-${Environment}-trail
-      S3BucketName: !Ref CloudTrailBucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      IsLogging: true
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Auto Scaling Group for ECS instances (using the mapping)
-  ECSAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      AutoScalingGroupName: !Sub ${CompanyName}-${Environment}-ecs-asg
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      LaunchTemplate:
-        LaunchTemplateId: !Ref ECSLaunchTemplate
-        Version: !GetAtt ECSLaunchTemplate.LatestVersionNumber
-      MinSize: !FindInMap [EnvironmentMap, !Ref Environment, MinCapacity]
-      MaxSize: !FindInMap [EnvironmentMap, !Ref Environment, MaxCapacity]
-      DesiredCapacity:
-        !FindInMap [EnvironmentMap, !Ref Environment, DesiredCapacity]
-      TargetGroupARNs:
-        - !Ref ECSTargetGroup
-      HealthCheckType: ELB
-      HealthCheckGracePeriod: 300
-      Tags:
-        - Key: Name
-          Value: !Sub ${CompanyName}-${Environment}-ecs-instance
-          PropagateAtLaunch: true
-        - Key: Environment
-          Value: !Ref Environment
-          PropagateAtLaunch: true
-
-  ECSLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Properties:
-      LaunchTemplateName: !Sub ${CompanyName}-${Environment}-ecs-lt
-      LaunchTemplateData:
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 ECS-optimized
-        InstanceType:
-          !FindInMap [EnvironmentMap, !Ref Environment, InstanceType]
-        SecurityGroupIds:
-          - !Ref ECSSecurityGroup
-        IamInstanceProfile:
-          Arn: !GetAtt ECSInstanceProfile.Arn
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
-            echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
-            yum update -y
-
-  ECSInstanceRole:
+  TapstackECSInstanceRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${EnvironmentName}-ecs-instance-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -608,53 +534,819 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ecs-instance-role"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
 
-  ECSInstanceProfile:
+  TapstackECSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
+      InstanceProfileName: !Sub "${EnvironmentName}-ecs-instance-profile"
       Roles:
-        - !Ref ECSInstanceRole
+        - !Ref TapstackECSInstanceRole
 
-  # RAM Resource Share (example)
-  RAMShare:
-    Type: AWS::RAM::ResourceShare
+  TapstackECSServiceRole:
+    Type: AWS::IAM::Role
     Properties:
-      Name: !Sub ${CompanyName}-${Environment}-share
-      AllowExternalPrincipals: false
+      RoleName: !Sub "${EnvironmentName}-ecs-service-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
       Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ecs-service-role"
         - Key: Environment
-          Value: !Ref Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  # ==============================================
+  # RDS DATABASE
+  # ==============================================
+
+  TapstackDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub "${EnvironmentName}-db-subnet-group"
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref TapstackDatabaseSubnet1
+        - !Ref TapstackDatabaseSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-db-subnet-group"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  TapstackDBInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub "${EnvironmentName}-database"
+      DBName: tapstackdb
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: "8.0.43"
+      MasterUsername: !Sub "{{resolve:secretsmanager:${EnvironmentName}-db-password:SecretString:username}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${EnvironmentName}-db-password:SecretString:password}}"
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 100
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId: !Ref TapstackKMSKey
+      VPCSecurityGroups:
+        - !Ref TapstackRDSSecurityGroup
+      DBSubnetGroupName: !Ref TapstackDBSubnetGroup
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: "03:00-04:00"
+      PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: true
+      EnablePerformanceInsights: true
+      MonitoringInterval: 60
+      MonitoringRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role"
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-database"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  # ==============================================
+  # APPLICATION LOAD BALANCER
+  # ==============================================
+
+  TapstackALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${EnvironmentName}-alb"
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref TapstackPublicSubnet1
+        - !Ref TapstackPublicSubnet2
+      SecurityGroups:
+        - !Ref TapstackALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-alb"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  TapstackALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TapstackECSTargetGroup
+      LoadBalancerArn: !Ref TapstackALB
+      Port: 80
+      Protocol: HTTP
+
+  TapstackECSTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub "${EnvironmentName}-ecs-targets"
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref TapstackVPC
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ecs-targets"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  # ==============================================
+  # ECS CLUSTER
+  # ==============================================
+
+  TapstackECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${EnvironmentName}-cluster"
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-cluster"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  TapstackECSLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${EnvironmentName}-ecs-launch-template"
+      LaunchTemplateData:
+        ImageId: ami-0c02fb55956c7d316 # Amazon ECS-Optimized Amazon Linux 2 AMI
+        InstanceType: t3.micro
+        KeyName: !Ref KeyPairName
+        IamInstanceProfile:
+          Arn: !GetAtt TapstackECSInstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref TapstackECSSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            echo ECS_CLUSTER=${TapstackECSCluster} >> /etc/ecs/ecs.config
+            yum update -y
+            yum install -y amazon-cloudwatch-agent
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:AmazonCloudWatch-linux
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub "${EnvironmentName}-ecs-instance"
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: Company
+                Value: !Ref CompanyName
+
+  TapstackECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub "${EnvironmentName}-ecs-asg"
+      LaunchTemplate:
+        LaunchTemplateId: !Ref TapstackECSLaunchTemplate
+        Version: !GetAtt TapstackECSLaunchTemplate.LatestVersionNumber
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref TapstackPrivateSubnet1
+        - !Ref TapstackPrivateSubnet2
+      TargetGroupARNs:
+        - !Ref TapstackECSTargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ecs-asg"
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+        - Key: Company
+          Value: !Ref CompanyName
+          PropagateAtLaunch: true
+
+  # ECS Task Definition (example application)
+  TapstackECSTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub "${EnvironmentName}-app"
+      ExecutionRoleArn: !GetAtt TapstackECSTaskExecutionRole.Arn
+      NetworkMode: bridge
+      ContainerDefinitions:
+        - Name: !Sub "${EnvironmentName}-app-container"
+          Image: nginx:latest
+          Memory: 512
+          PortMappings:
+            - ContainerPort: 80
+              HostPort: 0
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TapstackECSLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: ENVIRONMENT
+              Value: !Ref EnvironmentName
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-task-definition"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  TapstackECSService:
+    Type: AWS::ECS::Service
+    DependsOn: TapstackALBListener
+    Properties:
+      ServiceName: !Sub "${EnvironmentName}-service"
+      Cluster: !Ref TapstackECSCluster
+      TaskDefinition: !Ref TapstackECSTaskDefinition
+      DesiredCount: 2
+      LoadBalancers:
+        - ContainerName: !Sub "${EnvironmentName}-app-container"
+          ContainerPort: 80
+          TargetGroupArn: !Ref TapstackECSTargetGroup
+      Role: !GetAtt TapstackECSServiceRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-service"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  # ==============================================
+  # CLOUDWATCH MONITORING & LOGGING
+  # ==============================================
+
+  TapstackECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/ecs/${EnvironmentName}"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt TapstackKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ecs-logs"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  TapstackCloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/cloudtrail/${EnvironmentName}"
+      RetentionInDays: 90
+      KmsKeyId: !GetAtt TapstackKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-cloudtrail-logs"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  # CloudWatch Dashboard
+  TapstackCloudWatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${EnvironmentName}-infrastructure-dashboard"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ECS", "CPUUtilization", "ClusterName", "${TapstackECSCluster}" ],
+                  [ ".", "MemoryUtilization", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "ECS Cluster Resource Utilization"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApplicationELB", "RequestCount", "LoadBalancer", "${TapstackALB}" ],
+                  [ ".", "TargetResponseTime", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Application Load Balancer Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 12,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/RDS", "DatabaseConnections", "DBInstanceIdentifier", "${TapstackDBInstance}" ],
+                  [ ".", "CPUUtilization", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "RDS Database Metrics"
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarms
+  TapstackECSHighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${EnvironmentName}-ecs-high-cpu"
+      AlarmDescription: "ECS Cluster CPU utilization is too high"
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ClusterName
+          Value: !Ref TapstackECSCluster
+      AlarmActions:
+        - !Ref TapstackSNSTopic
+
+  TapstackRDSHighCPUAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${EnvironmentName}-rds-high-cpu"
+      AlarmDescription: "RDS CPU utilization is too high"
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 80
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref TapstackDBInstance
+      AlarmActions:
+        - !Ref TapstackSNSTopic
+
+  TapstackSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${EnvironmentName}-alerts"
+      DisplayName: !Sub "${EnvironmentName} Infrastructure Alerts"
+      KmsMasterKeyId: !Ref TapstackKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-alerts"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  # ==============================================
+  # S3 BUCKETS FOR LOGGING
+  # ==============================================
+
+  TapstackCloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref TapstackKMSKey
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: CloudTrailLogRetention
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+              - TransitionInDays: 365
+                StorageClass: DEEP_ARCHIVE
+            ExpirationInDays: 2555 # 7 years for compliance
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-cloudtrail-logs"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  TapstackApplicationLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${EnvironmentName}-app-logs-${AWS::AccountId}-${AWS::Region}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref TapstackKMSKey
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ApplicationLogRetention
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+            ExpirationInDays: 365
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-app-logs"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  TapstackCloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TapstackCloudTrailBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Ref TapstackCloudTrailBucket
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "${TapstackCloudTrailBucket}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": bucket-owner-full-control
+
+  # ==============================================
+  # CLOUDTRAIL
+  # ==============================================
+
+  TapstackCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: TapstackCloudTrailBucketPolicy
+    Properties:
+      IsLogging: true # Add this line
+      TrailName: !Sub "${EnvironmentName}-cloudtrail"
+      S3BucketName: !Ref TapstackCloudTrailBucket
+      S3KeyPrefix: "cloudtrail-logs"
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      KMSKeyId: !Ref TapstackKMSKey
+      CloudWatchLogsLogGroupArn: !Sub "${TapstackCloudTrailLogGroup}:*"
+      CloudWatchLogsRoleArn: !GetAtt TapstackCloudTrailLogRole.Arn
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: "AWS::S3::Object"
+              Values:
+                - !Sub "${TapstackApplicationLogsBucket}/*"
+                - !Sub "${TapstackCloudTrailBucket}/*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-cloudtrail"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  TapstackCloudTrailLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-cloudtrail-logs-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailLogsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${TapstackCloudTrailLogGroup}:*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-cloudtrail-logs-role"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  # ==============================================
+  # AUTO SCALING POLICIES
+  # ==============================================
+
+  TapstackECSAutoScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId: !Sub "service/${TapstackECSCluster}/${TapstackECSService.Name}"
+      MinCapacity: 1
+      MaxCapacity: 10
+      RoleARN: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
+
+  TapstackECSScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: !Sub "${EnvironmentName}-ecs-scaling-policy"
+      PolicyType: TargetTrackingScaling
+      ServiceNamespace: ecs
+      ScalableDimension: ecs:service:DesiredCount
+      ResourceId: !Sub "service/${TapstackECSCluster}/${TapstackECSService.Name}"
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 70.0
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+        ScaleOutCooldown: 300
+        ScaleInCooldown: 300
+
+  # ==============================================
+  # BASTION HOST (FOR SECURE ACCESS)
+  # ==============================================
+
+  TapstackBastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI
+      InstanceType: t3.micro
+      KeyName: !Ref KeyPairName
+      SecurityGroupIds:
+        - !Ref TapstackBastionSecurityGroup
+      SubnetId: !Ref TapstackPublicSubnet1
+      UserData: |
+        #!/bin/bash
+        yum update -y
+        yum install -y mysql
+        # Install CloudWatch agent
+        yum install -y amazon-cloudwatch-agent
+        /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:AmazonCloudWatch-linux
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-bastion-host"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  # ==============================================
+  # VPC FLOW LOGS FOR SECURITY MONITORING
+  # ==============================================
+
+  TapstackVPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${EnvironmentName}-vpc-flow-logs-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: VPCFlowLogsDeliveryRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: "*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-vpc-flow-logs-role"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+  TapstackVPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vpc/flowlogs/${EnvironmentName}"
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt TapstackKMSKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-vpc-flow-logs"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+        - Key: SOC2-Compliant
+          Value: "true"
+
+  TapstackVPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      ResourceType: VPC
+      ResourceId: !Ref TapstackVPC
+      TrafficType: ALL
+      LogDestinationType: cloud-watch-logs
+      LogDestination: !GetAtt TapstackVPCFlowLogGroup.Arn
+      DeliverLogsPermissionArn: !GetAtt TapstackVPCFlowLogRole.Arn
+      LogFormat: "${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${windowstart} ${windowend} ${action}"
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-vpc-flow-log"
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Company
+          Value: !Ref CompanyName
+
+# ==============================================
+# OUTPUTS
+# ==============================================
 
 Outputs:
   VPCId:
     Description: VPC ID
-    Value: !Ref VPC
+    Value: !Ref TapstackVPC
     Export:
-      Name: !Sub ${CompanyName}-${Environment}-VPCId
+      Name: !Sub "${EnvironmentName}-VPC-ID"
 
-  ALBDNSName:
-    Description: Application Load Balancer DNS Name
-    Value: !GetAtt ALB.DNSName
+  PublicSubnet1:
+    Description: Public Subnet 1 ID
+    Value: !Ref TapstackPublicSubnet1
     Export:
-      Name: !Sub ${CompanyName}-${Environment}-ALBDNSName
+      Name: !Sub "${EnvironmentName}-PublicSubnet1-ID"
 
-  RDSEndpoint:
-    Description: RDS Endpoint
-    Value: !GetAtt RDSInstance.Endpoint.Address
+  PublicSubnet2:
+    Description: Public Subnet 2 ID
+    Value: !Ref TapstackPublicSubnet2
     Export:
-      Name: !Sub ${CompanyName}-${Environment}-RDSEndpoint
+      Name: !Sub "${EnvironmentName}-PublicSubnet2-ID"
 
-  ECSClusterName:
+  PrivateSubnet1:
+    Description: Private Subnet 1 ID
+    Value: !Ref TapstackPrivateSubnet1
+    Export:
+      Name: !Sub "${EnvironmentName}-PrivateSubnet1-ID"
+
+  PrivateSubnet2:
+    Description: Private Subnet 2 ID
+    Value: !Ref TapstackPrivateSubnet2
+    Export:
+      Name: !Sub "${EnvironmentName}-PrivateSubnet2-ID"
+
+  DatabaseSubnet1:
+    Description: Database Subnet 1 ID
+    Value: !Ref TapstackDatabaseSubnet1
+    Export:
+      Name: !Sub "${EnvironmentName}-DatabaseSubnet1-ID"
+
+  DatabaseSubnet2:
+    Description: Database Subnet 2 ID
+    Value: !Ref TapstackDatabaseSubnet2
+    Export:
+      Name: !Sub "${EnvironmentName}-DatabaseSubnet2-ID"
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS name
+    Value: !GetAtt TapstackALB.DNSName
+    Export:
+      Name: !Sub "${EnvironmentName}-ALB-DNS"
+
+  ECSCluster:
     Description: ECS Cluster Name
-    Value: !Ref ECSCluster
+    Value: !Ref TapstackECSCluster
     Export:
-      Name: !Sub ${CompanyName}-${Environment}-ECSClusterName
+      Name: !Sub "${EnvironmentName}-ECS-Cluster"
 
-  ApplicationLogsBucketName:
-    Description: Application Logs S3 Bucket
-    Value: !Ref ApplicationLogsBucket
+  DatabaseEndpoint:
+    Description: RDS Database Endpoint
+    Value: !GetAtt TapstackDBInstance.Endpoint.Address
     Export:
-      Name: !Sub ${CompanyName}-${Environment}-AppLogsBucket
+      Name: !Sub "${EnvironmentName}-DB-Endpoint"
+
+  BastionHostPublicIP:
+    Description: Bastion Host Public IP
+    Value: !GetAtt TapstackBastionHost.PublicIp
+    Export:
+      Name: !Sub "${EnvironmentName}-Bastion-IP"
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !Ref TapstackKMSKey
+    Export:
+      Name: !Sub "${EnvironmentName}-KMS-Key-ID"
+
+  CloudTrailBucket:
+    Description: S3 Bucket for CloudTrail logs
+    Value: !Ref TapstackCloudTrailBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-CloudTrail-Bucket"
+
+  ApplicationLogsBucket:
+    Description: S3 Bucket for application logs
+    Value: !Ref TapstackApplicationLogsBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-App-Logs-Bucket"
+
+  CloudWatchDashboard:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${TapstackCloudWatchDashboard}"
+    Export:
+      Name: !Sub "${EnvironmentName}-Dashboard-URL"
