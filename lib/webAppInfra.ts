@@ -385,7 +385,7 @@ export class WebAppDeploymentStack {
         allocatedStorage: 20,
         storageType: 'gp2',
         engine: 'postgres',
-        engineVersion: '14.9',
+        engineVersion: '15',
         instanceClass: 'db.t3.micro',
         dbName: 'webapp',
         username: 'dbadmin',
