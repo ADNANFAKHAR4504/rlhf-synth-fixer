@@ -1,42 +1,39 @@
-You are an experienced **AWS CDKTF (Cloud Development Kit for Terraform) engineer**.  
-Please write a **production-ready TypeScript implementation** that provisions a secure and scalable AWS environment in the **us-east-1** region.
+Write a production-ready **TypeScript implementation** that provisions a **secure and scalable AWS environment** in **us-east-1**.
 
 ---
 
-## What the environment should include
+## Requirements
 
 ### Networking
-- A VPC with both **public and private subnets**.  
-- An **Internet Gateway** attached to the VPC.  
-- **NAT Gateways** in the public subnets so that private resources can reach the internet securely.  
+- VPC with **public + private subnets**  
+- **Internet Gateway** attached  
+- **NAT Gateways** in public subnets for private resource internet access  
 
-### Compute layer
-- An **Auto Scaling Group** that runs **two EC2 instances per private subnet**.  
-- An **Application Load Balancer** in the public subnets that fronts the ASG.  
-- Instances should use an **IAM role/instance profile** with policies to allow access to **S3 and Systems Manager**.  
+### Compute
+- **Auto Scaling Group** with **2 EC2 instances per private subnet**  
+- **Application Load Balancer** in public subnets in front of ASG  
+- Instances use an **IAM role** with access to **S3 + Systems Manager**  
 
 ### Security
-- **Security Groups** configured so that traffic is restricted to **HTTPS (443)** and **SSH (22)** only.  
+- **Security Groups** allowing only **HTTPS (443)** and **SSH (22)**  
 
 ### Database
-- An **RDS instance** deployed into the private subnets.  
-- It should be configured as **Multi-AZ** and the password must be stored securely in **AWS Secrets Manager**.  
+- **RDS Multi-AZ** in private subnets  
+- Password stored in **AWS Secrets Manager**  
 
 ### Storage
-- An **S3 bucket with versioning enabled** for backups.  
+- **S3 bucket** with **versioning enabled** for backups  
 
 ---
 
-## Code structure
+## Code Structure
 
-Keep the implementation clean and modular. The code should live in exactly **two files**:
+Code must be exactly **two files**:
 
-1. **`lib/tap-stack.ts`** – the main stack file that ties everything together.  
-2. **`lib/modules.ts`** – defines reusable modules for each layer:
+1. `lib/tap-stack.ts` – ties everything together  
+2. `lib/modules.ts` – reusable modules:  
    - **NetworkModule** (VPC, subnets, IGW, NAT)  
-   - **SecurityModule** (security groups and rules)  
+   - **SecurityModule** (SGs + rules)  
    - **ComputeModule** (ASG, EC2, ALB)  
-   - **DatabaseModule** (RDS with Multi-AZ + Secrets Manager)  
-   - **StorageModule** (S3 bucket + IAM roles for EC2)  
-
-Each module should accept minimal props and expose clear outputs (e.g., subnet IDs, SG IDs, ALB DNS name, RDS endpoint, S3 bucket name, secret ARN, instance profile).  
+   - **DatabaseModule** (RDS + Secrets Manager)  
+   - **StorageModule** (S3 + IAM roles)  
