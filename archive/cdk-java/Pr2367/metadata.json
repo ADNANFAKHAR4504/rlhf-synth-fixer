@@ -30,5 +30,11 @@
     "Amazon CloudWatch",
     "Amazon CloudWatch Logs",
     "VPC Flow Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
