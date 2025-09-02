@@ -36,7 +36,6 @@ export class SecureVpcStack extends cdk.Stack {
     const createNatGateway = props?.createNatGateway ?? true;
     const vpcCidr = props?.vpcCidr || '10.0.0.0/16';
     const allowedSshCidr = props?.allowedSshCidr || '0.0.0.0/0';
-    const existingVpcId = props?.existingVpcId;
     const companyTags = props?.companyTags || {
       Environment: 'Production',
       Project: 'SecureVPC',
