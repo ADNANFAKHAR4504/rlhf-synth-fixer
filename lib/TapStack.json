@@ -153,7 +153,7 @@
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "Handler": "index.handler",
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Code": {
           "ZipFile": "exports.handler = async function(event, context) { return 'Hello, secure world!'; };"
         },
