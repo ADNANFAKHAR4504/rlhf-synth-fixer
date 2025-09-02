@@ -2,6 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider'; // Add this line
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { Construct } from 'constructs';
@@ -57,6 +58,9 @@ export class TapStack extends TerraformStack {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    // Add Random Provider - ADD THIS
+    new RandomProvider(this, 'random');
 
     // Get current AWS account information
     const current = new DataAwsCallerIdentity(this, 'current');
