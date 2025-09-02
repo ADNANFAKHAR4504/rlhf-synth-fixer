@@ -3,7 +3,7 @@
 
 import fs from "fs";
 import path from "path";
-import { InfrastructureValidator, validateProviderConfiguration, validateTerraformStructure } from "./infrastructure-validator";
+// Removed infrastructure-validator import - using direct string matching instead
 
 const STACK_REL = "../lib/tap_stack.tf";
 const PROVIDER_REL = "../lib/provider.tf";
@@ -13,13 +13,11 @@ const providerPath = path.resolve(__dirname, PROVIDER_REL);
 describe("Terraform Infrastructure Validation", () => {
   let stackContent: string;
   let providerContent: string;
-  let validator: InfrastructureValidator;
 
   beforeAll(() => {
     // Read files once for all tests
     if (fs.existsSync(stackPath)) {
       stackContent = fs.readFileSync(stackPath, "utf8");
-      validator = new InfrastructureValidator(stackContent);
     }
     if (fs.existsSync(providerPath)) {
       providerContent = fs.readFileSync(providerPath, "utf8");
@@ -321,55 +319,52 @@ describe("Terraform Infrastructure Validation", () => {
     });
   });
 
-  describe("Infrastructure Validator Usage", () => {
-    test("validator can identify VPC resources", () => {
-      expect(validator.hasResourceType("aws_vpc")).toBe(true);
-      expect(validator.countResourceType("aws_vpc")).toBeGreaterThan(0);
+  describe("Resource Validation", () => {
+    test("has VPC resources", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_vpc"/);
+      const vpcMatches = stackContent.match(/resource\s+"aws_vpc"/g);
+      expect(vpcMatches?.length).toBeGreaterThan(0);
     });
 
-    test("validator can identify required variables", () => {
-      expect(validator.hasVariable("aws_region")).toBe(true);
-      expect(validator.hasVariable("environment")).toBe(true);
+    test("has required variables", () => {
+      expect(stackContent).toMatch(/variable\s+"aws_region"/);
+      expect(stackContent).toMatch(/variable\s+"environment"/);
     });
 
-    test("validator can identify outputs", () => {
-      expect(validator.hasOutput("vpc_ids_use1")).toBe(true);
-      expect(validator.hasOutput("alb_dns_names_use1")).toBe(true);
+    test("has required outputs", () => {
+      expect(stackContent).toMatch(/output\s+"vpc_ids_use1"/);
+      expect(stackContent).toMatch(/output\s+"alb_dns_names_use1"/);
     });
 
-    test("validator confirms multi-region setup", () => {
-      const regions = ["us-east-1", "ap-southeast-2"];
-      expect(validator.validateMultiRegion(regions)).toBe(true);
+    test("confirms multi-region setup", () => {
+      expect(stackContent).toMatch(/us-east-1/);
+      expect(stackContent).toMatch(/ap-southeast-2/);
     });
 
-    test("validator checks security practices", () => {
-      const security = validator.validateSecurityPractices();
-      expect(security.hasEncryption).toBe(true);
-      expect(security.hasVersioning).toBe(true);
-      expect(security.hasPublicAccessBlock).toBe(true);
+    test("validates security practices", () => {
+      expect(stackContent).toMatch(/storage_encrypted\s*=\s*true/);
+      expect(stackContent).toMatch(/status\s*=\s*"Enabled"/);
+      expect(stackContent).toMatch(/block_public_acls\s*=\s*true/);
     });
 
-    test("validator can extract resource names", () => {
-      const vpcNames = validator.getResourceNames("aws_vpc");
-      expect(vpcNames.length).toBeGreaterThan(0);
-      expect(vpcNames).toContain("main_use1");
+    test("can extract VPC resource names", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"main_use1"/);
+      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"main_apse2"/);
     });
   });
 
   describe("Structure Validation", () => {
     test("terraform structure validation works", () => {
-      const structure = validateTerraformStructure(stackContent);
-      expect(structure.hasVariables).toBe(true);
-      expect(structure.hasLocals).toBe(true);
-      expect(structure.hasResources).toBe(true);
-      expect(structure.hasOutputs).toBe(true);
-      expect(structure.hasDataSources).toBe(true);
+      expect(stackContent).toMatch(/variable\s+/);
+      expect(stackContent).toMatch(/locals\s*{/);
+      expect(stackContent).toMatch(/resource\s+/);
+      expect(stackContent).toMatch(/output\s+/);
+      expect(stackContent).toMatch(/data\s+/);
     });
 
     test("provider configuration validation works", () => {
-      const providerConfig = validateProviderConfiguration(providerContent);
-      expect(providerConfig.hasAliasProviders).toBe(true);
-      expect(providerConfig.hasVersionConstraints).toBe(true);
+      expect(providerContent).toMatch(/provider\s+"aws"\s*{[^}]*alias\s*=/);
+      expect(providerContent).toMatch(/required_version/);
     });
   });
 });
