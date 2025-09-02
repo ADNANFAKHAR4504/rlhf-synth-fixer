@@ -458,7 +458,7 @@ Resources:
       EngineVersion: "13.21"
       DBInstanceClass: !Ref DatabaseInstanceClass
       MasterUsername: !Ref DatabaseUsername
-      MasterUserPassword: "{{resolve:secretsmanager:YourSecretName:SecretString:password}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${EnvironmentName}-${EnvironmentSuffix}-db-password:SecretString:password}}"
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       StorageType: gp2
@@ -564,6 +564,7 @@ Resources:
 
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
+    # DependsOn: CloudWatchLogsGroup
     Properties:
       Family: !Sub ${EnvironmentName}-${EnvironmentSuffix}-task
       NetworkMode: awsvpc
@@ -587,7 +588,7 @@ Resources:
               awslogs-stream-prefix: ecs
           Secrets:
             - Name: DATABASE_PASSWORD
-              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:your-secret-name-here:password::"
+              ValueFrom: !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${EnvironmentName}-${EnvironmentSuffix}-db-password"
           Environment:
             - Name: DATABASE_URL
               Value: !Sub postgresql://${DatabaseUsername}:@${RDSInstance.Endpoint.Address}:${RDSInstance.Endpoint.Port}/${DatabaseName}
@@ -731,7 +732,7 @@ Resources:
     Properties:
       LogGroupName: !Sub /ecs/${EnvironmentName}-${EnvironmentSuffix}
       RetentionInDays: 365
-      KmsKeyId: !Ref KMSKey
+      # KmsKeyId: !Ref KMSKey
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-${EnvironmentSuffix}-logs
