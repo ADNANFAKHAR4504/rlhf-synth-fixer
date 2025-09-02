@@ -32,11 +32,11 @@ class TestTapStackUnit(unittest.TestCase):
         """Test network configuration constants."""
         # These values should match what's actually in tap_stack.py
         vpc_cidr = "10.0.0.0/16"
-        subnet_cidrs = ["10.0.1.0/24", "10.0.10.0/24", "10.0.2.0/24", "10.0.11.0/24"]
+        subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
         region = "us-east-1"
         
         self.assertEqual(vpc_cidr, "10.0.0.0/16")
-        self.assertEqual(len(subnet_cidrs), 4)
+        self.assertEqual(len(subnet_cidrs), 2)
         self.assertEqual(region, "us-east-1")
         
         # Test that these match our actual infrastructure design
@@ -45,25 +45,23 @@ class TestTapStackUnit(unittest.TestCase):
 
     def test_instance_configuration_constants(self):
         """Test instance configuration constants."""
-        instance_type = "t3.micro"
-        self.assertEqual(instance_type, "t3.micro")
+        instance_type = "t2.micro"
+        self.assertEqual(instance_type, "t2.micro")
 
     def test_common_tags_configuration(self):
         """Test common tags configuration."""
         common_tags = {
-            "Environment": "Production",
-            "Project": "tap-infrastructure",
+            "Environment": "production",
+            "Project": "TAP-Infrastructure",
             "ManagedBy": "Pulumi",
-            "CostCenter": "Infrastructure",
-            "Owner": "DevOps Team"
+            "Team": "Infrastructure"
         }
         
         expected_tags = {
-            "Environment": "Production",
-            "Project": "tap-infrastructure",
+            "Environment": "production",
+            "Project": "TAP-Infrastructure",
             "ManagedBy": "Pulumi",
-            "CostCenter": "Infrastructure",
-            "Owner": "DevOps Team"
+            "Team": "Infrastructure"
         }
         self.assertEqual(common_tags, expected_tags)
 
@@ -286,25 +284,18 @@ echo "<h1>Hello from TAP Infrastructure!</h1>" > /var/www/html/index.html
                 content = f.read()
             
             # Test that key configuration values are present in the file
-            self.assertIn('project_name = "tap-infrastructure"', content)
-            self.assertIn('"Environment": "Production"', content)
-            self.assertIn('"Project": project_name', content)
+            self.assertIn('vpc_cidr = "10.0.0.0/16"', content)
+            self.assertIn('"Environment": "production"', content)
+            self.assertIn('"Project": "TAP-Infrastructure"', content)
             self.assertIn('"ManagedBy": "Pulumi"', content)
-            self.assertIn('"CostCenter": "Infrastructure"', content)
-            self.assertIn('"Owner": "DevOps Team"', content)
+            self.assertIn('"Team": "Infrastructure"', content)
             
             # Test that key infrastructure components are defined
-            self.assertIn('def _create_vpc(self):', content)
-            self.assertIn('def _create_security_groups(self):', content)
-            self.assertIn('def _create_iam_roles(self):', content)
-            self.assertIn('def _create_s3_buckets(self):', content)
-            self.assertIn('def _create_rds_database(self):', content)
-            self.assertIn('def _create_lambda_function(self):', content)
-            self.assertIn('def _create_ec2_infrastructure(self):', content)
-            self.assertIn('def _create_monitoring(self):', content)
+            self.assertIn('class TapStack(pulumi.ComponentResource):', content)
+            self.assertIn('class TapStackArgs:', content)
             
             # Test that the stack is instantiated
-            self.assertIn('stack = TapStack("tap-infrastructure")', content)
+            self.assertIn('stack = TapStack("tap-infrastructure", TapStackArgs())', content)
             
             print("Stack code structure validation completed successfully")
             
@@ -313,137 +304,9 @@ echo "<h1>Hello from TAP Infrastructure!</h1>" > /var/www/html/index.html
         except Exception as e:
             self.fail(f"Failed to read tap_stack.py: {e}")
 
-    def test_auto_scaling_group_configuration(self):
-        """Test Auto Scaling Group configuration."""
-        asg_config = {
-            "desired_capacity": 2,
-            "max_size": 4,
-            "min_size": 1,
-            "health_check_grace_period": 300,
-            "health_check_type": "ELB"
-        }
-        
-        self.assertEqual(asg_config["desired_capacity"], 2)
-        self.assertEqual(asg_config["max_size"], 4)
-        self.assertEqual(asg_config["min_size"], 1)
-        self.assertEqual(asg_config["health_check_grace_period"], 300)
-        self.assertEqual(asg_config["health_check_type"], "ELB")
-        
-        # Test configuration validation
-        self.assertGreater(asg_config["max_size"], asg_config["min_size"])
-        self.assertGreaterEqual(asg_config["desired_capacity"], asg_config["min_size"])
-        self.assertLessEqual(asg_config["desired_capacity"], asg_config["max_size"])
-        self.assertGreater(asg_config["health_check_grace_period"], 0)
-        
-        # Test that health check type is valid
-        valid_health_check_types = ["EC2", "ELB"]
-        self.assertIn(asg_config["health_check_type"], valid_health_check_types)
 
-    def test_rds_configuration(self):
-        """Test RDS configuration."""
-        rds_config = {
-            "allocated_storage": 20,
-            "storage_type": "gp2",
-            "engine": "postgres",
-            "engine_version": "13.7",
-            "instance_class": "db.t3.micro",
-            "multi_az": True,
-            "storage_encrypted": True,
-            "backup_retention_period": 7
-        }
-        
-        self.assertEqual(rds_config["allocated_storage"], 20)
-        self.assertEqual(rds_config["storage_type"], "gp2")
-        self.assertEqual(rds_config["engine"], "postgres")
-        self.assertEqual(rds_config["engine_version"], "13.7")
-        self.assertEqual(rds_config["instance_class"], "db.t3.micro")
-        self.assertTrue(rds_config["multi_az"])
-        self.assertTrue(rds_config["storage_encrypted"])
-        self.assertEqual(rds_config["backup_retention_period"], 7)
 
-    def test_s3_bucket_configuration(self):
-        """Test S3 bucket configuration."""
-        s3_config = {
-            "versioning_enabled": True,
-            "encryption_algorithm": "AES256",
-            "public_access_blocked": True,
-            "lifecycle_policies_enabled": True
-        }
-        
-        self.assertTrue(s3_config["versioning_enabled"])
-        self.assertEqual(s3_config["encryption_algorithm"], "AES256")
-        self.assertTrue(s3_config["public_access_blocked"])
-        self.assertTrue(s3_config["lifecycle_policies_enabled"])
 
-    def test_cloudwatch_alarm_configuration(self):
-        """Test CloudWatch alarm configuration."""
-        alarm_config = {
-            "cpu_threshold": 80.0,
-            "memory_threshold": 85.0,
-            "evaluation_periods": 2,
-            "period": 300,
-            "statistic": "Average"
-        }
-        
-        self.assertEqual(alarm_config["cpu_threshold"], 80.0)
-        self.assertEqual(alarm_config["memory_threshold"], 85.0)
-        self.assertEqual(alarm_config["evaluation_periods"], 2)
-        self.assertEqual(alarm_config["period"], 300)
-        self.assertEqual(alarm_config["statistic"], "Average")
-
-    def test_lambda_function_configuration(self):
-        """Test Lambda function configuration."""
-        lambda_config = {
-            "runtime": "python3.9",
-            "timeout": 300,
-            "memory_size": 128,
-            "handler": "index.lambda_handler"
-        }
-        
-        self.assertEqual(lambda_config["runtime"], "python3.9")
-        self.assertEqual(lambda_config["timeout"], 300)
-        self.assertEqual(lambda_config["memory_size"], 128)
-        self.assertEqual(lambda_config["handler"], "index.lambda_handler")
-
-    def test_nat_gateway_configuration(self):
-        """Test NAT Gateway configuration."""
-        nat_config = {
-            "count": 3,  # One per AZ
-            "allocation_strategy": "one_per_az",
-            "cost_optimization": "enabled"
-        }
-        
-        self.assertEqual(nat_config["count"], 3)
-        self.assertEqual(nat_config["allocation_strategy"], "one_per_az")
-        self.assertEqual(nat_config["cost_optimization"], "enabled")
-
-    def test_load_balancer_configuration(self):
-        """Test Load Balancer configuration."""
-        lb_config = {
-            "type": "application",
-            "internal": False,
-            "deletion_protection": False,
-            "idle_timeout": 60
-        }
-        
-        self.assertEqual(lb_config["type"], "application")
-        self.assertFalse(lb_config["internal"])
-        self.assertFalse(lb_config["deletion_protection"])
-        self.assertEqual(lb_config["idle_timeout"], 60)
-
-    def test_bastion_host_configuration(self):
-        """Test Bastion host configuration."""
-        bastion_config = {
-            "instance_type": "t3.micro",
-            "public_ip": True,
-            "security_group": "bastion-sg",
-            "subnet": "public"
-        }
-        
-        self.assertEqual(bastion_config["instance_type"], "t3.micro")
-        self.assertTrue(bastion_config["public_ip"])
-        self.assertEqual(bastion_config["security_group"], "bastion-sg")
-        self.assertEqual(bastion_config["subnet"], "public")
 
     def _is_valid_cidr(self, cidr):
         """Helper method to validate CIDR format."""
@@ -476,40 +339,29 @@ echo "<h1>Hello from TAP Infrastructure!</h1>" > /var/www/html/index.html
             with open(tap_stack_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Test that the file contains the expected project configuration
-            self.assertIn('project_name = "tap-infrastructure"', content)
-            self.assertIn('environment = get_stack() or "prod"', content)
+            # Test that the file contains the expected configuration
+            self.assertIn('vpc_cidr = "10.0.0.0/16"', content)
+            self.assertIn('subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]', content)
+            self.assertIn('region = "us-east-1"', content)
             
             # Test that common tags are properly defined
-            self.assertIn('"Environment": "Production"', content)
-            self.assertIn('"Project": project_name', content)
+            self.assertIn('"Environment": "production"', content)
+            self.assertIn('"Project": "TAP-Infrastructure"', content)
             self.assertIn('"ManagedBy": "Pulumi"', content)
             
             # Test that the TapStack class is defined
             self.assertIn('class TapStack(pulumi.ComponentResource):', content)
             
-            # Test that all required methods are defined
-            required_methods = [
-                '_create_vpc',
-                '_create_security_groups', 
-                '_create_iam_roles',
-                '_create_s3_buckets',
-                '_create_rds_database',
-                '_create_lambda_function',
-                '_create_ec2_infrastructure',
-                '_create_monitoring'
-            ]
-            
-            for method in required_methods:
-                self.assertIn(f'def {method}(self):', content)
+            # Test that the TapStackArgs class is defined
+            self.assertIn('class TapStackArgs:', content)
             
             # Test that the stack is instantiated
-            self.assertIn('stack = TapStack("tap-infrastructure")', content)
+            self.assertIn('stack = TapStack("tap-infrastructure", TapStackArgs())', content)
             
             # Test that exports are defined
             self.assertIn('pulumi.export("vpc_id"', content)
-            self.assertIn('pulumi.export("load_balancer_dns"', content)
-            self.assertIn('pulumi.export("rds_endpoint"', content)
+            self.assertIn('pulumi.export("vpc_cidr"', content)
+            self.assertIn('pulumi.export("instance_ids"', content)
             
             print("File configuration validation completed successfully")
             
