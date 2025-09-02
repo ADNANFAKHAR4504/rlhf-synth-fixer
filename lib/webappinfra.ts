@@ -1255,17 +1255,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.backup.Selection(
-      `backup-selection-${environment}`,
-      {
-        iamRoleArn: backupRole.arn,
-        name: `backup-selection-${environment}`,
-        planId: backupPlan.id,
-        resources: [this.rdsInstance.arn],
-      },
-      { provider: this.provider }
-    );
-
     // CloudTrail
     const cloudTrailBucket = new aws.s3.Bucket(
       `cloudtrail-${environment}`,
@@ -1537,6 +1526,18 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
           AutoScalingGroupName: this.autoScalingGroup.name,
         },
         tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    // Backup Selection - moved here after RDS instance creation
+    new aws.backup.Selection(
+      `backup-selection-${environment}`,
+      {
+        iamRoleArn: backupRole.arn,
+        name: `backup-selection-${environment}`,
+        planId: backupPlan.id,
+        resources: [this.rdsInstance.arn],
       },
       { provider: this.provider }
     );
