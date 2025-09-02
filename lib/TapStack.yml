@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure AWS environment in a single region (e.g., us-east-2) with encryption, logging, WAF, Shield, and secure compute.
+Description: Secure AWS environment in a single region with encryption, logging, WAF, Shield, and secure compute.
 
 Parameters:
   VpcCidr:
@@ -16,6 +16,7 @@ Parameters:
     Default: 80
 
 Resources:
+  ### KMS ###
   KmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -36,6 +37,7 @@ Resources:
       AliasName: alias/secureKey
       TargetKeyId: !Ref KmsKey
 
+  ### VPC & Subnets ###
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -66,6 +68,7 @@ Resources:
         - Key: Name
           Value: PrivateSubnet2
 
+  ### S3 Buckets ###
   SecretsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -112,11 +115,12 @@ Resources:
               StringEquals:
                 "aws:SourceAccount": !Ref AWS::AccountId
 
-
+  ### Load Balancer ###
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn:
-      - ALBAccessLogsBucketPolicy 
+      - ALBAccessLogsBucket
+      - ALBAccessLogsBucketPolicy
     Properties:
       Subnets:
         - !Ref PrivateSubnet1
@@ -129,12 +133,14 @@ Resources:
       Type: application
       Scheme: internal
 
+  ### Shield ###
   ShieldProtection:
     Type: AWS::Shield::Protection
     Properties:
       Name: ShieldProtectionALB
       ResourceArn: !GetAtt LoadBalancer.LoadBalancerArn
 
+  ### Lambda ###
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -151,15 +157,12 @@ Resources:
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Lambda function security group
+      GroupDescription: Lambda security group
       VpcId: !Ref Vpc
       SecurityGroupIngress: []
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: "0.0.0.0/0"
-      Tags:
-        - Key: Name
-          Value: LambdaSecurityGroup
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -179,9 +182,10 @@ Resources:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
         SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+          - !Ref LambdaSecurityGroup
       Role: !GetAtt LambdaExecutionRole.Arn
 
+  ### CloudWatch Alarm ###
   CloudWatchAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -196,6 +200,7 @@ Resources:
       Dimensions: []
       AlarmActions: []
 
+  ### Secrets ###
   MySecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -203,6 +208,7 @@ Resources:
       Description: Secret used by Lambda
       SecretString: '{"username":"admin","password":"SecureP@ssw0rd"}'
 
+  ### API Gateway ###
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -238,6 +244,7 @@ Resources:
       RestApiId: !Ref ApiGateway
       StageName: prod
 
+  ### WAF ###
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -265,15 +272,16 @@ Resources:
 
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
-    DependsOn: ApiDeployment 
+    DependsOn: ApiDeployment
     Properties:
       WebACLArn: !GetAtt WAFWebACL.Arn
       ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod
 
+  ### AWS Config ###
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      RoleARN: arn:aws:iam::718240086340:role/aws-config-role  # Replace if needed
+      RoleARN: arn:aws:iam::718240086340:role/aws-config-role  # Update if needed
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -283,6 +291,7 @@ Resources:
     Properties:
       S3BucketName: !Ref SecretsBucket
 
+### Outputs ###
 Outputs:
   LoadBalancerDNS:
     Value: !GetAtt LoadBalancer.DNSName
