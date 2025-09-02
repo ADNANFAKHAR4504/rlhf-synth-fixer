@@ -57,11 +57,7 @@ export class TapStack extends pulumi.ComponentResource {
     const tags = args.tags || {};
     const environmentSuffix = args.environmentSuffix || 'dev';
 
-    new EnvironmentMigrationStack(
-      'us-east-1',
-      environmentSuffix,
-      pulumi.output(tags)
-    );
+    new EnvironmentMigrationStack('us-east-1', environmentSuffix, tags);
 
     // Register the outputs of this component.
     this.registerOutputs({

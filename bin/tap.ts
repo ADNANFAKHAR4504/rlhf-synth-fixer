@@ -37,7 +37,7 @@ const defaultTags = {
 // This encapsulates all the resources for the platform.
 new TapStack('pulumi-infra', {
   tags: defaultTags,
-  environmentSuffix: environmentSuffix
+  environmentSuffix: environmentSuffix,
 });
 
 // To use the stack outputs, you can export them.
