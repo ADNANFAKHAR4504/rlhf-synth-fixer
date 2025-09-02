@@ -276,20 +276,6 @@ Resources:
       WebACLArn: !GetAtt WAFWebACL.Arn
       ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod
 
-  ### AWS Config ###
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      RoleARN: arn:aws:iam::718240086340:role/aws-config-role  # Update if needed
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      S3BucketName: !Ref SecretsBucket
-
 ### Outputs ###
 Outputs:
   LoadBalancerDNS:
