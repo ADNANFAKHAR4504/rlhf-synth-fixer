@@ -94,6 +94,19 @@ export class EnvironmentMigrationStack {
     );
   }
 
+  public getAvailabilityZone(
+    names: string[] | undefined | null,
+    index: number
+  ): string {
+    if (!names || names.length === 0) {
+      return `us-east-1${String.fromCharCode(97 + index)}`;
+    }
+    return (
+      names[index % names.length] ||
+      `us-east-1${String.fromCharCode(97 + index)}`
+    );
+  }
+
   private createNetworking(): {
     publicSubnets: aws.ec2.Subnet[];
     privateSubnets: aws.ec2.Subnet[];
@@ -121,7 +134,9 @@ export class EnvironmentMigrationStack {
           {
             vpcId: this.vpc.id,
             cidrBlock: `10.0.${i + 1}.0/24`,
-            availabilityZone: azs.then(azs => azs.names[i % azs.names.length]),
+            availabilityZone: azs.then(azs =>
+              this.getAvailabilityZone(azs.names, i)
+            ),
             mapPublicIpOnLaunch: true,
             tags: {
               ...this.tags,
@@ -138,7 +153,9 @@ export class EnvironmentMigrationStack {
           {
             vpcId: this.vpc.id,
             cidrBlock: `10.0.${i + 10}.0/24`,
-            availabilityZone: azs.then(azs => azs.names[i % azs.names.length]),
+            availabilityZone: azs.then(azs =>
+              this.getAvailabilityZone(azs.names, i)
+            ),
             tags: {
               ...this.tags,
               Name: `private-subnet-${i}-${this.environment}`,

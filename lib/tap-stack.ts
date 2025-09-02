@@ -9,7 +9,8 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import { EnvironmentMigrationStack } from './environmentMigrationStack';
+
+import { WebAppInfra } from './webappinfra';
 // import * as aws from '@pulumi/aws'; // Removed as it's only used in example code
 
 // Import your nested stacks here. For example:
@@ -42,8 +43,16 @@ export interface TapStackArgs {
  * - Use other components (e.g., DynamoDBStack) for AWS resource definitions.
  */
 export class TapStack extends pulumi.ComponentResource {
-  // Example of a public property for a nested resource's output.
-  // public readonly table: pulumi.Output<string>;
+  public readonly vpcId: pulumi.Output<string>;
+  public readonly publicSubnetIds: pulumi.Output<string>[];
+  public readonly privateSubnetIds: pulumi.Output<string>[];
+  public readonly s3BucketName: pulumi.Output<string>;
+  public readonly rdsEndpoint: pulumi.Output<string>;
+  public readonly lambdaFunctionArn: pulumi.Output<string>;
+  public readonly albDnsName: pulumi.Output<string>;
+  public readonly cloudFrontDomainName: pulumi.Output<string>;
+  public readonly ec2InstanceId: pulumi.Output<string>;
+  public readonly dynamoTableName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -57,11 +66,39 @@ export class TapStack extends pulumi.ComponentResource {
     const tags = args.tags || {};
     const environmentSuffix = args.environmentSuffix || 'dev';
 
-    new EnvironmentMigrationStack('us-east-1', environmentSuffix, tags);
+    const webAppInfra = new WebAppInfra(
+      'webapp-infra',
+      {
+        region: 'us-east-1',
+        environment: environmentSuffix,
+        tags: tags,
+      },
+      { parent: this }
+    );
+
+    this.vpcId = webAppInfra.vpcId;
+    this.publicSubnetIds = webAppInfra.publicSubnetIds;
+    this.privateSubnetIds = webAppInfra.privateSubnetIds;
+    this.s3BucketName = webAppInfra.s3BucketName;
+    this.rdsEndpoint = webAppInfra.rdsEndpoint;
+    this.lambdaFunctionArn = webAppInfra.lambdaFunctionArn;
+    this.albDnsName = webAppInfra.albDnsName;
+    this.cloudFrontDomainName = webAppInfra.cloudFrontDomainName;
+    this.ec2InstanceId = webAppInfra.ec2InstanceId;
+    this.dynamoTableName = webAppInfra.dynamoTableName;
 
     // Register the outputs of this component.
     this.registerOutputs({
-      // table: this.table,
+      vpcId: this.vpcId,
+      publicSubnetIds: this.publicSubnetIds,
+      privateSubnetIds: this.privateSubnetIds,
+      s3BucketName: this.s3BucketName,
+      rdsEndpoint: this.rdsEndpoint,
+      lambdaFunctionArn: this.lambdaFunctionArn,
+      albDnsName: this.albDnsName,
+      cloudFrontDomainName: this.cloudFrontDomainName,
+      ec2InstanceId: this.ec2InstanceId,
+      dynamoTableName: this.dynamoTableName,
     });
   }
 }
