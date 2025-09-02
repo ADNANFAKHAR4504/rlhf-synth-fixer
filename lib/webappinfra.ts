@@ -1175,86 +1175,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider, dependsOn: [flowLogGroup] }
     );
 
-    // AWS Backup Plan for cross-region backup
-    const backupVault = new aws.backup.Vault(
-      `backup-vault-${environment}`,
-      {
-        kmsKeyArn: kmsKey.arn,
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    const backupPlan = new aws.backup.Plan(
-      `backup-plan-${environment}`,
-      {
-        rules: [
-          {
-            ruleName: `daily-backup-${environment}`,
-            targetVaultName: backupVault.name,
-            schedule: 'cron(0 5 ? * * *)', // Daily at 5 AM UTC
-            startWindow: 480, // 8 hours
-            completionWindow: 10080, // 7 days
-            lifecycle: {
-              coldStorageAfter: 30,
-              deleteAfter: 120,
-            },
-            copyActions: [
-              {
-                destinationVaultArn: `arn:aws:backup:us-west-2:${this.caller.apply(c => c.accountId)}:backup-vault:backup-vault-${environment}-replica`,
-                lifecycle: {
-                  coldStorageAfter: 30,
-                  deleteAfter: 120,
-                },
-              },
-            ],
-          },
-        ],
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    const backupRole = new aws.iam.Role(
-      `backup-role-${environment}`,
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'backup.amazonaws.com',
-              },
-            },
-          ],
-        }),
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    new aws.iam.RolePolicyAttachment(
-      `backup-role-policy-${environment}`,
-      {
-        role: backupRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
-      },
-      { provider: this.provider }
-    );
-
-    new aws.iam.RolePolicyAttachment(
-      `backup-role-restore-policy-${environment}`,
-      {
-        role: backupRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores',
-      },
-      { provider: this.provider }
-    );
-
     // CloudTrail
     const cloudTrailBucket = new aws.s3.Bucket(
       `cloudtrail-${environment}`,
@@ -1526,18 +1446,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
           AutoScalingGroupName: this.autoScalingGroup.name,
         },
         tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    // Backup Selection - moved here after RDS instance creation
-    new aws.backup.Selection(
-      `backup-selection-${environment}`,
-      {
-        iamRoleArn: backupRole.arn,
-        name: `backup-selection-${environment}`,
-        planId: backupPlan.id,
-        resources: [this.rdsInstance.arn],
       },
       { provider: this.provider }
     );
