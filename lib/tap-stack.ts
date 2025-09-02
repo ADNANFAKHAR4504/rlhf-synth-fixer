@@ -241,7 +241,7 @@ export class TapStack extends cdk.Stack {
         config.rdsInstanceSize !== ec2.InstanceSize.MICRO,
       performanceInsightRetention:
         config.rdsInstanceClass !== ec2.InstanceClass.T3 ||
-          config.rdsInstanceSize !== ec2.InstanceSize.MICRO
+        config.rdsInstanceSize !== ec2.InstanceSize.MICRO
           ? rds.PerformanceInsightRetention.DEFAULT
           : undefined,
     });
