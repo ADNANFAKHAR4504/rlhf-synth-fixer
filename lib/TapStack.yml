@@ -18,7 +18,7 @@ Parameters:
       CPU utilization percentage at which to trigger the CloudWatch alarm.
 
 Conditions:
-  HasTwoAZs: !Not [!Equals [!Join ['', !GetAZs ''], '']] # Checks if the list of AZs has at least two elements. A simple check for a non-empty string. This will prevent the Fn::Select error.
+  HasTwoAZs: !Not [!Equals [!Join ['', [!GetAZs '']], '']]
 
 Resources:
   ### KMS ###
