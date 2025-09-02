@@ -210,9 +210,9 @@ export class TapStack extends TerraformStack {
     new DbInstance(this, 'rds-instance', {
       identifier: `app-db-${randomSuffix}`,
       allocatedStorage: 20,
-      instanceClass: 'db.t3.micro',
+      instanceClass: 'db.t3.medium',
       engine: 'postgres',
-      engineVersion: '15.3',
+      engineVersion: '15',
       username: 'appadmin',
       password: 'MustBeChangedInSecretsManager',
       dbSubnetGroupName: dbSubnetGroup.name,
