@@ -61,21 +61,26 @@ export class TapStack extends cdk.Stack {
     });
 
     // CloudFront Distribution
-    const distribution = new cloudfront.Distribution(this, 'WebsiteDistribution', {
-      defaultBehavior: {
-        origin: new origins.S3Origin(websiteBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
-      },
-      defaultRootObject: 'index.html',
-      errorResponses: [
-        {
-          httpStatus: 404,
-          responseHttpStatus: 200,
-          responsePagePath: '/index.html',
+    const distribution = new cloudfront.Distribution(
+      this,
+      'WebsiteDistribution',
+      {
+        defaultBehavior: {
+          origin: new origins.S3Origin(websiteBucket),
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         },
-      ],
-    });
+        defaultRootObject: 'index.html',
+        errorResponses: [
+          {
+            httpStatus: 404,
+            responseHttpStatus: 200,
+            responsePagePath: '/index.html',
+          },
+        ],
+      }
+    );
 
     // Lambda function for API
     const apiLambda = new lambda.Function(this, 'ApiLambda', {
@@ -114,7 +119,12 @@ export class TapStack extends cdk.Stack {
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
-        allowHeaders: ['Content-Type', 'X-Amz-Date', 'Authorization', 'X-Api-Key'],
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+        ],
       },
     });
 
@@ -123,14 +133,20 @@ export class TapStack extends cdk.Stack {
     api.root.addResource('health').addMethod('GET', lambdaIntegration);
 
     // RDS Database
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc,
-      description: 'Security group for RDS database',
-      allowAllOutbound: false,
-    });
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for RDS database',
+        allowAllOutbound: false,
+      }
+    );
 
     dbSecurityGroup.addIngressRule(
-      ec2.Peer.securityGroupId(apiLambda.connections.securityGroups[0].securityGroupId),
+      ec2.Peer.securityGroupId(
+        apiLambda.connections.securityGroups[0].securityGroupId
+      ),
       ec2.Port.tcp(3306),
       'Allow Lambda access to database'
     );
@@ -139,7 +155,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
@@ -196,50 +215,39 @@ export class TapStack extends cdk.Stack {
             },
           },
           pre_build: {
-            commands: [
-              'npm install',
-            ],
+            commands: ['npm install'],
           },
           build: {
-            commands: [
-              'npm run build',
-              'npm run test',
-            ],
+            commands: ['npm run build', 'npm run test'],
           },
           post_build: {
-            commands: [
-              'echo Build completed on `date`',
-            ],
+            commands: ['echo Build completed on `date`'],
           },
         },
         artifacts: {
-          files: [
-            '**/*',
-          ],
+          files: ['**/*'],
         },
       }),
     });
 
     // Grant CodeBuild permissions
-    buildProject.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-        's3:GetObjectVersion',
-      ],
-      resources: [
-        artifactsBucket.arnForObjects('*'),
-        websiteBucket.arnForObjects('*'),
-        sourceBucket.arnForObjects('*'),
-      ],
-    }));
+    buildProject.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject', 's3:GetObjectVersion'],
+        resources: [
+          artifactsBucket.arnForObjects('*'),
+          websiteBucket.arnForObjects('*'),
+          sourceBucket.arnForObjects('*'),
+        ],
+      })
+    );
 
     // CodePipeline
     const sourceOutput = new codepipeline.Artifact();
     const buildOutput = new codepipeline.Artifact();
 
-    const pipeline = new codepipeline.Pipeline(this, 'TapPipeline', {
+    new codepipeline.Pipeline(this, 'TapPipeline', {
       pipelineName: `${stackName}-pipeline`,
       artifactBucket: artifactsBucket,
       stages: [
