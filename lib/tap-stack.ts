@@ -601,7 +601,7 @@ export class TapStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, `EBEnvironmentURL-${environmentSuffix}`, {
-      value: ebEnvironment.attrEndpointUrl,
+      value: ebEnvironment.getAtt('EndpointURL').toString(),
       description: `Elastic Beanstalk environment URL for ${environmentSuffix}`,
       exportName: `tap-eb-url-${environmentSuffix}`,
     });
