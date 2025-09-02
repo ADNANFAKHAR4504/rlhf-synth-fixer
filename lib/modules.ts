@@ -628,7 +628,6 @@ export class RdsModule extends Construct {
       },
     });
 
-    // Create RDS instance
     this.dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `${props.project}-${props.environment}-db`,
       engine: props.engine,
@@ -645,9 +644,11 @@ export class RdsModule extends Construct {
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: `${props.project}-${props.environment}-db-final-snapshot`,
-      deletionProtection: true,
+
+      // 👇 Important changes
+      skipFinalSnapshot: true,
+      deletionProtection: false,
+
       publiclyAccessible: false,
       tags: {
         Name: `${props.project}-${props.environment}-db`,
