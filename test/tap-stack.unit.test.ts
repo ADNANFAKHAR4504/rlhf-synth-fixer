@@ -422,4 +422,115 @@ describe('TapStack', () => {
       }
     });
   });
+
+  describe('Environment Configuration Coverage', () => {
+    test('should use context environmentSuffix when props is undefined', () => {
+      const contextApp = new cdk.App();
+      contextApp.node.setContext('environmentSuffix', 'staging');
+      const contextStack = new TapStack(contextApp, 'ContextStack');
+      const contextTemplate = Template.fromStack(contextStack);
+
+      // Check that staging environment creates pipeline with staging name
+      contextTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: 'tap-pipeline-staging',
+      });
+    });
+
+    test('should use default dev when no props or context provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultStack');
+      const defaultTemplate = Template.fromStack(defaultStack);
+
+      // Check that default environment creates pipeline with dev name
+      defaultTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: 'tap-pipeline-dev',
+      });
+    });
+
+    test('should use context notificationEmail when props is undefined', () => {
+      const contextApp = new cdk.App();
+      contextApp.node.setContext('notificationEmail', 'test@example.com');
+      const contextStack = new TapStack(contextApp, 'NotificationContextStack');
+      const contextTemplate = Template.fromStack(contextStack);
+
+      contextTemplate.hasResourceProperties('AWS::SNS::Subscription', {
+        Protocol: 'email',
+        Endpoint: 'test@example.com',
+      });
+    });
+
+    test('should use default email when no props or context provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultEmailStack');
+      const defaultTemplate = Template.fromStack(defaultStack);
+
+      defaultTemplate.hasResourceProperties('AWS::SNS::Subscription', {
+        Protocol: 'email',
+        Endpoint: 'admin@example.com',
+      });
+    });
+  });
+
+  describe('Production Environment Specific Tests', () => {
+    let prodApp: cdk.App;
+    let prodStack: TapStack;
+    let prodTemplate: Template;
+
+    beforeEach(() => {
+      prodApp = new cdk.App();
+      prodStack = new TapStack(prodApp, 'ProdStack', { environmentSuffix: 'prod' });
+      prodTemplate = Template.fromStack(prodStack);
+    });
+
+    test('should configure production scaling with higher limits', () => {
+      const ebEnvironment = prodTemplate.findResources(
+        'AWS::ElasticBeanstalk::Environment'
+      );
+      const environment = Object.values(ebEnvironment)[0] as any;
+      const optionSettings = environment.Properties.OptionSettings;
+
+      const minSizeSetting = optionSettings.find(
+        (setting: any) =>
+          setting.Namespace === 'aws:autoscaling:asg' &&
+          setting.OptionName === 'MinSize'
+      );
+      const maxSizeSetting = optionSettings.find(
+        (setting: any) =>
+          setting.Namespace === 'aws:autoscaling:asg' &&
+          setting.OptionName === 'MaxSize'
+      );
+
+      expect(minSizeSetting.Value).toBe('2');
+      expect(maxSizeSetting.Value).toBe('6');
+    });
+
+    test('should include manual approval stage for production', () => {
+      const pipeline = prodTemplate.findResources('AWS::CodePipeline::Pipeline');
+      const pipelineResource = Object.values(pipeline)[0] as any;
+      const stages = pipelineResource.Properties.Stages;
+      
+      const stageNames = stages.map((stage: any) => stage.Name);
+      expect(stageNames).toContain('ManualApproval');
+      
+      const approvalStage = stages.find((stage: any) => stage.Name === 'ManualApproval');
+      expect(approvalStage.Actions[0].ActionTypeId.Provider).toBe('Manual');
+    });
+
+    test('should create production-specific resource names', () => {
+      prodTemplate.hasResourceProperties('AWS::CodePipeline::Pipeline', {
+        Name: 'tap-pipeline-prod',
+      });
+      
+      prodTemplate.hasResourceProperties('AWS::ElasticBeanstalk::Application', {
+        ApplicationName: 'tap-app-prod',
+        Description: 'TAP Application - prod environment',
+      });
+      
+      // Check SNS topic has prod suffix
+      prodTemplate.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: 'tap-pipeline-notifications-prod',
+        DisplayName: 'TAP Pipeline Notifications - prod',
+      });
+    });
+  });
 });

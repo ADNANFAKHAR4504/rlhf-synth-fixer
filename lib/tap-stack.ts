@@ -102,14 +102,13 @@ export class TapStack extends cdk.Stack {
       new snsSubscriptions.EmailSubscription(notificationEmail)
     );
 
-    // CloudWatch Log Groups
+    // CloudWatch Log Groups (without encryption to avoid timing issues)
     const buildLogGroup = new logs.LogGroup(
       this,
       `BuildLogGroup-${environmentSuffix}`,
       {
         logGroupName: `/aws/codebuild/tap-build-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
-        encryptionKey: pipelineKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
@@ -120,7 +119,6 @@ export class TapStack extends cdk.Stack {
       {
         logGroupName: `/aws/codepipeline/tap-pipeline-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
-        encryptionKey: pipelineKmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
@@ -477,18 +475,18 @@ export class TapStack extends cdk.Stack {
           // Manual Approval (for production)
           ...(environmentSuffix === 'prod'
             ? [
-              {
-                stageName: 'ManualApproval',
-                actions: [
-                  new codepipelineActions.ManualApprovalAction({
-                    actionName: 'ManualApproval',
-                    additionalInformation: `Please review the build artifacts and approve deployment to ${environmentSuffix} environment.`,
-                    notificationTopic: notificationTopic,
-                    externalEntityLink: `https://console.aws.amazon.com/elasticbeanstalk/home?region=${this.region}#/environment/dashboard?applicationName=${ebApplication.applicationName}&environmentId=${ebEnvironment.ref}`,
-                  }),
-                ],
-              },
-            ]
+                {
+                  stageName: 'ManualApproval',
+                  actions: [
+                    new codepipelineActions.ManualApprovalAction({
+                      actionName: 'ManualApproval',
+                      additionalInformation: `Please review the build artifacts and approve deployment to ${environmentSuffix} environment.`,
+                      notificationTopic: notificationTopic,
+                      externalEntityLink: `https://console.aws.amazon.com/elasticbeanstalk/home?region=${this.region}#/environment/dashboard?applicationName=${ebApplication.applicationName}&environmentId=${ebEnvironment.ref}`,
+                    }),
+                  ],
+                },
+              ]
             : []),
           // Deploy Stage
           {
