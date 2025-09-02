@@ -567,7 +567,9 @@ output "availability_zones" {
 ```
 
 # provider.tf
+
 ```hcl
+
 terraform {
   required_version = ">= 1.4.0"
 
@@ -587,4 +589,5 @@ provider "aws" {
   alias  = "us_east_2"
   region = var.aws_region
 }
+
 ```
