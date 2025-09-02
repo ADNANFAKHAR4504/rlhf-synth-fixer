@@ -176,7 +176,7 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.privateSubnets[0].id, // Deploy in private subnet
       securityGroupIds: [ec2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: 'webapp-key-synthtrainr123cfnyaml', // Uncomment and set if you have a key pair
+      keyName: 'compute-key', // Uncomment and set if you have a key pair
     });
 
     // Create RDS instance

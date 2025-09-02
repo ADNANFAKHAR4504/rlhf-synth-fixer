@@ -619,7 +619,7 @@ export class RdsModule extends Construct {
 
     // Create DB subnet group
     this.subnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `${props.project}-${props.environment}-db-subnet-group`,
+      name: `${props.project}-${props.environment}-db-subnet-group-v2`,
       subnetIds: props.subnetIds,
       tags: {
         Name: `${props.project}-${props.environment}-db-subnet-group`,
