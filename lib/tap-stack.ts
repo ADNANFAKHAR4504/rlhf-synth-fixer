@@ -149,57 +149,6 @@ export class TapStack extends cdk.Stack {
               ],
               resources: ['*'],
             }),
-            // Allow EC2 service to use the key for EBS encryption
-            new iam.PolicyStatement({
-              sid: 'AllowEC2EBSAccess',
-              effect: iam.Effect.ALLOW,
-              principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
-              actions: [
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey',
-                'kms:CreateGrant',
-                'kms:ListGrants',
-                'kms:RevokeGrant',
-              ],
-              resources: ['*'],
-              conditions: {
-                StringEquals: {
-                  'kms:ViaService': `ec2.${cdk.Stack.of(this).region}.amazonaws.com`,
-                  'kms:CallerAccount': cdk.Stack.of(this).account,
-                },
-              },
-            }),
-            // Allow AutoScaling service to use the key
-            new iam.PolicyStatement({
-              sid: 'AllowAutoScalingAccess',
-              effect: iam.Effect.ALLOW,
-              principals: [
-                new iam.ServicePrincipal('autoscaling.amazonaws.com'),
-              ],
-              actions: [
-                'kms:Encrypt',
-                'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey',
-                'kms:CreateGrant',
-                'kms:ListGrants',
-                'kms:RevokeGrant',
-              ],
-              resources: ['*'],
-              conditions: {
-                StringEquals: {
-                  'kms:ViaService': [
-                    `ec2.${cdk.Stack.of(this).region}.amazonaws.com`,
-                    `autoscaling.${cdk.Stack.of(this).region}.amazonaws.com`,
-                  ],
-                  'kms:CallerAccount': cdk.Stack.of(this).account,
-                },
-              },
-            }),
           ],
         }),
       }
@@ -387,28 +336,6 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Add KMS permissions for EBS volume encryption/decryption
-    ecsInstanceRole.addToPolicy(
-      new iam.PolicyStatement({
-        sid: 'KMSEbsAccess',
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'kms:CreateGrant',
-          'kms:Encrypt',
-          'kms:Decrypt',
-          'kms:ReEncrypt*',
-          'kms:GenerateDataKey*',
-          'kms:DescribeKey',
-        ],
-        resources: [kmsKey.keyArn],
-        conditions: {
-          StringEquals: {
-            'kms:ViaService': `ec2.${cdk.Stack.of(this).region}.amazonaws.com`,
-            'kms:CallerAccount': cdk.Stack.of(this).account,
-          },
-        },
-      })
-    );
 
     // Security Group for ECS instances with restrictive rules
     const ecsSecurityGroup = new ec2.SecurityGroup(
@@ -516,7 +443,8 @@ export class TapStack extends cdk.Stack {
             deviceName: '/dev/xvda',
             volume: ec2.BlockDeviceVolume.ebs(30, {
               encrypted: true,
-              kmsKey: kmsKey,
+              // Use AWS-managed EBS key instead of custom KMS key to avoid InvalidState issues
+              // Custom KMS key with DESTROY policy can enter PendingDeletion state causing deployment failures
               volumeType: ec2.EbsDeviceVolumeType.GP3,
               deleteOnTermination: true, // Ensure cleanup
               iops: 3000, // Baseline IOPS for GP3
