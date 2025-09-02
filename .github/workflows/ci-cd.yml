@@ -6,7 +6,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, feature/semantic-release]
+    branches: [main]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
@@ -54,6 +54,26 @@ jobs:
       - name: Detect metadata and validate project
         id: metadata
         run: ./scripts/detect-metadata.sh
+
+  validate-commit-message:
+    name: Validate Commit Message
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to fetch all history for commitlint
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        run: npm install # Assumes commitlint is in package.json
+
+      - name: Validate commit message
+        run: npx commitlint --from=HEAD~1 --to=HEAD
 
   build:
     name: Build
@@ -848,7 +868,7 @@ jobs:
   semantic-release:
     name: Semantic Release
     runs-on: ubuntu-24.04
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/semantic-release'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
       issues: write

@@ -1,7 +1,6 @@
 {
   "branches": [
-    "main",
-    "feature/semantic-release"
+    "main"
   ],
   "plugins": [
     [
