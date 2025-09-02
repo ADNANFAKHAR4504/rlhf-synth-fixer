@@ -86,6 +86,67 @@ export class TapStack extends cdk.Stack {
         keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
         removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow destruction for testing
         pendingWindow: cdk.Duration.days(7), // Minimum waiting period for key deletion
+        policy: new iam.PolicyDocument({
+          statements: [
+            // Allow root user full access to the key
+            new iam.PolicyStatement({
+              sid: 'EnableIAMUserPermissions',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.AccountRootPrincipal()],
+              actions: ['kms:*'],
+              resources: ['*'],
+            }),
+            // Allow CloudWatch Logs service to use the key
+            new iam.PolicyStatement({
+              sid: 'AllowCloudWatchLogsAccess',
+              effect: iam.Effect.ALLOW,
+              principals: [
+                new iam.ServicePrincipal(`logs.${cdk.Stack.of(this).region}.amazonaws.com`)
+              ],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey'
+              ],
+              resources: ['*'],
+              conditions: {
+                ArnEquals: {
+                  'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/ecs/cluster-${this.environmentSuffix}-${this.randomSuffix}`
+                }
+              }
+            }),
+            // Allow RDS service to use the key for encryption
+            new iam.PolicyStatement({
+              sid: 'AllowRDSAccess',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.ServicePrincipal('rds.amazonaws.com')],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey'
+              ],
+              resources: ['*'],
+            }),
+            // Allow Secrets Manager service to use the key
+            new iam.PolicyStatement({
+              sid: 'AllowSecretsManagerAccess',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.ServicePrincipal('secretsmanager.amazonaws.com')],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey'
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
       }
     );
 
