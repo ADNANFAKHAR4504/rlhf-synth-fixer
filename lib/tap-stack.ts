@@ -21,10 +21,11 @@ import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
-// 1. IMPORT THE CALLER IDENTITY DATA SOURCE
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+// 1. IMPORT S3BucketOwnershipControls
+import { S3BucketOwnershipControls } from '@cdktf/provider-aws/lib/s3-bucket-ownership-controls';
 import { S3BucketReplicationConfigurationA as S3BucketReplicationConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
@@ -45,7 +46,7 @@ export class TapStack extends TerraformStack {
 
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
 
-    // 1. Multi-Region Provider Configuration
+    // Multi-Region Provider Configuration
     const primaryProvider = new AwsProvider(this, 'aws-primary', {
       region: 'us-east-1',
       alias: 'us-east-1',
@@ -62,12 +63,11 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // 2. ADD DATA SOURCE TO GET ACCOUNT ID
     const callerIdentity = new DataAwsCallerIdentity(this, 'caller-identity', {
       provider: primaryProvider,
     });
 
-    // 3. Cross-Region IAM Role for S3 Replication
+    // Cross-Region IAM Role for S3 Replication
     const s3ReplicationRole = new IamRole(this, 's3-replication-role', {
       provider: primaryProvider,
       name: `s3-replication-role-${randomSuffix}`,
@@ -83,7 +83,7 @@ export class TapStack extends TerraformStack {
       }),
     });
 
-    // 4. Cross-Region S3 Buckets with Replication
+    // Cross-Region S3 Buckets with Replication
     const primaryBucket = new S3Bucket(this, 'primary-bucket', {
       provider: primaryProvider,
       bucket: `primary-app-data-${randomSuffix}`,
@@ -98,11 +98,29 @@ export class TapStack extends TerraformStack {
       provider: secondaryProvider,
       bucket: `secondary-app-data-${randomSuffix}`,
     });
-    new S3BucketVersioningA(this, 'secondary-bucket-versioning', {
-      provider: secondaryProvider,
-      bucket: secondaryBucket.id,
-      versioningConfiguration: { status: 'Enabled' },
-    });
+
+    const secondaryBucketVersioning = new S3BucketVersioningA(
+      this,
+      'secondary-bucket-versioning',
+      {
+        provider: secondaryProvider,
+        bucket: secondaryBucket.id,
+        versioningConfiguration: { status: 'Enabled' },
+      }
+    );
+
+    // 2. ADD BUCKET OWNERSHIP CONTROLS TO THE DESTINATION BUCKET
+    const secondaryBucketOwnership = new S3BucketOwnershipControls(
+      this,
+      'secondary-bucket-ownership',
+      {
+        provider: secondaryProvider,
+        bucket: secondaryBucket.id,
+        rule: {
+          objectOwnership: 'BucketOwnerEnforced',
+        },
+      }
+    );
 
     const s3ReplicationPolicy = new IamPolicy(this, 's3-replication-policy', {
       provider: primaryProvider,
@@ -145,7 +163,12 @@ export class TapStack extends TerraformStack {
 
     new S3BucketReplicationConfiguration(this, 'replication-config', {
       provider: primaryProvider,
-      dependsOn: [secondaryBucket],
+      // 3. ADD DEPENDENCY ON BOTH VERSIONING AND OWNERSHIP
+      dependsOn: [
+        secondaryBucket,
+        secondaryBucketVersioning,
+        secondaryBucketOwnership,
+      ],
       bucket: primaryBucket.id,
       role: s3ReplicationRole.arn,
       rule: [
@@ -200,7 +223,7 @@ export class TapStack extends TerraformStack {
       });
     });
 
-    // 5. Regional Infrastructure Deployment
+    // Regional Infrastructure Deployment
     const primaryInfra = this.createRegionalInfrastructure(
       'primary',
       primaryProvider,
@@ -218,7 +241,7 @@ export class TapStack extends TerraformStack {
       callerIdentity.accountId
     );
 
-    // 6. Global Failover with Route 53
+    // Global Failover with Route 53
     const zone = new Route53Zone(this, 'dns-zone', {
       provider: primaryProvider,
       name: `my-resilient-app-${randomSuffix}.com`,
@@ -262,7 +285,7 @@ export class TapStack extends TerraformStack {
       setIdentifier: 'secondary-site',
     });
 
-    // 7. SNS Notifications for Alarms
+    // SNS Notifications for Alarms
     const alarmTopic = new SnsTopic(this, 'alarm-topic', {
       provider: primaryProvider,
       name: `app-alarms-${randomSuffix}`,
@@ -433,7 +456,6 @@ export class TapStack extends TerraformStack {
           {
             Action: 'ssm:GetParameter',
             Effect: 'Allow',
-            // 3. UPDATE IAM POLICY TO USE THE ACCOUNT ID
             Resource: `arn:aws:ssm:${region}:${accountId}:parameter/prod/db_password`,
           },
         ],
