@@ -161,6 +161,13 @@ export class TapStack extends cdk.Stack {
       memorySize: 256,
     });
 
+    // Add X-Ray permissions to Lambda execution role
+    if (config.enableXRayTracing) {
+      apiLambda.role?.addManagedPolicy(
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AWSXRayDaemonWriteAccess')
+      );
+    }
+
     // API Gateway
     const api = new apigateway.RestApi(this, 'TapApi', {
       restApiName: `${stackName}-api`,
