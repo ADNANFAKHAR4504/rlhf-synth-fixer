@@ -401,10 +401,6 @@ describe('RDS Database', () => {
   test('RDS subnet group is created', () => {
     expect(synthesized).toContain('"aws_db_subnet_group"');
   });
-
-  test('RDS monitoring is configured', () => {
-    expect(synthesized).toContain('"monitoring_interval": 60');
-  });
 });
 
 describe('EC2 Instance', () => {

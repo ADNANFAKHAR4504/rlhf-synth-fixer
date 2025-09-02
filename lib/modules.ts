@@ -22,6 +22,9 @@ import { Instance } from '@cdktf/provider-aws/lib/instance';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { Password } from '@cdktf/provider-random/lib/password';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 export interface SecureAppModulesConfig {
   environment: string;
@@ -42,16 +45,96 @@ export class SecureAppModules extends Construct {
   public readonly kmsKey: KmsKey;
   public readonly s3Bucket: S3Bucket;
   public readonly rdsInstance: DbInstance;
+  public readonly generatedPassword: Password;
   public readonly ec2Instance: Instance;
   public readonly cloudwatchLogGroup: CloudwatchLogGroup;
 
   constructor(scope: Construct, id: string, config: SecureAppModulesConfig) {
     super(scope, id);
 
+    const currentAccount = new DataAwsCallerIdentity(this, 'current');
+    const currentRegion = new DataAwsRegion(this, 'current-region');
+
+    // Generate a random password that meets AWS requirements
+    this.generatedPassword = new Password(this, 'db-password', {
+      length: 16,
+      special: true,
+      // Exclude forbidden characters: /, @, ", and space
+      overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+      minLower: 1,
+      minUpper: 1,
+      minNumeric: 1,
+      minSpecial: 1,
+    });
+
     // KMS Key for encryption
     this.kmsKey = new KmsKey(this, 'SecureApp-KmsKey', {
       description: `SecureApp KMS key for ${config.environment} environment`,
       deletionWindowInDays: config.environment === 'production' ? 30 : 7,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'Enable IAM User Permissions',
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${currentAccount.accountId}:root`,
+            },
+            Action: 'kms:*',
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: `logs.${currentRegion.name}.amazonaws.com`,
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+            Condition: {
+              ArnEquals: {
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${currentRegion.name}:${currentAccount.accountId}:log-group:/aws/secureapp/${config.environment}`,
+              },
+            },
+          },
+          {
+            Sid: 'Allow RDS Service',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'rds.amazonaws.com',
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+          },
+          {
+            Sid: 'Allow S3 Service',
+            Effect: 'Allow',
+            Principal: {
+              Service: 's3.amazonaws.com',
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
       tags: {
         Name: `SecureApp-KmsKey-${config.environment}`,
         Environment: config.environment,
@@ -396,8 +479,8 @@ export class SecureAppModules extends Construct {
       storageEncrypted: true,
       kmsKeyId: this.kmsKey.arn,
       dbName: 'secureappdb',
-      username: config.dbUsername,
-      password: config.dbPassword,
+      username: 'admin',
+      password: this.generatedPassword.result,
       vpcSecurityGroupIds: [this.dbSecurityGroup.id],
       dbSubnetGroupName: dbSubnetGroup.name,
       backupRetentionPeriod: config.environment === 'production' ? 30 : 7,
