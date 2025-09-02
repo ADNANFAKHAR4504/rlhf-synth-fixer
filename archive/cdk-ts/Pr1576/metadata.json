@@ -31,5 +31,11 @@
     "AWS IAM",
     "Amazon CloudWatch Logs",
     "AWS CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "souravk91",
+  "dockerS3Location": ""
 }
