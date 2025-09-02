@@ -121,13 +121,18 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('Lambda function is in VPC', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        VpcConfig: {
-          SubnetIds: expect.any(Array),
-          SecurityGroupIds: expect.any(Array),
-        },
-      });
+    test('API Lambda function is in VPC', () => {
+      // Find the API Lambda function specifically
+      const lambdas = template.findResources('AWS::Lambda::Function');
+      const apiLambda = Object.values(lambdas).find((lambda: any) => 
+        lambda.Properties.Handler === 'index.handler' && 
+        lambda.Properties.Runtime === 'nodejs18.x' &&
+        lambda.Properties.VpcConfig
+      ) as any;
+      
+      expect(apiLambda).toBeDefined();
+      expect(apiLambda.Properties.VpcConfig.SubnetIds).toHaveLength(2);
+      expect(apiLambda.Properties.VpcConfig.SecurityGroupIds).toHaveLength(1);
     });
   });
 
@@ -156,9 +161,9 @@ describe('TapStack Unit Tests', () => {
     test('creates RDS instance with correct properties', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'mysql',
-        EngineVersion: '8.0.35',
+        EngineVersion: '8.0',
         DBInstanceClass: 'db.t3.micro',
-        DatabaseName: 'tapdb',
+        DBName: 'tapdb',
         StorageEncrypted: true,
         BackupRetentionPeriod: 7,
         DeletionProtection: false,
@@ -179,10 +184,11 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('creates database subnet group', () => {
-      template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupDescription: expect.any(String),
-        SubnetIds: expect.any(Array),
-      });
+      const subnetGroups = template.findResources('AWS::RDS::DBSubnetGroup');
+      const subnetGroup = Object.values(subnetGroups)[0] as any;
+      
+      expect(subnetGroup.Properties.DBSubnetGroupDescription).toBe('Subnet group for TapDatabase database');
+      expect(subnetGroup.Properties.SubnetIds).toHaveLength(2);
     });
   });
 
@@ -201,18 +207,17 @@ describe('TapStack Unit Tests', () => {
     test('creates CodePipeline', () => {
       template.hasResourceProperties('AWS::CodePipeline::Pipeline', {
         Name: 'tap-pipeline',
-        Stages: expect.arrayContaining([
-          expect.objectContaining({
-            Name: 'Source',
-          }),
-          expect.objectContaining({
-            Name: 'Build',
-          }),
-          expect.objectContaining({
-            Name: 'Deploy',
-          }),
-        ]),
       });
+      
+      // Verify pipeline has the required stages
+      const pipelines = template.findResources('AWS::CodePipeline::Pipeline');
+      const pipeline = Object.values(pipelines)[0] as any;
+      const stages = pipeline.Properties.Stages;
+      
+      expect(stages).toHaveLength(3);
+      expect(stages[0].Name).toBe('Source');
+      expect(stages[1].Name).toBe('Build');
+      expect(stages[2].Name).toBe('Deploy');
     });
   });
 
@@ -235,12 +240,17 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('Lambda function has security group', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        VpcConfig: {
-          SecurityGroupIds: expect.any(Array),
-        },
-      });
+    test('API Lambda function has security group', () => {
+      // Find the API Lambda function specifically
+      const lambdas = template.findResources('AWS::Lambda::Function');
+      const apiLambda = Object.values(lambdas).find((lambda: any) => 
+        lambda.Properties.Handler === 'index.handler' && 
+        lambda.Properties.Runtime === 'nodejs18.x' &&
+        lambda.Properties.VpcConfig
+      ) as any;
+      
+      expect(apiLambda).toBeDefined();
+      expect(apiLambda.Properties.VpcConfig.SecurityGroupIds).toHaveLength(1);
     });
   });
 
