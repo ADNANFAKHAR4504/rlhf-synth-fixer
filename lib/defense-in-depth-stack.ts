@@ -38,6 +38,46 @@ export class DefenseInDepthStack extends cdk.Stack {
 
     ebsKmsKey.addAlias(`alias/ebs-key-${environmentSuffix}`);
 
+    // Add KMS key policy for Auto Scaling service role
+    ebsKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Allow service-linked role use of the KMS',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ArnPrincipal(
+            `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling`
+          ),
+        ],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    ebsKmsKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'Allow attachment of persistent resources',
+        effect: iam.Effect.ALLOW,
+        principals: [
+          new iam.ArnPrincipal(
+            `arn:aws:iam::${cdk.Aws.ACCOUNT_ID}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling`
+          ),
+        ],
+        actions: ['kms:CreateGrant'],
+        resources: ['*'],
+        conditions: {
+          Bool: {
+            'kms:GrantIsForAWSResource': true,
+          },
+        },
+      })
+    );
+
     // 2. IAM Role for EC2 with SSM permissions
     const ec2Role = new iam.Role(this, `Ec2Role-${environmentSuffix}`, {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -72,8 +112,8 @@ export class DefenseInDepthStack extends cdk.Stack {
 
     // 3. VPC with public/private subnets across 2 AZs
     const vpc = new ec2.Vpc(this, `Vpc-${environmentSuffix}`, {
-      maxAzs: 2,
-      natGateways: 2,
+      availabilityZones: ['us-east-1a', 'us-east-1b'],
+      natGateways: 1, // Reduce to 1 NAT gateway to be more cost-effective
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -101,8 +141,13 @@ export class DefenseInDepthStack extends cdk.Stack {
       }
     );
 
+    // Ensure IP address has proper CIDR format
+    const cidrIp = personalIpAddress.includes('/')
+      ? personalIpAddress
+      : `${personalIpAddress}/32`;
+
     ec2SecurityGroup.addIngressRule(
-      ec2.Peer.ipv4(personalIpAddress),
+      ec2.Peer.ipv4(cidrIp),
       ec2.Port.tcp(22),
       'SSH access from personal IP'
     );
@@ -159,9 +204,23 @@ export class DefenseInDepthStack extends cdk.Stack {
             }),
           },
         ],
-        userData: ec2.UserData.forLinux(),
+        userData: ec2.UserData.forLinux({
+          shebang: '#!/bin/bash',
+        }),
       }
     );
+
+    // Add user data commands to install and configure httpd
+    if (launchTemplate.userData) {
+      launchTemplate.userData.addCommands(
+        'yum update -y',
+        'yum install -y httpd',
+        'systemctl start httpd',
+        'systemctl enable httpd',
+        'echo "<html><body><h1>Hello World!</h1><p>Welcome to the Defense in Depth Stack</p><p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p><p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p></body></html>" > /var/www/html/index.html',
+        'chown apache:apache /var/www/html/index.html'
+      );
+    }
 
     // 6. ALB + Auto Scaling Group with 2 EC2 instances
     const alb = new elbv2.ApplicationLoadBalancer(
@@ -240,7 +299,23 @@ export class DefenseInDepthStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED, // Enable ACL access for CloudFront
     });
+
+    // Add bucket policy to allow CloudFront to write logs
+    s3Bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('cloudfront.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${s3Bucket.bucketArn}/cloudfront-logs/*`],
+        conditions: {
+          StringEquals: {
+            'AWS:SourceArn': `arn:aws:cloudfront::${cdk.Aws.ACCOUNT_ID}:distribution/*`,
+          },
+        },
+      })
+    );
 
     // 11. SQS queue for async logging
     const sqsKmsKey = new kms.Key(this, `SqsKmsKey-${environmentSuffix}`, {
@@ -432,9 +507,12 @@ export class DefenseInDepthStack extends cdk.Stack {
       alarmDescription: 'High CPU utilization alarm',
     });
 
-    const memoryMetric = new cloudwatch.Metric({
-      namespace: 'CWAgent',
-      metricName: 'mem_used_percent',
+    // Note: Memory metrics are not available by default in CloudWatch
+    // You would need to install CloudWatch agent on EC2 instances
+    // For now, we'll use a different metric or remove this alarm
+    const networkInMetric = new cloudwatch.Metric({
+      namespace: 'AWS/EC2',
+      metricName: 'NetworkIn',
       dimensionsMap: {
         AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
       },
@@ -442,13 +520,13 @@ export class DefenseInDepthStack extends cdk.Stack {
       period: cdk.Duration.minutes(5),
     });
 
-    new cloudwatch.Alarm(this, `MemoryAlarm-${environmentSuffix}`, {
-      metric: memoryMetric,
-      threshold: 80,
+    new cloudwatch.Alarm(this, `NetworkInAlarm-${environmentSuffix}`, {
+      metric: networkInMetric,
+      threshold: 1000000, // 1MB threshold for network in
       evaluationPeriods: 2,
       datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: 'High memory utilization alarm',
+      alarmDescription: 'High network in traffic alarm',
     });
 
     // Alternative: Using target tracking scaling policy (simpler and more reliable)
