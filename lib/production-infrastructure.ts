@@ -295,7 +295,6 @@ export class ProductionInfrastructure {
       `${this.environment}-vpc-flow-logs`,
       {
         retentionInDays: 14,
-        kmsKeyId: this.kmsKey!.arn,
         tags: {
           Name: `${this.environment}-vpc-flow-logs`,
           environment: this.environment,
@@ -309,7 +308,6 @@ export class ProductionInfrastructure {
       `${this.environment}-app-logs`,
       {
         retentionInDays: 30,
-        kmsKeyId: this.kmsKey!.arn,
         tags: {
           Name: `${this.environment}-app-logs`,
           environment: this.environment,
@@ -678,22 +676,7 @@ export class ProductionInfrastructure {
                   Action: 's3:GetBucketAcl',
                   Resource: bucketArn,
                 },
-                {
-                  Sid: 'DenyUnencryptedUploads',
-                  Effect: 'Deny',
-                  Principal: '*',
-                  Action: 's3:PutObject',
-                  Resource: `${bucketArn}/*`,
-                  Condition: {
-                    StringNotEquals: {
-                      's3:x-amz-server-side-encryption': 'AES256',
-                    },
-                  },
-                  NotPrincipal: {
-                    AWS: `arn:aws:iam::${elbAccount.arn}:root`,
-                    Service: 'delivery.logs.amazonaws.com',
-                  },
-                },
+
               ],
             })
           ),
