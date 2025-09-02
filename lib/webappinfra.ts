@@ -694,19 +694,6 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
-    // Secret rotation for database credentials
-    new aws.secretsmanager.SecretRotation(
-      `db-secret-rotation-${environment}`,
-      {
-        secretId: dbSecret.id,
-        rotationLambdaArn: `arn:aws:lambda:${region}:${this.caller.apply(c => c.accountId)}:function:SecretsManagerRDSMySQLRotationSingleUser`,
-        rotationRules: {
-          automaticallyAfterDays: 30,
-        },
-      },
-      { provider: this.provider }
-    );
-
     const jwtSecret = new random.RandomPassword(`jwt-secret-${environment}`, {
       length: 64,
       special: false,
