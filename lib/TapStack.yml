@@ -88,8 +88,35 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref KmsKey
 
+  ALBAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ALBAccessLogsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub "${ALBAccessLogsBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
+          - Effect: Allow
+            Principal:
+              Service: elasticloadbalancing.amazonaws.com
+            Action: "s3:PutObject"
+            Resource: !Sub "${ALBAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                "aws:SourceAccount": !Ref AWS::AccountId
+
+
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn:
+      - ALBAccessLogsBucketPolicy 
     Properties:
       Subnets:
         - !Ref PrivateSubnet1
