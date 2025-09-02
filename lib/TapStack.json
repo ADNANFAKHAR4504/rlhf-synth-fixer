@@ -43,6 +43,11 @@
             "Default": "",
             "Description": "EC2 Key Pair for SSH access (optional)"
         },
+        "SecondAvailabilityZone": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional explicit second Availability Zone (e.g., us-east-1b). If empty, fallback is used."
+        },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
@@ -81,6 +86,11 @@
             "Default": "",
             "Description": "Optional existing Private Subnet ID to reuse"
         },
+        "ExistingNatGatewayId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing NAT Gateway ID to reuse"
+        },
         "ExistingDatabaseSubnet1Id": {
             "Type": "String",
             "Default": "",
@@ -90,51 +100,6 @@
             "Type": "String",
             "Default": "",
             "Description": "Optional existing Database Subnet 2 ID to reuse"
-        },
-        "ExistingNatGatewayId": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing NAT Gateway ID to reuse"
-        },
-        "ExistingWebServerSecurityGroupId": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing Web Server Security Group ID to reuse"
-        },
-        "ExistingDatabaseSecurityGroupId": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing Database Security Group ID to reuse"
-        },
-        "ExistingLambdaSecurityGroupId": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing Lambda Security Group ID to reuse"
-        },
-        "ExistingEC2RoleArn": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing EC2 Role ARN to reuse"
-        },
-        "ExistingEC2InstanceProfileArn": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing EC2 Instance Profile ARN to reuse"
-        },
-        "ExistingLambdaExecutionRoleArn": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing Lambda Execution Role ARN to reuse"
-        },
-        "ExistingSecureS3BucketName": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing Secure S3 Bucket name to reuse"
-        },
-        "ExistingS3AccessLogsBucketName": {
-            "Type": "String",
-            "Default": "",
-            "Description": "Optional existing S3 Access Logs Bucket name to reuse"
         },
         "ExistingDatabaseSubnetGroupName": {
             "Type": "String",
@@ -185,6 +150,88 @@
             "Type": "String",
             "Default": "",
             "Description": "Optional existing EC2 Instance ID to reuse"
+        },
+        "ExistingBillingAlarmName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing CloudWatch Billing Alarm name to reuse"
+        },
+        "ExistingConfigDeliveryChannelName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing AWS Config Delivery Channel name to reuse"
+        },
+        "ExistingConfigRecorderName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing AWS Config Configuration Recorder name to reuse"
+        },
+        "EnableConfigDeliveryChannel": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to 'true' to create a new Config Delivery Channel if none exists"
+        },
+        "EnableConfigRecorder": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to 'true' to create a new Config Configuration Recorder if none exists"
+        },
+        "EnableEBSEncryption": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether to enable EBS encryption by default (true/false)"
+        },
+        "ExistingWebServerSecurityGroupId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Web Server Security Group ID to reuse"
+        },
+        "ExistingDatabaseSecurityGroupId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Database Security Group ID to reuse"
+        },
+        "ExistingLambdaSecurityGroupId": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Lambda Security Group ID to reuse"
+        },
+        "ExistingEC2RoleArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing EC2 Role ARN to reuse"
+        },
+        "ExistingEC2InstanceProfileArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing EC2 Instance Profile ARN to reuse"
+        },
+        "ExistingLambdaExecutionRoleArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Lambda Execution Role ARN to reuse"
+        },
+        "ExistingSecureS3BucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing Secure S3 Bucket name to reuse"
+        },
+        "ExistingS3AccessLogsBucketName": {
+            "Type": "String",
+            "Default": "",
+            "Description": "Optional existing S3 Access Logs Bucket name to reuse"
         }
     },
     "Conditions": {
@@ -208,15 +255,28 @@
                 ""
             ]
         },
-        "UseExistingVPC": {
+        "HasSecondAZ": {
             "Fn::Not": [
                 {
                     "Fn::Equals": [
                         {
-                            "Ref": "ExistingVPCId"
+                            "Ref": "SecondAvailabilityZone"
                         },
                         ""
                     ]
+                }
+            ]
+        },
+        "HasTwoSubnetAZs": {
+            "Fn::Or": [
+                {
+                    "Condition": "HasSecondAZ"
+                },
+                {
+                    "Condition": "UseExistingDatabaseSubnet1"
+                },
+                {
+                    "Condition": "UseExistingDatabaseSubnet2"
                 }
             ]
         },
@@ -520,14 +580,6 @@
                 }
             ]
         },
-        "CreateDatabaseSubnetGroup": {
-            "Fn::Equals": [
-                {
-                    "Ref": "ExistingDatabaseSubnetGroupName"
-                },
-                ""
-            ]
-        },
         "UseExistingDatabaseSecret": {
             "Fn::Not": [
                 {
@@ -558,14 +610,6 @@
                         ""
                     ]
                 }
-            ]
-        },
-        "CreateDatabaseInstance": {
-            "Fn::Equals": [
-                {
-                    "Ref": "ExistingDatabaseInstanceId"
-                },
-                ""
             ]
         },
         "UseExistingBackupVault": {
@@ -638,6 +682,16 @@
                 ""
             ]
         },
+        "CreateCloudTrailBucketPolicy": {
+            "Fn::And": [
+                {
+                    "Condition": "CreateCloudTrailBucket"
+                },
+                {
+                    "Condition": "CreateCloudTrail"
+                }
+            ]
+        },
         "UseExistingConfigBucket": {
             "Fn::Not": [
                 {
@@ -656,6 +710,69 @@
                     "Ref": "ExistingConfigBucketName"
                 },
                 ""
+            ]
+        },
+        "UseExistingConfigRecorder": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigRecorderName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateConfigRecorder": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigRecorderName"
+                        },
+                        ""
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableConfigRecorder"
+                        },
+                        "true"
+                    ]
+                },
+                {
+                    "Condition": "CreateConfigBucket"
+                }
+            ]
+        },
+        "CreateConfigDeliveryChannel": {
+            "Fn::And": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigDeliveryChannelName"
+                        },
+                        ""
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingConfigBucketName"
+                        },
+                        ""
+                    ]
+                },
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "EnableConfigDeliveryChannel"
+                        },
+                        "true"
+                    ]
+                }
             ]
         },
         "UseExistingGuardDutyDetector": {
@@ -718,6 +835,26 @@
                 ""
             ]
         },
+        "UseExistingBillingAlarm": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "ExistingBillingAlarmName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "CreateBillingAlarm": {
+            "Fn::Equals": [
+                {
+                    "Ref": "ExistingBillingAlarmName"
+                },
+                ""
+            ]
+        },
         "HasKeyPair": {
             "Fn::Not": [
                 {
@@ -728,6 +865,24 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "EnableBackupAndHasTwoAZs": {
+            "Fn::And": [
+                {
+                    "Condition": "EnableBackup"
+                },
+                {
+                    "Condition": "HasTwoSubnetAZs"
+                }
+            ]
+        },
+        "ShouldEnableEBSEncryption": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableEBSEncryption"
+                },
+                "true"
             ]
         }
     },
@@ -802,7 +957,36 @@
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
-                "AliasName": "alias/secure-environment-key",
+                "AliasName": {
+                    "Fn::Sub": [
+                        "alias/secure-environment-key-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
                 "TargetKeyId": {
                     "Ref": "SecureKMSKey"
                 }
@@ -851,7 +1035,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "SecureVPC-IGW-${Environment}"
+                            "Fn::Sub": "SecureVPC-IGW-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -935,7 +1119,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Public Subnet-${Environment}"
+                            "Fn::Sub": "Public Subnet-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -997,7 +1181,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Private Subnet-${Environment}"
+                            "Fn::Sub": "Private Subnet-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -1059,7 +1243,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Database Subnet 1-${Environment}"
+                            "Fn::Sub": "Database Subnet 1-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -1095,16 +1279,24 @@
                     ]
                 },
                 "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
+                    "Fn::If": [
+                        "HasSecondAZ",
                         {
-                            "Fn::GetAZs": ""
+                            "Ref": "SecondAvailabilityZone"
+                        },
+                        {
+                            "Fn::Select": [
+                                0,
+                                {
+                                    "Fn::GetAZs": ""
+                                }
+                            ]
                         }
                     ]
                 },
                 "CidrBlock": {
                     "Fn::Select": [
-                        3,
+                        4,
                         {
                             "Fn::Cidr": [
                                 {
@@ -1121,7 +1313,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Database Subnet 2-${Environment}"
+                            "Fn::Sub": "Database Subnet 2-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -1189,7 +1381,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "NAT Gateway-${Environment}"
+                            "Fn::Sub": "NAT Gateway-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -1220,7 +1412,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Public Route Table-${Environment}"
+                            "Fn::Sub": "Public Route Table-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -1297,7 +1489,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "Private Route Table-${Environment}"
+                            "Fn::Sub": "Private Route Table-${Environment}-${AWS::StackName}"
                         }
                     },
                     {
@@ -1422,14 +1614,44 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/vpc/flowlogs/${Environment}"
+                    "Fn::Sub": [
+                        "/aws/vpc/flowlogs/${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "RetentionInDays": 30,
                 "KmsKeyId": {
                     "Fn::If": [
                         "CreateKMS",
                         {
-                            "Ref": "SecureKMSKey"
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
                         },
                         {
                             "Ref": "ExistingKMSKeyArn"
@@ -1496,7 +1718,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "WebServerSecurityGroup-${Environment}"
+                    "Fn::Sub": "WebServerSecurityGroup-${Environment}-${AWS::StackName}"
                 },
                 "GroupDescription": "Security group for web servers",
                 "VpcId": {
@@ -1571,7 +1793,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "DatabaseSecurityGroup-${Environment}"
+                    "Fn::Sub": "DatabaseSecurityGroup-${Environment}-${AWS::StackName}"
                 },
                 "GroupDescription": "Security group for database servers",
                 "VpcId": {
@@ -1633,7 +1855,7 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "LambdaSecurityGroup-${Environment}"
+                    "Fn::Sub": "LambdaSecurityGroup-${Environment}-${AWS::StackName}"
                 },
                 "GroupDescription": "Security group for Lambda functions",
                 "VpcId": {
@@ -1857,7 +2079,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "secure-bucket-${AWS::AccountId}-${AWS::Region}-${Environment}"
+                    "Fn::Sub": [
+                        "secure-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1867,12 +2116,6 @@
                             }
                         }
                     ]
-                },
-                "PublicAccessBlockConfiguration": {
-                    "BlockPublicAcls": true,
-                    "BlockPublicPolicy": true,
-                    "IgnorePublicAcls": true,
-                    "RestrictPublicBuckets": true
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
@@ -1890,6 +2133,12 @@
                         ]
                     },
                     "LogFilePrefix": "access-logs/"
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
                 },
                 "Tags": [
                     {
@@ -1920,7 +2169,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "secure-access-logs-${AWS::AccountId}-${AWS::Region}-${Environment}"
+                    "Fn::Sub": [
+                        "logs-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -2021,11 +2297,14 @@
             }
         },
         "DatabaseSubnetGroup": {
-            "Condition": "CreateDatabaseSubnetGroup",
+            "Condition": "HasTwoSubnetAZs",
             "Type": "AWS::RDS::DBSubnetGroup",
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "DatabaseSubnetGroup-${Environment}-${AWS::StackName}"
+                },
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
                     {
@@ -2080,7 +2359,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${Environment}-database-password"
+                    "Fn::Sub": [
+                        "production-database-password-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Description": "Database password for secure environment",
                 "GenerateSecretString": {
@@ -2096,7 +2402,10 @@
                     "Fn::If": [
                         "CreateKMS",
                         {
-                            "Ref": "SecureKMSKey"
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
                         },
                         {
                             "Ref": "ExistingKMSKeyArn"
@@ -2120,14 +2429,12 @@
             }
         },
         "DatabaseInstance": {
-            "Condition": "CreateDatabaseInstance",
+            "Condition": "HasTwoSubnetAZs",
             "Type": "AWS::RDS::DBInstance",
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "secure-database-${Environment}"
-                },
+                "DBInstanceIdentifier": "secure-database-production-tapstack",
                 "DBInstanceClass": "db.t3.micro",
                 "Engine": "mysql",
                 "EngineVersion": "8.0.43",
@@ -2152,7 +2459,10 @@
                     "Fn::If": [
                         "CreateKMS",
                         {
-                            "Ref": "SecureKMSKey"
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
                         },
                         {
                             "Ref": "ExistingKMSKeyArn"
@@ -2218,7 +2528,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BackupVaultName": {
-                    "Fn::Sub": "SecureBackupVault-${Environment}"
+                    "Fn::Sub": [
+                        "SecureBackupVault-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "EncryptionKeyArn": {
                     "Fn::If": [
@@ -2255,7 +2592,34 @@
             "Properties": {
                 "BackupPlan": {
                     "BackupPlanName": {
-                        "Fn::Sub": "SecureBackupPlan-${Environment}"
+                        "Fn::Sub": [
+                            "SecureBackupPlan-production-tapstack-${Suffix}",
+                            {
+                                "Suffix": {
+                                    "Fn::Select": [
+                                        0,
+                                        {
+                                            "Fn::Split": [
+                                                "-",
+                                                {
+                                                    "Fn::Select": [
+                                                        2,
+                                                        {
+                                                            "Fn::Split": [
+                                                                "/",
+                                                                {
+                                                                    "Ref": "AWS::StackId"
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
                     },
                     "BackupPlanRule": [
                         {
@@ -2291,7 +2655,7 @@
             }
         },
         "BackupSelection": {
-            "Condition": "EnableBackup",
+            "Condition": "EnableBackupAndHasTwoAZs",
             "Type": "AWS::Backup::BackupSelection",
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
@@ -2368,14 +2732,44 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/cloudtrail/${Environment}"
+                    "Fn::Sub": [
+                        "/aws/cloudtrail/${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "RetentionInDays": 90,
                 "KmsKeyId": {
                     "Fn::If": [
                         "CreateKMS",
                         {
-                            "Ref": "SecureKMSKey"
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
                         },
                         {
                             "Ref": "ExistingKMSKeyArn"
@@ -2462,7 +2856,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "SecureEnvironmentTrail-${Environment}"
+                    "Fn::Sub": [
+                        "SecureEnvironmentTrail-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "S3BucketName": {
                     "Fn::If": [
@@ -2494,7 +2915,10 @@
                     "Fn::If": [
                         "CreateKMS",
                         {
-                            "Ref": "SecureKMSKey"
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
                         },
                         {
                             "Ref": "ExistingKMSKeyArn"
@@ -2531,7 +2955,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "cloudtrail-logs-${AWS::AccountId}-${AWS::Region}-${Environment}"
+                    "Fn::Sub": [
+                        "trail-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -2541,6 +2992,9 @@
                             }
                         }
                     ]
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
@@ -2571,10 +3025,8 @@
             }
         },
         "CloudTrailBucketPolicy": {
-            "Condition": "CreateCloudTrailBucket",
+            "Condition": "CreateCloudTrailBucketPolicy",
             "Type": "AWS::S3::BucketPolicy",
-            "DeletionPolicy": "Retain",
-            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "Bucket": {
                     "Ref": "CloudTrailBucket"
@@ -2598,13 +3050,32 @@
                             "Condition": {
                                 "StringEquals": {
                                     "AWS:SourceArn": {
-                                        "Fn::If": [
-                                            "UseExistingCloudTrail",
+                                        "Fn::Sub": [
+                                            "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-production-tapstack-${Suffix}",
                                             {
-                                                "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ExistingCloudTrailName}"
-                                            },
-                                            {
-                                                "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-${Environment}"
+                                                "Suffix": {
+                                                    "Fn::Select": [
+                                                        0,
+                                                        {
+                                                            "Fn::Split": [
+                                                                "-",
+                                                                {
+                                                                    "Fn::Select": [
+                                                                        2,
+                                                                        {
+                                                                            "Fn::Split": [
+                                                                                "/",
+                                                                                {
+                                                                                    "Ref": "AWS::StackId"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
                                             }
                                         ]
                                     }
@@ -2625,13 +3096,32 @@
                                 "StringEquals": {
                                     "s3:x-amz-acl": "bucket-owner-full-control",
                                     "AWS:SourceArn": {
-                                        "Fn::If": [
-                                            "UseExistingCloudTrail",
+                                        "Fn::Sub": [
+                                            "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-production-tapstack-${Suffix}",
                                             {
-                                                "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ExistingCloudTrailName}"
-                                            },
-                                            {
-                                                "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-${Environment}"
+                                                "Suffix": {
+                                                    "Fn::Select": [
+                                                        0,
+                                                        {
+                                                            "Fn::Split": [
+                                                                "-",
+                                                                {
+                                                                    "Fn::Select": [
+                                                                        2,
+                                                                        {
+                                                                            "Fn::Split": [
+                                                                                "/",
+                                                                                {
+                                                                                    "Ref": "AWS::StackId"
+                                                                                }
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
                                             }
                                         ]
                                     }
@@ -2658,9 +3148,6 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
-                ],
                 "Policies": [
                     {
                         "PolicyName": "ConfigBucketPolicy",
@@ -2692,6 +3179,24 @@
                                 }
                             ]
                         }
+                    },
+                    {
+                        "PolicyName": "AWSConfigCorePermissions",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "config:BatchGet*",
+                                        "config:Get*",
+                                        "config:Describe*",
+                                        "config:Put*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
                     }
                 ],
                 "Tags": [
@@ -2713,9 +3218,38 @@
         "ConfigBucket": {
             "Condition": "CreateConfigBucket",
             "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "aws-config-${AWS::AccountId}-${AWS::Region}-${Environment}"
+                    "Fn::Sub": [
+                        "config-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -2830,11 +3364,38 @@
             }
         },
         "ConfigurationRecorder": {
-            "Condition": "CreateConfigBucket",
+            "Condition": "CreateConfigRecorder",
             "Type": "AWS::Config::ConfigurationRecorder",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "SecureEnvironmentRecorder-${Environment}"
+                    "Fn::Sub": [
+                        "SecureEnvironmentRecorder-${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "RoleARN": {
                     "Fn::GetAtt": [
@@ -2849,11 +3410,38 @@
             }
         },
         "ConfigDeliveryChannel": {
-            "Condition": "CreateConfigBucket",
+            "Condition": "CreateConfigDeliveryChannel",
             "Type": "AWS::Config::DeliveryChannel",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "SecureEnvironmentDeliveryChannel-${Environment}"
+                    "Fn::Sub": [
+                        "SecureEnvironmentDeliveryChannel-${Environment}-${AWS::StackName}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "S3BucketName": {
                     "Ref": "ConfigBucket"
@@ -2861,11 +3449,12 @@
             }
         },
         "S3BucketPublicAccessProhibitedRule": {
-            "Condition": "CreateConfigBucket",
+            "Condition": "CreateConfigRecorder",
             "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "s3-bucket-public-access-prohibited-${Environment}"
+                    "Fn::Sub": "s3-bucket-public-access-prohibited-${Environment}-${AWS::StackName}"
                 },
                 "Description": "Checks that your Amazon S3 buckets do not allow public read access",
                 "Source": {
@@ -2875,11 +3464,12 @@
             }
         },
         "RootAccessKeyCheckRule": {
-            "Condition": "CreateConfigBucket",
+            "Condition": "CreateConfigRecorder",
             "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "root-access-key-check-${Environment}"
+                    "Fn::Sub": "root-access-key-check-${Environment}-${AWS::StackName}"
                 },
                 "Description": "Checks whether the root user access key is available",
                 "Source": {
@@ -2889,10 +3479,12 @@
             }
         },
         "EBSEncryptionByDefaultRule": {
+            "Condition": "CreateConfigRecorder",
             "Type": "AWS::Config::ConfigRule",
+            "DependsOn": "ConfigurationRecorder",
             "Properties": {
                 "ConfigRuleName": {
-                    "Fn::Sub": "ec2-ebs-encryption-by-default-${Environment}"
+                    "Fn::Sub": "ec2-ebs-encryption-by-default-${Environment}-${AWS::StackName}"
                 },
                 "Description": "Check that Amazon Elastic Block Store (EBS) encryption is enabled by default",
                 "Source": {
@@ -2949,7 +3541,34 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "SecureFunction-${Environment}"
+                    "Fn::Sub": [
+                        "SecureFunction-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
@@ -3007,7 +3626,10 @@
                                     "Ref": "ExistingKMSKeyArn"
                                 },
                                 {
-                                    "Ref": "SecureKMSKey"
+                                    "Fn::GetAtt": [
+                                        "SecureKMSKey",
+                                        "Arn"
+                                    ]
                                 }
                             ]
                         }
@@ -3124,7 +3746,10 @@
                                         "Ref": "ExistingKMSKeyArn"
                                     },
                                     {
-                                        "Ref": "SecureKMSKey"
+                                        "Fn::GetAtt": [
+                                            "SecureKMSKey",
+                                            "Arn"
+                                        ]
                                     }
                                 ]
                             },
@@ -3196,7 +3821,34 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "IAMPasswordPolicy-${Environment}"
+                    "Fn::Sub": [
+                        "IAMPasswordPolicy-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
@@ -3274,7 +3926,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "FunctionName": {
-                    "Fn::Sub": "EBSEncryption-${Environment}"
+                    "Fn::Sub": [
+                        "EBSEncryption-production-tapstack-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    0,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Runtime": "python3.9",
                 "Handler": "index.lambda_handler",
@@ -3290,6 +3969,7 @@
             }
         },
         "EBSEncryptionByDefault": {
+            "Condition": "ShouldEnableEBSEncryption",
             "Type": "AWS::CloudFormation::CustomResource",
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
@@ -3304,7 +3984,10 @@
                     "Fn::If": [
                         "CreateKMS",
                         {
-                            "Ref": "SecureKMSKey"
+                            "Fn::GetAtt": [
+                                "SecureKMSKey",
+                                "Arn"
+                            ]
                         },
                         {
                             "Ref": "ExistingKMSKeyArn"
@@ -3314,12 +3997,30 @@
             }
         },
         "BillingAlarm": {
+            "Condition": "CreateBillingAlarm",
             "Type": "AWS::CloudWatch::Alarm",
             "DeletionPolicy": "Retain",
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "AlarmName": {
-                    "Fn::Sub": "HighBillingAlarm-${Environment}"
+                    "Fn::Sub": [
+                        "HighBillingAlarm-${Environment}-${AWS::StackName}-${AWS::Region}-${Suffix}",
+                        {
+                            "Suffix": {
+                                "Fn::Select": [
+                                    2,
+                                    {
+                                        "Fn::Split": [
+                                            "/",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "AlarmDescription": "Alarm for high billing costs",
                 "MetricName": "EstimatedCharges",
@@ -3358,12 +4059,12 @@
             "Description": "VPC ID",
             "Value": {
                 "Fn::If": [
-                    "UseExistingVPC",
-                    {
-                        "Ref": "ExistingVPCId"
-                    },
+                    "CreateVPC",
                     {
                         "Ref": "SecureVPC"
+                    },
+                    {
+                        "Ref": "ExistingVPCId"
                     }
                 ]
             },
@@ -3415,6 +4116,7 @@
             }
         },
         "RDSInstanceId": {
+            "Condition": "HasTwoSubnetAZs",
             "Description": "RDS Instance ID",
             "Value": {
                 "Fn::If": [
@@ -3529,10 +4231,25 @@
             }
         },
         "ConfigRecorderName": {
-            "Condition": "CreateConfigBucket",
             "Description": "AWS Config Recorder Name",
             "Value": {
-                "Ref": "ConfigurationRecorder"
+                "Fn::If": [
+                    "UseExistingConfigRecorder",
+                    {
+                        "Ref": "ExistingConfigRecorderName"
+                    },
+                    {
+                        "Fn::If": [
+                            "CreateConfigRecorder",
+                            {
+                                "Ref": "ConfigurationRecorder"
+                            },
+                            {
+                                "Fn::Sub": "NoConfigRecorder-${AWS::StackName}"
+                            }
+                        ]
+                    }
+                ]
             },
             "Export": {
                 "Name": {
@@ -3543,7 +4260,15 @@
         "BillingAlarmName": {
             "Description": "Billing Alarm Name",
             "Value": {
-                "Ref": "BillingAlarm"
+                "Fn::If": [
+                    "UseExistingBillingAlarm",
+                    {
+                        "Ref": "ExistingBillingAlarmName"
+                    },
+                    {
+                        "Ref": "BillingAlarm"
+                    }
+                ]
             },
             "Export": {
                 "Name": {

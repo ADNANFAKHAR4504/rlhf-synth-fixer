@@ -1,4 +1,4 @@
-I'll create a comprehensive AWS CloudFormation template that implements all the security requirements you've specified. This template will be modular, secure, and follow AWS best practices.
+I'll fix all the lint errors and provide you with a corrected, complete CloudFormation template:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
@@ -49,13 +49,10 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
   
-  DBPassword:
+  AdminEmail:
     Type: String
-    NoEcho: true
-    Description: 'Database administrator password'
-    MinLength: 12
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()_+=-]*'
+    Description: 'Email address for billing alerts'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
 
 Resources:
   # KMS Key for encryption
@@ -334,25 +331,11 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !Ref DatabaseSecurityGroup
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
           Description: Database access
       Tags:
         - Key: Name
           Value: 'LambdaSecurityGroup'
-
-  # IAM Password Policy
-  IAMPasswordPolicy:
-    Type: AWS::IAM::AccountPasswordPolicy
-    Properties:
-      MinimumPasswordLength: 12
-      RequireSymbols: true
-      RequireNumbers: true
-      RequireUppercaseCharacters: true
-      RequireLowercaseCharacters: true
-      AllowUsersToChangePassword: true
-      MaxPasswordAge: 90
-      PasswordReusePrevention: 12
-      HardExpiry: false
 
   # IAM Role for EC2
   EC2Role:
@@ -435,11 +418,6 @@ Resources:
       LoggingConfiguration:
         DestinationBucketName: !Ref S3AccessLogsBucket
         LogFilePrefix: access-logs/
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref S3LogGroup
       Tags:
         - Key: Name
           Value: 'SecureS3Bucket'
@@ -481,17 +459,37 @@ Resources:
         - Key: Name
           Value: 'DatabaseSubnetGroup'
 
+  # Database Password Secret
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-database-password'
+      Description: 'Database password for secure environment'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
+      KmsKeyId: !Ref SecureKMSKey
+      Tags:
+        - Key: Name
+          Value: 'DatabaseSecret'
+        - Key: Environment
+          Value: 'Production'
+
   # RDS Instance with encryption
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: secure-database
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -600,6 +598,7 @@ Resources:
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       KMSKeyId: !Ref SecureKMSKey
+      IsLogging: true
       Tags:
         - Key: Name
           Value: 'SecureEnvironmentTrail'
@@ -631,6 +630,9 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt CloudTrailBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -640,6 +642,7 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
+                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail'
 
   # AWS Config
   ConfigRole:
@@ -654,6 +657,21 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/ConfigRole
+      Policies:
+        - PolicyName: ConfigBucketPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:ListBucket
+                Resource: !GetAtt ConfigBucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${ConfigBucket.Arn}/*'
 
   ConfigBucket:
     Type: AWS::S3::Bucket
@@ -720,6 +738,37 @@ Resources:
       Name: SecureEnvironmentDeliveryChannel
       S3BucketName: !Ref ConfigBucket
 
+  # Config Rules for Compliance
+  S3BucketPublicAccessProhibitedRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: s3-bucket-public-access-prohibited
+      Description: Checks that your Amazon S3 buckets do not allow public read access
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_ACCESS_PROHIBITED
+
+  RootAccessKeyCheckRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: root-access-key-check
+      Description: Checks whether the root user access key is available
+      Source:
+        Owner: AWS
+        SourceIdentifier: ROOT_ACCESS_KEY_CHECK
+
+  EBSEncryptionByDefaultRule:
+    Type: AWS::Config::ConfigRule
+    DependsOn: ConfigurationRecorder
+    Properties:
+      ConfigRuleName: ec2-ebs-encryption-by-default
+      Description: Check that Amazon Elastic Block Store (EBS) encryption is enabled by default
+      Source:
+        Owner: AWS
+        SourceIdentifier: EC2_EBS_ENCRYPTION_BY_DEFAULT
+
   # GuardDuty
   GuardDutyDetector:
     Type: AWS::GuardDuty::Detector
@@ -750,10 +799,19 @@ Resources:
       Code:
         ZipFile: |
           import json
+          import boto3
+          import os
+          
           def lambda_handler(event, context):
+              # Example of using KMS key from environment
+              kms_key_id = os.environ.get('KMS_KEY_ID')
+              
               return {
                   'statusCode': 200,
-                  'body': json.dumps('Hello from secure Lambda!')
+                  'body': json.dumps({
+                      'message': 'Hello from secure Lambda!',
+                      'kms_key': kms_key_id
+                  })
               }
       VpcConfig:
         SecurityGroupIds:
@@ -764,11 +822,23 @@ Resources:
         Variables:
           KMS_KEY_ID: !Ref SecureKMSKey
       KmsKeyArn: !GetAtt SecureKMSKey.Arn
+      Timeout: 30
       Tags:
         - Key: Name
           Value: 'SecureLambdaFunction'
         - Key: Environment
           Value: 'Production'
+
+  # EBS Encryption by Default
+  EBSEncryptionByDefault:
+    Type: AWS::EC2::EBSEncryptionByDefault
+    Properties:
+      EbsEncryptionByDefault: true
+
+  EBSDefaultKMSKey:
+    Type: AWS::EC2::EBSDefaultKMSKey
+    Properties:
+      KmsKeyId: !Ref SecureKMSKey
 
   # Cost and Billing Alarm
   BillingAlarm:
@@ -786,87 +856,4 @@ Resources:
       Dimensions:
         - Name: Currency
           Value: USD
-      TreatMissingData: notBreaching
-
-  # Cost Budget
-  CostBudget:
-    Type: AWS::Budgets::Budget
-    Properties:
-      Budget:
-        BudgetName: SecureEnvironmentBudget
-        BudgetLimit:
-          Amount: 100
-          Unit: USD
-        TimeUnit: MONTHLY
-        BudgetType: COST
-        CostFilters:
-          Region:
-            - us-west-2
-      NotificationsWithSubscribers:
-        - Notification:
-            NotificationType: ACTUAL
-            ComparisonOperator: GREATER_THAN
-            Threshold: 80
-          Subscribers:
-            - SubscriptionType: EMAIL
-              Address: admin@example.com
-
-Outputs:
-  VPCId:
-    Description: ID of the VPC
-    Value: !Ref SecureVPC
-    Export:
-      Name: !Sub '${AWS::StackName}-VPC-ID'
-
-  PrivateSubnetId:
-    Description: ID of the private subnet
-    Value: !Ref PrivateSubnet
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateSubnet-ID'
-
-  PublicSubnetId:
-    Description: ID of the public subnet
-    Value: !Ref PublicSubnet
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnet-ID'
-
-  DatabaseEndpoint:
-    Description: RDS instance endpoint
-    Value: !GetAtt DatabaseInstance.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-Database-Endpoint'
-
-  S3BucketName:
-    Description: Name of the secure S3 bucket
-    Value: !Ref SecureS3Bucket
-    Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket-Name'
-
-  KMSKeyId:
-    Description: ID of the KMS key
-    Value: !Ref SecureKMSKey
-    Export:
-      Name: !Sub '${AWS::StackName}-KMS-Key-ID'
-
-  EC2RoleArn:
-    Description: ARN of the EC2 IAM role
-    Value: !GetAtt EC2Role.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-EC2Role-ARN'
-
-  LambdaFunctionArn:
-    Description: ARN of the Lambda function
-    Value: !GetAtt SecureLambdaFunction.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-Lambda-ARN'
-```
-
-## Key Features Implemented
-
-This CloudFormation template implements all the requested security requirements:
-
-### **Security Features:**
-1. **IAM Roles for EC2**: Uses IAM roles instead of users for EC2 permissions
-2. **VPC Flow Logs**: Enabled for network traffic monitoring
-3. **S3 Encryption**: AES-256 encryption with public access blocked
-4. **RDS Backups**:
+      T
