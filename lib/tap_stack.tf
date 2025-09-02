@@ -687,42 +687,6 @@ resource "aws_cloudtrail" "main" {
   ]
 }
 
-# GuardDuty - Use existing detector if available, otherwise create new
-resource "aws_guardduty_detector" "main" {
-  count  = data.aws_guardduty_detector.existing.id == "" ? 1 : 0
-  enable = true
-
-  tags = {
-    Name = "${var.project_name}-guardduty"
-  }
-}
-
-# Use existing GuardDuty detector ID or newly created one
-locals {
-  guardduty_detector_id = data.aws_guardduty_detector.existing.id != "" ? data.aws_guardduty_detector.existing.id : aws_guardduty_detector.main[0].id
-}
-
-# GuardDuty S3 Protection Feature
-resource "aws_guardduty_detector_feature" "s3_protection" {
-  detector_id = local.guardduty_detector_id
-  name        = "S3_DATA_EVENTS"
-  status      = "ENABLED"
-}
-
-# GuardDuty EKS Protection Feature
-resource "aws_guardduty_detector_feature" "eks_protection" {
-  detector_id = local.guardduty_detector_id
-  name        = "EKS_AUDIT_LOGS"
-  status      = "ENABLED"
-}
-
-# GuardDuty Malware Protection Feature
-resource "aws_guardduty_detector_feature" "malware_protection" {
-  detector_id = local.guardduty_detector_id
-  name        = "EBS_MALWARE_PROTECTION"
-  status      = "ENABLED"
-}
-
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
