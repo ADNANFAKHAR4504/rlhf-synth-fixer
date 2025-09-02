@@ -171,6 +171,12 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: Set to 'true' to create a new Config Configuration Recorder if none exists
 
+  EnableEBSEncryption:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Whether to enable EBS encryption by default (true/false)
+
   ExistingWebServerSecurityGroupId:
     Type: String
     Default: ''
@@ -332,6 +338,7 @@ Conditions:
 
   EnableBackupAndHasTwoAZs:
     !And [Condition: EnableBackup, Condition: HasTwoSubnetAZs]
+  ShouldEnableEBSEncryption: !Equals [!Ref EnableEBSEncryption, 'true']
 
 Resources:
   # =========================
@@ -1727,7 +1734,7 @@ Resources:
           Value: !Ref Owner
 
   # =========================
-  # IAM Password Policy 
+  # IAM Password Policy
   # =========================
   IAMPasswordPolicyRole:
     Type: AWS::IAM::Role
@@ -1884,6 +1891,7 @@ Resources:
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
 
   EBSEncryptionByDefault:
+    Condition: ShouldEnableEBSEncryption
     Type: AWS::CloudFormation::CustomResource
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
