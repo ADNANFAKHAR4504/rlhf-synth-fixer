@@ -329,7 +329,3 @@ def get_stack_info():
         "region": region,
         "instance_type": instance_type
     }
-
-
-
-
