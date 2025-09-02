@@ -18,24 +18,21 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
       "Default": "",
       "AllowedPattern": "^$|^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
       "ConstraintDescription": "Must be empty or a valid EC2 KeyPair name."
-    },
-    "DBUsername": {
-      "Type": "String",
-      "Description": "Database administrator username",
-      "Default": "admin",
-      "MinLength": "1",
-      "MaxLength": "16",
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
-      "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
-    },
-    "DBPassword": {
-      "Type": "String",
-      "Description": "Database administrator password",
-      "NoEcho": true,
-      "MinLength": "8",
-      "MaxLength": "41",
-      "AllowedPattern": "[a-zA-Z0-9!@#$%^&*()_+=-]*",
-      "ConstraintDescription": "Must contain 8-41 alphanumeric and special characters."
+    }
+  },
+
+  "Conditions": {
+    "HasKeyPair": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "KeyPairName"
+            },
+            ""
+          ]
+        }
+      ]
     }
   },
   "Resources": {
@@ -372,7 +369,7 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
         ]
       }
     },
-    "EC2InstanceRole": {
+    "EC2Role": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -388,16 +385,28 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+          "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
         ],
-        "Tags": [
+        "Policies": [
           {
-            "Key": "Project",
-            "Value": "XYZ"
-          },
-          {
-            "Key": "Environment",
-            "Value": "Production"
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogStreams"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*"
+                  }
+                }
+              ]
+            }
           }
         ]
       }
@@ -407,7 +416,7 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
       "Properties": {
         "Roles": [
           {
-            "Ref": "EC2InstanceRole"
+            "Ref": "EC2Role"
           }
         ]
       }
@@ -419,20 +428,43 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
           "Ref": "LatestAmiId"
         },
         "InstanceType": "t3.micro",
-        "IamInstanceProfile": {
-          "Ref": "EC2InstanceProfile"
+        "KeyName": {
+          "Fn::If": [
+            "HasKeyPair",
+            {
+              "Ref": "KeyPairName"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet"
         },
         "SecurityGroupIds": [
           {
             "Ref": "WebServerSecurityGroup"
           }
         ],
-        "SubnetId": {
-          "Ref": "PublicSubnet"
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
         },
         "UserData": {
           "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho '<h1>Production Web Application</h1>' > /var/www/html/index.html\n"
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y\n",
+                "yum install -y httpd\n",
+                "systemctl start httpd\n",
+                "systemctl enable httpd\n",
+                "echo '<h1>Production Web Server - Project XYZ</h1>' > /var/www/html/index.html\n",
+                "echo '<p>Server started at: '$(date)'</p>' >> /var/www/html/index.html\n",
+                "echo '<p>Instance ID: '$(curl -s http://169.254.169.254/latest/meta-data/instance-id)'</p>' >> /var/www/html/index.html\n"
+              ]
+            ]
           }
         },
         "Tags": [
@@ -451,11 +483,62 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
         ]
       }
     },
+
+    "WebServerEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "InternetGatewayAttachment",
+      "Properties": {
+        "InstanceId": {
+          "Ref": "WebServerInstance"
+        },
+        "Domain": "vpc"
+      }
+    },
+
+    "DBPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "RDS MySQL Database Password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": " \"@/\\\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "Production-DB-Password"
+          },
+          {
+            "Key": "Project",
+            "Value": "XYZ"
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+
+    "DBPasswordSecretAttachment": {
+      "Type": "AWS::SecretsManager::SecretTargetAttachment",
+      "Properties": {
+        "SecretId": {
+          "Ref": "DBPasswordSecret"
+        },
+        "TargetId": {
+          "Ref": "ProductionDatabase"
+        },
+        "TargetType": "AWS::RDS::DBInstance"
+      }
+    },
+
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": "production-db-subnet-group",
-        "DBSubnetGroupDescription": "Subnet group for RDS database",
+        "DBSubnetGroupDescription": "Subnet group for RDS database spanning multiple AZs",
         "SubnetIds": [
           {
             "Ref": "PrivateSubnet"
@@ -486,12 +569,19 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
         "VpcId": {
           "Ref": "ProductionVPC"
         },
-        "AvailabilityZone": "us-west-2b",
         "CidrBlock": "10.0.3.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            2,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Name",
-            "Value": "Production-Private-Subnet-SecondAZ"
+            "Value": "Private-Subnet-AZ2"
           },
           {
             "Key": "Project",
@@ -507,16 +597,11 @@ Here's a comprehensive CloudFormation template that meets all specified requirem
     "ProductionDatabase": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
-        "DBInstanceIdentifier": "production-webapp-db",
         "DBInstanceClass": "db.t3.micro",
         "Engine": "mysql",
         "EngineVersion": "8.0.39",
-        "MasterUsername": {
-          "Ref": "DBUsername"
-        },
-        "MasterUserPassword": {
-          "Ref": "DBPassword"
-        },
+        "ManageMasterUserPassword": true,
+        "MasterUsername": "admin",
         "AllocatedStorage": 20,
         "StorageType": "gp2",
         "StorageEncrypted": true,

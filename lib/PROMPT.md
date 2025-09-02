@@ -1,37 +1,40 @@
-# CloudFormation Production Web Application Infrastructure Challenge
+# Production Web Infrastructure Setup
 
-You are a senior DevOps engineer tasked with creating a production-grade AWS infrastructure using CloudFormation JSON. Deploy a secure web application environment with the following architecture:
+Build a secure web application infrastructure on AWS using CloudFormation JSON. We need a complete setup for hosting a production web application.
 
-## Core Infrastructure Requirements
-Create a CloudFormation JSON template that provisions:
+## What to Build
 
-1. **VPC Network Architecture**
-   - VPC with CIDR block 10.0.0.0/16 in us-west-2
-   - Public subnet: 10.0.1.0/24 (us-west-2a)
-   - Private subnet: 10.0.2.0/24 (us-west-2b) 
-   - Internet Gateway attached to VPC
-   - NAT Gateway in public subnet for private subnet internet access
+Create a CloudFormation template that sets up:
 
-2. **Compute and Database Infrastructure**
-   - EC2 instance (t3.micro) in public subnet with Elastic IP
-   - RDS MySQL instance (db.t3.micro) in private subnet
-   - Database subnet group spanning multiple AZs
+**Network Setup:**
+- VPC using 10.0.0.0/16 in us-west-2
+- Public subnet: 10.0.1.0/24 in us-west-2a  
+- Private subnet: 10.0.2.0/24 in us-west-2b
+- Internet Gateway for public access
+- NAT Gateway so private resources can reach internet
 
-3. **Security and Access Control**
-   - Security groups: web server (HTTP/HTTPS from anywhere) and database (MySQL from web server only)
-   - IAM role for EC2 with CloudWatch Logs permissions
-   - Instance profile for EC2 to assume the IAM role
+**Servers and Database:**
+- Web server (t3.micro EC2) in public subnet with static IP
+- MySQL database (db.t3.micro RDS) in private subnet
+- Database subnet group across multiple availability zones
 
-4. **Operational Requirements**
-   - All resources tagged with Project: XYZ and Environment: Production
-   - Route tables configured for proper traffic flow
-   - Outputs section exposing EC2 public IP and RDS endpoint
+**Security:**
+- Security group for web server allowing HTTP/HTTPS from internet
+- Security group for database allowing MySQL only from web server
+- IAM role for EC2 with CloudWatch logging permissions
+- Instance profile to attach the role to EC2
 
-## Technical Constraints
-- Use JSON format exclusively
-- Template must validate using aws cloudformation validate-template
-- Name the template 'prod-environment-setup.json'
-- Ensure minimal IAM permissions following principle of least privilege
-- Database must be in private subnet with no direct internet access
+**Operations:**
+- Tag everything with Project: XYZ and Environment: Production
+- Set up routing tables for traffic flow
+- Export EC2 public IP and database endpoint in outputs
 
-Provide a complete, deployable CloudFormation JSON template that creates this infrastructure successfully.
+## Requirements
+
+- Use CloudFormation JSON format
+- Template should pass validation with aws cloudformation validate-template
+- Follow AWS best practices for security
+- Keep database private with no direct internet access
+- Use minimal IAM permissions
+
+The template should create working infrastructure that can run a production web application.
