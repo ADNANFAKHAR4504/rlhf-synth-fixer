@@ -1727,7 +1727,7 @@ Resources:
           Value: !Ref Owner
 
   # =========================
-  # IAM Password Policy (Custom Resource)
+  # IAM Password Policy 
   # =========================
   IAMPasswordPolicyRole:
     Type: AWS::IAM::Role
