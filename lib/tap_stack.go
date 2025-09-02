@@ -114,25 +114,25 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// CloudTrail bucket policy removed to avoid circular dependency
 
-	// Create VPC manually to avoid CDK subnet selection issues
+	// Create VPC with explicit subnet configuration to avoid CDK selection issues
 	vpc := awsec2.NewVpc(stack, jsii.String("TapVPC"), &awsec2.VpcProps{
-		MaxAzs:      jsii.Number(1),
-		IpAddresses: awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
+		MaxAzs: jsii.Number(2),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
-				Name:       jsii.String("PublicSubnet"),
-				SubnetType: awsec2.SubnetType_PUBLIC,
-				CidrMask:   jsii.Number(24),
+				Name:            jsii.String("Public"),
+				SubnetType:      awsec2.SubnetType_PUBLIC,
+				CidrMask:        jsii.Number(24),
+				MapPublicIpOnLaunch: jsii.Bool(true),
 			},
 			{
-				Name:       jsii.String("PrivateSubnet"),
-				SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
-				CidrMask:   jsii.Number(24),
+				Name:            jsii.String("Private"),
+				SubnetType:      awsec2.SubnetType_PRIVATE_WITH_EGRESS,
+				CidrMask:        jsii.Number(24),
 			},
 			{
-				Name:       jsii.String("DatabaseSubnet"),
-				SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED,
-				CidrMask:   jsii.Number(28),
+				Name:            jsii.String("Database"),
+				SubnetType:      awsec2.SubnetType_PRIVATE_ISOLATED,
+				CidrMask:        jsii.Number(24),
 			},
 		},
 		EnableDnsHostnames: jsii.Bool(true),
