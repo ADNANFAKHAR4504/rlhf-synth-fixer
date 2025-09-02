@@ -10,7 +10,7 @@
   "subject_labels": [
     "General Infrastructure Tooling QA",
     "Security Configuration",
-    "Network Configuration", 
+    "Network Configuration",
     "Access Control",
     "Performance Optimization",
     "Resource Scaling",
@@ -29,5 +29,11 @@
     "CloudWatch Logs",
     "IAM",
     "Systems Manager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
 }
