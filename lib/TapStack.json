@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe, EC2 uses dynamic AMI, CloudTrail trail creation skipped (to avoid 5-trail quota). EnvironmentName applied as tags.\n",
+    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe, EC2 uses dynamic AMI, CloudTrail trail creation skipped (avoids 5-trail quota). AWS Config is optional to avoid quota issues. EnvironmentName applied as tags.\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
@@ -36,6 +36,15 @@
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Description": "Latest Amazon Linux 2 AMI from SSM Parameter Store",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        },
+        "EnableConfig": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to true to create AWS Config resources, false to skip."
         }
     },
     "Conditions": {
@@ -49,6 +58,14 @@
                         ""
                     ]
                 }
+            ]
+        },
+        "CreateConfig": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableConfig"
+                },
+                "true"
             ]
         }
     },
@@ -525,6 +542,7 @@
         },
         "ConfigRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "CreateConfig",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -553,6 +571,7 @@
         },
         "ConfigRecorder": {
             "Type": "AWS::Config::ConfigurationRecorder",
+            "Condition": "CreateConfig",
             "Properties": {
                 "Name": "default",
                 "RoleARN": {
