@@ -579,7 +579,6 @@ export class InfrastructureModules extends Construct {
         publiclyAccessible: false, // Critical: No public access
         multiAz: false, // Set to true for production
         monitoringInterval: 0,
-        performanceInsightsEnabled: true,
         tags: {
           ...commonTags,
           Name: `${sanitizedProject}-${config.environment}-rds`,
