@@ -68,6 +68,9 @@ class TapStack(pulumi.ComponentResource):
 
         # AWS region is configured via Pulumi config or environment variables
 
+        # Get current AWS account ID early (needed for policies)
+        current_account = get_caller_identity()
+        
         # Base tags for all resources
         base_tags = {
             "Environment": "Production",
@@ -223,9 +226,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Get current AWS account ID
-        current_account = get_caller_identity()
-        
         # Create IAM policy for bucket access (attached to DataAccessRole)
         bucket_policy = iam.Policy(
             f"tap-bucket-policy-{self.environment_suffix}",
