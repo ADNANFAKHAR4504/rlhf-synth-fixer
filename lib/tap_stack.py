@@ -13,7 +13,7 @@ import json
 
 import pulumi
 from pulumi import ResourceOptions, get_stack
-from pulumi_aws import s3, kms, iam, cloudwatch, config
+from pulumi_aws import s3, kms, iam, cloudwatch, config, get_caller_identity
 
 
 class TapStackArgs:
@@ -202,6 +202,9 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Get current AWS account ID
+        current_account = get_caller_identity()
+        
         # Create IAM policy for bucket access
         bucket_policy = iam.Policy(
             f"tap-bucket-policy-{self.environment_suffix}",
@@ -214,7 +217,7 @@ class TapStack(pulumi.ComponentResource):
                             "Sid": "AllowDataAccessRoleAccess",
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": f"arn:aws:iam::{config.account_id}:role/DataAccessRole"
+                                "AWS": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
                             },
                             "Action": [
                                 "s3:GetObject",
@@ -238,7 +241,7 @@ class TapStack(pulumi.ComponentResource):
                             ],
                             "Condition": {
                                 "StringNotEquals": {
-                                    "aws:PrincipalArn": f"arn:aws:iam::{config.account_id}:role/DataAccessRole"
+                                    "aws:PrincipalArn": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
                                 }
                             }
                         }
