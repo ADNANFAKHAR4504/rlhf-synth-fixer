@@ -189,6 +189,12 @@ Parameters:
     Default: ''
     Description: Optional existing AWS Config Delivery Channel name to reuse
 
+  EnableConfigDeliveryChannel:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Set to 'true' to create a new Config Delivery Channel if none exists
+
 Conditions:
   # KMS Conditions
   UseExistingKMS: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
@@ -271,10 +277,12 @@ Conditions:
   # Config Conditions
   UseExistingConfigBucket: !Not [!Equals [!Ref ExistingConfigBucketName, '']]
   CreateConfigBucket: !Equals [!Ref ExistingConfigBucketName, '']
+  
   CreateConfigDeliveryChannel:
     !And [
       !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
       !Equals [!Ref ExistingConfigBucketName, ''],
+      !Equals [!Ref EnableConfigDeliveryChannel, 'true'],
     ]
 
   # Other Service Conditions
