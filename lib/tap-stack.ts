@@ -80,7 +80,8 @@ export class TapStack extends cdk.Stack {
     // 2. IAM Role for EC2 instances with least-privilege permissions
     const ec2Role = new iam.Role(this, 'EC2Role', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
-      description: 'IAM role for EC2 instances with least-privilege permissions',
+      description:
+        'IAM role for EC2 instances with least-privilege permissions',
     });
 
     // Attach minimal policy for EC2 instances using JSON policy document
@@ -99,9 +100,7 @@ export class TapStack extends cdk.Stack {
         }),
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
-          actions: [
-            'sns:Publish',
-          ],
+          actions: ['sns:Publish'],
           resources: [
             `arn:aws:sns:${this.region}:${this.account}:app-logs-topic`,
           ],
@@ -127,9 +126,13 @@ export class TapStack extends cdk.Stack {
     });
 
     // Instance profile for EC2 role
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role,
-    });
+    const instanceProfile = new iam.InstanceProfile(
+      this,
+      'EC2InstanceProfile',
+      {
+        role: ec2Role,
+      }
+    );
 
     // 4. S3 bucket with server-side encryption and blocked public access
     const secureBucket = new s3.Bucket(this, 'SecureBucket', {
@@ -142,11 +145,15 @@ export class TapStack extends cdk.Stack {
     });
 
     // 5. RDS database with encryption, backups, and deletion protection
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc,
-      description: 'Security group for RDS database',
-      allowAllOutbound: false,
-    });
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for RDS database',
+        allowAllOutbound: false,
+      }
+    );
 
     // Allow database access only from EC2 security group
     dbSecurityGroup.addIngressRule(
@@ -159,7 +166,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED, // Deploy in isolated subnets
@@ -198,22 +208,27 @@ export class TapStack extends cdk.Stack {
     });
 
     // 8. CloudWatch alarm for security group changes
-    const securityGroupAlarm = new cloudwatch.Alarm(this, 'SecurityGroupChangesAlarm', {
-      alarmName: `SecurityGroupChanges-Alarm-${environmentSuffix}`,
-      alarmDescription: 'Alarm for security group changes',
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/Events',
-        metricName: 'MatchedEvents',
-        dimensionsMap: {
-          RuleName: 'SecurityGroupChangesRule',
-        },
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-    });
+    const securityGroupAlarm = new cloudwatch.Alarm(
+      this,
+      'SecurityGroupChangesAlarm',
+      {
+        alarmName: `SecurityGroupChanges-Alarm-${environmentSuffix}`,
+        alarmDescription: 'Alarm for security group changes',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/Events',
+          metricName: 'MatchedEvents',
+          dimensionsMap: {
+            RuleName: 'SecurityGroupChangesRule',
+          },
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      }
+    );
 
     // Add SNS action to the alarm
     securityGroupAlarm.addAlarmAction({
@@ -223,25 +238,29 @@ export class TapStack extends cdk.Stack {
     });
 
     // EventBridge rule to detect security group changes
-    const securityGroupRule = new events.Rule(this, 'SecurityGroupChangesRule', {
-      ruleName: `SecurityGroupChangesRule-${environmentSuffix}`,
-      description: 'Detect security group changes',
-      eventPattern: {
-        source: ['aws.ec2'],
-        detailType: ['AWS API Call via CloudTrail'],
-        detail: {
-          eventSource: ['ec2.amazonaws.com'],
-          eventName: [
-            'AuthorizeSecurityGroupIngress',
-            'AuthorizeSecurityGroupEgress',
-            'RevokeSecurityGroupIngress',
-            'RevokeSecurityGroupEgress',
-            'CreateSecurityGroup',
-            'DeleteSecurityGroup',
-          ],
+    const securityGroupRule = new events.Rule(
+      this,
+      'SecurityGroupChangesRule',
+      {
+        ruleName: `SecurityGroupChangesRule-${environmentSuffix}`,
+        description: 'Detect security group changes',
+        eventPattern: {
+          source: ['aws.ec2'],
+          detailType: ['AWS API Call via CloudTrail'],
+          detail: {
+            eventSource: ['ec2.amazonaws.com'],
+            eventName: [
+              'AuthorizeSecurityGroupIngress',
+              'AuthorizeSecurityGroupEgress',
+              'RevokeSecurityGroupIngress',
+              'RevokeSecurityGroupEgress',
+              'CreateSecurityGroup',
+              'DeleteSecurityGroup',
+            ],
+          },
         },
-      },
-    });
+      }
+    );
 
     securityGroupRule.addTarget(new targets.SnsTopic(logsTopic));
 
@@ -296,7 +315,8 @@ export class TapStack extends cdk.Stack {
     // 10. Lambda function with restricted execution role
     const lambdaRole = new iam.Role(this, 'LambdaExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Execution role for Lambda function with minimal permissions',
+      description:
+        'Execution role for Lambda function with minimal permissions',
     });
 
     // Inline policy for Lambda with JSON document - least privilege
@@ -317,10 +337,7 @@ export class TapStack extends cdk.Stack {
         // Allow reading specific SSM parameters
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
-          actions: [
-            'ssm:GetParameter',
-            'ssm:GetParameters',
-          ],
+          actions: ['ssm:GetParameter', 'ssm:GetParameters'],
           resources: [
             `arn:aws:ssm:${this.region}:${this.account}:parameter/app/*`,
           ],
@@ -328,12 +345,8 @@ export class TapStack extends cdk.Stack {
         // Allow publishing to specific SNS topic
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
-          actions: [
-            'sns:Publish',
-          ],
-          resources: [
-            logsTopic.topicArn,
-          ],
+          actions: ['sns:Publish'],
+          resources: [logsTopic.topicArn],
         }),
       ],
     });
@@ -393,7 +406,10 @@ export class TapStack extends cdk.Stack {
     // 3. Auto Scaling Group for EC2 instances
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
       launchTemplateName: `secure-app-template-${environmentSuffix}`,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
@@ -401,23 +417,27 @@ export class TapStack extends cdk.Stack {
       requireImdsv2: true, // Enforce IMDSv2 for better security
     });
 
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'AutoScalingGroup', {
-      vpc,
-      launchTemplate,
-      minCapacity: 1,
-      maxCapacity: 5,
-      desiredCapacity: 2,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, // Deploy in private subnets
-      },
-      healthCheck: autoscaling.HealthCheck.ec2({
-        grace: cdk.Duration.minutes(5),
-      }),
-      updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
-        maxBatchSize: 1,
-        minInstancesInService: 1,
-      }),
-    });
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'AutoScalingGroup',
+      {
+        vpc,
+        launchTemplate,
+        minCapacity: 1,
+        maxCapacity: 5,
+        desiredCapacity: 2,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, // Deploy in private subnets
+        },
+        healthCheck: autoscaling.HealthCheck.ec2({
+          grace: cdk.Duration.minutes(5),
+        }),
+        updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
+          maxBatchSize: 1,
+          minInstancesInService: 1,
+        }),
+      }
+    );
 
     // CORRECTED: Simple CPU-based scaling with proper configuration
     autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
@@ -427,42 +447,50 @@ export class TapStack extends cdk.Stack {
 
     // Alternative: Manual scaling policies with proper step configuration
     // Scale-up policy with multiple steps for more granular control
-    const scaleUpPolicy = new autoscaling.StepScalingPolicy(this, 'ScaleUpPolicy', {
-      autoScalingGroup,
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/EC2',
-        metricName: 'CPUUtilization',
-        dimensionsMap: {
-          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
-        },
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      scalingSteps: [
-        { upper: 80, change: +1 },  // Add 1 instance when CPU 70-80%
-        { lower: 80, change: +2 },  // Add 2 instances when CPU > 80%
-      ],
-      cooldown: cdk.Duration.minutes(5),
-    });
+    const scaleUpPolicy = new autoscaling.StepScalingPolicy(
+      this,
+      'ScaleUpPolicy',
+      {
+        autoScalingGroup,
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/EC2',
+          metricName: 'CPUUtilization',
+          dimensionsMap: {
+            AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        scalingSteps: [
+          { upper: 80, change: +1 }, // Add 1 instance when CPU 70-80%
+          { lower: 80, change: +2 }, // Add 2 instances when CPU > 80%
+        ],
+        cooldown: cdk.Duration.minutes(5),
+      }
+    );
 
     // Scale-down policy with multiple steps
-    const scaleDownPolicy = new autoscaling.StepScalingPolicy(this, 'ScaleDownPolicy', {
-      autoScalingGroup,
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/EC2',
-        metricName: 'CPUUtilization',
-        dimensionsMap: {
-          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
-        },
-        statistic: 'Average',
-        period: cdk.Duration.minutes(5),
-      }),
-      scalingSteps: [
-        { upper: 20, change: -1 },  // Remove 1 instance when CPU < 20%
-        { lower: 20, upper: 30, change: -1 }, // Remove 1 instance when CPU 20-30%
-      ],
-      cooldown: cdk.Duration.minutes(10), // Longer cooldown for scale-down
-    });
+    const scaleDownPolicy = new autoscaling.StepScalingPolicy(
+      this,
+      'ScaleDownPolicy',
+      {
+        autoScalingGroup,
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/EC2',
+          metricName: 'CPUUtilization',
+          dimensionsMap: {
+            AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+          },
+          statistic: 'Average',
+          period: cdk.Duration.minutes(5),
+        }),
+        scalingSteps: [
+          { upper: 20, change: -1 }, // Remove 1 instance when CPU < 20%
+          { lower: 20, upper: 30, change: -1 }, // Remove 1 instance when CPU 20-30%
+        ],
+        cooldown: cdk.Duration.minutes(10), // Longer cooldown for scale-down
+      }
+    );
 
     // CloudWatch alarms for manual scaling policies
     new cloudwatch.Alarm(this, 'HighCpuAlarm', {
