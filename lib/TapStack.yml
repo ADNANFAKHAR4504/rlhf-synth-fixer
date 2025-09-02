@@ -206,9 +206,12 @@ Conditions:
   CreateKMS: !Equals [!Ref ExistingKMSKeyArn, '']
 
   HasSecondAZ: !Not [!Equals [!Ref SecondAvailabilityZone, '']]
+  HasTwoSubnetAZs: !Or
+    - Condition: HasSecondAZ
+    - Condition: UseExistingDatabaseSubnet1
+    - Condition: UseExistingDatabaseSubnet2
 
   # VPC Conditions
-  UseExistingVPC: !Not [!Equals [!Ref ExistingVPCId, '']]
   CreateVPC: !Equals [!Ref ExistingVPCId, '']
   UseExistingInternetGateway:
     !Not [!Equals [!Ref ExistingInternetGatewayId, '']]
@@ -260,12 +263,10 @@ Conditions:
   # RDS Conditions
   UseExistingDatabaseSubnetGroup:
     !Not [!Equals [!Ref ExistingDatabaseSubnetGroupName, '']]
-  CreateDatabaseSubnetGroup: !Equals [!Ref ExistingDatabaseSubnetGroupName, '']
   UseExistingDatabaseSecret: !Not [!Equals [!Ref ExistingDatabaseSecretArn, '']]
   CreateDatabaseSecret: !Equals [!Ref ExistingDatabaseSecretArn, '']
   UseExistingDatabaseInstance:
     !Not [!Equals [!Ref ExistingDatabaseInstanceId, '']]
-  CreateDatabaseInstance: !Equals [!Ref ExistingDatabaseInstanceId, '']
 
   # Backup Conditions
   UseExistingBackupVault: !Not [!Equals [!Ref ExistingBackupVaultName, '']]
@@ -284,7 +285,6 @@ Conditions:
   # Config Conditions
   UseExistingConfigBucket: !Not [!Equals [!Ref ExistingConfigBucketName, '']]
   CreateConfigBucket: !Equals [!Ref ExistingConfigBucketName, '']
-
   CreateConfigDeliveryChannel:
     !And [
       !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
@@ -989,7 +989,7 @@ Resources:
   # RDS Database with Backup
   # =========================
   DatabaseSubnetGroup:
-    Condition: CreateDatabaseSubnetGroup
+    Condition: HasTwoSubnetAZs
     Type: AWS::RDS::DBSubnetGroup
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -1046,7 +1046,7 @@ Resources:
           Value: !Ref Owner
 
   DatabaseInstance:
-    Condition: CreateDatabaseInstance
+    Condition: HasTwoSubnetAZs
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -1163,7 +1163,11 @@ Resources:
           - !If [
               UseExistingDatabaseInstance,
               !Ref ExistingDatabaseInstanceId,
-              !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}',
+              !If [
+                HasTwoSubnetAZs,
+                !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}',
+                !Ref AWS::NoValue,
+              ],
             ]
 
   BackupRole:
@@ -1885,7 +1889,7 @@ Resources:
 Outputs:
   VPCId:
     Description: VPC ID
-    Value: !If [UseExistingVPC, !Ref ExistingVPCId, !Ref SecureVPC]
+    Value: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
 
@@ -1912,7 +1916,7 @@ Outputs:
       !If [
         UseExistingDatabaseInstance,
         !Ref ExistingDatabaseInstanceId,
-        !Ref DatabaseInstance,
+        !If [HasTwoSubnetAZs, !Ref DatabaseInstance, !Ref AWS::NoValue],
       ]
     Export:
       Name: !Sub '${AWS::StackName}-RDS-Instance-ID'
