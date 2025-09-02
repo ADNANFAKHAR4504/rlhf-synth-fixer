@@ -36,6 +36,11 @@ Parameters:
     Default: ''
     Description: EC2 Key Pair for SSH access (optional)
 
+  SecondAvailabilityZone:
+    Type: String
+    Default: ''
+    Description: Optional explicit second Availability Zone (e.g., us-east-1b). If empty, fallback is used.
+
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
@@ -199,6 +204,8 @@ Conditions:
   # KMS Conditions
   UseExistingKMS: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
   CreateKMS: !Equals [!Ref ExistingKMSKeyArn, '']
+
+  HasSecondAZ: !Not [!Equals [!Ref SecondAvailabilityZone, '']]
 
   # VPC Conditions
   UseExistingVPC: !Not [!Equals [!Ref ExistingVPCId, '']]
@@ -473,7 +480,8 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone:
+        !If [HasSecondAZ, !Ref SecondAvailabilityZone, !Select [0, !GetAZs '']]
       CidrBlock: !Select [4, !Cidr [!Ref VpcCIDR, 6, 8]]
       MapPublicIpOnLaunch: false
       Tags:
