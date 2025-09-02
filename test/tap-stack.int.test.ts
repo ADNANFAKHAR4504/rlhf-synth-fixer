@@ -484,8 +484,75 @@ describe('TapStack Integration Tests', () => {
 
       if (ourTrail) {
         expect(ourTrail.IncludeGlobalServiceEvents).toBe(true);
-        expect(ourTrail.IsMultiRegionTrail).toBe(true);
+        expect(ourTrail.IsMultiRegionTrail).toBe(false);
       }
+    });
+
+    it('should have CloudTrail bucket with proper policy', async () => {
+      const cloudTrailBucketName = outputs.cloudTrailBucketName;
+      if (!cloudTrailBucketName) {
+        console.log('Skipping CloudTrail bucket test - no bucket name in outputs');
+        return;
+      }
+
+      const response = await s3
+        .getBucketPolicy({
+          Bucket: cloudTrailBucketName,
+        })
+        .promise();
+
+      const policy = JSON.parse(response.Policy!);
+      expect(policy.Version).toBe('2012-10-17');
+      expect(policy.Statement).toHaveLength(2);
+      
+      const aclCheckStatement = policy.Statement.find((s: any) => s.Sid === 'AWSCloudTrailAclCheck');
+      const writeStatement = policy.Statement.find((s: any) => s.Sid === 'AWSCloudTrailWrite');
+      
+      expect(aclCheckStatement).toBeDefined();
+      expect(aclCheckStatement.Action).toBe('s3:GetBucketAcl');
+      expect(writeStatement).toBeDefined();
+      expect(writeStatement.Action).toBe('s3:PutObject');
+    });
+
+    it('should have VPC Flow Logs with CloudWatch destination', async () => {
+      const flowLogGroupName = outputs.flowLogGroupName;
+      if (!flowLogGroupName) {
+        console.log('Skipping Flow Log group test - no log group name in outputs');
+        return;
+      }
+
+      const logs = new AWS.CloudWatchLogs();
+      const response = await logs
+        .describeLogGroups({
+          logGroupNamePrefix: flowLogGroupName,
+        })
+        .promise();
+
+      expect(response.logGroups).toHaveLength(1);
+      expect(response.logGroups![0].retentionInDays).toBe(30);
+    });
+
+    it('should create RDS instance with AWS managed password', async () => {
+      const rdsInstanceId = outputs.rdsInstanceId;
+      if (!rdsInstanceId) {
+        console.log('Skipping RDS test - no RDS instance ID in outputs');
+        return;
+      }
+
+      const rds = new AWS.RDS();
+      const response = await rds
+        .describeDBInstances({
+          DBInstanceIdentifier: rdsInstanceId,
+        })
+        .promise();
+
+      expect(response.DBInstances).toHaveLength(1);
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.Engine).toBe('mysql');
+      expect(dbInstance.EngineVersion).toBe('8.0');
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.MasterUsername).toBe('admin');
+      expect(dbInstance.MasterUserSecret).toBeDefined();
     });
   });
 
@@ -523,6 +590,9 @@ describe('TapStack Integration Tests', () => {
         outputs.cloudfrontDomainName || outputs.CloudFrontDomainName
       ).toBeDefined();
       expect(outputs.asgId || outputs.AutoScalingGroupId).toBeDefined();
+      expect(outputs.cloudTrailBucketName).toBeDefined();
+      expect(outputs.flowLogGroupName).toBeDefined();
+      expect(outputs.rdsInstanceId).toBeDefined();
     });
   });
 

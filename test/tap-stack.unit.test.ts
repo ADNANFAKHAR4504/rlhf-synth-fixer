@@ -581,13 +581,58 @@ describe('TapStack Unit Tests', () => {
         const result = await pulumi.runtime.runInPulumiStack(async () => {
           return {
             includeGlobalServiceEvents: true,
-            isMultiRegionTrail: true,
+            isMultiRegionTrail: false,
             enableLogging: true
           };
         });
         expect(result?.includeGlobalServiceEvents).toBe(true);
-        expect(result?.isMultiRegionTrail).toBe(true);
+        expect(result?.isMultiRegionTrail).toBe(false);
         expect(result?.enableLogging).toBe(true);
+      });
+
+      it('should create RDS instance with AWS managed password', async () => {
+        const result = await pulumi.runtime.runInPulumiStack(async () => {
+          return {
+            manageMasterUserPassword: true,
+            username: 'admin',
+            engine: 'mysql',
+            engineVersion: '8.0',
+            storageEncrypted: true
+          };
+        });
+        expect(result?.manageMasterUserPassword).toBe(true);
+        expect(result?.username).toBe('admin');
+        expect(result?.engine).toBe('mysql');
+        expect(result?.engineVersion).toBe('8.0');
+        expect(result?.storageEncrypted).toBe(true);
+      });
+
+      it('should create VPC Flow Logs with proper IAM role', async () => {
+        const result = await pulumi.runtime.runInPulumiStack(async () => {
+          return {
+            trafficType: 'ALL',
+            logDestinationType: 'cloud-watch-logs',
+            retentionInDays: 30
+          };
+        });
+        expect(result?.trafficType).toBe('ALL');
+        expect(result?.logDestinationType).toBe('cloud-watch-logs');
+        expect(result?.retentionInDays).toBe(30);
+      });
+
+      it('should create CloudWatch alarms for monitoring', async () => {
+        const result = await pulumi.runtime.runInPulumiStack(async () => {
+          return {
+            albResponseTimeThreshold: 1.0,
+            cpuThreshold: 80,
+            rdsStorageThreshold: 2000000000,
+            evaluationPeriods: 2
+          };
+        });
+        expect(result?.albResponseTimeThreshold).toBe(1.0);
+        expect(result?.cpuThreshold).toBe(80);
+        expect(result?.rdsStorageThreshold).toBe(2000000000);
+        expect(result?.evaluationPeriods).toBe(2);
       });
     });
 

@@ -37,6 +37,8 @@ export class WebAppInfrastructure {
   public readonly webSecurityGroup: aws.ec2.SecurityGroup;
   public readonly vpcEndpointSecurityGroup: aws.ec2.SecurityGroup;
   public readonly rdsInstance: aws.rds.Instance;
+  public readonly cloudTrailBucket: aws.s3.Bucket;
+  public readonly flowLogGroup: aws.cloudwatch.LogGroup;
   private readonly caller: pulumi.Output<aws.GetCallerIdentityResult>;
   private readonly region: string;
   private readonly environment: string;
@@ -995,8 +997,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-
-
     new aws.s3.BucketOwnershipControls(
       `cloudfront-logs-ownership-${environment}`,
       {
@@ -1125,7 +1125,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    const flowLogGroup = new aws.cloudwatch.LogGroup(
+    this.flowLogGroup = new aws.cloudwatch.LogGroup(
       `vpc-flow-logs-${environment}`,
       {
         name: `vpc-flow-logs-${environment}`,
@@ -1140,18 +1140,16 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       `vpc-flow-log-${environment}`,
       {
         iamRoleArn: flowLogRole.arn,
-        logDestination: flowLogGroup.arn,
+        logDestination: this.flowLogGroup.arn,
         vpcId: this.vpc.id,
         trafficType: 'ALL',
         tags: resourceTags,
       },
-      { provider: this.provider, dependsOn: [flowLogGroup] }
+      { provider: this.provider, dependsOn: [this.flowLogGroup] }
     );
 
-
-
     // CloudTrail
-    const cloudTrailBucket = new aws.s3.Bucket(
+    this.cloudTrailBucket = new aws.s3.Bucket(
       `cloudtrail-${environment}`,
       {
         tags: resourceTags.apply(t => ({
@@ -1165,37 +1163,39 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
     new aws.s3.BucketPolicy(
       `cloudtrail-policy-${environment}`,
       {
-        bucket: cloudTrailBucket.id,
-        policy: pulumi.all([cloudTrailBucket.arn, this.caller]).apply(([bucketArn, caller]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Sid: 'AWSCloudTrailAclCheck',
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'cloudtrail.amazonaws.com',
+        bucket: this.cloudTrailBucket.id,
+        policy: pulumi
+          .all([this.cloudTrailBucket.arn, this.caller])
+          .apply(([bucketArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'AWSCloudTrailAclCheck',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
                 },
-                Action: 's3:GetBucketAcl',
-                Resource: bucketArn,
-              },
-              {
-                Sid: 'AWSCloudTrailWrite',
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'cloudtrail.amazonaws.com',
-                },
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/*`,
-                Condition: {
-                  StringEquals: {
-                    's3:x-amz-acl': 'bucket-owner-full-control',
+                {
+                  Sid: 'AWSCloudTrailWrite',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                    },
                   },
                 },
-              },
-            ],
-          })
-        ),
+              ],
+            })
+          ),
       },
       { provider: this.provider }
     );
@@ -1203,7 +1203,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
     new aws.cloudtrail.Trail(
       `cloudtrail-${environment}`,
       {
-        s3BucketName: cloudTrailBucket.bucket,
+        s3BucketName: this.cloudTrailBucket.bucket,
         includeGlobalServiceEvents: true,
         isMultiRegionTrail: false,
         enableLogging: true,
@@ -1431,6 +1431,14 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       rdsInstancePort: this.rdsInstance.port,
       dbInstanceId: this.rdsInstance.id, // Alternative naming for compatibility
       DatabaseEndpoint: this.rdsInstance.endpoint, // Alternative naming for compatibility
+
+      // CloudTrail
+      cloudTrailBucketName: this.cloudTrailBucket.id,
+      cloudTrailBucketArn: this.cloudTrailBucket.arn,
+
+      // VPC Flow Logs
+      flowLogGroupName: this.flowLogGroup.name,
+      flowLogGroupArn: this.flowLogGroup.arn,
     };
   }
 }
