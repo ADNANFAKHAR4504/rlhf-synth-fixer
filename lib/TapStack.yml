@@ -84,6 +84,11 @@ Parameters:
     Default: ''
     Description: Optional existing Database Subnet 2 ID to reuse
 
+  ExistingDatabaseSubnet3Id:
+    Type: String
+    Default: ''
+    Description: Optional existing Database Subnet 3 ID to reuse
+
   ExistingNatGatewayId:
     Type: String
     Default: ''
@@ -216,6 +221,9 @@ Conditions:
   UseExistingDatabaseSubnet2:
     !Not [!Equals [!Ref ExistingDatabaseSubnet2Id, '']]
   CreateDatabaseSubnet2: !Equals [!Ref ExistingDatabaseSubnet2Id, '']
+  UseExistingDatabaseSubnet3:
+    !Not [!Equals [!Ref ExistingDatabaseSubnet3Id, '']]
+  CreateDatabaseSubnet3: !Equals [!Ref ExistingDatabaseSubnet3Id, '']
   UseExistingNatGateway: !Not [!Equals [!Ref ExistingNatGatewayId, '']]
   CreateNatGateway: !Equals [!Ref ExistingNatGatewayId, '']
 
@@ -479,6 +487,24 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub 'Database Subnet 2-${Environment}-${AWS::StackName}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+
+  DatabaseSubnet3:
+    Condition: CreateDatabaseSubnet3
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: !Select [5, !Cidr [!Ref VpcCIDR, 6, 8]]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'Database Subnet 3-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -998,6 +1024,11 @@ Resources:
             UseExistingDatabaseSubnet2,
             !Ref ExistingDatabaseSubnet2Id,
             !Ref DatabaseSubnet2,
+          ]
+        - !If [
+            UseExistingDatabaseSubnet3,
+            !Ref ExistingDatabaseSubnet3Id,
+            !Ref DatabaseSubnet3,
           ]
       Tags:
         - Key: Name
