@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "400200",
+  "team": "1",
+  "startedAt": "2025-08-27T14:01:42.748Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "IaC Optimization",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "Amazon S3",
+    "Amazon CloudFront",
+    "Application Load Balancer",
+    "Auto Scaling Group",
+    "Amazon IAM",
+    "Amazon CloudWatch",
+    "Amazon CloudWatch Logs",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}
