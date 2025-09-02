@@ -119,7 +119,6 @@ Resources:
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn:
-      - ALBAccessLogsBucket
       - ALBAccessLogsBucketPolicy
     Properties:
       Subnets:
