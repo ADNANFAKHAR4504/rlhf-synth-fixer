@@ -34,21 +34,62 @@
     }
   },
   "Conditions": {
-    "CreateKMSKey": {
-      "Fn::Equals": [{ "Ref": "KMSKeyArn" }, ""]
-    },
-    "IsProduction": {
-      "Fn::Equals": [{ "Ref": "Environment" }, "prod"]
-    }
+    "CreateKMSKey": { "Fn::Equals": [{ "Ref": "KMSKeyArn" }, "" ] },
+    "IsProduction": { "Fn::Equals": [{ "Ref": "Environment" }, "prod" ] }
   },
   "Resources": {
+    "MainS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "corp-${Environment}-main-${AWS::AccountId}" },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Fn::If": [ "CreateKMSKey", { "Ref": "S3KMSKey" }, { "Ref": "KMSKeyArn" } ]
+                }
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": { "Status": "Enabled" },
+        "LoggingConfiguration": {
+          "DestinationBucketName": { "Ref": "LoggingS3Bucket" },
+          "LogFilePrefix": "access-logs/"
+        },
+        "Tags": [
+          { "Key": "Environment", "Value": { "Ref": "Environment" } },
+          { "Key": "BackupAccount", "Value": { "Ref": "BackupAccountId" } }
+        ]
+      }
+    },
+    "LoggingS3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "corp-${Environment}-logging-${AWS::AccountId}" },
+        "AccessControl": "LogDeliveryWrite",
+        "VersioningConfiguration": { "Status": "Enabled" }
+      }
+    },
+    "SecurityNotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": { "Fn::Sub": "corp-${Environment}-security-topic" },
+        "Subscription": [
+          {
+            "Endpoint": { "Ref": "NotificationEmail" },
+            "Protocol": "email"
+          }
+        ]
+      }
+    },
     "S3KMSKey": {
       "Type": "AWS::KMS::Key",
       "Condition": "CreateKMSKey",
       "Properties": {
-        "Description": {
-          "Fn::Sub": "KMS key for S3 bucket encryption in ${Environment} environment"
-        },
+        "Description": { "Fn::Sub": "KMS key for S3 bucket encryption in ${Environment} environment" },
         "EnableKeyRotation": true,
         "KeyPolicy": {
           "Version": "2012-10-17",
@@ -56,24 +97,8 @@
             {
               "Sid": "Enable IAM User Permissions",
               "Effect": "Allow",
-              "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
-              },
+              "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" } },
               "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow CloudTrail to encrypt logs",
-              "Effect": "Allow",
-              "Principal": { "Service": "cloudtrail.amazonaws.com" },
-              "Action": ["kms:GenerateDataKey*", "kms:DescribeKey"],
-              "Resource": "*"
-            },
-            {
-              "Sid": "Allow S3 Service",
-              "Effect": "Allow",
-              "Principal": { "Service": "s3.amazonaws.com" },
-              "Action": ["kms:Decrypt", "kms:GenerateDataKey*"],
               "Resource": "*"
             }
           ]
@@ -92,119 +117,7 @@
         "TargetKeyId": { "Ref": "S3KMSKey" }
       }
     },
-    "S3ReadOnlyRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": { "Fn::Sub": "corp-${Environment}-s3-readonly-role" },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
-              },
-              "Action": "sts:AssumeRole",
-              "Condition": { "Bool": { "aws:MultiFactorAuthPresent": "true" } }
-            }
-          ]
-        },
-        "Policies": [
-          {
-            "PolicyName": "S3ReadOnlyAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:GetObjectVersion",
-                    "s3:ListBucket",
-                    "s3:ListBucketVersions"
-                  ],
-                  "Resource": [
-                    { "Fn::GetAtt": ["MainS3Bucket", "Arn"] },
-                    { "Fn::Sub": "arn:aws:s3:::corp-${Environment}-main-${AWS::AccountId}/*" }
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": ["kms:Decrypt", "kms:DescribeKey"],
-                  "Resource": {
-                    "Fn::If": ["CreateKMSKey", { "Ref": "S3KMSKey" }, { "Ref": "KMSKeyArn" }]
-                  }
-                }
-              ]
-            }
-          }
-        ],
-        "Tags": [{ "Key": "Environment", "Value": { "Ref": "Environment" } }]
-      }
-    },
-    "S3WriteRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": { "Fn::Sub": "corp-${Environment}-s3-write-role" },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
-              },
-              "Action": "sts:AssumeRole",
-              "Condition": {
-                "Bool": { "aws:MultiFactorAuthPresent": "true" },
-                "StringEquals": { "aws:RequestedRegion": "us-east-1" }
-              }
-            }
-          ]
-        },
-        "Policies": [
-          {
-            "PolicyName": "S3WriteAccess",
-            "PolicyDocument": {
-              "Version": "2012-10-17",
-              "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "s3:GetObject",
-                    "s3:GetObjectVersion",
-                    "s3:PutObject",
-                    "s3:PutObjectAcl",
-                    "s3:ListBucket",
-                    "s3:ListBucketVersions"
-                  ],
-                  "Resource": [
-                    { "Fn::GetAtt": ["MainS3Bucket", "Arn"] },
-                    { "Fn::Sub": "arn:aws:s3:::corp-${Environment}-main-${AWS::AccountId}/*" }
-                  ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "kms:Encrypt",
-                    "kms:Decrypt",
-                    "kms:ReEncrypt*",
-                    "kms:GenerateDataKey*",
-                    "kms:DescribeKey"
-                  ],
-                  "Resource": {
-                    "Fn::If": ["CreateKMSKey", { "Ref": "S3KMSKey" }, { "Ref": "KMSKeyArn" }]
-                  }
-                }
-              ]
-            }
-          }
-        ],
-        "Tags": [{ "Key": "Environment", "Value": { "Ref": "Environment" } }]
-      }
-    },
-
-  "LambdaExecutionRole": {
+    "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": { "Fn::Sub": "corp-${Environment}-lambda-execution-role" },
@@ -238,16 +151,39 @@
                     { "Fn::GetAtt": ["LoggingS3Bucket", "Arn"] }
                   ]
                 },
-                { "Effect": "Allow", "Action": ["sns:Publish"], "Resource": { "Ref": "SecurityNotificationTopic" } }
+                {
+                  "Effect": "Allow",
+                  "Action": ["sns:Publish"],
+                  "Resource": { "Ref": "SecurityNotificationTopic" }
+                }
               ]
             }
           }
         ]
       }
     },
-
+    "RemediationLambda": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": { "Fn::Sub": "corp-${Environment}-s3-remediation" },
+        "Handler": "index.handler",
+        "Runtime": "python3.9",
+        "Code": {
+          "S3Bucket": { "Ref": "LambdaCodeBucket" },
+          "S3Key": { "Ref": "LambdaCodeKey" }
+        },
+        "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
+        "Timeout": 60,
+        "Environment": {
+          "Variables": {
+            "SECURITY_TOPIC_ARN": { "Ref": "SecurityNotificationTopic" }
+          }
+        }
+      }
+    },
     "S3CloudTrail": {
       "Type": "AWS::CloudTrail::Trail",
+      "Condition": "IsProduction",
       "Properties": {
         "TrailName": { "Fn::Sub": "corp-${Environment}-s3-trail" },
         "S3BucketName": { "Ref": "LoggingS3Bucket" },
@@ -257,7 +193,7 @@
         "EnableLogFileValidation": true,
         "IsLogging": true,
         "KMSKeyId": {
-          "Fn::If": ["CreateKMSKey", { "Ref": "S3KMSKey" }, { "Ref": "KMSKeyArn" }]
+          "Fn::If": [ "CreateKMSKey", { "Ref": "S3KMSKey" }, { "Ref": "KMSKeyArn" } ]
         },
         "EventSelectors": [
           {
@@ -266,7 +202,9 @@
             "DataResources": [
               {
                 "Type": "AWS::S3::Object",
-                "Values": [{ "Fn::Sub": "arn:aws:s3:::corp-${Environment}-main-${AWS::AccountId}/*" }]
+                "Values": [
+                  { "Fn::Sub": "arn:aws:s3:::corp-${Environment}-main-${AWS::AccountId}/*" }
+                ]
               }
             ]
           }
