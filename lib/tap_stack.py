@@ -148,25 +148,27 @@ class TapStack(pulumi.ComponentResource):
         logs_bucket_policy = s3.BucketPolicy(
             f"tap-logs-bucket-policy-{self.environment_suffix}",
             bucket=logs_bucket.id,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "AllowLogDeliveryWrite",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "logging.s3.amazonaws.com"
-                        },
-                        "Action": "s3:PutObject",
-                        "Resource": f"arn:aws:s3::{current_account.account_id}:{logs_bucket.bucket}/*",
-                        "Condition": {
-                            "StringEquals": {
-                                "aws:SourceAccount": current_account.account_id
+            policy=logs_bucket.bucket.apply(
+                lambda bucket_name: json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowLogDeliveryWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logging.s3.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": f"arn:aws:s3::{current_account.account_id}:{bucket_name}/*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": current_account.account_id
+                                }
                             }
                         }
-                    }
-                ]
-            }),
+                    ]
+                })
+            ),
             opts=ResourceOptions(parent=self)
         )
 
@@ -259,43 +261,45 @@ class TapStack(pulumi.ComponentResource):
         data_bucket_policy = s3.BucketPolicy(
             f"tap-data-bucket-policy-{self.environment_suffix}",
             bucket=data_bucket.id,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "AllowDataAccessRoleAccess",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "AWS": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+            policy=data_bucket.bucket.apply(
+                lambda bucket_name: json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowDataAccessRoleAccess",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+                            },
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}",
+                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}/*"
+                            ]
                         },
-                        "Action": [
-                            "s3:GetObject",
-                            "s3:PutObject",
-                            "s3:DeleteObject",
-                            "s3:ListBucket"
-                        ],
-                        "Resource": [
-                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}",
-                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}/*"
-                        ]
-                    },
-                    {
-                        "Sid": "DenyAllOtherAccess",
-                        "Effect": "Deny",
-                        "Principal": "*",
-                        "Action": "s3:*",
-                        "Resource": [
-                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}",
-                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}/*"
-                        ],
-                        "Condition": {
-                            "StringNotEquals": {
-                                "aws:PrincipalArn": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+                        {
+                            "Sid": "DenyAllOtherAccess",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}",
+                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}/*"
+                            ],
+                            "Condition": {
+                                "StringNotEquals": {
+                                    "aws:PrincipalArn": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+                                }
                             }
                         }
-                    }
-                ]
-            }),
+                    ]
+                })
+            ),
             opts=ResourceOptions(parent=self)
         )
 
