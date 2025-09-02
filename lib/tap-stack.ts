@@ -656,3 +656,4 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Monitoring', 'Enabled');
   }
 }
+
