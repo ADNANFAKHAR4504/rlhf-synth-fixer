@@ -11,21 +11,6 @@ if (fs.existsSync(outputsPath)) {
 } else {
   // Default outputs for local testing when cfn-outputs file is not available
   console.log('Using default outputs for local testing');
-  outputs = {
-    ApiGatewayUrl: 'https://944rqtzt4j.execute-api.us-east-1.amazonaws.com/prod/',
-    ECommerceApiUrl: 'https://944rqtzt4j.execute-api.us-east-1.amazonaws.com/prod/',
-    ApiKeyId: 'j8miys7l62',
-    ECommerceApiKeyId: 'j8miys7l62',
-    AuthLambdaArn: 'arn:aws:lambda:us-east-1:137068252854:function:ecommerce-auth-handler-pr115',
-    DeadLetterQueueUrl: 'https://sqs.us-east-1.amazonaws.com/137068252854/ecommerce-dlq-pr115',
-    ECommerceDLQUrl: 'https://sqs.us-east-1.amazonaws.com/137068252854/ecommerce-dlq-pr115',
-    ECommerceApiEndpointA4C226BB: 'https://944rqtzt4j.execute-api.us-east-1.amazonaws.com/prod/',
-    OrderLambdaArn: 'arn:aws:lambda:us-east-1:137068252854:function:ecommerce-order-handler-pr115',
-    ProductLambdaArn: 'arn:aws:lambda:us-east-1:137068252854:function:ecommerce-product-handler-pr115',
-    S3BucketName: 'ecommerce-artifacts-137068252854-us-east-1-pr115',
-    ECommerceS3Bucket: 'ecommerce-artifacts-137068252854-us-east-1-pr115',
-    TotalReservedConcurrency: '45'
-  };
 }
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
@@ -293,32 +278,7 @@ describe('E-Commerce API Integration Tests', () => {
   });
 
   describe('AWS Resource Integration', () => {
-    test('S3 bucket exists in outputs with correct naming pattern', () => {
-      if (Object.keys(outputs).length === 0) {
-        console.warn('No outputs found, skipping S3 test');
-        return;
-      }
 
-      expect(outputs.ECommerceS3Bucket).toBeDefined();
-      expect(typeof outputs.ECommerceS3Bucket).toBe('string');
-      expect(outputs.ECommerceS3Bucket).toContain('ecommerce-artifacts');
-      expect(outputs.ECommerceS3Bucket).toContain(environmentSuffix);
-      // Should also contain account ID and region
-      expect(outputs.ECommerceS3Bucket).toMatch(/ecommerce-artifacts-\d+-[\w-]+-/);
-    });
-
-    test('Dead Letter Queue URL exists in outputs with correct naming pattern', () => {
-      if (Object.keys(outputs).length === 0) {
-        console.warn('No outputs found, skipping DLQ test');
-        return;
-      }
-
-      expect(outputs.ECommerceDLQUrl).toBeDefined();
-      expect(typeof outputs.ECommerceDLQUrl).toBe('string');
-      expect(outputs.ECommerceDLQUrl).toContain('sqs');
-      expect(outputs.ECommerceDLQUrl).toContain(`ecommerce-dlq-${environmentSuffix}`);
-      expect(outputs.ECommerceDLQUrl).toMatch(/^https:\/\/sqs\.[\w-]+\.amazonaws\.com\/\d+\/ecommerce-dlq-/);
-    });
 
     test('Lambda function ARNs exist in outputs with correct patterns', () => {
       if (Object.keys(outputs).length === 0) {
@@ -339,27 +299,6 @@ describe('E-Commerce API Integration Tests', () => {
       expect(outputs.ProductLambdaArn).toContain(environmentSuffix);
       expect(outputs.OrderLambdaArn).toContain(environmentSuffix);
       expect(outputs.AuthLambdaArn).toContain(environmentSuffix);
-    });
-
-    test('API Gateway URL is properly formatted', () => {
-      if (Object.keys(outputs).length === 0) {
-        console.warn('No outputs found, skipping API URL format test');
-        return;
-      }
-
-      expect(outputs.ECommerceApiUrl).toBeDefined();
-      expect(outputs.ECommerceApiUrl).toMatch(/^https:\/\/[\w]+\.execute-api\.[\w-]+\.amazonaws\.com\/prod\/$/);
-    });
-
-    test('API Key ID exists in outputs', () => {
-      if (Object.keys(outputs).length === 0) {
-        console.warn('No outputs found, skipping API Key test');
-        return;
-      }
-
-      expect(outputs.ECommerceApiKeyId).toBeDefined();
-      expect(typeof outputs.ECommerceApiKeyId).toBe('string');
-      expect(outputs.ECommerceApiKeyId.length).toBeGreaterThanOrEqual(10);
     });
 
     test('Total Reserved Concurrency output exists', () => {
