@@ -1224,9 +1224,6 @@
         "ECSExecutionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ecs-execution-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1287,9 +1284,6 @@
         "ECSTaskRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ecs-task-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
