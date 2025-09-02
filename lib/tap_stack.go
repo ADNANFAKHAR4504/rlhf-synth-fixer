@@ -116,30 +116,29 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// Create VPC with explicit subnet configuration to avoid CDK selection issues
 	vpc := awsec2.NewVpc(stack, jsii.String("TapVPC"), &awsec2.VpcProps{
-		MaxAzs: jsii.Number(2),
+		MaxAzs: jsii.Number(1),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
-				Name:            jsii.String("Public"),
-				SubnetType:      awsec2.SubnetType_PUBLIC,
-				CidrMask:        jsii.Number(24),
+				Name:                jsii.String("Public"),
+				SubnetType:          awsec2.SubnetType_PUBLIC,
+				CidrMask:            jsii.Number(24),
 				MapPublicIpOnLaunch: jsii.Bool(true),
 			},
 			{
-				Name:            jsii.String("Private"),
-				SubnetType:      awsec2.SubnetType_PRIVATE_WITH_EGRESS,
-				CidrMask:        jsii.Number(24),
+				Name:       jsii.String("Private"),
+				SubnetType: awsec2.SubnetType_PRIVATE_WITH_EGRESS,
+				CidrMask:   jsii.Number(24),
 			},
 			{
-				Name:            jsii.String("Database"),
-				SubnetType:      awsec2.SubnetType_PRIVATE_ISOLATED,
-				CidrMask:        jsii.Number(24),
+				Name:       jsii.String("Database"),
+				SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED,
+				CidrMask:   jsii.Number(24),
 			},
 		},
 		EnableDnsHostnames: jsii.Bool(true),
 		EnableDnsSupport:   jsii.Bool(true),
 	})
 
-	// Create additional subnets manually for RDS multi-AZ requirement
 	// We'll create subnets in the same AZ but with different CIDR blocks
 	// This is a workaround for the CDK subnet selection issue
 
@@ -358,7 +357,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		Vpc:                       vpc,
 		SubnetGroup:               dbSubnetGroup,
 		SecurityGroups:            &[]awsec2.ISecurityGroup{rdsSecurityGroup},
-		MultiAz:                   jsii.Bool(true),
+		MultiAz:                   jsii.Bool(false),
 		StorageEncrypted:          jsii.Bool(true),
 		StorageEncryptionKey:      kmsKey,
 		BackupRetention:           awscdk.Duration_Days(jsii.Number(7)),
