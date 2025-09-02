@@ -871,6 +871,9 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+    concurrency:
+      group: semantic_release_pipeline
+      cancel-in-progress: true
 
     steps:
       - name: Checkout code
