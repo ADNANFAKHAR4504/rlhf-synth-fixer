@@ -867,7 +867,6 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.21.0/24'
       Tags:
         - Key: Name
