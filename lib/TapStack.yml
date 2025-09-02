@@ -277,7 +277,7 @@ Conditions:
   # Config Conditions
   UseExistingConfigBucket: !Not [!Equals [!Ref ExistingConfigBucketName, '']]
   CreateConfigBucket: !Equals [!Ref ExistingConfigBucketName, '']
-  
+
   CreateConfigDeliveryChannel:
     !And [
       !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
