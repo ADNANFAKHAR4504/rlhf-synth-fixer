@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "TapStack - Secure baseline: KMS-encrypted S3, Org-guarded CloudTrail, MFA-gated cross-account IAM role, ALB with HTTP->HTTPS redirect + WAF, RDS with auto minor upgrades, IPSec Site-to-Site VPN for mgmt access. No SSL certificate resources are created.",
+  "Description": "TapStack - Secure baseline: KMS-encrypted S3, Org-guarded CloudTrail, MFA-gated cross-account IAM role, ALB with HTTP->HTTPS redirect + WAF, IPSec Site-to-Site VPN for mgmt access. NOTE: No SSL certificate or RDS resources are created.",
   "Parameters": {
     "VpcCidr": {
       "Type": "String",
@@ -42,42 +42,11 @@
       "Default": "",
       "Description": "External AWS Account ID allowed to assume the cross-account role."
     },
-    "ExternalId": {
-      "Type": "String",
-      "Default": "",
-      "Description": "Optional external ID required to assume the cross-account role."
-    },
     "EnableShieldAdvanced": {
       "Type": "String",
       "AllowedValues": ["true", "false"],
       "Default": "false",
       "Description": "Set to 'true' to create Shield Advanced protections (requires paid subscription)."
-    },
-    "DBName": {
-      "Type": "String",
-      "Default": "tapstack",
-      "Description": "Initial database name."
-    },
-    "DBUsername": {
-      "Type": "String",
-      "Default": "dbadmin",
-      "Description": "Master username."
-    },
-    "DBInstanceClass": {
-      "Type": "String",
-      "Default": "db.t3.medium",
-      "AllowedPattern": "^[a-z0-9.]+$",
-      "Description": "RDS instance class."
-    },
-    "DBAllocatedStorage": {
-      "Type": "Number",
-      "Default": 50,
-      "Description": "Allocated storage (GiB)."
-    },
-    "DBEngineVersion": {
-      "Type": "String",
-      "Default": "15.5",
-      "Description": "PostgreSQL engine version (supports ManageMasterUserPassword)."
     }
   },
   "Rules": {
@@ -103,11 +72,6 @@
     "UseOrganizationGuard": {
       "Fn::Not": [
         { "Fn::Equals": [ { "Ref": "OrganizationId" }, "" ] }
-      ]
-    },
-    "UseExternalIdCondition": {
-      "Fn::Not": [
-        { "Fn::Equals": [ { "Ref": "ExternalId" }, "" ] }
       ]
     },
     "CreateShield": {
@@ -237,16 +201,6 @@
         "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-app-sg" } } ]
       }
     },
-    "DBSecurityGroup": {
-      "Type": "AWS::EC2::SecurityGroup",
-      "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "GroupDescription": "DB SG - allow Postgres only from App SG",
-        "SecurityGroupIngress": [ { "IpProtocol": "tcp", "FromPort": 5432, "ToPort": 5432, "SourceSecurityGroupId": { "Ref": "AppSecurityGroup" } } ],
-        "SecurityGroupEgress": [ { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" } ],
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db-sg" } } ]
-      }
-    },
 
     "VirtualPrivateGateway": {
       "Type": "AWS::EC2::VPNGateway",
@@ -362,17 +316,12 @@
           "Version": "2012-10-17",
           "Statement": [
             {
-              "Sid": "AllowExternalAccountWithMFAAndOptionalExternalId",
+              "Sid": "AllowExternalAccountWithMFA",
               "Effect": "Allow",
               "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${ExternalAccountId}:root" } },
               "Action": "sts:AssumeRole",
               "Condition": {
-                "Bool": { "aws:MultiFactorAuthPresent": "true" },
-                "Fn::If": [
-                  "UseExternalIdCondition",
-                  { "StringEquals": { "sts:ExternalId": { "Ref": "ExternalId" } } },
-                  { "StringEquals": { "sts:ExternalId": "IGNORED-BY-CONDITION" } }
-                ]
+                "Bool": { "aws:MultiFactorAuthPresent": "true" }
               }
             }
           ]
@@ -383,7 +332,7 @@
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
-                { "Effect": "Allow", "Action": [ "ec2:Describe*", "elasticloadbalancing:Describe*", "rds:Describe*", "s3:Get*", "s3:List*", "cloudtrail:DescribeTrails", "cloudtrail:GetTrailStatus", "cloudtrail:ListTrails", "cloudtrail:LookupEvents", "iam:Get*", "iam:List*", "logs:Describe*", "logs:Get*" ], "Resource": "*" }
+                { "Effect": "Allow", "Action": [ "ec2:Describe*", "elasticloadbalancing:Describe*", "s3:Get*", "s3:List*", "cloudtrail:DescribeTrails", "cloudtrail:GetTrailStatus", "cloudtrail:ListTrails", "cloudtrail:LookupEvents", "iam:Get*", "iam:List*", "logs:Describe*", "logs:Get*" ], "Resource": "*" }
               ]
             }
           }
@@ -451,55 +400,6 @@
       "Type": "AWS::Shield::Protection",
       "Condition": "CreateShield",
       "Properties": { "Name": { "Fn::Sub": "${AWS::StackName}-alb-protection" }, "ResourceArn": { "Fn::GetAtt": [ "ALB", "LoadBalancerArn" ] } }
-    },
-
-    "KmsKeyRDS": {
-      "Type": "AWS::KMS::Key",
-      "Properties": {
-        "Description": "KMS CMK for RDS encryption",
-        "EnableKeyRotation": true,
-        "KeyPolicy": {
-          "Version": "2012-10-17",
-          "Statement": [
-            { "Sid": "EnableRootPermissions", "Effect": "Allow", "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" } }, "Action": "kms:*", "Resource": "*" },
-            { "Sid": "AllowRDSUseOfTheKey", "Effect": "Allow", "Principal": { "Service": "rds.amazonaws.com" }, "Action": [ "kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:CreateGrant", "kms:DescribeKey" ], "Resource": "*", "Condition": { "StringEquals": { "kms:ViaService": { "Fn::Sub": "rds.${AWS::Region}.amazonaws.com" }, "kms:CallerAccount": { "Fn::Sub": "${AWS::AccountId}" } } } }
-          ]
-        },
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-rds-kms" } } ]
-      }
-    },
-    "KmsAliasRDS": { "Type": "AWS::KMS::Alias", "Properties": { "AliasName": { "Fn::Sub": "alias/${AWS::StackName}-rds" }, "TargetKeyId": { "Ref": "KmsKeyRDS" } } },
-    "DBSubnetGroup": {
-      "Type": "AWS::RDS::DBSubnetGroup",
-      "Properties": {
-        "DBSubnetGroupDescription": "Private subnets for RDS",
-        "SubnetIds": [ { "Ref": "PrivateDbSubnetA" }, { "Ref": "PrivateDbSubnetB" } ],
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-dbsubnets" } } ]
-      }
-    },
-    "DBInstance": {
-      "Type": "AWS::RDS::DBInstance",
-      "Properties": {
-        "DBName": { "Ref": "DBName" },
-        "Engine": "postgres",
-        "EngineVersion": { "Ref": "DBEngineVersion" },
-        "DBInstanceClass": { "Ref": "DBInstanceClass" },
-        "AllocatedStorage": { "Ref": "DBAllocatedStorage" },
-        "MultiAZ": true,
-        "StorageEncrypted": true,
-        "KmsKeyId": { "Ref": "KmsKeyRDS" },
-        "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
-        "VPCSecurityGroups": [ { "Ref": "DBSecurityGroup" } ],
-        "PubliclyAccessible": false,
-        "AutoMinorVersionUpgrade": true,
-        "DeletionProtection": true,
-        "ManageMasterUserPassword": true,
-        "MasterUsername": { "Ref": "DBUsername" },
-        "BackupRetentionPeriod": 7,
-        "StorageType": "gp3",
-        "EnablePerformanceInsights": true,
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db" } } ]
-      }
     }
   },
   "Outputs": {
@@ -513,9 +413,6 @@
     "CrossAccountRoleArn": { "Condition": "AllowCrossAccountRole", "Value": { "Fn::GetAtt": [ "CrossAccountAuditRole", "Arn" ] } },
     "ALBArn": { "Value": { "Fn::GetAtt": [ "ALB", "LoadBalancerArn" ] } },
     "ALBRedirectListenerArn": { "Value": { "Fn::GetAtt": [ "ALBHttpListenerRedirectToHttps", "ListenerArn" ] } },
-    "WAFArn": { "Value": { "Fn::GetAtt": [ "WAFWebACL", "Arn" ] } },
-    "RDSInstanceArn": { "Value": { "Fn::GetAtt": [ "DBInstance", "DBInstanceArn" ] } },
-    "RDSAddress": { "Value": { "Fn::GetAtt": [ "DBInstance", "Endpoint.Address" ] } },
-    "RDSPort": { "Value": { "Fn::GetAtt": [ "DBInstance", "Endpoint.Port" ] } }
+    "WAFArn": { "Value": { "Fn::GetAtt": [ "WAFWebACL", "Arn" ] } }
   }
 }
