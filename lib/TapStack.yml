@@ -1446,7 +1446,15 @@ Resources:
     Condition: CreateConfigBucket
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub 'SecureEnvironmentRecorder-${Environment}-${AWS::StackName}'
+      Name: !Sub
+        - 'SecureEnvironmentRecorder-${Environment}-${AWS::StackName}-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -1456,7 +1464,15 @@ Resources:
     Condition: CreateConfigBucket
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub 'SecureEnvironmentDeliveryChannel-${Environment}-${AWS::StackName}'
+      Name: !Sub
+        - 'SecureEnvironmentDeliveryChannel-${Environment}-${AWS::StackName}-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       S3BucketName: !Ref ConfigBucket
 
   # Config Rules
