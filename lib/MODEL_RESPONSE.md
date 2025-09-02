@@ -1,7 +1,7 @@
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Secure AWS environment in a single region (e.g., us-east-2) with encryption,
-  logging, WAF, Shield, and secure compute.
+Description: Secure AWS environment in a single region (e.g., us-east-2) with encryption, logging, WAF, Shield, and secure compute.
+
 Parameters:
   VpcCidr:
     Type: String
@@ -15,6 +15,7 @@ Parameters:
   CriticalCpuThreshold:
     Type: Number
     Default: 80
+
 Resources:
   KmsKey:
     Type: AWS::KMS::Key
@@ -29,42 +30,43 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: kms:*
             Resource: '*'
+
   KmsAlias:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: alias/secureKey
-      TargetKeyId: !Ref 'KmsKey'
+      TargetKeyId: !Ref KmsKey
+
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref 'VpcCidr'
+      CidrBlock: !Ref VpcCidr
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
           Value: SecureVPC
+
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'Vpc'
-      CidrBlock: !Ref 'PrivateSubnet1Cidr'
-      AvailabilityZone: !Select
-        - 0
-        - !GetAZs ''
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: PrivateSubnet1
+
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'Vpc'
-      CidrBlock: !Ref 'PrivateSubnet2Cidr'
-      AvailabilityZone: !Select
-        - 1
-        - !GetAZs ''
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: PrivateSubnet2
+
   SecretsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -74,7 +76,8 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref 'KmsKey'
+              KMSMasterKeyID: !Ref KmsKey
+
   ALBAccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -84,25 +87,28 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref 'KmsKey'
+              KMSMasterKeyID: !Ref KmsKey
+
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Subnets:
-        - !Ref 'PrivateSubnet1'
-        - !Ref 'PrivateSubnet2'
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       LoadBalancerAttributes:
         - Key: access_logs.s3.enabled
           Value: 'true'
         - Key: access_logs.s3.bucket
-          Value: !Ref 'ALBAccessLogsBucket'
+          Value: !Ref ALBAccessLogsBucket
       Type: application
       Scheme: internal
+
   ShieldProtection:
     Type: AWS::Shield::Protection
     Properties:
       Name: ShieldProtectionALB
-      ResourceArn: !GetAtt 'LoadBalancer.LoadBalancerArn'
+      ResourceArn: !GetAtt LoadBalancer.LoadBalancerArn
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -115,20 +121,27 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Code:
-        ZipFile: exports.handler = async function(event, context) { return 'Hello,
-          secure world!'; };
+        ZipFile: |
+          exports.handler = async function(event, context) {
+            return {
+              statusCode: 200,
+              body: "Hello, secure world!"
+            };
+          };
       VpcConfig:
         SubnetIds:
-          - !Ref 'PrivateSubnet1'
-          - !Ref 'PrivateSubnet2'
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
         SecurityGroupIds: []
-      Role: !GetAtt 'LambdaExecutionRole.Arn'
+      Role: !GetAtt LambdaExecutionRole.Arn
+
   CloudWatchAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -139,25 +152,52 @@ Resources:
       EvaluationPeriods: 1
       Period: 300
       Statistic: Average
-      Threshold: !Ref 'CriticalCpuThreshold'
+      Threshold: !Ref CriticalCpuThreshold
       Dimensions: []
       AlarmActions: []
+
   MySecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: SecureAppSecret
       Description: Secret used by Lambda
       SecretString: '{"username":"admin","password":"SecureP@ssw0rd"}'
+
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: SecureAPI
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: secure
+
+  ApiMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: []
+    DependsOn: ApiMethod
     Properties:
-      RestApiId: !Ref 'ApiGateway'
+      RestApiId: !Ref ApiGateway
       StageName: prod
+
   WAFWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -182,42 +222,34 @@ Resources:
             ManagedRuleGroupStatement:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
+
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
     Properties:
-      WebACLArn: !GetAtt 'WAFWebACL.Arn'
-      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod'
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      WebACLArn: !GetAtt WAFWebACL.Arn
+      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod
+
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      RoleARN: !GetAtt 'ConfigRole.Arn'
+      RoleARN: arn:aws:iam::718240086340:role/aws-config-role  # Replace if needed
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
+
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      S3BucketName: !Ref 'SecretsBucket'
+      S3BucketName: !Ref SecretsBucket
+
 Outputs:
   LoadBalancerDNS:
-    Value: !GetAtt 'LoadBalancer.DNSName'
+    Value: !GetAtt LoadBalancer.DNSName
   LambdaFunctionArn:
-    Value: !Ref 'LambdaFunction'
+    Value: !Ref LambdaFunction
   SecretArn:
-    Value: !Ref 'MySecret'
+    Value: !Ref MySecret
   ApiGatewayId:
-    Value: !Ref 'ApiGateway'
+    Value: !Ref ApiGateway
 
 ```
