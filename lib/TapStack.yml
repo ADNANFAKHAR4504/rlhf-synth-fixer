@@ -80,9 +80,6 @@ Conditions:
   HasAnyLogsBucket: !Or [!Condition CreateLogsBucket, !Condition HasLogsBucketName]
 
 Resources:
-  # ----------------------
-  # KMS Key (with rotation)
-  # ----------------------
   TapStackKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -152,9 +149,6 @@ Resources:
       AliasName: !Sub 'alias/tapstack-${Environment}'
       TargetKeyId: !Ref TapStackKMSKey
 
-  # ------------------------
-  # Logs bucket (optional)
-  # ------------------------
   TapStackLogsBucket:
     Type: AWS::S3::Bucket
     Condition: CreateLogsBucket
@@ -176,7 +170,6 @@ Resources:
             Status: Enabled
             ExpirationInDays: 90
 
-  # BucketPolicy when the stack creates the bucket
   TapStackLogsBucketPolicyNew:
     Type: AWS::S3::BucketPolicy
     Condition: CreateLogsBucket
@@ -228,7 +221,6 @@ Resources:
                 's3:x-amz-acl': 'bucket-owner-full-control'
                 aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
 
-  # BucketPolicy when using an existing bucket provided by name
   TapStackLogsBucketPolicyExisting:
     Type: AWS::S3::BucketPolicy
     Condition: HasLogsBucketName
@@ -280,9 +272,6 @@ Resources:
                 's3:x-amz-acl': 'bucket-owner-full-control'
                 aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
 
-  # ------------------------------
-  # Secure S3 bucket for workloads
-  # ------------------------------
   TapStackSecureBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -334,9 +323,6 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
 
-  # ----------------
-  # CloudWatch Logs
-  # ----------------
   S3LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -344,9 +330,6 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt TapStackKMSKey.Arn
 
-  # -----------
-  # CloudTrail
-  # -----------
   TapStackCloudTrail:
     Type: AWS::CloudTrail::Trail
     Condition: HasAnyLogsBucket
@@ -367,9 +350,6 @@ Resources:
               Values:
                 - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
 
-  # -----------
-  # Networking
-  # -----------
   VPCWest:
     Type: AWS::EC2::VPC
     Properties:
@@ -382,12 +362,15 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # Explicitly span two distinct AZs for HA (fixes RDS AZ coverage)
   PublicSubnetWest1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs:
+              Ref: AWS::Region
       CidrBlock: !Select [0, !Cidr [!Ref VPCCidrWest, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
@@ -398,7 +381,11 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs:
+              Ref: AWS::Region
       CidrBlock: !Select [1, !Cidr [!Ref VPCCidrWest, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
@@ -409,7 +396,11 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs:
+              Ref: AWS::Region
       CidrBlock: !Select [2, !Cidr [!Ref VPCCidrWest, 6, 8]]
       Tags:
         - Key: Name
@@ -419,7 +410,11 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs:
+              Ref: AWS::Region
       CidrBlock: !Select [3, !Cidr [!Ref VPCCidrWest, 6, 8]]
       Tags:
         - Key: Name
@@ -507,9 +502,6 @@ Resources:
       SubnetId: !Ref PrivateSubnetWest2
       RouteTableId: !Ref PrivateRouteTableWest
 
-  # ----------------
-  # Security Groups
-  # ----------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -563,9 +555,6 @@ Resources:
         - Key: Name
           Value: !Sub 'TapStack-Database-SG-${Environment}'
 
-  # --------------------------
-  # Optional cross-account IAM
-  # --------------------------
   CrossAccountAccessRole:
     Type: AWS::IAM::Role
     Condition: CreateCrossAccountRole
@@ -600,9 +589,6 @@ Resources:
                   - s3:ListBucket
                 Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
 
-  # -----------------------
-  # EC2 role & instance prof
-  # -----------------------
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -647,9 +633,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
 
-  # ----------------------------
-  # ALB, Target Group & Listener
-  # ----------------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -689,9 +672,6 @@ Resources:
       Port: 80
       Protocol: HTTP
 
-  # --------------
-  # WAF v2 WebACL
-  # --------------
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -747,9 +727,6 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
-  # --------------------------
-  # RDS subnet group & secret
-  # --------------------------
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -807,9 +784,6 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  # ----------------
-  # Compute (ASG/LT)
-  # ----------------
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -874,9 +848,6 @@ Resources:
           Value: !Ref Environment
           PropagateAtLaunch: true
 
-  # ----------------------------
-  # Optional Shield for the ALB
-  # ----------------------------
   ShieldProtection:
     Type: AWS::Shield::Protection
     Condition: EnableShield
