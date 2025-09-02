@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 import json
 
 import pulumi
-from pulumi import ResourceOptions, get_stack
+from pulumi import ResourceOptions, get_stack, all
 from pulumi_aws import s3, kms, iam, cloudwatch, config, get_caller_identity
 
 
@@ -148,8 +148,8 @@ class TapStack(pulumi.ComponentResource):
         logs_bucket_policy = s3.BucketPolicy(
             f"tap-logs-bucket-policy-{self.environment_suffix}",
             bucket=logs_bucket.id,
-            policy=logs_bucket.bucket.apply(
-                lambda bucket_name: json.dumps({
+            policy=all([logs_bucket.bucket, current_account.account_id]).apply(
+                lambda args: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [
                         {
@@ -159,10 +159,10 @@ class TapStack(pulumi.ComponentResource):
                                 "Service": "logging.s3.amazonaws.com"
                             },
                             "Action": "s3:PutObject",
-                            "Resource": f"arn:aws:s3::{current_account.account_id}:{bucket_name}/*",
+                            "Resource": f"arn:aws:s3:::{args[0]}/*",
                             "Condition": {
                                 "StringEquals": {
-                                    "aws:SourceAccount": current_account.account_id
+                                    "aws:SourceAccount": args[1]
                                 }
                             }
                         }
@@ -261,15 +261,15 @@ class TapStack(pulumi.ComponentResource):
         data_bucket_policy = s3.BucketPolicy(
             f"tap-data-bucket-policy-{self.environment_suffix}",
             bucket=data_bucket.id,
-            policy=data_bucket.bucket.apply(
-                lambda bucket_name: json.dumps({
+            policy=all([data_bucket.bucket, current_account.account_id]).apply(
+                lambda args: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [
                         {
                             "Sid": "AllowDataAccessRoleAccess",
                             "Effect": "Allow",
                             "Principal": {
-                                "AWS": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+                                "AWS": f"arn:aws:iam::{args[1]}:role/DataAccessRole"
                             },
                             "Action": [
                                 "s3:GetObject",
@@ -278,8 +278,8 @@ class TapStack(pulumi.ComponentResource):
                                 "s3:ListBucket"
                             ],
                             "Resource": [
-                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}",
-                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}/*"
+                                f"arn:aws:s3:::{args[0]}",
+                                f"arn:aws:s3:::{args[0]}/*"
                             ]
                         },
                         {
@@ -288,12 +288,12 @@ class TapStack(pulumi.ComponentResource):
                             "Principal": "*",
                             "Action": "s3:*",
                             "Resource": [
-                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}",
-                                f"arn:aws:s3::{current_account.account_id}:{bucket_name}/*"
+                                f"arn:aws:s3:::{args[0]}",
+                                f"arn:aws:s3:::{args[0]}/*"
                             ],
                             "Condition": {
                                 "StringNotEquals": {
-                                    "aws:PrincipalArn": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+                                    "aws:PrincipalArn": f"arn:aws:iam::{args[1]}:role/DataAccessRole"
                                 }
                             }
                         }
