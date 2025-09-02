@@ -3,6 +3,7 @@
 Generate **production-ready CDKTF TypeScript code** for AWS infrastructure with the following specifications:
 
 ## Requirements
+
 1. **VPC** spanning **3 Availability Zones** in `us-west-2`.
 2. Include **public and private subnets** in each AZ for security best practices.
 3. Deploy an **Auto Scaling Group (ASG)** that launches **EC2 instances** in the **private subnets**.
@@ -18,6 +19,7 @@ Generate **production-ready CDKTF TypeScript code** for AWS infrastructure with 
 10. The output must be a **single deployable CDKTF project** with a stack named **`myapp-infrastructure`**.
 
 ## Expected Output
+
 - Fully working **TypeScript code**.
 - **Two files only** (`lib/tap-stack.ts` and `lib/modules.ts`).
 - Production-grade structure with reusable modules and clear naming.

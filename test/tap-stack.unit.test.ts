@@ -1,6 +1,6 @@
 import { Testing } from 'cdktf';
+import { Ec2AsgModule, IamModule, VpcModule } from '../lib/modules';
 import { TapStack } from '../lib/tap-stack';
-import { VpcModule, IamModule, Ec2AsgModule } from '../lib/modules';
 
 // Mock the modules to avoid complex dependencies in unit tests
 jest.mock('../lib/modules', () => ({

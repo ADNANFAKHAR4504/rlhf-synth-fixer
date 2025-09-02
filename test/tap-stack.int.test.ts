@@ -1,23 +1,22 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInstancesCommand,
-  DescribeLaunchTemplatesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  IAMClient,
-  GetRoleCommand,
-  GetInstanceProfileCommand,
-  ListAttachedRolePoliciesCommand,
-} from '@aws-sdk/client-iam';
-import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeLaunchTemplatesCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  GetInstanceProfileCommand,
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
 import * as fs from 'fs';
 import * as path from 'path';
 

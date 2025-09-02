@@ -380,7 +380,6 @@ export class Ec2AsgModule extends Construct {
     };
   }
 }
-
 ```
 
 ## lib/tap-stack.ts
@@ -529,5 +528,4 @@ export class TapStack extends TerraformStack {
     });
   }
 }
-
 ```

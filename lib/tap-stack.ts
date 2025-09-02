@@ -2,10 +2,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack } from 'cdktf';
+import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
-import { VpcModule, IamModule, Ec2AsgModule } from '../lib/modules';
-import { TerraformOutput } from 'cdktf';
+import { Ec2AsgModule, IamModule, VpcModule } from '../lib/modules';
 // ? Import your stacks here
 // import { MyStack } from './my-stack';
 
