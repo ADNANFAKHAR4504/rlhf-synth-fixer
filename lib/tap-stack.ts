@@ -12,24 +12,33 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import { Construct } from 'constructs';
 
 export class SecureInfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // Get environment suffix for unique resource naming
+    const environmentSuffix =
+      this.node.tryGetContext('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      'dev';
+
     // =============================================================================
     // 1. KMS KEYS FOR ENCRYPTION
     // =============================================================================
-    
+
     const kmsKey = new kms.Key(this, 'SecureInfraKMSKey', {
       description: 'KMS key for secure infrastructure encryption',
       enableKeyRotation: true,
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -48,7 +57,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
               'kms:DescribeKey',
               'kms:Encrypt',
               'kms:ReEncrypt*',
-              'kms:Decrypt'
+              'kms:Decrypt',
             ],
             resources: ['*'],
           }),
@@ -61,25 +70,25 @@ export class SecureInfrastructureStack extends cdk.Stack {
               'kms:Decrypt',
               'kms:ReEncrypt*',
               'kms:GenerateDataKey*',
-              'kms:DescribeKey'
+              'kms:DescribeKey',
             ],
             resources: ['*'],
-          })
-        ]
-      })
+          }),
+        ],
+      }),
     });
 
-    const kmsKeyAlias = new kms.Alias(this, 'SecureInfraKMSKeyAlias', {
-      aliasName: 'alias/secure-infrastructure-key',
-      targetKey: kmsKey
+    new kms.Alias(this, 'SecureInfraKMSKeyAlias', {
+      aliasName: `alias/secure-infrastructure-key-${environmentSuffix}`,
+      targetKey: kmsKey,
     });
 
     // =============================================================================
     // 2. VPC AND NETWORKING
     // =============================================================================
-    
+
     const vpc = new ec2.Vpc(this, 'SecureVPC', {
-      vpcName: 'SecureVPC',
+      vpcName: `SecureVPC-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 3,
       enableDnsHostnames: true,
@@ -99,40 +108,45 @@ export class SecureInfrastructureStack extends cdk.Stack {
           cidrMask: 28,
           name: 'Isolated',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        }
+        },
       ],
       natGateways: 1, // Single NAT Gateway for cost optimization, increase for HA
       flowLogs: {
-        'VPCFlowLogs': {
+        VPCFlowLogs: {
           destination: ec2.FlowLogDestination.toCloudWatchLogs(),
           trafficType: ec2.FlowLogTrafficType.ALL,
-        }
-      }
+        },
+      },
     });
 
     // VPC Flow Logs with KMS encryption
     const vpcFlowLogsGroup = new logs.LogGroup(this, 'VPCFlowLogsGroup', {
-      logGroupName: '/aws/vpc/flowlogs',
+      logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_YEAR,
       encryptionKey: kmsKey,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+    
+    // Override removal policy for VPC flow logs
+    (vpcFlowLogsGroup.node.defaultChild as logs.CfnLogGroup).applyRemovalPolicy(
+      cdk.RemovalPolicy.DESTROY
+    );
 
     // =============================================================================
     // 3. SECURITY GROUPS
     // =============================================================================
-    
+
     // ALB Security Group - HTTPS only from trusted IPs
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
       description: 'Security group for Application Load Balancer',
-      allowAllOutbound: false
+      allowAllOutbound: false,
     });
 
     // Add trusted IP ranges - Replace with your actual trusted IPs
     const trustedIpRanges = [
       '203.0.113.0/24', // Example trusted IP range
-      '198.51.100.0/24' // Example trusted IP range
+      '198.51.100.0/24', // Example trusted IP range
     ];
 
     trustedIpRanges.forEach((ipRange, index) => {
@@ -156,7 +170,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc,
       description: 'Security group for EC2 instances',
-      allowAllOutbound: false
+      allowAllOutbound: false,
     });
 
     ec2SecurityGroup.addIngressRule(
@@ -186,11 +200,15 @@ export class SecureInfrastructureStack extends cdk.Stack {
     );
 
     // Lambda Security Group
-    const lambdaSecurityGroup = new ec2.SecurityGroup(this, 'LambdaSecurityGroup', {
-      vpc,
-      description: 'Security group for Lambda functions',
-      allowAllOutbound: false
-    });
+    const lambdaSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'LambdaSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for Lambda functions',
+        allowAllOutbound: false,
+      }
+    );
 
     lambdaSecurityGroup.addEgressRule(
       ec2.Peer.anyIpv4(),
@@ -201,10 +219,10 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // =============================================================================
     // 4. S3 BUCKETS WITH ENCRYPTION AND VERSIONING
     // =============================================================================
-    
+
     // CloudTrail Logs Bucket
     const cloudTrailBucket = new s3.Bucket(this, 'CloudTrailLogsBucket', {
-      bucketName: `secure-cloudtrail-logs-${this.account}-${this.region}`,
+      bucketName: `secure-cloudtrail-logs-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -217,22 +235,22 @@ export class SecureInfrastructureStack extends cdk.Stack {
           transitions: [
             {
               storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30)
+              transitionAfter: cdk.Duration.days(30),
             },
             {
               storageClass: s3.StorageClass.GLACIER,
-              transitionAfter: cdk.Duration.days(90)
-            }
+              transitionAfter: cdk.Duration.days(90),
+            },
           ],
-          expiration: cdk.Duration.days(2555) // 7 years retention
-        }
+          expiration: cdk.Duration.days(2555), // 7 years retention
+        },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Application Assets Bucket
     const appAssetsBucket = new s3.Bucket(this, 'AppAssetsBucket', {
-      bucketName: `secure-app-assets-${this.account}-${this.region}`,
+      bucketName: `secure-app-assets-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -243,15 +261,15 @@ export class SecureInfrastructureStack extends cdk.Stack {
           allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD],
           allowedOrigins: ['https://*.yourdomain.com'], // Replace with your domain
           exposedHeaders: ['ETag'],
-          maxAge: 3000
-        }
+          maxAge: 3000,
+        },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Access Logs Bucket for ALB
     const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
-      bucketName: `secure-access-logs-${this.account}-${this.region}`,
+      bucketName: `secure-access-logs-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -263,28 +281,30 @@ export class SecureInfrastructureStack extends cdk.Stack {
           transitions: [
             {
               storageClass: s3.StorageClass.INFREQUENT_ACCESS,
-              transitionAfter: cdk.Duration.days(30)
-            }
+              transitionAfter: cdk.Duration.days(30),
+            },
           ],
-          expiration: cdk.Duration.days(365)
-        }
+          expiration: cdk.Duration.days(365),
+        },
       ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // =============================================================================
     // 5. IAM ROLES AND POLICIES (LEAST PRIVILEGE)
     // =============================================================================
-    
+
     // EC2 Instance Role
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances with least privilege access',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
       inlinePolicies: {
-        'EC2MinimalPolicy': new iam.PolicyDocument({
+        EC2MinimalPolicy: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -292,31 +312,31 @@ export class SecureInfrastructureStack extends cdk.Stack {
                 'logs:CreateLogGroup',
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
-                'logs:DescribeLogStreams'
+                'logs:DescribeLogStreams',
               ],
-              resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/*`]
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/*`,
+              ],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject'
-              ],
-              resources: [`${appAssetsBucket.bucketArn}/*`]
+              actions: ['s3:GetObject'],
+              resources: [`${appAssetsBucket.bucketArn}/*`],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue'
+              actions: ['secretsmanager:GetSecretValue'],
+              resources: [
+                `arn:aws:secretsmanager:${this.region}:${this.account}:secret:prod/app/*`,
               ],
-              resources: [`arn:aws:secretsmanager:${this.region}:${this.account}:secret:prod/app/*`]
-            })
-          ]
-        })
-      }
+            }),
+          ],
+        }),
+      },
     });
 
-    const ec2InstanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role
+    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+      role: ec2Role,
     });
 
     // Lambda Execution Role
@@ -324,70 +344,72 @@ export class SecureInfrastructureStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       description: 'IAM role for Lambda functions with least privilege access',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole')
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaVPCAccessExecutionRole'
+        ),
       ],
       inlinePolicies: {
-        'LambdaMinimalPolicy': new iam.PolicyDocument({
+        LambdaMinimalPolicy: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
                 'logs:CreateLogGroup',
                 'logs:CreateLogStream',
-                'logs:PutLogEvents'
+                'logs:PutLogEvents',
               ],
-              resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/*`]
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/*`,
+              ],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'cloudwatch:PutMetricData'
-              ],
-              resources: ['*']
+              actions: ['cloudwatch:PutMetricData'],
+              resources: ['*'],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'sns:Publish'
+              actions: ['sns:Publish'],
+              resources: [
+                `arn:aws:sns:${this.region}:${this.account}:security-alerts`,
               ],
-              resources: [`arn:aws:sns:${this.region}:${this.account}:security-alerts`]
-            })
-          ]
-        })
-      }
+            }),
+          ],
+        }),
+      },
     });
 
     // =============================================================================
     // 6. SECRETS MANAGER AND PARAMETER STORE
     // =============================================================================
-    
+
     // Database credentials in Secrets Manager
-    const dbSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
-      secretName: 'prod/app/database',
+    new secretsmanager.Secret(this, 'DatabaseSecret', {
+      secretName: `prod/app/database-${environmentSuffix}`,
       description: 'Database credentials for the application',
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'admin' }),
         generateStringKey: 'password',
-        excludeCharacters: '"@/\\'
+        excludeCharacters: '"@/\\',
       },
-      encryptionKey: kmsKey
+      encryptionKey: kmsKey,
     });
 
     // API Keys in Parameter Store
-    const apiKeyParameter = new ssm.StringParameter(this, 'APIKeyParameter', {
-      parameterName: '/prod/app/api-key',
+    new ssm.StringParameter(this, 'APIKeyParameter', {
+      parameterName: `/prod/app/api-key-${environmentSuffix}`,
       stringValue: 'placeholder-api-key', // Replace with actual API key
       description: 'API key for external service integration',
       tier: ssm.ParameterTier.STANDARD,
-      type: ssm.ParameterType.SECURE_STRING
+      type: ssm.ParameterType.SECURE_STRING,
     });
 
     // =============================================================================
     // 7. CLOUDTRAIL FOR AUDITING
     // =============================================================================
-    
+
     const trail = new cloudtrail.Trail(this, 'SecurityAuditTrail', {
-      trailName: 'secure-infrastructure-audit-trail',
+      trailName: `secure-infrastructure-audit-trail-${environmentSuffix}`,
       bucket: cloudTrailBucket,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
@@ -396,44 +418,46 @@ export class SecureInfrastructureStack extends cdk.Stack {
       sendToCloudWatchLogs: true,
       cloudWatchLogsRetention: logs.RetentionDays.ONE_YEAR,
       managementEvents: cloudtrail.ReadWriteType.ALL,
-      insightSelectors: [
-        {
-          insightType: cloudtrail.InsightType.API_CALL_RATE
-        }
-      ]
     });
+    
+    // Override removal policies for CloudTrail log group
+    if (trail.logGroup) {
+      (trail.logGroup.node.defaultChild as logs.CfnLogGroup).applyRemovalPolicy(
+        cdk.RemovalPolicy.DESTROY
+      );
+    }
 
     // =============================================================================
     // 8. AWS CONFIG FOR COMPLIANCE MONITORING
     // =============================================================================
-    
+
     // Config Bucket
     const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `secure-config-${this.account}-${this.region}`,
+      bucketName: `secure-config-${environmentSuffix}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Config Service Role
     const configRole = new iam.Role(this, 'ConfigRole', {
       assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole')
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
       ],
       inlinePolicies: {
-        'ConfigBucketPolicy': new iam.PolicyDocument({
+        ConfigBucketPolicy: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
                 's3:GetBucketAcl',
                 's3:GetBucketLocation',
-                's3:ListBucket'
+                's3:ListBucket',
               ],
-              resources: [configBucket.bucketArn]
+              resources: [configBucket.bucketArn],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -441,34 +465,42 @@ export class SecureInfrastructureStack extends cdk.Stack {
               resources: [`${configBucket.bucketArn}/*`],
               conditions: {
                 StringEquals: {
-                  's3:x-amz-acl': 'bucket-owner-full-control'
-                }
-              }
-            })
-          ]
-        })
-      }
+                  's3:x-amz-acl': 'bucket-owner-full-control',
+                },
+              },
+            }),
+          ],
+        }),
+      },
     });
 
     // Config Configuration Recorder
-    const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-      name: 'secure-infrastructure-recorder',
-      roleArn: configRole.roleArn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-        resourceTypes: []
+    const configRecorder = new config.CfnConfigurationRecorder(
+      this,
+      'ConfigRecorder',
+      {
+        name: `secure-infrastructure-recorder-${environmentSuffix}`,
+        roleArn: configRole.roleArn,
+        recordingGroup: {
+          allSupported: true,
+          includeGlobalResourceTypes: true,
+          resourceTypes: [],
+        },
       }
-    });
+    );
 
     // Config Delivery Channel
-    const configDeliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-      name: 'secure-infrastructure-delivery-channel',
-      s3BucketName: configBucket.bucketName,
-      configSnapshotDeliveryProperties: {
-        deliveryFrequency: 'TwentyFour_Hours'
+    const configDeliveryChannel = new config.CfnDeliveryChannel(
+      this,
+      'ConfigDeliveryChannel',
+      {
+        name: `secure-infrastructure-delivery-channel-${environmentSuffix}`,
+        s3BucketName: configBucket.bucketName,
+        configSnapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
       }
-    });
+    );
 
     configDeliveryChannel.addDependency(configRecorder);
 
@@ -477,28 +509,28 @@ export class SecureInfrastructureStack extends cdk.Stack {
       {
         ruleName: 'encrypted-volumes',
         source: 'AWS',
-        sourceIdentifier: 'ENCRYPTED_VOLUMES'
+        sourceIdentifier: 'ENCRYPTED_VOLUMES',
       },
       {
         ruleName: 's3-bucket-public-access-prohibited',
         source: 'AWS',
-        sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED'
+        sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
       },
       {
         ruleName: 's3-bucket-ssl-requests-only',
         source: 'AWS',
-        sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY'
+        sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
       },
       {
         ruleName: 'cloudtrail-enabled',
         source: 'AWS',
-        sourceIdentifier: 'CLOUD_TRAIL_ENABLED'
+        sourceIdentifier: 'CLOUD_TRAIL_ENABLED',
       },
       {
         ruleName: 'iam-password-policy',
         source: 'AWS',
-        sourceIdentifier: 'IAM_PASSWORD_POLICY'
-      }
+        sourceIdentifier: 'IAM_PASSWORD_POLICY',
+      },
     ];
 
     configRules.forEach((rule, index) => {
@@ -506,17 +538,17 @@ export class SecureInfrastructureStack extends cdk.Stack {
         configRuleName: rule.ruleName,
         source: {
           owner: rule.source,
-          sourceIdentifier: rule.sourceIdentifier
-        }
+          sourceIdentifier: rule.sourceIdentifier,
+        },
       }).addDependency(configRecorder);
     });
 
     // =============================================================================
     // 9. WAF FOR THREAT PROTECTION
     // =============================================================================
-    
+
     const webAcl = new wafv2.CfnWebACL(this, 'SecureWebACL', {
-      name: 'secure-infrastructure-waf',
+      name: `secure-infrastructure-waf-${environmentSuffix}`,
       scope: 'REGIONAL',
       defaultAction: { allow: {} },
       description: 'WAF for secure infrastructure protection',
@@ -528,14 +560,14 @@ export class SecureInfrastructureStack extends cdk.Stack {
           statement: {
             managedRuleGroupStatement: {
               vendorName: 'AWS',
-              name: 'AWSManagedRulesCommonRuleSet'
-            }
+              name: 'AWSManagedRulesCommonRuleSet',
+            },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'CommonRuleSetMetric'
-          }
+            metricName: 'CommonRuleSetMetric',
+          },
         },
         {
           name: 'AWSManagedRulesKnownBadInputsRuleSet',
@@ -544,14 +576,14 @@ export class SecureInfrastructureStack extends cdk.Stack {
           statement: {
             managedRuleGroupStatement: {
               vendorName: 'AWS',
-              name: 'AWSManagedRulesKnownBadInputsRuleSet'
-            }
+              name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'KnownBadInputsMetric'
-          }
+            metricName: 'KnownBadInputsMetric',
+          },
         },
         {
           name: 'AWSManagedRulesSQLiRuleSet',
@@ -560,14 +592,14 @@ export class SecureInfrastructureStack extends cdk.Stack {
           statement: {
             managedRuleGroupStatement: {
               vendorName: 'AWS',
-              name: 'AWSManagedRulesSQLiRuleSet'
-            }
+              name: 'AWSManagedRulesSQLiRuleSet',
+            },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'SQLiRuleSetMetric'
-          }
+            metricName: 'SQLiRuleSetMetric',
+          },
         },
         {
           name: 'RateLimitRule',
@@ -576,34 +608,451 @@ export class SecureInfrastructureStack extends cdk.Stack {
           statement: {
             rateBasedStatement: {
               limit: 2000,
-              aggregateKeyType: 'IP'
-            }
+              aggregateKeyType: 'IP',
+            },
           },
           visibilityConfig: {
             sampledRequestsEnabled: true,
             cloudWatchMetricsEnabled: true,
-            metricName: 'RateLimitMetric'
-          }
-        }
+            metricName: 'RateLimitMetric',
+          },
+        },
       ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudWatchMetricsEnabled: true,
-        metricName: 'SecureWebACLMetric'
-      }
+        metricName: 'SecureWebACLMetric',
+      },
     });
 
     // =============================================================================
     // 10. APPLICATION LOAD BALANCER WITH HTTPS
     // =============================================================================
-    
+
     // SSL Certificate (you'll need to validate this manually or use DNS validation)
-    const certificate = new certificatemanager.Certificate(this, 'SSLCertificate', {
-      domainName: '*.yourdomain.com', // Replace with your domain
-      validation: certificatemanager.CertificateValidation.fromEmail()
-    });
+    const certificate = new certificatemanager.Certificate(
+      this,
+      'SSLCertificate',
+      {
+        domainName: '*.yourdomain.com', // Replace with your domain
+        validation: certificatemanager.CertificateValidation.fromEmail(),
+      }
+    );
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'SecureALB', {
       vpc,
       internetFacing: true,
-      securityGroup: albSecurityGroup
+      securityGroup: albSecurityGroup,
+      loadBalancerName: `secure-alb-${environmentSuffix}`,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      dropInvalidHeaderFields: true,
+      idleTimeout: cdk.Duration.seconds(60),
+    });
+
+    // Enable access logs for ALB
+    alb.logAccessLogs(accessLogsBucket, 'alb-logs');
+
+    // Associate WAF with ALB
+    new wafv2.CfnWebACLAssociation(this, 'ALBWafAssociation', {
+      resourceArn: alb.loadBalancerArn,
+      webAclArn: webAcl.attrArn,
+    });
+
+    // Create target group for EC2 instances
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'SecureTargetGroup',
+      {
+        vpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.INSTANCE,
+        healthCheck: {
+          enabled: true,
+          healthyHttpCodes: '200-399',
+          interval: cdk.Duration.seconds(30),
+          path: '/health',
+          protocol: elbv2.Protocol.HTTP,
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+        deregistrationDelay: cdk.Duration.seconds(30),
+        stickinessCookieDuration: cdk.Duration.hours(1),
+      }
+    );
+
+    // HTTPS Listener with SSL Certificate
+    alb.addListener('HTTPSListener', {
+      port: 443,
+      protocol: elbv2.ApplicationProtocol.HTTPS,
+      certificates: [certificate],
+      sslPolicy: elbv2.SslPolicy.TLS13_RES,
+      defaultTargetGroups: [targetGroup],
+    });
+
+    // HTTP Listener - Redirect to HTTPS
+    alb.addListener('HTTPListener', {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      defaultAction: elbv2.ListenerAction.redirect({
+        protocol: 'HTTPS',
+        port: '443',
+        permanent: true,
+      }),
+    });
+
+    // Allow ALB to communicate with EC2 instances
+    albSecurityGroup.addEgressRule(
+      ec2SecurityGroup,
+      ec2.Port.tcp(80),
+      'Allow ALB to reach EC2 instances'
+    );
+
+    // =============================================================================
+    // 11. API GATEWAY WITH HTTPS AND WAF
+    // =============================================================================
+
+    const api = new apigateway.RestApi(this, 'SecureAPI', {
+      restApiName: `secure-infrastructure-api-${environmentSuffix}`,
+      description: 'Secure API with comprehensive security controls',
+      endpointConfiguration: {
+        types: [apigateway.EndpointType.REGIONAL],
+      },
+      deployOptions: {
+        stageName: 'prod',
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        dataTraceEnabled: true,
+        tracingEnabled: true,
+        metricsEnabled: true,
+        throttlingBurstLimit: 5000,
+        throttlingRateLimit: 10000,
+      },
+      cloudWatchRole: true,
+      defaultCorsPreflightOptions: {
+        allowOrigins: ['https://*.yourdomain.com'],
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+        ],
+        maxAge: cdk.Duration.hours(1),
+      },
+      policy: new iam.PolicyDocument({
+        statements: [
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.AnyPrincipal()],
+            actions: ['execute-api:Invoke'],
+            resources: ['execute-api:/*/*/*'],
+          }),
+        ],
+      }),
+    });
+
+    // Associate WAF with API Gateway
+    new wafv2.CfnWebACLAssociation(this, 'APIGatewayWafAssociation', {
+      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/prod`,
+      webAclArn: webAcl.attrArn,
+    });
+
+    // API Gateway Access Logs
+    new logs.LogGroup(this, 'APIGatewayLogGroup', {
+      logGroupName: `/aws/apigateway/${api.restApiId}`,
+      retention: logs.RetentionDays.ONE_YEAR,
+      encryptionKey: kmsKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // =============================================================================
+    // 12. LAMBDA FUNCTIONS FOR LOG PROCESSING AND ANOMALY DETECTION
+    // =============================================================================
+
+    // SNS Topic for Security Alerts
+    const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
+      topicName: `security-alerts-${environmentSuffix}`,
+      displayName: 'Security Alerts',
+      masterKey: kmsKey,
+    });
+
+    // Lambda function for log processing
+    const logProcessorFunction = new lambda.Function(
+      this,
+      'LogProcessorFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_20_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
+        const AWS = require('aws-sdk');
+        const sns = new AWS.SNS();
+        const cloudwatch = new AWS.CloudWatch();
+        
+        exports.handler = async (event) => {
+          console.log('Processing logs:', JSON.stringify(event));
+          
+          // Parse CloudWatch Logs
+          const logEvents = JSON.parse(Buffer.from(event.awslogs.data, 'base64').toString());
+          
+          // Check for suspicious patterns
+          const suspiciousPatterns = [
+            /unauthorized/i,
+            /denied/i,
+            /failed authentication/i,
+            /sql injection/i,
+            /xss attack/i,
+            /brute force/i
+          ];
+          
+          for (const logEvent of logEvents.logEvents) {
+            const message = logEvent.message;
+            
+            for (const pattern of suspiciousPatterns) {
+              if (pattern.test(message)) {
+                // Send alert
+                await sns.publish({
+                  TopicArn: process.env.SNS_TOPIC_ARN,
+                  Subject: 'Security Alert Detected',
+                  Message: JSON.stringify({
+                    timestamp: new Date(logEvent.timestamp).toISOString(),
+                    logGroup: logEvents.logGroup,
+                    logStream: logEvents.logStream,
+                    message: message,
+                    pattern: pattern.toString()
+                  }, null, 2)
+                }).promise();
+                
+                // Publish custom metric
+                await cloudwatch.putMetricData({
+                  Namespace: 'Security/Monitoring',
+                  MetricData: [{
+                    MetricName: 'SuspiciousActivity',
+                    Value: 1,
+                    Unit: 'Count',
+                    Timestamp: new Date(),
+                    Dimensions: [
+                      { Name: 'Pattern', Value: pattern.toString() },
+                      { Name: 'LogGroup', Value: logEvents.logGroup }
+                    ]
+                  }]
+                }).promise();
+              }
+            }
+          }
+          
+          return { statusCode: 200, body: 'Logs processed successfully' };
+        };
+      `),
+        functionName: `secure-log-processor-${environmentSuffix}`,
+        description: 'Process logs and detect security anomalies',
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        role: lambdaRole,
+        environment: {
+          SNS_TOPIC_ARN: securityAlertsTopic.topicArn,
+        },
+        vpc: vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        securityGroups: [lambdaSecurityGroup],
+        logRetention: logs.RetentionDays.ONE_YEAR,
+        tracing: lambda.Tracing.ACTIVE,
+      }
+    );
+
+    // Grant permissions to Lambda
+    securityAlertsTopic.grantPublish(logProcessorFunction);
+    logProcessorFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['cloudwatch:PutMetricData'],
+        resources: ['*'],
+      })
+    );
+
+    // =============================================================================
+    // 13. CLOUDWATCH ALARMS AND MONITORING
+    // =============================================================================
+
+    // Alarm for high number of security incidents
+    const securityIncidentAlarm = new cloudwatch.Alarm(
+      this,
+      'SecurityIncidentAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'Security/Monitoring',
+          metricName: 'SuspiciousActivity',
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 10,
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Alert when suspicious activity exceeds threshold',
+        alarmName: `HighSecurityIncidents-${environmentSuffix}`,
+      }
+    );
+
+    securityIncidentAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(securityAlertsTopic)
+    );
+
+    // Alarm for WAF blocked requests
+    const wafBlockedRequestsAlarm = new cloudwatch.Alarm(
+      this,
+      'WAFBlockedRequestsAlarm',
+      {
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/WAFV2',
+          metricName: 'BlockedRequests',
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+          dimensionsMap: {
+            WebACL: webAcl.name!,
+            Region: this.region,
+            Rule: 'ALL',
+          },
+        }),
+        threshold: 100,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: 'Alert when WAF blocks high number of requests',
+        alarmName: `HighWAFBlockedRequests-${environmentSuffix}`,
+      }
+    );
+
+    wafBlockedRequestsAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(securityAlertsTopic)
+    );
+
+    // =============================================================================
+    // 14. EC2 INSTANCES WITH ENCRYPTED EBS VOLUMES
+    // =============================================================================
+
+    // EC2 Launch Template with encrypted EBS
+    const userData = ec2.UserData.forLinux();
+    userData.addCommands(
+      'yum update -y',
+      'yum install -y amazon-cloudwatch-agent',
+      'yum install -y httpd',
+      'systemctl start httpd',
+      'systemctl enable httpd',
+      'echo "<h1>Secure Web Application</h1>" > /var/www/html/index.html',
+      'echo "OK" > /var/www/html/health'
+    );
+
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'SecureLaunchTemplate',
+      {
+        launchTemplateName: `secure-instance-template-${environmentSuffix}`,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        userData: userData,
+        role: ec2Role,
+        securityGroup: ec2SecurityGroup,
+        blockDevices: [
+          {
+            deviceName: '/dev/xvda',
+            volume: ec2.BlockDeviceVolume.ebs(20, {
+              encrypted: true,
+              kmsKey: kmsKey,
+              volumeType: ec2.EbsDeviceVolumeType.GP3,
+              deleteOnTermination: true,
+            }),
+          },
+        ],
+        requireImdsv2: true,
+        httpTokens: ec2.LaunchTemplateHttpTokens.REQUIRED,
+        httpPutResponseHopLimit: 1,
+      }
+    );
+
+    // Auto Scaling Group
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'SecureASG',
+      {
+        vpc,
+        launchTemplate: launchTemplate,
+        minCapacity: 1,
+        maxCapacity: 3,
+        desiredCapacity: 2,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.minutes(5),
+        }),
+        updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
+          maxBatchSize: 1,
+          minInstancesInService: 1,
+        }),
+      }
+    );
+
+    // Register ASG with target group
+    autoScalingGroup.attachToApplicationTargetGroup(targetGroup);
+
+    // Auto scaling based on CPU utilization
+    autoScalingGroup.scaleOnCpuUtilization('CPUScaling', {
+      targetUtilizationPercent: 70,
+      cooldown: cdk.Duration.minutes(5),
+    });
+
+    // =============================================================================
+    // 15. OUTPUTS
+    // =============================================================================
+
+    new cdk.CfnOutput(this, 'VPCId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `${this.stackName}-VPCId`,
+    });
+
+    new cdk.CfnOutput(this, 'ALBDNSName', {
+      value: alb.loadBalancerDnsName,
+      description: 'Application Load Balancer DNS Name',
+      exportName: `${this.stackName}-ALBDNSName`,
+    });
+
+    new cdk.CfnOutput(this, 'APIGatewayURL', {
+      value: api.url,
+      description: 'API Gateway URL',
+      exportName: `${this.stackName}-APIGatewayURL`,
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailBucketName', {
+      value: cloudTrailBucket.bucketName,
+      description: 'CloudTrail S3 Bucket Name',
+      exportName: `${this.stackName}-CloudTrailBucket`,
+    });
+
+    new cdk.CfnOutput(this, 'SecurityAlertsTopicArn', {
+      value: securityAlertsTopic.topicArn,
+      description: 'SNS Topic ARN for Security Alerts',
+      exportName: `${this.stackName}-SecurityAlertsTopic`,
+    });
+
+    new cdk.CfnOutput(this, 'KMSKeyId', {
+      value: kmsKey.keyId,
+      description: 'KMS Key ID for encryption',
+      exportName: `${this.stackName}-KMSKeyId`,
+    });
+
+    new cdk.CfnOutput(this, 'WebACLArn', {
+      value: webAcl.attrArn,
+      description: 'WAF Web ACL ARN',
+      exportName: `${this.stackName}-WebACLArn`,
+    });
+  }
+}
+
+export { SecureInfrastructureStack as TapStack };
