@@ -106,16 +106,16 @@ export class TapStack extends cdk.Stack {
               actions: [
                 'kms:Encrypt',
                 'kms:Decrypt',
-                'kms:ReEncrypt*',
-                'kms:GenerateDataKey*',
-                'kms:DescribeKey'
+                'kms:ReEncrypt',
+                'kms:GenerateDataKey',
+                'kms:DescribeKey',
               ],
               resources: ['*'],
               conditions: {
                 ArnEquals: {
-                  'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/ecs/cluster-${this.environmentSuffix}-${this.randomSuffix}`
-                }
-              }
+                  'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${cdk.Stack.of(this).region}:${cdk.Stack.of(this).account}:log-group:/aws/ecs/cluster-${this.environmentSuffix}-${this.randomSuffix}`,
+                },
+              },
             }),
             // Allow RDS service to use the key for encryption
             new iam.PolicyStatement({
@@ -127,7 +127,7 @@ export class TapStack extends cdk.Stack {
                 'kms:Decrypt',
                 'kms:ReEncrypt*',
                 'kms:GenerateDataKey*',
-                'kms:DescribeKey'
+                'kms:DescribeKey',
               ],
               resources: ['*'],
             }),
@@ -135,13 +135,15 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               sid: 'AllowSecretsManagerAccess',
               effect: iam.Effect.ALLOW,
-              principals: [new iam.ServicePrincipal('secretsmanager.amazonaws.com')],
+              principals: [
+                new iam.ServicePrincipal('secretsmanager.amazonaws.com'),
+              ],
               actions: [
                 'kms:Encrypt',
                 'kms:Decrypt',
                 'kms:ReEncrypt*',
                 'kms:GenerateDataKey*',
-                'kms:DescribeKey'
+                'kms:DescribeKey',
               ],
               resources: ['*'],
             }),
@@ -577,4 +579,3 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Monitoring', 'Enabled');
   }
 }
-
