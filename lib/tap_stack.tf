@@ -74,11 +74,7 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-# Check if GuardDuty detector already exists
-data "aws_guardduty_detector" "existing" {}
-
 resource "aws_guardduty_detector" "main" {
-  count  = data.aws_guardduty_detector.existing.id == "" ? 1 : 0
   enable = true
 
   tags = {
@@ -87,7 +83,7 @@ resource "aws_guardduty_detector" "main" {
 }
 
 locals {
-  guardduty_detector_id = try(data.aws_guardduty_detector.existing.id, aws_guardduty_detector.main[0].id)
+  guardduty_detector_id = aws_guardduty_detector.main.id
 }
 
 resource "aws_guardduty_detector_feature" "s3_protection" {
