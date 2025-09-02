@@ -59,13 +59,15 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: Whether to create AWS Shield Advanced protection for the ALB (requires subscription)
 
-  # Choose AZs explicitly to avoid Fn::Select errors
+  # Initialize with sane defaults for us-east-1; override as needed
   AZ1:
     Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1a
     Description: First Availability Zone (e.g., us-east-1a)
 
   AZ2:
     Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1b
     Description: Second Availability Zone (must be different from AZ1)
 
 Mappings:
@@ -526,7 +528,7 @@ Resources:
               - { Effect: Allow, Action: [s3:ListBucket], Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}' }
 
   # -----------------------
-  # EC2 role & instance prof (SINGLE DEFINITION — no duplicates)
+  # EC2 role & instance prof (single definition)
   # -----------------------
   EC2InstanceRole:
     Type: AWS::IAM::Role
