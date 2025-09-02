@@ -1148,6 +1148,8 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider, dependsOn: [flowLogGroup] }
     );
 
+
+
     // CloudTrail
     const cloudTrailBucket = new aws.s3.Bucket(
       `cloudtrail-${environment}`,
@@ -1160,69 +1162,40 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfiguration(
-      `cloudtrail-encryption-${environment}`,
-      {
-        bucket: cloudTrailBucket.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        ],
-      },
-      { provider: this.provider }
-    );
-
     new aws.s3.BucketPolicy(
       `cloudtrail-policy-${environment}`,
       {
         bucket: cloudTrailBucket.id,
-        policy: pulumi
-          .all([cloudTrailBucket.arn, this.caller])
-          .apply(([bucketArn, caller]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Sid: 'AWSCloudTrailAclCheck',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: 'cloudtrail.amazonaws.com',
-                  },
-                  Action: 's3:GetBucketAcl',
-                  Resource: bucketArn,
-                  Condition: {
-                    StringEquals: {
-                      'aws:SourceAccount': caller.accountId,
-                    },
-                    ArnEquals: {
-                      'aws:SourceArn': `arn:aws:cloudtrail:${region}:${caller.accountId}:trail/cloudtrail-${environment}`,
-                    },
+        policy: pulumi.all([cloudTrailBucket.arn, this.caller]).apply(([bucketArn, caller]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'AWSCloudTrailAclCheck',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'cloudtrail.amazonaws.com',
+                },
+                Action: 's3:GetBucketAcl',
+                Resource: bucketArn,
+              },
+              {
+                Sid: 'AWSCloudTrailWrite',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'cloudtrail.amazonaws.com',
+                },
+                Action: 's3:PutObject',
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                  StringEquals: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
                   },
                 },
-                {
-                  Sid: 'AWSCloudTrailWrite',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: 'cloudtrail.amazonaws.com',
-                  },
-                  Action: 's3:PutObject',
-                  Resource: `${bucketArn}/*`,
-                  Condition: {
-                    StringEquals: {
-                      's3:x-amz-acl': 'bucket-owner-full-control',
-                      'aws:SourceAccount': caller.accountId,
-                    },
-                    ArnEquals: {
-                      'aws:SourceArn': `arn:aws:cloudtrail:${region}:${caller.accountId}:trail/cloudtrail-${environment}`,
-                    },
-                  },
-                },
-              ],
-            })
-          ),
+              },
+            ],
+          })
+        ),
       },
       { provider: this.provider }
     );
@@ -1232,7 +1205,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       {
         s3BucketName: cloudTrailBucket.bucket,
         includeGlobalServiceEvents: true,
-        isMultiRegionTrail: true,
+        isMultiRegionTrail: false,
         enableLogging: true,
         tags: resourceTags,
       },
@@ -1274,16 +1247,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    // RDS Instance with secrets from Secrets Manager
-    const dbCredentials = dbSecret.id.apply(secretId =>
-      aws.secretsmanager.getSecretVersion(
-        {
-          secretId: secretId,
-        },
-        { provider: this.provider }
-      )
-    );
-
+    // RDS Instance with AWS managed password
     this.rdsInstance = new aws.rds.Instance(
       `db-${environment}`,
       {
@@ -1296,12 +1260,8 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
         storageEncrypted: true,
         kmsKeyId: kmsKey.arn,
         dbName: 'appdb',
-        username: dbCredentials.apply(
-          creds => JSON.parse(creds.secretString).username
-        ),
-        password: dbCredentials.apply(
-          creds => JSON.parse(creds.secretString).password
-        ),
+        username: 'admin',
+        manageMasterUserPassword: true,
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
         backupRetentionPeriod: 7,
