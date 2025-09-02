@@ -53,14 +53,6 @@ if [ "$PLATFORM" = "cdk" ]; then
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
   
-  # Fix resource conflicts before deployment
-  echo "🔧 Checking for resource conflicts..."
-  if [ -f "scripts/fix-resource-conflicts.sh" ]; then
-    ./scripts/fix-resource-conflicts.sh cleanup "$ENVIRONMENT_SUFFIX"
-  else
-    echo "⚠️  Resource conflict script not found, skipping conflict resolution"
-  fi
-  
   if [ "$LANGUAGE" = "go" ]; then
     echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
 
