@@ -23,6 +23,13 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Random suffix for unique naming
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 # Variables with default values
 variable "aws_region" {
   description = "AWS region"
@@ -78,7 +85,7 @@ variable "db_instance_class" {
   default     = "db.t3.small"
 
   validation {
-    condition = can(regex("^db\\.(t3|t4g|r5|r6g)\\.(small|medium|large|xlarge)", var.db_instance_class))
+    condition     = can(regex("^db\\.(t3|t4g|r5|r6g)\\.(small|medium|large|xlarge)", var.db_instance_class))
     error_message = "DB instance class must be a valid Aurora-compatible instance type."
   }
 }
@@ -98,9 +105,12 @@ variable "db_username" {
 locals {
   common_tags = {
     Project     = "WebAppDeployment"
-    Environment = "prod"
+    Environment = var.environment
     ManagedBy   = "Terraform"
   }
+
+  # Use suffix for unique naming
+  resource_prefix = "${var.project_name}-${random_string.suffix.result}"
 }
 
 # Generate random password for database
@@ -109,10 +119,10 @@ resource "random_password" "db_password" {
   special = true
 }
 
-# Store DB password in AWS Secrets Manager
+# Store DB password in AWS Secrets Manager with unique name
 resource "aws_secretsmanager_secret" "db_password" {
-  name = "proj-webapp-db-password"
-  tags = local.common_tags
+  name_prefix = "${local.resource_prefix}-db-password-"
+  tags        = local.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
@@ -132,7 +142,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-vpc"
+    Name = "${local.resource_prefix}-vpc"
   })
 }
 
@@ -141,8 +151,33 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-igw"
+    Name = "${local.resource_prefix}-igw"
   })
+}
+
+# Elastic IPs for NAT Gateway
+resource "aws_eip" "nat" {
+  count  = 2
+  domain = "vpc"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-nat-eip-${count.index + 1}"
+  })
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# NAT Gateways for private subnets
+resource "aws_nat_gateway" "main" {
+  count         = 2
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-nat-${count.index + 1}"
+  })
+
+  depends_on = [aws_internet_gateway.main]
 }
 
 # Public Subnets
@@ -155,7 +190,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-public-subnet-${count.index + 1}"
+    Name = "${local.resource_prefix}-public-subnet-${count.index + 1}"
     Type = "Public"
   })
 }
@@ -169,7 +204,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-private-subnet-${count.index + 1}"
+    Name = "${local.resource_prefix}-private-subnet-${count.index + 1}"
     Type = "Private"
   })
 }
@@ -184,7 +219,22 @@ resource "aws_route_table" "public" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-public-rt"
+    Name = "${local.resource_prefix}-public-rt"
+  })
+}
+
+# Route Tables for Private Subnets
+resource "aws_route_table" "private" {
+  count  = 2
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-private-rt-${count.index + 1}"
   })
 }
 
@@ -196,19 +246,66 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+resource "aws_route_table_association" "private" {
+  count = length(aws_subnet.private)
+
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "proj-webapp-db-subnet-group"
+  name       = "${local.resource_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-db-subnet-group"
+    Name = "${local.resource_prefix}-db-subnet-group"
   })
+}
+
+# S3 Bucket for assets
+resource "aws_s3_bucket" "webapp_assets" {
+  bucket = "${local.resource_prefix}-webapp-assets"
+
+  tags = merge(local.common_tags, {
+    Name = "${local.resource_prefix}-webapp-assets"
+  })
+}
+
+# S3 Bucket Versioning
+resource "aws_s3_bucket_versioning" "webapp_assets" {
+  bucket = aws_s3_bucket.webapp_assets.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 Bucket Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "webapp_assets" {
+  bucket = aws_s3_bucket.webapp_assets.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# S3 Public Access Block
+resource "aws_s3_bucket_public_access_block" "webapp_assets" {
+  bucket = aws_s3_bucket.webapp_assets.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # ALB Security Group
 resource "aws_security_group" "alb" {
-  name_prefix = "proj-webapp-alb-"
+  name        = "${local.resource_prefix}-alb-sg"
+  description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -235,7 +332,7 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-alb-sg"
+    Name = "${local.resource_prefix}-alb-sg"
   })
 
   lifecycle {
@@ -245,7 +342,8 @@ resource "aws_security_group" "alb" {
 
 # EC2 Security Group
 resource "aws_security_group" "ec2" {
-  name_prefix = "proj-webapp-ec2-"
+  name        = "${local.resource_prefix}-ec2-sg"
+  description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -272,7 +370,7 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-ec2-sg"
+    Name = "${local.resource_prefix}-ec2-sg"
   })
 
   lifecycle {
@@ -282,7 +380,8 @@ resource "aws_security_group" "ec2" {
 
 # Database Security Group
 resource "aws_security_group" "rds" {
-  name_prefix = "proj-webapp-rds-"
+  name        = "${local.resource_prefix}-rds-sg"
+  description = "Security group for RDS Aurora"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -293,8 +392,16 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ec2.id]
   }
 
+  egress {
+    description = "Allow all outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-rds-sg"
+    Name = "${local.resource_prefix}-rds-sg"
   })
 
   lifecycle {
@@ -304,7 +411,7 @@ resource "aws_security_group" "rds" {
 
 # IAM Role for EC2
 resource "aws_iam_role" "ec2_role" {
-  name = "proj-webapp-ec2-role"
+  name = "${local.resource_prefix}-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -324,7 +431,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM Policy for S3 Access
 resource "aws_iam_policy" "s3_access" {
-  name = "proj-webapp-s3-access"
+  name = "${local.resource_prefix}-s3-access"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -336,8 +443,8 @@ resource "aws_iam_policy" "s3_access" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::webapp-assets",
-          "arn:aws:s3:::webapp-assets/*"
+          aws_s3_bucket.webapp_assets.arn,
+          "${aws_s3_bucket.webapp_assets.arn}/*"
         ]
       }
     ]
@@ -348,7 +455,7 @@ resource "aws_iam_policy" "s3_access" {
 
 # IAM Policy for Secrets Manager (to get DB password)
 resource "aws_iam_policy" "secrets_access" {
-  name = "proj-webapp-secrets-access"
+  name = "${local.resource_prefix}-secrets-access"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -359,6 +466,29 @@ resource "aws_iam_policy" "secrets_access" {
           "secretsmanager:GetSecretValue"
         ]
         Resource = aws_secretsmanager_secret.db_password.arn
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+# IAM Policy for CloudWatch Logs
+resource "aws_iam_policy" "cloudwatch_logs" {
+  name = "${local.resource_prefix}-cloudwatch-logs"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:*:*"
       }
     ]
   })
@@ -377,10 +507,53 @@ resource "aws_iam_role_policy_attachment" "secrets_access" {
   policy_arn = aws_iam_policy.secrets_access.arn
 }
 
+resource "aws_iam_role_policy_attachment" "cloudwatch_logs" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.cloudwatch_logs.arn
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_managed_instance" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "proj-webapp-ec2-profile"
+  name = "${local.resource_prefix}-ec2-profile"
   role = aws_iam_role.ec2_role.name
+
+  tags = local.common_tags
+}
+
+# IAM Role for RDS Enhanced Monitoring
+resource "aws_iam_role" "rds_monitoring" {
+  name = "${local.resource_prefix}-rds-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoring" {
+  role       = aws_iam_role.rds_monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
+# CloudWatch Log Group for application logs
+resource "aws_cloudwatch_log_group" "webapp" {
+  name              = "/aws/ec2/${local.resource_prefix}"
+  retention_in_days = 7
 
   tags = local.common_tags
 }
@@ -403,144 +576,24 @@ data "aws_ami" "amazon_linux" {
 
 # User Data Script
 locals {
-  user_data = base64encode(<<-EOF
-#!/bin/bash
-yum update -y
-yum install -y python3 python3-pip
-
-# Install AWS CLI
-pip3 install awscli
-
-# Create app directory
-mkdir -p /opt/webapp
-cd /opt/webapp
-
-# Create Flask application
-cat > app.py << 'PYEOF'
-from flask import Flask, jsonify
-import os
-import boto3
-import json
-from botocore.exceptions import ClientError
-
-app = Flask(__name__)
-
-def get_secret():
-    secret_name = "proj-webapp-db-password"
-    region_name = "us-east-1"
-
-    session = boto3.session.Session()
-    client = session.client(
-        service_name='secretsmanager',
-        region_name=region_name
-    )
-
-    try:
-        get_secret_value_response = client.get_secret_value(
-            SecretId=secret_name
-        )
-        return get_secret_value_response['SecretString']
-    except ClientError as e:
-        return None
-
-@app.route('/')
-def hello():
-    return jsonify({
-        'message': 'Hello World from Flask!',
-        'status': 'success',
-        'instance_id': os.environ.get('EC2_INSTANCE_ID', 'unknown')
-    })
-
-@app.route('/health')
-def health():
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': str(os.popen('date').read().strip())
-    }), 200
-
-@app.route('/db-test')
-def db_test():
-    secret = get_secret()
-    if secret:
-        return jsonify({
-            'database': 'connected',
-            'status': 'success'
-        })
-    else:
-        return jsonify({
-            'database': 'connection failed',
-            'status': 'error'
-        }), 500
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
-PYEOF
-
-# Install Flask
-pip3 install flask boto3
-
-# Get instance metadata
-export EC2_INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-
-# Create systemd service
-cat > /etc/systemd/system/webapp.service << SVCEOF
-[Unit]
-Description=Flask Web Application
-After=network.target
-
-[Service]
-Type=simple
-User=ec2-user
-WorkingDirectory=/opt/webapp
-Environment=EC2_INSTANCE_ID=$EC2_INSTANCE_ID
-ExecStart=/usr/bin/python3 /opt/webapp/app.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-SVCEOF
-
-# Set permissions
-chown -R ec2-user:ec2-user /opt/webapp
-chmod +x /opt/webapp/app.py
-
-# Enable and start service
-systemctl daemon-reload
-systemctl enable webapp
-systemctl start webapp
-
-# Install and configure nginx as reverse proxy
-yum install -y nginx
-
-cat > /etc/nginx/conf.d/webapp.conf << 'NGEOF'
-server {
-    listen 80;
-    server_name _;
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-NGEOF
-
-systemctl enable nginx
-systemctl start nginx
-EOF
-  )
+  user_data = base64encode(templatefile("${path.module}/user_data.sh.tpl", {
+    db_secret_name = aws_secretsmanager_secret.db_password.name
+    region         = var.aws_region
+    log_group_name = aws_cloudwatch_log_group.webapp.name
+  }))
 }
 
 # Launch Template
 resource "aws_launch_template" "main" {
-  name_prefix   = "proj-webapp-"
+  name_prefix   = "${local.resource_prefix}-"
   image_id      = data.aws_ami.amazon_linux.id
-  instance_type = "t3.micro"
+  instance_type = var.instance_type
 
-  vpc_security_group_ids = [aws_security_group.ec2.id]
+  network_interfaces {
+    associate_public_ip_address = false
+    security_groups             = [aws_security_group.ec2.id]
+    delete_on_termination       = true
+  }
 
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
@@ -548,10 +601,21 @@ resource "aws_launch_template" "main" {
 
   user_data = local.user_data
 
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = 20
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
-      Name = "proj-webapp-instance"
+      Name = "${local.resource_prefix}-instance"
     })
   }
 
@@ -560,21 +624,22 @@ resource "aws_launch_template" "main" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-launch-template"
+    Name = "${local.resource_prefix}-launch-template"
   })
 }
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "proj-webapp-asg"
-  vpc_zone_identifier = aws_subnet.public[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                      = "${local.resource_prefix}-asg"
+  vpc_zone_identifier       = aws_subnet.public[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
+  wait_for_capacity_timeout = "10m"
 
-  min_size         = 2
-  max_size         = 5
-  desired_capacity = 2
+  min_size         = var.min_size
+  max_size         = var.max_size
+  desired_capacity = var.desired_capacity
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -583,7 +648,7 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "proj-webapp-asg"
+    value               = "${local.resource_prefix}-asg"
     propagate_at_launch = false
   }
 
@@ -597,90 +662,48 @@ resource "aws_autoscaling_group" "main" {
   }
 }
 
-# Auto Scaling Policy - Scale Up
-resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "proj-webapp-scale-up"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+# Auto Scaling Policy - Target Tracking
+resource "aws_autoscaling_policy" "target_tracking" {
+  name                   = "${local.resource_prefix}-target-tracking"
   autoscaling_group_name = aws_autoscaling_group.main.name
-}
+  policy_type            = "TargetTrackingScaling"
 
-# Auto Scaling Policy - Scale Down
-resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "proj-webapp-scale-down"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
-  autoscaling_group_name = aws_autoscaling_group.main.name
-}
-
-# CloudWatch Alarms
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "proj-webapp-cpu-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "70"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.main.name
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 50.0
   }
-
-  tags = local.common_tags
-}
-
-resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  alarm_name          = "proj-webapp-cpu-low"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "30"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.main.name
-  }
-
-  tags = local.common_tags
 }
 
 # Get available Aurora MySQL engine versions
 data "aws_rds_engine_version" "aurora_mysql" {
-  engine                 = "aurora-mysql"
-  preferred_versions     = ["8.0.mysql_aurora.3.04.0", "8.0.mysql_aurora.3.03.0", "8.0.mysql_aurora.3.02.0"]
-  include_all            = false
-  default_only          = false
+  engine             = "aurora-mysql"
+  preferred_versions = ["8.0.mysql_aurora.3.04.0", "8.0.mysql_aurora.3.03.0", "8.0.mysql_aurora.3.02.0"]
+  include_all        = false
+  default_only       = false
 }
 
-# Alternative: Get the latest Aurora MySQL 8.0 version
+# Get orderable DB instance
 data "aws_rds_orderable_db_instance" "aurora_mysql" {
   engine                     = "aurora-mysql"
-  engine_version            = data.aws_rds_engine_version.aurora_mysql.version
+  engine_version             = data.aws_rds_engine_version.aurora_mysql.version
   preferred_instance_classes = ["db.t3.small", "db.t4g.medium", "db.r5.large"]
-  supports_clusters         = true
+  supports_clusters          = true
 }
 
 # Aurora Cluster with dynamic version
 resource "aws_rds_cluster" "main" {
-  cluster_identifier      = "proj-webapp-aurora-cluster"
-  engine                 = "aurora-mysql"
-  engine_version         = data.aws_rds_engine_version.aurora_mysql.version
-  database_name          = "webapp"
-  master_username        = "admin"
-  master_password        = random_password.db_password.result
-  backup_retention_period = 7
-  preferred_backup_window = "07:00-09:00"
-  preferred_maintenance_window = "sun:05:00-sun:07:00"
+  cluster_identifier              = "${local.resource_prefix}-aurora-cluster"
+  engine                          = "aurora-mysql"
+  engine_version                  = data.aws_rds_engine_version.aurora_mysql.version
+  database_name                   = var.db_name
+  master_username                 = var.db_username
+  master_password                 = random_password.db_password.result
+  backup_retention_period         = 7
+  preferred_backup_window         = "07:00-09:00"
+  preferred_maintenance_window    = "sun:05:00-sun:07:00"
+  enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -691,50 +714,57 @@ resource "aws_rds_cluster" "main" {
   # Enable encryption
   storage_encrypted = true
 
-  # Enable backtrack for Aurora MySQL (optional but recommended)
+  # Enable backtrack for Aurora MySQL
   backtrack_window = 24
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-aurora-cluster"
+    Name = "${local.resource_prefix}-aurora-cluster"
   })
 }
 
 # Aurora Instances with compatible instance class
 resource "aws_rds_cluster_instance" "cluster_instances" {
   count              = 2
-  identifier         = "proj-webapp-aurora-${count.index}"
+  identifier         = "${local.resource_prefix}-aurora-${count.index}"
   cluster_identifier = aws_rds_cluster.main.id
   instance_class     = data.aws_rds_orderable_db_instance.aurora_mysql.instance_class
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
 
   performance_insights_enabled = true
-  monitoring_interval         = 60
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_monitoring.arn
+
+  depends_on = [
+    aws_iam_role_policy_attachment.rds_monitoring
+  ]
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-aurora-instance-${count.index}"
+    Name = "${local.resource_prefix}-aurora-instance-${count.index}"
   })
 }
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "proj-webapp-alb"
+  name               = "${local.resource_prefix}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection = false
+  enable_deletion_protection       = false
+  enable_http2                     = true
+  enable_cross_zone_load_balancing = true
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-alb"
+    Name = "${local.resource_prefix}-alb"
   })
 }
 
 # Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "proj-webapp-tg"
-  port     = 5000
+  name     = "${local.resource_prefix}-tg"
+  port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
 
@@ -746,23 +776,26 @@ resource "aws_lb_target_group" "main" {
     path                = "/health"
     port                = "traffic-port"
     protocol            = "HTTP"
-    timeout             = 5
+    timeout             = 10
     unhealthy_threshold = 2
   }
 
+  deregistration_delay = 30
+
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-tg"
+    Name = "${local.resource_prefix}-tg"
   })
 }
 
-# ACM Certificate (if domain provided)
+# ACM Certificate (conditional)
 resource "aws_acm_certificate" "main" {
-  count           = 0
-  domain_name     = ""
+  count = var.domain_name != "" ? 1 : 0
+
+  domain_name       = var.domain_name
   validation_method = "DNS"
 
   tags = merge(local.common_tags, {
-    Name = "proj-webapp-cert"
+    Name = "${local.resource_prefix}-cert"
   })
 
   lifecycle {
@@ -777,7 +810,33 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = "forward"
+    type = var.domain_name != "" ? "redirect" : "forward"
+
+    dynamic "redirect" {
+      for_each = var.domain_name != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    target_group_arn = var.domain_name == "" ? aws_lb_target_group.main.arn : null
+  }
+}
+
+# HTTPS Listener (conditional)
+resource "aws_lb_listener" "https" {
+  count = var.domain_name != "" ? 1 : 0
+
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate.main[0].arn
+
+  default_action {
+    type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
   }
 }
@@ -815,6 +874,11 @@ output "vpc_id" {
   value       = aws_vpc.main.id
 }
 
+output "vpc_cidr" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
 output "public_subnet_ids" {
   description = "IDs of the public subnets"
   value       = aws_subnet.public[*].id
@@ -828,4 +892,44 @@ output "private_subnet_ids" {
 output "autoscaling_group_name" {
   description = "Name of the Auto Scaling Group"
   value       = aws_autoscaling_group.main.name
+}
+
+output "s3_bucket_name" {
+  description = "Name of the S3 bucket"
+  value       = aws_s3_bucket.webapp_assets.id
+}
+
+output "s3_bucket_arn" {
+  description = "ARN of the S3 bucket"
+  value       = aws_s3_bucket.webapp_assets.arn
+}
+
+output "ec2_security_group_id" {
+  description = "ID of the EC2 security group"
+  value       = aws_security_group.ec2.id
+}
+
+output "alb_security_group_id" {
+  description = "ID of the ALB security group"
+  value       = aws_security_group.alb.id
+}
+
+output "rds_security_group_id" {
+  description = "ID of the RDS security group"
+  value       = aws_security_group.rds.id
+}
+
+output "ec2_iam_role_arn" {
+  description = "ARN of the EC2 IAM role"
+  value       = aws_iam_role.ec2_role.arn
+}
+
+output "nat_gateway_ids" {
+  description = "IDs of the NAT gateways"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "resource_suffix" {
+  description = "Random suffix used for resource naming"
+  value       = random_string.suffix.result
 }
