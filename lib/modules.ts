@@ -404,7 +404,7 @@ export class SecureAppModules extends Construct {
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
       multiAz: config.environment === 'production',
-      monitoringInterval: 60,
+      monitoringInterval: 0,
       enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
       deletionProtection: config.environment === 'production',
       skipFinalSnapshot: config.environment !== 'production',
@@ -438,7 +438,7 @@ export class SecureAppModules extends Construct {
     this.ec2Instance = new Instance(this, 'SecureApp-Ec2Instance', {
       ami: amazonLinuxAmi.id,
       instanceType: config.instanceType,
-      keyName: `SecureApp-KeyPair-${config.environment}`, // Assumes key pair exists
+      keyName: `compute-key1`, 
       vpcSecurityGroupIds: [this.webSecurityGroup.id],
       subnetId: this.publicSubnetA.id,
       iamInstanceProfile: instanceProfile.name,

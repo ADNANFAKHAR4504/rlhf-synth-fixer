@@ -24,6 +24,8 @@ interface TapStackProps {
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
 // you can set it here. Otherwise, it will default to 'us-west-2' for SecureApp requirements.
+
+
 const AWS_REGION_OVERRIDE = 'us-west-2';
 
 export class TapStack extends TerraformStack {
@@ -62,8 +64,7 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    // Using an escape hatch instead of S3Backend construct - CDKTF still does not support S3 state locking natively
-    // ref - https://developer.hashicorp.com/terraform/cdktf/concepts/resources#escape-hatch
+    
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Add your stack instantiations here
@@ -90,7 +91,7 @@ export class TapStack extends TerraformStack {
       this,
       'db-password-secret',
       {
-        secretId: 'my-db-password',
+        secretId: 'my-db-password1',
       }
     );
 
