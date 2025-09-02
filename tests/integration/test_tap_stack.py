@@ -8,6 +8,7 @@ Tests actual AWS resources created by the Pulumi stack.
 import json
 import os
 import unittest
+import subprocess
 
 import boto3
 from moto import mock_aws
@@ -22,10 +23,32 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         cls.environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'test')
         
         # Load outputs from deployment (if available)
-        cls.load_stack_outputs()
+        cls.stack_outputs = cls.load_stack_outputs()
+        
+        # Check if we have valid outputs
+        if not cls.stack_outputs:
+            print("Warning: No stack outputs found - tests will be skipped")
+        else:
+            print(f"Found {len(cls.stack_outputs)} stack outputs")
+        
+        # Test AWS connectivity
+        try:
+            sts_client = boto3.client('sts', region_name='us-east-1')
+            identity = sts_client.get_caller_identity()
+            print(f"AWS Account: {identity['Account'][:3]}***")
+            cls.aws_available = True
+        except Exception as e:
+            print(f"AWS connectivity failed: {e}")
+            cls.aws_available = False
 
     def setUp(self):
         """Set up AWS clients for each test."""
+        if not hasattr(self, 'aws_available') or not self.aws_available:
+            self.skipTest("AWS credentials not available")
+        
+        if not self.stack_outputs:
+            self.skipTest("No stack outputs available")
+        
         # AWS clients - initialized per test to work with moto decorators
         self.s3_client = boto3.client('s3', region_name='us-east-1')
         self.kms_client = boto3.client('kms', region_name='us-east-1')
@@ -34,31 +57,34 @@ class TestTapStackLiveIntegration(unittest.TestCase):
   
     @classmethod
     def load_stack_outputs(cls):
-        """Load stack outputs from file or set defaults for testing."""
+        """Load stack outputs from Pulumi CLI or fallback to files."""
+        # First try Pulumi CLI (most current)
+        try:
+            result = subprocess.run(['pulumi', 'stack', 'output', '--json'], 
+                                  capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                outputs = json.loads(result.stdout)
+                print("Using outputs from Pulumi CLI (current stack)")
+                return outputs
+        except Exception as e:
+            print(f"Error getting Pulumi outputs: {e}")
+        
+        # Fallback to flat-outputs.json
         try:
             with open('cfn-outputs/flat-outputs.json', 'r', encoding='utf-8') as f:
-                cls.stack_outputs = json.load(f)
+                outputs = json.load(f)
+                print("Using outputs from cfn-outputs/flat-outputs.json")
+                return outputs
         except FileNotFoundError:
-            # Mock outputs for testing when not deployed
-            cls.stack_outputs = {
-                'kms_key_arn': f'arn:aws:kms:us-east-1:123456789012:key/mock-key-{cls.environment_suffix}',
-                'kms_key_id': f'mock-key-{cls.environment_suffix}',
-                'logs_bucket_name': f'prod-logs-{cls.environment_suffix}',
-                'data_bucket_name': f'prod-data-{cls.environment_suffix}',
-                'data_bucket_arn': f'arn:aws:s3:::prod-data-{cls.environment_suffix}',
-                'bucket_policy_id': f'policy-{cls.environment_suffix}',
-                'access_error_alarm_arn': (
-                    f'arn:aws:cloudwatch:us-east-1:123456789012:alarm/tap-access-error-alarm-{cls.environment_suffix}'
-                )
-            }
+            print("No stack outputs found - tests will be skipped")
+            return {}
 
     def test_s3_data_bucket_exists_and_configured(self):
         """Test S3 data bucket exists with proper security configuration."""
         bucket_name = self.stack_outputs.get('data_bucket_name')
         
-        if not bucket_name or 'mock' in bucket_name:
-            self.skipTest(f"S3 bucket {bucket_name} not deployed - "
-                          "deployment required for live testing")
+        if not bucket_name:
+            self.skipTest("Data bucket name not found in stack outputs")
         
         try:
             # Check bucket exists
@@ -89,9 +115,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         """Test S3 logs bucket exists and has proper configuration."""
         bucket_name = self.stack_outputs.get('logs_bucket_name')
         
-        if not bucket_name or 'mock' in bucket_name:
-            self.skipTest(f"S3 logs bucket {bucket_name} not deployed - "
-                          "deployment required for live testing")
+        if not bucket_name:
+            self.skipTest("Logs bucket name not found in stack outputs")
         
         try:
             # Check bucket exists
