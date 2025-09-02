@@ -17,16 +17,8 @@ Parameters:
     Description: >-
       CPU utilization percentage at which to trigger the CloudWatch alarm.
 
-Mappings:
-  RegionMap:
-    us-west-2:
-      SecondAZ: !Select [1, !GetAZs '']
-    # Add other regions with multiple AZs here. For a single-AZ region, you don't need an entry.
-    # The absence of an entry implies the region has only one AZ.
-    # Example for a single-AZ region (uncomment if needed):
-    # ap-northeast-3:
-    #   SecondAZ: "n/a"
-
+Conditions:
+  HasTwoAZs: !Not [!Equals [!Select [1, !GetAZs ''], ""]]
 
 Resources:
   ### KMS ###
