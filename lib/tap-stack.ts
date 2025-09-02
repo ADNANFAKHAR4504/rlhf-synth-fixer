@@ -176,7 +176,9 @@ export class TapStack extends cdk.Stack {
             new iam.PolicyStatement({
               sid: 'AllowAutoScalingAccess',
               effect: iam.Effect.ALLOW,
-              principals: [new iam.ServicePrincipal('autoscaling.amazonaws.com')],
+              principals: [
+                new iam.ServicePrincipal('autoscaling.amazonaws.com'),
+              ],
               actions: [
                 'kms:Encrypt',
                 'kms:Decrypt',
