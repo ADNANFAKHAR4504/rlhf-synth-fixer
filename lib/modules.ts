@@ -578,7 +578,7 @@ export class InfrastructureModules extends Construct {
         deletionProtection: false, // Set to true in production
         publiclyAccessible: false, // Critical: No public access
         multiAz: false, // Set to true for production
-        monitoringInterval: 60,
+        monitoringInterval: 0,
         performanceInsightsEnabled: true,
         tags: {
           ...commonTags,
