@@ -37,7 +37,14 @@ export class S3Module extends Construct {
     const env = (config.environment ?? '').toLowerCase();
 
     // Build name using Fn.format so Terraform gets a valid expression (no tftoken)
-    const bucketName = Fn.format('%s-%s-%s-bucket', [proj, env, config.nameSuffix]);
+    const bucketName = Fn.format(
+      '%s-%s-%s-bucket',
+      [
+        proj,
+        env,
+        config.nameSuffix,
+      ],
+    );
 
     this.bucket = new S3Bucket(this, 'bucket', {
       bucket: bucketName,
@@ -91,7 +98,11 @@ export class SecurityGroupModule extends Construct {
   public readonly securityGroup: SecurityGroup;
   public readonly securityGroupId: string;
 
-  constructor(scope: Construct, id: string, config: ModuleConfig & { vpcId: string }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    config: ModuleConfig & { vpcId: string },
+  ) {
     super(scope, id);
 
     const sgName = Fn.format('%s-%s-%s-sg', [
@@ -149,7 +160,11 @@ export class IamRoleModule extends Construct {
   public readonly roleArn: string;
   public readonly roleName: string;
 
-  constructor(scope: Construct, id: string, config: ModuleConfig & { bucketArn: string }) {
+  constructor(
+    scope: Construct,
+    id: string,
+    config: ModuleConfig & { bucketArn: string },
+  ) {
     super(scope, id);
 
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
@@ -205,7 +220,11 @@ export class IamRoleModule extends Construct {
         },
         {
           Effect: 'Allow',
-          Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
+          Action: [
+            'logs:CreateLogGroup',
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+          ],
           Resource: `arn:aws:logs:${currentRegion.name}:${callerIdentity.accountId}:log-group:/aws/${config.projectName}/${config.environment}/*`,
         },
       ],

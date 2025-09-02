@@ -88,10 +88,14 @@ export class TapStack extends TerraformStack {
     const s3Module = new S3Module(this, 's3', moduleConfig);
 
     // Security Group (unique name due to suffix)
-    const securityGroupModule = new SecurityGroupModule(this, 'security-group', {
-      ...moduleConfig,
-      vpcId: vpcModule.vpcId,
-    });
+    const securityGroupModule = new SecurityGroupModule(
+      this,
+      'security-group',
+      {
+        ...moduleConfig,
+        vpcId: vpcModule.vpcId,
+      },
+    );
 
     // IAM Role (unique name due to suffix)
     const iamRoleModule = new IamRoleModule(this, 'iam-role', {
