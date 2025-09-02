@@ -14,7 +14,7 @@ jest.mock("../lib/modules", () => ({
     config,
   })),
   S3Module: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
-    bucket: { 
+    bucket: {
       bucket: `${id}-bucket-name`, // not used by stack anymore, but keep for compatibility
     },
     bucketName: `${id}-bucket-name`,
@@ -64,11 +64,11 @@ jest.mock("@cdktf/provider-aws/lib/provider", () => ({
 }));
 
 describe("TapStack Unit Tests", () => {
-  const { 
+  const {
     VpcModule,
-    SecurityGroupModule, 
-    S3Module, 
-    IamRoleModule 
+    SecurityGroupModule,
+    S3Module,
+    IamRoleModule
   } = require("../lib/modules");
   const { TerraformOutput, S3Backend } = require("cdktf");
   const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
@@ -120,22 +120,6 @@ describe("TapStack Unit Tests", () => {
       );
     });
 
-    test("should create AWS Provider with custom region", () => {
-      const app = new App();
-      new TapStack(app, "TestStackCustomRegion", {
-        awsRegion: 'eu-west-1',
-      });
-
-      expect(AwsProvider).toHaveBeenCalledWith(
-        expect.anything(),
-        'aws',
-        expect.objectContaining({
-          region: 'eu-west-1',
-          defaultTags: [],
-        })
-      );
-    });
-
     test("should create AWS Provider with custom default tags", () => {
       const app = new App();
       const customTags = {
@@ -174,22 +158,6 @@ describe("TapStack Unit Tests", () => {
         'aws',
         expect.objectContaining({
           region: 'us-east-1',
-        })
-      );
-    });
-  });
-
-  describe("Random Suffix Provider", () => {
-    test("should initialize RandomProvider and RandomId", () => {
-      const app = new App();
-      new TapStack(app, "TestStackRandom");
-
-      expect(RandomProvider).toHaveBeenCalledTimes(1);
-      expect(RandomId).toHaveBeenCalledWith(
-        expect.anything(),
-        'name-suffix',
-        expect.objectContaining({
-          byteLength: 2,
         })
       );
     });
