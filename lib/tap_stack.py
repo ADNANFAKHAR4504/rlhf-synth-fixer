@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 import json
 
 import pulumi
-from pulumi import ResourceOptions, get_stack, all
+from pulumi import ResourceOptions, get_stack
 from pulumi_aws import s3, kms, iam, cloudwatch, config, get_caller_identity
 
 
@@ -148,7 +148,7 @@ class TapStack(pulumi.ComponentResource):
         logs_bucket_policy = s3.BucketPolicy(
             f"tap-logs-bucket-policy-{self.environment_suffix}",
             bucket=logs_bucket.id,
-            policy=all([logs_bucket.bucket, current_account.account_id]).apply(
+            policy=pulumi.Output.all(logs_bucket.bucket, current_account.account_id).apply(
                 lambda args: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [
@@ -261,7 +261,7 @@ class TapStack(pulumi.ComponentResource):
         data_bucket_policy = s3.BucketPolicy(
             f"tap-data-bucket-policy-{self.environment_suffix}",
             bucket=data_bucket.id,
-            policy=all([data_bucket.bucket, current_account.account_id]).apply(
+            policy=pulumi.Output.all(data_bucket.bucket, current_account.account_id).apply(
                 lambda args: json.dumps({
                     "Version": "2012-10-17",
                     "Statement": [
