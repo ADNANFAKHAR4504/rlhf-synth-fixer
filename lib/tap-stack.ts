@@ -126,7 +126,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // Instance profile for EC2 role
-    const instanceProfile = new iam.InstanceProfile(
+    new iam.InstanceProfile(
       this,
       'EC2InstanceProfile',
       {
@@ -265,7 +265,7 @@ export class TapStack extends cdk.Stack {
     securityGroupRule.addTarget(new targets.SnsTopic(logsTopic));
 
     // 9. IAM account policy enforcing MFA for console users
-    const mfaPolicy = new iam.ManagedPolicy(this, 'EnforceMFAPolicy', {
+    new iam.ManagedPolicy(this, 'EnforceMFAPolicy', {
       managedPolicyName: `EnforceMFAForConsoleUsers-${environmentSuffix}`,
       description: 'Policy that enforces MFA for console access',
       document: new iam.PolicyDocument({
@@ -447,7 +447,7 @@ export class TapStack extends cdk.Stack {
 
     // Alternative: Manual scaling policies with proper step configuration
     // Scale-up policy with multiple steps for more granular control
-    const scaleUpPolicy = new autoscaling.StepScalingPolicy(
+    new autoscaling.StepScalingPolicy(
       this,
       'ScaleUpPolicy',
       {
@@ -470,7 +470,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Scale-down policy with multiple steps
-    const scaleDownPolicy = new autoscaling.StepScalingPolicy(
+    new autoscaling.StepScalingPolicy(
       this,
       'ScaleDownPolicy',
       {
