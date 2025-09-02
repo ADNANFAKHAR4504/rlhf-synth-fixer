@@ -565,7 +565,7 @@ resource "aws_config_config_rule" "s3_bucket_public_access_prohibited" {
 
   source {
     owner             = "AWS"
-    source_identifier = "S3_BUCKET_PUBLIC_ACCESS_PROHIBITED"
+    source_identifier = "S3_BUCKET_PUBLIC_READ_PROHIBITED"
   }
 }
 
@@ -715,6 +715,7 @@ resource "aws_launch_template" "web" {
   name_prefix   = "web-template"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
+  key_name      = "default"  # <-- Use the default key pair
 
   vpc_security_group_ids = [aws_security_group.web.id]
 
