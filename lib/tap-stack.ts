@@ -9,6 +9,7 @@ import {
   TerraformOutput,
 } from 'cdktf';
 import { Construct } from 'constructs';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider'; // Add this line
 
 // Import your stacks here
 import { SecureAppModules, SecureAppModulesConfig } from './modules';
@@ -54,6 +55,8 @@ export class TapStack extends TerraformStack {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    new RandomProvider(this, 'random');
 
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
