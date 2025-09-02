@@ -97,12 +97,12 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref KmsKey
-      AccessControl: LogDeliveryWrite
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      # Removed 'AccessControl: LogDeliveryWrite' to resolve the error
 
   ALBAccessLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -145,9 +145,8 @@ Resources:
       Type: application
       Scheme: internal
       SecurityGroups:
-        - !Ref ALBHttpSecurityGroup # Added a security group for the ALB
+        - !Ref ALBHttpSecurityGroup
 
-  # New resource: Security group for the ALB to allow inbound traffic
   ALBHttpSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -216,7 +215,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: nodejs20.x # Updated to a current runtime
+      Runtime: nodejs20.x
       Code:
         ZipFile: |
           const AWS = require('aws-sdk');
@@ -263,10 +262,6 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: !Ref CriticalCpuThreshold
-      # Dimensions need to be specified for a specific instance.
-      # Example: Dimensions:
-      #   - Name: InstanceId
-      #     Value: !Ref MyEc2Instance
       Dimensions: []
       AlarmActions: []
 
@@ -300,7 +295,7 @@ Resources:
       HttpMethod: GET
       AuthorizationType: NONE
       Integration:
-        Type: AWS_PROXY # Corrected to use AWS_PROXY for Lambda integration
+        Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
         IntegrationResponses:
@@ -323,6 +318,12 @@ Resources:
     DependsOn: ApiMethod
     Properties:
       RestApiId: !Ref ApiGateway
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ApiGateway
+      DeploymentId: !Ref ApiDeployment
       StageName: prod
 
   ### WAF ###
@@ -353,10 +354,9 @@ Resources:
 
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
-    DependsOn: ApiDeployment
     Properties:
       WebACLArn: !GetAtt WAFWebACL.Arn
-      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${ApiDeployment.StageName}'
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${ApiStage}'
 
 ### Outputs ###
 Outputs:
@@ -366,5 +366,6 @@ Outputs:
     Value: !Ref LambdaFunction
   SecretArn:
     Value: !Ref MySecret
-  ApiGatewayId:
-    Value: !Ref ApiGateway
+  ApiGatewayInvokeURL:
+    Description: The URL to invoke the API Gateway endpoint
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/secure'
