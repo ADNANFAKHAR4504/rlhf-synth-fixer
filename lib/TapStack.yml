@@ -292,6 +292,8 @@ Conditions:
   UseExistingCloudTrailBucket:
     !Not [!Equals [!Ref ExistingCloudTrailBucketName, '']]
   CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
+  CreateCloudTrailBucketPolicy:
+    !And [Condition: CreateCloudTrailBucket, Condition: CreateCloudTrail]
 
   # Config Conditions
   UseExistingConfigBucket: !Not [!Equals [!Ref ExistingConfigBucketName, '']]
@@ -1338,7 +1340,7 @@ Resources:
           Value: !Ref Owner
 
   CloudTrailBucketPolicy:
-    Condition: CreateCloudTrailBucket
+    Condition: CreateCloudTrailBucketPolicy
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref CloudTrailBucket
@@ -1353,12 +1355,18 @@ Resources:
             Resource: !GetAtt CloudTrailBucket.Arn
             Condition:
               StringEquals:
-                'AWS:SourceArn':
-                  !If [
-                    UseExistingCloudTrail,
-                    !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ExistingCloudTrailName}',
-                    !GetAtt CloudTrail.Arn,
-                  ]
+                'AWS:SourceArn': !Sub
+                  - 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-production-tapstack-${Suffix}'
+                  - {
+                      Suffix:
+                        !Select [
+                          0,
+                          !Split [
+                            '-',
+                            !Select [2, !Split ['/', !Ref 'AWS::StackId']],
+                          ],
+                        ],
+                    }
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -1368,12 +1376,18 @@ Resources:
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-                'AWS:SourceArn':
-                  !If [
-                    UseExistingCloudTrail,
-                    !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ExistingCloudTrailName}',
-                    !GetAtt CloudTrail.Arn,
-                  ]
+                'AWS:SourceArn': !Sub
+                  - 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-production-tapstack-${Suffix}'
+                  - {
+                      Suffix:
+                        !Select [
+                          0,
+                          !Split [
+                            '-',
+                            !Select [2, !Split ['/', !Ref 'AWS::StackId']],
+                          ],
+                        ],
+                    }
 
   # =========================
   # AWS Config for Compliance
