@@ -281,7 +281,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${TapStackSecureBucket}/*'
+                - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
 
   # CloudWatch Log Group for S3
   S3LogGroup:
@@ -516,11 +516,11 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${TapStackSecureBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
               - Effect: 'Allow'
                 Action:
                   - 's3:ListBucket'
-                Resource: !Ref TapStackSecureBucket
+                Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
 
   # IAM Role for EC2 instances
   EC2InstanceRole:
@@ -545,7 +545,7 @@ Resources:
                 Action:
                   - 's3:GetObject'
                   - 's3:PutObject'
-                Resource: !Sub '${TapStackSecureBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
 
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
