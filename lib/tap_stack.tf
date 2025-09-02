@@ -150,7 +150,7 @@ resource "aws_kms_key" "main" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -924,6 +924,12 @@ resource "aws_wafv2_web_acl" "main" {
 
   default_action {
     allow {}
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "${var.project_name}-web-acl"
+    sampled_requests_enabled   = true
   }
 
   rule {
