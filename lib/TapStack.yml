@@ -14,6 +14,8 @@ Parameters:
   CriticalCpuThreshold:
     Type: Number
     Default: 80
+    Description: >-
+      CPU utilization percentage at which to trigger the CloudWatch alarm.
 
 Resources:
   ### KMS ###
@@ -79,6 +81,11 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref KmsKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
 
   ALBAccessLogsBucket:
     Type: AWS::S3::Bucket
@@ -90,6 +97,12 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref KmsKey
+      AccessControl: LogDeliveryWrite
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
 
   ALBAccessLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -102,15 +115,15 @@ Resources:
             Principal:
               Service: delivery.logs.amazonaws.com
             Action: "s3:PutObject"
-            Resource: !Sub "${ALBAccessLogsBucket.Arn}/*"
+            Resource: !Sub "${ALBAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
             Condition:
               StringEquals:
                 "aws:SourceAccount": !Ref AWS::AccountId
           - Effect: Allow
             Principal:
-              Service: elasticloadbalancing.amazonaws.com
-            Action: "s3:PutObject"
-            Resource: !Sub "${ALBAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              Service: delivery.logs.amazonaws.com
+            Action: "s3:GetBucketAcl"
+            Resource: !GetAtt ALBAccessLogsBucket.Arn
             Condition:
               StringEquals:
                 "aws:SourceAccount": !Ref AWS::AccountId
@@ -131,6 +144,23 @@ Resources:
           Value: !Ref ALBAccessLogsBucket
       Type: application
       Scheme: internal
+      SecurityGroups:
+        - !Ref ALBHttpSecurityGroup # Added a security group for the ALB
+
+  # New resource: Security group for the ALB to allow inbound traffic
+  ALBHttpSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ALB
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 10.0.0.0/16
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
 
   ### Shield ###
   ShieldProtection:
@@ -152,13 +182,32 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: SecretAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref MySecret
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:log-stream:*'
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Lambda security group
       VpcId: !Ref Vpc
-      SecurityGroupIngress: []
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !GetAtt ALBHttpSecurityGroup.GroupId
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: "0.0.0.0/0"
@@ -167,14 +216,29 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: nodejs22.x
+      Runtime: nodejs20.x # Updated to a current runtime
       Code:
         ZipFile: |
+          const AWS = require('aws-sdk');
+          const secretsManager = new AWS.SecretsManager();
+
           exports.handler = async function(event, context) {
-            return {
-              statusCode: 200,
-              body: "Hello, secure world!"
-            };
+            try {
+              const secretResponse = await secretsManager.getSecretValue({ SecretId: process.env.SECRET_NAME }).promise();
+              const secret = JSON.parse(secretResponse.SecretString);
+              console.log('Successfully retrieved secret:', secret.username);
+
+              return {
+                statusCode: 200,
+                body: "Hello, secure world! We retrieved the secret."
+              };
+            } catch (error) {
+              console.error('Error retrieving secret:', error);
+              return {
+                statusCode: 500,
+                body: "Error: " + error.message
+              };
+            }
           };
       VpcConfig:
         SubnetIds:
@@ -183,6 +247,9 @@ Resources:
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
       Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          SECRET_NAME: !Ref MySecret
 
   ### CloudWatch Alarm ###
   CloudWatchAlarm:
@@ -196,6 +263,10 @@ Resources:
       Period: 300
       Statistic: Average
       Threshold: !Ref CriticalCpuThreshold
+      # Dimensions need to be specified for a specific instance.
+      # Example: Dimensions:
+      #   - Name: InstanceId
+      #     Value: !Ref MyEc2Instance
       Dimensions: []
       AlarmActions: []
 
@@ -206,6 +277,7 @@ Resources:
       Name: SecureAppSecret
       Description: Secret used by Lambda
       SecretString: '{"username":"admin","password":"SecureP@ssw0rd"}'
+      KmsKeyId: !Ref KmsKey
 
   ### API Gateway ###
   ApiGateway:
@@ -228,13 +300,23 @@ Resources:
       HttpMethod: GET
       AuthorizationType: NONE
       Integration:
-        Type: MOCK
+        Type: AWS_PROXY # Corrected to use AWS_PROXY for Lambda integration
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
         IntegrationResponses:
           - StatusCode: 200
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
+            ResponseTemplates:
+              application/json: ""
       MethodResponses:
         - StatusCode: 200
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt LambdaFunction.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: 'apigateway.amazonaws.com'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*/*'
 
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
@@ -274,7 +356,7 @@ Resources:
     DependsOn: ApiDeployment
     Properties:
       WebACLArn: !GetAtt WAFWebACL.Arn
-      ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${ApiDeployment.StageName}'
 
 ### Outputs ###
 Outputs:
