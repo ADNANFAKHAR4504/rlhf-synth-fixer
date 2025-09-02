@@ -6,7 +6,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/semantic-release]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
@@ -845,31 +845,27 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-  # TODO: For future use
-  # ? Need fine-grained Personal Access Token from repo owner
-  # semantic-release:
-  #   name: Semantic Release
-  #   runs-on: ubuntu-24.04
-  #   if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   permissions:
-  #     contents: write
-  #     issues: write
-  #     pull-requests: write
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/semantic-release'
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
 
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
-  #       with:
-  #         token: ${{ secrets.GITHUB_TOKEN }}
-  #         fetch-depth: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-  #     - name: Setup Environment
-  #       uses: ./.github/actions/setup-environment
-  #       with:
-  #         node-version: ${{ env.NODE_VERSION }}
-  #         download-artifacts: 'false'
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: 'false'
 
-  #     - name: Run semantic-release
-  #       run: npm run release
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+      - name: Run semantic-release
+        run: npm run release
