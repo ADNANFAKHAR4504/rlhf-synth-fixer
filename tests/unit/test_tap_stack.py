@@ -106,8 +106,8 @@ class TestTapStack(unittest.TestCase):
         # Verify IAM policy was created
         mock_iam_policy.assert_called_once()
 
-        # Verify bucket policies were created (logs and data buckets)
-        self.assertEqual(mock_bucket_policy.call_count, 2)
+        # Verify bucket policy was created (only logs bucket now)
+        self.assertEqual(mock_bucket_policy.call_count, 1)
 
         # Verify CloudWatch alarm was created
         mock_alarm.assert_called_once()
