@@ -25,6 +25,10 @@ jest.mock("../lib/modules", () => ({
       keyId: `${id}-key-id`,
       arn: `arn:aws:kms:us-east-1:123456789012:key/${id}-key-id`
     },
+    alias: {
+      name: `alias/${config.project}-${config.environment}-key`,
+      targetKeyId: `${id}-key-id`
+    },
     config,
   })),
   SecurityGroupModule: jest.fn((_, id, config) => ({
@@ -47,6 +51,13 @@ jest.mock("../lib/modules", () => ({
       endpoint: `${id}-db.cluster-xyz.us-east-1.rds.amazonaws.com:3306`,
       arn: `arn:aws:rds:us-east-1:123456789012:db:${id}-db-id`
     },
+    subnetGroup: {
+      name: `${config.project}-${config.environment}-db-subnet-group-v2`,
+      arn: `arn:aws:rds:us-east-1:123456789012:subnet-group:${id}-subnet-group`
+    },
+    generatedPassword: {
+      result: "generated-password-123!"
+    },
     config,
   })),
   Ec2Module: jest.fn((_, id, config) => ({
@@ -58,6 +69,10 @@ jest.mock("../lib/modules", () => ({
     config,
   })),
   IamModule: jest.fn((_, id, config) => ({
+    role: {
+      name: `${config.project}-${config.environment}-ec2-role`,
+      arn: `arn:aws:iam::123456789012:role/${id}-role`
+    },
     instanceProfile: {
       name: `${id}-instance-profile`,
       arn: `arn:aws:iam::123456789012:instance-profile/${id}-instance-profile`
@@ -65,9 +80,10 @@ jest.mock("../lib/modules", () => ({
     config,
   })),
   CloudTrailModule: jest.fn((_, id, config) => ({
-    cloudTrail: { 
+    trail: { 
       id: `${id}-cloudtrail-id`,
-      arn: `arn:aws:cloudtrail:us-east-1:123456789012:trail/${id}-cloudtrail`
+      arn: `arn:aws:cloudtrail:us-east-1:123456789012:trail/${id}-cloudtrail`,
+      name: `${config.project}-${config.environment}-trail`
     },
     logsBucket: {
       bucket: `${id}-logs-bucket-name`,
@@ -86,10 +102,11 @@ jest.mock("@cdktf/provider-aws/lib/data-aws-caller-identity", () => ({
   })),
 }));
 
-jest.mock("@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version", () => ({
-  DataAwsSecretsmanagerSecretVersion: jest.fn((_, id, config) => ({
-    secretString: "secretpassword123",
-    secretId: config.secretId,
+// Mock Random Password
+jest.mock("@cdktf/provider-random/lib/password", () => ({
+  Password: jest.fn((_, id, config) => ({
+    result: "generated-password-123!",
+    length: config?.length || 16,
   })),
 }));
 
@@ -122,7 +139,6 @@ describe("TapStack Unit Tests", () => {
   const { TerraformOutput, S3Backend } = require("cdktf");
   const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
   const { DataAwsCallerIdentity } = require("@cdktf/provider-aws/lib/data-aws-caller-identity");
-  const { DataAwsSecretsmanagerSecretVersion } = require("@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version");
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -278,15 +294,6 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "current"
     );
-
-    expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledTimes(1);
-    expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledWith(
-      expect.anything(),
-      "db-password-secret",
-      expect.objectContaining({
-        secretId: "my-db-password",
-      })
-    );
   });
 
   test("should create KMS module with correct configuration", () => {
@@ -301,6 +308,7 @@ describe("TapStack Unit Tests", () => {
         project: "tap-project",
         environment: "dev",
         description: "KMS key for tap-project dev environment",
+        accountId: "123456789012", // Added accountId
       })
     );
   });
@@ -340,6 +348,8 @@ describe("TapStack Unit Tests", () => {
           keyId: "kms-key-id",
           arn: "arn:aws:kms:us-east-1:123456789012:key/kms-key-id"
         }),
+        accountId: "123456789012", // Added accountId
+        region: "us-east-1", // Added region
       })
     );
   });
@@ -475,7 +485,7 @@ describe("TapStack Unit Tests", () => {
         allocatedStorage: 20,
         dbName: "appdb",
         username: "admin",
-        password: "secretpassword123",
+        password: "", // Empty string as it's ignored in favor of generated password
         subnetIds: ["subnet-private-1", "subnet-private-2"],
         securityGroupIds: ["rds-sg-sg-id"],
         kmsKey: expect.objectContaining({
@@ -540,7 +550,7 @@ describe("TapStack Unit Tests", () => {
     const app = new App();
     new TapStack(app, "TestStackOutputs");
 
-    expect(TerraformOutput).toHaveBeenCalledTimes(13);
+    expect(TerraformOutput).toHaveBeenCalledTimes(14); // Updated from 13 to 14
 
     // Verify specific outputs
     const outputCalls = TerraformOutput.mock.calls;
@@ -559,6 +569,7 @@ describe("TapStack Unit Tests", () => {
     expect(outputIds).toContain('kms-key-id');
     expect(outputIds).toContain('kms-key-arn');
     expect(outputIds).toContain('aws-account-id');
+    expect(outputIds).toContain('rds-password'); // New output
   });
 
   test("should create stack with all components integrated", () => {
@@ -569,7 +580,6 @@ describe("TapStack Unit Tests", () => {
     expect(AwsProvider).toHaveBeenCalledTimes(1);
     expect(S3Backend).toHaveBeenCalledTimes(1);
     expect(DataAwsCallerIdentity).toHaveBeenCalledTimes(1);
-    expect(DataAwsSecretsmanagerSecretVersion).toHaveBeenCalledTimes(1);
     expect(KmsModule).toHaveBeenCalledTimes(1);
     expect(S3Module).toHaveBeenCalledTimes(1);
     expect(CloudTrailModule).toHaveBeenCalledTimes(1);
@@ -578,7 +588,7 @@ describe("TapStack Unit Tests", () => {
     expect(SecurityGroupModule).toHaveBeenCalledTimes(2);
     expect(Ec2Module).toHaveBeenCalledTimes(1);
     expect(RdsModule).toHaveBeenCalledTimes(1);
-    expect(TerraformOutput).toHaveBeenCalledTimes(13);
+    expect(TerraformOutput).toHaveBeenCalledTimes(14); // Updated from 13 to 14
 
     // Verify the stack is properly constructed
     expect(stack).toBeDefined();
@@ -646,5 +656,23 @@ describe("TapStack Unit Tests", () => {
     // Note: We can't easily test addOverride directly since it's called in constructor
     // But we can verify the stack was created successfully which implies addOverride worked
     expect(stack).toBeDefined();
+  });
+
+  test("should create RDS password output with sensitive flag", () => {
+    const app = new App();
+    new TapStack(app, "TestStackRDSPassword");
+
+    // Find the RDS password output call
+    const outputCalls = TerraformOutput.mock.calls;
+    const rdsPasswordCall = outputCalls.find((call: any[]) => call[1] === 'rds-password');
+    
+    expect(rdsPasswordCall).toBeDefined();
+    expect(rdsPasswordCall[2]).toEqual(
+      expect.objectContaining({
+        value: "generated-password-123!",
+        description: "RDS instance password",
+        sensitive: true,
+      })
+    );
   });
 });

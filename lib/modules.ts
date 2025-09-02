@@ -25,6 +25,7 @@ import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { Password } from '@cdktf/provider-random/lib/password';
 
 // KMS Module - Creates customer-managed KMS key
 export interface KmsModuleProps {
@@ -613,9 +614,22 @@ export interface RdsModuleProps {
 export class RdsModule extends Construct {
   public readonly dbInstance: DbInstance;
   public readonly subnetGroup: DbSubnetGroup;
+  public readonly generatedPassword: Password; // Add this
 
   constructor(scope: Construct, id: string, props: RdsModuleProps) {
     super(scope, id);
+
+    // Generate a random password that meets AWS requirements
+    this.generatedPassword = new Password(this, 'db-password', {
+      length: 16,
+      special: true,
+      // Exclude forbidden characters: /, @, ", and space
+      overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+      minLower: 1,
+      minUpper: 1,
+      minNumeric: 1,
+      minSpecial: 1,
+    });
 
     // Create DB subnet group
     this.subnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
@@ -636,7 +650,7 @@ export class RdsModule extends Construct {
       allocatedStorage: props.allocatedStorage,
       dbName: props.dbName,
       username: props.username,
-      password: props.password,
+      password: this.generatedPassword.result, // Use generated password
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: props.securityGroupIds,
       storageEncrypted: true,
@@ -644,11 +658,8 @@ export class RdsModule extends Construct {
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-
-      // 👇 Important changes
       skipFinalSnapshot: true,
       deletionProtection: false,
-
       publiclyAccessible: false,
       tags: {
         Name: `${props.project}-${props.environment}-db`,

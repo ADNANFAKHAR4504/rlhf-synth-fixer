@@ -4,7 +4,6 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { Construct } from 'constructs';
 
 // Import your modules
@@ -92,15 +91,6 @@ export class TapStack extends TerraformStack {
       kmsKey: kmsModule.key,
     });
 
-    // Get database credentials from AWS Secrets Manager
-    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
-      this,
-      'db-password-secret',
-      {
-        secretId: 'my-db-password',
-      }
-    );
-
     // Create CloudTrail for auditing
     const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail', {
       project,
@@ -179,7 +169,7 @@ export class TapStack extends TerraformStack {
       keyName: 'compute-key', // Uncomment and set if you have a key pair
     });
 
-    // Create RDS instance
+    // Update the RDS module instantiation
     const rdsModule = new RdsModule(this, 'rds', {
       project,
       environment: environmentSuffix,
@@ -189,7 +179,7 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       dbName: 'appdb',
       username: 'admin',
-      password: dbPasswordSecret.secretString,
+      password: '', // This will be ignored since we're generating it in the module
       subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
       securityGroupIds: [rdsSecurityGroup.securityGroup.id],
       kmsKey: kmsModule.key,
@@ -259,6 +249,13 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'aws-account-id', {
       value: current.accountId,
       description: 'Current AWS Account ID',
+    });
+
+    // Add output for the generated password
+    new TerraformOutput(this, 'rds-password', {
+      value: rdsModule.generatedPassword.result,
+      description: 'RDS instance password',
+      sensitive: true, // Mark as sensitive to hide in logs
     });
 
     // ? Add your stack instantiations here
