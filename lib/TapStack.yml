@@ -9,10 +9,12 @@
     },
     "Az1": {
       "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-east-1a",
       "Description": "First Availability Zone (must be different from Az2)"
     },
     "Az2": {
       "Type": "AWS::EC2::AvailabilityZone::Name",
+      "Default": "us-east-1b",
       "Description": "Second Availability Zone (must be different from Az1)"
     },
     "OnPremCidr": {
@@ -100,38 +102,20 @@
   "Conditions": {
     "UseOrganizationGuard": {
       "Fn::Not": [
-        {
-          "Fn::Equals": [
-            { "Ref": "OrganizationId" },
-            ""
-          ]
-        }
+        { "Fn::Equals": [ { "Ref": "OrganizationId" }, "" ] }
       ]
     },
     "UseExternalIdCondition": {
       "Fn::Not": [
-        {
-          "Fn::Equals": [
-            { "Ref": "ExternalId" },
-            ""
-          ]
-        }
+        { "Fn::Equals": [ { "Ref": "ExternalId" }, "" ] }
       ]
     },
     "CreateShield": {
-      "Fn::Equals": [
-        { "Ref": "EnableShieldAdvanced" },
-        "true"
-      ]
+      "Fn::Equals": [ { "Ref": "EnableShieldAdvanced" }, "true" ]
     },
     "AllowCrossAccountRole": {
       "Fn::Not": [
-        {
-          "Fn::Equals": [
-            { "Ref": "ExternalAccountId" },
-            ""
-          ]
-        }
+        { "Fn::Equals": [ { "Ref": "ExternalAccountId" }, "" ] }
       ]
     }
   },
@@ -142,25 +126,16 @@
         "CidrBlock": { "Ref": "VpcCidr" },
         "EnableDnsHostnames": true,
         "EnableDnsSupport": true,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-vpc" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-vpc" } } ]
       }
     },
     "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
-      "Properties": {
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-igw" } }
-        ]
-      }
+      "Properties": { "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-igw" } } ] }
     },
     "VPCGatewayAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Properties": {
-        "InternetGatewayId": { "Ref": "InternetGateway" },
-        "VpcId": { "Ref": "VPC" }
-      }
+      "Properties": { "InternetGatewayId": { "Ref": "InternetGateway" }, "VpcId": { "Ref": "VPC" } }
     },
 
     "PublicSubnetA": {
@@ -170,9 +145,7 @@
         "CidrBlock": "10.0.0.0/20",
         "AvailabilityZone": { "Ref": "Az1" },
         "MapPublicIpOnLaunch": true,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-public-a" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-public-a" } } ]
       }
     },
     "PublicSubnetB": {
@@ -182,9 +155,7 @@
         "CidrBlock": "10.0.16.0/20",
         "AvailabilityZone": { "Ref": "Az2" },
         "MapPublicIpOnLaunch": true,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-public-b" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-public-b" } } ]
       }
     },
     "PrivateAppSubnetA": {
@@ -194,9 +165,7 @@
         "CidrBlock": "10.0.32.0/20",
         "AvailabilityZone": { "Ref": "Az1" },
         "MapPublicIpOnLaunch": false,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-app-a" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-app-a" } } ]
       }
     },
     "PrivateAppSubnetB": {
@@ -206,9 +175,7 @@
         "CidrBlock": "10.0.48.0/20",
         "AvailabilityZone": { "Ref": "Az2" },
         "MapPublicIpOnLaunch": false,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-app-b" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-app-b" } } ]
       }
     },
     "PrivateDbSubnetA": {
@@ -218,9 +185,7 @@
         "CidrBlock": "10.0.64.0/20",
         "AvailabilityZone": { "Ref": "Az1" },
         "MapPublicIpOnLaunch": false,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db-a" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db-a" } } ]
       }
     },
     "PrivateDbSubnetB": {
@@ -230,43 +195,26 @@
         "CidrBlock": "10.0.80.0/20",
         "AvailabilityZone": { "Ref": "Az2" },
         "MapPublicIpOnLaunch": false,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db-b" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db-b" } } ]
       }
     },
 
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
-      "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-public-rt" } }
-        ]
-      }
+      "Properties": { "VpcId": { "Ref": "VPC" }, "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-public-rt" } } ] }
     },
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
       "DependsOn": "VPCGatewayAttachment",
-      "Properties": {
-        "RouteTableId": { "Ref": "PublicRouteTable" },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": { "Ref": "InternetGateway" }
-      }
+      "Properties": { "RouteTableId": { "Ref": "PublicRouteTable" }, "DestinationCidrBlock": "0.0.0.0/0", "GatewayId": { "Ref": "InternetGateway" } }
     },
     "PublicSubnetARouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": { "Ref": "PublicSubnetA" },
-        "RouteTableId": { "Ref": "PublicRouteTable" }
-      }
+      "Properties": { "SubnetId": { "Ref": "PublicSubnetA" }, "RouteTableId": { "Ref": "PublicRouteTable" } }
     },
     "PublicSubnetBRouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
-      "Properties": {
-        "SubnetId": { "Ref": "PublicSubnetB" },
-        "RouteTableId": { "Ref": "PublicRouteTable" }
-      }
+      "Properties": { "SubnetId": { "Ref": "PublicSubnetB" }, "RouteTableId": { "Ref": "PublicRouteTable" } }
     },
 
     "ManagementSecurityGroup": {
@@ -274,108 +222,51 @@
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "GroupDescription": "Restrict SSH to on-prem via IPSec VPN only",
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 22,
-            "ToPort": 22,
-            "CidrIp": { "Ref": "OnPremCidr" }
-          }
-        ],
-        "SecurityGroupEgress": [
-          {
-            "IpProtocol": "-1",
-            "CidrIp": "0.0.0.0/0"
-          }
-        ],
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-mgmt-sg" } }
-        ]
+        "SecurityGroupIngress": [ { "IpProtocol": "tcp", "FromPort": 22, "ToPort": 22, "CidrIp": { "Ref": "OnPremCidr" } } ],
+        "SecurityGroupEgress": [ { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-mgmt-sg" } } ]
       }
     },
-
     "AppSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "GroupDescription": "App SG - no SSH allowed",
         "SecurityGroupIngress": [],
-        "SecurityGroupEgress": [
-          { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" }
-        ],
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-app-sg" } }
-        ]
+        "SecurityGroupEgress": [ { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-app-sg" } } ]
       }
     },
-
     "DBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "GroupDescription": "DB SG - allow Postgres only from App SG",
-        "SecurityGroupIngress": [
-          {
-            "IpProtocol": "tcp",
-            "FromPort": 5432,
-            "ToPort": 5432,
-            "SourceSecurityGroupId": { "Ref": "AppSecurityGroup" }
-          }
-        ],
-        "SecurityGroupEgress": [
-          { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" }
-        ],
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db-sg" } }
-        ]
+        "SecurityGroupIngress": [ { "IpProtocol": "tcp", "FromPort": 5432, "ToPort": 5432, "SourceSecurityGroupId": { "Ref": "AppSecurityGroup" } } ],
+        "SecurityGroupEgress": [ { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db-sg" } } ]
       }
     },
 
     "VirtualPrivateGateway": {
       "Type": "AWS::EC2::VPNGateway",
-      "Properties": {
-        "Type": "ipsec.1",
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-vgw" } }
-        ]
-      }
+      "Properties": { "Type": "ipsec.1", "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-vgw" } } ] }
     },
     "VPCVGWAttachment": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
-      "Properties": {
-        "VpcId": { "Ref": "VPC" },
-        "VpnGatewayId": { "Ref": "VirtualPrivateGateway" }
-      }
+      "Properties": { "VpcId": { "Ref": "VPC" }, "VpnGatewayId": { "Ref": "VirtualPrivateGateway" } }
     },
     "CustomerGateway": {
       "Type": "AWS::EC2::CustomerGateway",
-      "Properties": {
-        "Type": "ipsec.1",
-        "BgpAsn": { "Ref": "CustomerGatewayBgpAsn" },
-        "IpAddress": { "Ref": "CustomerGatewayIp" },
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-cgw" } }
-        ]
-      }
+      "Properties": { "Type": "ipsec.1", "BgpAsn": { "Ref": "CustomerGatewayBgpAsn" }, "IpAddress": { "Ref": "CustomerGatewayIp" }, "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-cgw" } } ] }
     },
     "VPNConnection": {
       "Type": "AWS::EC2::VPNConnection",
-      "Properties": {
-        "Type": "ipsec.1",
-        "StaticRoutesOnly": true,
-        "CustomerGatewayId": { "Ref": "CustomerGateway" },
-        "VpnGatewayId": { "Ref": "VirtualPrivateGateway" },
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-vpn" } }
-        ]
-      }
+      "Properties": { "Type": "ipsec.1", "StaticRoutesOnly": true, "CustomerGatewayId": { "Ref": "CustomerGateway" }, "VpnGatewayId": { "Ref": "VirtualPrivateGateway" }, "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-vpn" } } ] }
     },
     "VPNRouteToOnPremA": {
       "Type": "AWS::EC2::VPNConnectionRoute",
-      "Properties": {
-        "DestinationCidrBlock": { "Ref": "OnPremCidr" },
-        "VpnConnectionId": { "Ref": "VPNConnection" }
-      }
+      "Properties": { "DestinationCidrBlock": { "Ref": "OnPremCidr" }, "VpnConnectionId": { "Ref": "VPNConnection" } }
     },
 
     "KmsKeyS3CloudTrail": {
@@ -386,70 +277,24 @@
         "KeyPolicy": {
           "Version": "2012-10-17",
           "Statement": [
-            {
-              "Sid": "AllowRootAccountFullAccess",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
-              },
-              "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "AllowCloudTrailEncryptDescribe",
-              "Effect": "Allow",
-              "Principal": { "Service": "cloudtrail.amazonaws.com" },
-              "Action": [
-                "kms:GenerateDataKey*",
-                "kms:DescribeKey"
-              ],
-              "Resource": "*",
-              "Condition": {
-                "StringLike": {
-                  "kms:EncryptionContext:aws:cloudtrail:arn": {
-                    "Fn::Sub": "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*"
-                  }
-                }
-              }
-            }
+            { "Sid": "AllowRootAccountFullAccess", "Effect": "Allow", "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" } }, "Action": "kms:*", "Resource": "*" },
+            { "Sid": "AllowCloudTrailEncryptDescribe", "Effect": "Allow", "Principal": { "Service": "cloudtrail.amazonaws.com" }, "Action": [ "kms:GenerateDataKey*", "kms:DescribeKey" ], "Resource": "*", "Condition": { "StringLike": { "kms:EncryptionContext:aws:cloudtrail:arn": { "Fn::Sub": "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*" } } } }
           ]
         },
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-s3-ct-kms" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-s3-ct-kms" } } ]
       }
     },
-    "KmsAliasS3CloudTrail": {
-      "Type": "AWS::KMS::Alias",
-      "Properties": {
-        "AliasName": { "Fn::Sub": "alias/${AWS::StackName}-s3-cloudtrail" },
-        "TargetKeyId": { "Ref": "KmsKeyS3CloudTrail" }
-      }
-    },
+    "KmsAliasS3CloudTrail": { "Type": "AWS::KMS::Alias", "Properties": { "AliasName": { "Fn::Sub": "alias/${AWS::StackName}-s3-cloudtrail" }, "TargetKeyId": { "Ref": "KmsKeyS3CloudTrail" } } },
 
     "TrailBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "VersioningConfiguration": { "Status": "Enabled" },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "IgnorePublicAcls": true,
-          "BlockPublicPolicy": true,
-          "RestrictPublicBuckets": true
-        },
+        "PublicAccessBlockConfiguration": { "BlockPublicAcls": true, "IgnorePublicAcls": true, "BlockPublicPolicy": true, "RestrictPublicBuckets": true },
         "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Ref": "KmsKeyS3CloudTrail" }
-              }
-            }
-          ]
+          "ServerSideEncryptionConfiguration": [ { "ServerSideEncryptionByDefault": { "SSEAlgorithm": "aws:kms", "KMSMasterKeyID": { "Ref": "KmsKeyS3CloudTrail" } } } ]
         },
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-trail-bucket" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-trail-bucket" } } ]
       }
     },
     "TrailBucketPolicy": {
@@ -459,53 +304,10 @@
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
-            {
-              "Sid": "DenyInsecureTransport",
-              "Effect": "Deny",
-              "Principal": "*",
-              "Action": "s3:*",
-              "Resource": [
-                { "Fn::Sub": "arn:aws:s3:::${TrailBucket}" },
-                { "Fn::Sub": "arn:aws:s3:::${TrailBucket}/*" }
-              ],
-              "Condition": { "Bool": { "aws:SecureTransport": "false" } }
-            },
-            {
-              "Sid": "DenyOutsideOrg",
-              "Effect": "Deny",
-              "Principal": "*",
-              "Action": "s3:*",
-              "Resource": [
-                { "Fn::Sub": "arn:aws:s3:::${TrailBucket}" },
-                { "Fn::Sub": "arn:aws:s3:::${TrailBucket}/*" }
-              ],
-              "Condition": {
-                "Fn::If": [
-                  "UseOrganizationGuard",
-                  { "StringNotEquals": { "aws:PrincipalOrgID": { "Ref": "OrganizationId" } } },
-                  { "Null": { "aws:PrincipalOrgID": true } }
-                ]
-              }
-            },
-            {
-              "Sid": "AWSCloudTrailAclCheck",
-              "Effect": "Allow",
-              "Principal": { "Service": "cloudtrail.amazonaws.com" },
-              "Action": "s3:GetBucketAcl",
-              "Resource": { "Fn::Sub": "arn:aws:s3:::${TrailBucket}" }
-            },
-            {
-              "Sid": "AWSCloudTrailWrite",
-              "Effect": "Allow",
-              "Principal": { "Service": "cloudtrail.amazonaws.com" },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Sub": "arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*"
-              },
-              "Condition": {
-                "StringEquals": { "s3:x-amz-acl": "bucket-owner-full-control" }
-              }
-            }
+            { "Sid": "DenyInsecureTransport", "Effect": "Deny", "Principal": "*", "Action": "s3:*", "Resource": [ { "Fn::Sub": "arn:aws:s3:::${TrailBucket}" }, { "Fn::Sub": "arn:aws:s3:::${TrailBucket}/*" } ], "Condition": { "Bool": { "aws:SecureTransport": "false" } } },
+            { "Sid": "DenyOutsideOrg", "Effect": "Deny", "Principal": "*", "Action": "s3:*", "Resource": [ { "Fn::Sub": "arn:aws:s3:::${TrailBucket}" }, { "Fn::Sub": "arn:aws:s3:::${TrailBucket}/*" } ], "Condition": { "Fn::If": [ "UseOrganizationGuard", { "StringNotEquals": { "aws:PrincipalOrgID": { "Ref": "OrganizationId" } } }, { "Null": { "aws:PrincipalOrgID": true } } ] } },
+            { "Sid": "AWSCloudTrailAclCheck", "Effect": "Allow", "Principal": { "Service": "cloudtrail.amazonaws.com" }, "Action": "s3:GetBucketAcl", "Resource": { "Fn::Sub": "arn:aws:s3:::${TrailBucket}" } },
+            { "Sid": "AWSCloudTrailWrite", "Effect": "Allow", "Principal": { "Service": "cloudtrail.amazonaws.com" }, "Action": "s3:PutObject", "Resource": { "Fn::Sub": "arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*" }, "Condition": { "StringEquals": { "s3:x-amz-acl": "bucket-owner-full-control" } } }
           ]
         }
       }
@@ -513,45 +315,20 @@
 
     "CloudTrailLogsGroup": {
       "Type": "AWS::Logs::LogGroup",
-      "Properties": {
-        "RetentionInDays": 3653,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-ct-logs" } }
-        ]
-      }
+      "Properties": { "RetentionInDays": 3653, "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-ct-logs" } } ] }
     },
     "CloudTrailCWLRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": { "Service": "cloudtrail.amazonaws.com" },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
+        "AssumeRolePolicyDocument": { "Version": "2012-10-17", "Statement": [ { "Effect": "Allow", "Principal": { "Service": "cloudtrail.amazonaws.com" }, "Action": "sts:AssumeRole" } ] },
         "Policies": [
           {
             "PolicyName": "CloudTrailToCWL",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "logs:CreateLogStream",
-                    "logs:PutLogEvents"
-                  ],
-                  "Resource": { "Fn::Sub": "${CloudTrailLogsGroup.Arn}:*" }
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": "logs:CreateLogGroup",
-                  "Resource": { "Fn::GetAtt": [ "CloudTrailLogsGroup", "Arn" ] }
-                }
+                { "Effect": "Allow", "Action": [ "logs:CreateLogStream", "logs:PutLogEvents" ], "Resource": { "Fn::Sub": "${CloudTrailLogsGroup.Arn}:log-stream:*" } },
+                { "Effect": "Allow", "Action": "logs:CreateLogGroup", "Resource": { "Fn::GetAtt": [ "CloudTrailLogsGroup", "Arn" ] } }
               ]
             }
           }
@@ -570,12 +347,8 @@
         "CloudWatchLogsLogGroupArn": { "Fn::GetAtt": [ "CloudTrailLogsGroup", "Arn" ] },
         "CloudWatchLogsRoleArn": { "Fn::GetAtt": [ "CloudTrailCWLRole", "Arn" ] },
         "KMSKeyId": { "Ref": "KmsKeyS3CloudTrail" },
-        "EventSelectors": [
-          { "ReadWriteType": "All" }
-        ],
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-trail" } }
-        ]
+        "EventSelectors": [ { "ReadWriteType": "All" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-trail" } } ]
       }
     },
 
@@ -591,9 +364,7 @@
             {
               "Sid": "AllowExternalAccountWithMFAAndOptionalExternalId",
               "Effect": "Allow",
-              "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${ExternalAccountId}:root" }
-              },
+              "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${ExternalAccountId}:root" } },
               "Action": "sts:AssumeRole",
               "Condition": {
                 "Bool": { "aws:MultiFactorAuthPresent": "true" },
@@ -612,32 +383,12 @@
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "ec2:Describe*",
-                    "elasticloadbalancing:Describe*",
-                    "rds:Describe*",
-                    "s3:Get*",
-                    "s3:List*",
-                    "cloudtrail:DescribeTrails",
-                    "cloudtrail:GetTrailStatus",
-                    "cloudtrail:ListTrails",
-                    "cloudtrail:LookupEvents",
-                    "iam:Get*",
-                    "iam:List*",
-                    "logs:Describe*",
-                    "logs:Get*"
-                  ],
-                  "Resource": "*"
-                }
+                { "Effect": "Allow", "Action": [ "ec2:Describe*", "elasticloadbalancing:Describe*", "rds:Describe*", "s3:Get*", "s3:List*", "cloudtrail:DescribeTrails", "cloudtrail:GetTrailStatus", "cloudtrail:ListTrails", "cloudtrail:LookupEvents", "iam:Get*", "iam:List*", "logs:Describe*", "logs:Get*" ], "Resource": "*" }
               ]
             }
           }
         ],
-        "Tags": [
-          { "Key": "Purpose", "Value": "CrossAccountAuditWithMFA" }
-        ]
+        "Tags": [ { "Key": "Purpose", "Value": "CrossAccountAuditWithMFA" } ]
       }
     },
 
@@ -646,15 +397,9 @@
       "Properties": {
         "VpcId": { "Ref": "VPC" },
         "GroupDescription": "ALB SG: allow 80 for redirect only",
-        "SecurityGroupIngress": [
-          { "IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "CidrIp": "0.0.0.0/0" }
-        ],
-        "SecurityGroupEgress": [
-          { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" }
-        ],
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-alb-sg" } }
-        ]
+        "SecurityGroupIngress": [ { "IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "CidrIp": "0.0.0.0/0" } ],
+        "SecurityGroupEgress": [ { "IpProtocol": "-1", "CidrIp": "0.0.0.0/0" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-alb-sg" } } ]
       }
     },
     "ALB": {
@@ -662,39 +407,21 @@
       "Properties": {
         "Name": { "Fn::Sub": "${AWS::StackName}-alb" },
         "Scheme": "internet-facing",
-        "Subnets": [
-          { "Ref": "PublicSubnetA" },
-          { "Ref": "PublicSubnetB" }
-        ],
-        "SecurityGroups": [
-          { "Ref": "ALBSecurityGroup" }
-        ],
+        "Subnets": [ { "Ref": "PublicSubnetA" }, { "Ref": "PublicSubnetB" } ],
+        "SecurityGroups": [ { "Ref": "ALBSecurityGroup" } ],
         "Type": "application",
         "IpAddressType": "ipv4",
-        "LoadBalancerAttributes": [
-          { "Key": "deletion_protection.enabled", "Value": "true" }
-        ],
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-alb" } }
-        ]
+        "LoadBalancerAttributes": [ { "Key": "deletion_protection.enabled", "Value": "true" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-alb" } } ]
       }
     },
     "ALBHttpListenerRedirectToHttps": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
-        "LoadBalancerArn": { "Ref": "ALB" },
+        "LoadBalancerArn": { "Fn::GetAtt": [ "ALB", "LoadBalancerArn" ] },
         "Port": 80,
         "Protocol": "HTTP",
-        "DefaultActions": [
-          {
-            "Type": "redirect",
-            "RedirectConfig": {
-              "Protocol": "HTTPS",
-              "Port": "443",
-              "StatusCode": "HTTP_301"
-            }
-          }
-        ]
+        "DefaultActions": [ { "Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301" } } ]
       }
     },
 
@@ -704,67 +431,18 @@
         "Name": { "Fn::Sub": "${AWS::StackName}-webacl" },
         "Scope": "REGIONAL",
         "DefaultAction": { "Allow": {} },
-        "VisibilityConfig": {
-          "CloudWatchMetricsEnabled": true,
-          "MetricName": { "Fn::Sub": "${AWS::StackName}-waf" },
-          "SampledRequestsEnabled": true
-        },
+        "VisibilityConfig": { "CloudWatchMetricsEnabled": true, "MetricName": { "Fn::Sub": "${AWS::StackName}-waf" }, "SampledRequestsEnabled": true },
         "Rules": [
-          {
-            "Name": "AWSManagedCommonRules",
-            "Priority": 1,
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesCommonRuleSet"
-              }
-            },
-            "OverrideAction": { "None": {} },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "AWSManagedCommonRules"
-            }
-          },
-          {
-            "Name": "AWSManagedAmazonIpReputationList",
-            "Priority": 2,
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesAmazonIpReputationList"
-              }
-            },
-            "OverrideAction": { "None": {} },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "AWSManagedAmazonIpReputationList"
-            }
-          },
-          {
-            "Name": "AWSManagedSQLi",
-            "Priority": 3,
-            "Statement": {
-              "ManagedRuleGroupStatement": {
-                "VendorName": "AWS",
-                "Name": "AWSManagedRulesSQLiRuleSet"
-              }
-            },
-            "OverrideAction": { "None": {} },
-            "VisibilityConfig": {
-              "SampledRequestsEnabled": true,
-              "CloudWatchMetricsEnabled": true,
-              "MetricName": "AWSManagedSQLi"
-            }
-          }
+          { "Name": "AWSManagedCommonRules", "Priority": 1, "Statement": { "ManagedRuleGroupStatement": { "VendorName": "AWS", "Name": "AWSManagedRulesCommonRuleSet" } }, "OverrideAction": { "None": {} }, "VisibilityConfig": { "SampledRequestsEnabled": true, "CloudWatchMetricsEnabled": true, "MetricName": "AWSManagedCommonRules" } },
+          { "Name": "AWSManagedAmazonIpReputationList", "Priority": 2, "Statement": { "ManagedRuleGroupStatement": { "VendorName": "AWS", "Name": "AWSManagedRulesAmazonIpReputationList" } }, "OverrideAction": { "None": {} }, "VisibilityConfig": { "SampledRequestsEnabled": true, "CloudWatchMetricsEnabled": true, "MetricName": "AWSManagedAmazonIpReputationList" } },
+          { "Name": "AWSManagedSQLi", "Priority": 3, "Statement": { "ManagedRuleGroupStatement": { "VendorName": "AWS", "Name": "AWSManagedRulesSQLiRuleSet" } }, "OverrideAction": { "None": {} }, "VisibilityConfig": { "SampledRequestsEnabled": true, "CloudWatchMetricsEnabled": true, "MetricName": "AWSManagedSQLi" } }
         ]
       }
     },
     "WAFWebACLAssociationALB": {
       "Type": "AWS::WAFv2::WebACLAssociation",
       "Properties": {
-        "ResourceArn": { "Ref": "ALB" },
+        "ResourceArn": { "Fn::GetAtt": [ "ALB", "LoadBalancerArn" ] },
         "WebACLArn": { "Fn::GetAtt": [ "WAFWebACL", "Arn" ] }
       }
     },
@@ -772,10 +450,7 @@
     "ShieldProtectionALB": {
       "Type": "AWS::Shield::Protection",
       "Condition": "CreateShield",
-      "Properties": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-alb-protection" },
-        "ResourceArn": { "Ref": "ALB" }
-      }
+      "Properties": { "Name": { "Fn::Sub": "${AWS::StackName}-alb-protection" }, "ResourceArn": { "Fn::GetAtt": [ "ALB", "LoadBalancerArn" ] } }
     },
 
     "KmsKeyRDS": {
@@ -786,59 +461,20 @@
         "KeyPolicy": {
           "Version": "2012-10-17",
           "Statement": [
-            {
-              "Sid": "EnableRootPermissions",
-              "Effect": "Allow",
-              "Principal": {
-                "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" }
-              },
-              "Action": "kms:*",
-              "Resource": "*"
-            },
-            {
-              "Sid": "AllowRDSUseOfTheKey",
-              "Effect": "Allow",
-              "Principal": { "Service": "rds.amazonaws.com" },
-              "Action": [
-                "kms:Encrypt",
-                "kms:Decrypt",
-                "kms:ReEncrypt*",
-                "kms:CreateGrant",
-                "kms:DescribeKey"
-              ],
-              "Resource": "*",
-              "Condition": {
-                "StringEquals": {
-                  "kms:ViaService": { "Fn::Sub": "rds.${AWS::Region}.amazonaws.com" },
-                  "kms:CallerAccount": { "Fn::Sub": "${AWS::AccountId}" }
-                }
-              }
-            }
+            { "Sid": "EnableRootPermissions", "Effect": "Allow", "Principal": { "AWS": { "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root" } }, "Action": "kms:*", "Resource": "*" },
+            { "Sid": "AllowRDSUseOfTheKey", "Effect": "Allow", "Principal": { "Service": "rds.amazonaws.com" }, "Action": [ "kms:Encrypt", "kms:Decrypt", "kms:ReEncrypt*", "kms:CreateGrant", "kms:DescribeKey" ], "Resource": "*", "Condition": { "StringEquals": { "kms:ViaService": { "Fn::Sub": "rds.${AWS::Region}.amazonaws.com" }, "kms:CallerAccount": { "Fn::Sub": "${AWS::AccountId}" } } } }
           ]
         },
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-rds-kms" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-rds-kms" } } ]
       }
     },
-    "KmsAliasRDS": {
-      "Type": "AWS::KMS::Alias",
-      "Properties": {
-        "AliasName": { "Fn::Sub": "alias/${AWS::StackName}-rds" },
-        "TargetKeyId": { "Ref": "KmsKeyRDS" }
-      }
-    },
+    "KmsAliasRDS": { "Type": "AWS::KMS::Alias", "Properties": { "AliasName": { "Fn::Sub": "alias/${AWS::StackName}-rds" }, "TargetKeyId": { "Ref": "KmsKeyRDS" } } },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
         "DBSubnetGroupDescription": "Private subnets for RDS",
-        "SubnetIds": [
-          { "Ref": "PrivateDbSubnetA" },
-          { "Ref": "PrivateDbSubnetB" }
-        ],
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-dbsubnets" } }
-        ]
+        "SubnetIds": [ { "Ref": "PrivateDbSubnetA" }, { "Ref": "PrivateDbSubnetB" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-dbsubnets" } } ]
       }
     },
     "DBInstance": {
@@ -853,9 +489,7 @@
         "StorageEncrypted": true,
         "KmsKeyId": { "Ref": "KmsKeyRDS" },
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
-        "VPCSecurityGroups": [
-          { "Ref": "DBSecurityGroup" }
-        ],
+        "VPCSecurityGroups": [ { "Ref": "DBSecurityGroup" } ],
         "PubliclyAccessible": false,
         "AutoMinorVersionUpgrade": true,
         "DeletionProtection": true,
@@ -864,36 +498,21 @@
         "BackupRetentionPeriod": 7,
         "StorageType": "gp3",
         "EnablePerformanceInsights": true,
-        "Tags": [
-          { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db" } }
-        ]
+        "Tags": [ { "Key": "Name", "Value": { "Fn::Sub": "${AWS::StackName}-db" } } ]
       }
     }
   },
   "Outputs": {
     "VpcId": { "Value": { "Ref": "VPC" } },
-    "PublicSubnets": {
-      "Value": { "Fn::Join": [ ",", [ { "Ref": "PublicSubnetA" }, { "Ref": "PublicSubnetB" } ] ] }
-    },
-    "AppSubnets": {
-      "Value": { "Fn::Join": [ ",", [ { "Ref": "PrivateAppSubnetA" }, { "Ref": "PrivateAppSubnetB" } ] ] }
-    },
-    "DbSubnets": {
-      "Value": { "Fn::Join": [ ",", [ { "Ref": "PrivateDbSubnetA" }, { "Ref": "PrivateDbSubnetB" } ] ] }
-    },
+    "PublicSubnets": { "Value": { "Fn::Join": [ ",", [ { "Ref": "PublicSubnetA" }, { "Ref": "PublicSubnetB" } ] ] } },
+    "AppSubnets": { "Value": { "Fn::Join": [ ",", [ { "Ref": "PrivateAppSubnetA" }, { "Ref": "PrivateAppSubnetB" } ] ] } },
+    "DbSubnets": { "Value": { "Fn::Join": [ ",", [ { "Ref": "PrivateDbSubnetA" }, { "Ref": "PrivateDbSubnetB" } ] ] } },
     "TrailBucketName": { "Value": { "Ref": "TrailBucket" } },
     "CloudTrailName": { "Value": { "Ref": "Trail" } },
-    "CloudTrailArn": {
-      "Value": {
-        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Trail}"
-      }
-    },
-    "CrossAccountRoleArn": {
-      "Condition": "AllowCrossAccountRole",
-      "Value": { "Fn::GetAtt": [ "CrossAccountAuditRole", "Arn" ] }
-    },
-    "ALBArn": { "Value": { "Ref": "ALB" } },
-    "ALBRedirectListenerArn": { "Value": { "Ref": "ALBHttpListenerRedirectToHttps" } },
+    "CloudTrailArn": { "Value": { "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Trail}" } },
+    "CrossAccountRoleArn": { "Condition": "AllowCrossAccountRole", "Value": { "Fn::GetAtt": [ "CrossAccountAuditRole", "Arn" ] } },
+    "ALBArn": { "Value": { "Fn::GetAtt": [ "ALB", "LoadBalancerArn" ] } },
+    "ALBRedirectListenerArn": { "Value": { "Fn::GetAtt": [ "ALBHttpListenerRedirectToHttps", "ListenerArn" ] } },
     "WAFArn": { "Value": { "Fn::GetAtt": [ "WAFWebACL", "Arn" ] } },
     "RDSInstanceArn": { "Value": { "Fn::GetAtt": [ "DBInstance", "DBInstanceArn" ] } },
     "RDSAddress": { "Value": { "Fn::GetAtt": [ "DBInstance", "Endpoint.Address" ] } },
