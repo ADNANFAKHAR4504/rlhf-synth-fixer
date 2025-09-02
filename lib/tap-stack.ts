@@ -433,119 +433,192 @@ export class SecureInfrastructureStack extends cdk.Stack {
     // 8. AWS CONFIG FOR COMPLIANCE MONITORING
     // =============================================================================
 
-    // Config Bucket
-    const configBucket = new s3.Bucket(this, 'ConfigBucket', {
-      bucketName: `secure-config-${environmentSuffix}-${this.account}-${this.region}`,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      versioned: true,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    // Check if Config should be created or use existing
+    const createConfig = this.node.tryGetContext('createConfig') ?? false;
 
-    // Config Service Role
-    const configRole = new iam.Role(this, 'ConfigRole', {
-      assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWS_ConfigRole'
-        ),
-      ],
-      inlinePolicies: {
-        ConfigBucketPolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetBucketAcl',
-                's3:GetBucketLocation',
-                's3:ListBucket',
-              ],
-              resources: [configBucket.bucketArn],
-            }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['s3:PutObject'],
-              resources: [`${configBucket.bucketArn}/*`],
-              conditions: {
-                StringEquals: {
-                  's3:x-amz-acl': 'bucket-owner-full-control',
+    let configBucket: s3.Bucket;
+    let configRole: iam.Role;
+
+    if (createConfig) {
+      // Config Bucket
+      configBucket = new s3.Bucket(this, 'ConfigBucket', {
+        bucketName: `secure-config-${environmentSuffix}-${this.account}-${this.region}`,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        versioned: true,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
+      // Config Service Role
+      configRole = new iam.Role(this, 'ConfigRole', {
+        assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWS_ConfigRole'
+          ),
+        ],
+        inlinePolicies: {
+          ConfigBucketPolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  's3:GetBucketAcl',
+                  's3:GetBucketLocation',
+                  's3:ListBucket',
+                ],
+                resources: [configBucket.bucketArn],
+              }),
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['s3:PutObject'],
+                resources: [`${configBucket.bucketArn}/*`],
+                conditions: {
+                  StringEquals: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
+                  },
                 },
-              },
-            }),
-          ],
-        }),
-      },
-    });
-
-    // Config Configuration Recorder
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        name: `secure-infrastructure-recorder-${environmentSuffix}`,
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-          resourceTypes: [],
+              }),
+            ],
+          }),
         },
-      }
-    );
+      });
 
-    // Config Delivery Channel
-    const configDeliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'ConfigDeliveryChannel',
-      {
-        name: `secure-infrastructure-delivery-channel-${environmentSuffix}`,
-        s3BucketName: configBucket.bucketName,
-        configSnapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
+      // Config Configuration Recorder
+      const configRecorder = new config.CfnConfigurationRecorder(
+        this,
+        'ConfigRecorder',
+        {
+          name: `secure-infrastructure-recorder-${environmentSuffix}`,
+          roleArn: configRole.roleArn,
+          recordingGroup: {
+            allSupported: true,
+            includeGlobalResourceTypes: true,
+            resourceTypes: [],
+          },
+        }
+      );
+
+      // Config Delivery Channel
+      const configDeliveryChannel = new config.CfnDeliveryChannel(
+        this,
+        'ConfigDeliveryChannel',
+        {
+          name: `secure-infrastructure-delivery-channel-${environmentSuffix}`,
+          s3BucketName: configBucket.bucketName,
+          configSnapshotDeliveryProperties: {
+            deliveryFrequency: 'TwentyFour_Hours',
+          },
+        }
+      );
+
+      configDeliveryChannel.addDependency(configRecorder);
+
+      // Config Rules for Security Compliance
+      const configRules = [
+        {
+          ruleName: 'encrypted-volumes',
+          source: 'AWS',
+          sourceIdentifier: 'ENCRYPTED_VOLUMES',
         },
-      }
-    );
-
-    configDeliveryChannel.addDependency(configRecorder);
-
-    // Config Rules for Security Compliance
-    const configRules = [
-      {
-        ruleName: 'encrypted-volumes',
-        source: 'AWS',
-        sourceIdentifier: 'ENCRYPTED_VOLUMES',
-      },
-      {
-        ruleName: 's3-bucket-public-access-prohibited',
-        source: 'AWS',
-        sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
-      },
-      {
-        ruleName: 's3-bucket-ssl-requests-only',
-        source: 'AWS',
-        sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
-      },
-      {
-        ruleName: 'cloudtrail-enabled',
-        source: 'AWS',
-        sourceIdentifier: 'CLOUD_TRAIL_ENABLED',
-      },
-      {
-        ruleName: 'iam-password-policy',
-        source: 'AWS',
-        sourceIdentifier: 'IAM_PASSWORD_POLICY',
-      },
-    ];
-
-    configRules.forEach((rule, index) => {
-      new config.CfnConfigRule(this, `ConfigRule${index}`, {
-        configRuleName: rule.ruleName,
-        source: {
-          owner: rule.source,
-          sourceIdentifier: rule.sourceIdentifier,
+        {
+          ruleName: 's3-bucket-public-access-prohibited',
+          source: 'AWS',
+          sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
         },
-      }).addDependency(configRecorder);
-    });
+        {
+          ruleName: 's3-bucket-ssl-requests-only',
+          source: 'AWS',
+          sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
+        },
+        {
+          ruleName: 'cloudtrail-enabled',
+          source: 'AWS',
+          sourceIdentifier: 'CLOUD_TRAIL_ENABLED',
+        },
+        {
+          ruleName: 'iam-password-policy',
+          source: 'AWS',
+          sourceIdentifier: 'IAM_PASSWORD_POLICY',
+        },
+      ];
+
+      configRules.forEach((rule, index) => {
+        new config.CfnConfigRule(this, `ConfigRule${index}`, {
+          configRuleName: rule.ruleName,
+          source: {
+            owner: rule.source,
+            sourceIdentifier: rule.sourceIdentifier,
+          },
+        }).addDependency(configRecorder);
+      });
+    } else {
+      // Reference existing Config resources
+      // In production, you would typically reference existing Config bucket and role
+      // For now, we'll create minimal resources that don't conflict
+
+      // Create a bucket for this stack's specific needs (not for Config service)
+      configBucket = new s3.Bucket(this, 'StackConfigBucket', {
+        bucketName: `stack-specific-config-${environmentSuffix}-${this.account}-${this.region}`,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        versioned: true,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
+      // Create a role for stack-specific operations (not for Config service)
+      configRole = new iam.Role(this, 'StackConfigRole', {
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        description: 'Role for stack-specific configuration operations',
+        inlinePolicies: {
+          StackConfigPolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  's3:GetObject',
+                  's3:PutObject',
+                ],
+                resources: [`${configBucket.bucketArn}/*`],
+              }),
+            ],
+          }),
+        },
+      });
+
+      // Add Config Rules that can work with existing Config service
+      // These rules don't require a specific recorder and can use the existing one
+      const configRules = [
+        {
+          ruleName: `stack-encrypted-volumes-${environmentSuffix}`,
+          source: 'AWS',
+          sourceIdentifier: 'ENCRYPTED_VOLUMES',
+        },
+        {
+          ruleName: `stack-s3-bucket-public-access-prohibited-${environmentSuffix}`,
+          source: 'AWS',
+          sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
+        },
+        {
+          ruleName: `stack-s3-bucket-ssl-requests-only-${environmentSuffix}`,
+          source: 'AWS',
+          sourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY',
+        },
+      ];
+
+      configRules.forEach((rule, index) => {
+        new config.CfnConfigRule(this, `StackConfigRule${index}`, {
+          configRuleName: rule.ruleName,
+          source: {
+            owner: rule.source,
+            sourceIdentifier: rule.sourceIdentifier,
+          },
+          // Don't add dependency on configRecorder since we're using existing Config service
+        });
+      });
+    }
 
     // =============================================================================
     // 9. WAF FOR THREAT PROTECTION

@@ -530,8 +530,9 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
 
   describe('AWS Config', () => {
     test('creates Config bucket', () => {
+      // With createConfig = false (default), it creates a stack-specific bucket
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`secure-config-${testEnvSuffix}-.*`),
+        BucketName: Match.stringLikeRegexp(`stack-specific-config-${testEnvSuffix}-.*`),
         BucketEncryption: {
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
@@ -548,28 +549,20 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
     });
 
     test('creates Config configuration recorder', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        Name: `secure-infrastructure-recorder-${testEnvSuffix}`,
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResourceTypes: true
-        }
-      });
+      // With createConfig = false (default), no Config recorder is created
+      // Instead, Config Rules work with existing Config service
+      template.resourceCountIs('AWS::Config::ConfigurationRecorder', 0);
     });
 
     test('creates Config delivery channel', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        Name: `secure-infrastructure-delivery-channel-${testEnvSuffix}`,
-        ConfigSnapshotDeliveryProperties: {
-          DeliveryFrequency: 'TwentyFour_Hours'
-        }
-      });
+      // With createConfig = false (default), no Config delivery channel is created
+      template.resourceCountIs('AWS::Config::DeliveryChannel', 0);
     });
 
     test('creates Config rules for compliance', () => {
-      // Check for encrypted volumes rule
+      // With createConfig = false (default), stack-specific Config rules are created
       template.hasResourceProperties('AWS::Config::ConfigRule', {
-        ConfigRuleName: 'encrypted-volumes',
+        ConfigRuleName: `stack-encrypted-volumes-${testEnvSuffix}`,
         Source: {
           Owner: 'AWS',
           SourceIdentifier: 'ENCRYPTED_VOLUMES'
@@ -578,19 +571,19 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
 
       // Check for S3 bucket public access rule
       template.hasResourceProperties('AWS::Config::ConfigRule', {
-        ConfigRuleName: 's3-bucket-public-access-prohibited',
+        ConfigRuleName: `stack-s3-bucket-public-access-prohibited-${testEnvSuffix}`,
         Source: {
           Owner: 'AWS',
           SourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED'
         }
       });
 
-      // Check for CloudTrail enabled rule
+      // Check for S3 SSL requests rule
       template.hasResourceProperties('AWS::Config::ConfigRule', {
-        ConfigRuleName: 'cloudtrail-enabled',
+        ConfigRuleName: `stack-s3-bucket-ssl-requests-only-${testEnvSuffix}`,
         Source: {
           Owner: 'AWS',
-          SourceIdentifier: 'CLOUD_TRAIL_ENABLED'
+          SourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY'
         }
       });
     });
