@@ -447,7 +447,9 @@ export class SecureInfrastructureStack extends cdk.Stack {
     const configRole = new iam.Role(this, 'ConfigRole', {
       assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWS_ConfigRole'
+        ),
       ],
       inlinePolicies: {
         ConfigBucketPolicy: new iam.PolicyDocument({
@@ -757,10 +759,14 @@ export class SecureInfrastructureStack extends cdk.Stack {
     });
 
     // Associate WAF with API Gateway - wait for deployment to complete
-    const apiWafAssociation = new wafv2.CfnWebACLAssociation(this, 'APIGatewayWafAssociation', {
-      resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/prod`,
-      webAclArn: webAcl.attrArn,
-    });
+    const apiWafAssociation = new wafv2.CfnWebACLAssociation(
+      this,
+      'APIGatewayWafAssociation',
+      {
+        resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/prod`,
+        webAclArn: webAcl.attrArn,
+      }
+    );
 
     // Ensure WAF association waits for API deployment
     apiWafAssociation.node.addDependency(api.deploymentStage);
