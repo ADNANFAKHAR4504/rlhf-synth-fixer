@@ -256,7 +256,7 @@ export class EnvironmentMigrationStack {
       { provider: this.provider }
     );
 
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `s3-bucket-versioning-${this.environment}`,
       {
         bucket: bucket.id,
@@ -573,8 +573,9 @@ export class EnvironmentMigrationStack {
         operations: [
           'Encrypt',
           'Decrypt',
-          'ReEncrypt*',
-          'GenerateDataKey*',
+          'ReEncryptFrom',
+          'ReEncryptTo',
+          'GenerateDataKey',
           'DescribeKey',
         ],
       },
