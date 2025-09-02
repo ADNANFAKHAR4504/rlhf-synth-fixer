@@ -80,7 +80,7 @@ function getLanguageChoices(platform: string) {
       { name: 'TypeScript', value: 'ts' },
       { name: 'Python', value: 'py' },
       { name: 'Go', value: 'go' },
-      { name: 'Java', value: 'java' }
+      { name: 'Java', value: 'java' },
     ];
   }
 
