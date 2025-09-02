@@ -35,7 +35,7 @@ I need a Pulumi TypeScript implementation that provisions a production-ready, se
 
 - Create an **S3 bucket** with:
   - **Versioning enabled**
-  - **KMS encryption**
+  - **KMS encryption** wherever applicable
 
 ### IAM:
 

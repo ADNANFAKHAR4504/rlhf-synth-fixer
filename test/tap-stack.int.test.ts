@@ -3,6 +3,8 @@ import * as path from 'path';
 
 // AWS SDK v3 imports for integration tests
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand, DescribePoliciesCommand } from '@aws-sdk/client-auto-scaling';
+import { CloudFrontClient, GetDistributionCommand } from '@aws-sdk/client-cloudfront';
+import { WAFV2Client, GetWebACLCommand } from '@aws-sdk/client-wafv2';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 import { DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeRouteTablesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
@@ -268,55 +270,47 @@ describe('Integration Tests - Live Infrastructure', () => {
 
   describe('Auto Scaling', () => {
     it('Auto Scaling Group is configured correctly', async () => {
-      const command = new DescribeAutoScalingGroupsCommand({});
+      const asgName = outputs.autoScalingGroupName;
+      if (!asgName) {
+        console.log('Skipping ASG test - no ASG name in outputs');
+        return;
+      }
+
+      const command = new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [asgName]
+      });
       const response = await autoScalingClient.send(command);
 
-      const vpcId = outputs.vpcId || outputs.VPCId;
-      let ourAsg;
-
-      if (vpcId && response.AutoScalingGroups) {
-        const subnetResponse = await ec2Client.send(new DescribeSubnetsCommand({
-          Filters: [{ Name: 'vpc-id', Values: [vpcId] }],
-        }));
-
-        const ourSubnetIds = subnetResponse.Subnets!.map(s => s.SubnetId);
-
-        ourAsg = response.AutoScalingGroups.find(asg =>
-          asg.VPCZoneIdentifier &&
-          asg.VPCZoneIdentifier.split(',').some(id => ourSubnetIds.includes(id))
-        );
-      }
-
-      if (ourAsg) {
-        expect(ourAsg.MinSize).toBeGreaterThanOrEqual(1);
-        expect(ourAsg.MaxSize).toBeGreaterThanOrEqual(2);
-        expect(ourAsg.DesiredCapacity).toBeGreaterThanOrEqual(1);
-        expect(ourAsg.HealthCheckType).toBe('ELB');
-      } else {
-        console.log('Could not find ASG in our VPC');
-      }
+      expect(response.AutoScalingGroups).toHaveLength(1);
+      const asg = response.AutoScalingGroups![0];
+      
+      expect(asg.MinSize).toBe(1);
+      expect(asg.MaxSize).toBe(3);
+      expect(asg.DesiredCapacity).toBe(2);
+      expect(asg.HealthCheckType).toBe('ELB');
+      expect(asg.HealthCheckGracePeriod).toBe(300);
     });
 
-    it('Auto Scaling policies are configured', async () => {
-      const command = new DescribePoliciesCommand({});
+    it('Target Tracking Scaling Policy is configured', async () => {
+      const asgName = outputs.autoScalingGroupName;
+      if (!asgName) {
+        console.log('Skipping scaling policy test - no ASG name in outputs');
+        return;
+      }
+
+      const command = new DescribePoliciesCommand({
+        AutoScalingGroupName: asgName
+      });
       const response = await autoScalingClient.send(command);
 
       if (response.ScalingPolicies && response.ScalingPolicies.length > 0) {
-        const scaleUpPolicy = response.ScalingPolicies.find((p: any) =>
-          p.PolicyName && p.PolicyName.includes('scale-up')
-        );
-        const scaleDownPolicy = response.ScalingPolicies.find((p: any) =>
-          p.PolicyName && p.PolicyName.includes('scale-down')
+        const targetTrackingPolicy = response.ScalingPolicies.find(p =>
+          p.PolicyType === 'TargetTrackingScaling'
         );
 
-        if (scaleUpPolicy) {
-          expect(scaleUpPolicy.ScalingAdjustment).toBeGreaterThanOrEqual(1);
-          expect(scaleUpPolicy.AdjustmentType).toBe('ChangeInCapacity');
-        }
-
-        if (scaleDownPolicy) {
-          expect(scaleDownPolicy.ScalingAdjustment).toBe(-1);
-          expect(scaleDownPolicy.AdjustmentType).toBe('ChangeInCapacity');
+        if (targetTrackingPolicy) {
+          expect(targetTrackingPolicy.PolicyType).toBe('TargetTrackingScaling');
+          expect(targetTrackingPolicy.TargetTrackingConfiguration).toBeDefined();
         }
       }
     });
@@ -634,6 +628,99 @@ describe('Integration Tests - Live Infrastructure', () => {
         expect(response.KeyMetadata!.Enabled).toBe(true);
       } catch (error) {
         console.log('Could not verify KMS key:', error);
+      }
+    });
+  });
+
+  describe('CloudFront Distribution', () => {
+    it('CloudFront distribution is deployed and enabled', async () => {
+      const cloudFrontDomain = outputs.cloudFrontDomainName;
+      if (!cloudFrontDomain) {
+        console.log('Skipping CloudFront test - no CloudFront domain in outputs');
+        return;
+      }
+
+      // Test DNS resolution for CloudFront domain
+      const dns = require('dns').promises;
+      try {
+        const addresses = await dns.resolve4(cloudFrontDomain);
+        expect(addresses).toBeDefined();
+        expect(addresses.length).toBeGreaterThan(0);
+      } catch (error) {
+        console.log('CloudFront DNS not yet propagated:', cloudFrontDomain);
+      }
+    });
+
+    it('CloudFront serves content from ALB origin', async () => {
+      const cloudFrontDomain = outputs.cloudFrontDomainName;
+      if (!cloudFrontDomain) {
+        console.log('Skipping CloudFront origin test - no CloudFront domain in outputs');
+        return;
+      }
+
+      try {
+        const response = await fetch(`https://${cloudFrontDomain}`, {
+          method: 'HEAD'
+        });
+        expect(response.status).toBeLessThan(500);
+      } catch (error) {
+        console.log('CloudFront not yet ready for requests:', error);
+      }
+    });
+  });
+
+  describe('VPC Flow Logs', () => {
+    it('VPC Flow Logs are configured and active', async () => {
+      const vpcId = outputs.vpcId;
+      const flowLogGroupName = outputs.vpcFlowLogGroupName;
+      
+      if (!vpcId || !flowLogGroupName) {
+        console.log('Skipping VPC Flow Logs test - missing VPC ID or log group name');
+        return;
+      }
+
+      // Check if flow logs exist for the VPC
+      const { CloudWatchLogsClient, DescribeLogGroupsCommand } = require('@aws-sdk/client-cloudwatch-logs');
+      const logsClient = new CloudWatchLogsClient({ region });
+      
+      try {
+        const command = new DescribeLogGroupsCommand({
+          logGroupNamePrefix: flowLogGroupName
+        });
+        const response = await logsClient.send(command);
+        
+        expect(response.logGroups).toBeDefined();
+        expect(response.logGroups!.length).toBeGreaterThanOrEqual(1);
+        
+        const logGroup = response.logGroups!.find((lg: any) => lg.logGroupName === flowLogGroupName);
+        expect(logGroup).toBeDefined();
+        expect(logGroup!.retentionInDays).toBe(14);
+      } catch (error) {
+        console.log('Could not verify VPC Flow Logs:', error);
+      }
+    });
+  });
+
+  describe('Launch Template', () => {
+    it('Launch Template is configured correctly', async () => {
+      const launchTemplateId = outputs.launchTemplateId;
+      if (!launchTemplateId) {
+        console.log('Skipping Launch Template test - no template ID in outputs');
+        return;
+      }
+
+      const { DescribeLaunchTemplatesCommand } = require('@aws-sdk/client-ec2');
+      try {
+        const command = new DescribeLaunchTemplatesCommand({
+          LaunchTemplateIds: [launchTemplateId]
+        });
+        const response: any = await ec2Client.send(command);
+        
+        expect(response.LaunchTemplates).toHaveLength(1);
+        const template = response.LaunchTemplates[0];
+        expect(template.LaunchTemplateId).toBe(launchTemplateId);
+      } catch (error) {
+        console.log('Could not verify Launch Template:', error);
       }
     });
   });

@@ -4,62 +4,100 @@ Here's a complete Pulumi TypeScript implementation for a production-ready AWS in
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
-// Configuration
-const config = new pulumi.Config();
-const region = 'ap-south-1';
-const allowedSshCidr = config.get('allowedSshCidr') || '0.0.0.0/0';
-
-// AWS Provider for ap-south-1 region
-const provider = new aws.Provider('production-provider', {
-  region: region,
-});
+interface InfraConfig {
+  allowedSshCidr: string;
+  rdsConnectionsThreshold: number;
+  rdsCpuThreshold: number;
+  asgCpuHighThreshold: number;
+  asgCpuLowThreshold: number;
+  asgTargetCpuUtilization: number;
+}
 
 export class ProductionInfrastructure {
-  public vpc!: aws.ec2.Vpc;
-  public publicSubnets!: aws.ec2.Subnet[];
-  public privateSubnets!: aws.ec2.Subnet[];
-  public internetGateway!: aws.ec2.InternetGateway;
-  public natGateway!: aws.ec2.NatGateway;
-  public elasticIp!: aws.ec2.Eip;
-  public publicRouteTable!: aws.ec2.RouteTable;
-  public privateRouteTable!: aws.ec2.RouteTable;
-  public vpcFlowLogGroup!: aws.cloudwatch.LogGroup;
-  public vpcFlowLogRole!: aws.iam.Role;
-  public vpcFlowLog!: aws.ec2.FlowLog;
-  public ec2SecurityGroup!: aws.ec2.SecurityGroup;
-  public rdsSecurityGroup!: aws.ec2.SecurityGroup;
-  public albSecurityGroup!: aws.ec2.SecurityGroup;
-  public ec2Role!: aws.iam.Role;
-  public ec2InstanceProfile!: aws.iam.InstanceProfile;
-  public kmsKey!: aws.kms.Key;
-  public s3Bucket!: aws.s3.Bucket;
-  public rdsSubnetGroup!: aws.rds.SubnetGroup;
-  public rdsInstance!: aws.rds.Instance;
-  public launchTemplate!: aws.ec2.LaunchTemplate;
-  public targetGroup!: aws.lb.TargetGroup;
-  public applicationLoadBalancer!: aws.lb.LoadBalancer;
-  public albListener!: aws.lb.Listener;
-  public autoScalingGroup!: aws.autoscaling.Group;
-  public scaleUpPolicy!: aws.autoscaling.Policy;
-  public scaleDownPolicy!: aws.autoscaling.Policy;
-  public cpuAlarmHigh!: aws.cloudwatch.MetricAlarm;
-  public cpuAlarmLow!: aws.cloudwatch.MetricAlarm;
-  public rdsConnectionsAlarm!: aws.cloudwatch.MetricAlarm;
-  public rdsCpuAlarm!: aws.cloudwatch.MetricAlarm;
+  public vpc?: aws.ec2.Vpc;
+  public publicSubnets?: aws.ec2.Subnet[];
+  public privateSubnets?: aws.ec2.Subnet[];
+  public internetGateway?: aws.ec2.InternetGateway;
+  public natGateway?: aws.ec2.NatGateway;
+  public elasticIp?: aws.ec2.Eip;
+  public publicRouteTable?: aws.ec2.RouteTable;
+  public privateRouteTable?: aws.ec2.RouteTable;
+  public vpcFlowLogGroup?: aws.cloudwatch.LogGroup;
+  public vpcFlowLogRole?: aws.iam.Role;
+  public vpcFlowLog?: aws.ec2.FlowLog;
+  public ec2SecurityGroup?: aws.ec2.SecurityGroup;
+  public rdsSecurityGroup?: aws.ec2.SecurityGroup;
+  public albSecurityGroup?: aws.ec2.SecurityGroup;
+  public ec2Role?: aws.iam.Role;
+  public ec2InstanceProfile?: aws.iam.InstanceProfile;
+  public kmsKey?: aws.kms.Key;
+  public s3Bucket?: aws.s3.Bucket;
+  public rdsSubnetGroup?: aws.rds.SubnetGroup;
+  public rdsInstance?: aws.rds.Instance;
+  public launchTemplate?: aws.ec2.LaunchTemplate;
+  public targetGroup?: aws.lb.TargetGroup;
+  public applicationLoadBalancer?: aws.lb.LoadBalancer;
+  public albListener?: aws.lb.Listener;
+  public autoScalingGroup?: aws.autoscaling.Group;
+  public scaleUpPolicy?: aws.autoscaling.Policy;
+  public scaleDownPolicy?: aws.autoscaling.Policy;
+  public cpuAlarmHigh?: aws.cloudwatch.MetricAlarm;
+  public cpuAlarmLow?: aws.cloudwatch.MetricAlarm;
+  public rdsConnectionsAlarm?: aws.cloudwatch.MetricAlarm;
+  public rdsCpuAlarm?: aws.cloudwatch.MetricAlarm;
+  public appLogGroup?: aws.cloudwatch.LogGroup;
+  public webAcl?: aws.wafv2.WebAcl;
+  public cloudFrontDistribution?: aws.cloudfront.Distribution;
 
-  private environment: string;
+  private readonly environment: string;
+  private provider?: aws.Provider;
+  private readonly config: InfraConfig;
+  private callerIdentity?: pulumi.Output<aws.GetCallerIdentityResult>;
 
   private constructor(environment: string) {
     this.environment = environment;
+
+    const pulumiConfig = new pulumi.Config();
+    this.config = {
+      allowedSshCidr: pulumiConfig.get('allowedSshCidr') || '10.0.0.0/8',
+      rdsConnectionsThreshold:
+        pulumiConfig.getNumber('rdsConnectionsThreshold') || 80,
+      rdsCpuThreshold: pulumiConfig.getNumber('rdsCpuThreshold') || 75,
+      asgCpuHighThreshold: pulumiConfig.getNumber('asgCpuHighThreshold') || 80,
+      asgCpuLowThreshold: pulumiConfig.getNumber('asgCpuLowThreshold') || 10,
+      asgTargetCpuUtilization:
+        pulumiConfig.getNumber('asgTargetCpuUtilization') || 50,
+    };
   }
 
-  public static create(environment: string): ProductionInfrastructure {
+  private setupProvider(region: string) {
+    this.provider = new aws.Provider('production-provider', {
+      region: region,
+    });
+    this.callerIdentity = pulumi.output(
+      aws.getCallerIdentity({}, { provider: this.provider })
+    );
+    this.region = region;
+  }
+
+  private region!: string;
+
+  public static create(
+    environment: string,
+    region: string = 'ap-south-1'
+  ): ProductionInfrastructure {
     const instance = new ProductionInfrastructure(environment);
+    instance.setupProvider(region);
+    instance.createStorage();
     instance.createNetworking();
     instance.createSecurity();
-    instance.createStorage();
     instance.createDatabase();
-    instance.createCompute();
+    instance.createIAMRoles();
+    instance.createLaunchTemplate();
+    instance.createLoadBalancer();
+    instance.createAutoScaling();
+    instance.createWAF();
+    instance.createCloudFront();
     instance.createMonitoring();
     return instance;
   }
@@ -77,7 +115,7 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // Get availability zones
@@ -85,7 +123,7 @@ export class ProductionInfrastructure {
       {
         state: 'available',
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // Public Subnets
@@ -105,7 +143,7 @@ export class ProductionInfrastructure {
               Type: 'Public',
             },
           },
-          { provider }
+          { provider: this.provider }
         )
       );
     }
@@ -126,7 +164,7 @@ export class ProductionInfrastructure {
               Type: 'Private',
             },
           },
-          { provider }
+          { provider: this.provider }
         )
       );
     }
@@ -141,35 +179,49 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // Elastic IP for NAT Gateway
-    this.elasticIp = new aws.ec2.Eip(
-      `${this.environment}-nat-eip`,
-      {
-        domain: 'vpc',
-        tags: {
-          Name: `${this.environment}-nat-eip`,
-          environment: this.environment,
-        },
-      },
-      { provider }
-    );
+    // Elastic IPs for NAT Gateways (one per AZ for high availability)
+    const natEips: aws.ec2.Eip[] = [];
+    for (let i = 0; i < 2; i++) {
+      natEips.push(
+        new aws.ec2.Eip(
+          `${this.environment}-nat-eip-${i + 1}`,
+          {
+            domain: 'vpc',
+            tags: {
+              Name: `${this.environment}-nat-eip-${i + 1}`,
+              environment: this.environment,
+            },
+          },
+          { provider: this.provider }
+        )
+      );
+    }
 
-    // NAT Gateway
-    this.natGateway = new aws.ec2.NatGateway(
-      `${this.environment}-nat-gateway`,
-      {
-        allocationId: this.elasticIp.id,
-        subnetId: this.publicSubnets[0].id,
-        tags: {
-          Name: `${this.environment}-nat-gateway`,
-          environment: this.environment,
-        },
-      },
-      { provider }
-    );
+    // NAT Gateways (one per AZ to eliminate SPOF)
+    const natGateways: aws.ec2.NatGateway[] = [];
+    for (let i = 0; i < 2; i++) {
+      natGateways.push(
+        new aws.ec2.NatGateway(
+          `${this.environment}-nat-gateway-${i + 1}`,
+          {
+            allocationId: natEips[i].id,
+            subnetId: this.publicSubnets[i].id,
+            tags: {
+              Name: `${this.environment}-nat-gateway-${i + 1}`,
+              environment: this.environment,
+            },
+          },
+          { provider: this.provider }
+        )
+      );
+    }
+
+    // Store first NAT Gateway for backward compatibility
+    this.natGateway = natGateways[0];
+    this.elasticIp = natEips[0];
 
     // Public Route Table
     this.publicRouteTable = new aws.ec2.RouteTable(
@@ -187,7 +239,7 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // Associate public subnets with public route table
@@ -196,42 +248,50 @@ export class ProductionInfrastructure {
         `${this.environment}-public-rta-${index + 1}`,
         {
           subnetId: subnet.id,
-          routeTableId: this.publicRouteTable.id,
+          routeTableId: this.publicRouteTable!.id,
         },
-        { provider }
+        { provider: this.provider }
       );
     });
 
-    // Private Route Table
-    this.privateRouteTable = new aws.ec2.RouteTable(
-      `${this.environment}-private-rt`,
-      {
-        vpcId: this.vpc.id,
-        routes: [
+    // Private Route Tables (one per AZ for better isolation)
+    const privateRouteTables: aws.ec2.RouteTable[] = [];
+    for (let i = 0; i < 2; i++) {
+      privateRouteTables.push(
+        new aws.ec2.RouteTable(
+          `${this.environment}-private-rt-${i + 1}`,
           {
-            cidrBlock: '0.0.0.0/0',
-            natGatewayId: this.natGateway.id,
+            vpcId: this.vpc.id,
+            routes: [
+              {
+                cidrBlock: '0.0.0.0/0',
+                natGatewayId: natGateways[i].id,
+              },
+            ],
+            tags: {
+              Name: `${this.environment}-private-rt-${i + 1}`,
+              environment: this.environment,
+            },
           },
-        ],
-        tags: {
-          Name: `${this.environment}-private-rt`,
-          environment: this.environment,
-        },
-      },
-      { provider }
-    );
+          { provider: this.provider }
+        )
+      );
+    }
 
-    // Associate private subnets with private route table
+    // Associate each private subnet with its own route table
     this.privateSubnets.forEach((subnet, index) => {
       new aws.ec2.RouteTableAssociation(
         `${this.environment}-private-rta-${index + 1}`,
         {
           subnetId: subnet.id,
-          routeTableId: this.privateRouteTable.id,
+          routeTableId: privateRouteTables[index].id,
         },
-        { provider }
+        { provider: this.provider }
       );
     });
+
+    // Store first private route table for backward compatibility
+    this.privateRouteTable = privateRouteTables[0];
 
     // VPC Flow Logs
     this.vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
@@ -243,7 +303,20 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
+    );
+
+    // Application Log Group
+    this.appLogGroup = new aws.cloudwatch.LogGroup(
+      `${this.environment}-app-logs`,
+      {
+        retentionInDays: 30,
+        tags: {
+          Name: `${this.environment}-app-logs`,
+          environment: this.environment,
+        },
+      },
+      { provider: this.provider }
     );
 
     this.vpcFlowLogRole = new aws.iam.Role(
@@ -266,31 +339,33 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     new aws.iam.RolePolicy(
       `${this.environment}-vpc-flow-log-policy`,
       {
         role: this.vpcFlowLogRole.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              Resource: '*',
-            },
-          ],
-        }),
+        policy: pulumi.all([this.vpcFlowLogGroup.arn]).apply(([logGroupArn]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: [logGroupArn, `${logGroupArn}:*`],
+              },
+            ],
+          })
+        ),
       },
-      { provider }
+      { provider: this.provider }
     );
 
     this.vpcFlowLog = new aws.ec2.FlowLog(
@@ -305,30 +380,23 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
   }
 
   private createSecurity() {
-    // ALB Security Group
+    // ALB Security Group (allowing all traffic as per requirement)
     this.albSecurityGroup = new aws.ec2.SecurityGroup(
       `${this.environment}-alb-sg`,
       {
         name: `${this.environment}-alb-sg`,
         description: 'Security group for Application Load Balancer',
-        vpcId: this.vpc.id,
+        vpcId: this.vpc!.id,
         ingress: [
           {
-            description: 'HTTP',
+            description: 'HTTP from anywhere',
             fromPort: 80,
             toPort: 80,
-            protocol: 'tcp',
-            cidrBlocks: ['0.0.0.0/0'],
-          },
-          {
-            description: 'HTTPS',
-            fromPort: 443,
-            toPort: 443,
             protocol: 'tcp',
             cidrBlocks: ['0.0.0.0/0'],
           },
@@ -346,7 +414,7 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // EC2 Security Group
@@ -355,14 +423,14 @@ export class ProductionInfrastructure {
       {
         name: `${this.environment}-ec2-sg`,
         description: 'Security group for EC2 instances',
-        vpcId: this.vpc.id,
+        vpcId: this.vpc!.id,
         ingress: [
           {
             description: 'SSH',
             fromPort: 22,
             toPort: 22,
             protocol: 'tcp',
-            cidrBlocks: [allowedSshCidr],
+            cidrBlocks: [this.config.allowedSshCidr],
           },
           {
             description: 'HTTP from ALB',
@@ -385,7 +453,7 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // RDS Security Group
@@ -394,7 +462,7 @@ export class ProductionInfrastructure {
       {
         name: `${this.environment}-rds-sg`,
         description: 'Security group for RDS database',
-        vpcId: this.vpc.id,
+        vpcId: this.vpc!.id,
         ingress: [
           {
             description: 'MySQL/Aurora',
@@ -404,20 +472,13 @@ export class ProductionInfrastructure {
             securityGroups: [this.ec2SecurityGroup.id],
           },
         ],
-        egress: [
-          {
-            fromPort: 0,
-            toPort: 0,
-            protocol: '-1',
-            cidrBlocks: ['0.0.0.0/0'],
-          },
-        ],
+        egress: [],
         tags: {
           Name: `${this.environment}-rds-sg`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
   }
 
@@ -428,43 +489,54 @@ export class ProductionInfrastructure {
       {
         description: 'KMS key for encryption at rest',
         enableKeyRotation: true,
-        policy: pulumi
-          .all([aws.getCallerIdentity({}, { provider })])
-          .apply(([identity]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Id: 'key-default-1',
-              Statement: [
-                {
-                  Sid: 'Enable IAM User Permissions',
-                  Effect: 'Allow',
-                  Principal: { AWS: `arn:aws:iam::${identity.accountId}:root` },
-                  Action: 'kms:*',
-                  Resource: '*',
-                },
-                {
-                  Sid: 'Allow RDS and S3 use of the key',
-                  Effect: 'Allow',
-                  Principal: {
-                    Service: ['rds.amazonaws.com', 's3.amazonaws.com'],
-                  },
-                  Action: [
-                    'kms:Encrypt',
-                    'kms:Decrypt',
-                    'kms:GenerateDataKey*',
-                    'kms:DescribeKey',
+        policy: this.callerIdentity!.apply(identity =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Id: 'key-default-1',
+            Statement: [
+              {
+                Sid: 'EnableRoot',
+                Effect: 'Allow',
+                Principal: { AWS: `arn:aws:iam::${identity.accountId}:root` },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'AllowServicesViaRegion',
+                Effect: 'Allow',
+                Principal: {
+                  Service: [
+                    'rds.amazonaws.com',
+                    's3.amazonaws.com',
+                    'logs.amazonaws.com',
                   ],
-                  Resource: '*',
                 },
-              ],
-            })
-          ),
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'kms:ViaService': [
+                      `rds.${this.region}.amazonaws.com`,
+                      `s3.${this.region}.amazonaws.com`,
+                      `logs.${this.region}.amazonaws.com`,
+                    ],
+                  },
+                },
+              },
+            ],
+          })
+        ),
         tags: {
           Name: `${this.environment}-kms-key`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     new aws.kms.Alias(
@@ -473,23 +545,25 @@ export class ProductionInfrastructure {
         name: `alias/${this.environment}-key`,
         targetKeyId: this.kmsKey.keyId,
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // S3 Bucket
+    // S3 Bucket with unique name
     this.s3Bucket = new aws.s3.Bucket(
       `${this.environment}-s3-bucket`,
       {
-        bucket: `${this.environment}-app-data-bucket`,
+        bucket: pulumi.interpolate`${this.environment}-app-data-bucket-${
+          this.callerIdentity!.accountId
+        }`,
         tags: {
           Name: `${this.environment}-s3-bucket`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // S3 Bucket Encryption
+    // S3 Bucket Encryption (SSE-S3 for ALB compatibility)
     new aws.s3.BucketServerSideEncryptionConfiguration(
       `${this.environment}-s3-encryption`,
       {
@@ -497,14 +571,12 @@ export class ProductionInfrastructure {
         rules: [
           {
             applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: this.kmsKey.arn,
+              sseAlgorithm: 'AES256',
             },
-            bucketKeyEnabled: true,
           },
         ],
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // S3 Bucket Versioning
@@ -516,7 +588,7 @@ export class ProductionInfrastructure {
           status: 'Enabled',
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // S3 Public Access Block
@@ -529,7 +601,7 @@ export class ProductionInfrastructure {
         ignorePublicAcls: true,
         restrictPublicBuckets: true,
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // S3 Lifecycle Policy
@@ -547,7 +619,73 @@ export class ProductionInfrastructure {
           },
         ],
       },
-      { provider }
+      { provider: this.provider }
+    );
+
+    // S3 Bucket Policy for secure transport and ALB access logs
+    const elbServiceAccount = aws.elb.getServiceAccount(
+      {},
+      { provider: this.provider }
+    );
+    new aws.s3.BucketPolicy(
+      `${this.environment}-s3-policy`,
+      {
+        bucket: this.s3Bucket.id,
+        policy: pulumi
+          .all([this.s3Bucket.arn, elbServiceAccount])
+          .apply(([bucketArn, elbAccount]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'DenyInsecureTransport',
+                  Effect: 'Deny',
+                  Principal: '*',
+                  Action: 's3:*',
+                  Resource: [bucketArn, `${bucketArn}/*`],
+                  Condition: {
+                    Bool: {
+                      'aws:SecureTransport': 'false',
+                    },
+                  },
+                },
+                {
+                  Sid: 'AllowALBAccessLogs',
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: elbAccount.arn,
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/alb-logs/*`,
+                },
+                {
+                  Sid: 'AllowALBLogDeliveryWrite',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'delivery.logs.amazonaws.com',
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/alb-logs/*`,
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                    },
+                  },
+                },
+                {
+                  Sid: 'AllowALBLogDeliveryCheck',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'delivery.logs.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
+                },
+              ],
+            })
+          ),
+      },
+      { provider: this.provider }
     );
   }
 
@@ -571,7 +709,7 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     new aws.iam.RolePolicyAttachment(
@@ -581,7 +719,7 @@ export class ProductionInfrastructure {
         policyArn:
           'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole',
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // RDS Subnet Group
@@ -589,13 +727,13 @@ export class ProductionInfrastructure {
       `${this.environment}-rds-subnet-group`,
       {
         name: `${this.environment}-rds-subnet-group`,
-        subnetIds: this.privateSubnets.map(subnet => subnet.id),
+        subnetIds: this.privateSubnets!.map(subnet => subnet.id),
         tags: {
           Name: `${this.environment}-rds-subnet-group`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // RDS Instance with managed password and enhanced monitoring
@@ -605,16 +743,18 @@ export class ProductionInfrastructure {
         identifier: `${this.environment}-mysql-db`,
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
-        storageType: 'gp2',
+        storageType: 'gp3',
         storageEncrypted: true,
-        kmsKeyId: this.kmsKey.arn,
+        kmsKeyId: this.kmsKey!.arn,
         engine: 'mysql',
         engineVersion: '8.0',
         instanceClass: 'db.t3.micro',
         dbName: 'appdb',
         username: 'admin',
         manageMasterUserPassword: true,
-        vpcSecurityGroupIds: [this.rdsSecurityGroup.id],
+        multiAz: true,
+        publiclyAccessible: false,
+        vpcSecurityGroupIds: [this.rdsSecurityGroup!.id],
         dbSubnetGroupName: this.rdsSubnetGroup.name,
         backupRetentionPeriod: 7,
         backupWindow: '03:00-04:00',
@@ -624,12 +764,19 @@ export class ProductionInfrastructure {
         deletionProtection: true,
         monitoringRoleArn: rdsMonitoringRole.arn,
         monitoringInterval: 60,
+        enabledCloudwatchLogsExports: [
+          'error',
+          'general',
+          'slowquery',
+          'audit',
+        ],
+        performanceInsightsEnabled: false,
         tags: {
           Name: `${this.environment}-rds-mysql`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     // RDS CloudWatch Alarms
@@ -643,7 +790,7 @@ export class ProductionInfrastructure {
         namespace: 'AWS/RDS',
         period: 300,
         statistic: 'Average',
-        threshold: 80,
+        threshold: this.config.rdsConnectionsThreshold,
         alarmDescription: 'RDS database connections are high',
         dimensions: {
           DBInstanceIdentifier: this.rdsInstance.id,
@@ -653,7 +800,7 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     this.rdsCpuAlarm = new aws.cloudwatch.MetricAlarm(
@@ -666,7 +813,7 @@ export class ProductionInfrastructure {
         namespace: 'AWS/RDS',
         period: 300,
         statistic: 'Average',
-        threshold: 75,
+        threshold: this.config.rdsCpuThreshold,
         alarmDescription: 'RDS CPU utilization is high',
         dimensions: {
           DBInstanceIdentifier: this.rdsInstance.id,
@@ -676,12 +823,11 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
   }
 
-  private createCompute() {
-    // EC2 IAM Role with least privilege
+  private createIAMRoles() {
     this.ec2Role = new aws.iam.Role(
       `${this.environment}-ec2-role`,
       {
@@ -702,68 +848,93 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // SSM Managed Instance Core Policy
     new aws.iam.RolePolicyAttachment(
       `${this.environment}-ec2-ssm-policy`,
       {
         role: this.ec2Role.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // EC2 Role Policy with least privilege
+    const rdsSecretArn = this.rdsInstance!.masterUserSecrets.apply(
+      (secrets: any) =>
+        secrets && secrets.length > 0 ? secrets[0]?.secretArn : undefined
+    );
+
+    const ec2InlinePolicy = pulumi
+      .all([
+        this.s3Bucket!.arn,
+        this.appLogGroup!.arn,
+        this.kmsKey!.arn,
+        rdsSecretArn,
+        this.callerIdentity!,
+      ])
+      .apply(([bucketArn, appLogGroupArn, kmsKeyArn, secretArn, identity]) => {
+        const stmts: any[] = [
+          {
+            Effect: 'Allow',
+            Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+            Resource: [`${bucketArn}/app/*`, `${bucketArn}/logs/*`],
+          },
+          {
+            Effect: 'Allow',
+            Action: ['s3:ListBucket'],
+            Resource: bucketArn,
+            Condition: {
+              StringLike: {
+                's3:prefix': ['app/*', 'logs/*'],
+              },
+            },
+          },
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: [`${appLogGroupArn}:log-stream:*`],
+          },
+          {
+            Effect: 'Allow',
+            Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
+            Resource: kmsKeyArn,
+            Condition: {
+              StringEquals: {
+                'kms:ViaService': [
+                  `s3.${this.region}.amazonaws.com`,
+                  `logs.${this.region}.amazonaws.com`,
+                  `secretsmanager.${this.region}.amazonaws.com`,
+                ],
+                'aws:SourceAccount': identity.accountId,
+              },
+            },
+          },
+        ];
+        if (secretArn) {
+          stmts.push({
+            Effect: 'Allow',
+            Action: [
+              'secretsmanager:GetSecretValue',
+              'secretsmanager:DescribeSecret',
+            ],
+            Resource: secretArn,
+          });
+        }
+        return JSON.stringify({ Version: '2012-10-17', Statement: stmts });
+      });
+
     new aws.iam.RolePolicy(
       `${this.environment}-ec2-policy`,
       {
         role: this.ec2Role.id,
-        policy: pulumi
-          .all([this.s3Bucket.arn, this.vpcFlowLogGroup.arn, this.kmsKey.arn])
-          .apply(([bucketArn, logGroupArn, kmsKeyArn]) =>
-            JSON.stringify({
-              Version: '2012-10-17',
-              Statement: [
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    's3:GetObject',
-                    's3:PutObject',
-                    's3:DeleteObject',
-                    's3:ListBucket',
-                  ],
-                  Resource: [bucketArn, `${bucketArn}/*`],
-                },
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'logs:CreateLogGroup',
-                    'logs:CreateLogStream',
-                    'logs:PutLogEvents',
-                    'logs:DescribeLogStreams',
-                  ],
-                  Resource: logGroupArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: ['kms:Decrypt', 'kms:GenerateDataKey'],
-                  Resource: kmsKeyArn,
-                },
-                {
-                  Effect: 'Allow',
-                  Action: [
-                    'secretsmanager:GetSecretValue',
-                    'secretsmanager:DescribeSecret',
-                  ],
-                  Resource: '*',
-                },
-              ],
-            })
-          ),
+        policy: ec2InlinePolicy,
       },
-      { provider }
+      { provider: this.provider }
     );
 
     this.ec2InstanceProfile = new aws.iam.InstanceProfile(
@@ -775,10 +946,11 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
+  }
 
-    // Get latest Amazon Linux 2 AMI
+  private createLaunchTemplate() {
     const ami = aws.ec2.getAmi(
       {
         mostRecent: true,
@@ -786,32 +958,39 @@ export class ProductionInfrastructure {
         filters: [
           {
             name: 'name',
-            values: ['amzn2-ami-hvm-*-x86_64-gp2'],
+            values: ['al2023-ami-*-x86_64'],
           },
         ],
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // Launch Template
     this.launchTemplate = new aws.ec2.LaunchTemplate(
       `${this.environment}-launch-template`,
       {
         name: `${this.environment}-launch-template`,
         imageId: ami.then(ami => ami.id),
         instanceType: 't3.micro',
-
-        vpcSecurityGroupIds: [this.ec2SecurityGroup.id],
+        vpcSecurityGroupIds: [this.ec2SecurityGroup!.id],
         iamInstanceProfile: {
-          name: this.ec2InstanceProfile.name,
+          name: this.ec2InstanceProfile!.name,
         },
-        userData: pulumi
-          .all([this.s3Bucket.bucket, this.rdsInstance.endpoint])
-          .apply(([bucketName, rdsEndpoint]) =>
-            Buffer.from(
-              `#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho \"<h1>Hello from ${this.environment} environment</h1>\" > /var/www/html/index.html\necho \"S3 Bucket: ${bucketName}\" >> /var/www/html/index.html\necho \"RDS Endpoint: ${rdsEndpoint}\" >> /var/www/html/index.html\n`
-            ).toString('base64')
-          ),
+        userData: Buffer.from(
+          `#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Hello from ${this.environment} environment</h1>" > /var/www/html/index.html
+echo "Application server running" >> /var/www/html/index.html
+`
+        ).toString('base64'),
+        metadataOptions: {
+          httpTokens: 'required',
+        },
+        monitoring: {
+          enabled: true,
+        },
         tagSpecifications: [
           {
             resourceType: 'instance',
@@ -822,17 +1001,18 @@ export class ProductionInfrastructure {
           },
         ],
       },
-      { provider }
+      { provider: this.provider }
     );
+  }
 
-    // Target Group
+  private createLoadBalancer() {
     this.targetGroup = new aws.lb.TargetGroup(
       `${this.environment}-tg`,
       {
         name: `${this.environment}-tg`,
         port: 80,
         protocol: 'HTTP',
-        vpcId: this.vpc.id,
+        vpcId: this.vpc!.id,
         healthCheck: {
           enabled: true,
           healthyThreshold: 2,
@@ -849,30 +1029,33 @@ export class ProductionInfrastructure {
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // Application Load Balancer
     this.applicationLoadBalancer = new aws.lb.LoadBalancer(
       `${this.environment}-alb`,
       {
         name: `${this.environment}-alb`,
         internal: false,
         loadBalancerType: 'application',
-        securityGroups: [this.albSecurityGroup.id],
-        subnets: this.publicSubnets.map(subnet => subnet.id),
-        enableDeletionProtection: false,
+        securityGroups: [this.albSecurityGroup!.id],
+        subnets: this.publicSubnets!.map(subnet => subnet.id),
+        enableDeletionProtection: true,
+        accessLogs: {
+          bucket: this.s3Bucket!.bucket,
+          prefix: 'alb-logs',
+          enabled: true,
+        },
         tags: {
           Name: `${this.environment}-alb`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    // ALB HTTP Listener
     this.albListener = new aws.lb.Listener(
-      `${this.environment}-alb-listener-http`,
+      `${this.environment}-alb-http`,
       {
         loadBalancerArn: this.applicationLoadBalancer.arn,
         port: 80,
@@ -884,23 +1067,24 @@ export class ProductionInfrastructure {
           },
         ],
       },
-      { provider }
+      { provider: this.provider }
     );
+  }
 
-    // Auto Scaling Group
+  private createAutoScaling() {
     this.autoScalingGroup = new aws.autoscaling.Group(
       `${this.environment}-asg`,
       {
         name: `${this.environment}-asg`,
-        vpcZoneIdentifiers: this.publicSubnets.map(subnet => subnet.id),
-        targetGroupArns: [this.targetGroup.arn],
+        vpcZoneIdentifiers: this.publicSubnets!.map(subnet => subnet.id),
+        targetGroupArns: [this.targetGroup!.arn],
         healthCheckType: 'ELB',
         healthCheckGracePeriod: 300,
         minSize: 1,
         maxSize: 3,
         desiredCapacity: 2,
         launchTemplate: {
-          id: this.launchTemplate.id,
+          id: this.launchTemplate!.id,
           version: '$Latest',
         },
         tags: [
@@ -916,37 +1100,133 @@ export class ProductionInfrastructure {
           },
         ],
       },
-      { provider }
+      { provider: this.provider }
+    );
+  }
+
+  private createWAF() {
+    // Create US East 1 provider for CloudFront WAF
+    const usEast1Provider = new aws.Provider('us-east-1-provider', {
+      region: 'us-east-1',
+    });
+
+    this.webAcl = new aws.wafv2.WebAcl(
+      `${this.environment}-web-acl`,
+      {
+        name: `${this.environment}-web-acl`,
+        description: 'WebACL for CloudFront with managed rule sets',
+        scope: 'CLOUDFRONT',
+        defaultAction: {
+          allow: {},
+        },
+        rules: [
+          {
+            name: 'AWSManagedRulesCommonRuleSet',
+            priority: 1,
+            overrideAction: {
+              none: {},
+            },
+            statement: {
+              managedRuleGroupStatement: {
+                name: 'AWSManagedRulesCommonRuleSet',
+                vendorName: 'AWS',
+              },
+            },
+            visibilityConfig: {
+              cloudwatchMetricsEnabled: true,
+              metricName: 'CommonRuleSetMetric',
+              sampledRequestsEnabled: true,
+            },
+          },
+        ],
+        visibilityConfig: {
+          cloudwatchMetricsEnabled: true,
+          metricName: `${this.environment}WebAcl`,
+          sampledRequestsEnabled: true,
+        },
+        tags: {
+          Name: `${this.environment}-web-acl`,
+          environment: this.environment,
+        },
+      },
+      { provider: usEast1Provider }
+    );
+  }
+
+  private createCloudFront() {
+    this.cloudFrontDistribution = new aws.cloudfront.Distribution(
+      `${this.environment}-cloudfront`,
+      {
+        origins: [
+          {
+            domainName: this.applicationLoadBalancer!.dnsName,
+            originId: 'ALB',
+            customOriginConfig: {
+              httpPort: 80,
+              httpsPort: 443,
+              originProtocolPolicy: 'http-only',
+              originSslProtocols: ['TLSv1.2'],
+            },
+          },
+        ],
+        enabled: true,
+        defaultCacheBehavior: {
+          targetOriginId: 'ALB',
+          viewerProtocolPolicy: 'redirect-to-https',
+          allowedMethods: [
+            'DELETE',
+            'GET',
+            'HEAD',
+            'OPTIONS',
+            'PATCH',
+            'POST',
+            'PUT',
+          ],
+          cachedMethods: ['GET', 'HEAD'],
+          compress: true,
+          forwardedValues: {
+            queryString: true,
+            cookies: { forward: 'all' },
+            headers: ['*'],
+          },
+        },
+        restrictions: {
+          geoRestriction: {
+            restrictionType: 'none',
+          },
+        },
+        viewerCertificate: {
+          cloudfrontDefaultCertificate: true,
+        },
+        webAclId: this.webAcl!.arn,
+        tags: {
+          Name: `${this.environment}-cloudfront`,
+          environment: this.environment,
+        },
+      },
+      { provider: this.provider }
     );
   }
 
   private createMonitoring() {
-    // Auto Scaling Policies
-    this.scaleUpPolicy = new aws.autoscaling.Policy(
-      `${this.environment}-scale-up`,
+    // Target Tracking Scaling Policy (preferred over simple scaling)
+    new aws.autoscaling.Policy(
+      `${this.environment}-cpu-tt`,
       {
-        name: `${this.environment}-scale-up`,
-        scalingAdjustment: 1,
-        adjustmentType: 'ChangeInCapacity',
-        cooldown: 300,
-        autoscalingGroupName: this.autoScalingGroup.name,
+        name: `${this.environment}-cpu-tt`,
+        autoscalingGroupName: this.autoScalingGroup!.name,
+        policyType: 'TargetTrackingScaling',
+        targetTrackingConfiguration: {
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ASGAverageCPUUtilization',
+          },
+          targetValue: this.config.asgTargetCpuUtilization,
+        },
       },
-      { provider }
+      { provider: this.provider }
     );
 
-    this.scaleDownPolicy = new aws.autoscaling.Policy(
-      `${this.environment}-scale-down`,
-      {
-        name: `${this.environment}-scale-down`,
-        scalingAdjustment: -1,
-        adjustmentType: 'ChangeInCapacity',
-        cooldown: 300,
-        autoscalingGroupName: this.autoScalingGroup.name,
-      },
-      { provider }
-    );
-
-    // CloudWatch Alarms
+    // CloudWatch Alarms for monitoring (without scaling actions)
     this.cpuAlarmHigh = new aws.cloudwatch.MetricAlarm(
       `${this.environment}-cpu-high`,
       {
@@ -957,18 +1237,17 @@ export class ProductionInfrastructure {
         namespace: 'AWS/EC2',
         period: 120,
         statistic: 'Average',
-        threshold: 80,
+        threshold: this.config.asgCpuHighThreshold,
         alarmDescription: 'This metric monitors ec2 cpu utilization',
-        alarmActions: [this.scaleUpPolicy.arn],
         dimensions: {
-          AutoScalingGroupName: this.autoScalingGroup.name,
+          AutoScalingGroupName: this.autoScalingGroup!.name,
         },
         tags: {
           Name: `${this.environment}-cpu-high`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
 
     this.cpuAlarmLow = new aws.cloudwatch.MetricAlarm(
@@ -981,51 +1260,53 @@ export class ProductionInfrastructure {
         namespace: 'AWS/EC2',
         period: 120,
         statistic: 'Average',
-        threshold: 10,
+        threshold: this.config.asgCpuLowThreshold,
         alarmDescription: 'This metric monitors ec2 cpu utilization',
-        alarmActions: [this.scaleDownPolicy.arn],
         dimensions: {
-          AutoScalingGroupName: this.autoScalingGroup.name,
+          AutoScalingGroupName: this.autoScalingGroup!.name,
         },
         tags: {
           Name: `${this.environment}-cpu-low`,
           environment: this.environment,
         },
       },
-      { provider }
+      { provider: this.provider }
     );
   }
 
   public getOutputs() {
     return {
-      vpcId: this.vpc.id,
-      publicSubnetIds: this.publicSubnets.map(subnet => subnet.id),
-      privateSubnetIds: this.privateSubnets.map(subnet => subnet.id),
-      albDnsName: this.applicationLoadBalancer.dnsName,
-      s3BucketName: this.s3Bucket.bucket,
-      rdsEndpoint: this.rdsInstance.endpoint,
-      natGatewayIp: this.elasticIp.publicIp,
-      // Additional outputs for comprehensive testing
-      albArn: this.applicationLoadBalancer.arn,
-      targetGroupArn: this.targetGroup.arn,
-      autoScalingGroupName: this.autoScalingGroup.name,
-      kmsKeyId: this.kmsKey.keyId,
-      kmsKeyArn: this.kmsKey.arn,
-      ec2SecurityGroupId: this.ec2SecurityGroup.id,
-      rdsSecurityGroupId: this.rdsSecurityGroup.id,
-      albSecurityGroupId: this.albSecurityGroup.id,
-      rdsInstanceId: this.rdsInstance.id,
-      rdsSubnetGroupName: this.rdsSubnetGroup.name,
-      launchTemplateId: this.launchTemplate.id,
-      vpcFlowLogGroupName: this.vpcFlowLogGroup.name,
-      ec2RoleName: this.ec2Role.name,
-      scaleUpPolicyArn: this.scaleUpPolicy.arn,
-      scaleDownPolicyArn: this.scaleDownPolicy.arn,
-      cpuAlarmHighName: this.cpuAlarmHigh.name,
-      cpuAlarmLowName: this.cpuAlarmLow.name,
-      internetGatewayId: this.internetGateway.id,
-      publicRouteTableId: this.publicRouteTable.id,
-      privateRouteTableId: this.privateRouteTable.id,
+      vpcId: this.vpc!.id,
+      publicSubnetIds: this.publicSubnets!.map(subnet => subnet.id),
+      privateSubnetIds: this.privateSubnets!.map(subnet => subnet.id),
+      albDnsName: this.applicationLoadBalancer!.dnsName,
+      s3BucketName: this.s3Bucket!.bucket,
+      rdsEndpoint: this.rdsInstance!.endpoint,
+      natGatewayIp: this.elasticIp!.publicIp,
+      albArn: this.applicationLoadBalancer!.arn,
+      targetGroupArn: this.targetGroup!.arn,
+      autoScalingGroupName: this.autoScalingGroup!.name,
+      kmsKeyId: this.kmsKey!.keyId,
+      kmsKeyArn: this.kmsKey!.arn,
+      ec2SecurityGroupId: this.ec2SecurityGroup!.id,
+      rdsSecurityGroupId: this.rdsSecurityGroup!.id,
+      albSecurityGroupId: this.albSecurityGroup!.id,
+      rdsInstanceId: this.rdsInstance!.id,
+      rdsSubnetGroupName: this.rdsSubnetGroup!.name,
+      launchTemplateId: this.launchTemplate!.id,
+      vpcFlowLogGroupName: this.vpcFlowLogGroup!.name,
+      ec2RoleName: this.ec2Role!.name,
+      cpuAlarmHighName: this.cpuAlarmHigh!.name,
+      cpuAlarmLowName: this.cpuAlarmLow!.name,
+      rdsConnectionsAlarmName: this.rdsConnectionsAlarm!.name,
+      rdsCpuAlarmName: this.rdsCpuAlarm!.name,
+      internetGatewayId: this.internetGateway!.id,
+      publicRouteTableId: this.publicRouteTable!.id,
+      privateRouteTableId: this.privateRouteTable!.id,
+      webAclId: this.webAcl!.id,
+      webAclArn: this.webAcl!.arn,
+      cloudFrontDomainName: this.cloudFrontDistribution!.domainName,
+      cloudFrontDistributionId: this.cloudFrontDistribution!.id,
     };
   }
 }

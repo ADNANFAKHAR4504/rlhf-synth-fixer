@@ -18,6 +18,7 @@ pulumi.runtime.setMocks({
         endpoint: type.includes('rds') ? `${name}.cluster-xyz.ap-south-1.rds.amazonaws.com` : undefined,
         bucket: type.includes('s3') ? `${name}-bucket` : undefined,
         publicIp: type.includes('Eip') ? '203.0.113.1' : undefined,
+        masterUserSecrets: inputs.manageMasterUserPassword ? [{ secretArn: `arn:aws:secretsmanager:ap-south-1:123456789012:secret:${name}-secret` }] : [],
       },
     };
   },
@@ -31,7 +32,10 @@ pulumi.runtime.setMocks({
     if (args.token === 'aws:ec2/getAmi:getAmi') {
       return Promise.resolve({ id: 'ami-12345678' });
     }
-    return args;
+    if (args.token === 'aws:elb/getServiceAccount:getServiceAccount') {
+      return Promise.resolve({ arn: '123456789012' });
+    }
+    return Promise.resolve(args.inputs || {});
   },
 });
 
@@ -127,6 +131,13 @@ describe('Unit Tests - TAP Stack', () => {
       expect(outputs.rdsInstanceId).toBeDefined();
       expect(outputs.launchTemplateId).toBeDefined();
       expect(outputs.vpcFlowLogGroupName).toBeDefined();
+      expect(outputs.webAclId).toBeDefined();
+      expect(outputs.webAclArn).toBeDefined();
+      expect(outputs.cloudFrontDomainName).toBeDefined();
+      expect(outputs.cloudFrontDistributionId).toBeDefined();
+      expect(outputs.internetGatewayId).toBeDefined();
+      expect(outputs.publicRouteTableId).toBeDefined();
+      expect(outputs.privateRouteTableId).toBeDefined();
     });
   });
 
@@ -174,12 +185,22 @@ describe('Unit Tests - TAP Stack', () => {
     });
 
     it('has monitoring components', () => {
-      expect(infrastructure.scaleUpPolicy).toBeDefined();
-      expect(infrastructure.scaleDownPolicy).toBeDefined();
       expect(infrastructure.cpuAlarmHigh).toBeDefined();
       expect(infrastructure.cpuAlarmLow).toBeDefined();
       expect(infrastructure.rdsConnectionsAlarm).toBeDefined();
       expect(infrastructure.rdsCpuAlarm).toBeDefined();
+      expect(infrastructure.vpcFlowLogGroup).toBeDefined();
+      expect(infrastructure.appLogGroup).toBeDefined();
+    });
+
+    it('has CloudFront and WAF components', () => {
+      expect(infrastructure.webAcl).toBeDefined();
+      expect(infrastructure.cloudFrontDistribution).toBeDefined();
+    });
+
+    it('has VPC Flow Logs configured', () => {
+      expect(infrastructure.vpcFlowLog).toBeDefined();
+      expect(infrastructure.vpcFlowLogRole).toBeDefined();
     });
 
     it('returns correct outputs', () => {

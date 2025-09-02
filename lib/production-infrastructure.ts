@@ -648,10 +648,10 @@ export class ProductionInfrastructure {
                   Sid: 'AllowALBAccessLogs',
                   Effect: 'Allow',
                   Principal: {
-                    AWS: `arn:aws:iam::${elbAccount.arn}:root`,
+                    AWS: elbAccount.arn,
                   },
                   Action: 's3:PutObject',
-                  Resource: `${bucketArn}/AWSLogs/*`,
+                  Resource: `${bucketArn}/alb-logs/*`,
                 },
                 {
                   Sid: 'AllowALBLogDeliveryWrite',
@@ -660,7 +660,7 @@ export class ProductionInfrastructure {
                     Service: 'delivery.logs.amazonaws.com',
                   },
                   Action: 's3:PutObject',
-                  Resource: `${bucketArn}/AWSLogs/*`,
+                  Resource: `${bucketArn}/alb-logs/*`,
                   Condition: {
                     StringEquals: {
                       's3:x-amz-acl': 'bucket-owner-full-control',
@@ -676,7 +676,6 @@ export class ProductionInfrastructure {
                   Action: 's3:GetBucketAcl',
                   Resource: bucketArn,
                 },
-
               ],
             })
           ),
@@ -766,8 +765,7 @@ export class ProductionInfrastructure {
           'slowquery',
           'audit',
         ],
-        performanceInsightsEnabled: true,
-        performanceInsightsKmsKeyId: this.kmsKey!.arn,
+        performanceInsightsEnabled: false,
         tags: {
           Name: `${this.environment}-rds-mysql`,
           environment: this.environment,
@@ -858,7 +856,8 @@ export class ProductionInfrastructure {
     );
 
     const rdsSecretArn = this.rdsInstance!.masterUserSecrets.apply(
-      (secrets: any) => secrets?.[0]?.secretArn
+      (secrets: any) =>
+        secrets && secrets.length > 0 ? secrets[0]?.secretArn : undefined
     );
 
     const ec2InlinePolicy = pulumi
@@ -1039,7 +1038,7 @@ echo "Application server running" >> /var/www/html/index.html
         enableDeletionProtection: true,
         accessLogs: {
           bucket: this.s3Bucket!.bucket,
-          prefix: 'AWSLogs',
+          prefix: 'alb-logs',
           enabled: true,
         },
         tags: {
