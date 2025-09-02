@@ -381,15 +381,10 @@ Resources:
       VpcId: !Ref VPCWest
       SecurityGroupIngress:
         - IpProtocol: 'tcp'
-          FromPort: 443
-          ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS traffic'
-        - IpProtocol: 'tcp'
           FromPort: 80
           ToPort: 80
           CidrIp: '0.0.0.0/0'
-          Description: 'HTTP traffic for redirect'
+          Description: 'HTTP traffic'
       SecurityGroupEgress:
         - IpProtocol: '-1'
           CidrIp: '0.0.0.0/0'
@@ -408,11 +403,6 @@ Resources:
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
           Description: 'HTTP from ALB'
-        - IpProtocol: 'tcp'
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: 'HTTPS from ALB'
         - IpProtocol: 'tcp'
           FromPort: 22
           ToPort: 22
@@ -517,19 +507,6 @@ Resources:
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
 
-  # SSL Certificate for ALB
-  SSLCertificate:
-    Type: 'AWS::CertificateManager::Certificate'
-    Properties:
-      DomainName: !Sub '*.${Environment}.tapstack.com'
-      ValidationMethod: 'DNS'
-      DomainValidationOptions:
-        - DomainName: !Sub '*.${Environment}.tapstack.com'
-          HostedZoneId: 'Z1D633PJN98FT9'  # Replace with actual hosted zone ID
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'TapStack-SSL-${Environment}'
-
   # Application Load Balancer
   ApplicationLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
@@ -561,30 +538,13 @@ Resources:
       UnhealthyThresholdCount: 3
       TargetType: 'instance'
 
-  # ALB Listener for HTTPS
-  ALBListenerHTTPS:
+  # ALB Listener for HTTP
+  ALBListenerHTTP:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
       DefaultActions:
         - Type: 'forward'
           TargetGroupArn: !Ref ALBTargetGroup
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 443
-      Protocol: 'HTTPS'
-      Certificates:
-        - CertificateArn: !Ref SSLCertificate
-      SslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01'
-
-  # ALB Listener for HTTP (redirect to HTTPS)
-  ALBListenerHTTP:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties:
-      DefaultActions:
-        - Type: 'redirect'
-          RedirectConfig:
-            Protocol: 'HTTPS'
-            Port: '443'
-            StatusCode: 'HTTP_301'
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: 'HTTP'
