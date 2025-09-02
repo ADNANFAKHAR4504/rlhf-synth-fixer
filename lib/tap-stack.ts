@@ -336,7 +336,6 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-
     // Security Group for ECS instances with restrictive rules
     const ecsSecurityGroup = new ec2.SecurityGroup(
       this,
