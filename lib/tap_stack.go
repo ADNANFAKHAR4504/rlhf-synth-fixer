@@ -6,7 +6,6 @@ import (
 
 	"github.com/aws/aws-cdk-go/awscdk/v2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsautoscaling"
-	"github.com/aws/aws-cdk-go/awscdk/v2/awsconfig"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsec2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awselasticloadbalancingv2"
 	"github.com/aws/aws-cdk-go/awscdk/v2/awsiam"
@@ -365,7 +364,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 		StorageEncrypted:          jsii.Bool(true),
 		StorageEncryptionKey:      kmsKey,
 		BackupRetention:           awscdk.Duration_Days(jsii.Number(7)),
-		DeletionProtection:        jsii.Bool(true),
+		DeletionProtection:        jsii.Bool(false), // Disabled for easier cleanup during development
 		DatabaseName:              jsii.String("tapdb"),
 		Credentials:               awsrds.Credentials_FromGeneratedSecret(jsii.String("admin"), nil),
 		MonitoringInterval:        awscdk.Duration_Minutes(jsii.Number(1)),
@@ -393,87 +392,90 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// CloudTrail creation removed to avoid S3 bucket policy circular dependency
 
-	// Create Config Configuration Recorder
-	configRole := awsiam.NewRole(stack, jsii.String("ConfigRole"), &awsiam.RoleProps{
-		AssumedBy: awsiam.NewServicePrincipal(jsii.String("config.amazonaws.com"), nil),
-		InlinePolicies: &map[string]awsiam.PolicyDocument{
-			"ConfigPolicy": awsiam.NewPolicyDocument(&awsiam.PolicyDocumentProps{
-				Statements: &[]awsiam.PolicyStatement{
-					awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-						Effect: awsiam.Effect_ALLOW,
-						Actions: &[]*string{
-							jsii.String("s3:GetBucketAcl"),
-							jsii.String("s3:ListBucket"),
-							jsii.String("s3:GetBucketLocation"),
-							jsii.String("s3:ListBucketMultipartUploads"),
-							jsii.String("s3:ListBucketVersions"),
-							jsii.String("s3:GetObject"),
-							jsii.String("s3:GetObjectAcl"),
-							jsii.String("s3:GetObjectVersion"),
-							jsii.String("s3:GetObjectVersionAcl"),
-							jsii.String("s3:PutObject"),
-							jsii.String("s3:PutObjectAcl"),
-							jsii.String("s3:PutObjectVersionAcl"),
-							jsii.String("s3:DeleteObject"),
-							jsii.String("s3:DeleteObjectVersion"),
-						},
-						Resources: &[]*string{
-							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "-" + *stack.Region() + "-" + uniqueSuffix),
-							jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "-" + *stack.Region() + "-" + uniqueSuffix + "/*"),
-						},
-					}),
-					awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-						Effect: awsiam.Effect_ALLOW,
-						Actions: &[]*string{
-							jsii.String("logs:CreateLogGroup"),
-							jsii.String("logs:CreateLogStream"),
-							jsii.String("logs:PutLogEvents"),
-							jsii.String("logs:DescribeLogGroups"),
-							jsii.String("logs:DescribeLogStreams"),
-						},
-						Resources: &[]*string{
-							jsii.String("arn:aws:logs:*:*:*"),
-						},
-					}),
-					awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
-						Effect: awsiam.Effect_ALLOW,
-						Actions: &[]*string{
-							jsii.String("config:Put*"),
-							jsii.String("config:Get*"),
-							jsii.String("config:List*"),
-							jsii.String("config:Describe*"),
-						},
-						Resources: &[]*string{
-							jsii.String("*"),
-						},
-					}),
-				},
-			}),
-		},
-	})
+	// AWS Config resources commented out to avoid delivery channel limit issues
+	// There's already a delivery channel in the account, and AWS Config only allows one per region
+	// configRole := awsiam.NewRole(stack, jsii.String("ConfigRole"), &awsiam.RoleProps{
+	// 	AssumedBy: awsiam.NewServicePrincipal(jsii.String("config.amazonaws.com"), nil),
+	// 	InlinePolicies: &map[string]awsiam.PolicyDocument{
+	// 		"ConfigPolicy": awsiam.NewPolicyDocument(&awsiam.PolicyDocumentProps{
+	// 			Statements: &[]awsiam.PolicyStatement{
+	// 				awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+	// 					Effect: awsiam.Effect_ALLOW,
+	// 					Actions: &[]*string{
+	// 						jsii.String("s3:GetBucketAcl"),
+	// 						jsii.String("s3:ListBucket"),
+	// 						jsii.String("s3:GetBucketLocation"),
+	// 						jsii.String("s3:ListBucketMultipartUploads"),
+	// 						jsii.String("s3:ListBucketVersions"),
+	// 						jsii.String("s3:GetObject"),
+	// 						jsii.String("s3:GetObjectAcl"),
+	// 						jsii.String("s3:GetObjectVersion"),
+	// 						jsii.String("s3:GetObjectVersionAcl"),
+	// 						jsii.String("s3:PutObject"),
+	// 						jsii.String("s3:PutObjectAcl"),
+	// 						jsii.String("s3:PutObjectVersionAcl"),
+	// 						jsii.String("s3:DeleteObject"),
+	// 						jsii.String("s3:DeleteObjectVersion"),
+	// 					},
+	// 					Resources: &[]*string{
+	// 						jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "-" + *stack.Region() + "-" + uniqueSuffix),
+	// 						jsii.String("arn:aws:s3:::tap-config-" + *stack.Account() + "-" + *stack.Region() + "-" + uniqueSuffix + "/*"),
+	// 					},
+	// 				}),
+	// 				awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+	// 					Effect: awsiam.Effect_ALLOW,
+	// 					Actions: &[]*string{
+	// 						jsii.String("logs:CreateLogGroup"),
+	// 						jsii.String("logs:CreateLogStream"),
+	// 						jsii.String("logs:PutLogEvents"),
+	// 						jsii.String("logs:DescribeLogGroups"),
+	// 						jsii.String("logs:DescribeLogStreams"),
+	// 					},
+	// 					Resources: &[]*string{
+	// 						jsii.String("arn:aws:logs:*:*:*"),
+	// 					},
+	// 				}),
+	// 				awsiam.NewPolicyStatement(&awsiam.PolicyStatementProps{
+	// 					Effect: awsiam.Effect_ALLOW,
+	// 					Actions: &[]*string{
+	// 						jsii.String("config:Put*"),
+	// 						jsii.String("config:Get*"),
+	// 						jsii.String("config:List*"),
+	// 						jsii.String("config:Describe*"),
+	// 					},
+	// 					Resources: &[]*string{
+	// 						jsii.String("*"),
+	// 					},
+	// 				}),
+	// 			},
+	// 		}),
+	// 	},
+	// })
 
-	configBucket := awss3.NewBucket(stack, jsii.String("TapConfigBucket"), &awss3.BucketProps{
-		BucketName:        jsii.String("tap-config-" + *stack.Account() + "-" + *stack.Region() + "-" + uniqueSuffix),
-		Encryption:        awss3.BucketEncryption_KMS,
-		EncryptionKey:     kmsKey,
-		BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
-		Versioned:         jsii.Bool(true),
-	})
+	// configBucket := awss3.NewBucket(stack, jsii.String("TapConfigBucket"), &awss3.BucketProps{
+	// 	BucketName:        jsii.String("tap-config-" + *stack.Account() + "-" + *stack.Region() + "-" + uniqueSuffix),
+	// 	Encryption:        awss3.BucketEncryption_KMS,
+	// 	EncryptionKey:     kmsKey,
+	// 	BlockPublicAccess: awss3.BlockPublicAccess_BLOCK_ALL(),
+	// 	Versioned:         jsii.Bool(true),
+	// })
 
-	deliveryChannel := awsconfig.NewCfnDeliveryChannel(stack, jsii.String("TapConfigDeliveryChannel"), &awsconfig.CfnDeliveryChannelProps{
-		S3BucketName: configBucket.BucketName(),
-		S3KeyPrefix:  jsii.String("config"),
-	})
+	// AWS Config delivery channel creation commented out to avoid limit issues
+	// There's already a delivery channel in the account, and AWS Config only allows one per region
+	// deliveryChannel := awsconfig.NewCfnDeliveryChannel(stack, jsii.String("TapConfigDeliveryChannel"), &awsconfig.CfnDeliveryChannelProps{
+	// 	S3BucketName: configBucket.BucketName(),
+	// 	S3KeyPrefix:  jsii.String("config"),
+	// })
 
-	configRecorder := awsconfig.NewCfnConfigurationRecorder(stack, jsii.String("TapConfigRecorder"), &awsconfig.CfnConfigurationRecorderProps{
-		RoleArn: configRole.RoleArn(),
-		RecordingGroup: &awsconfig.CfnConfigurationRecorder_RecordingGroupProperty{
-			AllSupported:               jsii.Bool(true),
-			IncludeGlobalResourceTypes: jsii.Bool(true),
-		},
-	})
+	// configRecorder := awsconfig.NewCfnConfigurationRecorder(stack, jsii.String("TapConfigRecorder"), &awsconfig.CfnConfigurationRecorderProps{
+	// 	RoleArn: configRole.RoleArn(),
+	// 	RecordingGroup: &awsconfig.CfnConfigurationRecorder_RecordingGroupProperty{
+	// 		AllSupported:               jsii.Bool(true),
+	// 		IncludeGlobalResourceTypes: jsii.Bool(true),
+	// 	},
+	// })
 
-	configRecorder.AddDependency(deliveryChannel)
+	// configRecorder.AddDependency(deliveryChannel)
 
 	// Create CloudWatch Alarms - Commented out due to API compatibility issues
 	// awscloudwatch.NewAlarm(stack, jsii.String("HighCPUAlarm"), &awscloudwatch.AlarmProps{
