@@ -8,6 +8,10 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
 
   # Partial backend config: values are injected at `terraform init` time
@@ -72,6 +76,11 @@ variable "db_instance_class" {
   description = "Aurora instance class"
   type        = string
   default     = "db.t3.small"
+
+  validation {
+    condition = can(regex("^db\\.(t3|t4g|r5|r6g)\\.(small|medium|large|xlarge)", var.db_instance_class))
+    error_message = "DB instance class must be a valid Aurora-compatible instance type."
+  }
 }
 
 variable "db_name" {
@@ -645,11 +654,27 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   tags = local.common_tags
 }
 
-# Aurora Cluster
+# Get available Aurora MySQL engine versions
+data "aws_rds_engine_version" "aurora_mysql" {
+  engine                 = "aurora-mysql"
+  preferred_versions     = ["8.0.mysql_aurora.3.04.0", "8.0.mysql_aurora.3.03.0", "8.0.mysql_aurora.3.02.0"]
+  include_all            = false
+  default_only          = false
+}
+
+# Alternative: Get the latest Aurora MySQL 8.0 version
+data "aws_rds_orderable_db_instance" "aurora_mysql" {
+  engine                     = "aurora-mysql"
+  engine_version            = data.aws_rds_engine_version.aurora_mysql.version
+  preferred_instance_classes = ["db.t3.small", "db.t4g.medium", "db.r5.large"]
+  supports_clusters         = true
+}
+
+# Aurora Cluster with dynamic version
 resource "aws_rds_cluster" "main" {
   cluster_identifier      = "proj-webapp-aurora-cluster"
   engine                 = "aurora-mysql"
-  engine_version         = "8.0.mysql_aurora.3.02.0"
+  engine_version         = data.aws_rds_engine_version.aurora_mysql.version
   database_name          = "webapp"
   master_username        = "admin"
   master_password        = random_password.db_password.result
@@ -663,17 +688,23 @@ resource "aws_rds_cluster" "main" {
   skip_final_snapshot = true
   deletion_protection = false
 
+  # Enable encryption
+  storage_encrypted = true
+
+  # Enable backtrack for Aurora MySQL (optional but recommended)
+  backtrack_window = 24
+
   tags = merge(local.common_tags, {
     Name = "proj-webapp-aurora-cluster"
   })
 }
 
-# Aurora Instances
+# Aurora Instances with compatible instance class
 resource "aws_rds_cluster_instance" "cluster_instances" {
   count              = 2
   identifier         = "proj-webapp-aurora-${count.index}"
   cluster_identifier = aws_rds_cluster.main.id
-  instance_class     = "db.t3.small"
+  instance_class     = data.aws_rds_orderable_db_instance.aurora_mysql.instance_class
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
 
