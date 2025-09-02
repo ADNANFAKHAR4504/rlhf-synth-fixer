@@ -63,6 +63,7 @@ class TestTapStack(unittest.TestCase):
             bucket_name_suffix='test-data'
         )
 
+    @patch('lib.tap_stack.get_caller_identity')
     @patch('lib.tap_stack.kms.Key')
     @patch('lib.tap_stack.kms.Alias')
     @patch('lib.tap_stack.s3.Bucket')
@@ -71,9 +72,10 @@ class TestTapStack(unittest.TestCase):
     @patch('lib.tap_stack.cloudwatch.MetricAlarm')
     @patch('lib.tap_stack.config')
     def test_tap_stack_initialization(self, mock_config, mock_alarm, mock_bucket_policy, 
-                                    mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key):
+                                    mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key, mock_get_caller_identity):
         """Test TapStack initialization creates all required resources."""
         # Mock the AWS resources
+        mock_get_caller_identity.return_value = MagicMock(account_id='123456789012')
         mock_kms_key.return_value = MagicMock()
         mock_kms_alias.return_value = MagicMock()
         mock_s3_bucket.return_value = MagicMock()
@@ -104,8 +106,8 @@ class TestTapStack(unittest.TestCase):
         # Verify IAM policy was created
         mock_iam_policy.assert_called_once()
 
-        # Verify bucket policy attachment was created
-        mock_bucket_policy.assert_called_once()
+        # Verify bucket policies were created (logs and data buckets)
+        self.assertEqual(mock_bucket_policy.call_count, 2)
 
         # Verify CloudWatch alarm was created
         mock_alarm.assert_called_once()
@@ -113,6 +115,7 @@ class TestTapStack(unittest.TestCase):
         # Verify region was set
         mock_config.region = 'us-east-1'
 
+    @patch('lib.tap_stack.get_caller_identity')
     @patch('lib.tap_stack.kms.Key')
     @patch('lib.tap_stack.kms.Alias')
     @patch('lib.tap_stack.s3.Bucket')
@@ -121,9 +124,10 @@ class TestTapStack(unittest.TestCase):
     @patch('lib.tap_stack.cloudwatch.MetricAlarm')
     @patch('lib.tap_stack.config')
     def test_tap_stack_without_logging(self, mock_config, mock_alarm, mock_bucket_policy,
-                                     mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key):
+                                     mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key, mock_get_caller_identity):
         """Test TapStack initialization without server access logging."""
         # Mock the AWS resources
+        mock_get_caller_identity.return_value = MagicMock(account_id='123456789012')
         mock_kms_key.return_value = MagicMock()
         mock_kms_alias.return_value = MagicMock()
         mock_s3_bucket.return_value = MagicMock()
@@ -145,6 +149,7 @@ class TestTapStack(unittest.TestCase):
         # Verify S3 buckets were created (should still create both)
         self.assertEqual(mock_s3_bucket.call_count, 2)
 
+    @patch('lib.tap_stack.get_caller_identity')
     @patch('lib.tap_stack.kms.Key')
     @patch('lib.tap_stack.kms.Alias')
     @patch('lib.tap_stack.s3.Bucket')
@@ -153,9 +158,10 @@ class TestTapStack(unittest.TestCase):
     @patch('lib.tap_stack.cloudwatch.MetricAlarm')
     @patch('lib.tap_stack.config')
     def test_tap_stack_resource_tags(self, mock_config, mock_alarm, mock_bucket_policy,
-                                   mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key):
+                                   mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key, mock_get_caller_identity):
         """Test that all resources are properly tagged."""
         # Mock the AWS resources
+        mock_get_caller_identity.return_value = MagicMock(account_id='123456789012')
         mock_kms_key.return_value = MagicMock()
         mock_kms_alias.return_value = MagicMock()
         mock_s3_bucket.return_value = MagicMock()
@@ -184,6 +190,7 @@ class TestTapStack(unittest.TestCase):
             tags = call[1]['tags']
             self.assertEqual(tags['Environment'], 'Production')
 
+    @patch('lib.tap_stack.get_caller_identity')
     @patch('lib.tap_stack.kms.Key')
     @patch('lib.tap_stack.kms.Alias')
     @patch('lib.tap_stack.s3.Bucket')
@@ -192,9 +199,10 @@ class TestTapStack(unittest.TestCase):
     @patch('lib.tap_stack.cloudwatch.MetricAlarm')
     @patch('lib.tap_stack.config')
     def test_tap_stack_outputs_registration(self, mock_config, mock_alarm, mock_bucket_policy,
-                                          mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key):
+                                          mock_iam_policy, mock_s3_bucket, mock_kms_alias, mock_kms_key, mock_get_caller_identity):
         """Test that TapStack properly registers outputs."""
         # Mock the AWS resources with specific return values
+        mock_get_caller_identity.return_value = MagicMock(account_id='123456789012')
         mock_kms_key.return_value = MagicMock()
         mock_kms_alias.return_value = MagicMock()
         mock_s3_bucket.return_value = MagicMock()

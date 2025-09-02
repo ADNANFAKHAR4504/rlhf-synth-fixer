@@ -13,7 +13,7 @@ import json
 
 import pulumi
 from pulumi import ResourceOptions, get_stack
-from pulumi_aws import s3, kms, iam, cloudwatch, config
+from pulumi_aws import s3, kms, iam, cloudwatch, config, get_caller_identity
 
 
 class TapStackArgs:
@@ -68,6 +68,9 @@ class TapStack(pulumi.ComponentResource):
 
         # AWS region is configured via Pulumi config or environment variables
 
+        # Get current AWS account ID early (needed for policies)
+        current_account = get_caller_identity()
+        
         # Base tags for all resources
         base_tags = {
             "Environment": "Production",
@@ -101,13 +104,8 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create ACL for logs bucket
-        logs_bucket_acl = s3.BucketAclV2(
-            f"tap-logs-bucket-acl-{self.environment_suffix}",
-            bucket=logs_bucket.id,
-            acl="log-delivery-write",
-            opts=ResourceOptions(parent=self)
-        )
+        # Note: Modern S3 buckets have ACLs disabled by default
+        # Log delivery write permissions are handled via bucket policy
 
         # Create versioning for logs bucket
         logs_bucket_versioning = s3.BucketVersioningV2(
@@ -140,9 +138,35 @@ class TapStack(pulumi.ComponentResource):
             f"tap-logs-bucket-public-access-block-{self.environment_suffix}",
             bucket=logs_bucket.id,
             block_public_acls=True,
-            block_public_policy=True,
+            block_public_policy=False,  # Allow bucket policy for log delivery
             ignore_public_acls=True,
             restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create bucket policy for logs bucket to allow log delivery
+        logs_bucket_policy = s3.BucketPolicy(
+            f"tap-logs-bucket-policy-{self.environment_suffix}",
+            bucket=logs_bucket.id,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AllowLogDeliveryWrite",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "logging.s3.amazonaws.com"
+                        },
+                        "Action": "s3:PutObject",
+                        "Resource": f"arn:aws:s3:::{logs_bucket.bucket}/*",
+                        "Condition": {
+                            "StringEquals": {
+                                "aws:SourceAccount": current_account.account_id
+                            }
+                        }
+                    }
+                ]
+            }),
             opts=ResourceOptions(parent=self)
         )
 
@@ -202,7 +226,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create IAM policy for bucket access
+        # Create IAM policy for bucket access (attached to DataAccessRole)
         bucket_policy = iam.Policy(
             f"tap-bucket-policy-{self.environment_suffix}",
             description="IAM policy for S3 bucket access",
@@ -211,11 +235,8 @@ class TapStack(pulumi.ComponentResource):
                     "Version": "2012-10-17",
                     "Statement": [
                         {
-                            "Sid": "AllowDataAccessRoleAccess",
+                            "Sid": "AllowS3Access",
                             "Effect": "Allow",
-                            "Principal": {
-                                "AWS": f"arn:aws:iam::{config.account_id}:role/DataAccessRole"
-                            },
                             "Action": [
                                 "s3:GetObject",
                                 "s3:PutObject",
@@ -226,21 +247,6 @@ class TapStack(pulumi.ComponentResource):
                                 arn,
                                 f"{arn}/*"
                             ]
-                        },
-                        {
-                            "Sid": "DenyAllOtherAccess",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                arn,
-                                f"{arn}/*"
-                            ],
-                            "Condition": {
-                                "StringNotEquals": {
-                                    "aws:PrincipalArn": f"arn:aws:iam::{config.account_id}:role/DataAccessRole"
-                                }
-                            }
                         }
                     ]
                 })
@@ -249,11 +255,47 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Attach policy to bucket
-        bucket_policy_attachment = s3.BucketPolicy(
-            f"tap-bucket-policy-attachment-{self.environment_suffix}",
+        # Create bucket policy for data bucket (restrictive access)
+        data_bucket_policy = s3.BucketPolicy(
+            f"tap-data-bucket-policy-{self.environment_suffix}",
             bucket=data_bucket.id,
-            policy=bucket_policy.policy,
+            policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Sid": "AllowDataAccessRoleAccess",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "AWS": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+                        },
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:PutObject",
+                            "s3:DeleteObject",
+                            "s3:ListBucket"
+                        ],
+                        "Resource": [
+                            f"arn:aws:s3:::{data_bucket.bucket}",
+                            f"arn:aws:s3:::{data_bucket.bucket}/*"
+                        ]
+                    },
+                    {
+                        "Sid": "DenyAllOtherAccess",
+                        "Effect": "Deny",
+                        "Principal": "*",
+                        "Action": "s3:*",
+                        "Resource": [
+                            f"arn:aws:s3:::{data_bucket.bucket}",
+                            f"arn:aws:s3:::{data_bucket.bucket}/*"
+                        ],
+                        "Condition": {
+                            "StringNotEquals": {
+                                "aws:PrincipalArn": f"arn:aws:iam::{current_account.account_id}:role/DataAccessRole"
+                            }
+                        }
+                    }
+                ]
+            }),
             opts=ResourceOptions(parent=self)
         )
 
@@ -285,15 +327,15 @@ class TapStack(pulumi.ComponentResource):
         self.access_error_alarm = access_error_alarm
         
         # Store additional resource references
-        self.logs_bucket_acl = logs_bucket_acl
         self.logs_bucket_versioning = logs_bucket_versioning
         self.logs_bucket_encryption = logs_bucket_encryption
         self.logs_bucket_public_access_block = logs_bucket_public_access_block
+        self.logs_bucket_policy = logs_bucket_policy
         self.data_bucket_versioning = data_bucket_versioning
         self.data_bucket_encryption = data_bucket_encryption
         self.data_bucket_public_access_block = data_bucket_public_access_block
         self.data_bucket_logging = data_bucket_logging
-        self.bucket_policy_attachment = bucket_policy_attachment
+        self.data_bucket_policy = data_bucket_policy
 
         # Register outputs
         self.register_outputs({
