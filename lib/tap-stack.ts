@@ -6,7 +6,7 @@ import {
 import { S3Backend, TerraformOutput, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 
-// NEW: random provider for stable, unique suffixes
+// Random provider for stable, unique suffixes
 import { Id as RandomId } from '@cdktf/provider-random/lib/id';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 
@@ -51,7 +51,7 @@ export class TapStack extends TerraformStack {
     // Random provider for name suffixes
     new RandomProvider(this, 'random');
 
-    // Remote state (can stay in us-east-1 even if you deploy elsewhere)
+    // Remote state
     new S3Backend(this, {
       bucket: stateBucket,
       key: `${environmentSuffix}/${id}.tfstate`,
@@ -68,11 +68,11 @@ export class TapStack extends TerraformStack {
     // Caller identity for outputs
     const current = new DataAwsCallerIdentity(this, 'current');
 
-    // Common module config (now includes the suffix)
+    // Common module config (includes the suffix token)
     const moduleConfig: ModuleConfig = {
       environment: environmentSuffix,
       projectName: projectName,
-      nameSuffix: nameSuffixResource.hex, // <--- pass the .hex reference
+      nameSuffix: nameSuffixResource.hex, // pass the RandomId .hex token
       tags: {
         Environment: environmentSuffix,
         Project: projectName,
@@ -88,14 +88,10 @@ export class TapStack extends TerraformStack {
     const s3Module = new S3Module(this, 's3', moduleConfig);
 
     // Security Group (unique name due to suffix)
-    const securityGroupModule = new SecurityGroupModule(
-      this,
-      'security-group',
-      {
-        ...moduleConfig,
-        vpcId: vpcModule.vpcId,
-      }
-    );
+    const securityGroupModule = new SecurityGroupModule(this, 'security-group', {
+      ...moduleConfig,
+      vpcId: vpcModule.vpcId,
+    });
 
     // IAM Role (unique name due to suffix)
     const iamRoleModule = new IamRoleModule(this, 'iam-role', {
@@ -103,8 +99,8 @@ export class TapStack extends TerraformStack {
       bucketArn: s3Module.bucketArn,
     });
 
-    // Outputs - use unique names to avoid conflicts
-    new TerraformOutput(this, 'name-suffix-output', {
+    // Outputs (exact keys to match your tests)
+    new TerraformOutput(this, 'name-suffix', {
       value: nameSuffixResource.hex,
       description: 'Stable random suffix used in resource names',
     });

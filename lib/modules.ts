@@ -1,14 +1,19 @@
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
-import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
-import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
-import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { Fn } from 'cdktf';
+import { Construct } from 'constructs';
+
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
+
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { Construct } from 'constructs';
+
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
+import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
 
 export interface ModuleConfig {
   environment: string;
@@ -27,9 +32,12 @@ export class S3Module extends Construct {
   constructor(scope: Construct, id: string, config: ModuleConfig) {
     super(scope, id);
 
-    // Lowercase, hyphenated, globally unique
-    const bucketName = `${config.projectName}-${config.environment}-${config.nameSuffix
-      }-bucket`.toLowerCase();
+    // Ensure fixed parts are lowercase for S3 naming rules
+    const proj = (config.projectName ?? '').toLowerCase();
+    const env = (config.environment ?? '').toLowerCase();
+
+    // Build name using Fn.format so Terraform gets a valid expression (no tftoken)
+    const bucketName = Fn.format('%s-%s-%s-bucket', [proj, env, config.nameSuffix]);
 
     this.bucket = new S3Bucket(this, 'bucket', {
       bucket: bucketName,
@@ -38,7 +46,7 @@ export class S3Module extends Construct {
         Name: bucketName,
         Component: 'storage',
       },
-      // Safety: don't let Terraform destroy the bucket by accident
+      // Safety: avoid accidental destruction
       lifecycle: {
         preventDestroy: true,
         ignoreChanges: ['tags'],
@@ -83,14 +91,14 @@ export class SecurityGroupModule extends Construct {
   public readonly securityGroup: SecurityGroup;
   public readonly securityGroupId: string;
 
-  constructor(
-    scope: Construct,
-    id: string,
-    config: ModuleConfig & { vpcId: string }
-  ) {
+  constructor(scope: Construct, id: string, config: ModuleConfig & { vpcId: string }) {
     super(scope, id);
 
-    const sgName = `${config.projectName}-${config.environment}-${config.nameSuffix}-sg`;
+    const sgName = Fn.format('%s-%s-%s-sg', [
+      config.projectName,
+      config.environment,
+      config.nameSuffix,
+    ]);
 
     this.securityGroup = new SecurityGroup(this, 'security-group', {
       name: sgName,
@@ -141,17 +149,17 @@ export class IamRoleModule extends Construct {
   public readonly roleArn: string;
   public readonly roleName: string;
 
-  constructor(
-    scope: Construct,
-    id: string,
-    config: ModuleConfig & { bucketArn: string }
-  ) {
+  constructor(scope: Construct, id: string, config: ModuleConfig & { bucketArn: string }) {
     super(scope, id);
 
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
     const currentRegion = new DataAwsRegion(this, 'current-region');
 
-    const roleName = `${config.projectName}-${config.environment}-${config.nameSuffix}-role`;
+    const roleName = Fn.format('%s-%s-%s-role', [
+      config.projectName,
+      config.environment,
+      config.nameSuffix,
+    ]);
 
     this.role = new IamRole(this, 'iam-role', {
       name: roleName,
@@ -197,24 +205,20 @@ export class IamRoleModule extends Construct {
         },
         {
           Effect: 'Allow',
-          Action: [
-            'logs:CreateLogGroup',
-            'logs:CreateLogStream',
-            'logs:PutLogEvents',
-          ],
+          Action: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
           Resource: `arn:aws:logs:${currentRegion.name}:${callerIdentity.accountId}:log-group:/aws/${config.projectName}/${config.environment}/*`,
         },
       ],
     };
 
     new IamRolePolicy(this, 'iam-role-policy', {
-      name: `${roleName}-policy`,
+      name: Fn.format('%s-policy', [roleName]),
       role: this.role.id,
       policy: JSON.stringify(policyDocument),
     });
 
     this.roleArn = this.role.arn;
-    this.roleName = roleName;
+    this.roleName = roleName as unknown as string; // Token; fine for outputs/tests
   }
 }
 
