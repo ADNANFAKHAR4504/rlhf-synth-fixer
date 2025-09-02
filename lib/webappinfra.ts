@@ -569,16 +569,7 @@ export class WebAppInfrastructure {
                 Principal: {
                   AWS: `arn:aws:iam::${caller.accountId}:root`,
                 },
-                Action: [
-                  'kms:Encrypt',
-                  'kms:Decrypt',
-                  'kms:ReEncrypt*',
-                  'kms:GenerateDataKey*',
-                  'kms:DescribeKey',
-                  'kms:CreateGrant',
-                  'kms:ListGrants',
-                  'kms:RevokeGrant',
-                ],
+                Action: 'kms:*',
                 Resource: '*',
               },
               {
@@ -756,36 +747,38 @@ export class WebAppInfrastructure {
       `instance-policy-${environment}`,
       {
         role: instanceRole.id,
-        policy: pulumi.all([this.caller]).apply(([caller]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-                Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:/ec2/app-logs/${environment}:*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue'],
-                Resource: [
-                  `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:app-secrets-${environment}-*`,
-                  `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:db-credentials-${environment}-*`,
-                ],
-              },
-              {
-                Effect: 'Allow',
-                Action: ['kms:Decrypt'],
-                Resource: pulumi.interpolate`${kmsKey.arn}`,
-                Condition: {
-                  StringEquals: {
-                    'kms:ViaService': `secretsmanager.${region}.amazonaws.com`,
+        policy: pulumi
+          .all([this.caller, kmsKey.arn])
+          .apply(([caller, kmsArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                  Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:/ec2/app-logs/${environment}:*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: [
+                    `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:app-secrets-${environment}-*`,
+                    `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:db-credentials-${environment}-*`,
+                  ],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: kmsArn,
+                  Condition: {
+                    StringEquals: {
+                      'kms:ViaService': `secretsmanager.${region}.amazonaws.com`,
+                    },
                   },
                 },
-              },
-            ],
-          })
-        ),
+              ],
+            })
+          ),
       },
       { provider: this.provider }
     );
@@ -805,7 +798,7 @@ export class WebAppInfrastructure {
       {
         name: `/ec2/app-logs/${environment}`,
         retentionInDays: 30,
-        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        kmsKeyId: kmsKey.arn,
         tags: resourceTags,
       },
       { provider: this.provider }
@@ -1144,7 +1137,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       {
         name: `vpc-flow-logs-${environment}`,
         retentionInDays: 30,
-        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        kmsKeyId: kmsKey.arn,
         tags: resourceTags,
       },
       { provider: this.provider }
@@ -1308,7 +1301,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
         allocatedStorage: 20,
         storageType: 'gp2',
         storageEncrypted: true,
-        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        kmsKeyId: kmsKey.arn,
         dbName: 'appdb',
         username: dbCredentials.apply(
           creds => JSON.parse(creds.secretString).username
