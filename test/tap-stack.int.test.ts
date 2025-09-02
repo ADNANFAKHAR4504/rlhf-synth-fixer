@@ -12,8 +12,8 @@ let outputs: any = {};
 function loadOutputs() {
   // Try multiple possible output file locations
   const possiblePaths = [
-    path.join(process.cwd(), 'cfn-outputs', 'all-outputs.json'),
     path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json'),
+    path.join(process.cwd(), 'cfn-outputs', 'all-outputs.json'),
     path.join(process.cwd(), 'cfn-outputs', 'outputs.json')
   ];
 
@@ -22,6 +22,26 @@ function loadOutputs() {
       try {
         const data = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
         console.log(`✅ Loaded outputs from: ${outputsPath}`);
+
+        // If this is the nested structure from all-outputs.json, flatten it
+        if (outputsPath.includes('all-outputs.json')) {
+          const flattened: any = {};
+          for (const [stackName, outputs] of Object.entries(data)) {
+            if (Array.isArray(outputs)) {
+              // CDK outputs format: { "StackName": [{"OutputKey": "...", "OutputValue": "..."}] }
+              for (const output of outputs as any[]) {
+                if (output.OutputKey && output.OutputValue) {
+                  flattened[output.OutputKey] = output.OutputValue;
+                }
+              }
+            } else if (typeof outputs === 'object' && outputs !== null) {
+              // Direct key-value format
+              Object.assign(flattened, outputs);
+            }
+          }
+          return flattened;
+        }
+
         return data;
       } catch (error) {
         console.warn(`⚠️ Failed to parse ${outputsPath}:`, error);
