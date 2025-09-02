@@ -239,7 +239,6 @@ export class TapStack extends cdk.Stack {
 
     // 3. STORAGE - S3 bucket for backups
     const backupBucket = new s3.Bucket(this, 'BackupBucket', {
-      bucketName: `tap-backup-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       versioned: true,
@@ -537,7 +536,6 @@ export class TapStack extends cdk.Stack {
 
     // CloudWatch Dashboard
     const dashboard = new cloudwatch.Dashboard(this, 'ApplicationDashboard', {
-      dashboardName: `tap-dashboard-${environmentSuffix}`,
       defaultInterval: cdk.Duration.hours(1),
     });
 

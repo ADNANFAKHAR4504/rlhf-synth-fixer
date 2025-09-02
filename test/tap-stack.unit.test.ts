@@ -762,7 +762,6 @@ describe('TapStack', () => {
 
     test('should create CloudWatch dashboard', () => {
       template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: `tap-dashboard-${environmentSuffix}`,
         DashboardBody: Match.anyValue()
       });
     });

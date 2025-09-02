@@ -132,7 +132,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         Filters: [{ Name: 'attachment.vpc-id', Values: [outputs.VpcId] }]
       }));
       internetGateways = igwResponse.InternetGateways!;
-    }, TEST_TIMEOUT);
+    });
 
     test('VPC should exist and be properly configured', async () => {
       expect(vpcDetails).toBeDefined();
@@ -187,10 +187,10 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
       expect(albSG).toBeDefined();
       
       // Verify ALB SG allows HTTP and HTTPS
-      const httpRule = albSG?.IpPermissions?.find(rule => 
+      const httpRule = albSG?.IpPermissions?.find((rule: any) => 
         rule.FromPort === 80 && rule.ToPort === 80
       );
-      const httpsRule = albSG?.IpPermissions?.find(rule => 
+      const httpsRule = albSG?.IpPermissions?.find((rule: any) => 
         rule.FromPort === 443 && rule.ToPort === 443
       );
       
@@ -210,7 +210,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
       expect(dbSG).toBeDefined();
       
       // Verify database SG allows PostgreSQL (5432)
-      const postgresRule = dbSG?.IpPermissions?.find(rule => 
+      const postgresRule = dbSG?.IpPermissions?.find((rule: any) => 
         rule.FromPort === 5432 && rule.ToPort === 5432
       );
       expect(postgresRule).toBeDefined();
@@ -252,7 +252,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
       );
       expect(privateRouteTable).toBeDefined();
     });
-  }, TEST_TIMEOUT);
+  });
 
   describe('RDS Database Infrastructure', () => {
     let dbInstance: any;
@@ -277,7 +277,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         DBSubnetGroupName: `tap-db-subnet-${environmentSuffix}`
       }));
       dbSubnetGroup = subnetGroupResponse.DBSubnetGroups![0];
-    }, TEST_TIMEOUT);
+    });
 
     test('Primary database should be properly configured', async () => {
       expect(dbInstance).toBeDefined();
@@ -363,7 +363,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
       expect(dbInstance.PreferredBackupWindow).toMatch(/^\d{2}:\d{2}-\d{2}:\d{2}$/);
       expect(dbInstance.PreferredMaintenanceWindow).toMatch(/^\w{3}:\d{2}:\d{2}-\w{3}:\d{2}:\d{2}$/);
     });
-  }, TEST_TIMEOUT);
+  });
 
   describe('S3 Bucket Infrastructure', () => {
     let bucketEncryption: any;
@@ -394,7 +394,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         // Lifecycle configuration might not exist
         bucketLifecycle = [];
       }
-    }, TEST_TIMEOUT);
+    });
 
     test('S3 bucket should exist and be accessible', async () => {
       const headBucketResponse = await s3Client.send(new HeadBucketCommand({
@@ -419,13 +419,13 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     test('S3 bucket should have lifecycle configuration', async () => {
       expect(bucketLifecycle.length).toBeGreaterThan(0);
       
-      const glacierTransition = bucketLifecycle.find(rule =>
-        rule.Transitions?.some(transition => transition.StorageClass === 'GLACIER')
+      const glacierTransition = bucketLifecycle.find((rule: any) =>
+        rule.Transitions?.some((transition: any) => transition.StorageClass === 'GLACIER')
       );
       expect(glacierTransition).toBeDefined();
 
-      const deepArchiveTransition = bucketLifecycle.find(rule =>
-        rule.Transitions?.some(transition => transition.StorageClass === 'DEEP_ARCHIVE')
+      const deepArchiveTransition = bucketLifecycle.find((rule: any) =>
+        rule.Transitions?.some((transition: any) => transition.StorageClass === 'DEEP_ARCHIVE')
       );
       expect(deepArchiveTransition).toBeDefined();
     });
@@ -465,9 +465,9 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     test('S3 bucket should block public access', async () => {
       // This is configured via CDK, we verify by checking if we can access publicly
       // The bucket should deny public access due to BlockPublicAccess settings
-      expect(outputs.BackupBucketName).toMatch(/^tap-backup-dev-\d+$/);
+      expect(outputs.BackupBucketName).toMatch(/^tapstackdev-backupbucket[a-f0-9]{8}-[a-z0-9]+$/);
     });
-  }, TEST_TIMEOUT);
+  });
 
   describe('Auto Scaling Group and EC2 Infrastructure', () => {
     let autoScalingGroup: any;
@@ -489,7 +489,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
 
       // Get EC2 instances in the ASG
       if (autoScalingGroup.Instances && autoScalingGroup.Instances.length > 0) {
-        const instanceIds = autoScalingGroup.Instances.map(instance => instance.InstanceId!);
+        const instanceIds = autoScalingGroup.Instances.map((instance: any) => instance.InstanceId!);
         const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({
           InstanceIds: instanceIds
         }));
@@ -497,7 +497,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
       } else {
         instances = [];
       }
-    }, TEST_TIMEOUT);
+    });
 
     test('Auto Scaling Group should be properly configured', async () => {
       expect(autoScalingGroup).toBeDefined();
@@ -546,7 +546,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         expect(instance.BlockDeviceMappings).toBeDefined();
         expect(instance.BlockDeviceMappings!.length).toBeGreaterThan(0);
         
-        instance.BlockDeviceMappings!.forEach(blockDevice => {
+        instance.BlockDeviceMappings!.forEach((blockDevice: any) => {
           if (blockDevice.Ebs) {
             // EBS encryption status might not be visible in DescribeInstances
             // but we can check that the volume exists and has expected properties
@@ -566,7 +566,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         });
       });
     });
-  }, TEST_TIMEOUT);
+  });
 
   describe('Load Balancer Infrastructure', () => {
     let loadBalancer: any;
@@ -600,7 +600,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         }));
         targetHealth = healthResponse.TargetHealthDescriptions!;
       }
-    }, TEST_TIMEOUT);
+    });
 
     test('Load Balancer should be properly configured', async () => {
       expect(loadBalancer).toBeDefined();
@@ -690,7 +690,7 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         expect(target.Target?.Id).toBeDefined();
       });
     });
-  }, TEST_TIMEOUT);
+  });
 
   describe('Overall System Health Check', () => {
     test('All critical infrastructure components should be healthy', async () => {
@@ -773,5 +773,5 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         }
       }
     });
-  }, TEST_TIMEOUT);
+  });
 });
