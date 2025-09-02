@@ -34,7 +34,7 @@ public final class Main {
      * 
      * @param args Command line arguments (not used in this example)
      */
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         Pulumi.run(Main::defineInfrastructure);
     }
 
