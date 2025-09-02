@@ -613,26 +613,140 @@
         "VpcId": {
             "Value": {
                 "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VpcId"
+                }
+            }
+        },
+        "InternetGatewayId": {
+            "Value": {
+                "Ref": "InternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-InternetGatewayId"
+                }
             }
         },
         "PublicSubnet1Id": {
             "Value": {
                 "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet1Id"
+                }
             }
         },
         "PublicSubnet2Id": {
             "Value": {
                 "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet2Id"
+                }
             }
         },
         "PrivateSubnet1Id": {
             "Value": {
                 "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet1Id"
+                }
             }
         },
         "PrivateSubnet2Id": {
             "Value": {
                 "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "PublicRouteTableId": {
+            "Value": {
+                "Ref": "PublicRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicRouteTableId"
+                }
+            }
+        },
+        "WebSecurityGroupId": {
+            "Value": {
+                "Ref": "WebSG"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-WebSecurityGroupId"
+                }
+            }
+        },
+        "EC2InstanceId": {
+            "Value": {
+                "Ref": "EC2Instance"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2InstanceId"
+                }
+            }
+        },
+        "EC2InstanceAZ": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Instance",
+                    "AvailabilityZone"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2InstanceAZ"
+                }
+            }
+        },
+        "EC2InstancePrivateIp": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Instance",
+                    "PrivateIp"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2InstancePrivateIp"
+                }
+            }
+        },
+        "EC2InstancePublicIp": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Instance",
+                    "PublicIp"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2InstancePublicIp"
+                }
+            }
+        },
+        "SecureBucketName": {
+            "Value": {
+                "Ref": "SecureBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-SecureBucketName"
+                }
             }
         },
         "S3BucketArn": {
@@ -641,6 +755,21 @@
                     "SecureBucket",
                     "Arn"
                 ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-SecureBucketArn"
+                }
+            }
+        },
+        "TrailBucketName": {
+            "Value": {
+                "Ref": "TrailBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TrailBucketName"
+                }
             }
         },
         "TrailBucketArn": {
@@ -649,11 +778,69 @@
                     "TrailBucket",
                     "Arn"
                 ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TrailBucketArn"
+                }
+            }
+        },
+        "KmsKeyId": {
+            "Value": {
+                "Ref": "KmsKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-KmsKeyId"
+                }
             }
         },
         "KmsKeyArn": {
             "Value": {
-                "Ref": "KmsKey"
+                "Fn::GetAtt": [
+                    "KmsKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-KmsKeyArn"
+                }
+            }
+        },
+        "ConfigRoleArn": {
+            "Condition": "CreateConfig",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ConfigRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ConfigRoleArn"
+                }
+            }
+        },
+        "ConfigRecorderName": {
+            "Condition": "CreateConfig",
+            "Value": {
+                "Ref": "ConfigRecorder"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ConfigRecorderName"
+                }
+            }
+        },
+        "UnauthorizedApiCallsAlarmName": {
+            "Value": {
+                "Ref": "UnauthorizedApiCallsAlarm"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-UnauthorizedApiCallsAlarmName"
+                }
             }
         }
     }

@@ -339,19 +339,127 @@ Resources:
           Value: !Ref EnvironmentName
 
 Outputs:
+  #################################
+  # VPC & Networking
+  #################################
   VpcId:
     Value: !Ref VPC
+    Export:
+      Name: !Sub "${EnvironmentName}-VpcId"
+
+  InternetGatewayId:
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${EnvironmentName}-InternetGatewayId"
+
   PublicSubnet1Id:
     Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${EnvironmentName}-PublicSubnet1Id"
+
   PublicSubnet2Id:
     Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${EnvironmentName}-PublicSubnet2Id"
+
   PrivateSubnet1Id:
     Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${EnvironmentName}-PrivateSubnet1Id"
+
   PrivateSubnet2Id:
     Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${EnvironmentName}-PrivateSubnet2Id"
+
+  PublicRouteTableId:
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub "${EnvironmentName}-PublicRouteTableId"
+
+  WebSecurityGroupId:
+    Value: !Ref WebSG
+    Export:
+      Name: !Sub "${EnvironmentName}-WebSecurityGroupId"
+
+  #################################
+  # EC2
+  #################################
+  EC2InstanceId:
+    Value: !Ref EC2Instance
+    Export:
+      Name: !Sub "${EnvironmentName}-EC2InstanceId"
+
+  EC2InstanceAZ:
+    Value: !GetAtt EC2Instance.AvailabilityZone
+    Export:
+      Name: !Sub "${EnvironmentName}-EC2InstanceAZ"
+
+  EC2InstancePrivateIp:
+    Value: !GetAtt EC2Instance.PrivateIp
+    Export:
+      Name: !Sub "${EnvironmentName}-EC2InstancePrivateIp"
+
+  EC2InstancePublicIp:
+    Value: !GetAtt EC2Instance.PublicIp
+    Export:
+      Name: !Sub "${EnvironmentName}-EC2InstancePublicIp"
+
+  #################################
+  # S3
+  #################################
+  SecureBucketName:
+    Value: !Ref SecureBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-SecureBucketName"
+
   S3BucketArn:
     Value: !GetAtt SecureBucket.Arn
+    Export:
+      Name: !Sub "${EnvironmentName}-SecureBucketArn"
+
+  TrailBucketName:
+    Value: !Ref TrailBucket
+    Export:
+      Name: !Sub "${EnvironmentName}-TrailBucketName"
+
   TrailBucketArn:
     Value: !GetAtt TrailBucket.Arn
-  KmsKeyArn:
+    Export:
+      Name: !Sub "${EnvironmentName}-TrailBucketArn"
+
+  #################################
+  # KMS
+  #################################
+  KmsKeyId:
     Value: !Ref KmsKey
+    Export:
+      Name: !Sub "${EnvironmentName}-KmsKeyId"
+
+  KmsKeyArn:
+    Value: !GetAtt KmsKey.Arn
+    Export:
+      Name: !Sub "${EnvironmentName}-KmsKeyArn"
+
+  #################################
+  # IAM / Config
+  #################################
+  ConfigRoleArn:
+    Condition: CreateConfig
+    Value: !GetAtt ConfigRole.Arn
+    Export:
+      Name: !Sub "${EnvironmentName}-ConfigRoleArn"
+
+  ConfigRecorderName:
+    Condition: CreateConfig
+    Value: !Ref ConfigRecorder
+    Export:
+      Name: !Sub "${EnvironmentName}-ConfigRecorderName"
+
+  #################################
+  # CloudWatch
+  #################################
+  UnauthorizedApiCallsAlarmName:
+    Value: !Ref UnauthorizedApiCallsAlarm
+    Export:
+      Name: !Sub "${EnvironmentName}-UnauthorizedApiCallsAlarmName"
