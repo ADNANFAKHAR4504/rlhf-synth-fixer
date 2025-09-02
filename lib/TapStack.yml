@@ -309,6 +309,9 @@ Conditions:
   # General Conditions
   HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
 
+  EnableBackupAndHasTwoAZs:
+    !And [Condition: EnableBackup, Condition: HasTwoSubnetAZs]
+
 Resources:
   # =========================
   # KMS Key for Encryption
@@ -1150,7 +1153,7 @@ Resources:
               Owner: !Ref Owner
 
   BackupSelection:
-    Condition: EnableBackup
+    Condition: EnableBackupAndHasTwoAZs
     Type: AWS::Backup::BackupSelection
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -1163,11 +1166,7 @@ Resources:
           - !If [
               UseExistingDatabaseInstance,
               !Ref ExistingDatabaseInstanceId,
-              !If [
-                HasTwoSubnetAZs,
-                !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}',
-                !Ref AWS::NoValue,
-              ],
+              !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DatabaseInstance}',
             ]
 
   BackupRole:
