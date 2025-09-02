@@ -226,7 +226,7 @@ resource "aws_kms_key" "main" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail"
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail-${local.suffix}"
           }
         }
       },
@@ -270,7 +270,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/main-key"
+  name          = "alias/main-key-${local.suffix}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -365,7 +365,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail-${local.suffix}"
           }
         }
       },
@@ -380,7 +380,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
-            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/main-cloudtrail-${local.suffix}"
           }
         }
       }
@@ -389,7 +389,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 }
 
 resource "aws_cloudtrail" "main" {
-  name           = "main-cloudtrail"
+  name           = "main-cloudtrail-${local.suffix}"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
   s3_key_prefix  = "cloudtrail"
 
@@ -865,7 +865,7 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
 
 resource "aws_lambda_function" "example" {
   filename         = "lambda_function.zip"
-  function_name    = "example-function"
+  function_name    = "example-function-${local.suffix}"
   role             = data.aws_iam_role.lambda.arn
   handler          = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
