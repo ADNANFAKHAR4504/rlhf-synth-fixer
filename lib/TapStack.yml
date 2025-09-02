@@ -102,7 +102,6 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
-      # Removed 'AccessControl: LogDeliveryWrite' to resolve the error
 
   ALBAccessLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
