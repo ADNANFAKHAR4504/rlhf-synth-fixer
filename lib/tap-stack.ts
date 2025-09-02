@@ -84,7 +84,7 @@ export class TapStack extends cdk.Stack {
         enableKeyRotation: true,
         keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
         keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
-        removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow destruction for testing
+        removalPolicy: cdk.RemovalPolicy.RETAIN, // Retain the key for future use
         pendingWindow: cdk.Duration.days(7), // Minimum waiting period for key deletion
         policy: new iam.PolicyDocument({
           statements: [
