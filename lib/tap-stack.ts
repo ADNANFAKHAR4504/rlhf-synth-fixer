@@ -108,9 +108,10 @@ export class TapStack extends TerraformStack {
       {
         type: 'list(string)',
         description: 'CIDR blocks allowed to access the application',
-        default: environmentSuffix === 'prod' || environmentSuffix === 'production' 
-          ? ['10.0.0.0/8'] // More restrictive for production
-          : ['0.0.0.0/0'], // Open for development
+        default:
+          environmentSuffix === 'prod' || environmentSuffix === 'production'
+            ? ['10.0.0.0/8'] // More restrictive for production
+            : ['0.0.0.0/0'], // Open for development
         validation: [
           {
             condition: 'length(var.allowed_cidr_blocks) > 0',
@@ -167,7 +168,7 @@ export class TapStack extends TerraformStack {
   private getInstanceType(environmentSuffix: string): string {
     const prodEnvironments = ['production', 'prod', 'prd'];
     const stagingEnvironments = ['staging', 'stage', 'stg'];
-    
+
     if (prodEnvironments.includes(environmentSuffix.toLowerCase())) {
       return 't3.medium';
     } else if (stagingEnvironments.includes(environmentSuffix.toLowerCase())) {
