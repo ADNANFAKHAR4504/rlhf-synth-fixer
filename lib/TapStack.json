@@ -1,134 +1,183 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Production-grade SOC2-compliant AWS infrastructure with VPC, RDS, ECS, and monitoring",
+    "Description": "SOC2-compliant AWS infrastructure with VPC, RDS, ECS, and monitoring",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
-            "Default": "tapstack",
-            "Description": "Environment name prefix for resources"
+            "Default": "production",
+            "Description": "Environment name (dev, staging, production)"
         },
-        "EnvironmentSuffix": {
+        "CompanyName": {
             "Type": "String",
-            "Default": "dev",
-            "Description": "Environment suffix (dev, staging, prod)"
-        },
-        "VpcCIDR": {
-            "Type": "String",
-            "Default": "10.0.0.0/16",
-            "Description": "CIDR block for the VPC"
-        },
-        "PublicSubnet1CIDR": {
-            "Type": "String",
-            "Default": "10.0.1.0/24",
-            "Description": "CIDR block for Public Subnet 1 in us-east-1a"
-        },
-        "PublicSubnet2CIDR": {
-            "Type": "String",
-            "Default": "10.0.2.0/24",
-            "Description": "CIDR block for Public Subnet 2 in us-east-1b"
-        },
-        "PrivateSubnet1CIDR": {
-            "Type": "String",
-            "Default": "10.0.3.0/24",
-            "Description": "CIDR block for Private Subnet 1 in us-east-1a"
-        },
-        "PrivateSubnet2CIDR": {
-            "Type": "String",
-            "Default": "10.0.4.0/24",
-            "Description": "CIDR block for Private Subnet 2 in us-east-1b"
-        },
-        "DatabaseSubnet1CIDR": {
-            "Type": "String",
-            "Default": "10.0.5.0/24",
-            "Description": "CIDR block for Database Subnet 1 in us-east-1a"
-        },
-        "DatabaseSubnet2CIDR": {
-            "Type": "String",
-            "Default": "10.0.6.0/24",
-            "Description": "CIDR block for Database Subnet 2 in us-east-1b"
+            "Default": "company",
+            "Description": "Company name for resource naming"
         },
         "DatabaseName": {
             "Type": "String",
-            "Default": "applicationdb",
+            "Default": "appdb",
             "Description": "RDS database name"
-        },
-        "DatabaseUsername": {
-            "Type": "String",
-            "Default": "dbadmin",
-            "Description": "RDS database admin username"
         },
         "DatabaseInstanceClass": {
             "Type": "String",
             "Default": "db.t3.micro",
             "Description": "RDS instance type"
         },
-        "SSLCertificate": {
+        "ServiceName": {
             "Type": "String",
-            "Default": "",
-            "Description": "ARN of SSL certificate for HTTPS listener (required for production)"
+            "Default": "app-service",
+            "Description": "ECS service name"
+        },
+        "ContainerPort": {
+            "Type": "Number",
+            "Default": 80,
+            "Description": "Container port for ALB"
+        },
+        "ContainerImage": {
+            "Type": "String",
+            "Default": "nginx:latest",
+            "Description": "ECS container image"
         }
     },
-    "Mappings": {
-        "RegionMap": {
-            "us-east-1": {
-                "AZ1": "us-east-1a",
-                "AZ2": "us-east-1b"
-            }
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentName",
+                        "CompanyName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DatabaseName",
+                        "DatabaseInstanceClass"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "ECS Configuration"
+                    },
+                    "Parameters": [
+                        "ServiceName",
+                        "ContainerPort",
+                        "ContainerImage"
+                    ]
+                }
+            ]
         }
     },
     "Conditions": {
         "IsProduction": {
             "Fn::Equals": [
                 {
-                    "Ref": "EnvironmentSuffix"
+                    "Ref": "EnvironmentName"
                 },
-                "prod"
-            ]
-        },
-        "HasSSLCertificate": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "SSLCertificate"
-                        },
-                        ""
-                    ]
-                }
+                "production"
             ]
         }
     },
     "Resources": {
+        "KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for encrypting RDS and S3 data",
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Id": "key-default-1",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail to encrypt logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:GenerateDataKey",
+                                "kms:Decrypt"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringLike": {
+                                    "kms:EncryptionContext:aws:cloudtrail:arn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "encryption"
+                    }
+                ]
+            }
+        },
+        "KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${CompanyName}-${EnvironmentName}-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
-                "CidrBlock": {
-                    "Ref": "VpcCIDR"
-                },
+                "CidrBlock": "10.0.0.0/16",
                 "EnableDnsSupport": true,
                 "EnableDnsHostnames": true,
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-vpc"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-vpc"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Project",
-                        "Value": {
                             "Ref": "EnvironmentName"
                         }
                     },
                     {
-                        "Key": "Compliance",
-                        "Value": "SOC2"
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
                     }
                 ]
             }
@@ -140,13 +189,19 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-igw"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-igw"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
@@ -169,16 +224,13 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet1CIDR"
-                },
+                "CidrBlock": "10.0.1.0/24",
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        0,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ1"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "MapPublicIpOnLaunch": true,
@@ -186,18 +238,24 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-public-subnet-1"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-subnet-1"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     },
                     {
                         "Key": "Tier",
-                        "Value": "Public"
+                        "Value": "public"
                     }
                 ]
             }
@@ -208,16 +266,13 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Ref": "PublicSubnet2CIDR"
-                },
+                "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        1,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ2"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "MapPublicIpOnLaunch": true,
@@ -225,18 +280,24 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-public-subnet-2"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-subnet-2"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     },
                     {
                         "Key": "Tier",
-                        "Value": "Public"
+                        "Value": "public"
                     }
                 ]
             }
@@ -247,34 +308,37 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet1CIDR"
-                },
+                "CidrBlock": "10.0.3.0/24",
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        0,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ1"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-private-subnet-1"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-subnet-1"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     },
                     {
                         "Key": "Tier",
-                        "Value": "Private"
+                        "Value": "private"
                     }
                 ]
             }
@@ -285,138 +349,37 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "CidrBlock": {
-                    "Ref": "PrivateSubnet2CIDR"
-                },
+                "CidrBlock": "10.0.4.0/24",
                 "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
+                    "Fn::Select": [
+                        1,
                         {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ2"
+                            "Fn::GetAZs": ""
+                        }
                     ]
                 },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-private-subnet-2"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-subnet-2"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     },
                     {
                         "Key": "Tier",
-                        "Value": "Private"
-                    }
-                ]
-            }
-        },
-        "DatabaseSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "DatabaseSubnet1CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ1"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db-subnet-1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Tier",
-                        "Value": "Database"
-                    }
-                ]
-            }
-        },
-        "DatabaseSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": {
-                    "Ref": "DatabaseSubnet2CIDR"
-                },
-                "AvailabilityZone": {
-                    "Fn::FindInMap": [
-                        "RegionMap",
-                        {
-                            "Ref": "AWS::Region"
-                        },
-                        "AZ2"
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db-subnet-2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Tier",
-                        "Value": "Database"
-                    }
-                ]
-            }
-        },
-        "DatabaseSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Database subnet group",
-                "SubnetIds": [
-                    {
-                        "Ref": "DatabaseSubnet1"
-                    },
-                    {
-                        "Ref": "DatabaseSubnet2"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db-subnet-group"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
+                        "Value": "private"
                     }
                 ]
             }
@@ -431,13 +394,47 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-public-rt"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-rt"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
@@ -445,7 +442,6 @@
         },
         "PublicRoute": {
             "Type": "AWS::EC2::Route",
-            "DependsOn": "VPCGatewayAttachment",
             "Properties": {
                 "RouteTableId": {
                     "Ref": "PublicRouteTable"
@@ -456,7 +452,7 @@
                 }
             }
         },
-        "PublicSubnet1RouteTableAssociation": {
+        "PublicSubnetRouteTableAssociation1": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
@@ -467,7 +463,7 @@
                 }
             }
         },
-        "PublicSubnet2RouteTableAssociation": {
+        "PublicSubnetRouteTableAssociation2": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
             "Properties": {
                 "SubnetId": {
@@ -478,22 +474,49 @@
                 }
             }
         },
+        "PrivateSubnetRouteTableAssociation1": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnetRouteTableAssociation2": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
         "EIP": {
             "Type": "AWS::EC2::EIP",
-            "DependsOn": "VPCGatewayAttachment",
             "Properties": {
                 "Domain": "vpc",
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-nat-eip"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-nat-eip"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
@@ -515,35 +538,19 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-nat-gw"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-nat-gw"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-private-rt"
+                            "Ref": "EnvironmentName"
                         }
                     },
                     {
-                        "Key": "Environment",
+                        "Key": "Company",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
@@ -561,155 +568,6 @@
                 }
             }
         },
-        "PrivateSubnet1RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
-                }
-            }
-        },
-        "PrivateSubnet2RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
-                }
-            }
-        },
-        "DatabaseRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db-rt"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "DatabaseRoute": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "DatabaseRouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway"
-                }
-            }
-        },
-        "DatabaseSubnet1RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "DatabaseSubnet1"
-                },
-                "RouteTableId": {
-                    "Ref": "DatabaseRouteTable"
-                }
-            }
-        },
-        "DatabaseSubnet2RouteTableAssociation": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "DatabaseSubnet2"
-                },
-                "RouteTableId": {
-                    "Ref": "DatabaseRouteTable"
-                }
-            }
-        },
-        "PrivateNetworkACL": {
-            "Type": "AWS::EC2::NetworkAcl",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-private-nacl"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateNetworkACLInboundRule": {
-            "Type": "AWS::EC2::NetworkAclEntry",
-            "Properties": {
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                },
-                "RuleNumber": 100,
-                "Protocol": -1,
-                "RuleAction": "allow",
-                "CidrBlock": {
-                    "Ref": "VpcCIDR"
-                }
-            }
-        },
-        "PrivateNetworkACLOutboundRule": {
-            "Type": "AWS::EC2::NetworkAclEntry",
-            "Properties": {
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                },
-                "RuleNumber": 100,
-                "Protocol": -1,
-                "Egress": true,
-                "RuleAction": "allow",
-                "CidrBlock": "0.0.0.0/0"
-            }
-        },
-        "PrivateSubnet1NetworkACLAssociation": {
-            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1"
-                },
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                }
-            }
-        },
-        "PrivateSubnet2NetworkACLAssociation": {
-            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2"
-                },
-                "NetworkAclId": {
-                    "Ref": "PrivateNetworkACL"
-                }
-            }
-        },
         "ALBSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
@@ -722,35 +580,32 @@
                         "IpProtocol": "tcp",
                         "FromPort": 80,
                         "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTP traffic"
+                        "CidrIp": "0.0.0.0/0"
                     },
                     {
                         "IpProtocol": "tcp",
                         "FromPort": 443,
                         "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow HTTPS traffic"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow all outbound traffic"
+                        "CidrIp": "0.0.0.0/0"
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-alb-sg"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-alb-sg"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
@@ -759,48 +614,41 @@
         "ECSSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupDescription": "Security group for ECS instances",
+                "GroupDescription": "Security group for ECS tasks",
                 "VpcId": {
                     "Ref": "VPC"
                 },
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
+                        "FromPort": {
+                            "Ref": "ContainerPort"
+                        },
+                        "ToPort": {
+                            "Ref": "ContainerPort"
+                        },
                         "SourceSecurityGroupId": {
                             "Ref": "ALBSecurityGroup"
-                        },
-                        "Description": "Allow HTTP from ALB"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "SourceSecurityGroupId": {
-                            "Ref": "ALBSecurityGroup"
-                        },
-                        "Description": "Allow HTTPS from ALB"
-                    }
-                ],
-                "SecurityGroupEgress": [
-                    {
-                        "IpProtocol": -1,
-                        "CidrIp": "0.0.0.0/0",
-                        "Description": "Allow all outbound traffic"
+                        }
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ecs-sg"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-ecs-sg"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
@@ -816,100 +664,531 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 5432,
-                        "ToPort": 5432,
+                        "FromPort": 3306,
+                        "ToPort": 3306,
                         "SourceSecurityGroupId": {
                             "Ref": "ECSSecurityGroup"
-                        },
-                        "Description": "Allow PostgreSQL from ECS"
+                        }
                     }
                 ],
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-rds-sg"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-rds-sg"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
             }
         },
-        "KMSKey": {
-            "Type": "AWS::KMS::Key",
+        "PublicNACL": {
+            "Type": "AWS::EC2::NetworkAcl",
             "Properties": {
-                "Description": "KMS key for encrypting RDS and S3 data",
-                "KeyPolicy": {
-                    "Version": "2012-10-17",
-                    "Id": "key-default-1",
-                    "Statement": [
-                        {
-                            "Sid": "Enable IAM User Permissions",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow CloudTrail Service",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:GenerateDataKey*",
-                                "kms:DescribeKey",
-                                "kms:Encrypt",
-                                "kms:ReEncrypt*",
-                                "kms:Decrypt"
-                            ],
-                            "Resource": "*"
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-nacl"
                         }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateNACL": {
+            "Type": "AWS::EC2::NetworkAcl",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-nacl"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for RDS",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-db-subnet-group"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "RDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBName": {
+                    "Ref": "DatabaseName"
+                },
+                "DBInstanceClass": {
+                    "Ref": "DatabaseInstanceClass"
+                },
+                "Engine": "mysql",
+                "EngineVersion": "8.0.40",
+                "MasterUsername": "{{resolve:secretsmanager:my-db-secret:SecretString:username}}",
+                "MasterUserPassword": "{{resolve:secretsmanager:my-db-secret:SecretString:password}}",
+                "AllocatedStorage": 20,
+                "MaxAllocatedStorage": 100,
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "KMSKey"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Fn::GetAtt": [
+                            "RDSSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "MultiAZ": {
+                    "Fn::If": [
+                        "IsProduction",
+                        true,
+                        false
+                    ]
+                },
+                "BackupRetentionPeriod": {
+                    "Fn::If": [
+                        "IsProduction",
+                        35,
+                        7
+                    ]
+                },
+                "DeletionProtection": {
+                    "Fn::If": [
+                        "IsProduction",
+                        true,
+                        false
                     ]
                 },
                 "Tags": [
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-kms-key"
+                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-rds"
                         }
                     },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
                         }
                     },
                     {
-                        "Key": "Compliance",
-                        "Value": "SOC2"
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
                     }
                 ]
             }
         },
-        "KMSKeyAlias": {
-            "Type": "AWS::KMS::Alias",
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
             "Properties": {
-                "AliasName": {
-                    "Fn::Sub": "alias/${EnvironmentName}-${EnvironmentSuffix}-key"
+                "ClusterName": {
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-cluster"
                 },
-                "TargetKeyId": {
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ECSExecutionPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecr:GetAuthorizationToken",
+                                        "ecr:BatchCheckLayerAvailability",
+                                        "ecr:GetDownloadUrlForLayer",
+                                        "ecr:BatchGetImage",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "kms:Decrypt"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "TaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-task"
+                },
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": 256,
+                "Memory": 512,
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": {
+                            "Ref": "ServiceName"
+                        },
+                        "Image": {
+                            "Ref": "ContainerImage"
+                        },
+                        "PortMappings": [
+                            {
+                                "ContainerPort": {
+                                    "Ref": "ContainerPort"
+                                }
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "CloudWatchLogsGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "ecs"
+                            }
+                        },
+                        "Environment": [
+                            {
+                                "Name": "DATABASE_HOST",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "RDSInstance",
+                                        "Endpoint.Address"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "DATABASE_NAME",
+                                "Value": {
+                                    "Ref": "DatabaseName"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-alb"
+                },
+                "Scheme": "internet-facing",
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-tg"
+                },
+                "Port": {
+                    "Ref": "ContainerPort"
+                },
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "ip",
+                "HealthCheckPath": "/",
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 2,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSService": {
+            "Type": "AWS::ECS::Service",
+            "Properties": {
+                "ServiceName": {
+                    "Ref": "ServiceName"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "TaskDefinition"
+                },
+                "DesiredCount": 2,
+                "LaunchType": "FARGATE",
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "AssignPublicIp": "ENABLED",
+                        "SecurityGroups": [
+                            {
+                                "Ref": "ECSSecurityGroup"
+                            }
+                        ],
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnet1"
+                            },
+                            {
+                                "Ref": "PrivateSubnet2"
+                            }
+                        ]
+                    }
+                },
+                "LoadBalancers": [
+                    {
+                        "ContainerName": {
+                            "Ref": "ServiceName"
+                        },
+                        "ContainerPort": {
+                            "Ref": "ContainerPort"
+                        },
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
+                    }
+                ]
+            }
+        },
+        "CloudWatchLogsGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/${CompanyName}-${EnvironmentName}"
+                },
+                "RetentionInDays": 90,
+                "KmsKeyId": {
                     "Ref": "KMSKey"
                 }
             }
         },
-        "ApplicationLogsBucket": {
+        "LogsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-logs-${AWS::AccountId}"
+                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
@@ -938,9 +1217,25 @@
                             ]
                         },
                         {
-                            "Id": "ExpireAfter365Days",
+                            "Id": "TransitionToGlacier",
                             "Status": "Enabled",
-                            "ExpirationInDays": 365
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 60,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        },
+                        {
+                            "Id": "ExpireOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionTransitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "STANDARD_IA"
+                                }
+                            ],
+                            "NoncurrentVersionExpirationInDays": 90
                         }
                     ]
                 },
@@ -952,670 +1247,88 @@
                 },
                 "Tags": [
                     {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-app-logs"
-                        }
-                    },
-                    {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
                         }
                     },
                     {
-                        "Key": "Compliance",
-                        "Value": "SOC2"
-                    }
-                ]
-            }
-        },
-        "CloudTrailBucketPolicy": {
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "ApplicationLogsBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSCloudTrailAclCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:GetBucketAcl",
-                            "Resource": {
-                                "Fn::Sub": "${ApplicationLogsBucket.Arn}"
-                            }
-                        },
-                        {
-                            "Sid": "AWSCloudTrailWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": {
-                                "Fn::Sub": "${ApplicationLogsBucket.Arn}/cloudtrail/*"
-                            },
-                            "Condition": {
-                                "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "CloudWatchLogsGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/ecs/${EnvironmentName}-${EnvironmentSuffix}"
-                },
-                "RetentionInDays": 365,
-                "Tags": [
-                    {
-                        "Key": "Name",
+                        "Key": "Company",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-logs"
+                            "Ref": "CompanyName"
                         }
                     },
                     {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
+                        "Key": "Purpose",
+                        "Value": "logs"
                     }
                 ]
             }
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": "CloudTrailBucketPolicy",
             "Properties": {
                 "TrailName": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-trail"
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-trail"
                 },
                 "S3BucketName": {
-                    "Ref": "ApplicationLogsBucket"
+                    "Ref": "LogsBucket"
                 },
-                "S3KeyPrefix": "cloudtrail/",
+                "S3KeyPrefix": "cloudtrail",
                 "IncludeGlobalServiceEvents": true,
                 "IsMultiRegionTrail": true,
                 "EnableLogFileValidation": true,
-                "IsLogging": true,
                 "KMSKeyId": {
                     "Ref": "KMSKey"
                 },
+                "IsLogging": true,
                 "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-trail"
-                        }
-                    },
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "EnvironmentName"
                         }
                     },
                     {
-                        "Key": "Compliance",
-                        "Value": "SOC2"
+                        "Key": "Company",
+                        "Value": {
+                            "Ref": "CompanyName"
+                        }
                     }
                 ]
             }
         },
-        "DatabaseSecret": {
-            "Type": "AWS::SecretsManager::Secret",
+        "RAMShare": {
+            "Type": "AWS::RAM::ResourceShare",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db-password"
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-share"
                 },
-                "Description": "RDS master password",
-                "GenerateSecretString": {
-                    "SecretStringTemplate": {
-                        "Fn::Sub": "{\"username\": \"${DatabaseUsername}\"}"
-                    },
-                    "GenerateStringKey": "password",
-                    "PasswordLength": 32,
-                    "ExcludeCharacters": "\"@/\\"
-                },
-                "KmsKeyId": {
-                    "Ref": "KMSKey"
-                },
-                "Tags": [
+                "AllowExternalPrincipals": false,
+                "Principals": [
                     {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db-secret"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "RDSInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "DeletionPolicy": "Snapshot",
-            "UpdateReplacePolicy": "Snapshot",
-            "Properties": {
-                "DBInstanceIdentifier": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db"
-                },
-                "DBName": {
-                    "Ref": "DatabaseName"
-                },
-                "Engine": "postgres",
-                "EngineVersion": "13.21",
-                "DBInstanceClass": {
-                    "Ref": "DatabaseInstanceClass"
-                },
-                "MasterUsername": {
-                    "Ref": "DatabaseUsername"
-                },
-                "ManageMasterUserPassword": true,
-                "MasterUserSecret": {
-                    "KmsKeyId": {
-                        "Ref": "KMSKey"
-                    }
-                },
-                "AllocatedStorage": 20,
-                "MaxAllocatedStorage": 100,
-                "StorageType": "gp2",
-                "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Ref": "KMSKey"
-                },
-                "DBSubnetGroupName": {
-                    "Ref": "DatabaseSubnetGroup"
-                },
-                "VPCSecurityGroups": [
-                    {
-                        "Ref": "RDSSecurityGroup"
+                        "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
                     }
                 ],
-                "MultiAZ": {
-                    "Fn::If": [
-                        "IsProduction",
-                        true,
-                        false
-                    ]
-                },
-                "BackupRetentionPeriod": {
-                    "Fn::If": [
-                        "IsProduction",
-                        35,
-                        7
-                    ]
-                },
-                "DeletionProtection": {
-                    "Fn::If": [
-                        "IsProduction",
-                        true,
-                        false
-                    ]
-                },
-                "EnablePerformanceInsights": true,
-                "PerformanceInsightsKMSKeyId": {
-                    "Ref": "KMSKey"
-                },
-                "PerformanceInsightsRetentionPeriod": {
-                    "Fn::If": [
-                        "IsProduction",
-                        731,
-                        7
-                    ]
-                },
-                "PubliclyAccessible": false,
-                "Tags": [
+                "ResourceArns": [
                     {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-db"
-                        }
+                        "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet1}"
                     },
                     {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    },
-                    {
-                        "Key": "Compliance",
-                        "Value": "SOC2"
-                    }
-                ]
-            }
-        },
-        "ApplicationLoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-alb"
-                },
-                "Scheme": "internet-facing",
-                "Subnets": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2"
-                    }
-                ],
-                "SecurityGroups": [
-                    {
-                        "Ref": "ALBSecurityGroup"
-                    }
-                ],
-                "Type": "application",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-alb"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-tg"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "TargetType": "ip",
-                "HealthCheckPath": "/",
-                "HealthCheckProtocol": "HTTP",
-                "HealthCheckPort": "traffic-port",
-                "HealthCheckIntervalSeconds": 30,
-                "HealthCheckTimeoutSeconds": 5,
-                "HealthyThresholdCount": 2,
-                "UnhealthyThresholdCount": 2,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-tg"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "ALBListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "ForwardConfig": {
-                            "TargetGroups": [
-                                {
-                                    "TargetGroupArn": {
-                                        "Ref": "ECSTargetGroup"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "ALBListenerHTTPS": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Condition": "HasSSLCertificate",
-            "Properties": {
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "Port": 443,
-                "Protocol": "HTTPS",
-                "SslPolicy": "ELBSecurityPolicy-TLS-1-2-2017-01",
-                "Certificates": [
-                    {
-                        "CertificateArn": {
-                            "Ref": "SSLCertificate"
-                        }
-                    }
-                ],
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "ForwardConfig": {
-                            "TargetGroups": [
-                                {
-                                    "TargetGroupArn": {
-                                        "Ref": "ECSTargetGroup"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSCluster": {
-            "Type": "AWS::ECS::Cluster",
-            "Properties": {
-                "ClusterName": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-cluster"
-                },
-                "CapacityProviders": [
-                    "FARGATE",
-                    "FARGATE_SPOT"
-                ],
-                "DefaultCapacityProviderStrategy": [
-                    {
-                        "CapacityProvider": "FARGATE",
-                        "Weight": 1
-                    }
-                ],
-                "ClusterSettings": [
-                    {
-                        "Name": "containerInsights",
-                        "Value": "enabled"
+                        "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet2}"
                     }
                 ],
                 "Tags": [
                     {
-                        "Key": "Name",
+                        "Key": "Environment",
                         "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-cluster"
+                            "Ref": "EnvironmentName"
                         }
                     },
                     {
-                        "Key": "Environment",
+                        "Key": "Company",
                         "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSExecutionRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ecs-tasks.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ecs-execution-policy"
-                        },
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "ecr:GetAuthorizationToken",
-                                        "ecr:BatchCheckLayerAvailability",
-                                        "ecr:GetDownloadUrlForLayer",
-                                        "ecr:BatchGetImage",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents",
-                                        "kms:Decrypt",
-                                        "secretsmanager:GetSecretValue"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ecs-execution-role"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSTaskRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ecs-tasks.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "Policies": [
-                    {
-                        "PolicyName": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ecs-task-policy"
-                        },
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "s3:GetObject",
-                                        "s3:PutObject"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "${ApplicationLogsBucket}/*"
-                                    }
-                                },
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "rds-db:connect"
-                                    ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${RDSInstance.DBInstanceIdentifier}/*"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ecs-task-role"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSTaskDefinition": {
-            "Type": "AWS::ECS::TaskDefinition",
-            "Properties": {
-                "Family": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-task"
-                },
-                "NetworkMode": "awsvpc",
-                "RequiresCompatibilities": [
-                    "FARGATE"
-                ],
-                "Cpu": 256,
-                "Memory": 512,
-                "ExecutionRoleArn": {
-                    "Fn::GetAtt": [
-                        "ECSExecutionRole",
-                        "Arn"
-                    ]
-                },
-                "TaskRoleArn": {
-                    "Fn::GetAtt": [
-                        "ECSTaskRole",
-                        "Arn"
-                    ]
-                },
-                "ContainerDefinitions": [
-                    {
-                        "Name": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-container"
-                        },
-                        "Image": "nginx:latest",
-                        "PortMappings": [
-                            {
-                                "ContainerPort": 80,
-                                "Protocol": "tcp"
-                            }
-                        ],
-                        "LogConfiguration": {
-                            "LogDriver": "awslogs",
-                            "Options": {
-                                "awslogs-group": {
-                                    "Ref": "CloudWatchLogsGroup"
-                                },
-                                "awslogs-region": {
-                                    "Ref": "AWS::Region"
-                                },
-                                "awslogs-stream-prefix": "ecs"
-                            }
-                        },
-                        "Environment": [
-                            {
-                                "Name": "DATABASE_URL",
-                                "Value": {
-                                    "Fn::Sub": "postgresql://${DatabaseUsername}:@${RDSInstance.Endpoint.Address}:${RDSInstance.Endpoint.Port}/${DatabaseName}"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-task"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSService": {
-            "Type": "AWS::ECS::Service",
-            "DependsOn": "ALBListener",
-            "Properties": {
-                "ServiceName": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-service"
-                },
-                "Cluster": {
-                    "Ref": "ECSCluster"
-                },
-                "TaskDefinition": {
-                    "Ref": "ECSTaskDefinition"
-                },
-                "DesiredCount": 2,
-                "LaunchType": "FARGATE",
-                "NetworkConfiguration": {
-                    "AwsvpcConfiguration": {
-                        "AssignPublicIp": "DISABLED",
-                        "Subnets": [
-                            {
-                                "Ref": "PrivateSubnet1"
-                            },
-                            {
-                                "Ref": "PrivateSubnet2"
-                            }
-                        ],
-                        "SecurityGroups": [
-                            {
-                                "Ref": "ECSSecurityGroup"
-                            }
-                        ]
-                    }
-                },
-                "LoadBalancers": [
-                    {
-                        "TargetGroupArn": {
-                            "Ref": "ECSTargetGroup"
-                        },
-                        "ContainerName": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-container"
-                        },
-                        "ContainerPort": 80
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-service"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentSuffix"
+                            "Ref": "CompanyName"
                         }
                     }
                 ]
@@ -1630,47 +1343,11 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-VPC-ID"
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-VPCId"
                 }
             }
         },
-        "PrivateSubnet1Id": {
-            "Description": "Private Subnet 1 ID",
-            "Value": {
-                "Ref": "PrivateSubnet1"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-PrivateSubnet1-ID"
-                }
-            }
-        },
-        "PrivateSubnet2Id": {
-            "Description": "Private Subnet 2 ID",
-            "Value": {
-                "Ref": "PrivateSubnet2"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-PrivateSubnet2-ID"
-                }
-            }
-        },
-        "DatabaseEndpoint": {
-            "Description": "RDS Database Endpoint",
-            "Value": {
-                "Fn::GetAtt": [
-                    "RDSInstance",
-                    "Endpoint.Address"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-DB-Endpoint"
-                }
-            }
-        },
-        "LoadBalancerDNS": {
+        "ALBDNSName": {
             "Description": "Application Load Balancer DNS Name",
             "Value": {
                 "Fn::GetAtt": [
@@ -1680,7 +1357,21 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ALB-DNS"
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-ALBDNSName"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-RDSEndpoint"
                 }
             }
         },
@@ -1691,7 +1382,18 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentName}-${EnvironmentSuffix}-ECS-Cluster"
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-ECSClusterName"
+                }
+            }
+        },
+        "LogsBucketName": {
+            "Description": "S3 Logs Bucket Name",
+            "Value": {
+                "Ref": "LogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-LogsBucketName"
                 }
             }
         }
