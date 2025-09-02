@@ -64,23 +64,19 @@ The MODEL_RESPONSE3 template demonstrates significant shortcomings in meeting th
 - Hardcoded resource names causing potential conflicts
 
 #### Resource Configuration Issues
-- Incomplete properties for several resources (EBS encryption, MFA setup)
+- Incomplete properties for several resources (EBS encryption)
 - Missing deletion and update policies
 - Improper resource dependencies
 
 ### Security Control Failures
 
-#### 1. Missing MFA Enforcement
-- **Requirement**: MFA for root user
-- **Model Failure**: No MFA implementation in template
-- **Impact**: Critical security control missing
 
-#### 2. TLS Enforcement Gaps
+#### 1. TLS Enforcement Gaps
 - **Requirement**: TLS for all data transfers
 - **Model Failure**: Missing S3 bucket policies enforcing TLS
 - **Ideal Comparison**: IDEAL_RESPONSE includes explicit TLS enforcement policies
 
-#### 3. Public Access Configuration
+#### 2. Public Access Configuration
 - **Requirement**: Disable S3 public access
 - **Model Failure**: Public access blocks configured but no explicit deny policies
 - **Evidence**: Missing explicit deny policies for public access
@@ -100,7 +96,7 @@ The MODEL_RESPONSE3 template demonstrates significant shortcomings in meeting th
 ### Recommended Corrections
 
 1. **Regional Compliance**: Add region specification parameters and validation
-2. **Security Controls**: Implement missing MFA, TLS enforcement, and encryption requirements
+2. **Security Controls**: TLS enforcement, and encryption requirements
 3. **Parameterization**: Replace hardcoded values with parameters with proper validation
 4. **Conditional Logic**: Add Conditions section for resource reuse scenarios
 5. **Resource Configuration**: Complete all required properties for AWS resources

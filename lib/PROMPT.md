@@ -7,7 +7,6 @@ IAM for EC2: Use IAM roles (not IAM users) for managing permissions within EC2 i
 VPC Flow Logs: Enable VPC Flow Logs for all VPCs to monitor network traffic.
 S3 Encryption: Encrypt all S3 buckets using AES-256 encryption (SSE-S3).
 RDS Backups: Automate RDS instance backups using the AWS Backup service.
-MFA for Root: Enable multi-factor authentication (MFA) for the AWS account root user.
 EBS Encryption: Encrypt all EBS volumes.
 CloudTrail: Enable CloudTrail to capture all API activity within the account.
 S3 Public Access: Disable public access for all S3 buckets unless explicitly required.
