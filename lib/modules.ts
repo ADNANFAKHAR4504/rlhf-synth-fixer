@@ -90,10 +90,16 @@ export class InfrastructureModules extends Construct {
       ],
     });
 
-    // Common tags for all resources - sanitize project name for AWS resource naming
+    // Create sanitized naming convention to avoid AWS naming constraint violations
     const sanitizedProject = config.project
-      .replace(/[^a-zA-Z0-9-]/g, '-')
+      .replace(/[^a-zA-Z0-9-]/g, '-') // Replace non-alphanumeric chars with hyphens
+      .replace(/-+/g, '-') // Replace multiple consecutive hyphens with single hyphen
+      .replace(/^-|-$/g, '') // Remove leading/trailing hyphens
       .toLowerCase();
+
+    // Create short name for resources with length constraints (ALB, Target Groups)
+    const shortName = `${sanitizedProject.substring(0, 10)}-${config.environment}`;
+
     const commonTags = {
       Name: `${sanitizedProject}-${config.environment}`,
       Environment: config.environment,
@@ -351,9 +357,9 @@ export class InfrastructureModules extends Construct {
       restrictPublicBuckets: true,
     });
 
-    // 8. Application Load Balancer
+    // 8. Application Load Balancer - Using shortened name to meet 32 character limit
     this.loadBalancer = new Lb(this, 'alb', {
-      name: `${sanitizedProject}-${config.environment}-alb`,
+      name: `${shortName}-alb`.substring(0, 32), // Ensure ALB name is ≤ 32 chars
       loadBalancerType: 'application',
       subnets: this.publicSubnets.map(subnet => subnet.id),
       securityGroups: [this.webSecurityGroup.id],
@@ -364,9 +370,9 @@ export class InfrastructureModules extends Construct {
       },
     });
 
-    // Target Group for ALB
+    // Target Group for ALB - Using shortened name to meet 32 character limit
     this.targetGroup = new LbTargetGroup(this, 'tg', {
-      name: `${sanitizedProject}-${config.environment}-tg`,
+      name: `${shortName}-tg`.substring(0, 32), // Ensure TG name is ≤ 32 chars
       port: 80,
       protocol: 'HTTP',
       vpcId: this.vpc.id,
@@ -548,8 +554,11 @@ export class InfrastructureModules extends Construct {
       });
 
       // RDS Instance - MySQL in private subnets
+      // Fix: Remove consecutive hyphens from RDS identifier
+      const rdsIdentifier = `${sanitizedProject}-${config.environment}-db`;
+
       this.rdsInstance = new DbInstance(this, 'rds', {
-        identifier: `${sanitizedProject}-${config.environment}-db`,
+        identifier: rdsIdentifier,
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
         storageType: 'gp2',
