@@ -401,6 +401,8 @@ Resources:
 
   RDSInstance:
     Type: AWS::RDS::DBInstance
+    DependsOn:
+      - KMSKeyAlias
     Properties:
       DBName: !Ref DatabaseName
       DBInstanceClass: !Ref DatabaseInstanceClass
@@ -578,6 +580,8 @@ Resources:
   # CloudWatch Logs
   CloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
+    DependsOn:
+      - KMSKeyAlias
     Properties:
       LogGroupName: !Sub /ecs/${CompanyName}-${EnvironmentName}
       RetentionInDays: 90
@@ -586,6 +590,8 @@ Resources:
   # S3 Buckets for Logs
   LogsBucket:
     Type: AWS::S3::Bucket
+    DependsOn:
+      - KMSKeyAlias
     Properties:
       BucketName: !Sub ${CompanyName}-${EnvironmentName}-logs-${AWS::AccountId}
       BucketEncryption:
@@ -629,6 +635,8 @@ Resources:
   # CloudTrail
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - KMSKeyAlias
     Properties:
       TrailName: !Sub ${CompanyName}-${EnvironmentName}-trail
       S3BucketName: !Ref LogsBucket
