@@ -74,6 +74,11 @@ Parameters:
     Default: ''
     Description: Optional existing Private Subnet ID to reuse
 
+  ExistingNatGatewayId:
+    Type: String
+    Default: ''
+    Description: Optional existing NAT Gateway ID to reuse
+
   ExistingDatabaseSubnet1Id:
     Type: String
     Default: ''
@@ -83,56 +88,6 @@ Parameters:
     Type: String
     Default: ''
     Description: Optional existing Database Subnet 2 ID to reuse
-
-  ExistingDatabaseSubnet3Id:
-    Type: String
-    Default: ''
-    Description: Optional existing Database Subnet 3 ID to reuse
-
-  ExistingNatGatewayId:
-    Type: String
-    Default: ''
-    Description: Optional existing NAT Gateway ID to reuse
-
-  ExistingWebServerSecurityGroupId:
-    Type: String
-    Default: ''
-    Description: Optional existing Web Server Security Group ID to reuse
-
-  ExistingDatabaseSecurityGroupId:
-    Type: String
-    Default: ''
-    Description: Optional existing Database Security Group ID to reuse
-
-  ExistingLambdaSecurityGroupId:
-    Type: String
-    Default: ''
-    Description: Optional existing Lambda Security Group ID to reuse
-
-  ExistingEC2RoleArn:
-    Type: String
-    Default: ''
-    Description: Optional existing EC2 Role ARN to reuse
-
-  ExistingEC2InstanceProfileArn:
-    Type: String
-    Default: ''
-    Description: Optional existing EC2 Instance Profile ARN to reuse
-
-  ExistingLambdaExecutionRoleArn:
-    Type: String
-    Default: ''
-    Description: Optional existing Lambda Execution Role ARN to reuse
-
-  ExistingSecureS3BucketName:
-    Type: String
-    Default: ''
-    Description: Optional existing Secure S3 Bucket name to reuse
-
-  ExistingS3AccessLogsBucketName:
-    Type: String
-    Default: ''
-    Description: Optional existing S3 Access Logs Bucket name to reuse
 
   ExistingDatabaseSubnetGroupName:
     Type: String
@@ -200,6 +155,46 @@ Parameters:
     AllowedValues: ['true', 'false']
     Description: Set to 'true' to create a new Config Delivery Channel if none exists
 
+  ExistingWebServerSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: Optional existing Web Server Security Group ID to reuse
+
+  ExistingDatabaseSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: Optional existing Database Security Group ID to reuse
+
+  ExistingLambdaSecurityGroupId:
+    Type: String
+    Default: ''
+    Description: Optional existing Lambda Security Group ID to reuse
+
+  ExistingEC2RoleArn:
+    Type: String
+    Default: ''
+    Description: Optional existing EC2 Role ARN to reuse
+
+  ExistingEC2InstanceProfileArn:
+    Type: String
+    Default: ''
+    Description: Optional existing EC2 Instance Profile ARN to reuse
+
+  ExistingLambdaExecutionRoleArn:
+    Type: String
+    Default: ''
+    Description: Optional existing Lambda Execution Role ARN to reuse
+
+  ExistingSecureS3BucketName:
+    Type: String
+    Default: ''
+    Description: Optional existing Secure S3 Bucket name to reuse
+
+  ExistingS3AccessLogsBucketName:
+    Type: String
+    Default: ''
+    Description: Optional existing S3 Access Logs Bucket name to reuse
+
 Conditions:
   # KMS Conditions
   UseExistingKMS: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
@@ -221,9 +216,6 @@ Conditions:
   UseExistingDatabaseSubnet2:
     !Not [!Equals [!Ref ExistingDatabaseSubnet2Id, '']]
   CreateDatabaseSubnet2: !Equals [!Ref ExistingDatabaseSubnet2Id, '']
-  UseExistingDatabaseSubnet3:
-    !Not [!Equals [!Ref ExistingDatabaseSubnet3Id, '']]
-  CreateDatabaseSubnet3: !Equals [!Ref ExistingDatabaseSubnet3Id, '']
   UseExistingNatGateway: !Not [!Equals [!Ref ExistingNatGatewayId, '']]
   CreateNatGateway: !Equals [!Ref ExistingNatGatewayId, '']
 
@@ -481,30 +473,12 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [4, !Cidr [!Ref VpcCIDR, 6, 8]]
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
           Value: !Sub 'Database Subnet 2-${Environment}-${AWS::StackName}'
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
-
-  DatabaseSubnet3:
-    Condition: CreateDatabaseSubnet3
-    Type: AWS::EC2::Subnet
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      VpcId: !If [CreateVPC, !Ref SecureVPC, !Ref ExistingVPCId]
-      AvailabilityZone: !Select [0, !GetAZs '']
-      CidrBlock: !Select [5, !Cidr [!Ref VpcCIDR, 6, 8]]
-      MapPublicIpOnLaunch: false
-      Tags:
-        - Key: Name
-          Value: !Sub 'Database Subnet 3-${Environment}-${AWS::StackName}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Owner
@@ -1024,11 +998,6 @@ Resources:
             UseExistingDatabaseSubnet2,
             !Ref ExistingDatabaseSubnet2Id,
             !Ref DatabaseSubnet2,
-          ]
-        - !If [
-            UseExistingDatabaseSubnet3,
-            !Ref ExistingDatabaseSubnet3Id,
-            !Ref DatabaseSubnet3,
           ]
       Tags:
         - Key: Name
