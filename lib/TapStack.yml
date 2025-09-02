@@ -638,13 +638,14 @@ Resources:
     Type: 'AWS::RDS::DBInstance'
     DeletionPolicy: 'Snapshot'
     UpdateReplacePolicy: 'Snapshot'
+    DependsOn: RDSSecret
     Properties:
       DBInstanceIdentifier: !Sub 'tapstack-db-${Environment}'
       DBInstanceClass: !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]
       Engine: 'mysql'
       EngineVersion: '8.0.43'
       MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: '{{resolve:secretsmanager:TapStackDBSecret:SecretString:password}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:TapStackDBSecret-${Environment}:SecretString:password}}'
       AllocatedStorage: 20
       StorageType: 'gp2'
       StorageEncrypted: true
