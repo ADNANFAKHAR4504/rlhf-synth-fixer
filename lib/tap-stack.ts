@@ -1,19 +1,31 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as rds from 'aws-cdk-lib/aws-rds';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipelineActions from 'aws-cdk-lib/aws-codepipeline-actions';
-import * as codebuild from 'aws-cdk-lib/aws-codebuild';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
+  // Infrastructure configuration
+  lambdaRuntime?: lambda.Runtime;
+  rdsEngineVersion?: rds.MysqlEngineVersion;
+  rdsInstanceClass?: ec2.InstanceClass;
+  rdsInstanceSize?: ec2.InstanceSize;
+  codebuildImage?: codebuild.LinuxBuildImage;
+  codebuildComputeType?: codebuild.ComputeType;
+  backupRetentionDays?: number;
+  // Monitoring configuration
+  enableXRayTracing?: boolean;
+  enableCloudWatchAlarms?: boolean;
 }
 
 export class TapStack extends cdk.Stack {
@@ -23,6 +35,22 @@ export class TapStack extends cdk.Stack {
     // Get environment suffix from context or default to empty
     const envSuffix = this.node.tryGetContext('envSuffix') || '';
     const stackName = envSuffix ? `tap-${envSuffix}` : 'tap';
+
+    // Configuration with defaults
+    const config = {
+      lambdaRuntime: props?.lambdaRuntime || lambda.Runtime.NODEJS_18_X,
+      rdsEngineVersion:
+        props?.rdsEngineVersion || rds.MysqlEngineVersion.VER_8_0,
+      rdsInstanceClass: props?.rdsInstanceClass || ec2.InstanceClass.T3,
+      rdsInstanceSize: props?.rdsInstanceSize || ec2.InstanceSize.MICRO,
+      codebuildImage:
+        props?.codebuildImage || codebuild.LinuxBuildImage.STANDARD_5_0,
+      codebuildComputeType:
+        props?.codebuildComputeType || codebuild.ComputeType.SMALL,
+      backupRetentionDays: props?.backupRetentionDays || 7,
+      enableXRayTracing: props?.enableXRayTracing ?? true,
+      enableCloudWatchAlarms: props?.enableCloudWatchAlarms ?? true,
+    };
 
     // VPC with 2 Availability Zones
     const vpc = new ec2.Vpc(this, 'TapVpc', {
@@ -84,24 +112,40 @@ export class TapStack extends cdk.Stack {
 
     // Lambda function for API
     const apiLambda = new lambda.Function(this, 'ApiLambda', {
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: config.lambdaRuntime,
       handler: 'index.handler',
       code: lambda.Code.fromInline(`
-        exports.handler = async (event) => {
-          return {
-            statusCode: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            },
-            body: JSON.stringify({
-              message: 'Hello from TAP API!',
-              timestamp: new Date().toISOString(),
-              path: event.path,
-              method: event.httpMethod,
-            }),
-          };
-        };
+        const AWSXRay = require('aws-xray-sdk-core');
+        const AWS = AWSXRay.captureAWS(require('aws-sdk'));
+        
+        exports.handler = AWSXRay.captureAsyncFunc('api-handler', async (subsegment) => {
+          try {
+            const response = {
+              statusCode: 200,
+              headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'X-Request-ID': subsegment.trace_id,
+              },
+              body: JSON.stringify({
+                message: 'Hello from TAP API!',
+                timestamp: new Date().toISOString(),
+                path: event.path,
+                method: event.httpMethod,
+                environment: process.env.NODE_ENV,
+                version: '1.0.0',
+              }),
+            };
+            
+            subsegment.addMetadata('response', response);
+            return response;
+          } catch (error) {
+            subsegment.addError(error);
+            throw error;
+          } finally {
+            subsegment.close();
+          }
+        });
       `),
       vpc: vpc,
       vpcSubnets: {
@@ -110,6 +154,11 @@ export class TapStack extends cdk.Stack {
       environment: {
         NODE_ENV: 'production',
       },
+      tracing: config.enableXRayTracing
+        ? lambda.Tracing.ACTIVE
+        : lambda.Tracing.DISABLED,
+      timeout: cdk.Duration.seconds(30),
+      memorySize: 256,
     });
 
     // API Gateway
@@ -124,7 +173,15 @@ export class TapStack extends cdk.Stack {
           'X-Amz-Date',
           'Authorization',
           'X-Api-Key',
+          'X-Request-ID',
         ],
+      },
+      deployOptions: {
+        tracingEnabled: config.enableXRayTracing,
+        stageName: 'prod',
+        dataTraceEnabled: config.enableXRayTracing,
+        loggingLevel: apigateway.MethodLoggingLevel.INFO,
+        metricsEnabled: true,
       },
     });
 
@@ -153,11 +210,11 @@ export class TapStack extends cdk.Stack {
 
     const database = new rds.DatabaseInstance(this, 'TapDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0,
+        version: config.rdsEngineVersion,
       }),
       instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
+        config.rdsInstanceClass,
+        config.rdsInstanceSize
       ),
       vpc,
       vpcSubnets: {
@@ -167,9 +224,12 @@ export class TapStack extends cdk.Stack {
       databaseName: 'tapdb',
       credentials: rds.Credentials.fromGeneratedSecret('admin'),
       storageEncrypted: true,
-      backupRetention: cdk.Duration.days(7),
+      backupRetention: cdk.Duration.days(config.backupRetentionDays),
       deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      monitoringInterval: cdk.Duration.seconds(60),
+      enablePerformanceInsights: true,
+      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
     });
 
     // Grant Lambda access to database secret
@@ -203,8 +263,8 @@ export class TapStack extends cdk.Stack {
         path: 'source.zip',
       }),
       environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
-        computeType: codebuild.ComputeType.SMALL,
+        buildImage: config.codebuildImage,
+        computeType: config.codebuildComputeType,
       },
       buildSpec: codebuild.BuildSpec.fromObject({
         version: '0.2',
@@ -306,5 +366,80 @@ export class TapStack extends cdk.Stack {
       value: sourceBucket.bucketName,
       description: 'Pipeline Source S3 Bucket',
     });
+
+    // CloudWatch Alarms for monitoring
+    if (config.enableCloudWatchAlarms) {
+      // Lambda Error Rate Alarm
+      new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
+        metric: apiLambda.metricErrors({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 2,
+        alarmDescription: 'Lambda function error rate is high',
+        alarmName: `${stackName}-lambda-errors`,
+      });
+
+      // Lambda Duration Alarm
+      new cloudwatch.Alarm(this, 'LambdaDurationAlarm', {
+        metric: apiLambda.metricDuration({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Average',
+        }),
+        threshold: 10000, // 10 seconds
+        evaluationPeriods: 2,
+        alarmDescription: 'Lambda function duration is high',
+        alarmName: `${stackName}-lambda-duration`,
+      });
+
+      // API Gateway 4XX Error Rate Alarm
+      new cloudwatch.Alarm(this, 'Api4xxAlarm', {
+        metric: api.metricClientError({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Sum',
+        }),
+        threshold: 10,
+        evaluationPeriods: 2,
+        alarmDescription: 'API Gateway 4XX error rate is high',
+        alarmName: `${stackName}-api-4xx-errors`,
+      });
+
+      // API Gateway 5XX Error Rate Alarm
+      new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+        metric: api.metricServerError({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Sum',
+        }),
+        threshold: 5,
+        evaluationPeriods: 2,
+        alarmDescription: 'API Gateway 5XX error rate is high',
+        alarmName: `${stackName}-api-5xx-errors`,
+      });
+
+      // Database CPU Utilization Alarm
+      new cloudwatch.Alarm(this, 'DatabaseCpuAlarm', {
+        metric: database.metricCPUUtilization({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Average',
+        }),
+        threshold: 80,
+        evaluationPeriods: 2,
+        alarmDescription: 'Database CPU utilization is high',
+        alarmName: `${stackName}-db-cpu-utilization`,
+      });
+
+      // Database Connection Count Alarm
+      new cloudwatch.Alarm(this, 'DatabaseConnectionsAlarm', {
+        metric: database.metricDatabaseConnections({
+          period: cdk.Duration.minutes(5),
+          statistic: 'Average',
+        }),
+        threshold: 80,
+        evaluationPeriods: 2,
+        alarmDescription: 'Database connection count is high',
+        alarmName: `${stackName}-db-connections`,
+      });
+    }
   }
 }
