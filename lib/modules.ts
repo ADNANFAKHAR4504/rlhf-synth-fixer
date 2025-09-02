@@ -37,7 +37,11 @@ export class S3Module extends Construct {
     const env = (config.environment ?? '').toLowerCase();
 
     // Build name using Fn.format so Terraform gets a valid expression (no tftoken)
-    const bucketName = Fn.format('%s-%s-%s-bucket', [proj, env, config.nameSuffix]);
+    const bucketName = Fn.format('%s-%s-%s-bucket', [
+      proj,
+      env,
+      config.nameSuffix,
+    ]);
 
     this.bucket = new S3Bucket(this, 'bucket', {
       bucket: bucketName,
@@ -94,14 +98,14 @@ export class SecurityGroupModule extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    config: ModuleConfig & { vpcId: string },
+    config: ModuleConfig & { vpcId: string }
   ) {
     super(scope, id);
 
     const sgName = Fn.format('%s-%s-%s-sg', [
       config.projectName,
       config.environment,
-      config.nameSuffix
+      config.nameSuffix,
     ]);
 
     this.securityGroup = new SecurityGroup(this, 'security-group', {
@@ -156,7 +160,7 @@ export class IamRoleModule extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    config: ModuleConfig & { bucketArn: string },
+    config: ModuleConfig & { bucketArn: string }
   ) {
     super(scope, id);
 
@@ -166,7 +170,7 @@ export class IamRoleModule extends Construct {
     const roleName = Fn.format('%s-%s-%s-role', [
       config.projectName,
       config.environment,
-      config.nameSuffix
+      config.nameSuffix,
     ]);
 
     this.role = new IamRole(this, 'iam-role', {
