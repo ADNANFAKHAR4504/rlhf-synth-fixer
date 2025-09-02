@@ -1,9 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-type Environment = "dev" | "staging" | "production";
-const environments: Environment[] = ["dev", "staging", "production"];
-
+// Path to the flat outputs JSON file
 const outputPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 
 let outputsRaw: any;
@@ -13,131 +11,167 @@ try {
   throw new Error("Cannot load flattened outputs JSON");
 }
 
-// Your flat-outputs.json has JSON strings as values, so parse each now:
+// Helper: If a value is an encoded array-like string, convert it
+function decode(val: any) {
+  if (typeof val === "string" && val.startsWith("[") && val.endsWith("]")) {
+    try { return JSON.parse(val); } catch { return val; }
+  }
+  return val;
+}
+
+// Decode array values from output
 const outputs: Record<string, any> = {};
 for (const [key, val] of Object.entries(outputsRaw)) {
-  try {
-    outputs[key] = JSON.parse(val as string);
-  } catch {
-    // fallback: If parsing fails, keep original
-    outputs[key] = val;
-  }
+  outputs[key] = decode(val);
 }
 
-function isNonEmptyString(value: any): boolean {
-  return typeof value === "string" && value.trim().length > 0;
+// Helper for basic checks
+function isNonEmptyString(v: any): boolean {
+  return typeof v === "string" && v.trim().length > 0;
+}
+function isArn(str: string): boolean {
+  return /^arn:aws:[\w\-]+:[\w\-]+:.*$/.test(str);
+}
+function isCidr(str: string): boolean {
+  return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(str);
 }
 
-function getSubnetIds(env: Environment, type: "public" | "private"): string[] {
-  const subnetMap = type === "public" ? outputs.public_subnet_ids : outputs.private_subnet_ids;
-  const prefix = `${env}-${type}`;
-  return Object.entries(subnetMap)
-    .filter(([key]) => key.startsWith(prefix))
-    .map(([, val]) => val as string);
-}
+describe("flat-outputs.json integration output validation", () => {
+  // 1. Validate presence and format of all required outputs
+  const requiredKeys = [
+    "amazon_linux_2_ami_id",
+    "amazon_linux_2_ami_name",
+    "availability_zones",
+    "deployment_region",
+    "ec2_iam_role_arn",
+    "ec2_iam_role_name",
+    "ec2_instance_availability_zones",
+    "ec2_instance_ids",
+    "ec2_instance_private_ips",
+    "ec2_instance_profile_name",
+    "ec2_security_group_id",
+    "internet_gateway_id",
+    "nat_gateway_eip_addresses",
+    "nat_gateway_ids",
+    "private_route_table_ids",
+    "private_subnet_cidrs",
+    "private_subnet_ids",
+    "public_route_table_id",
+    "public_subnet_cidrs",
+    "public_subnet_ids",
+    "s3_bucket_arn",
+    "s3_bucket_domain_name",
+    "s3_bucket_id",
+    "vpc_cidr_block",
+    "vpc_id"
+  ];
 
-describe("Flattened JSON Outputs Integration Tests", () => {
-  it("should contain all required output keys", () => {
-    const requiredKeys = [
-      "ec2_instance_ids",
-      "ec2_private_ips",
-      "ec2_public_ips",
-      "environment_summary",
-      "iam_role_arns",
-      "internet_gateway_ids",
-      "nat_gateway_ids",
-      "private_subnet_ids",
-      "public_subnet_ids",
-      "security_group_ids",
-      "vpc_cidrs",
-      "vpc_ids"
-    ];
-    requiredKeys.forEach(key => {
+  it("should have all required output keys and valid values", () => {
+    requiredKeys.forEach((key) => {
       expect(outputs).toHaveProperty(key);
+      // Check array outputs are non-empty arrays, string outputs are non-empty
+      const val = outputs[key];
+      if (Array.isArray(val)) {
+        expect(val.length).toBeGreaterThan(0);
+        val.forEach((item) => expect(isNonEmptyString(item)).toBe(true));
+      } else {
+        expect(isNonEmptyString(val)).toBe(true);
+      }
     });
   });
 
-  environments.forEach(env => {
-    describe(`Environment: ${env}`, () => {
-      const envData = {
-        vpcId: outputs.vpc_ids[env],
-        vpcCidr: outputs.vpc_cidrs[env],
-        instanceId: outputs.ec2_instance_ids[env],
-        privateIp: outputs.ec2_private_ips[env],
-        publicIp: outputs.ec2_public_ips[env],
-        iamRoleArn: outputs.iam_role_arns[env],
-        igwId: outputs.internet_gateway_ids[env],
-        natGwId: outputs.nat_gateway_ids[env],
-        sgId: outputs.security_group_ids[env],
-        summary: outputs.environment_summary[env],
-        publicSubnetIds: getSubnetIds(env, "public"),
-        privateSubnetIds: getSubnetIds(env, "private")
-      };
-
-      it("should have non-empty VPC ID and CIDR", () => {
-        expect(isNonEmptyString(envData.vpcId)).toBe(true);
-        expect(isNonEmptyString(envData.vpcCidr)).toBe(true);
-      });
-
-      it("should have exactly 2 public and 2 private subnets", () => {
-        expect(envData.publicSubnetIds.length).toBe(2);
-        expect(envData.privateSubnetIds.length).toBe(2);
-        envData.publicSubnetIds.forEach(id => expect(isNonEmptyString(id)).toBe(true));
-        envData.privateSubnetIds.forEach(id => expect(isNonEmptyString(id)).toBe(true));
-      });
-
-      it("should have non-empty EC2 instance ID and matching summary info", () => {
-        expect(isNonEmptyString(envData.instanceId)).toBe(true);
-        expect(isNonEmptyString(envData.summary.instance_id)).toBe(true);
-        expect(isNonEmptyString(envData.summary.instance_type)).toBe(true);
-        expect(isNonEmptyString(envData.privateIp)).toBe(true);
-        expect(isNonEmptyString(envData.publicIp)).toBe(true);
-
-        expect(envData.summary.instance_id).toBe(envData.instanceId);
-        expect(envData.summary.private_ip).toBe(envData.privateIp);
-        expect(envData.summary.public_ip).toBe(envData.publicIp);
-        expect(envData.summary.vpc_id).toBe(envData.vpcId);
-        expect(envData.summary.vpc_cidr).toBe(envData.vpcCidr);
-      });
-
-      it("should have non-empty IAM role ARN", () => {
-        expect(isNonEmptyString(envData.iamRoleArn)).toBe(true);
-      });
-
-      it("should have non-empty security group ID", () => {
-        expect(isNonEmptyString(envData.sgId)).toBe(true);
-      });
-
-      it("should have non-empty IGW and NAT gateway IDs", () => {
-        expect(isNonEmptyString(envData.igwId)).toBe(true);
-        expect(isNonEmptyString(envData.natGwId)).toBe(true);
-      });
+  // 2. Individual output format checks (IDs, ARNs, IPs, names)
+  it("should have valid instance IDs (i-...)", () => {
+    const instanceIds = outputs.ec2_instance_ids;
+    expect(Array.isArray(instanceIds)).toBe(true);
+    instanceIds.forEach(id => {
+      expect(id.startsWith("i-")).toBe(true);
+      expect(id.length).toBeGreaterThan(8);
     });
   });
 
-  describe("Cross-environment uniqueness and standards", () => {
-    it("should have unique VPC and instance IDs, unique subnet IDs and CIDRs", () => {
-      const vpcs = environments.map(env => outputs.vpc_ids[env]);
-      expect(new Set(vpcs).size).toBe(vpcs.length);
+  it("should have availability zones as AWS formatted string", () => {
+    const azs = outputs.availability_zones;
+    expect(Array.isArray(azs)).toBe(true);
+    azs.forEach(z => expect(/^us-east-2[ab]$/.test(z)).toBe(true));
+  });
 
-      const instances = environments.map(env => outputs.ec2_instance_ids[env]);
-      expect(new Set(instances).size).toBe(instances.length);
-
-      const allPublicSubnets = Object.values(outputs.public_subnet_ids);
-      const allPrivateSubnets = Object.values(outputs.private_subnet_ids);
-      const allSubnets = [...allPublicSubnets, ...allPrivateSubnets];
-      expect(new Set(allSubnets).size).toBe(allSubnets.length);
-
-      const cidrs = environments.map(env => outputs.vpc_cidrs[env]);
-      expect(new Set(cidrs).size).toBe(cidrs.length);
+  it("should have valid CIDR blocks for public/private subnets and VPC", () => {
+    [...outputs.public_subnet_cidrs, ...outputs.private_subnet_cidrs, outputs.vpc_cidr_block].forEach(cidr => {
+      expect(isCidr(cidr)).toBe(true);
     });
+  });
 
-    it("should have consistent IAM role naming and correct subnet counts", () => {
-      environments.forEach(env => {
-        expect(outputs.iam_role_arns[env]).toContain(`ec2-role-${env}`);
-        expect(getSubnetIds(env, "public").length).toBe(2);
-        expect(getSubnetIds(env, "private").length).toBe(2);
-      });
+  it("should have valid IPv4 private IPs for instances", () => {
+    outputs.ec2_instance_private_ips.forEach(ip => {
+      expect(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)).toBe(true);
     });
+  });
+
+  it("should have correctly formatted ARNs for S3 bucket and IAM role", () => {
+    expect(isArn(outputs.s3_bucket_arn)).toBe(true);
+    expect(isArn(outputs.ec2_iam_role_arn)).toBe(true);
+  });
+
+  // 3. Edge cases and logical validations
+  it("instance AZs should correspond to availability zones", () => {
+    const azSet = new Set(outputs.availability_zones);
+    outputs.ec2_instance_availability_zones.forEach(az => {
+      expect(azSet.has(az)).toBe(true);
+    });
+  });
+
+  it("subnet IDs and NAT gateways should be unique", () => {
+    function isUnique(arr: any[]) { return new Set(arr).size === arr.length; }
+    expect(isUnique(outputs.public_subnet_ids)).toBe(true);
+    expect(isUnique(outputs.private_subnet_ids)).toBe(true);
+    expect(isUnique(outputs.nat_gateway_ids)).toBe(true);
+    expect(isUnique(outputs.nat_gateway_eip_addresses)).toBe(true);
+  });
+
+  it("should have exactly 2 public and 2 private subnets", () => {
+    expect(outputs.public_subnet_ids.length).toBe(2);
+    expect(outputs.private_subnet_ids.length).toBe(2);
+    expect(outputs.public_subnet_cidrs.length).toBe(2);
+    expect(outputs.private_subnet_cidrs.length).toBe(2);
+  });
+
+  it("should have the expected count of EC2 instances and instance properties", () => {
+    expect(outputs.ec2_instance_ids.length).toBe(4);
+    expect(outputs.ec2_instance_private_ips.length).toBe(4);
+    expect(outputs.ec2_instance_availability_zones.length).toBe(4);
+  });
+
+  it("should use correct profile/role names and IDs", () => {
+    expect(isNonEmptyString(outputs.ec2_iam_role_name)).toBe(true);
+    expect(isNonEmptyString(outputs.ec2_instance_profile_name)).toBe(true);
+  });
+
+  // 4. Negative/Edge: Uniqueness and no invalid data
+  it("should not have empty, duplicate, or invalid IDs", () => {
+    [...outputs.public_subnet_ids, ...outputs.private_subnet_ids,
+     ...outputs.ec2_instance_ids, outputs.ec2_security_group_id, outputs.vpc_id,
+     outputs.internet_gateway_id, outputs.public_route_table_id, ...outputs.private_route_table_ids,
+     ...outputs.nat_gateway_ids, outputs.s3_bucket_id].forEach(id => {
+      expect(isNonEmptyString(id)).toBe(true);
+      expect(id).not.toContain(" "); // No spaces
+      expect(id).not.toContain("null"); // Not string "null"
+      expect(id).not.toContain("undefined"); // Not string "undefined"
+    });
+  });
+
+  it("should have matching region in all zone names and deployment_region output", () => {
+    expect(outputs.deployment_region).toBe("us-east-2");
+    outputs.availability_zones.forEach(z => {
+      expect(z.startsWith("us-east-2")).toBe(true);
+    });
+    outputs.ec2_instance_availability_zones.forEach(z => {
+      expect(z.startsWith("us-east-2")).toBe(true);
+    });
+  });
+
+  it("should have valid domain name for S3 bucket", () => {
+    expect(outputs.s3_bucket_domain_name.endsWith(".s3.amazonaws.com")).toBe(true);
+    expect(outputs.s3_bucket_domain_name.startsWith(outputs.s3_bucket_id)).toBe(true);
   });
 });
