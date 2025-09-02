@@ -2019,7 +2019,11 @@ Outputs:
       !If [
         UseExistingConfigRecorder,
         !Ref ExistingConfigRecorderName,
-        !If [CreateConfigRecorder, !Ref ConfigurationRecorder, ''],
+        !If [
+          CreateConfigRecorder,
+          !Ref ConfigurationRecorder,
+          !Sub 'NoConfigRecorder-${AWS::StackName}',
+        ],
       ]
     Export:
       Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
