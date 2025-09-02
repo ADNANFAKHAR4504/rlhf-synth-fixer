@@ -35,14 +35,15 @@ class TestTapStack(unittest.TestCase):
         if not flat_outputs or len(flat_outputs) == 0:
             self.skipTest("No cfn-outputs/flat-outputs.json found or file is empty")
         
-        # Initialize AWS clients
-        self.ec2_client = boto3.client('ec2')
-        self.rds_client = boto3.client('rds')
-        self.elbv2_client = boto3.client('elbv2')
-        self.autoscaling_client = boto3.client('autoscaling')
-        self.iam_client = boto3.client('iam')
-        self.logs_client = boto3.client('logs')
-        self.secretsmanager_client = boto3.client('secretsmanager')
+        # Initialize AWS clients with region
+        aws_region = 'us-west-2'  # Based on the outputs, resources are in us-west-2
+        self.ec2_client = boto3.client('ec2', region_name=aws_region)
+        self.rds_client = boto3.client('rds', region_name=aws_region)
+        self.elbv2_client = boto3.client('elbv2', region_name=aws_region)
+        self.autoscaling_client = boto3.client('autoscaling', region_name=aws_region)
+        self.iam_client = boto3.client('iam', region_name=aws_region)
+        self.logs_client = boto3.client('logs', region_name=aws_region)
+        self.secretsmanager_client = boto3.client('secretsmanager', region_name=aws_region)
         
         # Load outputs
         self.outputs = flat_outputs
