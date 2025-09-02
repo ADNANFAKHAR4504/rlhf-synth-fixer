@@ -453,7 +453,7 @@ describe("TapStack Unit Tests", () => {
           name: "iam-instance-profile",
           arn: "arn:aws:iam::123456789012:instance-profile/iam-instance-profile"
         }),
-        keyName: "compute-secure-key",
+        keyName: "webapp-key-synthtrainr123cfnyaml",
       })
     );
   });
