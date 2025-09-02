@@ -1,5 +1,3 @@
-# Ideal Response: Infrastructure as Code Best Practices
-
 ## Overview
 This document demonstrates the ideal response pattern for infrastructure as code requests, based on the `tap-stack.ts` CDK implementation. It showcases security-first design, proper resource management, and production-ready configurations.
 

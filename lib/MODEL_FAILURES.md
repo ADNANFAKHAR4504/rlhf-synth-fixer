@@ -1,5 +1,3 @@
-# Model Failure Cases
-
 ## Case 1: Infrastructure Deployment Failure
 
 ### Description
