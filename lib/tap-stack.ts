@@ -228,8 +228,15 @@ export class TapStack extends cdk.Stack {
       deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       monitoringInterval: cdk.Duration.seconds(60),
-      enablePerformanceInsights: true,
-      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      // Only enable Performance Insights for instance classes that support it
+      enablePerformanceInsights:
+        config.rdsInstanceClass !== ec2.InstanceClass.T3 ||
+        config.rdsInstanceSize !== ec2.InstanceSize.MICRO,
+      performanceInsightRetention:
+        config.rdsInstanceClass !== ec2.InstanceClass.T3 ||
+        config.rdsInstanceSize !== ec2.InstanceSize.MICRO
+          ? rds.PerformanceInsightRetention.DEFAULT
+          : undefined,
     });
 
     // Grant Lambda access to database secret
