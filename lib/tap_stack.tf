@@ -74,16 +74,10 @@ data "aws_caller_identity" "current" {}
 
 data "aws_region" "current" {}
 
-resource "aws_guardduty_detector" "main" {
-  enable = true
-
-  tags = {
-    Name = "${var.project_name}-guardduty"
-  }
-}
+data "aws_guardduty_detector" "existing" {}
 
 locals {
-  guardduty_detector_id = aws_guardduty_detector.main.id
+  guardduty_detector_id = data.aws_guardduty_detector.existing.id
 }
 
 resource "aws_guardduty_detector_feature" "s3_protection" {
@@ -1272,6 +1266,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_reboot" {
   evaluation_periods   = 1
   threshold            = 0
   comparison_operator  = "LessThanThreshold"
+  alarm_actions        = [aws_sns_topic.alarms.arn]
   alarm_actions        = [aws_sns_topic.alarms.arn]
   ok_actions           = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
