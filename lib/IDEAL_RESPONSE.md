@@ -1,0 +1,223 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Secure AWS environment in a single region (e.g., us-east-2) with encryption,
+  logging, WAF, Shield, and secure compute.
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+  CriticalCpuThreshold:
+    Type: Number
+    Default: 80
+Resources:
+  KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key for encrypting resources
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: kms:*
+            Resource: '*'
+  KmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/secureKey
+      TargetKeyId: !Ref 'KmsKey'
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref 'VpcCidr'
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: SecureVPC
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'Vpc'
+      CidrBlock: !Ref 'PrivateSubnet1Cidr'
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'Vpc'
+      CidrBlock: !Ref 'PrivateSubnet2Cidr'
+      AvailabilityZone: !Select
+        - 1
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+  SecretsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref 'KmsKey'
+  ALBAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref 'KmsKey'
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref 'PrivateSubnet1'
+        - !Ref 'PrivateSubnet2'
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref 'ALBAccessLogsBucket'
+      Type: application
+      Scheme: internal
+  ShieldProtection:
+    Type: AWS::Shield::Protection
+    Properties:
+      Name: ShieldProtectionALB
+      ResourceArn: !GetAtt 'LoadBalancer.LoadBalancerArn'
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs18.x
+      Code:
+        ZipFile: exports.handler = async function(event, context) { return 'Hello,
+          secure world!'; };
+      VpcConfig:
+        SubnetIds:
+          - !Ref 'PrivateSubnet1'
+          - !Ref 'PrivateSubnet2'
+        SecurityGroupIds: []
+      Role: !GetAtt 'LambdaExecutionRole.Arn'
+  CloudWatchAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: High CPU usage
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      Period: 300
+      Statistic: Average
+      Threshold: !Ref 'CriticalCpuThreshold'
+      Dimensions: []
+      AlarmActions: []
+  MySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: SecureAppSecret
+      Description: Secret used by Lambda
+      SecretString: '{"username":"admin","password":"SecureP@ssw0rd"}'
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: SecureAPI
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: []
+    Properties:
+      RestApiId: !Ref 'ApiGateway'
+      StageName: prod
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: WAFProtectAPI
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: WAFMetrics
+      Rules:
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRules
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+  WAFAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      WebACLArn: !GetAtt 'WAFWebACL.Arn'
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod'
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+  ConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Properties:
+      RoleARN: !GetAtt 'ConfigRole.Arn'
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Properties:
+      S3BucketName: !Ref 'SecretsBucket'
+Outputs:
+  LoadBalancerDNS:
+    Value: !GetAtt 'LoadBalancer.DNSName'
+  LambdaFunctionArn:
+    Value: !Ref 'LambdaFunction'
+  SecretArn:
+    Value: !Ref 'MySecret'
+  ApiGatewayId:
+    Value: !Ref 'ApiGateway'
+
+```
