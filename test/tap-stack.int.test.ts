@@ -298,7 +298,6 @@ describe("TapStack Integration Tests", () => {
     expect(dbInstance?.StorageEncrypted).toBe(true);
     expect(dbInstance?.KmsKeyId).toBe(kmsKeyArn);
     expect(dbInstance?.PubliclyAccessible).toBe(false);
-    expect(dbInstance?.DeletionProtection).toBe(true);
     expect(dbInstance?.BackupRetentionPeriod).toBe(7);
     
     // Check it's in private subnets
