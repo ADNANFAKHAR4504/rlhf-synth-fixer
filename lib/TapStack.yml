@@ -102,6 +102,9 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
 
   ALBAccessLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -110,6 +113,15 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
+          # This statement grants full S3 permissions to the AWS account root user.
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 's3:*'
+            Resource: 
+              - !GetAtt ALBAccessLogsBucket.Arn
+              - !Sub '${ALBAccessLogsBucket.Arn}/*'
+          # The following statements are the correct, least-privilege policies for ALB logging.
           - Effect: Allow
             Principal:
               Service: delivery.logs.amazonaws.com
@@ -126,7 +138,6 @@ Resources:
             Condition:
               StringEquals:
                 "aws:SourceAccount": !Ref AWS::AccountId
-
   ### Load Balancer ###
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
