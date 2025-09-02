@@ -336,6 +336,29 @@ export class TapStack extends cdk.Stack {
       })
     );
 
+    // Add KMS permissions for EBS volume encryption/decryption
+    ecsInstanceRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'KMSEbsAccess',
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'kms:CreateGrant',
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:DescribeKey',
+        ],
+        resources: [kmsKey.keyArn],
+        conditions: {
+          StringEquals: {
+            'kms:ViaService': `ec2.${cdk.Stack.of(this).region}.amazonaws.com`,
+            'kms:CallerAccount': cdk.Stack.of(this).account,
+          },
+        },
+      })
+    );
+
     // Security Group for ECS instances with restrictive rules
     const ecsSecurityGroup = new ec2.SecurityGroup(
       this,
