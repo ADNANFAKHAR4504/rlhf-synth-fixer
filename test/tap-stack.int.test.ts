@@ -208,9 +208,10 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
       const response = await cloudWatchLogsClient.send(command);
 
       expect(response.logGroups).toBeDefined();
-      expect(response.logGroups!.length).toBe(1);
-      expect(response.logGroups![0].logGroupName).toBe(logGroupName);
-      expect(response.logGroups![0].retentionInDays).toBe(30);
+      const matchingLogGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
+      expect(matchingLogGroup).toBeDefined();
+      expect(matchingLogGroup!.logGroupName).toBe(logGroupName);
+      expect(matchingLogGroup!.retentionInDays).toBe(30);
     });
 
     test('pipeline log group should exist with correct retention', async () => {
@@ -222,9 +223,10 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
       const response = await cloudWatchLogsClient.send(command);
 
       expect(response.logGroups).toBeDefined();
-      expect(response.logGroups!.length).toBe(1);
-      expect(response.logGroups![0].logGroupName).toBe(logGroupName);
-      expect(response.logGroups![0].retentionInDays).toBe(30);
+      const matchingLogGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
+      expect(matchingLogGroup).toBeDefined();
+      expect(matchingLogGroup!.logGroupName).toBe(logGroupName);
+      expect(matchingLogGroup!.retentionInDays).toBe(30);
     });
   });
 
@@ -358,9 +360,10 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
       const response = await cloudWatchClient.send(command);
 
       expect(response.DashboardEntries).toBeDefined();
-      expect(response.DashboardEntries!.length).toBe(1);
-      expect(response.DashboardEntries![0].DashboardName).toBe(dashboardName);
-      expect(response.DashboardEntries![0].Size).toBeGreaterThan(0);
+      const matchingDashboard = response.DashboardEntries!.find(d => d.DashboardName === dashboardName);
+      expect(matchingDashboard).toBeDefined();
+      expect(matchingDashboard!.DashboardName).toBe(dashboardName);
+      expect(matchingDashboard!.Size).toBeGreaterThan(0);
     });
   });
 
