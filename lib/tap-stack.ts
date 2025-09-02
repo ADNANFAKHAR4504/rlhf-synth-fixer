@@ -34,11 +34,9 @@ export class TapStack extends TerraformStack {
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // 👇 Mark the unreachable branch ignored for coverage
-    const awsRegion = AWS_REGION_OVERRIDE
-      /* istanbul ignore next: override is constant in this build; else path not reachable */
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+    // AWS_REGION_OVERRIDE is always truthy in this build, so the else branch is unreachable
+    /* istanbul ignore next */
+    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
 
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
@@ -81,10 +79,14 @@ export class TapStack extends TerraformStack {
     const vpcModule = new VpcModule(this, 'vpc', moduleConfig);
     const s3Module = new S3Module(this, 's3', moduleConfig);
 
-    const securityGroupModule = new SecurityGroupModule(this, 'security-group', {
-      ...moduleConfig,
-      vpcId: vpcModule.vpcId,
-    });
+    const securityGroupModule = new SecurityGroupModule(
+      this,
+      'security-group',
+      {
+        ...moduleConfig,
+        vpcId: vpcModule.vpcId,
+      }
+    );
 
     const iamRoleModule = new IamRoleModule(this, 'iam-role', {
       ...moduleConfig,

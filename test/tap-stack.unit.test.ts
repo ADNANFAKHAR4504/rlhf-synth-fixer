@@ -1,4 +1,3 @@
-// __tests__/tap-stack.unit.test.ts
 import { App } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
 import { TapStack } from "../lib/tap-stack";
@@ -167,8 +166,6 @@ describe("TapStack Unit Tests", () => {
       });
 
       // In our stack, override constant is 'us-east-1', so props.awsRegion is ignored.
-      // However, the provided updated code sets override to 'us-east-1'.
-      // So expect region 'us-east-1'.
       expect(AwsProvider).toHaveBeenCalledWith(
         expect.anything(),
         'aws',
@@ -234,12 +231,13 @@ describe("TapStack Unit Tests", () => {
       );
     });
 
-    test("should call addOverride for S3 backend locking", () => {
+    test("should call addOverride for S3 backend locking (exact args)", () => {
+      const spy = jest.spyOn(TapStack.prototype as any, 'addOverride');
       const app = new App();
-      const stack = new TapStack(app, "TestStackOverride");
+      new TapStack(app, "TestStackOverrideCall");
 
-      // Method exists (called in constructor)
-      expect(typeof stack.addOverride).toBe('function');
+      expect(spy).toHaveBeenCalledWith('terraform.backend.s3.use_lockfile', true);
+      spy.mockRestore();
     });
   });
 
