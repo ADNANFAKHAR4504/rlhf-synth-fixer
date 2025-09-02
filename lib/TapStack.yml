@@ -25,9 +25,9 @@ Parameters:
   #   MinLength: 12
   #   NoEcho: true
 
-  KeyPairName:
-    Description: EC2 Key Pair for ECS instances
-    Type: AWS::EC2::KeyPair::KeyName
+  # KeyPairName:
+  #   Description: EC2 Key Pair for ECS instances
+  #   Type: AWS::EC2::KeyPair::KeyName
 
 Mappings:
   SubnetConfig:
@@ -710,7 +710,7 @@ Resources:
       LaunchTemplateData:
         ImageId: ami-0c02fb55956c7d316 # Amazon ECS-Optimized Amazon Linux 2 AMI
         InstanceType: t3.micro
-        KeyName: !Ref KeyPairName
+        # KeyName: !Ref KeyPairName
         IamInstanceProfile:
           Arn: !GetAtt TapstackECSInstanceProfile.Arn
         SecurityGroupIds:
@@ -1167,7 +1167,7 @@ Resources:
     Properties:
       ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 AMI
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
+      # KeyName: !Ref KeyPairName
       SecurityGroupIds:
         - !Ref TapstackBastionSecurityGroup
       SubnetId: !Ref TapstackPublicSubnet1

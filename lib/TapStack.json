@@ -12,10 +12,6 @@
             "Description": "Company name for tagging",
             "Type": "String",
             "Default": "tapstack"
-        },
-        "KeyPairName": {
-            "Description": "EC2 Key Pair for ECS instances",
-            "Type": "AWS::EC2::KeyPair::KeyName"
         }
     },
     "Mappings": {
@@ -1373,9 +1369,6 @@
                 "LaunchTemplateData": {
                     "ImageId": "ami-0c02fb55956c7d316",
                     "InstanceType": "t3.micro",
-                    "KeyName": {
-                        "Ref": "KeyPairName"
-                    },
                     "IamInstanceProfile": {
                         "Arn": {
                             "Fn::GetAtt": [
@@ -2150,9 +2143,6 @@
             "Properties": {
                 "ImageId": "ami-0c02fb55956c7d316",
                 "InstanceType": "t3.micro",
-                "KeyName": {
-                    "Ref": "KeyPairName"
-                },
                 "SecurityGroupIds": [
                     {
                         "Ref": "TapstackBastionSecurityGroup"
