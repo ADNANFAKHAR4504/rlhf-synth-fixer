@@ -425,4 +425,3 @@ func getEnvironmentSuffix() string {
 	}
 	return envSuffix
 }
-

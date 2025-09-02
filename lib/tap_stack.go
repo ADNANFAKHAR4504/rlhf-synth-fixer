@@ -1041,7 +1041,7 @@ func NewMultiRegionInfrastructureStack(scope constructs.Construct, id *string, e
 	if awsRegion == "" {
 		awsRegion = "us-east-1"
 	}
-	
+
 	terraformStateBucket := os.Getenv("TERRAFORM_STATE_BUCKET")
 	if terraformStateBucket != "" {
 		backend := cdktf.NewS3Backend(stack, &cdktf.S3BackendConfig{
