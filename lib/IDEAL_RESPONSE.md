@@ -157,7 +157,7 @@ class TapStack(Stack):
             self, "TapUploadFunction",
             runtime=_lambda.Runtime.PYTHON_3_9,
             handler="upload_handler.lambda_handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=_lambda.Code.from_asset("lib/lambda"),
             role=lambda_role,
             timeout=Duration.seconds(3),  # 3 second timeout as required
             memory_size=256,
@@ -296,7 +296,7 @@ class TapStack(Stack):
         )
 ```
 
-## 3. Lambda Function (`lambda/upload_handler.py`)
+## 3. Lambda Function (`lib/lambda/upload_handler.py`)
 
 ```python
 import json
