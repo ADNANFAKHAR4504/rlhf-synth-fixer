@@ -431,6 +431,16 @@ describe('DefenseInDepthStack', () => {
         stack = new DefenseInDepthStack(app, 'TestDefenseStack', propsWithInvalidIp);
       }).toThrow();
     });
+
+    test('should handle IP address with existing CIDR mask', () => {
+      const propsWithCidrIp = {
+        environmentSuffix: 'test',
+        personalIpAddress: '192.168.1.1/32',
+      };
+      expect(() => {
+        stack = new DefenseInDepthStack(app, 'TestDefenseStack', propsWithCidrIp);
+      }).not.toThrow();
+    });
   });
 
   describe('Resource Naming', () => {
