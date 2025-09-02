@@ -25,7 +25,6 @@ interface TapStackProps {
 // If you need to override the AWS Region for the terraform provider for any particular task,
 // you can set it here. Otherwise, it will default to 'us-west-2' for SecureApp requirements.
 
-
 const AWS_REGION_OVERRIDE = 'us-west-2';
 
 export class TapStack extends TerraformStack {
@@ -64,7 +63,7 @@ export class TapStack extends TerraformStack {
       region: stateBucketRegion,
       encrypt: true,
     });
-    
+
     this.addOverride('terraform.backend.s3.use_lockfile', true);
 
     // Add your stack instantiations here

@@ -438,7 +438,7 @@ export class SecureAppModules extends Construct {
     this.ec2Instance = new Instance(this, 'SecureApp-Ec2Instance', {
       ami: amazonLinuxAmi.id,
       instanceType: config.instanceType,
-      keyName: `compute-key1`, 
+      keyName: 'compute-key1',
       vpcSecurityGroupIds: [this.webSecurityGroup.id],
       subnetId: this.publicSubnetA.id,
       iamInstanceProfile: instanceProfile.name,
