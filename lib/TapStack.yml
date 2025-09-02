@@ -121,6 +121,19 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
 
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lambda function security group
+      VpcId: !Ref Vpc
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+      Tags:
+        - Key: Name
+          Value: LambdaSecurityGroup
+
   LambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -138,7 +151,8 @@ Resources:
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
-        SecurityGroupIds: []
+        SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
       Role: !GetAtt LambdaExecutionRole.Arn
 
   CloudWatchAlarm:
