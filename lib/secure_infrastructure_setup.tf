@@ -731,7 +731,6 @@ resource "aws_launch_template" "web" {
   name_prefix   = "web-template"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
-  key_name      = "default"  # <-- Use the default key pair
 
   vpc_security_group_ids = [aws_security_group.web.id]
 
@@ -844,6 +843,11 @@ resource "aws_autoscaling_group" "web" {
     value               = "web-asg-instance"
     propagate_at_launch = true
   }
+
+  depends_on = [
+    aws_iam_role_policy.web_kms_access,
+    aws_kms_key.main
+  ]
 }
 
 # Lambda Function (with private access)
