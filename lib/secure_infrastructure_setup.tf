@@ -739,8 +739,6 @@ resource "aws_launch_template" "web" {
     ebs {
       volume_size = 20
       volume_type = "gp3"
-      encrypted   = true
-      kms_key_id  = aws_kms_key.main.arn
     }
   }
 
