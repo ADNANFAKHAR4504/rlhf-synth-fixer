@@ -89,3 +89,7 @@ export const albSecurityGroupId = stack.infrastructure.albSecurityGroup.id;
 export const ec2SecurityGroupId = stack.infrastructure.ec2SecurityGroup.id;
 
 export const cloudTrailBucketName = stack.infrastructure.cloudTrailBucket.id;
+
+export const rdsInstanceId = stack.infrastructure.rdsInstance.id;
+export const flowLogGroupName = stack.infrastructure.flowLogGroup.name;
+export const flowLogGroupArn = stack.infrastructure.flowLogGroup.arn;
