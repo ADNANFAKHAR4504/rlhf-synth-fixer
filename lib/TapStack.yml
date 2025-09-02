@@ -119,6 +119,15 @@ Resources:
               - 'kms:GenerateDataKey'
               - 'kms:DescribeKey'
             Resource: '*'
+          - Sid: 'Allow SecretsManager Service'
+            Effect: 'Allow'
+            Principal:
+              Service: 'secretsmanager.amazonaws.com'
+            Action:
+              - 'kms:GenerateDataKey*'
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+            Resource: '*'
 
   # KMS Key Alias
   TapStackKMSKeyAlias:
@@ -147,6 +156,57 @@ Resources:
           - Id: 'DeleteOldLogs'
             Status: 'Enabled'
             ExpirationInDays: 90
+
+  # S3 Bucket Policy for logs bucket
+  TapStackLogsBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref TapStackLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyPublicAccess'
+            Effect: 'Deny'
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${TapStackLogsBucket}/*'
+              - !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 
+                  - 'public-read'
+                  - 'public-read-write'
+                  - 'authenticated-read'
+          - Sid: 'DenyUnSecureCommunications'
+            Effect: 'Deny'
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${TapStackLogsBucket}/*'
+              - !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+          - Sid: 'AWSCloudTrailAclCheck'
+            Effect: 'Allow'
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:GetBucketAcl'
+            Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}'
+            Condition:
+              StringEquals:
+                'aws:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
+          - Sid: 'AWSCloudTrailWrite'
+            Effect: 'Allow'
+            Principal:
+              Service: 'cloudtrail.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${TapStackLogsBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'aws:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
 
   # S3 Bucket for secure storage
   TapStackSecureBucket:
@@ -183,8 +243,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${TapStackSecureBucket}/*'
-              - !Ref TapStackSecureBucket
+              - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
+              - !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 
@@ -196,8 +256,8 @@ Resources:
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${TapStackSecureBucket}/*'
-              - !Ref TapStackSecureBucket
+              - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
+              - !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -205,6 +265,7 @@ Resources:
   # CloudTrail for logging
   TapStackCloudTrail:
     Type: 'AWS::CloudTrail::Trail'
+    DependsOn: TapStackLogsBucketPolicy
     Properties:
       TrailName: !Sub 'TapStack-CloudTrail-${Environment}'
       S3BucketName: !Ref TapStackLogsBucket
@@ -629,6 +690,7 @@ Resources:
         GenerateStringKey: 'password'
         PasswordLength: 16
         ExcludeCharacters: '"@/\\'
+      KmsKeyId: !Ref TapStackKMSKey
       Tags:
         - Key: 'Name'
           Value: !Sub 'TapStack-DB-Secret-${Environment}'
