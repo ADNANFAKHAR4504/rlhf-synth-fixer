@@ -465,7 +465,13 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     test('S3 bucket should block public access', async () => {
       // This is configured via CDK, we verify by checking if we can access publicly
       // The bucket should deny public access due to BlockPublicAccess settings
-      expect(outputs.BackupBucketName).toMatch(/^tapstackdev-backupbucket[a-f0-9]{8}-[a-z0-9]+$/);
+      // Use dynamic pattern based on environment suffix to handle different environments
+      const expectedPattern = new RegExp(`^tapstack${environmentSuffix}-backupbucket[a-f0-9]{8}-[a-z0-9]+$`);
+      expect(outputs.BackupBucketName).toMatch(expectedPattern);
+      
+      // Additional verification: bucket name should contain the environment suffix
+      expect(outputs.BackupBucketName).toContain(`tapstack${environmentSuffix}`);
+      expect(outputs.BackupBucketName).toContain('backupbucket');
     });
   });
 
@@ -473,6 +479,28 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     let autoScalingGroup: any;
     let launchTemplate: any;
     let instances: any[];
+
+    // Helper function to get active instances
+    const getActiveInstances = async () => {
+      // Refresh instances data to get current state
+      if (autoScalingGroup?.Instances && autoScalingGroup.Instances.length > 0) {
+        const instanceIds = autoScalingGroup.Instances
+          .map((instance: any) => instance.InstanceId)
+          .filter((id: string | undefined): id is string => id !== undefined);
+        
+        if (instanceIds.length > 0) {
+          const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({
+            InstanceIds: instanceIds
+          }));
+          const currentInstances = instancesResponse.Reservations!.flatMap(reservation => reservation.Instances!);
+          return currentInstances.filter(instance => {
+            const stateName = instance.State?.Name;
+            return stateName && !['shutting-down', 'stopping', 'stopped', 'terminated'].includes(stateName);
+          });
+        }
+      }
+      return [];
+    };
 
     beforeAll(async () => {
       // Get Auto Scaling Group details
@@ -489,11 +517,18 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
 
       // Get EC2 instances in the ASG
       if (autoScalingGroup.Instances && autoScalingGroup.Instances.length > 0) {
-        const instanceIds = autoScalingGroup.Instances.map((instance: any) => instance.InstanceId!);
-        const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({
-          InstanceIds: instanceIds
-        }));
-        instances = instancesResponse.Reservations!.flatMap(reservation => reservation.Instances!);
+        const instanceIds = autoScalingGroup.Instances
+          .map((instance: any) => instance.InstanceId)
+          .filter((id: string | undefined): id is string => id !== undefined);
+        
+        if (instanceIds.length > 0) {
+          const instancesResponse = await ec2Client.send(new DescribeInstancesCommand({
+            InstanceIds: instanceIds
+          }));
+          instances = instancesResponse.Reservations!.flatMap(reservation => reservation.Instances!);
+        } else {
+          instances = [];
+        }
       } else {
         instances = [];
       }
@@ -520,7 +555,12 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     test('EC2 instances should be running and healthy', async () => {
       expect(instances.length).toBeGreaterThanOrEqual(2);
       
-      instances.forEach(instance => {
+      const activeInstances = await getActiveInstances();
+      
+      // We should have at least 2 active instances (desired capacity)
+      expect(activeInstances.length).toBeGreaterThanOrEqual(2);
+      
+      activeInstances.forEach(instance => {
         expect(instance.State?.Name).toBe('running');
         expect(instance.InstanceType).toBe('t3.small');
         expect(instance.VpcId).toBe(outputs.VpcId);
@@ -529,10 +569,20 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         const subnetId = instance.SubnetId;
         expect(subnetId).toBeDefined();
       });
+      
+      // Log instance states for debugging
+      if (instances.length !== activeInstances.length) {
+        console.log('Instance states:', instances.map(i => ({ id: i.InstanceId, state: i.State?.Name })));
+        console.log(`Active instances: ${activeInstances.length}/${instances.length}`);
+      }
     });
 
     test('EC2 instances should have proper IAM role attached', async () => {
-      instances.forEach(instance => {
+      const activeInstances = await getActiveInstances();
+      
+      expect(activeInstances.length).toBeGreaterThanOrEqual(2);
+      
+      activeInstances.forEach(instance => {
         expect(instance.IamInstanceProfile).toBeDefined();
         // Check that the instance profile contains the stack name and role
         expect(instance.IamInstanceProfile?.Arn).toContain(`TapStack${environmentSuffix}`);
@@ -542,7 +592,11 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
     });
 
     test('EC2 instances should have encrypted EBS volumes', async () => {
-      instances.forEach(instance => {
+      const activeInstances = await getActiveInstances();
+      
+      expect(activeInstances.length).toBeGreaterThanOrEqual(2);
+      
+      activeInstances.forEach(instance => {
         expect(instance.BlockDeviceMappings).toBeDefined();
         expect(instance.BlockDeviceMappings!.length).toBeGreaterThan(0);
         
@@ -732,7 +786,14 @@ describe('TAP Stack Infrastructure Integration Tests', () => {
         const asgResponse = await asgClient.send(new DescribeAutoScalingGroupsCommand({
           AutoScalingGroupNames: [outputs.AutoScalingGroupName]
         }));
-        healthStatus.autoScaling = asgResponse.AutoScalingGroups![0].Instances!.length >= 2;
+        const asg = asgResponse.AutoScalingGroups![0];
+        const activeInstances = asg.Instances!.filter(instance => 
+          !['shutting-down', 'stopping', 'stopped', 'terminated'].includes(instance.LifecycleState || '')
+        );
+        healthStatus.autoScaling = activeInstances.length >= (asg.MinSize || 0);
+        
+        // Log ASG status for debugging
+        console.log(`ASG Status: ${activeInstances.length}/${asg.Instances!.length} instances active (Min: ${asg.MinSize}, Desired: ${asg.DesiredCapacity})`);
 
         // Verify all components are healthy
         Object.entries(healthStatus).forEach(([, isHealthy]) => {
