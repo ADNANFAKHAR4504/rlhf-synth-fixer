@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 
 interface StackOutputs {
   vpcId: pulumi.Output<string>;
@@ -754,18 +755,33 @@ export class EnvironmentMigrationStack {
   }
 
   private createSecretsManager(): aws.secretsmanager.Secret {
-    return new aws.secretsmanager.Secret(
+    const password = new random.RandomPassword(`password-${this.environment}`, {
+      length: 16,
+      special: true,
+    });
+
+    const secret = new aws.secretsmanager.Secret(
       `secret-${this.environment}`,
       {
         name: `secret-${this.environment}`,
         kmsKeyId: this.kmsKey.arn,
-        secretString: JSON.stringify({
-          username: 'admin',
-          password: 'temp-password-change-me',
-        }),
         tags: this.tags,
       },
       { provider: this.provider }
     );
+
+    new aws.secretsmanager.SecretVersion(
+      `secret-version-${this.environment}`,
+      {
+        secretId: secret.id,
+        secretString: pulumi.jsonStringify({
+          username: 'admin',
+          password: password.result,
+        }),
+      },
+      { provider: this.provider }
+    );
+
+    return secret;
   }
 }
