@@ -495,9 +495,19 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 	// })
 
 	// Output important information
+	awscdk.NewCfnOutput(stack, jsii.String("VPCId"), &awscdk.CfnOutputProps{
+		Value:       vpc.VpcId(),
+		Description: jsii.String("VPC ID"),
+	})
+
 	awscdk.NewCfnOutput(stack, jsii.String("LoadBalancerDNS"), &awscdk.CfnOutputProps{
 		Value:       alb.LoadBalancerDnsName(),
 		Description: jsii.String("DNS name of the Application Load Balancer"),
+	})
+
+	awscdk.NewCfnOutput(stack, jsii.String("S3BucketName"), &awscdk.CfnOutputProps{
+		Value:       logsBucket.BucketName(),
+		Description: jsii.String("S3 bucket name for logs"),
 	})
 
 	awscdk.NewCfnOutput(stack, jsii.String("DatabaseEndpoint"), &awscdk.CfnOutputProps{
