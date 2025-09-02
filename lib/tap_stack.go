@@ -114,9 +114,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// CloudTrail bucket policy removed to avoid circular dependency
 
-	// Create VPC with public and private subnets
+	// Create VPC with explicit subnet definitions
 	vpc := awsec2.NewVpc(stack, jsii.String("TapVPC"), &awsec2.VpcProps{
-		MaxAzs:      jsii.Number(2),
+		MaxAzs:      jsii.Number(1),
 		IpAddresses: awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
