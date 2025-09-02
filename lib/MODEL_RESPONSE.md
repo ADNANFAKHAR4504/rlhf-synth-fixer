@@ -13,6 +13,11 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "AllowedValues": ["dev", "staging", "prod"],
       "Description": "Environment name for resource naming and configuration"
     },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming to avoid conflicts between deployments"
+    },
     "KMSKeyArn": {
       "Type": "String",
       "Default": "",
@@ -28,15 +33,6 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Description": "Email address for security notifications",
       "AllowedPattern": "^[^@]+@[^@]+\\.[^@]+$"
     },
-    "LambdaCodeBucket": {
-      "Type": "String",
-      "Description": "S3 bucket containing Lambda deployment packages"
-    },
-    "LambdaCodeKey": {
-      "Type": "String",
-      "Default": "s3-remediation-lambda.zip",
-      "Description": "S3 key for Lambda deployment package"
-    }
   },
   "Conditions": {
     "CreateKMSKey": {
@@ -110,7 +106,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Condition": "CreateKMSKey",
       "Properties": {
         "AliasName": {
-          "Fn::Sub": "alias/corp-${Environment}-s3-key"
+          "Fn::Sub": "alias/corp-${Environment}-s3-key-${EnvironmentSuffix}"
         },
         "TargetKeyId": {"Ref": "S3KMSKey"}
       }
@@ -119,7 +115,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "corp-${Environment}-s3-readonly-role"
+          "Fn::Sub": "corp-${Environment}-s3-readonly-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -187,7 +183,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "corp-${Environment}-s3-write-role"
+          "Fn::Sub": "corp-${Environment}-s3-write-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -263,7 +259,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "corp-${Environment}-lambda-execution-role"
+          "Fn::Sub": "corp-${Environment}-lambda-execution-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -337,7 +333,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "corp-${Environment}-cloudtrail-role"
+          "Fn::Sub": "corp-${Environment}-cloudtrail-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -384,7 +380,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": {
-          "Fn::Sub": "corp-${Environment}-replication-role"
+          "Fn::Sub": "corp-${Environment}-replication-role-${EnvironmentSuffix}"
         },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
@@ -443,7 +439,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "corp-${Environment}-logging-${AWS::AccountId}"
+          "Fn::Sub": "corp-${Environment}-logging-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -509,7 +505,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "corp-${Environment}-main-${AWS::AccountId}"
+          "Fn::Sub": "corp-${Environment}-main-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -622,7 +618,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "corp-${Environment}-security-notifications"
+          "Fn::Sub": "corp-${Environment}-security-notifications-${EnvironmentSuffix}"
         },
         "DisplayName": "S3 Security Notifications",
         "KmsMasterKeyId": {
@@ -652,7 +648,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::Logs::LogGroup",
       "Properties": {
         "LogGroupName": {
-          "Fn::Sub": "/aws/s3/corp-${Environment}"
+          "Fn::Sub": "/aws/s3/corp-${Environment}-${EnvironmentSuffix}"
         },
         "RetentionInDays": {
           "Fn::If": ["IsProduction", 365, 30]
@@ -663,15 +659,14 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Fn::Sub": "corp-${Environment}-s3-remediation"
+          "Fn::Sub": "corp-${Environment}-s3-remediation-${EnvironmentSuffix}"
         },
-        "Runtime": "python3.9",
+        "Runtime": "python3.12",
         "Handler": "index.lambda_handler",
         "Role": {"Fn::GetAtt": ["LambdaExecutionRole", "Arn"]},
         "Timeout": 300,
         "Code": {
-          "S3Bucket": {"Ref": "LambdaCodeBucket"},
-          "S3Key": {"Ref": "LambdaCodeKey"}
+          "ZipFile": "import json\nimport boto3\nimport os\n\ndef lambda_handler(event, context):\n    s3_client = boto3.client('s3')\n    sns_client = boto3.client('sns')\n    \n    # Get environment variables\n    sns_topic = os.environ.get('SNS_TOPIC_ARN')\n    main_bucket = os.environ.get('MAIN_BUCKET')\n    logging_bucket = os.environ.get('LOGGING_BUCKET')\n    kms_key = os.environ.get('KMS_KEY_ID')\n    \n    try:\n        # Parse the CloudTrail event\n        detail = event.get('detail', {})\n        event_name = detail.get('eventName')\n        bucket_name = detail.get('requestParameters', {}).get('bucketName')\n        \n        print(f'Processing event: {event_name} for bucket: {bucket_name}')\n        \n        # Only process events for our managed buckets\n        if bucket_name not in [main_bucket, logging_bucket]:\n            return {'statusCode': 200, 'body': 'Event not for managed buckets'}\n        \n        # Remediation logic based on event type\n        if event_name in ['PutBucketPolicy', 'DeleteBucketPolicy']:\n            remediate_bucket_policy(s3_client, bucket_name, kms_key)\n        elif event_name in ['PutBucketAcl']:\n            remediate_bucket_acl(s3_client, bucket_name)\n        elif event_name in ['PutBucketPublicAccessBlock', 'DeleteBucketPublicAccessBlock']:\n            remediate_public_access(s3_client, bucket_name)\n        elif event_name in ['PutBucketEncryption', 'DeleteBucketEncryption']:\n            remediate_encryption(s3_client, bucket_name, kms_key)\n        \n        # Send notification\n        message = f'S3 security remediation completed for bucket: {bucket_name}, event: {event_name}'\n        sns_client.publish(TopicArn=sns_topic, Message=message)\n        \n        return {'statusCode': 200, 'body': 'Remediation completed'}\n        \n    except Exception as e:\n        print(f'Error: {str(e)}')\n        error_message = f'S3 remediation failed: {str(e)}'\n        if sns_topic:\n            sns_client.publish(TopicArn=sns_topic, Message=error_message)\n        return {'statusCode': 500, 'body': str(e)}\n\ndef remediate_bucket_policy(s3_client, bucket_name, kms_key):\n    # Ensure bucket policy denies insecure transport and unencrypted uploads\n    policy = {\n        'Version': '2012-10-17',\n        'Statement': [\n            {\n                'Sid': 'DenyInsecureConnections',\n                'Effect': 'Deny',\n                'Principal': '*',\n                'Action': 's3:*',\n                'Resource': [f'arn:aws:s3:::{bucket_name}', f'arn:aws:s3:::{bucket_name}/*'],\n                'Condition': {'Bool': {'aws:SecureTransport': 'false'}}\n            },\n            {\n                'Sid': 'DenyUnencryptedObjectUploads',\n                'Effect': 'Deny',\n                'Principal': '*',\n                'Action': 's3:PutObject',\n                'Resource': f'arn:aws:s3:::{bucket_name}/*',\n                'Condition': {'StringNotEquals': {'s3:x-amz-server-side-encryption': 'aws:kms'}}\n            }\n        ]\n    }\n    s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))\n\ndef remediate_bucket_acl(s3_client, bucket_name):\n    # Reset to private ACL\n    s3_client.put_bucket_acl(Bucket=bucket_name, ACL='private')\n\ndef remediate_public_access(s3_client, bucket_name):\n    # Block all public access\n    s3_client.put_public_access_block(\n        Bucket=bucket_name,\n        PublicAccessBlockConfiguration={\n            'BlockPublicAcls': True,\n            'IgnorePublicAcls': True,\n            'BlockPublicPolicy': True,\n            'RestrictPublicBuckets': True\n        }\n    )\n\ndef remediate_encryption(s3_client, bucket_name, kms_key):\n    # Ensure KMS encryption is enabled\n    s3_client.put_bucket_encryption(\n        Bucket=bucket_name,\n        ServerSideEncryptionConfiguration={\n            'Rules': [{\n                'ApplyServerSideEncryptionByDefault': {\n                    'SSEAlgorithm': 'aws:kms',\n                    'KMSMasterKeyID': kms_key\n                },\n                'BucketKeyEnabled': True\n            }]\n        }\n    )\n"
         },
         "Environment": {
           "Variables": {
@@ -699,7 +694,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::CloudTrail::Trail",
       "Properties": {
         "TrailName": {
-          "Fn::Sub": "corp-${Environment}-s3-trail"
+          "Fn::Sub": "corp-${Environment}-s3-trail-${EnvironmentSuffix}"
         },
         "S3BucketName": {"Ref": "LoggingS3Bucket"},
         "S3KeyPrefix": "cloudtrail-logs/",
@@ -745,7 +740,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": {
-          "Fn::Sub": "corp-${Environment}-s3-config-change"
+          "Fn::Sub": "corp-${Environment}-s3-config-change-${EnvironmentSuffix}"
         },
         "Description": "Triggers remediation Lambda on S3 configuration changes",
         "EventPattern": {
@@ -786,7 +781,7 @@ I'll create a comprehensive CloudFormation template that implements enterprise-g
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmName": {
-          "Fn::Sub": "corp-${Environment}-s3-public-access-alarm"
+          "Fn::Sub": "corp-${Environment}-s3-public-access-alarm-${EnvironmentSuffix}"
         },
         "AlarmDescription": "Alarm for S3 bucket public access attempts",
         "MetricName": "PublicAccessAttempts",
