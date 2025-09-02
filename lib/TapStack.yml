@@ -98,6 +98,17 @@ Resources:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
             Resource: '*'
+          - Sid: 'Allow CloudWatch Logs'
+            Effect: 'Allow'
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
           - Sid: 'Allow RDS Service'
             Effect: 'Allow'
             Principal:
@@ -175,8 +186,11 @@ Resources:
               - !Sub '${TapStackSecureBucket}/*'
               - !Ref TapStackSecureBucket
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              StringEquals:
+                's3:x-amz-acl': 
+                  - 'public-read'
+                  - 'public-read-write'
+                  - 'authenticated-read'
           - Sid: 'DenyUnSecureCommunications'
             Effect: 'Deny'
             Principal: '*'
@@ -299,7 +313,6 @@ Resources:
 
   EIPNATWest:
     Type: 'AWS::EC2::EIP'
-    DependsOn: AttachGatewayWest
     Properties:
       Domain: 'vpc'
 
@@ -323,7 +336,6 @@ Resources:
   # Routes
   PublicRouteWest:
     Type: 'AWS::EC2::Route'
-    DependsOn: AttachGatewayWest
     Properties:
       RouteTableId: !Ref PublicRouteTableWest
       DestinationCidrBlock: '0.0.0.0/0'
@@ -423,7 +435,7 @@ Resources:
           Description: 'MySQL from web servers'
       Tags:
         - Key: 'Name'
-          Value: 'TapStack-Database-SG'
+          Value: !Sub 'TapStack-Database-SG-${Environment}'
 
   # IAM Role for Cross-Account Access
   CrossAccountAccessRole:
@@ -489,6 +501,21 @@ Resources:
     Properties:
       Roles:
         - !Ref EC2InstanceRole
+
+  # IAM Role for RDS Monitoring
+  RDSMonitoringRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Sub 'TapStack-RDS-Monitoring-Role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Service: 'monitoring.rds.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
 
   # SSL Certificate for ALB
   SSLCertificate:
@@ -631,7 +658,22 @@ Resources:
         - Key: 'Name'
           Value: !Sub 'TapStack-DB-SubnetGroup-${Environment}'
 
-  # RDS Instance - Using dynamic reference for password (AWS Secrets Manager)
+  # Secrets Manager Secret for RDS Password
+  RDSSecret:
+    Type: 'AWS::SecretsManager::Secret'
+    Properties:
+      Name: !Sub 'TapStackDBSecret-${Environment}'
+      Description: 'RDS database credentials for TapStack'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: 'Name'
+          Value: !Sub 'TapStack-DB-Secret-${Environment}'
+
+  # RDS Instance - Using dynamic reference for password
   RDSInstance:
     Type: 'AWS::RDS::DBInstance'
     DeletionPolicy: 'Snapshot'
@@ -657,27 +699,12 @@ Resources:
       EnablePerformanceInsights: true
       PerformanceInsightsKMSKeyId: !Ref TapStackKMSKey
       MonitoringInterval: 60
-      MonitoringRoleArn: !Sub 'arn:aws:iam::${AWS::AccountId}:role/rds-monitoring-role'
+      MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
       Tags:
         - Key: 'Name'
           Value: !Sub 'TapStack-RDS-${Environment}'
         - Key: 'Environment'
           Value: !Ref Environment
-
-  # Secrets Manager Secret for RDS Password
-  RDSSecret:
-    Type: 'AWS::SecretsManager::Secret'
-    Properties:
-      Name: !Sub 'TapStackDBSecret-${Environment}'
-      Description: 'RDS database credentials for TapStack'
-      GenerateSecretString:
-        SecretStringTemplate: !Sub '{"username": "${DBMasterUsername}"}'
-        GenerateStringKey: 'password'
-        PasswordLength: 16
-        ExcludeCharacters: '"@/\'
-      Tags:
-        - Key: 'Name'
-          Value: !Sub 'TapStack-DB-Secret-${Environment}'
 
   # Launch Template for Auto Scaling
   LaunchTemplate:
