@@ -286,9 +286,14 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
       const response = await elasticBeanstalkClient.send(command);
 
       expect(response.Environments).toBeDefined();
-      expect(response.Environments!.length).toBe(1);
+      
+      // Filter out terminated environments
+      const activeEnvironments = response.Environments!.filter(
+        env => env.Status !== 'Terminated'
+      );
+      expect(activeEnvironments.length).toBe(1);
 
-      const environment = response.Environments![0];
+      const environment = activeEnvironments[0];
       expect(environment.EnvironmentName).toBe(environmentName);
       expect(environment.SolutionStackName).toBe(
         '64bit Amazon Linux 2023 v6.6.4 running Node.js 20'
