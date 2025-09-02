@@ -1911,12 +1911,13 @@ Outputs:
       Name: !Sub '${AWS::StackName}-S3-Bucket-Name'
 
   RDSInstanceId:
+    Condition: HasTwoSubnetAZs
     Description: RDS Instance ID
     Value:
       !If [
         UseExistingDatabaseInstance,
         !Ref ExistingDatabaseInstanceId,
-        !If [HasTwoSubnetAZs, !Ref DatabaseInstance, !Ref AWS::NoValue],
+        !Ref DatabaseInstance,
       ]
     Export:
       Name: !Sub '${AWS::StackName}-RDS-Instance-ID'
