@@ -126,13 +126,9 @@ export class TapStack extends cdk.Stack {
     });
 
     // Instance profile for EC2 role
-    new iam.InstanceProfile(
-      this,
-      'EC2InstanceProfile',
-      {
-        role: ec2Role,
-      }
-    );
+    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+      role: ec2Role,
+    });
 
     // 4. S3 bucket with server-side encryption and blocked public access
     const secureBucket = new s3.Bucket(this, 'SecureBucket', {
@@ -447,50 +443,42 @@ export class TapStack extends cdk.Stack {
 
     // Alternative: Manual scaling policies with proper step configuration
     // Scale-up policy with multiple steps for more granular control
-    new autoscaling.StepScalingPolicy(
-      this,
-      'ScaleUpPolicy',
-      {
-        autoScalingGroup,
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/EC2',
-          metricName: 'CPUUtilization',
-          dimensionsMap: {
-            AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
-          },
-          statistic: 'Average',
-          period: cdk.Duration.minutes(5),
-        }),
-        scalingSteps: [
-          { upper: 80, change: +1 }, // Add 1 instance when CPU 70-80%
-          { lower: 80, change: +2 }, // Add 2 instances when CPU > 80%
-        ],
-        cooldown: cdk.Duration.minutes(5),
-      }
-    );
+    new autoscaling.StepScalingPolicy(this, 'ScaleUpPolicy', {
+      autoScalingGroup,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/EC2',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      scalingSteps: [
+        { upper: 80, change: +1 }, // Add 1 instance when CPU 70-80%
+        { lower: 80, change: +2 }, // Add 2 instances when CPU > 80%
+      ],
+      cooldown: cdk.Duration.minutes(5),
+    });
 
     // Scale-down policy with multiple steps
-    new autoscaling.StepScalingPolicy(
-      this,
-      'ScaleDownPolicy',
-      {
-        autoScalingGroup,
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/EC2',
-          metricName: 'CPUUtilization',
-          dimensionsMap: {
-            AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
-          },
-          statistic: 'Average',
-          period: cdk.Duration.minutes(5),
-        }),
-        scalingSteps: [
-          { upper: 20, change: -1 }, // Remove 1 instance when CPU < 20%
-          { lower: 20, upper: 30, change: -1 }, // Remove 1 instance when CPU 20-30%
-        ],
-        cooldown: cdk.Duration.minutes(10), // Longer cooldown for scale-down
-      }
-    );
+    new autoscaling.StepScalingPolicy(this, 'ScaleDownPolicy', {
+      autoScalingGroup,
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/EC2',
+        metricName: 'CPUUtilization',
+        dimensionsMap: {
+          AutoScalingGroupName: autoScalingGroup.autoScalingGroupName,
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(5),
+      }),
+      scalingSteps: [
+        { upper: 20, change: -1 }, // Remove 1 instance when CPU < 20%
+        { lower: 20, upper: 30, change: -1 }, // Remove 1 instance when CPU 20-30%
+      ],
+      cooldown: cdk.Duration.minutes(10), // Longer cooldown for scale-down
+    });
 
     // CloudWatch alarms for manual scaling policies
     new cloudwatch.Alarm(this, 'HighCpuAlarm', {
