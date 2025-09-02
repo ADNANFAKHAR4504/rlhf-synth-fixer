@@ -715,19 +715,19 @@ Outputs:
     Description: 'VPC ID'
     Value: !Ref VPC
     Export:
-      Name: !Sub '${Environment}-vpc-id'
+      Name: !Sub '${Environment}-vpc-id-latest'
 
   PublicSubnetId:
     Description: 'Public Subnet ID'
     Value: !Ref PublicSubnet
     Export:
-      Name: !Sub '${Environment}-public-subnet-id'
+      Name: !Sub '${Environment}-public-subnet-id-latest'
 
   PrivateSubnetId:
     Description: 'Private Subnet ID'
     Value: !Ref PrivateSubnet
     Export:
-      Name: !Sub '${Environment}-private-subnet-id'
+      Name: !Sub '${Environment}-private-subnet-id-latest'
 
   BastionHostId:
     Description: 'Bastion Host Instance ID'
