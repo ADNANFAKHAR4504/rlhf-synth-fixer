@@ -257,51 +257,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create bucket policy for data bucket (restrictive access)
-        data_bucket_policy = s3.BucketPolicy(
-            f"tap-data-bucket-policy-{self.environment_suffix}",
-            bucket=data_bucket.id,
-            policy=pulumi.Output.all(data_bucket.bucket, current_account.account_id).apply(
-                lambda args: json.dumps({
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AllowDataAccessRoleAccess",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": f"arn:aws:iam::{args[1]}:role/DataAccessRole"
-                            },
-                            "Action": [
-                                "s3:GetObject",
-                                "s3:PutObject",
-                                "s3:DeleteObject",
-                                "s3:ListBucket"
-                            ],
-                            "Resource": [
-                                f"arn:aws:s3:::{args[0]}",
-                                f"arn:aws:s3:::{args[0]}/*"
-                            ]
-                        },
-                        {
-                            "Sid": "DenyAllOtherAccess",
-                            "Effect": "Deny",
-                            "Principal": "*",
-                            "Action": "s3:*",
-                            "Resource": [
-                                f"arn:aws:s3:::{args[0]}",
-                                f"arn:aws:s3:::{args[0]}/*"
-                            ],
-                            "Condition": {
-                                "StringNotEquals": {
-                                    "aws:PrincipalArn": f"arn:aws:iam::{args[1]}:role/DataAccessRole"
-                                }
-                            }
-                        }
-                    ]
-                })
-            ),
-            opts=ResourceOptions(parent=self)
-        )
+
 
         # Create CloudWatch alarm for access errors
         access_error_alarm = cloudwatch.MetricAlarm(
@@ -339,7 +295,6 @@ class TapStack(pulumi.ComponentResource):
         self.data_bucket_encryption = data_bucket_encryption
         self.data_bucket_public_access_block = data_bucket_public_access_block
         self.data_bucket_logging = data_bucket_logging
-        self.data_bucket_policy = data_bucket_policy
 
         # Register outputs
         self.register_outputs({
