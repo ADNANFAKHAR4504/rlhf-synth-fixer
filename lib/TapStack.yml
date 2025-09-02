@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   Secure AWS environment setup for a single region (e.g., us-west-2) with encryption, logging, WAF, Shield,
-  and secure compute. This template is designed for portability and must be deployed separately in each target region.
+  and secure compute. This template is designed for portability and will use two Availability Zones if available.
 
 Parameters:
   VpcCidr:
@@ -27,10 +27,9 @@ Mappings:
       SingleAZ: 'true'
 
 Conditions:
-  HasTwoAZs: !Not [!FindInMap [SingleAZRegions, !Ref 'AWS::Region', SingleAZ, 'false']]
+  HasTwoAZs: !Not [!FindInMap [SingleAZRegions, !Ref 'AWS::Region', 'SingleAZ', 'false']]
 
 Resources:
-  # 1. Encrypt all sensitive data at rest using AWS Key Management Service (KMS).
   KmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -54,7 +53,6 @@ Resources:
       AliasName: alias/secureKey
       TargetKeyId: !Ref KmsKey
 
-  # 5. A single-region VPC is created. The template needs to be deployed twice for the multi-region setup.
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -86,7 +84,6 @@ Resources:
         - Key: Name
           Value: PrivateSubnet2
 
-  # 7. Enable versioning on all S3 buckets to guard against accidental data deletion or overwriting.
   SecretsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -109,7 +106,6 @@ Resources:
         - Key: Name
           Value: SecureSecretsBucket
 
-  # 3. Set up an Elastic Load Balancer (ELB) with logging enabled, and ensure logs are stored in a secure, encrypted format.
   ALBAccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -192,7 +188,6 @@ Resources:
         - Key: Name
           Value: ALBHttpSecurityGroup
 
-  # 8. Protect the web application by integrating AWS Shield for advanced DDoS protection.
   ShieldProtection:
     Type: AWS::Shield::Protection
     Properties:
@@ -202,8 +197,6 @@ Resources:
         - Key: Name
           Value: ALBShieldProtection
 
-  # 2. Configure IAM roles correctly and avoid using inline policies to manage access and permissions.
-  # 9. Ensure that Lambda functions operate within private VPCs to prevent unrestrained internet access.
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -289,7 +282,6 @@ Resources:
         - Key: Name
           Value: SecureLambdaFunction
 
-  # 4. Monitor infrastructure metrics by setting up CloudWatch alarms for critical thresholds.
   CloudWatchAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -304,7 +296,6 @@ Resources:
       Dimensions: []
       AlarmActions: []
 
-  # 11. Store all secrets securely using AWS Secrets Manager.
   MySecret:
     Type: AWS::SecretsManager::Secret
     Properties:
@@ -313,7 +304,6 @@ Resources:
       SecretString: '{"username":"admin","password":"SecureP@ssw0rd"}'
       KmsKeyId: !Ref KmsKey
 
-  # 10. Enforce AWS WAF rules on API Gateway to provide application firewall protection.
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
     Properties:
@@ -401,11 +391,6 @@ Resources:
     Properties:
       WebACLArn: !GetAtt WAFWebACL.Arn
       ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/${ApiStage}'
-
-  # 6. Use AWS Config to track all configuration changes across resources.
-  # This part of the requirement is fulfilled by a separate CloudFormation template or manual setup in AWS Config.
-  # AWS Config is a separate service that tracks changes across an account, not within a single stack.
-  # A `AWS::Config::ConfigurationRecorder` could be added here to enable it.
 
 Outputs:
   LoadBalancerDNS:
