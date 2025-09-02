@@ -756,11 +756,14 @@ export class SecureInfrastructureStack extends cdk.Stack {
       }),
     });
 
-    // Associate WAF with API Gateway
-    new wafv2.CfnWebACLAssociation(this, 'APIGatewayWafAssociation', {
+    // Associate WAF with API Gateway - wait for deployment to complete
+    const apiWafAssociation = new wafv2.CfnWebACLAssociation(this, 'APIGatewayWafAssociation', {
       resourceArn: `arn:aws:apigateway:${this.region}::/restapis/${api.restApiId}/stages/prod`,
       webAclArn: webAcl.attrArn,
     });
+
+    // Ensure WAF association waits for API deployment
+    apiWafAssociation.node.addDependency(api.deploymentStage);
 
     // API Gateway Access Logs
     new logs.LogGroup(this, 'APIGatewayLogGroup', {

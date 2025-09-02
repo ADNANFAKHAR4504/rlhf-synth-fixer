@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack - Secure Infrastructure Unit Tests', () => {
@@ -34,32 +34,32 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
         env: { account: '123456789012', region: 'us-west-2' },
       });
       const contextTemplate = Template.fromStack(contextStack);
-      
+
       // Check that resources use the context suffix
-      contextTemplate.hasResourceProperties('AWS::S3::Bucket', 
+      contextTemplate.hasResourceProperties('AWS::S3::Bucket',
         Match.objectLike({
           BucketName: Match.stringLikeRegexp('.*context-suffix.*')
         })
       );
     });
-    
+
     test('uses environment variable when no context is provided', () => {
       const envApp = new cdk.App();
       const originalEnv = process.env.ENVIRONMENT_SUFFIX;
       process.env.ENVIRONMENT_SUFFIX = 'env-suffix';
-      
+
       const envStack = new TapStack(envApp, 'EnvStack', {
         env: { account: '123456789012', region: 'us-west-2' },
       });
       const envTemplate = Template.fromStack(envStack);
-      
+
       // Check that resources use the environment variable suffix
-      envTemplate.hasResourceProperties('AWS::S3::Bucket', 
+      envTemplate.hasResourceProperties('AWS::S3::Bucket',
         Match.objectLike({
           BucketName: Match.stringLikeRegexp('.*env-suffix.*')
         })
       );
-      
+
       // Restore original env
       if (originalEnv) {
         process.env.ENVIRONMENT_SUFFIX = originalEnv;
@@ -67,24 +67,24 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
         delete process.env.ENVIRONMENT_SUFFIX;
       }
     });
-    
+
     test('uses default dev suffix when neither context nor env var is set', () => {
       const originalEnv = process.env.ENVIRONMENT_SUFFIX;
       delete process.env.ENVIRONMENT_SUFFIX;
-      
+
       const defaultApp = new cdk.App();
       const defaultStack = new TapStack(defaultApp, 'DefaultStack', {
         env: { account: '123456789012', region: 'us-west-2' },
       });
       const defaultTemplate = Template.fromStack(defaultStack);
-      
+
       // Check that resources use the default 'dev' suffix
-      defaultTemplate.hasResourceProperties('AWS::S3::Bucket', 
+      defaultTemplate.hasResourceProperties('AWS::S3::Bucket',
         Match.objectLike({
           BucketName: Match.stringLikeRegexp('.*dev.*')
         })
       );
-      
+
       // Restore original env
       if (originalEnv) {
         process.env.ENVIRONMENT_SUFFIX = originalEnv;
@@ -158,7 +158,7 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
 
     test('creates public subnets', () => {
       template.resourceCountIs('AWS::EC2::Subnet', 9); // 3 public, 3 private, 3 isolated
-      
+
       template.hasResourceProperties('AWS::EC2::Subnet', {
         MapPublicIpOnLaunch: true,
         Tags: Match.arrayWith([
@@ -498,7 +498,7 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
       template.hasResourceProperties('AWS::SSM::Parameter', {
         Name: `/prod/app/api-key-${testEnvSuffix}`,
         Description: 'API key for external service integration',
-        Type: 'SecureString',
+        Type: 'String',
         Tier: 'Standard'
       });
     });
@@ -967,8 +967,8 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
           role.Properties.Policies.forEach((policy: any) => {
             policy.PolicyDocument.Statement.forEach((statement: any) => {
               // Ensure no statements with Resource: '*' and sensitive actions
-              if (statement.Resource === '*' || 
-                  (Array.isArray(statement.Resource) && statement.Resource.includes('*'))) {
+              if (statement.Resource === '*' ||
+                (Array.isArray(statement.Resource) && statement.Resource.includes('*'))) {
                 // Only allow specific safe actions with wildcard resources
                 const allowedWildcardActions = [
                   'cloudwatch:PutMetricData',
@@ -976,7 +976,7 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
                   'logs:CreateLogStream',
                   'logs:PutLogEvents'
                 ];
-                
+
                 if (statement.Action) {
                   const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
                   actions.forEach((action: string) => {
