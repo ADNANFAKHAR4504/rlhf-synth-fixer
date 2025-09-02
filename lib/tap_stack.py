@@ -158,7 +158,7 @@ class TapStack(pulumi.ComponentResource):
                             "Service": "logging.s3.amazonaws.com"
                         },
                         "Action": "s3:PutObject",
-                        "Resource": f"arn:aws:s3:::{logs_bucket.bucket}/*",
+                        "Resource": f"arn:aws:s3::{current_account.account_id}:{logs_bucket.bucket}/*",
                         "Condition": {
                             "StringEquals": {
                                 "aws:SourceAccount": current_account.account_id
@@ -275,8 +275,8 @@ class TapStack(pulumi.ComponentResource):
                             "s3:ListBucket"
                         ],
                         "Resource": [
-                            f"arn:aws:s3:::{data_bucket.bucket}",
-                            f"arn:aws:s3:::{data_bucket.bucket}/*"
+                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}",
+                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}/*"
                         ]
                     },
                     {
@@ -285,8 +285,8 @@ class TapStack(pulumi.ComponentResource):
                         "Principal": "*",
                         "Action": "s3:*",
                         "Resource": [
-                            f"arn:aws:s3:::{data_bucket.bucket}",
-                            f"arn:aws:s3:::{data_bucket.bucket}/*"
+                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}",
+                            f"arn:aws:s3::{current_account.account_id}:{data_bucket.bucket}/*"
                         ],
                         "Condition": {
                             "StringNotEquals": {
