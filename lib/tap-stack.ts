@@ -1,22 +1,22 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
-import * as config from 'aws-cdk-lib/aws-config';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as config from 'aws-cdk-lib/aws-config';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
-import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
 
 export class SecureInfrastructureStack extends cdk.Stack {
@@ -126,7 +126,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
       encryptionKey: kmsKey,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-    
+
     // Override removal policy for VPC flow logs
     (vpcFlowLogsGroup.node.defaultChild as logs.CfnLogGroup).applyRemovalPolicy(
       cdk.RemovalPolicy.DESTROY
@@ -395,13 +395,13 @@ export class SecureInfrastructureStack extends cdk.Stack {
       encryptionKey: kmsKey,
     });
 
-    // API Keys in Parameter Store
-    new ssm.StringParameter(this, 'APIKeyParameter', {
-      parameterName: `/prod/app/api-key-${environmentSuffix}`,
-      stringValue: 'placeholder-api-key', // Replace with actual API key
+    // API Keys in Parameter Store (SecureString)
+    new ssm.CfnParameter(this, 'APIKeyParameter', {
+      name: `/prod/app/api-key-${environmentSuffix}`,
+      value: 'placeholder-api-key', // Replace with actual API key
       description: 'API key for external service integration',
-      tier: ssm.ParameterTier.STANDARD,
-      type: ssm.ParameterType.SECURE_STRING,
+      tier: 'Standard',
+      type: 'SecureString',
     });
 
     // =============================================================================
@@ -419,7 +419,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
       cloudWatchLogsRetention: logs.RetentionDays.ONE_YEAR,
       managementEvents: cloudtrail.ReadWriteType.ALL,
     });
-    
+
     // Override removal policies for CloudTrail log group
     if (trail.logGroup) {
       (trail.logGroup.node.defaultChild as logs.CfnLogGroup).applyRemovalPolicy(
