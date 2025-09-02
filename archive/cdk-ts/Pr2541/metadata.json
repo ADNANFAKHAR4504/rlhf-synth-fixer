@@ -20,5 +20,11 @@
     "S3",
     "CloudWatch Logs",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
