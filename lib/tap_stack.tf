@@ -1267,7 +1267,6 @@ resource "aws_cloudwatch_metric_alarm" "rds_reboot" {
   threshold            = 0
   comparison_operator  = "LessThanThreshold"
   alarm_actions        = [aws_sns_topic.alarms.arn]
-  alarm_actions        = [aws_sns_topic.alarms.arn]
   ok_actions           = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = [aws_sns_topic.alarms.arn]
 
