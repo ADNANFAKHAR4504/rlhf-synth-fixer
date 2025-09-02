@@ -24,6 +24,9 @@ import { AutoscalingPolicy } from '@cdktf/provider-aws/lib/autoscaling-policy';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+// 1. IMPORT S3BucketPolicy and DataAwsCallerIdentity
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 interface TapStackConfig {
   env: {
@@ -39,7 +42,7 @@ export class TapStack extends TerraformStack {
     const randomSuffix = Fn.substr(Fn.uuid(), 0, 8);
     const availabilityZones = [`${region}a`, `${region}b`];
 
-    // 1. AWS Provider and Global Tagging
+    // AWS Provider and Global Tagging
     new AwsProvider(this, 'aws', {
       region,
       defaultTags: [
@@ -52,7 +55,23 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // 2. Networking (VPC, Subnets, Gateways) for High Availability
+    // 2. GET CALLER IDENTITY TO DYNAMICALLY GET YOUR ACCOUNT ID
+    const callerIdentity = new DataAwsCallerIdentity(
+      this,
+      'caller-identity',
+      {}
+    );
+
+    // Map of ELB Account IDs per region for access logging
+    const elbAccountIds: { [key: string]: string } = {
+      'us-east-1': '127311923021',
+      'us-east-2': '033677994240',
+      'us-west-1': '027434742980',
+      'us-west-2': '797873946194',
+      // Add other regions as needed
+    };
+
+    // Networking (VPC, Subnets, Gateways)
     const vpc = new Vpc(this, 'main-vpc', {
       cidrBlock: '10.0.0.0/16',
       enableDnsHostnames: true,
@@ -92,7 +111,6 @@ export class TapStack extends TerraformStack {
       });
     });
 
-    // NAT Gateways in each public subnet for HA outbound traffic from private subnets
     availabilityZones.forEach((zone, index) => {
       const eip = new Eip(this, `nat-eip-${index}`, { domain: 'vpc' });
       const natGateway = new NatGateway(this, `nat-gw-${index}`, {
@@ -109,7 +127,7 @@ export class TapStack extends TerraformStack {
       });
     });
 
-    // 3. Security (Strict Security Groups)
+    // Security Groups
     const albSg = new SecurityGroup(this, 'alb-sg', {
       name: `alb-sg-${randomSuffix}`,
       vpcId: vpc.id,
@@ -158,9 +176,27 @@ export class TapStack extends TerraformStack {
       ],
     });
 
-    // 4. Logging (Centralized in CloudWatch and S3)
+    // Logging
     const albLogBucket = new S3Bucket(this, 'alb-log-bucket', {
       bucket: `alb-logs-${randomSuffix}`,
+    });
+
+    // 3. ADD THE S3 BUCKET POLICY
+    new S3BucketPolicy(this, 'alb-log-bucket-policy', {
+      bucket: albLogBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              AWS: `arn:aws:iam::${elbAccountIds[region]}:root`,
+            },
+            Action: 's3:PutObject',
+            Resource: `${albLogBucket.arn}/alb-logs/AWSLogs/${callerIdentity.accountId}/*`,
+          },
+        ],
+      }),
     });
 
     const appLogGroup = new CloudwatchLogGroup(this, 'app-log-group', {
@@ -168,7 +204,7 @@ export class TapStack extends TerraformStack {
       retentionInDays: 30,
     });
 
-    // 5. Application Load Balancer
+    // Application Load Balancer
     const alb = new Lb(this, 'alb', {
       name: `app-lb-${randomSuffix}`,
       internal: false,
@@ -201,7 +237,7 @@ export class TapStack extends TerraformStack {
       defaultAction: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
     });
 
-    // 6. Database (Encrypted, Multi-AZ, Backups)
+    // Database
     const dbSubnetGroup = new DbSubnetGroup(this, 'rds-subnet-group', {
       name: `rds-subnet-group-${randomSuffix}`,
       subnetIds: privateSubnets.map(subnet => subnet.id),
@@ -224,7 +260,7 @@ export class TapStack extends TerraformStack {
       enabledCloudwatchLogsExports: ['postgresql', 'upgrade'],
     });
 
-    // 7. IAM (Least Privilege for EC2)
+    // IAM
     const ec2Role = new IamRole(this, 'ec2-role', {
       name: `ec2-role-${randomSuffix}`,
       assumeRolePolicy: JSON.stringify({
@@ -272,7 +308,7 @@ export class TapStack extends TerraformStack {
       { name: `ec2-instance-profile-${randomSuffix}`, role: ec2Role.name }
     );
 
-    // 8. Compute (Auto Scaling for Scalability & Resilience)
+    // Compute
     const ami = new DataAwsAmi(this, 'amazon-linux-2', {
       mostRecent: true,
       filter: [{ name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] }],
@@ -283,10 +319,6 @@ export class TapStack extends TerraformStack {
 yum update -y
 yum install -y amazon-cloudwatch-agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c ssm:AmazonCloudWatch-linux
-# Your application deployment script would go here
-# For example:
-# yum install -y nodejs
-# # Fetch app from S3/CodeDeploy and start it on port 8080
 `;
 
     const launchTemplate = new LaunchTemplate(this, 'launch-template', {
