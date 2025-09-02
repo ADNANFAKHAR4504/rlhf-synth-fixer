@@ -25,7 +25,7 @@ echo "CI mode: $CI"
 if [ "$LANGUAGE" = "java" ]; then
   echo "✅ Java project detected, running integration tests..."
   chmod +x ./gradlew
-  ./gradlew integrationTest --build-cache --no-daemon
+  ./gradlew integrationTest jacocoIntegrationTestReport --build-cache --no-daemon
 
 elif [ "$LANGUAGE" = "py" ]; then
   echo "✅ Python project detected, running integration tests..."
