@@ -382,10 +382,12 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # Explicitly span two distinct AZs for HA (fixes RDS AZ coverage)
   PublicSubnetWest1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [0, !Cidr [!Ref VPCCidrWest, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
@@ -396,6 +398,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [1, !Cidr [!Ref VPCCidrWest, 6, 8]]
       MapPublicIpOnLaunch: true
       Tags:
@@ -406,6 +409,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [2, !Cidr [!Ref VPCCidrWest, 6, 8]]
       Tags:
         - Key: Name
@@ -415,6 +419,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPCWest
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [3, !Cidr [!Ref VPCCidrWest, 6, 8]]
       Tags:
         - Key: Name
