@@ -1,46 +1,32 @@
-## You are a DevOps expert who focuses on production-grade Infrastructure as Code with the Terraform CDK for TypeScript (cdktf).
-
-Your goal is to create a fully featured, secure, and modular CDKTF project that deploys multi-environment AWS infrastructure (staging and production).
-
----
-
-## Requirements
+Create a secure, modular, production-ready CDKTF project that deploys staging and production AWS environments.
+here are my Requirements:
 
 ### Environments
-- Support staging and production environments.
-- Employ Terraform provider blocks to set up separate AWS providers for each environment.
-- Make sure both environments are structurally similar yet separated.
+- Support **staging + production**, structurally similar but isolated.  
+- Separate AWS providers + Terraform Cloud remote state per environment.  
 
-### Remote State
-- Use remote state management with Terraform Cloud.
-- Split states for each environment.
+### Resources (per env)
+- **S3 bucket** with versioning.  
+- **Security Group** allowing only port 443.  
+- **IAM role** with least privilege, scoped to env.  
 
-### Resources per environment
-- S3 bucket with versioning turned on.
-- Security group for accepting traffic on port 443 only.
-- IAM role with least privilege, scoped per environment.
+### Naming & Tags
+- Env-specific names (e.g., `myapp-staging`, `myapp-production`).  
+- Tag all resources with `environment=staging|production`.  
 
-### Tagging & Naming
-- Tag all the resources with:
-  - environment = staging or environment = production.
-- Use environment-specific naming standards (e.g., myapp-staging, myapp-production).
-
-### Modular design
-- Define submodules for repeatable infrastructure pieces (S3, Security Groups, IAM roles).
-- Do not put environment logic in the main stack.
+### Modularity
+- Reusable modules (S3, SGs, IAM).  
+- Keep env logic **out of main stack**.  
 
 ---
 
 ## File Structure
-You will need to create exactly two files:
-
-- **lib/modules.ts**: Declares all reusable infrastructure modules.  
-- **lib/tap-stack.ts**: Root stack that sets up providers, creates modules, and connects resources for staging and production.
+- `lib/modules.ts` – defines reusable modules.  
+- `lib/tap-stack.ts` – root stack, sets up providers, creates modules, wires staging + production.  
 
 ---
 
-## Expected Output
-- Valid CDKTF TypeScript code.  
-- Deployable via cdktf deploy.  
-- Complies with all security and environmental specifications.  
-- Clean comments describing every section.  
+## Output
+- Valid **CDKTF TypeScript**.  
+- Deployable with `cdktf deploy`.  
+- Secure, compliant, and well-commented.  
