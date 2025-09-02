@@ -34,7 +34,7 @@ export class TapStack extends TerraformStack {
       props?.stateBucket || 'prod-config-logs-us-west-2-a8e48bba';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Providers - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
