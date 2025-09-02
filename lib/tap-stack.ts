@@ -209,7 +209,7 @@ export class TapStack extends cdk.Stack {
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_4,
+          version: rds.PostgresEngineVersion.VER_15,
         }),
         instanceType: dbInstanceClass,
         securityGroups: [dbSecurityGroup],
