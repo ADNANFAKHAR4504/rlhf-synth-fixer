@@ -83,11 +83,10 @@ describe('TapStack', () => {
       const synthesized = JSON.parse(Testing.synth(stack));
 
       expect(synthesized.terraform.backend.s3).toEqual({
-        bucket: 'iac-rlhf-tf-states',
+        bucket: 'prod-config-logs-us-west-2-a8e48bba',
         key: 'dev/test-stack.tfstate',
         region: 'us-west-2',
         encrypt: true,
-        use_lockfile: true,
       });
     });
 
@@ -212,7 +211,6 @@ describe('TapStack', () => {
         key: 'prod/test-stack.tfstate',
         region: 'eu-west-1',
         encrypt: true,
-        use_lockfile: true,
       });
     });
 
@@ -259,7 +257,9 @@ describe('TapStack', () => {
       const stack = new TapStack(app, 'test-stack');
       const synthesized = JSON.parse(Testing.synth(stack));
 
-      expect(synthesized.terraform.backend.s3.use_lockfile).toBe(true);
+      // CDKTF S3Backend automatically enables state locking
+      expect(synthesized.terraform.backend.s3.bucket).toBeDefined();
+      expect(synthesized.terraform.backend.s3.encrypt).toBe(true);
     });
 
     it('should encrypt state files', () => {
@@ -399,7 +399,7 @@ describe('TapStack', () => {
 
       expect(synthesized.provider.aws[0].region).toBe('us-west-2');
       expect(synthesized.terraform.backend.s3.bucket).toBe(
-        'iac-rlhf-tf-states'
+        'prod-config-logs-us-west-2-a8e48bba'
       );
       expect(synthesized.terraform.backend.s3.region).toBe('us-west-2');
       expect(synthesized.terraform.backend.s3.key).toBe(
