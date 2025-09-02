@@ -4,14 +4,12 @@ This file tracks the differences between the MODEL_RESPONSE.md files and the act
 
 ## Current Deployment Issue
 
-**Error**: `Template error: Fn::Select cannot select nonexistent value at index 1`
+**Error**: `The DB subnet group doesn't meet Availability Zone (AZ) coverage requirement. Current AZ coverage: us-east-1d. Add subnets to cover at least 2 AZs.`
 
 **Affected Resources**: 
-- TapVPC/PublicSubnetSubnet2/Subnet
-- TapVPC/PrivateSubnetSubnet2/Subnet  
-- TapVPC/DatabaseSubnetSubnet2/Subnet
+- TapDBSubnetGroup (RDS Database Subnet Group)
 
-**Root Cause**: VPC subnet creation is failing due to CDK's internal subnet selection logic, even with `MaxAzs: 2`.
+**Root Cause**: RDS requires subnets in at least 2 different Availability Zones, but with `MaxAzs: 1`, we only have subnets in one AZ. The VPC subnet creation issue has been resolved.
 
 ## Attempted Fixes
 

@@ -116,7 +116,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// Create VPC with explicit subnet definitions
 	vpc := awsec2.NewVpc(stack, jsii.String("TapVPC"), &awsec2.VpcProps{
-		MaxAzs:      jsii.Number(1),
+		MaxAzs:      jsii.Number(2),
 		IpAddresses: awsec2.IpAddresses_Cidr(jsii.String("10.0.0.0/16")),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
