@@ -1357,7 +1357,7 @@ Resources:
                   !If [
                     UseExistingCloudTrail,
                     !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ExistingCloudTrailName}',
-                    !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-${Environment}',
+                    !GetAtt CloudTrail.Arn,
                   ]
           - Sid: AWSCloudTrailWrite
             Effect: Allow
@@ -1372,7 +1372,7 @@ Resources:
                   !If [
                     UseExistingCloudTrail,
                     !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ExistingCloudTrailName}',
-                    !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/SecureEnvironmentTrail-${Environment}',
+                    !GetAtt CloudTrail.Arn,
                   ]
 
   # =========================
