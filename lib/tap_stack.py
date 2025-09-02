@@ -66,8 +66,7 @@ class TapStack(pulumi.ComponentResource):
         self.enable_server_access_logs = args.enable_server_access_logs
         self.bucket_name_suffix = args.bucket_name_suffix
 
-        # Set AWS region
-        config.region = "us-east-1"
+        # AWS region is configured via Pulumi config or environment variables
 
         # Base tags for all resources
         base_tags = {
