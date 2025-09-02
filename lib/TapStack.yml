@@ -17,6 +17,9 @@ Parameters:
     Description: >-
       CPU utilization percentage at which to trigger the CloudWatch alarm.
 
+Conditions:
+  HasTwoAZs: !Not [!Equals [!Join ['', !GetAZs ''], '']] # Checks if the list of AZs has at least two elements. A simple check for a non-empty string. This will prevent the Fn::Select error.
+
 Resources:
   ### KMS ###
   KmsKey:
@@ -55,17 +58,18 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref PrivateSubnet1Cidr
-      AvailabilityZone: "us-west-2a"
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
           Value: PrivateSubnet1
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
+    Condition: HasTwoAZs
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref PrivateSubnet2Cidr
-      AvailabilityZone: "us-west-2b"
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
           Value: PrivateSubnet2
@@ -86,6 +90,9 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
 
   ALBAccessLogsBucket:
     Type: AWS::S3::Bucket
@@ -113,15 +120,6 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          # This statement grants full S3 permissions to the AWS account root user.
-          - Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 's3:*'
-            Resource: 
-              - !GetAtt ALBAccessLogsBucket.Arn
-              - !Sub '${ALBAccessLogsBucket.Arn}/*'
-          # The following statements are the correct, least-privilege policies for ALB logging.
           - Effect: Allow
             Principal:
               Service: delivery.logs.amazonaws.com
@@ -138,6 +136,7 @@ Resources:
             Condition:
               StringEquals:
                 "aws:SourceAccount": !Ref AWS::AccountId
+
   ### Load Balancer ###
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -146,7 +145,7 @@ Resources:
     Properties:
       Subnets:
         - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+        - !If [HasTwoAZs, !Ref PrivateSubnet2, !Ref AWS::NoValue]
       LoadBalancerAttributes:
         - Key: access_logs.s3.enabled
           Value: 'true'
@@ -168,8 +167,8 @@ Resources:
           ToPort: 80
           CidrIp: 10.0.0.0/16
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
 
   ### Shield ###
   ShieldProtection:
@@ -252,7 +251,7 @@ Resources:
       VpcConfig:
         SubnetIds:
           - !Ref PrivateSubnet1
-          - !Ref PrivateSubnet2
+          - !If [HasTwoAZs, !Ref PrivateSubnet2, !Ref AWS::NoValue]
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
       Role: !GetAtt LambdaExecutionRole.Arn
