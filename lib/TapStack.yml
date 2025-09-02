@@ -224,6 +224,7 @@ Resources:
 
   WAFAssociation:
     Type: AWS::WAFv2::WebACLAssociation
+    DependsOn: ApiDeployment 
     Properties:
       WebACLArn: !GetAtt WAFWebACL.Arn
       ResourceArn: !Sub arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod
