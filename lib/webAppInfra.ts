@@ -39,6 +39,10 @@ export class WebAppDeploymentStack {
   public readonly publicRouteTableAssociation2: aws.ec2.RouteTableAssociation;
   public readonly cloudFront: aws.cloudfront.Distribution;
   public readonly waf: aws.wafv2.WebAcl;
+  public readonly natGateway: aws.ec2.NatGateway;
+  public readonly natGateway2: aws.ec2.NatGateway;
+  public readonly eip: aws.ec2.Eip;
+  public readonly eip2: aws.ec2.Eip;
   public readonly availabilityZones: pulumi.Output<string[]>;
   private readonly latestAmi: pulumi.Output<string>;
 
@@ -247,10 +251,79 @@ export class WebAppDeploymentStack {
       { provider: this.provider }
     );
 
+    this.eip = new aws.ec2.Eip(
+      `eip-${environment}`,
+      {
+        domain: 'vpc',
+        tags: {
+          ...allTags,
+          Name: `eip-${environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    this.eip2 = new aws.ec2.Eip(
+      `eip-2-${environment}`,
+      {
+        domain: 'vpc',
+        tags: {
+          ...allTags,
+          Name: `eip-2-${environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    this.natGateway = new aws.ec2.NatGateway(
+      `nat-${environment}`,
+      {
+        allocationId: this.eip.id,
+        subnetId: this.publicSubnet.id,
+        tags: {
+          ...allTags,
+          Name: `nat-${environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    this.natGateway2 = new aws.ec2.NatGateway(
+      `nat-2-${environment}`,
+      {
+        allocationId: this.eip2.id,
+        subnetId: this.publicSubnet2.id,
+        tags: {
+          ...allTags,
+          Name: `nat-2-${environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    new aws.ec2.Route(
+      `private-route-${environment}`,
+      {
+        routeTableId: this.privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: this.natGateway.id,
+      },
+      { provider: this.provider }
+    );
+
     this.privateRouteTableAssociation = new aws.ec2.RouteTableAssociation(
       `private-rta-${environment}`,
       {
         subnetId: this.privateSubnet.id,
+        routeTableId: this.privateRouteTable.id,
+      },
+      { provider: this.provider }
+    );
+
+    new aws.ec2.RouteTableAssociation(
+      `private-rta-2-${environment}`,
+      {
+        subnetId: this.privateSubnet2.id,
         routeTableId: this.privateRouteTable.id,
       },
       { provider: this.provider }

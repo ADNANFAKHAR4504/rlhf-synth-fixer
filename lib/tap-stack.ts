@@ -45,6 +45,13 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly cloudFrontDomainName: pulumi.Output<string>;
   public readonly vpcId: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
+  public readonly publicSubnetIds: pulumi.Output<string[]>;
+  public readonly privateSubnetIds: pulumi.Output<string[]>;
+  public readonly autoScalingGroupName: pulumi.Output<string>;
+  public readonly targetGroupArn: pulumi.Output<string>;
+  public readonly launchTemplateId: pulumi.Output<string>;
+  public readonly secretArn: pulumi.Output<string>;
+  public readonly backupVaultName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -65,6 +72,19 @@ export class TapStack extends pulumi.ComponentResource {
     this.cloudFrontDomainName = webApp.cloudFront.domainName;
     this.vpcId = webApp.vpc.id;
     this.rdsEndpoint = webApp.rdsInstance.endpoint;
+    this.publicSubnetIds = pulumi.all([
+      webApp.publicSubnet.id,
+      webApp.publicSubnet2.id,
+    ]);
+    this.privateSubnetIds = pulumi.all([
+      webApp.privateSubnet.id,
+      webApp.privateSubnet2.id,
+    ]);
+    this.autoScalingGroupName = webApp.autoScalingGroup.name;
+    this.targetGroupArn = webApp.targetGroup.arn;
+    this.launchTemplateId = webApp.launchTemplate.id;
+    this.secretArn = webApp.secret.arn;
+    this.backupVaultName = webApp.backupVault.name;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -72,6 +92,13 @@ export class TapStack extends pulumi.ComponentResource {
       cloudFrontDomainName: this.cloudFrontDomainName,
       vpcId: this.vpcId,
       rdsEndpoint: this.rdsEndpoint,
+      publicSubnetIds: this.publicSubnetIds,
+      privateSubnetIds: this.privateSubnetIds,
+      autoScalingGroupName: this.autoScalingGroupName,
+      targetGroupArn: this.targetGroupArn,
+      launchTemplateId: this.launchTemplateId,
+      secretArn: this.secretArn,
+      backupVaultName: this.backupVaultName,
     });
   }
 }
