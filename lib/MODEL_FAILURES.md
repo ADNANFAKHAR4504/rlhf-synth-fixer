@@ -281,3 +281,111 @@ this.autoScalingGroup = new aws.autoscaling.Group(
   { provider: this.provider }
 );
 ```
+
+## 10. Build Failure - Pulumi Output Handling
+**Issue Type**: Build/Runtime Error
+**Description**: Model used template literals with Pulumi Outputs causing "toString() not supported" errors.
+
+**Model Generated Code**:
+```typescript
+rotationLambdaArn: `arn:aws:lambda:${region}:${this.caller.apply(c => c.accountId)}:function:SecretsManagerRDSMySQLRotationSingleUser`,
+```
+
+**Correct Implementation**:
+```typescript
+rotationLambdaArn: pulumi.interpolate`arn:aws:lambda:${region}:${this.caller.apply(c => c.accountId)}:function:SecretsManagerRDSMySQLRotationSingleUser`,
+```
+
+## 11. Build Failure - Variable Scope Issues
+**Issue Type**: Build/TypeScript Error
+**Description**: Model used local variables in outputs that were not accessible outside their scope.
+
+**Model Generated Code**:
+```typescript
+// Local variable in constructor
+const cloudTrailBucket = new aws.s3.Bucket(...);
+
+// Later in outputs method
+cloudTrailBucketName: cloudTrailBucket.id, // Error: not accessible
+```
+
+**Correct Implementation**:
+```typescript
+// Class property
+public readonly cloudTrailBucket: aws.s3.Bucket;
+
+// In constructor
+this.cloudTrailBucket = new aws.s3.Bucket(...);
+
+// In outputs method
+cloudTrailBucketName: this.cloudTrailBucket.id,
+```
+
+## 12. Security Issue - Missing KMS Key Management Permissions
+**Issue Type**: Security/IAM Issue
+**Description**: Model created KMS key policy that would prevent future key management operations.
+
+**Model Generated Code**:
+```typescript
+Action: [
+  'kms:Encrypt',
+  'kms:Decrypt',
+  'kms:ReEncrypt*',
+  'kms:GenerateDataKey*',
+  'kms:DescribeKey',
+  'kms:CreateGrant',
+  'kms:ListGrants',
+  'kms:RevokeGrant',
+],
+```
+
+**Correct Implementation**:
+```typescript
+Action: 'kms:*',
+```
+
+## 13. Deployment Failure - S3 ACL Configuration
+**Issue Type**: Deployment Error
+**Description**: Model attempted to set S3 bucket ACLs when modern buckets have ACLs disabled by default.
+
+**Model Generated Code**:
+```typescript
+new aws.s3.BucketAcl(
+  `cloudfront-logs-acl-${environment}`,
+  {
+    bucket: cloudFrontLogsBucket.id,
+    acl: 'private',
+  },
+  { provider: this.provider }
+);
+```
+
+**Correct Implementation**: Removed - ACLs are disabled by default for security
+
+## 14. Security Issue - Missing RDS Password Management
+**Issue Type**: Security Issue
+**Description**: Model used hardcoded or generated passwords instead of AWS managed passwords for RDS.
+
+**Model Generated Code**:
+```typescript
+password: dbPassword.result,
+```
+
+**Correct Implementation**:
+```typescript
+manageMasterUserPassword: true,
+```
+
+## 15. Compliance Issue - CloudTrail Multi-Region Configuration
+**Issue Type**: Compliance Issue
+**Description**: Model set CloudTrail as multi-region when single-region was sufficient and caused deployment issues.
+
+**Model Generated Code**:
+```typescript
+isMultiRegionTrail: true,
+```
+
+**Correct Implementation**:
+```typescript
+isMultiRegionTrail: false,
+```
