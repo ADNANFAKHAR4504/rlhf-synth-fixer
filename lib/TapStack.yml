@@ -154,11 +154,22 @@ Parameters:
     Default: ''
     Description: Optional existing AWS Config Delivery Channel name to reuse
 
+  ExistingConfigRecorderName:
+    Type: String
+    Default: ''
+    Description: Optional existing AWS Config Configuration Recorder name to reuse
+
   EnableConfigDeliveryChannel:
     Type: String
     Default: 'false'
     AllowedValues: ['true', 'false']
     Description: Set to 'true' to create a new Config Delivery Channel if none exists
+
+  EnableConfigRecorder:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Set to 'true' to create a new Config Configuration Recorder if none exists
 
   ExistingWebServerSecurityGroupId:
     Type: String
@@ -285,6 +296,14 @@ Conditions:
   # Config Conditions
   UseExistingConfigBucket: !Not [!Equals [!Ref ExistingConfigBucketName, '']]
   CreateConfigBucket: !Equals [!Ref ExistingConfigBucketName, '']
+  UseExistingConfigRecorder:
+    !Not [!Equals [!Ref ExistingConfigRecorderName, '']]
+  CreateConfigRecorder:
+    !And [
+      !Equals [!Ref ExistingConfigRecorderName, ''],
+      !Equals [!Ref EnableConfigRecorder, 'true'],
+      Condition: CreateConfigBucket,
+    ]
   CreateConfigDeliveryChannel:
     !And [
       !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
@@ -1472,18 +1491,20 @@ Resources:
                 'AWS:SourceAccount': !Ref AWS::AccountId
 
   ConfigurationRecorder:
-    Condition: CreateConfigBucket
+    Condition: CreateConfigRecorder
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub
-        - 'SecureEnvironmentRecorder-${Environment}-${AWS::StackName}-${Suffix}'
-        - {
+      Name:
+        !Sub [
+          'SecureEnvironmentRecorder-${Environment}-${AWS::StackName}-${Suffix}',
+          {
             Suffix:
               !Select [
                 0,
                 !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
               ],
-          }
+          },
+        ]
       RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -1493,20 +1514,22 @@ Resources:
     Condition: CreateConfigDeliveryChannel
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub
-        - 'SecureEnvironmentDeliveryChannel-${Environment}-${AWS::StackName}-${Suffix}'
-        - {
+      Name:
+        !Sub [
+          'SecureEnvironmentDeliveryChannel-${Environment}-${AWS::StackName}-${Suffix}',
+          {
             Suffix:
               !Select [
                 0,
                 !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
               ],
-          }
+          },
+        ]
       S3BucketName: !Ref ConfigBucket
 
   # Config Rules
   S3BucketPublicAccessProhibitedRule:
-    Condition: CreateConfigBucket
+    Condition: CreateConfigRecorder
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
@@ -1517,7 +1540,7 @@ Resources:
         SourceIdentifier: S3_BUCKET_PUBLIC_ACCESS_PROHIBITED
 
   RootAccessKeyCheckRule:
-    Condition: CreateConfigBucket
+    Condition: CreateConfigRecorder
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
@@ -1528,7 +1551,7 @@ Resources:
         SourceIdentifier: ROOT_ACCESS_KEY_CHECK
 
   EBSEncryptionByDefaultRule:
-    Condition: CreateConfigBucket
+    Condition: CreateConfigRecorder
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigurationRecorder
     Properties:
@@ -1969,9 +1992,13 @@ Outputs:
       Name: !Sub '${AWS::StackName}-Config-Bucket-Name'
 
   ConfigRecorderName:
-    Condition: CreateConfigBucket
     Description: AWS Config Recorder Name
-    Value: !Ref ConfigurationRecorder
+    Value:
+      !If [
+        UseExistingConfigRecorder,
+        !Ref ExistingConfigRecorderName,
+        !If [CreateConfigRecorder, !Ref ConfigurationRecorder, ''],
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
 
