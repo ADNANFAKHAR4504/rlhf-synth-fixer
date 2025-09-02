@@ -72,45 +72,63 @@ export class TapStack extends pulumi.ComponentResource {
     const bucketName = `tap-storage-${environmentSuffix}-${pulumi.getStack()}`;
 
     // Create the S3 bucket
-    this.bucket = new aws.s3.Bucket(`tap-storage-${environmentSuffix}`, {
-      bucket: bucketName,
-      tags: {
-        ...tags,
-        Name: bucketName,
-        Environment: environmentSuffix,
-        Project: 'TAP',
-        ManagedBy: 'Pulumi',
-        Purpose: 'storage',
+    this.bucket = new aws.s3.Bucket(
+      `tap-storage-${environmentSuffix}`,
+      {
+        bucket: bucketName,
+        tags: {
+          ...tags,
+          Name: bucketName,
+          Environment: environmentSuffix,
+          Project: 'TAP',
+          ManagedBy: 'Pulumi',
+          Purpose: 'storage',
+        },
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // Enable versioning for the bucket
-    const bucketVersioning = new aws.s3.BucketVersioning(`tap-storage-${environmentSuffix}-versioning`, {
-      bucket: this.bucket.id,
-      versioningConfiguration: {
-        status: 'Enabled',
+    new aws.s3.BucketVersioning(
+      `tap-storage-${environmentSuffix}-versioning`,
+      {
+        bucket: this.bucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
       },
-    }, { parent: this });
+      { parent: this }
+    );
 
     // Enable server-side encryption
-    const bucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(`tap-storage-${environmentSuffix}-encryption`, {
-      bucket: this.bucket.id,
-      rules: [{
-        applyServerSideEncryptionByDefault: {
-          sseAlgorithm: 'AES256',
-        },
-        bucketKeyEnabled: true,
-      }],
-    }, { parent: this });
+    new aws.s3.BucketServerSideEncryptionConfiguration(
+      `tap-storage-${environmentSuffix}-encryption`,
+      {
+        bucket: this.bucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'AES256',
+            },
+            bucketKeyEnabled: true,
+          },
+        ],
+      },
+      { parent: this }
+    );
 
     // Block public access
-    const bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`tap-storage-${environmentSuffix}-public-access-block`, {
-      bucket: this.bucket.id,
-      blockPublicAcls: true,
-      blockPublicPolicy: true,
-      ignorePublicAcls: true,
-      restrictPublicBuckets: true,
-    }, { parent: this });
+    new aws.s3.BucketPublicAccessBlock(
+      `tap-storage-${environmentSuffix}-public-access-block`,
+      {
+        bucket: this.bucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { parent: this }
+    );
 
     // Set bucket name as output
     this.bucketName = this.bucket.bucket;

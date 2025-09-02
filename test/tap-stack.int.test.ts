@@ -1,6 +1,6 @@
 /**
  * Integration tests for TapStack using cfn-outputs/flat-outputs.json as reference
- * 
+ *
  * These tests validate that the deployed infrastructure matches the expected outputs
  * and that the S3 bucket is accessible and properly configured.
  */
@@ -61,7 +61,10 @@ const getBucketName = (): string => {
     return outputs.S3BucketName;
   }
 
-  throw new Error('No bucket name found in outputs. Available outputs: ' + JSON.stringify(outputs, null, 2));
+  throw new Error(
+    'No bucket name found in outputs. Available outputs: ' +
+      JSON.stringify(outputs, null, 2)
+  );
 };
 
 describe('TapStack Integration Tests', () => {
@@ -107,7 +110,10 @@ describe('TapStack Integration Tests', () => {
         expect(response.Status).toBe('Enabled');
         console.log(`✅ S3 bucket ${bucketName} has versioning enabled`);
       } catch (error) {
-        console.error(`❌ Failed to get versioning for bucket ${bucketName}:`, error);
+        console.error(
+          `❌ Failed to get versioning for bucket ${bucketName}:`,
+          error
+        );
         throw error;
       }
     }, 30000);
@@ -118,15 +124,25 @@ describe('TapStack Integration Tests', () => {
         const response = await s3Client.send(command);
         expect(response.ServerSideEncryptionConfiguration).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration?.Rules).toBeDefined();
-        expect(response.ServerSideEncryptionConfiguration?.Rules?.length).toBeGreaterThan(0);
+        expect(
+          response.ServerSideEncryptionConfiguration?.Rules?.length
+        ).toBeGreaterThan(0);
 
-        const encryptionRule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
-        expect(encryptionRule?.ApplyServerSideEncryptionByDefault).toBeDefined();
-        expect(encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+        const encryptionRule =
+          response.ServerSideEncryptionConfiguration?.Rules?.[0];
+        expect(
+          encryptionRule?.ApplyServerSideEncryptionByDefault
+        ).toBeDefined();
+        expect(
+          encryptionRule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm
+        ).toBe('AES256');
 
         console.log(`✅ S3 bucket ${bucketName} has encryption configured`);
       } catch (error) {
-        console.error(`❌ Failed to get encryption for bucket ${bucketName}:`, error);
+        console.error(
+          `❌ Failed to get encryption for bucket ${bucketName}:`,
+          error
+        );
         throw error;
       }
     }, 30000);
@@ -145,7 +161,10 @@ describe('TapStack Integration Tests', () => {
 
         console.log(`✅ S3 bucket ${bucketName} has public access blocked`);
       } catch (error) {
-        console.error(`❌ Failed to get public access block for bucket ${bucketName}:`, error);
+        console.error(
+          `❌ Failed to get public access block for bucket ${bucketName}:`,
+          error
+        );
         throw error;
       }
     }, 30000);
@@ -173,9 +192,12 @@ describe('TapStack Integration Tests', () => {
           Key: testKey,
         });
         const downloadResponse = await s3Client.send(downloadCommand);
-        const downloadedContent = await downloadResponse.Body?.transformToString();
+        const downloadedContent =
+          await downloadResponse.Body?.transformToString();
         expect(downloadedContent).toBe(testContent);
-        console.log(`✅ Successfully downloaded and verified test object ${testKey}`);
+        console.log(
+          `✅ Successfully downloaded and verified test object ${testKey}`
+        );
 
         // Clean up test object
         const deleteCommand = new DeleteObjectCommand({
@@ -185,7 +207,10 @@ describe('TapStack Integration Tests', () => {
         await s3Client.send(deleteCommand);
         console.log(`✅ Successfully cleaned up test object ${testKey}`);
       } catch (error) {
-        console.error(`❌ Failed to perform object operations on bucket ${bucketName}:`, error);
+        console.error(
+          `❌ Failed to perform object operations on bucket ${bucketName}:`,
+          error
+        );
         throw error;
       }
     }, 60000); // 60 second timeout for object operations
