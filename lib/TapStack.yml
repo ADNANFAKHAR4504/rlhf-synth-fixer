@@ -765,7 +765,8 @@ Resources:
       Name: !Sub ${EnvironmentName}-${EnvironmentSuffix}-share
       AllowExternalPrincipals: false
       ResourceArns:
-        - !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ECSCluster}
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       Tags:
         - Key: Name
           Value: !Sub ${EnvironmentName}-${EnvironmentSuffix}-ram-share
