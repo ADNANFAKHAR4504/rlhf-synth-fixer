@@ -1,5 +1,4 @@
 import { Construct } from 'constructs';
-import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -62,18 +61,13 @@ export class InfrastructureModules extends Construct {
   public readonly s3Bucket: S3Bucket;
   public readonly loadBalancer: Lb;
   public readonly targetGroup: LbTargetGroup;
-  public readonly autoScalingGroup: AutoscalingGroup;
+  public readonly autoScalingGroup?: AutoscalingGroup;
   public readonly rdsInstance?: DbInstance;
-  public readonly cpuAlarm: CloudwatchMetricAlarm;
+  public readonly cpuAlarm?: CloudwatchMetricAlarm;
   public readonly kmsKey: KmsKey;
 
   constructor(scope: Construct, id: string, config: ModulesConfig) {
     super(scope, id);
-
-    // AWS Provider configuration for us-east-1
-    new AwsProvider(this, 'aws', {
-      region: 'us-east-1',
-    });
 
     // Get availability zones for multi-AZ deployment
     const azs = new DataAwsAvailabilityZones(this, 'azs', {
@@ -96,9 +90,12 @@ export class InfrastructureModules extends Construct {
       ],
     });
 
-    // Common tags for all resources
+    // Common tags for all resources - sanitize project name for AWS resource naming
+    const sanitizedProject = config.project
+      .replace(/[^a-zA-Z0-9-]/g, '-')
+      .toLowerCase();
     const commonTags = {
-      Name: `${config.project}-${config.environment}`,
+      Name: `${sanitizedProject}-${config.environment}`,
       Environment: config.environment,
       Project: config.project,
     };
@@ -110,7 +107,7 @@ export class InfrastructureModules extends Construct {
       enableDnsSupport: true,
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-vpc`,
+        Name: `${sanitizedProject}-${config.environment}-vpc`,
       },
     });
 
@@ -119,7 +116,7 @@ export class InfrastructureModules extends Construct {
       vpcId: this.vpc.id,
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-igw`,
+        Name: `${sanitizedProject}-${config.environment}-igw`,
       },
     });
 
@@ -133,7 +130,7 @@ export class InfrastructureModules extends Construct {
         mapPublicIpOnLaunch: true, // Auto-assign public IPs for ELB
         tags: {
           ...commonTags,
-          Name: `${config.project}-${config.environment}-public-subnet-${i + 1}`,
+          Name: `${sanitizedProject}-${config.environment}-public-subnet-${i + 1}`,
           Type: 'Public',
         },
       });
@@ -150,7 +147,7 @@ export class InfrastructureModules extends Construct {
         mapPublicIpOnLaunch: false, // No public IPs for security
         tags: {
           ...commonTags,
-          Name: `${config.project}-${config.environment}-private-subnet-${i + 1}`,
+          Name: `${sanitizedProject}-${config.environment}-private-subnet-${i + 1}`,
           Type: 'Private',
         },
       });
@@ -162,7 +159,7 @@ export class InfrastructureModules extends Construct {
       vpcId: this.vpc.id,
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-public-rt`,
+        Name: `${sanitizedProject}-${config.environment}-public-rt`,
       },
     });
 
@@ -185,12 +182,12 @@ export class InfrastructureModules extends Construct {
 
     // Web Security Group - Allow HTTP/HTTPS inbound only
     this.webSecurityGroup = new SecurityGroup(this, 'web-sg', {
-      name: `${config.project}-${config.environment}-web-sg`,
+      name: `${sanitizedProject}-${config.environment}-web-sg`,
       description: 'Security group for web servers - HTTP/HTTPS only',
       vpcId: this.vpc.id,
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-web-sg`,
+        Name: `${sanitizedProject}-${config.environment}-web-sg`,
       },
     });
 
@@ -229,13 +226,13 @@ export class InfrastructureModules extends Construct {
 
     // Database Security Group - Only allow access from web servers
     this.dbSecurityGroup = new SecurityGroup(this, 'db-sg', {
-      name: `${config.project}-${config.environment}-db-sg`,
+      name: `${sanitizedProject}-${config.environment}-db-sg`,
       description:
         'Security group for RDS - Allow access only from web servers',
       vpcId: this.vpc.id,
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-db-sg`,
+        Name: `${sanitizedProject}-${config.environment}-db-sg`,
       },
     });
 
@@ -256,18 +253,18 @@ export class InfrastructureModules extends Construct {
       keyUsage: 'ENCRYPT_DECRYPT',
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-kms-key`,
+        Name: `${sanitizedProject}-${config.environment}-kms-key`,
       },
     });
 
     new KmsAlias(this, 'kms-alias', {
-      name: `alias/${config.project}-${config.environment}-s3-key`,
+      name: `alias/${sanitizedProject}-${config.environment}-s3-key`,
       targetKeyId: this.kmsKey.keyId,
     });
 
     // 6. IAM Role for EC2 instances - S3 access with least privilege
     this.ec2Role = new IamRole(this, 'ec2-role', {
-      name: `${config.project}-${config.environment}-ec2-role`,
+      name: `${sanitizedProject}-${config.environment}-ec2-role`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -282,13 +279,22 @@ export class InfrastructureModules extends Construct {
       }),
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-ec2-role`,
+        Name: `${sanitizedProject}-${config.environment}-ec2-role`,
       },
     });
 
-    // S3 access policy - restricted to specific bucket
+    // 7. S3 Bucket with KMS encryption and public access blocked
+    this.s3Bucket = new S3Bucket(this, 's3-bucket', {
+      bucket: `${sanitizedProject}-${config.environment.toLowerCase()}-${Date.now()}`,
+      tags: {
+        ...commonTags,
+        Name: `${sanitizedProject}-${config.environment}-s3-bucket`,
+      },
+    });
+
+    // S3 access policy - restricted to specific bucket (reference after bucket creation)
     new IamRolePolicy(this, 'ec2-s3-policy', {
-      name: `${config.project}-${config.environment}-s3-policy`,
+      name: `${sanitizedProject}-${config.environment}-s3-policy`,
       role: this.ec2Role.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -301,10 +307,7 @@ export class InfrastructureModules extends Construct {
               's3:DeleteObject',
               's3:ListBucket',
             ],
-            Resource: [
-              '${aws_s3_bucket.s3-bucket.arn}',
-              '${aws_s3_bucket.s3-bucket.arn}/*',
-            ],
+            Resource: [this.s3Bucket.arn, `${this.s3Bucket.arn}/*`],
           },
           {
             Effect: 'Allow',
@@ -320,19 +323,10 @@ export class InfrastructureModules extends Construct {
       this,
       'ec2-instance-profile',
       {
-        name: `${config.project}-${config.environment}-instance-profile`,
+        name: `${sanitizedProject}-${config.environment}-instance-profile`,
         role: this.ec2Role.name,
       }
     );
-
-    // 7. S3 Bucket with KMS encryption and public access blocked
-    this.s3Bucket = new S3Bucket(this, 's3-bucket', {
-      bucket: `${config.project.toLowerCase()}-${config.environment.toLowerCase()}-${Date.now()}`,
-      tags: {
-        ...commonTags,
-        Name: `${config.project}-${config.environment}-s3-bucket`,
-      },
-    });
 
     // Server-side encryption with KMS
     new S3BucketServerSideEncryptionConfigurationA(this, 's3-encryption', {
@@ -359,20 +353,20 @@ export class InfrastructureModules extends Construct {
 
     // 8. Application Load Balancer
     this.loadBalancer = new Lb(this, 'alb', {
-      name: `${config.project}-${config.environment}-alb`,
+      name: `${sanitizedProject}-${config.environment}-alb`,
       loadBalancerType: 'application',
       subnets: this.publicSubnets.map(subnet => subnet.id),
       securityGroups: [this.webSecurityGroup.id],
       enableDeletionProtection: false, // Set to true in production
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-alb`,
+        Name: `${sanitizedProject}-${config.environment}-alb`,
       },
     });
 
     // Target Group for ALB
     this.targetGroup = new LbTargetGroup(this, 'tg', {
-      name: `${config.project}-${config.environment}-tg`,
+      name: `${sanitizedProject}-${config.environment}-tg`,
       port: 80,
       protocol: 'HTTP',
       vpcId: this.vpc.id,
@@ -390,7 +384,7 @@ export class InfrastructureModules extends Construct {
       },
       tags: {
         ...commonTags,
-        Name: `${config.project}-${config.environment}-tg`,
+        Name: `${sanitizedProject}-${config.environment}-tg`,
       },
     });
 
@@ -409,7 +403,7 @@ export class InfrastructureModules extends Construct {
 
     // 9. Launch Template for Auto Scaling Group
     const launchTemplate = new LaunchTemplate(this, 'lt', {
-      name: `${config.project}-${config.environment}-lt`,
+      name: `${sanitizedProject}-${config.environment}-lt`,
       imageId: ami.id,
       instanceType: config.instanceType,
       keyName: undefined, // Add key pair name if needed for SSH access
@@ -437,7 +431,7 @@ export class InfrastructureModules extends Construct {
           resourceType: 'instance',
           tags: {
             ...commonTags,
-            Name: `${config.project}-${config.environment}-instance`,
+            Name: `${sanitizedProject}-${config.environment}-instance`,
           },
         },
       ],
@@ -446,7 +440,7 @@ export class InfrastructureModules extends Construct {
     // 10. Auto Scaling Group (conditional deployment)
     if (config.enableAutoScaling) {
       this.autoScalingGroup = new AutoscalingGroup(this, 'asg', {
-        name: `${config.project}-${config.environment}-asg`,
+        name: `${sanitizedProject}-${config.environment}-asg`,
         minSize: config.minSize,
         maxSize: config.maxSize,
         desiredCapacity: config.desiredCapacity,
@@ -461,7 +455,7 @@ export class InfrastructureModules extends Construct {
         tag: [
           {
             key: 'Name',
-            value: `${config.project}-${config.environment}-asg`,
+            value: `${sanitizedProject}-${config.environment}-asg`,
             propagateAtLaunch: true,
           },
           {
@@ -479,7 +473,7 @@ export class InfrastructureModules extends Construct {
 
       // Auto Scaling Policy - Scale Up
       const scaleUpPolicy = new AutoscalingPolicy(this, 'scale-up-policy', {
-        name: `${config.project}-${config.environment}-scale-up`,
+        name: `${sanitizedProject}-${config.environment}-scale-up`,
         scalingAdjustment: 1,
         adjustmentType: 'ChangeInCapacity',
         cooldown: 300,
@@ -489,7 +483,7 @@ export class InfrastructureModules extends Construct {
 
       // Auto Scaling Policy - Scale Down
       const scaleDownPolicy = new AutoscalingPolicy(this, 'scale-down-policy', {
-        name: `${config.project}-${config.environment}-scale-down`,
+        name: `${sanitizedProject}-${config.environment}-scale-down`,
         scalingAdjustment: -1,
         adjustmentType: 'ChangeInCapacity',
         cooldown: 300,
@@ -499,7 +493,7 @@ export class InfrastructureModules extends Construct {
 
       // 11. CloudWatch Alarms for Auto Scaling
       this.cpuAlarm = new CloudwatchMetricAlarm(this, 'cpu-high-alarm', {
-        alarmName: `${config.project}-${config.environment}-cpu-high`,
+        alarmName: `${sanitizedProject}-${config.environment}-cpu-high`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -514,13 +508,13 @@ export class InfrastructureModules extends Construct {
         alarmActions: [scaleUpPolicy.arn],
         tags: {
           ...commonTags,
-          Name: `${config.project}-${config.environment}-cpu-high-alarm`,
+          Name: `${sanitizedProject}-${config.environment}-cpu-high-alarm`,
         },
       });
 
       // CPU Low Alarm for scaling down
       new CloudwatchMetricAlarm(this, 'cpu-low-alarm', {
-        alarmName: `${config.project}-${config.environment}-cpu-low`,
+        alarmName: `${sanitizedProject}-${config.environment}-cpu-low`,
         comparisonOperator: 'LessThanThreshold',
         evaluationPeriods: 2,
         metricName: 'CPUUtilization',
@@ -536,7 +530,7 @@ export class InfrastructureModules extends Construct {
         alarmActions: [scaleDownPolicy.arn],
         tags: {
           ...commonTags,
-          Name: `${config.project}-${config.environment}-cpu-low-alarm`,
+          Name: `${sanitizedProject}-${config.environment}-cpu-low-alarm`,
         },
       });
     }
@@ -545,17 +539,17 @@ export class InfrastructureModules extends Construct {
     if (config.enableRds) {
       // DB Subnet Group for RDS
       const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-        name: `${config.project}-${config.environment}-db-subnet-group`,
+        name: `${sanitizedProject}-${config.environment}-db-subnet-group`,
         subnetIds: this.privateSubnets.map(subnet => subnet.id),
         tags: {
           ...commonTags,
-          Name: `${config.project}-${config.environment}-db-subnet-group`,
+          Name: `${sanitizedProject}-${config.environment}-db-subnet-group`,
         },
       });
 
       // RDS Instance - MySQL in private subnets
       this.rdsInstance = new DbInstance(this, 'rds', {
-        identifier: `${config.project}-${config.environment}-db`,
+        identifier: `${sanitizedProject}-${config.environment}-db`,
         allocatedStorage: 20,
         maxAllocatedStorage: 100,
         storageType: 'gp2',
@@ -579,7 +573,7 @@ export class InfrastructureModules extends Construct {
         performanceInsightsEnabled: true,
         tags: {
           ...commonTags,
-          Name: `${config.project}-${config.environment}-rds`,
+          Name: `${sanitizedProject}-${config.environment}-rds`,
         },
       });
     }
