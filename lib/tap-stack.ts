@@ -149,6 +149,55 @@ export class TapStack extends cdk.Stack {
               ],
               resources: ['*'],
             }),
+            // Allow EC2 service to use the key for EBS encryption
+            new iam.PolicyStatement({
+              sid: 'AllowEC2EBSAccess',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:CreateGrant',
+                'kms:ListGrants',
+                'kms:RevokeGrant',
+              ],
+              resources: ['*'],
+              conditions: {
+                StringEquals: {
+                  'kms:ViaService': `ec2.${cdk.Stack.of(this).region}.amazonaws.com`,
+                  'kms:CallerAccount': cdk.Stack.of(this).account,
+                },
+              },
+            }),
+            // Allow AutoScaling service to use the key
+            new iam.PolicyStatement({
+              sid: 'AllowAutoScalingAccess',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.ServicePrincipal('autoscaling.amazonaws.com')],
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:CreateGrant',
+                'kms:ListGrants',
+                'kms:RevokeGrant',
+              ],
+              resources: ['*'],
+              conditions: {
+                StringEquals: {
+                  'kms:ViaService': [
+                    `ec2.${cdk.Stack.of(this).region}.amazonaws.com`,
+                    `autoscaling.${cdk.Stack.of(this).region}.amazonaws.com`,
+                  ],
+                  'kms:CallerAccount': cdk.Stack.of(this).account,
+                },
+              },
+            }),
           ],
         }),
       }
