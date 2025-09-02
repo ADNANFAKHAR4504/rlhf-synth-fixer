@@ -94,7 +94,7 @@ export class TapStack extends cdk.Stack {
       'WebsiteDistribution',
       {
         defaultBehavior: {
-          origin: new origins.S3Origin(websiteBucket),
+          origin: new origins.S3StaticWebsiteOrigin(websiteBucket),
           viewerProtocolPolicy:
             cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
@@ -241,7 +241,7 @@ export class TapStack extends cdk.Stack {
         config.rdsInstanceSize !== ec2.InstanceSize.MICRO,
       performanceInsightRetention:
         config.rdsInstanceClass !== ec2.InstanceClass.T3 ||
-        config.rdsInstanceSize !== ec2.InstanceSize.MICRO
+          config.rdsInstanceSize !== ec2.InstanceSize.MICRO
           ? rds.PerformanceInsightRetention.DEFAULT
           : undefined,
     });
