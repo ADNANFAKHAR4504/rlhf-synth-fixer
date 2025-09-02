@@ -1,13 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack.yml — Secure, compliant AWS baseline environment.
-  Single-AZ safe (all subnets in AZ0).
-  Includes CloudTrail bucket policy fix.
+  Single-AZ safe, EC2 uses dynamic AMI, CloudTrail trail creation skipped
+  (to avoid 5-trail quota). EnvironmentName applied as tags.
 
 Parameters:
   EnvironmentName:
     Type: String
     Default: "prod"
+    Description: "Environment name for tagging (e.g., dev, staging, prod)."
 
   VpcCIDR:
     Type: String
@@ -60,6 +61,9 @@ Resources:
               AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
             Action: "kms:*"
             Resource: "*"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   #################################
   # VPC & Networking
@@ -70,9 +74,18 @@ Resources:
       CidrBlock: !Ref VpcCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-vpc"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -87,6 +100,11 @@ Resources:
       CidrBlock: !Ref PublicSubnet1CIDR
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-az0a"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -95,6 +113,11 @@ Resources:
       CidrBlock: !Ref PublicSubnet2CIDR
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-az0b"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -103,6 +126,11 @@ Resources:
       CidrBlock: !Ref PrivateSubnet1CIDR
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-az0a"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -111,11 +139,21 @@ Resources:
       CidrBlock: !Ref PrivateSubnet2CIDR
       AvailabilityZone: !Select [0, !GetAZs ""]
       MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-private-az0b"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-public-rt"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -157,6 +195,9 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   #################################
   # EC2 Instance
@@ -175,6 +216,11 @@ Resources:
             Encrypted: true
             KmsKeyId: !Ref KmsKey
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref "AWS::NoValue"]
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-ec2"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   #################################
   # S3 Bucket
@@ -189,9 +235,14 @@ Resources:
               KMSMasterKeyID: !Ref KmsKey
       VersioningConfiguration:
         Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-secure-bucket"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   #################################
-  # CloudTrail (with fixed bucket policy)
+  # CloudTrail Logging Bucket (no trail resource)
   #################################
   TrailBucket:
     Type: AWS::S3::Bucket
@@ -201,6 +252,11 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref KmsKey
+      Tags:
+        - Key: Name
+          Value: !Sub "${EnvironmentName}-trail-logs"
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   TrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -225,16 +281,6 @@ Resources:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
 
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    Properties:
-      TrailName: !Sub "${EnvironmentName}-trail"
-      S3BucketName: !Ref TrailBucket
-      IsMultiRegionTrail: true
-      IncludeGlobalServiceEvents: true
-      EnableLogFileValidation: true
-      IsLogging: true
-
   #################################
   # AWS Config
   #################################
@@ -250,6 +296,9 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
@@ -275,6 +324,9 @@ Resources:
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       AlarmActions: []
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
 
 Outputs:
   VpcId:
@@ -289,7 +341,7 @@ Outputs:
     Value: !Ref PrivateSubnet2
   S3BucketArn:
     Value: !GetAtt SecureBucket.Arn
-  CloudTrailArn:
-    Value: !Ref CloudTrail
+  TrailBucketArn:
+    Value: !GetAtt TrailBucket.Arn
   KmsKeyArn:
     Value: !Ref KmsKey

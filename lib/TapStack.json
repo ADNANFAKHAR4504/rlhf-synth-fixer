@@ -1,10 +1,11 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe (all subnets in AZ0). Includes CloudTrail bucket policy fix.\n",
+    "Description": "TapStack.yml — Secure, compliant AWS baseline environment. Single-AZ safe, EC2 uses dynamic AMI, CloudTrail trail creation skipped (to avoid 5-trail quota). EnvironmentName applied as tags.\n",
     "Parameters": {
         "EnvironmentName": {
             "Type": "String",
-            "Default": "prod"
+            "Default": "prod",
+            "Description": "Environment name for tagging (e.g., dev, staging, prod)."
         },
         "VpcCIDR": {
             "Type": "String",
@@ -71,7 +72,15 @@
                             "Resource": "*"
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "VPC": {
@@ -81,11 +90,35 @@
                     "Ref": "VpcCIDR"
                 },
                 "EnableDnsSupport": true,
-                "EnableDnsHostnames": true
+                "EnableDnsHostnames": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway"
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
         },
         "AttachGateway": {
             "Type": "AWS::EC2::VPCGatewayAttachment",
@@ -115,7 +148,21 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": true
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-az0a"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "PublicSubnet2": {
@@ -135,7 +182,21 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": true
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-az0b"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "PrivateSubnet1": {
@@ -155,7 +216,21 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": false
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-az0a"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "PrivateSubnet2": {
@@ -175,7 +250,21 @@
                         }
                     ]
                 },
-                "MapPublicIpOnLaunch": false
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-private-az0b"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "PublicRouteTable": {
@@ -183,7 +272,21 @@
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "PublicRoute": {
@@ -247,6 +350,14 @@
                         "IpProtocol": -1,
                         "CidrIp": "0.0.0.0/0"
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
                 ]
             }
         },
@@ -287,7 +398,21 @@
                             "Ref": "AWS::NoValue"
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ec2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "SecureBucket": {
@@ -307,7 +432,21 @@
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-secure-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "TrailBucket": {
@@ -324,7 +463,21 @@
                             }
                         }
                     ]
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-trail-logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         },
         "TrailBucketPolicy": {
@@ -370,21 +523,6 @@
                 }
             }
         },
-        "CloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
-            "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "${EnvironmentName}-trail"
-                },
-                "S3BucketName": {
-                    "Ref": "TrailBucket"
-                },
-                "IsMultiRegionTrail": true,
-                "IncludeGlobalServiceEvents": true,
-                "EnableLogFileValidation": true,
-                "IsLogging": true
-            }
-        },
         "ConfigRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
@@ -402,6 +540,14 @@
                 },
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
                 ]
             }
         },
@@ -432,7 +578,15 @@
                 "EvaluationPeriods": 1,
                 "Threshold": 1,
                 "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-                "AlarmActions": []
+                "AlarmActions": [],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
             }
         }
     },
@@ -470,9 +624,12 @@
                 ]
             }
         },
-        "CloudTrailArn": {
+        "TrailBucketArn": {
             "Value": {
-                "Ref": "CloudTrail"
+                "Fn::GetAtt": [
+                    "TrailBucket",
+                    "Arn"
+                ]
             }
         },
         "KmsKeyArn": {
