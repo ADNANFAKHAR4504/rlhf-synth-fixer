@@ -9,6 +9,7 @@ import {
   TerraformOutput,
 } from 'cdktf';
 import { Construct } from 'constructs';
+import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 
 // Import your stacks here
 import { SecureAppModules, SecureAppModulesConfig } from './modules';
@@ -74,12 +75,6 @@ export class TapStack extends TerraformStack {
       sensitive: false,
     });
 
-    const dbPassword = new TerraformVariable(this, 'db_password', {
-      type: 'string',
-      description: 'Database password',
-      sensitive: true,
-    });
-
     const allowedCidrBlocks = new TerraformVariable(
       this,
       'allowed_cidr_blocks',
@@ -90,12 +85,21 @@ export class TapStack extends TerraformStack {
       }
     );
 
+    // Configuration parameters
+    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
+      this,
+      'db-password-secret',
+      {
+        secretId: 'my-db-password',
+      }
+    );
+
     // Environment-specific configuration
     const config: SecureAppModulesConfig = {
       environment: environmentSuffix,
       allowedCidrBlocks: allowedCidrBlocks.listValue,
       dbUsername: dbUsername.stringValue,
-      dbPassword: dbPassword.stringValue,
+      dbPassword: dbPasswordSecret.secretString,
       instanceType:
         environmentSuffix === 'production' || environmentSuffix === 'prod'
           ? 't3.medium'
