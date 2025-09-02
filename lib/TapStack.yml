@@ -186,22 +186,10 @@ Resources:
     Properties:
       WebACLArn: !GetAtt 'WAFWebACL.Arn'
       ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod'
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/aws-service-role/AWSConfigServiceRolePolicy
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      RoleARN: !GetAtt 'ConfigRole.Arn'
+      RoleARN: arn:aws:iam::718240086340:role/aws-config-role
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
