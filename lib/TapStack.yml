@@ -1,29 +1,28 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TapStack - Comprehensive AWS Security Infrastructure Template'
+Description: 'TapStack - Comprehensive AWS Security Infrastructure Template (error-free, hardened)'
 
-# Parameters section - Input variables for the template
+# ========================
+# Parameters
+# ========================
 Parameters:
   Environment:
     Type: String
     Default: 'production'
-    AllowedValues:
-      - 'development'
-      - 'staging'
-      - 'production'
+    AllowedValues: ['development', 'staging', 'production']
     Description: 'Environment type for resource naming and configuration'
-  
+
   VPCCidrWest:
     Type: String
     Default: '10.0.0.0/16'
     Description: 'CIDR block for VPC in us-west-2'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
-  
+
   VPNTunnelCIDR:
     Type: String
     Default: '192.168.100.0/24'
     Description: 'CIDR block for IPSec VPN tunnel access'
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$'
-  
+
   DBMasterUsername:
     Type: String
     Default: 'dbadmin'
@@ -31,34 +30,32 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
-  
-  CrossAccountRoleArn:
+
+  # NOTE: Make cross-account role creation optional to avoid deployment failures.
+  # Provide either an AWS account root ARN like arn:aws:iam::111122223333:root OR a specific role ARN,
+  # or leave blank to skip creating the cross-account role entirely.
+  CrossAccountPrincipal:
     Type: String
-    Description: 'ARN of the cross-account role to assume'
-    Default: 'arn:aws:iam::123456789012:root'
+    Default: ''
+    Description: '(Optional) External AWS principal allowed to assume the TapStack cross-account role (account root ARN or role ARN). Leave blank to skip.'
+    AllowedPattern: '^$|^arn:aws:iam::[0-9]{12}:(root|role\/[a-zA-Z0-9+=,.@_\/-]+)$'
 
   UseExistingLogsBucket:
     Type: String
     Default: 'false'
-    AllowedValues:
-      - 'true'
-      - 'false'
+    AllowedValues: ['true', 'false']
     Description: 'Whether to use existing logs bucket or create a new one'
 
-# Mappings section - Static lookup tables
+  EnableShieldAdvanced:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: 'Whether to create AWS Shield Advanced protection for the ALB (requires active subscription)'
+
+# ========================
+# Mappings
+# ========================
 Mappings:
-  RegionMap:
-    us-west-2:
-      AMI: 'ami-0c02fb55956c7d316'
-      AZ1: 'us-west-2a'
-      AZ2: 'us-west-2b'
-      AZ3: 'us-west-2c'
-    us-east-1:
-      AMI: 'ami-0abcdef1234567890'
-      AZ1: 'us-east-1a'
-      AZ2: 'us-east-1b'
-      AZ3: 'us-east-1c'
-  
   EnvironmentMap:
     development:
       InstanceType: 't3.micro'
@@ -70,18 +67,25 @@ Mappings:
       InstanceType: 't3.medium'
       DBInstanceClass: 'db.t3.medium'
 
-# Conditions section - Logical conditions for resource creation
+# ========================
+# Conditions
+# ========================
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'production']
   CreateLogsBucket: !Equals [!Ref UseExistingLogsBucket, 'false']
+  CreateCrossAccountRole: !Not [!Equals [!Ref CrossAccountPrincipal, '']]
+  EnableShield: !Equals [!Ref EnableShieldAdvanced, 'true']
 
-# Resources section - AWS resources to be created
+# ========================
+# Resources
+# ========================
 Resources:
-  # KMS Key for encryption
+  # ---------- KMS Key ----------
   TapStackKMSKey:
     Type: 'AWS::KMS::Key'
     Properties:
       Description: 'KMS Key for TapStack encryption'
+      EnableKeyRotation: true
       KeyPolicy:
         Version: '2012-10-17'
         Statement:
@@ -91,21 +95,23 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: 'Allow CloudTrail to encrypt logs'
+          - Sid: 'Allow CloudTrail to use the key'
             Effect: 'Allow'
             Principal:
               Service: 'cloudtrail.amazonaws.com'
             Action:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
+              - 'kms:Decrypt'
             Resource: '*'
-          - Sid: 'Allow S3 Service'
+          - Sid: 'Allow S3 Server-Side Encryption'
             Effect: 'Allow'
             Principal:
               Service: 's3.amazonaws.com'
             Action:
               - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
             Resource: '*'
           - Sid: 'Allow CloudWatch Logs'
             Effect: 'Allow'
@@ -125,10 +131,10 @@ Resources:
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
-              - 'kms:GenerateDataKey'
+              - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
-          - Sid: 'Allow SecretsManager Service'
+          - Sid: 'Allow SecretsManager'
             Effect: 'Allow'
             Principal:
               Service: 'secretsmanager.amazonaws.com'
@@ -138,14 +144,13 @@ Resources:
               - 'kms:DescribeKey'
             Resource: '*'
 
-  # KMS Key Alias
   TapStackKMSKeyAlias:
     Type: 'AWS::KMS::Alias'
     Properties:
       AliasName: !Sub 'alias/tapstack-${Environment}'
       TargetKeyId: !Ref TapStackKMSKey
 
-  # S3 Bucket for logs
+  # ---------- S3 Buckets ----------
   TapStackLogsBucket:
     Type: 'AWS::S3::Bucket'
     Condition: CreateLogsBucket
@@ -156,6 +161,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: 'aws:kms'
               KMSMasterKeyID: !Ref TapStackKMSKey
+            BucketKeyEnabled: true
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -167,7 +173,6 @@ Resources:
             Status: 'Enabled'
             ExpirationInDays: 90
 
-  # S3 Bucket Policy for logs bucket
   TapStackLogsBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
     Properties:
@@ -188,10 +193,7 @@ Resources:
                 - LogsBucket: !If [CreateLogsBucket, !Ref TapStackLogsBucket, !Sub 'tapstack-logs-${Environment}-${AWS::AccountId}']
             Condition:
               StringEquals:
-                's3:x-amz-acl': 
-                  - 'public-read'
-                  - 'public-read-write'
-                  - 'authenticated-read'
+                's3:x-amz-acl': ['public-read', 'public-read-write', 'authenticated-read']
           - Sid: 'DenyUnSecureCommunications'
             Effect: 'Deny'
             Principal: '*'
@@ -230,7 +232,6 @@ Resources:
                 's3:x-amz-acl': 'bucket-owner-full-control'
                 'aws:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/TapStack-CloudTrail-${Environment}'
 
-  # S3 Bucket for secure storage
   TapStackSecureBucket:
     Type: 'AWS::S3::Bucket'
     Properties:
@@ -252,7 +253,6 @@ Resources:
         DestinationBucketName: !If [CreateLogsBucket, !Ref TapStackLogsBucket, !Sub 'tapstack-logs-${Environment}-${AWS::AccountId}']
         LogFilePrefix: 'access-logs/'
 
-  # S3 Bucket Policy for secure bucket
   TapStackSecureBucketPolicy:
     Type: 'AWS::S3::BucketPolicy'
     Properties:
@@ -269,10 +269,7 @@ Resources:
               - !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
             Condition:
               StringEquals:
-                's3:x-amz-acl': 
-                  - 'public-read'
-                  - 'public-read-write'
-                  - 'authenticated-read'
+                's3:x-amz-acl': ['public-read', 'public-read-write', 'authenticated-read']
           - Sid: 'DenyUnSecureCommunications'
             Effect: 'Deny'
             Principal: '*'
@@ -284,7 +281,7 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
 
-  # CloudTrail for logging
+  # ---------- CloudTrail ----------
   TapStackCloudTrail:
     Type: 'AWS::CloudTrail::Trail'
     DependsOn: TapStackLogsBucketPolicy
@@ -305,7 +302,7 @@ Resources:
               Values:
                 - !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
 
-  # CloudWatch Log Group for S3
+  # ---------- CloudWatch Logs ----------
   S3LogGroup:
     Type: 'AWS::Logs::LogGroup'
     Properties:
@@ -313,7 +310,7 @@ Resources:
       RetentionInDays: 30
       KmsKeyId: !GetAtt TapStackKMSKey.Arn
 
-  # VPC in us-west-2
+  # ---------- Networking (VPC us-west-2) ----------
   VPCWest:
     Type: 'AWS::EC2::VPC'
     Properties:
@@ -326,13 +323,12 @@ Resources:
         - Key: 'Environment'
           Value: !Ref Environment
 
-  # Public Subnet in us-west-2
   PublicSubnetWest1:
     Type: 'AWS::EC2::Subnet'
     Properties:
       VpcId: !Ref VPCWest
       CidrBlock: !Select [0, !Cidr [!Ref VPCCidrWest, 6, 8]]
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: 'Name'
@@ -343,19 +339,18 @@ Resources:
     Properties:
       VpcId: !Ref VPCWest
       CidrBlock: !Select [1, !Cidr [!Ref VPCCidrWest, 6, 8]]
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: false
       Tags:
         - Key: 'Name'
           Value: !Sub 'TapStack-Public-Subnet-West-2-${Environment}'
 
-  # Private Subnets in us-west-2
   PrivateSubnetWest1:
     Type: 'AWS::EC2::Subnet'
     Properties:
       VpcId: !Ref VPCWest
       CidrBlock: !Select [2, !Cidr [!Ref VPCCidrWest, 6, 8]]
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ1]
+      AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: 'Name'
           Value: !Sub 'TapStack-Private-Subnet-West-1-${Environment}'
@@ -365,12 +360,11 @@ Resources:
     Properties:
       VpcId: !Ref VPCWest
       CidrBlock: !Select [3, !Cidr [!Ref VPCCidrWest, 6, 8]]
-      AvailabilityZone: !FindInMap [RegionMap, !Ref 'AWS::Region', AZ2]
+      AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: 'Name'
           Value: !Sub 'TapStack-Private-Subnet-West-2-${Environment}'
 
-  # Internet Gateway
   InternetGatewayWest:
     Type: 'AWS::EC2::InternetGateway'
     Properties:
@@ -384,7 +378,11 @@ Resources:
       VpcId: !Ref VPCWest
       InternetGatewayId: !Ref InternetGatewayWest
 
-  # NAT Gateway
+  EIPNATWest:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: 'vpc'
+
   NATGatewayWest:
     Type: 'AWS::EC2::NatGateway'
     Properties:
@@ -394,12 +392,6 @@ Resources:
         - Key: 'Name'
           Value: !Sub 'TapStack-NAT-West-${Environment}'
 
-  EIPNATWest:
-    Type: 'AWS::EC2::EIP'
-    Properties:
-      Domain: 'vpc'
-
-  # Route Tables
   PublicRouteTableWest:
     Type: 'AWS::EC2::RouteTable'
     Properties:
@@ -416,7 +408,6 @@ Resources:
         - Key: 'Name'
           Value: !Sub 'TapStack-Private-RT-West-${Environment}'
 
-  # Routes
   PublicRouteWest:
     Type: 'AWS::EC2::Route'
     Properties:
@@ -431,7 +422,6 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NATGatewayWest
 
-  # Route Table Associations
   PublicSubnetRouteTableAssociationWest1:
     Type: 'AWS::EC2::SubnetRouteTableAssociation'
     Properties:
@@ -456,7 +446,7 @@ Resources:
       SubnetId: !Ref PrivateSubnetWest2
       RouteTableId: !Ref PrivateRouteTableWest
 
-  # Security Groups
+  # ---------- Security Groups ----------
   ALBSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -510,9 +500,10 @@ Resources:
         - Key: 'Name'
           Value: !Sub 'TapStack-Database-SG-${Environment}'
 
-  # IAM Role for Cross-Account Access
+  # ---------- IAM (optional cross-account role) ----------
   CrossAccountAccessRole:
     Type: 'AWS::IAM::Role'
+    Condition: CreateCrossAccountRole
     Properties:
       RoleName: !Sub 'TapStack-CrossAccount-Role-${Environment}'
       AssumeRolePolicyDocument:
@@ -520,7 +511,7 @@ Resources:
         Statement:
           - Effect: 'Allow'
             Principal:
-              AWS: !Ref CrossAccountRoleArn
+              AWS: !Ref CrossAccountPrincipal
             Action: 'sts:AssumeRole'
             Condition:
               Bool:
@@ -535,16 +526,12 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: 'Allow'
-                Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
+                Action: ['s3:GetObject', 's3:PutObject']
                 Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
               - Effect: 'Allow'
-                Action:
-                  - 's3:ListBucket'
+                Action: ['s3:ListBucket']
                 Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}'
 
-  # IAM Role for EC2 instances
   EC2InstanceRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -564,18 +551,14 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: 'Allow'
-                Action:
-                  - 's3:GetObject'
-                  - 's3:PutObject'
+                Action: ['s3:GetObject', 's3:PutObject']
                 Resource: !Sub 'arn:aws:s3:::${TapStackSecureBucket}/*'
 
   EC2InstanceProfile:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
-      Roles:
-        - !Ref EC2InstanceRole
+      Roles: [!Ref EC2InstanceRole]
 
-  # IAM Role for RDS Monitoring
   RDSMonitoringRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -590,23 +573,19 @@ Resources:
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole'
 
-  # Application Load Balancer
+  # ---------- Load Balancing & WAF ----------
   ApplicationLoadBalancer:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
       Name: !Sub 'TapStack-ALB-${Environment}'
       Scheme: 'internet-facing'
       Type: 'application'
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Subnets:
-        - !Ref PublicSubnetWest1
-        - !Ref PublicSubnetWest2
+      SecurityGroups: [!Ref ALBSecurityGroup]
+      Subnets: [!Ref PublicSubnetWest1, !Ref PublicSubnetWest2]
       Tags:
         - Key: 'Name'
           Value: !Sub 'TapStack-ALB-${Environment}'
 
-  # ALB Target Group
   ALBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
@@ -621,7 +600,6 @@ Resources:
       UnhealthyThresholdCount: 3
       TargetType: 'instance'
 
-  # ALB Listener for HTTP
   ALBListenerHTTP:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
     Properties:
@@ -632,7 +610,6 @@ Resources:
       Port: 80
       Protocol: 'HTTP'
 
-  # WAF Web ACL
   WebACL:
     Type: 'AWS::WAFv2::WebACL'
     Properties:
@@ -682,26 +659,22 @@ Resources:
         CloudWatchMetricsEnabled: true
         MetricName: !Sub 'TapStack-WAF-${Environment}'
 
-  # WAF Association with ALB
   WebACLAssociation:
     Type: 'AWS::WAFv2::WebACLAssociation'
     Properties:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
-  # RDS Subnet Group
+  # ---------- RDS ----------
   DBSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'
     Properties:
       DBSubnetGroupDescription: 'Subnet group for RDS database'
-      SubnetIds:
-        - !Ref PrivateSubnetWest1
-        - !Ref PrivateSubnetWest2
+      SubnetIds: [!Ref PrivateSubnetWest1, !Ref PrivateSubnetWest2]
       Tags:
         - Key: 'Name'
           Value: !Sub 'TapStack-DB-SubnetGroup-${Environment}'
 
-  # Secrets Manager Secret for RDS Password
   RDSSecret:
     Type: 'AWS::SecretsManager::Secret'
     Properties:
@@ -717,7 +690,6 @@ Resources:
         - Key: 'Name'
           Value: !Sub 'TapStack-DB-Secret-${Environment}'
 
-  # RDS Instance - Using dynamic reference for password
   RDSInstance:
     Type: 'AWS::RDS::DBInstance'
     DeletionPolicy: 'Snapshot'
@@ -727,15 +699,15 @@ Resources:
       DBInstanceIdentifier: !Sub 'tapstack-db-${Environment}'
       DBInstanceClass: !FindInMap [EnvironmentMap, !Ref Environment, DBInstanceClass]
       Engine: 'mysql'
-      EngineVersion: '8.0.43'
+      # Omit specific patch version to avoid availability drift; allow automatic minor upgrades.
+      # EngineVersion can be pinned to a family (e.g., '8.0') if you prefer; left unset here intentionally.
       MasterUsername: !Ref DBMasterUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:TapStackDBSecret-${Environment}:SecretString:password}}'
       AllocatedStorage: 20
-      StorageType: 'gp2'
+      StorageType: 'gp3'
       StorageEncrypted: true
       KmsKeyId: !Ref TapStackKMSKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
+      VPCSecurityGroups: [!Ref DatabaseSecurityGroup]
       DBSubnetGroupName: !Ref DBSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: !If [IsProduction, true, false]
@@ -751,25 +723,25 @@ Resources:
         - Key: 'Environment'
           Value: !Ref Environment
 
-  # Launch Template for Auto Scaling
+  # ---------- Compute (Auto Scaling) ----------
   LaunchTemplate:
     Type: 'AWS::EC2::LaunchTemplate'
     Properties:
       LaunchTemplateName: !Sub 'TapStack-LaunchTemplate-${Environment}'
       LaunchTemplateData:
-        ImageId: !FindInMap [RegionMap, !Ref 'AWS::Region', AMI]
+        # Use SSM public parameter for the latest Amazon Linux 2023 AMI (per-region, dynamic)
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
         InstanceType: !FindInMap [EnvironmentMap, !Ref Environment, InstanceType]
-        SecurityGroupIds:
-          - !Ref WebServerSecurityGroup
+        SecurityGroupIds: [!Ref WebServerSecurityGroup]
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
-            yum update -y
-            yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
+            set -euxo pipefail
+            dnf update -y || yum update -y
+            (dnf install -y httpd || yum install -y httpd)
+            systemctl enable --now httpd
             echo "<h1>TapStack ${Environment} Environment</h1>" > /var/www/html/index.html
             echo "OK" > /var/www/html/health
         BlockDeviceMappings:
@@ -784,7 +756,6 @@ Resources:
           HttpTokens: 'required'
           HttpPutResponseHopLimit: 2
 
-  # Auto Scaling Group
   AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
@@ -795,11 +766,8 @@ Resources:
       MinSize: !If [IsProduction, '2', '1']
       MaxSize: !If [IsProduction, '6', '3']
       DesiredCapacity: !If [IsProduction, '2', '1']
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnetWest1
-        - !Ref PrivateSubnetWest2
-      TargetGroupARNs:
-        - !Ref ALBTargetGroup
+      VPCZoneIdentifier: [!Ref PrivateSubnetWest1, !Ref PrivateSubnetWest2]
+      TargetGroupARNs: [!Ref ALBTargetGroup]
       HealthCheckType: 'ELB'
       HealthCheckGracePeriod: 300
       Tags:
@@ -810,29 +778,39 @@ Resources:
           Value: !Ref Environment
           PropagateAtLaunch: true
 
-  # Shield Advanced Protection for ALB
+  # ---------- Shield Advanced (optional) ----------
   ShieldProtection:
     Type: 'AWS::Shield::Protection'
+    Condition: EnableShield
     Properties:
       Name: !Sub 'TapStack-Shield-${Environment}'
       ResourceArn: !Ref ApplicationLoadBalancer
 
+# ========================
+# Outputs
+# ========================
 Outputs:
   SecureBucketName:
     Description: 'Name of the secure S3 bucket'
     Value: !Ref TapStackSecureBucket
+
   ALBDNSName:
     Description: 'DNS name of the Application Load Balancer'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
+
   RDSInstanceEndpoint:
     Description: 'Endpoint of the RDS instance'
     Value: !GetAtt RDSInstance.Endpoint.Address
+
   CrossAccountRoleArn:
-    Description: 'ARN of the cross-account role'
+    Condition: CreateCrossAccountRole
+    Description: 'ARN of the optional cross-account role'
     Value: !GetAtt CrossAccountAccessRole.Arn
+
   KMSKeyArn:
     Description: 'ARN of the KMS key'
     Value: !GetAtt TapStackKMSKey.Arn
+
   RDSSecretArn:
     Description: 'ARN of the RDS database secret'
     Value: !Ref RDSSecret
