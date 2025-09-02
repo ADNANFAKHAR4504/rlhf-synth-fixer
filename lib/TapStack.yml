@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Secure AWS environment setup for a single region (e.g., us-west-2) with encryption, logging, WAF, Shield,
-  and secure compute. This template is designed for portability and will use two Availability Zones if available.
+  Secure AWS environment setup using two Availability Zones.
+  This template will only work in regions that have at least two AZs.
 
 Parameters:
   VpcCidr:
@@ -20,14 +20,6 @@ Parameters:
     Type: Number
     Default: 80
     Description: CPU utilization percentage for CloudWatch alarm.
-
-Mappings:
-  SingleAZRegions:
-    ap-northeast-3:
-      SingleAZ: 'true'
-
-Conditions:
-  HasTwoAZs: !Not [!FindInMap [SingleAZRegions, !Ref 'AWS::Region', 'SingleAZ', 'false']]
 
 Resources:
   KmsKey:
@@ -75,7 +67,6 @@ Resources:
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
-    Condition: HasTwoAZs
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref PrivateSubnet2Cidr
@@ -157,7 +148,9 @@ Resources:
     DependsOn:
       - ALBAccessLogsBucketPolicy
     Properties:
-      Subnets: !If [HasTwoAZs, [!Ref PrivateSubnet1, !Ref PrivateSubnet2], [!Ref PrivateSubnet1]]
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       LoadBalancerAttributes:
         - Key: access_logs.s3.enabled
           Value: 'true'
@@ -271,7 +264,9 @@ Resources:
             }
           };
       VpcConfig:
-        SubnetIds: !If [HasTwoAZs, [!Ref PrivateSubnet1, !Ref PrivateSubnet2], [!Ref PrivateSubnet1]]
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
         SecurityGroupIds:
           - !Ref LambdaSecurityGroup
       Role: !GetAtt LambdaExecutionRole.Arn
