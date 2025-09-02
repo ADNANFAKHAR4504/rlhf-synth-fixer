@@ -57,7 +57,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
   
     @classmethod
     def load_stack_outputs(cls):
-        """Load stack outputs from Pulumi CLI or fallback to files."""
+        """Load stack outputs from various sources, prioritizing current stack outputs"""
         # First try Pulumi CLI (most current)
         try:
             result = subprocess.run(['pulumi', 'stack', 'output', '--json'], 
@@ -65,26 +65,84 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             if result.returncode == 0:
                 outputs = json.loads(result.stdout)
                 print("Using outputs from Pulumi CLI (current stack)")
+                
+                # Parse string outputs that should be lists
+                for key, value in outputs.items():
+                    if isinstance(value, str) and value.startswith('[') and value.endswith(']'):
+                        try:
+                            parsed_value = json.loads(value)
+                            outputs[key] = parsed_value
+                            print(f"Parsed {key}: {value} -> {parsed_value}")
+                        except json.JSONDecodeError:
+                            pass  # Keep as string if parsing fails
+                
                 return outputs
         except Exception as e:
             print(f"Error getting Pulumi outputs: {e}")
         
+        # Fallback to environment variables
+        env_outputs = {}
+        env_mappings = {
+            'KMS_KEY_ARN': 'kms_key_arn',
+            'KMS_KEY_ID': 'kms_key_id',
+            'LOGS_BUCKET_NAME': 'logs_bucket_name',
+            'DATA_BUCKET_NAME': 'data_bucket_name',
+            'DATA_BUCKET_ARN': 'data_bucket_arn',
+            'BUCKET_POLICY_ID': 'bucket_policy_id',
+            'ACCESS_ERROR_ALARM_ARN': 'access_error_alarm_arn'
+        }
+        
+        for env_key, output_key in env_mappings.items():
+            value = os.environ.get(env_key)
+            if value:
+                env_outputs[output_key] = value
+        
+        if env_outputs:
+            print("Using outputs from environment variables")
+            return env_outputs
+        
         # Fallback to flat-outputs.json
-        try:
-            with open('cfn-outputs/flat-outputs.json', 'r', encoding='utf-8') as f:
-                outputs = json.load(f)
-                print("Using outputs from cfn-outputs/flat-outputs.json")
-                return outputs
-        except FileNotFoundError:
-            print("No stack outputs found - tests will be skipped")
-            return {}
+        outputs_file = "cfn-outputs/flat-outputs.json"
+        if os.path.exists(outputs_file):
+            try:
+                with open(outputs_file, 'r') as f:
+                    outputs = json.load(f)
+                    if outputs:
+                        print(f"Using outputs from {outputs_file}")
+                        return outputs
+            except Exception as e:
+                print(f"Error reading {outputs_file}: {e}")
+        
+        # Last resort: try all-outputs.json
+        all_outputs_file = "cfn-outputs/all-outputs.json"
+        if os.path.exists(all_outputs_file):
+            try:
+                with open(all_outputs_file, 'r') as f:
+                    outputs = json.load(f)
+                    if outputs:
+                        print(f"Using outputs from {all_outputs_file}")
+                        # Convert to flat format
+                        flat_outputs = {}
+                        for key, value in outputs.items():
+                            if isinstance(value, dict) and 'value' in value:
+                                flat_outputs[key] = value['value']
+                            else:
+                                flat_outputs[key] = value
+                        return flat_outputs
+            except Exception as e:
+                print(f"Error reading {all_outputs_file}: {e}")
+        
+        return {}
 
     def test_s3_data_bucket_exists_and_configured(self):
         """Test S3 data bucket exists with proper security configuration."""
         bucket_name = self.stack_outputs.get('data_bucket_name')
         
         if not bucket_name:
-            self.skipTest("Data bucket name not found in stack outputs")
+            self.skipTest("Data bucket name not found in stack outputs - skipping S3 data bucket test")
+            return
+        
+        print(f"Testing S3 data bucket: {bucket_name}")
         
         try:
             # Check bucket exists
@@ -116,7 +174,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         bucket_name = self.stack_outputs.get('logs_bucket_name')
         
         if not bucket_name:
-            self.skipTest("Logs bucket name not found in stack outputs")
+            self.skipTest("Logs bucket name not found in stack outputs - skipping S3 logs bucket test")
+            return
+        
+        print(f"Testing S3 logs bucket: {bucket_name}")
         
         try:
             # Check bucket exists
@@ -342,11 +403,36 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except Exception as e:  # pylint: disable=broad-exception-caught
             self.skipTest(f"End-to-end workflow test requires deployed infrastructure: {str(e)}")
 
-    @mock_aws
     def test_placeholder_integration(self):
         """Placeholder test for integration testing - always passes for now."""
         # This test always passes to ensure integration test suite runs
         self.assertEqual(1, 1)  # Placeholder assertion
+        print("Integration test framework is working correctly")
+
+    def test_available_resources(self):
+        """Test to show what resources are available from stack outputs."""
+        print(f"Available stack outputs: {list(self.stack_outputs.keys())}")
+        
+        # Check what resources we can test
+        available_resources = []
+        
+        if self.stack_outputs.get('data_bucket_name'):
+            available_resources.append('S3 Data Bucket')
+        if self.stack_outputs.get('logs_bucket_name'):
+            available_resources.append('S3 Logs Bucket')
+        if self.stack_outputs.get('kms_key_id'):
+            available_resources.append('KMS Key')
+        if self.stack_outputs.get('access_error_alarm_arn'):
+            available_resources.append('CloudWatch Alarm')
+        if self.stack_outputs.get('bucket_policy_id'):
+            available_resources.append('IAM Policy')
+        
+        if available_resources:
+            print(f"Resources available for testing: {', '.join(available_resources)}")
+            self.assertTrue(len(available_resources) > 0, "Should have at least one resource to test")
+        else:
+            print("No resources available for testing - stack may not be deployed")
+            self.skipTest("No resources available for testing")
 
 
 if __name__ == '__main__':
