@@ -114,9 +114,9 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 
 	// CloudTrail bucket policy removed to avoid circular dependency
 
-	// Create VPC with explicit subnet configuration to avoid CDK selection issues
+	// Create VPC with 2 AZs to meet RDS subnet group requirements
 	vpc := awsec2.NewVpc(stack, jsii.String("TapVPC"), &awsec2.VpcProps{
-		MaxAzs: jsii.Number(1),
+		MaxAzs: jsii.Number(2),
 		SubnetConfiguration: &[]*awsec2.SubnetConfiguration{
 			{
 				Name:                jsii.String("Public"),
@@ -132,7 +132,7 @@ func NewTapStack(scope constructs.Construct, id string, props *TapStackProps) Ta
 			{
 				Name:       jsii.String("Database"),
 				SubnetType: awsec2.SubnetType_PRIVATE_ISOLATED,
-				CidrMask:   jsii.Number(24),
+				CidrMask:   jsii.Number(28), // Smaller CIDR for database subnets
 			},
 		},
 		EnableDnsHostnames: jsii.Bool(true),
