@@ -88,11 +88,14 @@
           "Version": "2012-10-17",
           "Statement": [
             {
-              "Sid": "AWSCloudTrailWrite",
+              "Sid": "AllowS3LogsDelivery",
               "Effect": "Allow",
-              "Principal": { "Service": "logging.s3.amazonaws.com" },
+              "Principal": { "Service": "delivery.logs.amazonaws.com" },
               "Action": "s3:PutObject",
-              "Resource": { "Fn::Sub": "arn:aws:s3:::corp-${Environment}-logging-${AWS::AccountId}/access-logs/*" }
+              "Resource": { "Fn::Sub": "arn:aws:s3:::corp-${Environment}-logging-${AWS::AccountId}/access-logs/*" },
+              "Condition": {
+                "StringEquals": { "s3:x-amz-acl": "bucket-owner-full-control" }
+              }
             }
           ]
         }
@@ -101,7 +104,6 @@
     "SecurityNotificationTopic": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "TopicName": { "Fn::Sub": "corp-${Environment}-security-topic" },
         "Subscription": [
           {
             "Endpoint": { "Ref": "NotificationEmail" },
@@ -145,7 +147,6 @@
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": { "Fn::Sub": "corp-${Environment}-lambda-execution-role" },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [{ "Effect": "Allow", "Principal": { "Service": "lambda.amazonaws.com" }, "Action": "sts:AssumeRole" }]
@@ -190,7 +191,6 @@
     "RemediationLambda": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "FunctionName": { "Fn::Sub": "corp-${Environment}-s3-remediation" },
         "Handler": "index.handler",
         "Runtime": "python3.9",
         "Code": {
