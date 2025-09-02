@@ -184,6 +184,11 @@ Parameters:
     Default: ''
     Description: Optional existing CloudWatch Billing Alarm name to reuse
 
+  ExistingConfigDeliveryChannelName:
+    Type: String
+    Default: ''
+    Description: Optional existing AWS Config Delivery Channel name to reuse
+
 Conditions:
   # KMS Conditions
   UseExistingKMS: !Not [!Equals [!Ref ExistingKMSKeyArn, '']]
@@ -266,6 +271,11 @@ Conditions:
   # Config Conditions
   UseExistingConfigBucket: !Not [!Equals [!Ref ExistingConfigBucketName, '']]
   CreateConfigBucket: !Equals [!Ref ExistingConfigBucketName, '']
+  CreateConfigDeliveryChannel:
+    !And [
+      !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
+      !Equals [!Ref ExistingConfigBucketName, ''],
+    ]
 
   # Other Service Conditions
   UseExistingGuardDutyDetector:
@@ -1461,7 +1471,7 @@ Resources:
         IncludeGlobalResourceTypes: true
 
   ConfigDeliveryChannel:
-    Condition: CreateConfigBucket
+    Condition: CreateConfigDeliveryChannel
     Type: AWS::Config::DeliveryChannel
     Properties:
       Name: !Sub
