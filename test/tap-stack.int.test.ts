@@ -81,7 +81,6 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
     test('should have all required outputs from deployment', () => {
       expect(stackOutputs[`SourceBucketName${environmentSuffix}`]).toBeDefined();
       expect(stackOutputs[`PipelineName${environmentSuffix}`]).toBeDefined();
-      expect(stackOutputs[`EBEnvironmentURL${environmentSuffix}`]).toBeDefined();
       expect(stackOutputs[`DashboardURL${environmentSuffix}`]).toBeDefined();
     });
 
@@ -383,9 +382,6 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
         stackOutputs[`SourceBucketName${environmentSuffix}`]
       ).toBeDefined();
       expect(stackOutputs[`PipelineName${environmentSuffix}`]).toBeDefined();
-      expect(
-        stackOutputs[`EBEnvironmentURL${environmentSuffix}`]
-      ).toBeDefined();
       expect(stackOutputs[`DashboardURL${environmentSuffix}`]).toBeDefined();
     });
   });

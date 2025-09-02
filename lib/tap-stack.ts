@@ -600,12 +600,6 @@ export class TapStack extends cdk.Stack {
       exportName: `tap-pipeline-name-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `EBEnvironmentURL-${environmentSuffix}`, {
-      value: ebEnvironment.getAtt('EndpointURL').toString(),
-      description: `Elastic Beanstalk environment URL for ${environmentSuffix}`,
-      exportName: `tap-eb-url-${environmentSuffix}`,
-    });
-
     new cdk.CfnOutput(this, `DashboardURL-${environmentSuffix}`, {
       value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
       description: `CloudWatch dashboard URL for ${environmentSuffix} environment`,

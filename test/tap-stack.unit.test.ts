@@ -323,7 +323,6 @@ describe('TapStack', () => {
     test('should have required outputs', () => {
       template.hasOutput(`SourceBucketName${environmentSuffix}`, {});
       template.hasOutput(`PipelineName${environmentSuffix}`, {});
-      template.hasOutput(`EBEnvironmentURL${environmentSuffix}`, {});
       template.hasOutput(`DashboardURL${environmentSuffix}`, {});
     });
   });

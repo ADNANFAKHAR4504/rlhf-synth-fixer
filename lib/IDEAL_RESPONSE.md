@@ -663,12 +663,6 @@ export class TapStack extends cdk.Stack {
       exportName: `tap-pipeline-name-${environmentSuffix}`,
     });
 
-    new cdk.CfnOutput(this, `EBEnvironmentURL-${environmentSuffix}`, {
-      value: ebEnvironment.attrEndpointUrl,
-      description: `Elastic Beanstalk environment URL for ${environmentSuffix}`,
-      exportName: `tap-eb-url-${environmentSuffix}`,
-    });
-
     new cdk.CfnOutput(this, `DashboardURL-${environmentSuffix}`, {
       value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`,
       description: `CloudWatch dashboard URL for ${environmentSuffix} environment`,
@@ -772,7 +766,6 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
     test('should have all required outputs from deployment', () => {
       expect(stackOutputs[`SourceBucketName${environmentSuffix}`]).toBeDefined();
       expect(stackOutputs[`PipelineName${environmentSuffix}`]).toBeDefined();
-      expect(stackOutputs[`EBEnvironmentURL${environmentSuffix}`]).toBeDefined();
       expect(stackOutputs[`DashboardURL${environmentSuffix}`]).toBeDefined();
     });
 
@@ -1074,9 +1067,6 @@ describe('CI/CD Pipeline Infrastructure Integration Tests', () => {
         stackOutputs[`SourceBucketName${environmentSuffix}`]
       ).toBeDefined();
       expect(stackOutputs[`PipelineName${environmentSuffix}`]).toBeDefined();
-      expect(
-        stackOutputs[`EBEnvironmentURL${environmentSuffix}`]
-      ).toBeDefined();
       expect(stackOutputs[`DashboardURL${environmentSuffix}`]).toBeDefined();
     });
   });
@@ -1458,7 +1448,6 @@ describe('TapStack', () => {
     test('should have required outputs', () => {
       template.hasOutput(`SourceBucketName${environmentSuffix}`, {});
       template.hasOutput(`PipelineName${environmentSuffix}`, {});
-      template.hasOutput(`EBEnvironmentURL${environmentSuffix}`, {});
       template.hasOutput(`DashboardURL${environmentSuffix}`, {});
     });
   });
