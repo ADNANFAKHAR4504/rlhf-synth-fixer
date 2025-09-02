@@ -16,7 +16,7 @@ const config = new pulumi.Config();
 
 // Get the environment suffix from the Pulumi config, defaulting to 'dev'.
 // You can set this value using the command: `pulumi config set env <value>`
-const environmentSuffix = config.get('env') || 'dev';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
@@ -35,10 +35,13 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
+const stack = new TapStack('pulumi-infra', {
   tags: defaultTags,
+  environmentSuffix: environmentSuffix,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export stack outputs
+export const albDnsName = stack.albDnsName;
+export const cloudFrontDomainName = stack.cloudFrontDomainName;
+export const vpcId = stack.vpcId;
+export const rdsEndpoint = stack.rdsEndpoint;
