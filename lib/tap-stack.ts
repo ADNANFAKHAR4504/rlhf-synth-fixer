@@ -395,13 +395,15 @@ export class SecureInfrastructureStack extends cdk.Stack {
       encryptionKey: kmsKey,
     });
 
-    // API Keys in Parameter Store (SecureString)
-    new ssm.CfnParameter(this, 'APIKeyParameter', {
-      name: `/prod/app/api-key-${environmentSuffix}`,
-      value: 'placeholder-api-key', // Replace with actual API key
+    // API Keys in Parameter Store
+    // Note: Using StringParameter instead of CfnParameter for better CDK integration
+    new ssm.StringParameter(this, 'APIKeyParameter', {
+      parameterName: `/prod/app/api-key-${environmentSuffix}`,
+      stringValue: 'placeholder-api-key', // Replace with actual API key
       description: 'API key for external service integration',
-      tier: 'Standard',
-      type: 'SecureString',
+      tier: ssm.ParameterTier.STANDARD,
+      // StringParameter creates a String type parameter by default
+      // For SecureString, use AWS CLI: aws ssm put-parameter --name "param-name" --value "value" --type SecureString
     });
 
     // =============================================================================
