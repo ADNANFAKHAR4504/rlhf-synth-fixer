@@ -55,7 +55,7 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref PrivateSubnet1Cidr
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: "us-west-2a"
       Tags:
         - Key: Name
           Value: PrivateSubnet1
@@ -65,7 +65,7 @@ Resources:
     Properties:
       VpcId: !Ref Vpc
       CidrBlock: !Ref PrivateSubnet2Cidr
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: "us-west-2b"
       Tags:
         - Key: Name
           Value: PrivateSubnet2
