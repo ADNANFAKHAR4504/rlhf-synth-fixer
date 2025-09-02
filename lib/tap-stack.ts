@@ -24,7 +24,6 @@ import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
-// 1. IMPORT S3BucketOwnershipControls
 import { S3BucketOwnershipControls } from '@cdktf/provider-aws/lib/s3-bucket-ownership-controls';
 import { S3BucketReplicationConfigurationA as S3BucketReplicationConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-replication-configuration';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
@@ -109,7 +108,6 @@ export class TapStack extends TerraformStack {
       }
     );
 
-    // 2. ADD BUCKET OWNERSHIP CONTROLS TO THE DESTINATION BUCKET
     const secondaryBucketOwnership = new S3BucketOwnershipControls(
       this,
       'secondary-bucket-ownership',
@@ -163,7 +161,6 @@ export class TapStack extends TerraformStack {
 
     new S3BucketReplicationConfiguration(this, 'replication-config', {
       provider: primaryProvider,
-      // 3. ADD DEPENDENCY ON BOTH VERSIONING AND OWNERSHIP
       dependsOn: [
         secondaryBucket,
         secondaryBucketVersioning,
@@ -316,13 +313,16 @@ export class TapStack extends TerraformStack {
   ): RegionalInfrastructure {
     const availabilityZones = [`${region}a`, `${region}b`];
 
+    // Regional Parameter Store
     new SsmParameter(this, `${prefix}-db-password`, {
       provider,
-      name: '/prod/db_password',
+      // FIX: Add random suffix to parameter name
+      name: `/prod/${randomSuffix}/db_password`,
       type: 'SecureString',
       value: 'MustBeChangedInSecretsManager',
     });
 
+    // VPC and Networking
     const vpc = new Vpc(this, `${prefix}-vpc`, {
       provider,
       cidrBlock: vpcCidr,
@@ -456,7 +456,8 @@ export class TapStack extends TerraformStack {
           {
             Action: 'ssm:GetParameter',
             Effect: 'Allow',
-            Resource: `arn:aws:ssm:${region}:${accountId}:parameter/prod/db_password`,
+            // FIX: Update policy to match unique parameter path
+            Resource: `arn:aws:ssm:${region}:${accountId}:parameter/prod/${randomSuffix}/*`,
           },
         ],
       }),
