@@ -500,6 +500,24 @@ export class EnvironmentMigrationStack {
       { provider: this.provider }
     );
 
+    new aws.s3.BucketOwnershipControls(
+      `cf-logs-ownership-${this.environment}`,
+      {
+        bucket: logBucket.id,
+        rule: { objectOwnership: 'BucketOwnerPreferred' },
+      },
+      { provider: this.provider }
+    );
+
+    new aws.s3.BucketAcl(
+      `cf-logs-acl-${this.environment}`,
+      {
+        bucket: logBucket.id,
+        acl: 'private',
+      },
+      { provider: this.provider }
+    );
+
     const distribution = new aws.cloudfront.Distribution(
       `cf-${this.environment}`,
       {
