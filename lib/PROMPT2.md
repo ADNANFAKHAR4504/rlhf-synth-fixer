@@ -1,7 +1,4 @@
-Model response had below errors and issues -
-
-1. Model was not able to comprehend the prompt properly even after providing the complete information.
-2. Model generated the below error related to the providerr config
+Can you provide the code snippet to fix the below issue , may be I can declare an alias in my provider.tf to fix this issue?
 
 ```
 │ Error: Provider configuration not present

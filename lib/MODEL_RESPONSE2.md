@@ -1,10 +1,33 @@
-# tap_stack.tf - Complete infrastructure stack for TAP deployment
+The issue is that your `tap_stack.tf` file references `provider = aws.us_east_2` (with an alias), but your `provider.tf` file doesn't define that alias. Here are two ways to fix this:
+
+## Option 1: Update your provider.tf to include the alias (Recommended)
+
+Update your `provider.tf` file to include the alias:
+
 ```hcl
+# provider.tf
+provider "aws" {
+  region = var.aws_region
+}
+
+provider "aws" {
+  alias  = "us_east_2"
+  region = "us-east-2"
+}
+```
+
+## Option 2: Remove all provider references from tap_stack.tf
+
+If you prefer to use the default provider without aliases, here's the updated `tap_stack.tf` with all `provider = aws.us_east_2` lines removed:
+
+```hcl
+# tap_stack.tf - Complete infrastructure stack for TAP deployment
+
 # ============================================================================
 # VARIABLES
 # ============================================================================
 
-variable "aws_region" {
+variable "region" {
   description = "AWS region for deployment"
   type        = string
   default     = "us-east-2"
@@ -53,7 +76,7 @@ locals {
   }
 
   # Availability zones for the region
-  availability_zones = ["${var.aws_region}a", "${var.aws_region}b"]
+  availability_zones = ["${var.region}a", "${var.region}b"]
 
   # Subnet CIDR blocks
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
@@ -66,7 +89,6 @@ locals {
 
 # Get latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux_2" {
-  provider    = aws.us_east_2
   most_recent = true
   owners      = ["amazon"]
 
@@ -87,7 +109,6 @@ data "aws_ami" "amazon_linux_2" {
 
 # VPC
 resource "aws_vpc" "main" {
-  provider             = aws.us_east_2
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
@@ -99,8 +120,7 @@ resource "aws_vpc" "main" {
 
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
-  provider = aws.us_east_2
-  vpc_id   = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
 
   tags = merge(local.common_tags, {
     Name = "tap-igw"
@@ -109,7 +129,6 @@ resource "aws_internet_gateway" "main" {
 
 # Public Subnets
 resource "aws_subnet" "public" {
-  provider                = aws.us_east_2
   count                   = 2
   vpc_id                  = aws_vpc.main.id
   cidr_block              = local.public_subnet_cidrs[count.index]
@@ -124,7 +143,6 @@ resource "aws_subnet" "public" {
 
 # Private Subnets
 resource "aws_subnet" "private" {
-  provider          = aws.us_east_2
   count             = 2
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
@@ -138,9 +156,8 @@ resource "aws_subnet" "private" {
 
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "nat" {
-  provider = aws.us_east_2
-  count    = 2
-  domain   = "vpc"
+  count  = 2
+  domain = "vpc"
 
   depends_on = [aws_internet_gateway.main]
 
@@ -151,7 +168,6 @@ resource "aws_eip" "nat" {
 
 # NAT Gateways
 resource "aws_nat_gateway" "main" {
-  provider      = aws.us_east_2
   count         = 2
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
@@ -165,8 +181,7 @@ resource "aws_nat_gateway" "main" {
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
-  provider = aws.us_east_2
-  vpc_id   = aws_vpc.main.id
+  vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -180,9 +195,8 @@ resource "aws_route_table" "public" {
 
 # Route Tables for Private Subnets
 resource "aws_route_table" "private" {
-  provider = aws.us_east_2
-  count    = 2
-  vpc_id   = aws_vpc.main.id
+  count  = 2
+  vpc_id = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
@@ -196,7 +210,6 @@ resource "aws_route_table" "private" {
 
 # Route Table Associations for Public Subnets
 resource "aws_route_table_association" "public" {
-  provider       = aws.us_east_2
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
@@ -204,7 +217,6 @@ resource "aws_route_table_association" "public" {
 
 # Route Table Associations for Private Subnets
 resource "aws_route_table_association" "private" {
-  provider       = aws.us_east_2
   count          = 2
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
@@ -216,7 +228,6 @@ resource "aws_route_table_association" "private" {
 
 # Security Group for EC2 instances
 resource "aws_security_group" "ec2_sg" {
-  provider    = aws.us_east_2
   name        = "tap-ec2-security-group"
   description = "Security group for TAP EC2 instances"
   vpc_id      = aws_vpc.main.id
@@ -264,8 +275,7 @@ resource "aws_security_group" "ec2_sg" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  provider = aws.us_east_2
-  name     = "tap-ec2-role"
+  name = "tap-ec2-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -285,9 +295,8 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM Policy for EC2 instances (basic CloudWatch and SSM permissions)
 resource "aws_iam_role_policy" "ec2_policy" {
-  provider = aws.us_east_2
-  name     = "tap-ec2-policy"
-  role     = aws_iam_role.ec2_role.id
+  name = "tap-ec2-policy"
+  role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -319,9 +328,8 @@ resource "aws_iam_role_policy" "ec2_policy" {
 
 # IAM Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  provider = aws.us_east_2
-  name     = "tap-ec2-profile"
-  role     = aws_iam_role.ec2_role.name
+  name = "tap-ec2-profile"
+  role = aws_iam_role.ec2_role.name
 
   tags = local.common_tags
 }
@@ -332,7 +340,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 
 # EC2 Instances in Private Subnets
 resource "aws_instance" "private_instances" {
-  provider                    = aws.us_east_2
   count                       = 4 # 2 instances per private subnet
   ami                         = data.aws_ami.amazon_linux_2.id
   instance_type               = var.instance_type
@@ -378,8 +385,7 @@ resource "aws_instance" "private_instances" {
 
 # S3 Bucket for TAP application data
 resource "aws_s3_bucket" "tap_bucket" {
-  provider = aws.us_east_2
-  bucket   = "tap-stack-data-${random_string.bucket_suffix.result}"
+  bucket = "tap-stack-data-${random_string.bucket_suffix.result}"
 
   tags = merge(local.common_tags, {
     Name = "tap-application-bucket"
@@ -395,8 +401,7 @@ resource "random_string" "bucket_suffix" {
 
 # S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "tap_bucket_versioning" {
-  provider = aws.us_east_2
-  bucket   = aws_s3_bucket.tap_bucket.id
+  bucket = aws_s3_bucket.tap_bucket.id
   versioning_configuration {
     status = "Enabled"
   }
@@ -404,8 +409,7 @@ resource "aws_s3_bucket_versioning" "tap_bucket_versioning" {
 
 # S3 Bucket Server Side Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "tap_bucket_encryption" {
-  provider = aws.us_east_2
-  bucket   = aws_s3_bucket.tap_bucket.id
+  bucket = aws_s3_bucket.tap_bucket.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -416,8 +420,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "tap_bucket_encryp
 
 # S3 Bucket Public Access Block
 resource "aws_s3_bucket_public_access_block" "tap_bucket_pab" {
-  provider = aws.us_east_2
-  bucket   = aws_s3_bucket.tap_bucket.id
+  bucket = aws_s3_bucket.tap_bucket.id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -556,7 +559,7 @@ output "s3_bucket_domain_name" {
 # Region Output
 output "deployment_region" {
   description = "AWS region where resources are deployed"
-  value       = var.aws_region
+  value       = var.region
 }
 
 # Availability Zones Output
@@ -566,25 +569,13 @@ output "availability_zones" {
 }
 ```
 
-# provider.tf
-```hcl
-terraform {
-  required_version = ">= 1.4.0"
+## Recommendation
 
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-  }
+I recommend **Option 1** (updating your provider.tf) because:
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
-}
+1. It maintains the explicit provider configuration as originally requested
+2. It provides better control over which provider is used for each resource
+3. It prevents potential issues if you have multiple AWS providers configured
+4. It makes the configuration more explicit and maintainable
 
-# Primary AWS provider for general resources
-provider "aws" {
-  alias  = "us_east_2"
-  region = var.aws_region
-}
-```
+With Option 1, just make sure your `var.aws_region` is set to `"us-east-2"` or update the alias provider to use `var.aws_region` instead of the hardcoded region.
