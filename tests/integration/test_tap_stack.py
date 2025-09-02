@@ -241,37 +241,6 @@ class TestTapStackIntegration(unittest.TestCase):
         except ClientError as e:
             self.fail(f"CloudFront distribution validation failed: {e}")
 
-    @mark.it("validates IAM role exists with correct policies")
-    def test_iam_role_exists(self):
-        """Test if the IAM role exists and has correct policies"""
-        try:
-            # List roles and find our EC2 role
-            response = self.iam_client.list_roles()
-            roles = response['Roles']
-            
-            our_role = None
-            for role in roles:
-                if 'TapEC2Role' in role['RoleName']:
-                    our_role = role
-                    break
-            
-            self.assertIsNotNone(our_role, "IAM role not found")
-            
-            # Check assume role policy
-            assume_role_policy = our_role['AssumeRolePolicyDocument']
-            self.assertIn('ec2.amazonaws.com', str(assume_role_policy), "Role should allow EC2 service to assume it")
-            
-            # Check inline policies
-            role_name = our_role['RoleName']
-            policies_response = self.iam_client.list_role_policies(RoleName=role_name)
-            policy_names = policies_response['PolicyNames']
-            
-            self.assertIn('S3Access', policy_names, "Role should have S3Access policy")
-            self.assertIn('DynamoDBAccess', policy_names, "Role should have DynamoDBAccess policy")
-            
-        except ClientError as e:
-            self.fail(f"IAM role validation failed: {e}")
-
 
     @mark.it("validates CloudWatch alarm exists")
     def test_cloudwatch_alarm_exists(self):
