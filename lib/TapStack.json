@@ -220,9 +220,9 @@
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "Handler": "index.handler",
-                "Runtime": "nodejs22.x",
+                "Runtime": "nodejs18.x",
                 "Code": {
-                    "ZipFile": "exports.handler = async function(event, context) { return 'Hello, secure world!'; };"
+                    "ZipFile": "exports.handler = async function(event, context) {\n  return {\n    statusCode: 200,\n    body: \"Hello, secure world!\"\n  };\n};\n"
                 },
                 "VpcConfig": {
                     "SubnetIds": [
@@ -274,9 +274,53 @@
                 "Name": "SecureAPI"
             }
         },
+        "ApiResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGateway",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "secure"
+            }
+        },
+        "ApiMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    }
+                ]
+            }
+        },
         "ApiDeployment": {
             "Type": "AWS::ApiGateway::Deployment",
-            "DependsOn": [],
+            "DependsOn": "ApiMethod",
             "Properties": {
                 "RestApiId": {
                     "Ref": "ApiGateway"
