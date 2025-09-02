@@ -162,7 +162,7 @@ describe('TapStack Integration Tests', () => {
       expect(response.LoadBalancers).toBeDefined();
       const alb = response.LoadBalancers!.find(lb => lb.DNSName === albDnsName);
       expect(alb).toBeDefined();
-      expect(alb?.State.Code).toBe('active');
+      expect(alb?.State?.Code).toBe('active');
       expect(alb!.Type).toBe('application');
       expect(alb!.Scheme).toBe('internet-facing');
     });
@@ -234,7 +234,7 @@ describe('TapStack Integration Tests', () => {
       const albResponse = await elbv2Client.send(albCommand);
       const alb = albResponse.LoadBalancers!.find(lb => lb.DNSName === albDns);
       expect(alb).toBeDefined();
-      expect(alb?.State.Code).toBe('active');
+      expect(alb?.State?.Code).toBe('active');
 
       // S3 bucket should be accessible
       const s3Command = new HeadBucketCommand({ Bucket: s3Bucket });

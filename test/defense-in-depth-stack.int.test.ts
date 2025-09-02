@@ -161,7 +161,7 @@ describe('Defense in Depth Stack Integration Tests', () => {
       expect(response.LoadBalancers).toBeDefined();
       const alb = response.LoadBalancers!.find(lb => lb.DNSName === albDnsName);
       expect(alb).toBeDefined();
-      expect(alb!.State.Code).toBe('active');
+      expect(alb?.State?.Code).toBe('active');
       expect(alb!.Type).toBe('application');
       expect(alb!.Scheme).toBe('internet-facing');
     });
@@ -272,10 +272,10 @@ describe('Defense in Depth Stack Integration Tests', () => {
       const getResponse = await cloudfrontClient.send(getCommand);
 
       expect(getResponse.Distribution).toBeDefined();
-      expect(getResponse.Distribution!.DistributionConfig).toBeDefined();
-      expect(getResponse.Distribution!.DistributionConfig.DefaultCacheBehavior).toBeDefined();
-      expect(getResponse.Distribution!.DistributionConfig.Origins).toBeDefined();
-      expect(getResponse.Distribution!.DistributionConfig.Origins!.Items!.length).toBeGreaterThan(0);
+      expect(getResponse.Distribution?.DistributionConfig).toBeDefined();
+      expect(getResponse.Distribution?.DistributionConfig?.DefaultCacheBehavior).toBeDefined();
+      expect(getResponse.Distribution?.DistributionConfig?.Origins).toBeDefined();
+      expect(getResponse.Distribution?.DistributionConfig?.Origins?.Items?.length).toBeGreaterThan(0);
     });
   });
 
@@ -297,7 +297,8 @@ describe('Defense in Depth Stack Integration Tests', () => {
       const albCommand = new DescribeLoadBalancersCommand({});
       const albResponse = await elbv2Client.send(albCommand);
       const alb = albResponse.LoadBalancers!.find(lb => lb.DNSName === albDns);
-      expect(alb!.State.Code).toBe('active');
+      expect(alb).toBeDefined();
+      expect(alb?.State?.Code).toBe('active');
 
       // S3 bucket should be accessible
       const s3Command = new HeadBucketCommand({ Bucket: s3Bucket });
