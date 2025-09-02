@@ -87,7 +87,7 @@ resource "aws_guardduty_detector" "main" {
 }
 
 locals {
-  guardduty_detector_id = data.aws_guardduty_detector.existing.id != "" ? data.aws_guardduty_detector.existing.id : aws_guardduty_detector.main[0].id
+  guardduty_detector_id = try(data.aws_guardduty_detector.existing.id, aws_guardduty_detector.main[0].id)
 }
 
 resource "aws_guardduty_detector_feature" "s3_protection" {
