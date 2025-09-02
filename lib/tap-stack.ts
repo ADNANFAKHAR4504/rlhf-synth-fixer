@@ -495,9 +495,9 @@ export class TapStack extends cdk.Stack {
     // Capacity Provider for ECS Cluster with optimized settings
     const capacityProvider = new ecs.AsgCapacityProvider(
       this,
-      `ECSCapacityProvider-${this.environmentSuffix}-${this.randomSuffix}`,
+      `CapacityProvider-${this.environmentSuffix}-${this.randomSuffix}`,
       {
-        capacityProviderName: `ECS-CP-${this.environmentSuffix}-${this.randomSuffix}`,
+        capacityProviderName: `CP-${this.environmentSuffix}-${this.randomSuffix}`,
         autoScalingGroup: autoScalingGroup,
         enableManagedScaling: true,
         enableManagedTerminationProtection: false, // Allow termination for cost optimization
