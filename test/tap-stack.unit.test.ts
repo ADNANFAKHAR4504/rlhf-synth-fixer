@@ -202,9 +202,9 @@ describe('S3 Backend Configuration', () => {
     expect(synthesized).toContain('"encrypt": true');
   });
 
-  // test('S3 Backend uses state locking', () => {
-  //   expect(synthesized).toContain('"use_lockfile": true');
-  // });
+  test('S3 Backend uses state locking', () => {
+    expect(synthesized).toContain('"use_lockfile": true');
+  });
 
   test('S3 Backend uses default values when not specified', () => {
     const defaultApp = new App();
@@ -234,6 +234,7 @@ describe('Terraform Variables', () => {
     expect(synthesized).toContain('"default": "admin"');
     expect(synthesized).toContain('"sensitive": false');
   });
+
 });
 
 describe('VPC and Networking', () => {
@@ -533,15 +534,15 @@ describe('Environment-Specific Configuration', () => {
     expect(devSynthesized).toContain('"deletion_protection": false');
   });
 
-  // test('Staging environment uses smaller resources', () => {
-  //   const stagingStack = new TapStack(app, 'StagingStack', {
-  //     environmentSuffix: 'staging'
-  //   });
-  //   const stagingSynthesized = Testing.synth(stagingStack);
+  test('Staging environment uses smaller resources', () => {
+    const stagingStack = new TapStack(app, 'StagingStack', {
+      environmentSuffix: 'staging'
+    });
+    const stagingSynthesized = Testing.synth(stagingStack);
     
-  //   expect(stagingSynthesized).toContain('"instance_type": "t3.micro"');
-  //   expect(stagingSynthesized).toContain('"instance_class": "db.t3.micro"');
-  // });
+    expect(stagingSynthesized).toContain('"instance_type": "t3.micro"');
+    expect(stagingSynthesized).toContain('"instance_class": "db.t3.micro"');
+  });
 
   test('Environment suffix is properly passed to modules', () => {
     const testStack = new TapStack(app, 'TestEnvStack', {
