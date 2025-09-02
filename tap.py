@@ -36,7 +36,20 @@ default_tags = {
     'Author': commit_author,
 }
 
-stack = TapStack(
+# Create the TapStack component
+tap_stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
+    args=TapStackArgs(
+        environment_suffix=environment_suffix,
+        tags=default_tags
+    ),
 )
+
+# Export the outputs from TapStack so they appear in stack outputs
+pulumi.export("kms_key_arn", tap_stack.kms_key.arn)
+pulumi.export("kms_key_id", tap_stack.kms_key.key_id)
+pulumi.export("logs_bucket_name", tap_stack.logs_bucket.bucket)
+pulumi.export("data_bucket_name", tap_stack.data_bucket.bucket)
+pulumi.export("data_bucket_arn", tap_stack.data_bucket.arn)
+pulumi.export("bucket_policy_id", tap_stack.bucket_policy.id)
+pulumi.export("access_error_alarm_arn", tap_stack.access_error_alarm.arn)
