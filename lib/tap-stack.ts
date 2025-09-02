@@ -93,7 +93,7 @@ export class TapStack extends TerraformStack {
       'security-group',
       {
         ...moduleConfig,
-        vpcId: vpcModule.vpcId,
+        vpcId: vpcModule.vpcId
       },
     );
 
