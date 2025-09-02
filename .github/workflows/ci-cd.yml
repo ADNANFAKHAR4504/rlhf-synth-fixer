@@ -869,3 +869,5 @@ jobs:
 
       - name: Run semantic-release
         run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
