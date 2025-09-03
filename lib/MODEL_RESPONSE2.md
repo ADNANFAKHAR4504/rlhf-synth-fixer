@@ -1,3 +1,7 @@
+
+## lib/tapstack.ts (Updated)
+
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -13,13 +17,13 @@ export interface TapStackProps extends cdk.StackProps {
    * Environment suffix to append to resource names (e.g., 'dev', 'staging', 'prod')
    */
   environmentSuffix?: string;
-
+  
   /**
    * Domain name for the ACM certificate (e.g., 'example.com')
    * If not provided, a self-signed certificate will be created
    */
   domainName?: string;
-
+  
   /**
    * Hosted Zone ID for the domain (required if domainName is provided)
    */
@@ -70,10 +74,7 @@ export class TapStack extends cdk.Stack {
     this.alb = this.createApplicationLoadBalancer(securityGroups.albSg, props);
 
     // Create Auto Scaling Group
-    this.asg = this.createAutoScalingGroup(
-      securityGroups.applicationSg,
-      ec2Role
-    );
+    this.asg = this.createAutoScalingGroup(securityGroups.applicationSg, ec2Role);
 
     // Create ALB Target Group and attach ASG
     this.createTargetGroupAndListeners(securityGroups.albSg, props);
@@ -131,16 +132,12 @@ export class TapStack extends cdk.Stack {
     );
 
     // Application Security Group
-    const applicationSg = new ec2.SecurityGroup(
-      this,
-      `${this.envSuffix}-app-sg`,
-      {
-        vpc: this.vpc,
-        securityGroupName: `${this.envSuffix}-app-sg`,
-        description: 'Security group for application instances',
-        allowAllOutbound: false,
-      }
-    );
+    const applicationSg = new ec2.SecurityGroup(this, `${this.envSuffix}-app-sg`, {
+      vpc: this.vpc,
+      securityGroupName: `${this.envSuffix}-app-sg`,
+      description: 'Security group for application instances',
+      allowAllOutbound: false,
+    });
 
     // Allow traffic from ALB to application instances
     applicationSg.addIngressRule(
@@ -247,8 +244,8 @@ export class TapStack extends cdk.Stack {
   }
 
   private createS3Bucket(): s3.Bucket {
-    return new s3.Bucket(this, 'prod-assets-bucket', {
-      bucketName: `prod-tap-assets-${this.account}-${this.region}`,
+    return new s3.Bucket(this, `${this.envSuffix}-assets-bucket`, {
+      bucketName: `${this.envSuffix}-tap-assets-${this.account}-${this.region}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
@@ -256,7 +253,7 @@ export class TapStack extends cdk.Stack {
         {
           id: 'delete-old-versions',
           noncurrentVersionExpiration: cdk.Duration.days(30),
-          enabled: true, // Changed from status: s3.LifecycleRuleStatus.ENABLED
+          status: s3.LifecycleRuleStatus.ENABLED,
         },
       ],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -265,28 +262,21 @@ export class TapStack extends cdk.Stack {
 
   private createDatabase(databaseSg: ec2.SecurityGroup): rds.DatabaseInstance {
     // Create DB subnet group using isolated subnets
-    const subnetGroup = new rds.SubnetGroup(
-      this,
-      `${this.envSuffix}-db-subnet-group`,
-      {
-        description: 'Subnet group for RDS database',
-        vpc: this.vpc,
-        subnetGroupName: `${this.envSuffix}-db-subnet-group`,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      }
-    );
+    const subnetGroup = new rds.SubnetGroup(this, `${this.envSuffix}-db-subnet-group`, {
+      description: 'Subnet group for RDS database',
+      vpc: this.vpc,
+      subnetGroupName: `${this.envSuffix}-db-subnet-group`,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
+    });
 
     return new rds.DatabaseInstance(this, `${this.envSuffix}-database`, {
       instanceIdentifier: `${this.envSuffix}-postgresql-db`,
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_4,
       }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
       storageEncrypted: true,
@@ -298,37 +288,20 @@ export class TapStack extends cdk.Stack {
       credentials: rds.Credentials.fromGeneratedSecret('dbadmin', {
         secretName: `${this.envSuffix}-db-credentials`,
       }),
-      backupRetention:
-        this.envSuffix === 'prod' ? cdk.Duration.days(7) : cdk.Duration.days(1),
+      backupRetention: this.envSuffix === 'prod' ? cdk.Duration.days(7) : cdk.Duration.days(1),
       deletionProtection: this.envSuffix === 'prod',
-      removalPolicy:
-        this.envSuffix === 'prod'
-          ? cdk.RemovalPolicy.RETAIN
-          : cdk.RemovalPolicy.DESTROY,
-      monitoringInterval:
-        this.envSuffix === 'prod'
-          ? cdk.Duration.seconds(60)
-          : cdk.Duration.seconds(0),
-      monitoringRole:
-        this.envSuffix === 'prod'
-          ? new iam.Role(this, `${this.envSuffix}-db-monitoring-role`, {
-              assumedBy: new iam.ServicePrincipal(
-                'monitoring.rds.amazonaws.com'
-              ),
-              managedPolicies: [
-                iam.ManagedPolicy.fromAwsManagedPolicyName(
-                  'service-role/AmazonRDSEnhancedMonitoringRole'
-                ),
-              ],
-            })
-          : undefined,
+      removalPolicy: this.envSuffix === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      monitoringInterval: this.envSuffix === 'prod' ? cdk.Duration.seconds(60) : cdk.Duration.seconds(0),
+      monitoringRole: this.envSuffix === 'prod' ? new iam.Role(this, `${this.envSuffix}-db-monitoring-role`, {
+        assumedBy: new iam.ServicePrincipal('monitoring.rds.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonRDSEnhancedMonitoringRole'),
+        ],
+      }) : undefined,
     });
   }
 
-  private createApplicationLoadBalancer(
-    albSg: ec2.SecurityGroup,
-    props?: TapStackProps
-  ): elbv2.ApplicationLoadBalancer {
+  private createApplicationLoadBalancer(albSg: ec2.SecurityGroup, props?: TapStackProps): elbv2.ApplicationLoadBalancer {
     return new elbv2.ApplicationLoadBalancer(this, `${this.envSuffix}-alb`, {
       loadBalancerName: `${this.envSuffix}-alb`,
       vpc: this.vpc,
@@ -340,10 +313,7 @@ export class TapStack extends cdk.Stack {
     });
   }
 
-  private createAutoScalingGroup(
-    applicationSg: ec2.SecurityGroup,
-    ec2Role: iam.Role
-  ): autoscaling.AutoScalingGroup {
+  private createAutoScalingGroup(applicationSg: ec2.SecurityGroup, ec2Role: iam.Role): autoscaling.AutoScalingGroup {
     // User data script for application setup
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
@@ -362,10 +332,7 @@ export class TapStack extends cdk.Stack {
     return new autoscaling.AutoScalingGroup(this, `${this.envSuffix}-asg`, {
       autoScalingGroupName: `${this.envSuffix}-asg`,
       vpc: this.vpc,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       userData,
       role: ec2Role,
@@ -399,32 +366,25 @@ export class TapStack extends cdk.Stack {
     }
   }
 
-  private createTargetGroupAndListeners(
-    albSg: ec2.SecurityGroup,
-    props?: TapStackProps
-  ): void {
+  private createTargetGroupAndListeners(albSg: ec2.SecurityGroup, props?: TapStackProps): void {
     // Create target group
-    const targetGroup = new elbv2.ApplicationTargetGroup(
-      this,
-      `${this.envSuffix}-tg`,
-      {
-        targetGroupName: `${this.envSuffix}-tg`,
-        port: 80,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        vpc: this.vpc,
-        targets: [this.asg],
-        healthCheck: {
-          enabled: true,
-          healthyHttpCodes: '200',
-          interval: cdk.Duration.seconds(30),
-          path: '/',
-          protocol: elbv2.Protocol.HTTP,
-          timeout: cdk.Duration.seconds(5),
-          unhealthyThresholdCount: 2,
-          healthyThresholdCount: 2,
-        },
-      }
-    );
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, `${this.envSuffix}-tg`, {
+      targetGroupName: `${this.envSuffix}-tg`,
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      vpc: this.vpc,
+      targets: [this.asg],
+      healthCheck: {
+        enabled: true,
+        healthyHttpCodes: '200',
+        interval: cdk.Duration.seconds(30),
+        path: '/',
+        protocol: elbv2.Protocol.HTTP,
+        timeout: cdk.Duration.seconds(5),
+        unhealthyThresholdCount: 2,
+        healthyThresholdCount: 2,
+      },
+    });
 
     // HTTP Listener (redirects to HTTPS)
     this.alb.addListener(`${this.envSuffix}-http-listener`, {
@@ -439,28 +399,20 @@ export class TapStack extends cdk.Stack {
 
     // HTTPS Listener
     let certificate: certificatemanager.ICertificate;
-
+    
     if (props?.domainName && props?.hostedZoneId) {
       // Use ACM certificate for the provided domain
-      certificate = new certificatemanager.Certificate(
-        this,
-        `${this.envSuffix}-certificate`,
-        {
-          domainName: props.domainName,
-          validation: certificatemanager.CertificateValidation.fromDns(),
-        }
-      );
+      certificate = new certificatemanager.Certificate(this, `${this.envSuffix}-certificate`, {
+        domainName: props.domainName,
+        validation: certificatemanager.CertificateValidation.fromDns(),
+      });
     } else {
       // Create a self-signed certificate for development/testing
       // Note: In production, you should always use a proper ACM certificate
-      certificate = new certificatemanager.Certificate(
-        this,
-        `${this.envSuffix}-self-signed-cert`,
-        {
-          domainName: 'localhost',
-          validation: certificatemanager.CertificateValidation.fromEmail(),
-        }
-      );
+      certificate = new certificatemanager.Certificate(this, `${this.envSuffix}-self-signed-cert`, {
+        domainName: 'localhost',
+        validation: certificatemanager.CertificateValidation.fromEmail(),
+      });
     }
 
     this.alb.addListener(`${this.envSuffix}-https-listener`, {
@@ -472,15 +424,80 @@ export class TapStack extends cdk.Stack {
 
     // Add scaling policies (only for production and staging)
     if (this.envSuffix === 'prod' || this.envSuffix === 'staging') {
-      this.asg.scaleOnCpuUtilization('prod-cpu-scaling', {
+      this.asg.scaleOnCpuUtilization(`${this.envSuffix}-cpu-scaling`, {
         targetUtilizationPercent: 70,
-        cooldown: cdk.Duration.seconds(300),
+        scaleInCooldown: cdk.Duration.seconds(300),
+        scaleOutCooldown: cdk.Duration.seconds(300),
       });
 
-      this.asg.scaleOnRequestCount('prod-request-scaling', {
-        targetRequestsPerMinute: 1000,
-        // Remove targetGroups property entirely
+      this.asg.scaleOnRequestCount(`${this.envSuffix}-request-scaling`, {
+        requestsPerTarget: 1000,
+        targetGroup,
       });
     }
   }
 }
+```
+
+## Key Changes Made
+
+### 1. **Updated Interface**
+```typescript
+export interface TapStackProps extends cdk.StackProps {
+  /**
+   * Environment suffix to append to resource names (e.g., 'dev', 'staging', 'prod')
+   */
+  environmentSuffix?: string;
+  // ... other properties
+}
+```
+
+### 2. **Environment-Aware Resource Naming**
+- All resources now use `${this.envSuffix}-` prefix instead of hardcoded `prod-`
+- S3 bucket: `dev-tap-assets-123456789012-us-east-1`
+- VPC: `dev-vpc`
+- ALB: `dev-alb`
+- ASG: `dev-asg`
+- etc.
+
+### 3. **Environment-Specific Configurations**
+
+**Database Settings:**
+- **Dev**: Single-AZ, 1-day backup, no monitoring, DESTROY on delete
+- **Staging**: Single-AZ, 1-day backup, no monitoring, DESTROY on delete  
+- **Prod**: Multi-AZ, 7-day backup, enhanced monitoring, RETAIN on delete
+
+**Auto Scaling Capacity:**
+- **Dev**: min=1, max=2, desired=1
+- **Staging**: min=1, max=3, desired=1
+- **Prod**: min=2, max=6, desired=2
+
+**Scaling Policies:**
+- Only enabled for `prod` and `staging` environments
+- Disabled for `dev` to save costs
+
+### 4. **Dynamic Tagging**
+- Environment tag now reflects the actual environment: `Dev`, `Staging`, or `Production`
+
+## Usage Examples
+
+```typescript
+// Development environment
+new TapStack(app, 'TapStack', {
+  environmentSuffix: 'dev',
+});
+
+// Staging environment
+new TapStack(app, 'StagingTapStack', {
+  environmentSuffix: 'staging',
+});
+
+// Production environment with custom domain
+new TapStack(app, 'ProdTapStack', {
+  environmentSuffix: 'prod',
+  domainName: 'yourdomain.com',
+  hostedZoneId: 'Z1234567890ABC',
+});
+```
+
+Now your TypeScript error should be resolved, and you'll have environment-specific resource configurations that are cost-effective for development while maintaining production-ready settings for higher environments.

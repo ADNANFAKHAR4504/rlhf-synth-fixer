@@ -1,4 +1,3 @@
-I'll create a production-ready CDK stack that meets all your requirements. Here's the complete implementation:
 
 ## lib/tapstack.ts
 
