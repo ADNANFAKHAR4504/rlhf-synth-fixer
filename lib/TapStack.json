@@ -384,42 +384,32 @@
                 "RestApiId": {
                     "Ref": "ServerlessApi"
                 },
-                "StageName": "prod"
-            }
-        },
-        "ApiStage": {
-            "Type": "AWS::ApiGateway::Stage",
-            "Properties": {
-                "RestApiId": {
-                    "Ref": "ServerlessApi"
-                },
-                "DeploymentId": {
-                    "Ref": "ApiDeployment"
-                },
                 "StageName": "prod",
-                "MethodSettings": [
-                    {
-                        "ResourcePath": "/*",
-                        "HttpMethod": "*",
-                        "LoggingLevel": "INFO",
-                        "DataTraceEnabled": true,
-                        "MetricsEnabled": true
-                    }
-                ],
-                "AccessLogSetting": {
-                    "DestinationArn": {
-                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ServerlessApi}"
+                "StageDescription": {
+                    "AccessLogSetting": {
+                        "DestinationArn": {
+                            "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ServerlessApi}"
+                        },
+                        "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"caller\":\"$context.identity.caller\",\"user\":\"$context.identity.user\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\"}"
                     },
-                    "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"caller\":\"$context.identity.caller\",\"user\":\"$context.identity.user\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\"}"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "Environment"
+                    "MethodSettings": [
+                        {
+                            "ResourcePath": "/*",
+                            "HttpMethod": "*",
+                            "LoggingLevel": "INFO",
+                            "DataTraceEnabled": true,
+                            "MetricsEnabled": true
                         }
-                    }
-                ]
+                    ],
+                    "Tags": [
+                        {
+                            "Key": "Environment",
+                            "Value": {
+                                "Ref": "Environment"
+                            }
+                        }
+                    ]
+                }
             }
         },
         "ApiLogGroup": {

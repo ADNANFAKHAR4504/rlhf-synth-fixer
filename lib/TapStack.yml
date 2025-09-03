@@ -280,7 +280,7 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
 
-  # API Gateway Deployment
+  # API Gateway Deployment with Stage
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -289,26 +289,19 @@ Resources:
     Properties:
       RestApiId: !Ref ServerlessApi
       StageName: prod
-
-  # API Gateway Stage
-  ApiStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      RestApiId: !Ref ServerlessApi
-      DeploymentId: !Ref ApiDeployment
-      StageName: prod
-      MethodSettings:
-        - ResourcePath: "/*"
-          HttpMethod: "*"
-          LoggingLevel: INFO
-          DataTraceEnabled: true
-          MetricsEnabled: true
-      AccessLogSetting:
-        DestinationArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ServerlessApi}"
-        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+      StageDescription:
+        AccessLogSetting:
+          DestinationArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ServerlessApi}"
+          Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
+        MethodSettings:
+          - ResourcePath: "/*"
+            HttpMethod: "*"
+            LoggingLevel: INFO
+            DataTraceEnabled: true
+            MetricsEnabled: true
+        Tags:
+          - Key: Environment
+            Value: !Ref Environment
 
   # CloudWatch Log Group for API Gateway
   ApiLogGroup:
