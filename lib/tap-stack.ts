@@ -56,7 +56,7 @@ export class TapStack extends TerraformStack {
     // These values would typically come from environment variables or config files
     const config: WebAppModulesConfig = {
       region: awsRegion, // Required region as per specifications
-      amiId: 'ami-003279a7e0f16807f', // Amazon Linux 2 AMI for us-west-2
+      amiId: 'ami-01102c5e8ab69fb75', // Amazon Linux 2 AMI for us-west-2
       instanceType: 't3.micro', // Cost-effective instance type for web servers
       dbUsername: process.env.DB_USERNAME || 'admin', // Database master username
       dbPassword: process.env.DB_PASSWORD || 'changeme123!', // Use AWS Secrets Manager in production
