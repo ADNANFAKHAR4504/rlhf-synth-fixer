@@ -391,10 +391,12 @@ class TestTapStack(unittest.TestCase):
                             ]
                         )
                     },
-                    "Roles": Match.array_with([Match.any_value()]),
+                    # <-- change here: don't nest any_value() inside array_with()
+                    "Roles": Match.any_value(),
                 }
             ),
         )
+
 
     # ---------- Outputs ----------
 
