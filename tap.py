@@ -21,7 +21,7 @@ app = cdk.App()
 # Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
 STACK_NAME = f"TapStack{environment_suffix}"
-STACK_NAME = f"LambdaFuncStack{environment_suffix}"
+LAMBDA_STACK_NAME = f"LambdaFuncStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
@@ -33,12 +33,9 @@ Tags.of(app).add('Author', commit_author)
 
 # Create a TapStackProps object to pass environment_suffix
 
-props = TapStackProps(
-    environment_suffix=environment_suffix,
-    env=cdk.Environment(
-        account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region=os.getenv('CDK_DEFAULT_REGION')
-    )
+env = cdk.Environment(
+    account=os.getenv('CDK_DEFAULT_ACCOUNT'),
+    region=os.getenv('CDK_DEFAULT_REGION')
 )
 
 # Initialize the stack with proper parameters
