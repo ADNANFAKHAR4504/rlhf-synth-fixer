@@ -18,26 +18,22 @@ from typing import Dict, List, Optional, Tuple
 
 import aws_cdk as cdk
 from aws_cdk import (
-    Stack,
-    aws_ec2 as ec2,
-    aws_elasticloadbalancingv2 as elbv2,   # <-- FIXED: not aws_elbv2
-    aws_s3 as s3,
-    aws_dynamodb as dynamodb,
-    aws_iam as iam,
-    aws_ssm as ssm,
-    aws_secretsmanager as secretsmanager,
-    aws_cloudtrail as cloudtrail,
-    aws_logs as logs,
-    aws_cloudwatch as cloudwatch,
-    aws_sns as sns,
-    aws_sns_subscriptions as sns_subscriptions,
-    aws_kms as kms,
-    aws_rds as rds,
-    aws_autoscaling as autoscaling,
-    CfnOutput,
-    RemovalPolicy,
     Duration,
+    RemovalPolicy,
     Tags,
+    aws_autoscaling as autoscaling,
+    aws_cloudtrail as cloudtrail,
+    aws_cloudwatch as cloudwatch,
+    aws_dynamodb as dynamodb,
+    aws_ec2 as ec2,
+    aws_elasticloadbalancingv2 as elbv2,
+    aws_iam as iam,
+    aws_kms as kms,
+    aws_logs as logs,
+    aws_rds as rds,
+    aws_s3 as s3,
+    aws_secretsmanager as secretsmanager,
+    aws_ssm as ssm,
 )
 from constructs import Construct
 
@@ -78,7 +74,8 @@ class TapStack(cdk.Stack):
         )
         if cdk.Stack.of(self).region != "us-west-1":
             cdk.Annotations.of(self).add_warning(
-                f"Stack region is {cdk.Stack.of(self).region}. Requirement is us-west-1."
+                f"Stack region is {cdk.Stack.of(self).region}. "
+                "Requirement is us-west-1."
             )
 
         self.project_name: str = self._DEFAULT_PROJECT_NAME
@@ -110,7 +107,9 @@ class TapStack(cdk.Stack):
         self.vpc: ec2.Vpc = self._create_vpc(self.vpc_cidr)
 
         # Security Groups (no SSH ingress; SSM only)
-        self.security_groups: Dict[str, ec2.SecurityGroup] = self._create_security_groups()
+        self.security_groups: Dict[str, ec2.SecurityGroup] = (
+            self._create_security_groups()
+        )
 
         # Storage / Data
         self.app_bucket, self.logs_bucket = self._create_s3_buckets()
@@ -254,7 +253,9 @@ class TapStack(cdk.Stack):
         app_bucket = s3.Bucket(
             self,
             "NovaAppBucket",
-            bucket_name=f"nova-{self.environment_name}-app-{self.account}-{self.region}",
+            bucket_name=(
+                f"nova-{self.environment_name}-app-{self.account}-{self.region}"
+            ),
             versioned=True,
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.kms_key,
@@ -269,7 +270,9 @@ class TapStack(cdk.Stack):
                 principals=[iam.AnyPrincipal()],
                 actions=["s3:PutObject"],
                 resources=[app_bucket.arn_for_objects("*")],
-                conditions={"StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}},
+                conditions={
+                    "StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}
+                },
             )
         )
         app_bucket.add_to_resource_policy(
@@ -286,7 +289,9 @@ class TapStack(cdk.Stack):
         logs_bucket = s3.Bucket(
             self,
             "NovaLogsBucket",
-            bucket_name=f"nova-{self.environment_name}-logs-{self.account}-{self.region}",
+            bucket_name=(
+                f"nova-{self.environment_name}-logs-{self.account}-{self.region}"
+            ),
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -309,7 +314,9 @@ class TapStack(cdk.Stack):
                 principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
                 actions=["s3:PutObject"],
                 resources=[logs_bucket.arn_for_objects("*")],
-                conditions={"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}},
+                conditions={
+                    "StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}
+                },
             )
         )
 
@@ -378,19 +385,31 @@ class TapStack(cdk.Stack):
 
         # SSM core (Session Manager)
         role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonSSMManagedInstanceCore")
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "AmazonSSMManagedInstanceCore"
+            )
         )
         # CloudWatch Agent policy
         role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchAgentServerPolicy")
+            iam.ManagedPolicy.from_aws_managed_policy_name(
+                "CloudWatchAgentServerPolicy"
+            )
         )
 
         # SSM Parameter Store (scoped to prefix)
-        prefix = self.app_param_path if self.app_param_path.endswith("/") else f"{self.app_param_path}/"
+        prefix = (
+            self.app_param_path
+            if self.app_param_path.endswith("/")
+            else f"{self.app_param_path}/"
+        )
         role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
+                actions=[
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath",
+                ],
                 resources=[f"arn:aws:ssm:{self.region}:{self.account}:parameter{prefix}*"],
             )
         )
@@ -408,7 +427,12 @@ class TapStack(cdk.Stack):
         role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
+                actions=[
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket",
+                ],
                 resources=[self.app_bucket.bucket_arn, self.app_bucket.arn_for_objects("*")],
             )
         )
@@ -417,8 +441,15 @@ class TapStack(cdk.Stack):
         role.add_to_policy(
             iam.PolicyStatement(
                 effect=iam.Effect.ALLOW,
-                actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-                resources=[f"arn:aws:logs:{self.region}:{self.account}:log-group:/nova/{self.environment_name}/app:*"],
+                actions=[
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                resources=[
+                    f"arn:aws:logs:{self.region}:{self.account}:"
+                    f"log-group:/nova/{self.environment_name}/app:*"
+                ],
             )
         )
 
@@ -479,7 +510,10 @@ class TapStack(cdk.Stack):
     def _create_auto_scaling_group(self) -> autoscaling.AutoScalingGroup:
         """ASG using AL2023 SSM parameter AMI in private subnets."""
         ami = ec2.MachineImage.from_ssm_parameter(
-            parameter_name="/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64",
+            parameter_name=(
+                "/aws/service/ami-amazon-linux-latest/"
+                "al2023-ami-kernel-6.1-x86_64"
+            ),
             os=ec2.OperatingSystemType.LINUX,
         )
 
@@ -490,7 +524,8 @@ class TapStack(cdk.Stack):
             "yum update -y",
             "yum install -y amazon-cloudwatch-agent python3 python3-pip",
             # CloudWatch Agent config
-            "cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'",
+            "cat > /opt/aws/amazon-cloudwatch-agent/etc/"
+            "amazon-cloudwatch-agent.json << 'EOF'",
             "{",
             '  "logs": {',
             '    "logs_collected": {',
@@ -508,16 +543,30 @@ class TapStack(cdk.Stack):
             '  "metrics": {',
             f'    "namespace": "Nova/{self.environment_name}",',
             '    "metrics_collected": {',
-            '      "cpu": { "measurement": ["cpu_usage_idle","cpu_usage_iowait","cpu_usage_user","cpu_usage_system"], "metrics_collection_interval": 60 },',
-            '      "disk": { "measurement": ["used_percent"], "metrics_collection_interval": 60, "resources": ["*"] },',
-            '      "mem": { "measurement": ["mem_used_percent"], "metrics_collection_interval": 60 }',
+            '      "cpu": {',
+            '        "measurement": [',
+            '          "cpu_usage_idle", "cpu_usage_iowait",',
+            '          "cpu_usage_user", "cpu_usage_system"',
+            "        ],",
+            '        "metrics_collection_interval": 60',
+            "      },",
+            '      "disk": {',
+            '        "measurement": ["used_percent"],',
+            '        "metrics_collection_interval": 60,',
+            '        "resources": ["*"]',
+            "      },",
+            '      "mem": {',
+            '        "measurement": ["mem_used_percent"],',
+            '        "metrics_collection_interval": 60',
+            "      }",
             "    }",
             "  }",
             "}",
             "EOF",
             "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl "
             "-a fetch-config -m ec2 "
-            "-c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s",
+            "-c file:/opt/aws/amazon-cloudwatch-agent/etc/"
+            "amazon-cloudwatch-agent.json -s",
             # Minimal HTTP health endpoint
             "cat > /tmp/health_server.py << 'EOF'",
             "#!/usr/bin/env python3",
@@ -535,7 +584,8 @@ class TapStack(cdk.Stack):
             "            self.send_response(404)",
             "            self.end_headers()",
             "",
-            f"with socketserver.TCPServer(('', {self.app_port}), HealthHandler) as httpd:",
+            f"with socketserver.TCPServer(('', {self.app_port}), "
+            "HealthHandler) as httpd:",
             "    httpd.serve_forever()",
             "EOF",
             "chmod +x /tmp/health_server.py",
@@ -571,7 +621,7 @@ class TapStack(cdk.Stack):
         return asg
 
     def _create_rds(self) -> rds.DatabaseInstance:
-        """Private RDS (PostgreSQL) with SG restricted to App SG."""
+        """Private RDS (PostgreSQL 15 pinned via L1 override) with App-only SG."""
         subnet_group = rds.SubnetGroup(
             self,
             "NovaRdsSubnetGroup",
@@ -581,7 +631,7 @@ class TapStack(cdk.Stack):
                 subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
             ),
         )
-        return rds.DatabaseInstance(
+        db = rds.DatabaseInstance(
             self,
             "NovaRdsInstance",
             engine=rds.DatabaseInstanceEngine.postgres(
@@ -597,10 +647,15 @@ class TapStack(cdk.Stack):
             credentials=rds.Credentials.from_generated_secret("dbadmin"),
             storage_encrypted=True,
             backup_retention=Duration.days(7),
-            deletion_protection=False,          # demo
+            deletion_protection=False,           # demo
             removal_policy=RemovalPolicy.DESTROY,  # demo
-            auto_minor_version_upgrade=False,  # demo
+            auto_minor_version_upgrade=False,    # pin patch (see L1 override)
         )
+        # L1 override to set exact patch version (e.g., 15.14)
+        cfn_db = db.node.default_child
+        if isinstance(cfn_db, rds.CfnDBInstance):
+            cfn_db.engine_version = "15.14"
+        return db
 
     def _create_cloudtrail(self) -> cloudtrail.Trail:
         """Organization/account audit trail (multi-region)."""
@@ -619,8 +674,14 @@ class TapStack(cdk.Stack):
 
     def _create_monitoring(self) -> cloudwatch.Alarm:
         """CPU alarm on ASG; no SNS actions."""
-        metric = self.asg.metric_cpu_utilization(
-            period=Duration.minutes(5), statistic="Average"
+        # Some CDK versions do not expose asg.metric_cpu_utilization().
+        # Use a direct CloudWatch metric instead.
+        metric = cloudwatch.Metric(
+            namespace="AWS/EC2",
+            metric_name="CPUUtilization",
+            dimensions_map={"AutoScalingGroupName": self.asg.auto_scaling_group_name},
+            statistic="Average",
+            period=Duration.minutes(5),
         )
         alarm = cloudwatch.Alarm(
             self,
@@ -639,10 +700,14 @@ class TapStack(cdk.Stack):
         cdk.CfnOutput(self, "VpcId", value=self.vpc.vpc_id)
         cdk.CfnOutput(self, "AlbDnsName", value=self.alb.load_balancer_dns_name)
         cdk.CfnOutput(
-            self, "AppSecurityGroupId", value=self.security_groups["app"].security_group_id
+            self,
+            "AppSecurityGroupId",
+            value=self.security_groups["app"].security_group_id,
         )
         cdk.CfnOutput(
-            self, "AlbSecurityGroupId", value=self.security_groups["alb"].security_group_id
+            self,
+            "AlbSecurityGroupId",
+            value=self.security_groups["alb"].security_group_id,
         )
 
         private_ids = self.vpc.select_subnets(
@@ -663,5 +728,7 @@ class TapStack(cdk.Stack):
 
         if self.rds_instance:
             cdk.CfnOutput(
-                self, "RdsEndpoint", value=self.rds_instance.db_instance_endpoint_address
+                self,
+                "RdsEndpoint",
+                value=self.rds_instance.db_instance_endpoint_address,
             )
