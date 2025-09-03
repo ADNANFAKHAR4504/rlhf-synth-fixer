@@ -160,7 +160,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "Deploying infrastructure ..."
     pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
     cd ..
-  elif [ "$LANGUAGE" = "typescript" ]; then
+  elif [ "$LANGUAGE" = "ts" ]; then
     echo "🔧 TypeScript Pulumi project detected"
     pulumi login "$PULUMI_BACKEND_URL"
     cd lib
