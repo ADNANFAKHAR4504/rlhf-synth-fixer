@@ -301,6 +301,7 @@ export class WebAppModules extends Construct {
       {
         name: 'ec2-instance-profile-ts',
         role: ec2Role.name,
+        dependsOn: [ec2Role],
       }
     );
 
@@ -382,6 +383,7 @@ export class WebAppModules extends Construct {
       instanceType: config.instanceType,
       securityGroups: [ec2SecurityGroup.id],
       iamInstanceProfile: instanceProfile.name,
+      dependsOn: [instanceProfile, ec2SecurityGroup],
       // User data script to install and configure web server
       userData: Buffer.from(
         `#!/bin/bash
@@ -409,6 +411,7 @@ export class WebAppModules extends Construct {
       targetGroupArns: [targetGroup.arn],
       healthCheckType: 'ELB',
       healthCheckGracePeriod: 300,
+      dependsOn: [launchConfig],
       tag: [
         {
           key: 'Name',
