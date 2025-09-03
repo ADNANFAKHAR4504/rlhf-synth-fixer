@@ -668,21 +668,255 @@
     },
     "Outputs": {
         "VPCId": {
+            "Description": "VPC ID for the environment",
             "Value": {
                 "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPCId"
+                }
             }
         },
-        "ALBDNSName": {
+        "PublicSubnet1Id": {
+            "Description": "ID of the first public subnet",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet1Id"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "ID of the second public subnet",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet2Id"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "ID of the first private subnet",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet1Id"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "ID of the second private subnet",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-InternetGatewayId"
+                }
+            }
+        },
+        "NatGateway1Id": {
+            "Description": "NAT Gateway in AZ1",
+            "Value": {
+                "Ref": "NatGateway1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-NatGateway1Id"
+                }
+            }
+        },
+        "NatGateway2Id": {
+            "Description": "NAT Gateway in AZ2",
+            "Value": {
+                "Ref": "NatGateway2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-NatGateway2Id"
+                }
+            }
+        },
+        "LoadBalancerArn": {
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "LoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LoadBalancerArn"
+                }
+            }
+        },
+        "LoadBalancerDNS": {
+            "Description": "DNS name of the ALB",
             "Value": {
                 "Fn::GetAtt": [
                     "LoadBalancer",
                     "DNSName"
                 ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LoadBalancerDNS"
+                }
             }
         },
-        "S3LogBucket": {
+        "TargetGroupArn": {
+            "Description": "Target Group ARN",
+            "Value": {
+                "Ref": "TargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TargetGroupArn"
+                }
+            }
+        },
+        "ListenerHTTPArn": {
+            "Description": "ARN of the HTTP listener",
+            "Value": {
+                "Ref": "ListenerHTTP"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ListenerHTTPArn"
+                }
+            }
+        },
+        "ListenerHTTPSArn": {
+            "Condition": "HasCertificate",
+            "Description": "ARN of the HTTPS listener",
+            "Value": {
+                "Ref": "ListenerHTTPS"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ListenerHTTPSArn"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group logical name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-AutoScalingGroupName"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "EC2 Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplateId"
+                }
+            }
+        },
+        "LaunchTemplateVersion": {
+            "Description": "Latest version number of Launch Template",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LaunchTemplate",
+                    "LatestVersionNumber"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplateVersion"
+                }
+            }
+        },
+        "InstanceSecurityGroupId": {
+            "Description": "Security Group ID for EC2 instances",
+            "Value": {
+                "Ref": "InstanceSG"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-InstanceSecurityGroupId"
+                }
+            }
+        },
+        "LoadBalancerSecurityGroupId": {
+            "Description": "Security Group ID for ALB",
+            "Value": {
+                "Ref": "LoadBalancerSG"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LoadBalancerSecurityGroupId"
+                }
+            }
+        },
+        "LogBucketName": {
+            "Description": "Centralized S3 Log Bucket",
             "Value": {
                 "Ref": "LogBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LogBucketName"
+                }
+            }
+        },
+        "LogBucketArn": {
+            "Description": "ARN of the S3 Log Bucket",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LogBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LogBucketArn"
+                }
+            }
+        },
+        "CPUAlarmHighName": {
+            "Description": "Name of the High CPU CloudWatch Alarm",
+            "Value": {
+                "Ref": "CPUAlarmHigh"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CPUAlarmHigh"
+                }
+            }
+        },
+        "CPUAlarmLowName": {
+            "Description": "Name of the Low CPU CloudWatch Alarm",
+            "Value": {
+                "Ref": "CPUAlarmLow"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-CPUAlarmLow"
+                }
             }
         }
     }
