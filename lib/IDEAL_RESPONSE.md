@@ -1895,6 +1895,7 @@ output "cloudtrail_global_service_events_enabled" {
 # provider.tf
 
 ```hcl
+
 terraform {
   required_version = ">= 1.4.0"
   required_providers {
@@ -1918,4 +1919,5 @@ provider "aws" {
   alias  = "us_west_1"
   region = var.secondary_region
 }
+
 ```
