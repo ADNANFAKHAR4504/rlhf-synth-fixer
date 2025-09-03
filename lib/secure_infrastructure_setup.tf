@@ -822,7 +822,7 @@ resource "aws_lb_listener" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                = "web-asg"
+  name                = "web-asg-${local.environment}-${local.suffix}"
   vpc_zone_identifier = aws_subnet.public[*].id
   target_group_arns   = [aws_lb_target_group.web.arn]
   health_check_type   = "ELB"
