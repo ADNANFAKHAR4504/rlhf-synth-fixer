@@ -31,5 +31,7 @@
     "Route Tables",
     "Route 53",
     "RDS"
-  ]
+  ],
+  "author": "olatunjym",
+  "dockerS3Location": ""
 }
