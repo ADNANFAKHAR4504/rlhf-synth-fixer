@@ -63,7 +63,7 @@ const getBucketName = (): string => {
 
   throw new Error(
     'No bucket name found in outputs. Available outputs: ' +
-    JSON.stringify(outputs, null, 2)
+      JSON.stringify(outputs, null, 2)
   );
 };
 
@@ -94,7 +94,9 @@ describe('TapStack Integration Tests', () => {
       expect(match).toBeTruthy();
       if (match) {
         const [, envSuffix, stackName] = match;
-        console.log(`Environment suffix: ${envSuffix}, Stack name: ${stackName}`);
+        console.log(
+          `Environment suffix: ${envSuffix}, Stack name: ${stackName}`
+        );
 
         // Environment suffix should be alphanumeric and valid
         expect(envSuffix).toMatch(/^[a-z0-9]+$/);
@@ -107,7 +109,9 @@ describe('TapStack Integration Tests', () => {
         // In local development, it might be 'dev'
         if (process.env.CI || process.env.ENVIRONMENT_SUFFIX) {
           expect(envSuffix).not.toBe('dev');
-          console.log(`CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`);
+          console.log(
+            `CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`
+          );
         } else {
           console.log(`Local development environment - suffix: ${envSuffix}`);
         }
@@ -255,7 +259,9 @@ describe('TapStack Integration Tests', () => {
       expect(bucketName.length).toBeLessThanOrEqual(63);
       expect(bucketName).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
       expect(bucketName).not.toMatch(/--/); // No consecutive hyphens
-      console.log(`✅ Bucket name ${bucketName} has valid S3 format (length: ${bucketName.length})`);
+      console.log(
+        `✅ Bucket name ${bucketName} has valid S3 format (length: ${bucketName.length})`
+      );
     });
 
     test('should demonstrate bucket naming edge cases', () => {
@@ -263,7 +269,9 @@ describe('TapStack Integration Tests', () => {
       // by showing the current bucket name and explaining the validation
       console.log(`Current bucket name: ${bucketName}`);
       console.log(`Bucket name length: ${bucketName.length}`);
-      console.log(`Bucket name pattern: ${bucketName.match(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/) ? 'Valid' : 'Invalid'}`);
+      console.log(
+        `Bucket name pattern: ${bucketName.match(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/) ? 'Valid' : 'Invalid'}`
+      );
 
       // Verify the bucket name follows our expected pattern
       expect(bucketName).toMatch(/^tap-storage-[a-z0-9]+-[a-z0-9]+$/);
@@ -283,7 +291,9 @@ describe('TapStack Integration Tests', () => {
         // In local development, it might be 'dev'
         if (process.env.CI || process.env.ENVIRONMENT_SUFFIX) {
           expect(envSuffix).not.toBe('dev');
-          console.log(`CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`);
+          console.log(
+            `CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`
+          );
         } else {
           console.log(`Local development environment - suffix: ${envSuffix}`);
         }

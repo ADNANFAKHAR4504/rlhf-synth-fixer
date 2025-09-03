@@ -90,9 +90,14 @@ describe('TapStack Unit Tests', () => {
   describe('Basic Functionality', () => {
     test('should create TapStack with different environment suffixes', () => {
       const environments = [
-        'dev', 'staging', 'prod',  // Traditional environments
-        'pr123', 'env456', '789',  // CI/CD alphanumeric environments
-        'abc123def', 'deploy-2024' // Complex CI/CD environments
+        'dev',
+        'staging',
+        'prod', // Traditional environments
+        'pr123',
+        'env456',
+        '789', // CI/CD alphanumeric environments
+        'abc123def',
+        'deploy-2024', // Complex CI/CD environments
       ];
 
       environments.forEach(env => {
@@ -113,7 +118,7 @@ describe('TapStack Unit Tests', () => {
         'Stack@#$%^&*()',
         'Stack-With-Hyphens',
         'Stack.With.Dots',
-        'Stack_With_Underscores'
+        'Stack_With_Underscores',
       ];
 
       specialStackNames.forEach(stackName => {
@@ -145,16 +150,52 @@ describe('TapStack Unit Tests', () => {
   describe('Bucket Naming Logic', () => {
     test('should generate valid bucket names for different stack names', () => {
       const testCases = [
-        { stackName: 'TestStack', env: 'dev', expectedPattern: /^tap-storage-dev-teststack$/ },
-        { stackName: 'Stack@#$%^&*()', env: 'prod', expectedPattern: /^tap-storage-prod-stack$/ },
-        { stackName: 'Stack-With-Hyphens', env: 'staging', expectedPattern: /^tap-storage-staging-stackwithhyphens$/ },
-        { stackName: 'Stack.With.Dots', env: 'dev', expectedPattern: /^tap-storage-dev-stackwithdots$/ },
-        { stackName: 'Stack_With_Underscores', env: 'prod', expectedPattern: /^tap-storage-prod-stackwithunderscores$/ },
+        {
+          stackName: 'TestStack',
+          env: 'dev',
+          expectedPattern: /^tap-storage-dev-teststack$/,
+        },
+        {
+          stackName: 'Stack@#$%^&*()',
+          env: 'prod',
+          expectedPattern: /^tap-storage-prod-stack$/,
+        },
+        {
+          stackName: 'Stack-With-Hyphens',
+          env: 'staging',
+          expectedPattern: /^tap-storage-staging-stackwithhyphens$/,
+        },
+        {
+          stackName: 'Stack.With.Dots',
+          env: 'dev',
+          expectedPattern: /^tap-storage-dev-stackwithdots$/,
+        },
+        {
+          stackName: 'Stack_With_Underscores',
+          env: 'prod',
+          expectedPattern: /^tap-storage-prod-stackwithunderscores$/,
+        },
         // CI/CD environment suffixes (alphanumeric)
-        { stackName: 'TestStack', env: 'pr123', expectedPattern: /^tap-storage-pr123-teststack$/ },
-        { stackName: 'TestStack', env: 'env456', expectedPattern: /^tap-storage-env456-teststack$/ },
-        { stackName: 'TestStack', env: '789', expectedPattern: /^tap-storage-789-teststack$/ },
-        { stackName: 'TestStack', env: 'abc123def', expectedPattern: /^tap-storage-abc123def-teststack$/ }
+        {
+          stackName: 'TestStack',
+          env: 'pr123',
+          expectedPattern: /^tap-storage-pr123-teststack$/,
+        },
+        {
+          stackName: 'TestStack',
+          env: 'env456',
+          expectedPattern: /^tap-storage-env456-teststack$/,
+        },
+        {
+          stackName: 'TestStack',
+          env: '789',
+          expectedPattern: /^tap-storage-789-teststack$/,
+        },
+        {
+          stackName: 'TestStack',
+          env: 'abc123def',
+          expectedPattern: /^tap-storage-abc123def-teststack$/,
+        },
       ];
 
       testCases.forEach(({ stackName, env, expectedPattern }) => {
@@ -187,12 +228,12 @@ describe('TapStack Unit Tests', () => {
     test('should handle CI/CD alphanumeric environment suffixes', () => {
       // Test various CI/CD environment suffixes that are alphanumeric
       const ciCdEnvironments = [
-        'pr123',      // Pull request number
-        'env456',     // Environment identifier
-        '789',        // Numeric only
-        'abc123def',  // Mixed alphanumeric
+        'pr123', // Pull request number
+        'env456', // Environment identifier
+        '789', // Numeric only
+        'abc123def', // Mixed alphanumeric
         'branch-feature', // Branch name
-        'deploy-2024'     // Deployment identifier
+        'deploy-2024', // Deployment identifier
       ];
 
       ciCdEnvironments.forEach(env => {
@@ -240,8 +281,6 @@ describe('TapStack Unit Tests', () => {
       });
       expect(stack).toBeDefined();
       expect(stack).toBeInstanceOf(TapStack);
-
-
     });
 
     test('should handle bucket name ending with hyphen', () => {
@@ -250,13 +289,12 @@ describe('TapStack Unit Tests', () => {
       // The bucket name format is: tap-storage-{env}-{sanitizedStackName}
       // If sanitizedStackName is empty (after removing special chars), we get: tap-storage-dev-
       // This should trigger the endsWith('-') condition
-      const stack = new TapStack('@#$%^&*()', { // Stack name with only special chars
+      const stack = new TapStack('@#$%^&*()', {
+        // Stack name with only special chars
         environmentSuffix: 'dev',
       });
       expect(stack).toBeDefined();
       expect(stack).toBeInstanceOf(TapStack);
-
-
     });
   });
 });
