@@ -266,8 +266,8 @@ rds_instance = aws.rds.Instance(f"{prefix.lower()}-rds-instance",
     tags={**common_tags, "Name": f"{prefix}-RDS-Instance"}
 )
 
-# Update DB host parameter with actual RDS endpoint
-db_host_param.value = rds_instance.endpoint
+# Note: RDS endpoint is available as rds_instance.endpoint
+# Parameter Store values cannot be updated after creation in this way
 
 # Create launch template
 launch_template = aws.ec2.LaunchTemplate(f"{prefix.lower()}-launch-template",
