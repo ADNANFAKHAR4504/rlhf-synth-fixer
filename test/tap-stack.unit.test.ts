@@ -25,6 +25,10 @@ jest.mock('@pulumi/pulumi', () => ({
     create: jest.fn().mockImplementation((value) => mockOutput),
   },
   output: jest.fn().mockImplementation((value) => mockOutputWithApply),
+  asset: {
+    AssetArchive: jest.fn().mockImplementation(() => ({ id: 'mock-asset-archive' })),
+    StringAsset: jest.fn().mockImplementation(() => ({ id: 'mock-string-asset' })),
+  },
 }));
 
 // Mock AWS SDK
@@ -41,6 +45,11 @@ jest.mock('@pulumi/aws', () => ({
     RouteTableAssociation: jest.fn().mockImplementation(() => ({ id: mockOutput })),
     SecurityGroup: jest.fn().mockImplementation(() => ({ id: mockOutput })),
     LaunchTemplate: jest.fn().mockImplementation(() => ({ id: mockOutput })),
+    Instance: jest.fn().mockImplementation(() => ({
+      id: mockOutput,
+      publicIp: mockOutput,
+      privateIp: mockOutput,
+    })),
     getAmi: jest.fn().mockResolvedValue({ id: 'ami-12345' }),
   },
   lb: {
@@ -119,6 +128,27 @@ jest.mock('@pulumi/aws', () => ({
   wafv2: {
     WebAcl: jest.fn().mockImplementation(() => ({
       id: mockOutput,
+      arn: mockOutput,
+    })),
+  },
+  kms: {
+    Key: jest.fn().mockImplementation(() => ({
+      id: mockOutput,
+      keyId: mockOutput,
+      arn: mockOutput,
+    })),
+  },
+  s3: {
+    Bucket: jest.fn().mockImplementation(() => ({
+      id: mockOutput,
+      bucket: mockOutput,
+      arn: mockOutput,
+    })),
+  },
+  lambda: {
+    Function: jest.fn().mockImplementation(() => ({
+      id: mockOutput,
+      name: mockOutput,
       arn: mockOutput,
     })),
   },
@@ -202,8 +232,14 @@ describe('WebApp Infrastructure Unit Tests', () => {
 
       // Security and monitoring
       expect(aws.secretsmanager.Secret).toHaveBeenCalled();
-      expect(aws.iam.Role).toHaveBeenCalledTimes(2);
+      expect(aws.iam.Role).toHaveBeenCalledTimes(3);
       expect(aws.cloudwatch.LogGroup).toHaveBeenCalled();
+
+      // New resources
+      expect(aws.kms.Key).toHaveBeenCalled();
+      expect(aws.s3.Bucket).toHaveBeenCalled();
+      expect(aws.lambda.Function).toHaveBeenCalled();
+      expect(aws.ec2.Instance).toHaveBeenCalledTimes(3);
 
       // Backup
       expect(aws.backup.Vault).toHaveBeenCalled();
@@ -234,8 +270,11 @@ describe('WebApp Infrastructure Unit Tests', () => {
       expect(aws.ec2.SecurityGroup).toHaveBeenCalledTimes(3);
 
       // IAM roles for least privilege
-      expect(aws.iam.Role).toHaveBeenCalledTimes(2);
+      expect(aws.iam.Role).toHaveBeenCalledTimes(3);
       expect(aws.iam.Policy).toHaveBeenCalled();
+
+      // Encryption
+      expect(aws.kms.Key).toHaveBeenCalled();
 
       // Secrets management
       expect(aws.secretsmanager.Secret).toHaveBeenCalled();
@@ -351,6 +390,162 @@ describe('WebApp Infrastructure Unit Tests', () => {
           new TapStack('test-stack', { environmentSuffix: env });
         }).not.toThrow();
       });
+    });
+  });
+
+  describe('Resource Validation', () => {
+    it('should validate KMS encryption setup', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.kms.Key).toHaveBeenCalled();
+    });
+
+    it('should validate S3 storage configuration', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.s3.Bucket).toHaveBeenCalled();
+    });
+
+    it('should validate Lambda function setup', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.lambda.Function).toHaveBeenCalled();
+    });
+
+    it('should validate EC2 instances configuration', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.ec2.Instance).toHaveBeenCalledTimes(3); // bastion + 2 web servers
+    });
+
+    it('should validate IAM roles and policies', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.iam.Role).toHaveBeenCalledTimes(3); // ec2, backup, lambda
+      expect(aws.iam.RolePolicyAttachment).toHaveBeenCalledTimes(3); // ec2 policy + ssm + backup
+    });
+  });
+
+  describe('Output Validation', () => {
+    it('should expose all required outputs from TapStack', () => {
+      const stack = new TapStack('test-stack', {});
+      
+      expect(stack.albDnsName).toBeDefined();
+      expect(stack.cloudFrontDomainName).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.rdsEndpoint).toBeDefined();
+      expect(stack.publicSubnetIds).toBeDefined();
+      expect(stack.privateSubnetIds).toBeDefined();
+      expect(stack.autoScalingGroupName).toBeDefined();
+      expect(stack.targetGroupArn).toBeDefined();
+      expect(stack.launchTemplateId).toBeDefined();
+      expect(stack.secretArn).toBeDefined();
+      expect(stack.backupVaultName).toBeDefined();
+      expect(stack.bastionInstanceId).toBeDefined();
+      expect(stack.webServer1Id).toBeDefined();
+      expect(stack.webServer2Id).toBeDefined();
+      expect(stack.s3BucketName).toBeDefined();
+      expect(stack.kmsKeyId).toBeDefined();
+      expect(stack.lambdaFunctionName).toBeDefined();
+    });
+
+    it('should validate WebAppDeploymentStack properties', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      
+      expect(webApp.vpc).toBeDefined();
+      expect(webApp.publicSubnet).toBeDefined();
+      expect(webApp.privateSubnet).toBeDefined();
+      expect(webApp.alb).toBeDefined();
+      expect(webApp.rdsInstance).toBeDefined();
+      expect(webApp.autoScalingGroup).toBeDefined();
+      expect(webApp.kmsKey).toBeDefined();
+      expect(webApp.s3Bucket).toBeDefined();
+      expect(webApp.lambdaFunction).toBeDefined();
+      expect(webApp.bastionInstance).toBeDefined();
+      expect(webApp.webServer1).toBeDefined();
+      expect(webApp.webServer2).toBeDefined();
+    });
+  });
+
+  describe('Configuration Validation', () => {
+    it('should handle different AWS regions', () => {
+      const regions = ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'];
+      
+      regions.forEach(region => {
+        expect(() => {
+          WebAppDeploymentStack.create(region, 'test', {});
+        }).not.toThrow();
+      });
+    });
+
+    it('should handle different environment suffixes', () => {
+      const environments = ['dev', 'staging', 'prod', 'test', 'demo'];
+      
+      environments.forEach(env => {
+        expect(() => {
+          new TapStack('test-stack', { environmentSuffix: env });
+        }).not.toThrow();
+      });
+    });
+
+    it('should handle complex tag configurations', () => {
+      const complexTags = {
+        Environment: 'production',
+        Project: 'webapp',
+        Owner: 'team-alpha',
+        CostCenter: '12345',
+        Compliance: 'SOC2',
+        DataClassification: 'internal',
+        BackupRequired: 'true',
+        MonitoringLevel: 'high'
+      };
+      
+      expect(() => {
+        new TapStack('test-stack', { tags: complexTags });
+      }).not.toThrow();
+    });
+  });
+
+  describe('Security Validation', () => {
+    it('should validate encryption at rest', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.kms.Key).toHaveBeenCalled();
+      expect(aws.s3.Bucket).toHaveBeenCalled();
+    });
+
+    it('should validate network security', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.ec2.SecurityGroup).toHaveBeenCalledTimes(3);
+      expect(aws.wafv2.WebAcl).toHaveBeenCalled();
+    });
+
+    it('should validate access control', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.iam.Role).toHaveBeenCalledTimes(3);
+      expect(aws.secretsmanager.Secret).toHaveBeenCalled();
+    });
+  });
+
+  describe('Scalability Validation', () => {
+    it('should validate auto scaling setup', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.autoscaling.Group).toHaveBeenCalled();
+      expect(aws.lb.TargetGroup).toHaveBeenCalled();
+    });
+
+    it('should validate multi-AZ deployment', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.ec2.Subnet).toHaveBeenCalledTimes(4); // 2 public + 2 private
+      expect(aws.ec2.NatGateway).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('Monitoring and Observability', () => {
+    it('should validate logging configuration', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.cloudwatch.LogGroup).toHaveBeenCalled();
+    });
+
+    it('should validate backup configuration', () => {
+      const webApp = WebAppDeploymentStack.create('us-east-1', 'test', {});
+      expect(aws.backup.Vault).toHaveBeenCalled();
+      expect(aws.backup.Plan).toHaveBeenCalled();
+      expect(aws.backup.Selection).toHaveBeenCalled();
     });
   });
 });

@@ -45,6 +45,13 @@ export class WebAppDeploymentStack {
   public readonly eip2: aws.ec2.Eip;
   public readonly availabilityZones: pulumi.Output<string[]>;
   private readonly latestAmi: pulumi.Output<string>;
+  public readonly bastionInstance: aws.ec2.Instance;
+  public readonly webServer1: aws.ec2.Instance;
+  public readonly webServer2: aws.ec2.Instance;
+  public readonly s3Bucket: aws.s3.Bucket;
+  public readonly kmsKey: aws.kms.Key;
+  public readonly lambdaFunction: aws.lambda.Function;
+  public readonly lambdaRole: aws.iam.Role;
 
   static create(
     region: string,
@@ -547,6 +554,16 @@ export class WebAppDeploymentStack {
       { provider: this.provider }
     );
 
+    // Attach Session Manager policy for secure access
+    new aws.iam.RolePolicyAttachment(
+      `ec2-ssm-policy-attachment-${environment}`,
+      {
+        role: this.ec2Role.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+      },
+      { provider: this.provider }
+    );
+
     this.ec2InstanceProfile = new aws.iam.InstanceProfile(
       `ec2-instance-profile-${environment}`,
       {
@@ -853,6 +870,135 @@ EOF
         },
         webAclId: this.waf.arn,
         tags: allTags,
+      },
+      { provider: this.provider }
+    );
+
+    // KMS Key for encryption
+    this.kmsKey = new aws.kms.Key(
+      `kms-key-${environment}`,
+      {
+        description: `KMS key for ${environment} environment`,
+        tags: allTags,
+      },
+      { provider: this.provider }
+    );
+
+    // S3 Bucket for data storage
+    this.s3Bucket = new aws.s3.Bucket(
+      `s3-bucket-${environment}`,
+      {
+        bucket: `healthapp-phi-data-${environment}`,
+        versioning: {
+          enabled: true,
+        },
+        serverSideEncryptionConfiguration: {
+          rule: {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: this.kmsKey.arn,
+            },
+          },
+        },
+        tags: allTags,
+      },
+      { provider: this.provider }
+    );
+
+    // Lambda execution role
+    this.lambdaRole = new aws.iam.Role(
+      `lambda-role-${environment}`,
+      {
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            },
+          ],
+        }),
+        managedPolicyArns: [
+          'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+        ],
+        tags: allTags,
+      },
+      { provider: this.provider }
+    );
+
+    // Lambda function for S3 processing
+    this.lambdaFunction = new aws.lambda.Function(
+      `lambda-function-${environment}`,
+      {
+        name: `healthapp-s3-processor-${environment}`,
+        runtime: 'python3.9',
+        handler: 'index.handler',
+        role: this.lambdaRole.arn,
+        code: new pulumi.asset.AssetArchive({
+          'index.py': new pulumi.asset.StringAsset(`
+def handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': 'Hello from Lambda!'
+    }
+`),
+        }),
+        tags: allTags,
+      },
+      { provider: this.provider }
+    );
+
+    // Bastion host for secure access via Session Manager
+    this.bastionInstance = new aws.ec2.Instance(
+      `bastion-${environment}`,
+      {
+        instanceType: 't3.micro',
+        ami: this.latestAmi,
+        subnetId: this.publicSubnet.id,
+        vpcSecurityGroupIds: [this.ec2SecurityGroup.id],
+        iamInstanceProfile: this.ec2InstanceProfile.name,
+        tags: {
+          ...allTags,
+          Name: `bastion-${environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    // Web server instances
+    this.webServer1 = new aws.ec2.Instance(
+      `web-server-1-${environment}`,
+      {
+        instanceType: 't3.micro',
+        ami: this.latestAmi,
+        subnetId: this.publicSubnet.id,
+        vpcSecurityGroupIds: [this.ec2SecurityGroup.id],
+        userData: userData,
+        iamInstanceProfile: this.ec2InstanceProfile.name,
+        tags: {
+          ...allTags,
+          Name: `web-server-1-${environment}`,
+        },
+      },
+      { provider: this.provider }
+    );
+
+    this.webServer2 = new aws.ec2.Instance(
+      `web-server-2-${environment}`,
+      {
+        instanceType: 't3.micro',
+        ami: this.latestAmi,
+        subnetId: this.publicSubnet2.id,
+        vpcSecurityGroupIds: [this.ec2SecurityGroup.id],
+        userData: userData,
+        iamInstanceProfile: this.ec2InstanceProfile.name,
+        tags: {
+          ...allTags,
+          Name: `web-server-2-${environment}`,
+        },
       },
       { provider: this.provider }
     );

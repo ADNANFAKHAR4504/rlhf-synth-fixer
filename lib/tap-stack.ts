@@ -52,6 +52,12 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly launchTemplateId: pulumi.Output<string>;
   public readonly secretArn: pulumi.Output<string>;
   public readonly backupVaultName: pulumi.Output<string>;
+  public readonly bastionInstanceId: pulumi.Output<string>;
+  public readonly webServer1Id: pulumi.Output<string>;
+  public readonly webServer2Id: pulumi.Output<string>;
+  public readonly s3BucketName: pulumi.Output<string>;
+  public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly lambdaFunctionName: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -85,6 +91,12 @@ export class TapStack extends pulumi.ComponentResource {
     this.launchTemplateId = webApp.launchTemplate.id;
     this.secretArn = webApp.secret.arn;
     this.backupVaultName = webApp.backupVault.name;
+    this.bastionInstanceId = webApp.bastionInstance.id;
+    this.webServer1Id = webApp.webServer1.id;
+    this.webServer2Id = webApp.webServer2.id;
+    this.s3BucketName = webApp.s3Bucket.bucket;
+    this.kmsKeyId = webApp.kmsKey.keyId;
+    this.lambdaFunctionName = webApp.lambdaFunction.name;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -99,6 +111,12 @@ export class TapStack extends pulumi.ComponentResource {
       launchTemplateId: this.launchTemplateId,
       secretArn: this.secretArn,
       backupVaultName: this.backupVaultName,
+      bastionInstanceId: this.bastionInstanceId,
+      webServer1Id: this.webServer1Id,
+      webServer2Id: this.webServer2Id,
+      s3BucketName: this.s3BucketName,
+      kmsKeyId: this.kmsKeyId,
+      lambdaFunctionName: this.lambdaFunctionName,
     });
   }
 }
