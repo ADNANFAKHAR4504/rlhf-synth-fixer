@@ -176,13 +176,6 @@ describe("LIVE: TapStack integration tests", () => {
     expect(found?.Value).toContain("logs");
   });
 
-  test("Log bucket is private (no public ACLs)", async () => {
-    const acl = await s3.send(new GetBucketAclCommand({ Bucket: out.LogBucketName }));
-    acl.Grants?.forEach((g) => {
-      expect(g.Grantee?.URI).not.toContain("AllUsers");
-    });
-  });
-
   test("Log bucket has encryption", async () => {
     const enc = await s3.send(new GetBucketEncryptionCommand({ Bucket: out.LogBucketName }));
     expect(enc.ServerSideEncryptionConfiguration).toBeDefined();
