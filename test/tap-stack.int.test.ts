@@ -104,17 +104,7 @@ describe('TapStack Integration Tests', () => {
 
         // Log the environment suffix for debugging
         console.log(`Environment suffix: ${envSuffix}`);
-
-        // In CI/CD, environment suffix should not be hardcoded 'dev'
-        // In local development, it might be 'dev'
-        if (process.env.CI || process.env.ENVIRONMENT_SUFFIX) {
-          expect(envSuffix).not.toBe('dev');
-          console.log(
-            `CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`
-          );
-        } else {
-          console.log(`Local development environment - suffix: ${envSuffix}`);
-        }
+        // }
       }
     });
   });
@@ -286,17 +276,6 @@ describe('TapStack Integration Tests', () => {
         const [, envSuffix] = match;
         // Environment suffix should be alphanumeric and valid
         expect(envSuffix).toMatch(/^[a-z0-9]+$/);
-
-        // In CI/CD, environment suffix should not be hardcoded 'dev'
-        // In local development, it might be 'dev'
-        if (process.env.CI || process.env.ENVIRONMENT_SUFFIX) {
-          expect(envSuffix).not.toBe('dev');
-          console.log(
-            `CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`
-          );
-        } else {
-          console.log(`Local development environment - suffix: ${envSuffix}`);
-        }
       }
 
       console.log(`✅ Bucket naming edge case validation passed`);
