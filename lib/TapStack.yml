@@ -71,6 +71,12 @@ Resources:
             Action:
               - kms:Decrypt
               - kms:GenerateDataKey*
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
             Resource: '*'
       Tags:
         - Key: Environment
