@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "intermediate",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "cloudformation",
+    "aws",
+    "vpc",
+    "ec2",
+    "rds",
+    "autoscaling"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "AutoScaling",
+    "RDS"
+  ]
+}

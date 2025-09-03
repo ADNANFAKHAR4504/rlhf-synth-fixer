@@ -74,17 +74,8 @@ elif [ "$PLATFORM" = "cdktf" ]; then
       echo "❌ .gen/aws missing after cdktf get; aborting"
       exit 1
     fi
-
-    # Ensure CDKTF core deps are present to satisfy .gen imports
-    export GOPROXY=${GOPROXY:-direct}
-    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    go clean -modcache || true
-    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
-    go mod tidy
+    # Go modules are prepared during build; avoid cache-clearing and extra tidying here
   fi
-
   npm run cdktf:deploy
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
@@ -108,13 +99,43 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   cd lib
   
+
+  # Always remove any stale Terraform plan to avoid cross-run reuse
+  rm -f tfplan
+  
+  # Check if plan file exists
+
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
-    npm run tf:deploy
+    # Try to deploy with the plan file
+    if ! npm run tf:deploy; then
+      echo "⚠️ Deployment with plan file failed, checking for state lock issues..."
+      
+      # Extract lock ID from error output if present
+      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
+      
+      if [ -n "$LOCK_ID" ]; then
+        echo "🔓 Detected stuck lock ID: $LOCK_ID. Attempting to force unlock..."
+        terraform force-unlock -force "$LOCK_ID" || echo "Force unlock failed"
+        echo "🔄 Retrying deployment after unlock..."
+        npm run tf:deploy || echo "Deployment still failed after unlock attempt"
+      else
+        echo "❌ Deployment failed but no lock ID detected. Manual intervention may be required."
+      fi
+    fi
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
     terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
-    terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan || terraform apply -auto-approve -lock=true -lock-timeout=300s || echo "Deployment failed"
+    
+    # Try direct apply with lock timeout, and handle lock issues
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan; then
+      echo "⚠️ Direct apply with plan failed, trying without plan..."
+      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s; then
+        echo "❌ All deployment attempts failed. Check for state lock issues."
+        # List any potential locks
+        terraform show -json 2>&1 | grep -i lock || echo "No lock information available"
+      fi
+    fi
   fi
   
   cd ..
@@ -129,14 +150,27 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-  export PYTHONPATH=.:bin
-  pipenv run pulumi-create-stack
-  echo "Deploying infrastructure ..."
-  pipenv run pulumi-deploy
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Go Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+    cd lib
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    echo "Deploying infrastructure ..."
+    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    cd ..
+  else
+    echo "🔧 Python Pulumi project detected"
+    export PYTHONPATH=.:bin
+    pipenv run pulumi-create-stack
+    echo "Deploying infrastructure ..."
+    pipenv run pulumi-deploy
+  fi
 
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python, pulumi+java"
   exit 1
 fi
 

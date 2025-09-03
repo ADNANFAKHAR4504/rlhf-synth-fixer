@@ -22,19 +22,25 @@ fi
 
 # Run unit tests based on platform and language
 if [ "$LANGUAGE" = "java" ]; then
-  echo "✅ Java project detected, running JUnit tests..."
-  chmod +x ./gradlew
-  ./gradlew test jacocoTestReport --build-cache --no-daemon
-  
-  echo "📊 Checking for generated coverage reports..."
-  if [ -d "build/reports/jacoco" ]; then
-    echo "JaCoCo directory structure:"
-    find build/reports/jacoco -type f -name "*.xml" -o -name "*.html" | head -10
-  else
-    echo "⚠️ No JaCoCo reports directory found"
-    echo "Build directory contents:"
-    ls -la build/ 2>/dev/null || echo "No build directory found"
-  fi
+  case "$PLATFORM" in
+    pulumi|cdk|cdktf)
+      echo "✅ $PLATFORM Java project detected, running JUnit tests..."
+
+      chmod +x ./gradlew
+
+      ./gradlew test jacocoTestReport --build-cache --no-daemon
+
+      echo "📊 Checking for generated coverage reports..."
+        if [ -d "build/reports/jacoco" ]; then
+          echo "JaCoCo directory structure:"
+          find build/reports/jacoco -type f -name "*.xml" -o -name "*.html" | head -10
+        else
+          echo "⚠️ No JaCoCo reports directory found"
+          echo "Build directory contents:"
+          ls -la build/ 2>/dev/null || echo "No build directory found"
+        fi
+      ;;
+  esac
 
 elif [ "$LANGUAGE" = "ts" ] && [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ Terraform TypeScript project detected, running unit tests..."
@@ -63,15 +69,7 @@ elif [ "$LANGUAGE" = "go" ]; then
       echo "❌ .gen/aws missing after cdktf get; aborting"
       exit 1
     fi
-
-    # Ensure CDKTF core deps are present to satisfy .gen imports
-    export GOPROXY=${GOPROXY:-direct}
-    export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-    go clean -modcache || true
-    go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
-    go mod tidy
+    # Go modules prepared during build; skipping go get/tidy here
   fi
 
   if [ -d "lib" ]; then

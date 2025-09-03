@@ -1,0 +1,40 @@
+{
+  "po_id": "trainr961",
+  "task_id": "trainr961",
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-08-23T15:54:40+00:00",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Infrastructure QA and Management",
+    "Network Configuration",
+    "Database Management",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "CloudTrail",
+    "Security Hub",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Route Tables",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

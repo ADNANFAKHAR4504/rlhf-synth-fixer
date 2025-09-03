@@ -24,38 +24,27 @@ elif [ "$PLATFORM" = "cdktf" ]; then
     echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
     rm -f terraform.tfstate
   fi
+  # .gen should be restored via cache/artifacts; generate only if missing
 
-  echo "Pre-fetching Go modules (go mod download)"
-  export GOPROXY=${GOPROXY:-direct}
-  export GONOSUMDB=${GONOSUMDB:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-  export GONOPROXY=${GONOPROXY:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-  export GOPRIVATE=${GOPRIVATE:-github.com/cdktf/*,github.com/hashicorp/terraform-cdk-go/*}
-  
-  if [ -f "go.mod" ]; then
-    go mod download || true
-    go mod download github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0 || true
-  fi
-
-  npm run cdktf:get
-
-  ensure_gen() {
-    if [ ! -d ".gen" ]; then
-      echo "❌ .gen not found; generating..."
-      npx --yes cdktf get
-    fi
-    if [ ! -d ".gen/aws" ]; then
-      echo "❌ .gen/aws missing after cdktf get"
-      echo "Contents of .gen:"; ls -la .gen || true
-      exit 1
-    fi
-  }
-  ensure_gen
-
-  echo "Ensuring Go module deps are available (go mod tidy)"
-  go clean -modcache || true
-  go get github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0
-  go mod download github.com/hashicorp/terraform-cdk-go/cdktf@v0.21.0 || true
-  go mod tidy
+  case "$LANGUAGE" in
+    py|go|ts)
+      if [ ! -d ".gen" ]; then
+        echo "❌ No .gen directory found; generating..."
+        npx --yes cdktf get
+      fi
+      if [ -d ".gen/aws" ] || [ -d ".gen/providers/aws" ]; then
+        echo "✅ Found other language CDKTF generated provider directory in .gen"
+      else
+        echo "❌ No generated provider directory found after cdktf get."
+        echo "Contents of project root:"; ls -la || true
+        exit 1
+      fi
+      ;;
+    *)
+      echo "ℹ️ Skipping ensure_gen for LANGUAGE=$LANGUAGE"
+      ;;
+  esac
+  # Go modules are prepared during build; avoid extra operations here
 
   npm run cdktf:synth
 

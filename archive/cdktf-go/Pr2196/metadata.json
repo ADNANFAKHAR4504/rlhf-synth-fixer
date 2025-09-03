@@ -1,0 +1,36 @@
+{
+  "po_id": "trainr968",
+  "task_id": "security-configuration-as-code_CloudFormation_YAML_f8dk2lcx0weh",
+  "platform": "cdktf",
+  "language": "go",
+  "complexity": "hard",
+  "team": "infrastructure",
+  "startedAt": "2025-08-25T00:00:00Z",
+  "status": "in_progress",
+  "original_platform": "CloudFormation",
+  "original_language": "YAML",
+  "task_type": "Security Configuration as Code",
+  "description": "Set up security configurations for SecureApp project with IAM roles and policies for S3 and DynamoDB access",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Access Control",
+    "Database Management",
+    "Performance Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "IAM",
+    "S3",
+    "DynamoDB",
+    "AccessAnalyzer",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

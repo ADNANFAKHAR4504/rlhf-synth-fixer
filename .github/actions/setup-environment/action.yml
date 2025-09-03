@@ -1,37 +1,38 @@
+
 name: "Setup Environment"
-description: "Sets up Node.js, Python and Terraform environment and restores build artifacts"
+description: "Sets up Node.js, Python, Java and Terraform environment and restores build artifacts"
 inputs:
   node-version:
-    description: "Node.js version to use"
+    description: 'Node.js version to use'
     required: true
-    default: "22.17.0"
+    default: '22.17.0'
   download-artifacts:
-    description: "Whether to download build artifacts"
+    description: 'Whether to download build artifacts'
     required: false
-    default: "true"
+    default: 'true'
   language:
-    description: "Project language (ts, py, go, yaml, json, hcl)"
+    description: "Project language (ts, py, java, go, yaml, json, hcl)"
     required: false
     default: ''
   terraform-version:
-    description: "Terraform version to use"
+    description: 'Terraform version to use'
     required: false
-    default: "1.12.2"
+    default: '1.12.2'
   pulumi-version:
-    description: "Pulumi version to use"
+    description: 'Pulumi version to use'
     required: false
-    default: "3.109.0"
+    default: '3.109.0'
   upload-artifacts:
-    description: "Whether to upload build artifacts (only for build job)"
+    description: 'Whether to upload build artifacts (only for build job)'
     required: false
-    default: "false"
+    default: 'false'
   platform:
-    description: "The platform type (cdk, cdktf, cfn, pulumi, terraform)"
+    description: 'The platform type (cdk, cdktf, cfn, pulumi, terraform)'
     required: false
-    default: ""
+    default: ''
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Download build artifacts
       if: inputs.download-artifacts == 'true'
@@ -50,44 +51,64 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: "npm"
+        cache: 'npm'
 
     - name: Setup Python 3.12.11
       uses: actions/setup-python@v5
       with:
-        python-version: "3.12.11"
+        python-version: '3.12.11'
         check-latest: true
 
     - name: Setup Go 1.23.x
-      if: ${{ inputs.platform == 'cdktf' && inputs.language == 'go' }}
+      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
       uses: actions/setup-go@v5
       with:
         go-version: '1.23.12'
+        cache: false # We'll handle caching manually for better control
 
     - name: Cache Go modules
-      if: ${{ inputs.platform == 'cdktf' && inputs.language == 'go' }}
+      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
       uses: actions/cache@v4
       with:
         path: |
           ~/go/pkg/mod
           ~/.cache/go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('lib/go.sum') }}
+          ${{ github.workspace }}/.cache/go-build
+          ${{ github.workspace }}/.cache/go-mod
+        key: ${{ runner.os }}-go-${{ inputs.platform }}-${{ hashFiles('go.sum', 'lib/go.sum', '**/go.sum') }}
         restore-keys: |
+          ${{ runner.os }}-go-${{ inputs.platform }}-
           ${{ runner.os }}-go-
 
+    - name: Cache CDKTF .gen (Go)
+      if: ${{ (inputs.platform == 'cdktf' && inputs.language == 'go') || (inputs.platform == 'cdk' && inputs.language == 'go') }}
+      uses: actions/cache@v4
+      with:
+        path: .gen
+        key: ${{ runner.os }}-cdktf-gen-${{ hashFiles('cdktf.json', 'package-lock.json', 'package.json') }}
+        restore-keys: |
+          ${{ runner.os }}-cdktf-gen-
+
     - name: Setup Java 17
-      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      if: inputs.language == 'java' || inputs.platform == ''
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
+    - name: Cache Gradle Wrapper
+      if: inputs.language == 'java' || inputs.platform == ''
+      uses: actions/cache@v4
+      with:
+        path: ~/.gradle/wrapper/dists
+        key: gradle-wrapper-${{ hashFiles('**/gradle-wrapper.properties') }}
+        restore-keys: gradle-wrapper-
+
     - name: Setup Gradle
-      if: ${{ inputs.platform == 'pulumi' || inputs.platform == '' }}
+      if: ${{ inputs.language == 'java' || inputs.platform == '' }}
       uses: gradle/actions/setup-gradle@v4
       with:
         gradle-home-cache-cleanup: true
-
 
     - name: Setup Terraform
       if: ${{ inputs.platform == 'cdktf' || inputs.platform == 'tf' || inputs.platform == '' }}
@@ -120,6 +141,11 @@ runs:
         UPLOAD_ARTIFACTS: ${{ inputs.upload-artifacts }}
         PLATFORM: ${{ inputs.platform }}
         LANGUAGE: ${{ inputs.language }}
+        # Go environment variables for consistent caching
+        GOCACHE: ${{ github.workspace }}/.cache/go-build
+        GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
+        GOPROXY: https://proxy.golang.org,direct
+        GOSUMDB: sum.golang.org
 
     - name: Upload build artifacts
       if: inputs.upload-artifacts == 'true'
@@ -128,6 +154,7 @@ runs:
         name: build-artifacts
         include-hidden-files: true
         path: |
+          .gen/
           bin/
           lib/
           tests/
@@ -148,3 +175,6 @@ runs:
           config/
           .gradle/
           build/
+          go.mod
+          go.sum
+          tap.go
