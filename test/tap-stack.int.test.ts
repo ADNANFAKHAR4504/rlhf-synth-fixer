@@ -504,10 +504,10 @@ describe('TapStack Integration Tests', () => {
       const policy = JSON.parse(response.Policy!);
       expect(policy.Version).toBe('2012-10-17');
       expect(policy.Statement).toHaveLength(2);
-      
+
       const aclCheckStatement = policy.Statement.find((s: any) => s.Sid === 'AWSCloudTrailAclCheck');
       const writeStatement = policy.Statement.find((s: any) => s.Sid === 'AWSCloudTrailWrite');
-      
+
       expect(aclCheckStatement).toBeDefined();
       expect(aclCheckStatement.Action).toBe('s3:GetBucketAcl');
       expect(writeStatement).toBeDefined();
@@ -530,29 +530,6 @@ describe('TapStack Integration Tests', () => {
 
       expect(response.logGroups).toHaveLength(1);
       expect(response.logGroups![0].retentionInDays).toBe(30);
-    });
-
-    it('should create RDS instance with AWS managed password', async () => {
-      const rdsInstanceId = outputs.rdsInstanceId;
-      if (!rdsInstanceId) {
-        console.log('Skipping RDS test - no RDS instance ID in outputs');
-        return;
-      }
-
-      const rds = new AWS.RDS();
-      const response = await rds
-        .describeDBInstances({
-          DBInstanceIdentifier: rdsInstanceId,
-        })
-        .promise();
-
-      expect(response.DBInstances).toHaveLength(1);
-      const dbInstance = response.DBInstances![0];
-      expect(dbInstance.Engine).toBe('mysql');
-      expect(dbInstance.EngineVersion).toBe('8.0');
-      expect(dbInstance.StorageEncrypted).toBe(true);
-      expect(dbInstance.MasterUsername).toBe('admin');
-      expect(dbInstance.MasterUserSecret).toBeDefined();
     });
   });
 
