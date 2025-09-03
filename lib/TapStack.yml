@@ -1821,7 +1821,7 @@ Resources:
       ServiceRoleArn: !GetAtt CodeDeployRole.Arn
       DeploymentStyle:
         DeploymentType: BLUE_GREEN
-        DeploymentOption: WITH_TRAFFIC_CONTROL
+        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
       AutoRollbackConfiguration:
         Enabled: true
         Events:
