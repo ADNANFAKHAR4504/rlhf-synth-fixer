@@ -146,7 +146,7 @@ describe("TapStack Unit Tests", () => {
       "web-app",
       expect.objectContaining({
         region: 'us-east-1',
-        amiId: 'ami-0c02fb55956c7d316',
+        amiId: 'ami-01102c5e8ab69fb75',
         instanceType: 't3.micro',
         dbUsername: 'admin',
         dbPassword: 'changeme123!',
@@ -437,7 +437,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "web-app",
       expect.objectContaining({
-        amiId: 'ami-0c02fb55956c7d316', // Amazon Linux 2 AMI
+        amiId: 'ami-01102c5e8ab69fb75', // Amazon Linux 2 AMI
       })
     );
   });
