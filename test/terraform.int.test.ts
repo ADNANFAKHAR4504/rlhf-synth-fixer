@@ -3,7 +3,7 @@ import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwa
 import { DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
 import { DescribeListenersCommand, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { IAMClient } from "@aws-sdk/client-iam";
-import { DescribeKeyCommand, GetKeyRotationStatusCommand, KMSClient, ListKeysCommand, ListResourceTagsCommand } from "@aws-sdk/client-kms";
+import { GetKeyRotationStatusCommand, KMSClient, ListKeysCommand, ListResourceTagsCommand } from "@aws-sdk/client-kms";
 import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
 import { S3Client } from "@aws-sdk/client-s3";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
@@ -67,7 +67,7 @@ describe("Terraform E2E Integration: AWS Resources", () => {
     const sgs = await ec2.send(new DescribeSecurityGroupsCommand({}));
     ["alb", "web", "database"].forEach(sgType => {
       const sg = sgs.SecurityGroups?.find(
-        (sg: SecurityGroup) => sg.GroupName?.includes(`${projectName}-${sgType}`)
+        (sg: SecurityGroup) => sg.GroupName?.startsWith(`${projectName}-${sgType}-`)
       );
       expect(sg).toBeDefined();
       if (sgType === "alb") {
@@ -108,8 +108,8 @@ describe("Terraform E2E Integration: AWS Resources", () => {
     const keys = await kms.send(new ListKeysCommand({}));
     let foundKeyId: string | undefined;
     for (const key of keys.Keys || []) {
-      const keyMeta = await kms.send(new DescribeKeyCommand({ KeyId: key.KeyId! }));
       const tagsResp = await kms.send(new ListResourceTagsCommand({ KeyId: key.KeyId! }));
+      console.log("KMS Key Tags:", tagsResp.Tags);
       const hasProjectTag = tagsResp.Tags?.some(
         tag => tag.TagKey === "Name" && tag.TagValue === `${projectName}-kms-key`
       );
@@ -156,8 +156,8 @@ describe("Terraform E2E Integration: AWS Resources", () => {
     const elbv2 = new ElasticLoadBalancingV2Client({ region });
     const lbs = await elbv2.send(new DescribeLoadBalancersCommand({}));
     const alb = lbs.LoadBalancers?.find(
-      (lb: { LoadBalancerName?: string; State?: { Code?: string } }) =>
-        lb.LoadBalancerName === `${projectName}-alb`
+      (lb: { LoadBalancerName?: string; State?: { Code?: string }, LoadBalancerArn?: string }) =>
+        lb.LoadBalancerName?.startsWith(`${projectName}-alb`)
     );
     expect(alb).toBeDefined();
     expect(alb?.State?.Code).toBe("active");
@@ -166,7 +166,7 @@ describe("Terraform E2E Integration: AWS Resources", () => {
       (tg: { TargetGroupName?: string }) => tg.TargetGroupName === `${projectName}-web-tg`
     );
     expect(tg).toBeDefined();
-    const listeners = await elbv2.send(new DescribeListenersCommand({}));
+    const listeners = await elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: alb?.LoadBalancerArn }));
     expect(
       listeners.Listeners?.some(
         (listener: { Port?: number }) => listener.Port === 80
@@ -197,8 +197,8 @@ describe("Terraform E2E Integration: AWS Resources", () => {
       "rds-deadlock-count", "rds-replica-lag"
     ].forEach(alarmName => {
       const alarm = alarms.MetricAlarms?.find(
-        (alarm: { AlarmName?: string; AlarmActions?: string[]; OKActions?: string[] }) =>
-          alarm.AlarmName === `${projectName}-${alarmName}`
+        (alarm: { AlarmName?: string }) =>
+          alarm.AlarmName?.startsWith(`${projectName}-${alarmName}`)
       );
       expect(alarm).toBeDefined();
       expect(alarm?.AlarmActions?.length).toBeGreaterThan(0);
