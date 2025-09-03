@@ -32,10 +32,19 @@ for (const key of requiredKeys) {
 }
 
 // Detect region from outputs or env
-const region = process.env.AWS_REGION || outputs["region"] || outputs["aws_region"];
-if (!region) {
-  throw new Error("AWS region not set in environment or outputs.");
+function getOutputValue(key: string) {
+  const val = outputs[key];
+  if (val && typeof val === "object" && "value" in val) return val.value;
+  return val;
 }
+
+const region = process.env.AWS_REGION || getOutputValue("region") || getOutputValue("aws_region") || "us-west-2";
+const vpcId = getOutputValue("vpc_id");
+const mainBucketName = getOutputValue("s3_bucket_name");
+const rdsEndpoint = getOutputValue("rds_endpoint");
+const lbDns = getOutputValue("load_balancer_dns");
+const trailBucket = getOutputValue("cloudtrail_bucket_name");
+const webAclArn = getOutputValue("web_acl_arn");
 
 // Tag conventions
 const environment = process.env.ENVIRONMENT || "prod";
@@ -104,9 +113,8 @@ describe("Terraform AWS Infrastructure Integration", () => {
     const vpc = vpcList.find((v: AwsVpc) =>
       (v.Tags ?? []).some((t: Tag) => t.Key === vpcTag.Key && t.Value === vpcTag.Value)
     );
-    // Defensive check for VpcId
     expect(vpc).toBeDefined();
-    expect(vpc?.VpcId).toBe(outputs["vpc_id"]);
+    expect(vpc?.VpcId).toBe(vpcId);
   });
 
   test("Main S3 bucket exists with correct tags", async () => {
@@ -118,7 +126,6 @@ describe("Terraform AWS Infrastructure Integration", () => {
       console.error("Error listing S3 buckets:", err);
       throw err;
     }
-    const mainBucketName = outputs["s3_bucket_name"];
     const mainBucket = (buckets.Buckets ?? []).find((b: Bucket) => b.Name === mainBucketName);
     if (!mainBucket) {
       console.error("Main S3 bucket", mainBucketName, "not found. Available:", buckets.Buckets?.map(b => b.Name));
@@ -148,9 +155,8 @@ describe("Terraform AWS Infrastructure Integration", () => {
       console.error("Error describing RDS instances:", err);
       throw err;
     }
-    const rdsEndpoint = outputs["rds_endpoint"];
     const db = (dbs.DBInstances ?? []).find(d =>
-      d.Endpoint?.Address && rdsEndpoint.includes(d.Endpoint.Address)
+      d.Endpoint?.Address && rdsEndpoint === d.Endpoint.Address
     );
     if (!db) {
       console.error("RDS instance with endpoint", rdsEndpoint, "not found. Available:", dbs.DBInstances?.map(d => d.Endpoint?.Address));
@@ -167,7 +173,6 @@ describe("Terraform AWS Infrastructure Integration", () => {
       console.error("Error describing load balancers:", err);
       throw err;
     }
-    const lbDns = outputs["load_balancer_dns"];
     const lb = (lbs.LoadBalancers ?? []).find((l: LoadBalancer) =>
       l.DNSName === lbDns
     );
@@ -186,7 +191,6 @@ describe("Terraform AWS Infrastructure Integration", () => {
       console.error("Error describing CloudTrails:", err);
       throw err;
     }
-    const trailBucket = outputs["cloudtrail_bucket_name"];
     const trail = (trails.trailList ?? []).find(t =>
       t.S3BucketName === trailBucket
     );
@@ -205,7 +209,6 @@ describe("Terraform AWS Infrastructure Integration", () => {
       console.error("Error listing WAF Web ACLs:", err);
       throw err;
     }
-    const webAclArn = outputs["web_acl_arn"];
     const acl = (acls.WebACLs ?? []).find((a: WebACLSummary) => a.ARN === webAclArn);
     if (!acl) {
       console.error("Web ACL with ARN", webAclArn, "not found. Available:", acls.WebACLs?.map(a => a.ARN));
