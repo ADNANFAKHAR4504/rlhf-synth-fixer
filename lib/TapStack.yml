@@ -641,14 +641,14 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${Environment}-config-recorder-latest'
-      RoleARN: !GetAtt ConfigServiceRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
+  # ConfigRecorder:
+  #   Type: AWS::Config::ConfigurationRecorder
+  #   Properties:
+  #     Name: !Sub '${Environment}-config-recorder-latest'
+  #     RoleARN: !GetAtt ConfigServiceRole.Arn
+  #     RecordingGroup:
+  #       AllSupported: true
+  #       IncludeGlobalResourceTypes: true
 
   #ConfigDeliveryChannel:
   #  Type: AWS::Config::DeliveryChannel
