@@ -168,12 +168,12 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "Building TypeScript project..."
     npm run build
     echo "Verifying build output..."
-    if [ ! -f "bin/tap.js" ]; then
-      echo "❌ Build failed: bin/tap.js not found"
+    if [ ! -f "dist/bin/tap.js" ]; then
+      echo "❌ Build failed: dist/bin/tap.js not found"
       echo "Checking for source files..."
       if [ -f "bin/tap.ts" ]; then
         echo "Found source file, attempting manual compilation..."
-        npx tsc bin/tap.ts --outDir bin --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck || echo "⚠️ Manual compilation failed"
+        npx tsc bin/tap.ts --outDir dist/bin --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck || echo "⚠️ Manual compilation failed"
       else
         echo "❌ No TypeScript source file found. Deployment cannot continue."
         exit 1
