@@ -64,6 +64,14 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey*
             Resource: '*'
+          - Sid: Allow logs to use the key
+            Effect: Allow
+            Principal:
+              Service: logs.us-east-1.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey*
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
