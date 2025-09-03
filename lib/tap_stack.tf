@@ -507,13 +507,10 @@ resource "aws_security_group" "db_sg" {
   name   = "${local.name_prefix}-db-sg"
   vpc_id = aws_vpc.main.id
 
-  ingress {
-    description     = "Postgres from web servers"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.web_sg.id]
-  }
+  # Note: we intentionally keep the security group itself minimal and create
+  # an explicit aws_security_group_rule below that grants Postgres from the
+  # web security group using `source_security_group_id`. This produces a
+  # UserIdGroupPairs entry in the EC2 API which our integration tests expect.
 
   egress {
     from_port   = 0
@@ -523,6 +520,18 @@ resource "aws_security_group" "db_sg" {
   }
 
   tags = merge(local.tags, { Name = "${local.name_prefix}-db-sg" })
+}
+
+# Explicit security group rule: allow Postgres (5432) from the web server SG.
+resource "aws_security_group_rule" "db_allow_postgres_from_web" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.db_sg.id
+  source_security_group_id = aws_security_group.web_sg.id
+
+  description = "Allow Postgres traffic from the web server security group"
 }
 
 # EC2 instance in a public subnet
@@ -1166,13 +1175,10 @@ resource "aws_wafv2_web_acl" "api_protection" {
 #   web_acl_arn  = aws_wafv2_web_acl.api_protection.arn
 # }
 
-# Data source to get the correct API Gateway stage ARN for WAF association
-data "aws_apigatewayv2_stage" "main_stage_data" {
-  api_id     = aws_apigatewayv2_api.main.id
-  stage_name = aws_apigatewayv2_stage.main.name
-
-  depends_on = [aws_apigatewayv2_stage.main]
-}
+# The aws provider does not expose a data source named
+# `aws_apigatewayv2_stage`. We build the API stage ARN directly
+# (see aws_wafv2_web_acl_association below) using the API id and
+# stage name from the managed resource `aws_apigatewayv2_stage.main`.
 
 # Associate WAF Web ACL with API Gateway Stage using data source ARN
 resource "aws_wafv2_web_acl_association" "api_gateway_association" {
