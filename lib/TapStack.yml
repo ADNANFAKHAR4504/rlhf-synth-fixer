@@ -259,15 +259,10 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       SubnetId: !Ref PrivateSubnet2
 
-  # S3 Bucket
+  # S3 Bucket (auto-named to ensure valid lowercase & global uniqueness)
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 
-        - '${StackName}-${Region}-${RandomSuffix}'
-        - StackName: !Ref AWS::StackName
-          Region: !Ref AWS::Region
-          RandomSuffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
