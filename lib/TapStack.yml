@@ -645,11 +645,11 @@ Resources:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${Environment}-config-delivery-channel-latest'
-      S3BucketName: !Ref ConfigS3Bucket
+  #ConfigDeliveryChannel:
+  #  Type: AWS::Config::DeliveryChannel
+  #  Properties:
+  #    Name: !Sub '${Environment}-config-delivery-channel-latest'
+  #    S3BucketName: !Ref ConfigS3Bucket
 
   # ================================
   # Monitoring & Alerts
