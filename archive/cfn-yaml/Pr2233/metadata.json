@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291617",
+  "team": "4",
+  "startedAt": "2025-08-25T16:49:02.269Z",
+  "author": "manoj-tur",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "KMS",
+    "EC2",
+    "VPC",
+    "CloudWatch",
+    "Config",
+    "S3",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
