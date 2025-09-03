@@ -293,8 +293,9 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_flow_log"\s+"vpc_flow_log"\s*{/);
     });
 
-    test("declares CloudWatch log group for flow logs", () => {
+    test("declares CloudWatch log group for flow logs with random suffix", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_log"\s*{/);
+      expect(terraformContent).toMatch(/name\s*=\s*"\/aws\/vpc\/flowlogs-\$\{local\.name_prefix\}-\$\{random_id\.suffix\.hex\}"/);
     });
 
     test("declares IAM role and policy for flow logs", () => {
@@ -344,16 +345,22 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_wafv2_ip_set"\s+"blocked_ips"\s*{/);
     });
 
-    test("declares WAF logging configuration", () => {
+    test("declares WAF logging configuration with CloudWatch log group using random suffix", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_wafv2_web_acl_logging_configuration"\s+"main"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"waf"\s*{/);
+      expect(terraformContent).toMatch(/name\s*=\s*"\/aws\/wafv2\/\$\{local\.name_prefix\}-security-waf-\$\{random_id\.suffix\.hex\}"/);
     });
   });
 
   describe("GuardDuty Configuration", () => {
-    test("declares GuardDuty detector conditionally", () => {
-      expect(terraformContent).toMatch(/resource\s+"aws_guardduty_detector"\s+"main"\s*{/);
+    test("checks for existing GuardDuty detector with data source", () => {
+      expect(terraformContent).toMatch(/data\s+"aws_guardduty_detector"\s+"existing"\s*{/);
       expect(terraformContent).toMatch(/count\s*=\s*var\.enable_guardduty\s*\?\s*1\s*:\s*0/);
+    });
+
+    test("declares GuardDuty detector conditionally only if not existing", () => {
+      expect(terraformContent).toMatch(/resource\s+"aws_guardduty_detector"\s+"main"\s*{/);
+      expect(terraformContent).toMatch(/count\s*=\s*var\.enable_guardduty\s*&&\s*length\(data\.aws_guardduty_detector\.existing\)\s*==\s*0\s*\?\s*1\s*:\s*0/);
     });
 
     test("GuardDuty enables S3 and Kubernetes monitoring", () => {
@@ -364,11 +371,17 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
         expect(guardDutyMatch[0]).toMatch(/malware_protection\s*{/);
       }
     });
+
+    test("has local variable for GuardDuty detector ID", () => {
+      expect(terraformContent).toMatch(/locals\s*{[\s\S]*?guardduty_detector_id\s*=[\s\S]*?}/);
+    });
   });
 
   describe("Security Hub", () => {
-    test("declares Security Hub account", () => {
+    test("declares Security Hub account with lifecycle management", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_securityhub_account"\s+"main"\s*{/);
+      expect(terraformContent).toMatch(/count\s*=\s*1/);
+      expect(terraformContent).toMatch(/lifecycle\s*{\s*ignore_changes\s*=\s*\[enable_default_standards\]\s*}/);
     });
 
     test("enables default standards", () => {
@@ -399,9 +412,16 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_versioning"\s+"config"\s*{/);
     });
 
-    test("declares Config service components", () => {
+    test("checks for existing Config service-linked role with data source", () => {
+      expect(terraformContent).toMatch(/data\s+"aws_iam_role"\s+"config_service_role"\s*{/);
+      expect(terraformContent).toMatch(/name\s*=\s*"AWSServiceRoleForConfig"/);
+    });
+
+    test("declares Config service components with lifecycle management", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_config_delivery_channel"\s+"main"\s*{/);
+      expect(terraformContent).toMatch(/count\s*=\s*1/);
+      expect(terraformContent).toMatch(/lifecycle\s*{\s*ignore_changes\s*=\s*\[name\]\s*}/);
     });
 
     test("declares Config rules", () => {
@@ -437,6 +457,7 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
 
     test("declares CloudWatch log group for CloudTrail", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"cloudtrail"\s*{/);
+      expect(terraformContent).toMatch(/name\s*=\s*"\/aws\/cloudtrail\/\$\{local\.name_prefix\}-\$\{random_id\.suffix\.hex\}"/);
     });
 
     test("CloudTrail integrates with CloudWatch logs", () => {
@@ -484,6 +505,7 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket"\s+"audit_logs_replica"\s*{/);
       expect(terraformContent).toMatch(/count\s*=\s*var\.enable_cross_region_backup\s*\?\s*1\s*:\s*0/);
       expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_replication_configuration"\s+"audit_logs"\s*{/);
+      expect(terraformContent).toMatch(/delete_marker_replication\s*{\s*status\s*=\s*"Enabled"\s*}/);
     });
   });
 
@@ -521,7 +543,7 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
 
     test("conditional outputs handle null values", () => {
       expect(terraformContent).toMatch(/var\.enable_waf\s*\?\s*aws_wafv2_web_acl\.main\[0\]\.arn\s*:\s*null/);
-      expect(terraformContent).toMatch(/var\.enable_guardduty\s*\?\s*aws_guardduty_detector\.main\[0\]\.id\s*:\s*null/);
+      expect(terraformContent).toMatch(/value\s*=\s*local\.guardduty_detector_id/);
     });
   });
 

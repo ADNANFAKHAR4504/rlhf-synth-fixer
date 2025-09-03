@@ -829,7 +829,7 @@ resource "aws_flow_log" "vpc_flow_log" {
 }
 
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs-${local.name_prefix}"
+  name              = "/aws/vpc/flowlogs-${local.name_prefix}-${random_id.suffix.hex}"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.security_master_key.arn
 
@@ -1306,7 +1306,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "main" {
 resource "aws_cloudwatch_log_group" "waf" {
   count = var.enable_waf ? 1 : 0
 
-  name              = "/aws/wafv2/${local.name_prefix}-security-waf"
+  name              = "/aws/wafv2/${local.name_prefix}-security-waf-${random_id.suffix.hex}"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.security_master_key.arn
 
@@ -1319,15 +1319,16 @@ resource "aws_cloudwatch_log_group" "waf" {
 # GuardDuty - Threat Detection
 # ==============================================================================
 
-resource "aws_guardduty_detector" "main" {
+# Try to get existing GuardDuty detector first
+data "aws_guardduty_detector" "existing" {
   count = var.enable_guardduty ? 1 : 0
+}
+
+resource "aws_guardduty_detector" "main" {
+  count = var.enable_guardduty && length(data.aws_guardduty_detector.existing) == 0 ? 1 : 0
 
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
-
-  lifecycle {
-    ignore_changes = [enable]
-  }
 
   datasources {
     s3_logs {
@@ -1352,13 +1353,22 @@ resource "aws_guardduty_detector" "main" {
   })
 }
 
+locals {
+  guardduty_detector_id = var.enable_guardduty ? (
+    length(data.aws_guardduty_detector.existing) > 0 ?
+    data.aws_guardduty_detector.existing[0].id :
+    aws_guardduty_detector.main[0].id
+  ) : null
+}
+
 # ==============================================================================
 # Security Hub - Central Security Dashboard
 # ==============================================================================
 
 resource "aws_securityhub_account" "main" {
-  enable_default_standards = true
+  count = 1
 
+  enable_default_standards  = true
   control_finding_generator = "SECURITY_CONTROL"
   auto_enable_controls      = true
 
@@ -1478,18 +1488,25 @@ resource "aws_s3_bucket_policy" "config" {
 }
 
 # Config Service Role
-resource "aws_iam_service_linked_role" "config" {
-  aws_service_name = "config.amazonaws.com"
+# Try to get existing Config service linked role
+data "aws_iam_role" "config_service_role" {
+  count = 1
+  name  = "AWSServiceRoleForConfig"
+}
 
-  lifecycle {
-    ignore_changes = [aws_service_name]
-  }
+resource "aws_iam_service_linked_role" "config" {
+  count            = length(data.aws_iam_role.config_service_role) == 0 ? 1 : 0
+  aws_service_name = "config.amazonaws.com"
+}
+
+locals {
+  config_role_arn = length(data.aws_iam_role.config_service_role) > 0 ? data.aws_iam_role.config_service_role[0].arn : aws_iam_service_linked_role.config[0].arn
 }
 
 # Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
   name     = "${local.name_prefix}-config-recorder-${random_id.suffix.hex}"
-  role_arn = aws_iam_service_linked_role.config.arn
+  role_arn = local.config_role_arn
 
   recording_group {
     all_supported                 = true
@@ -1500,13 +1517,18 @@ resource "aws_config_configuration_recorder" "main" {
     ignore_changes = [name]
   }
 
-  depends_on = [aws_config_delivery_channel.main]
+  depends_on = [aws_s3_bucket.config]
 }
 
 # Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
+  count          = 1
   name           = "${local.name_prefix}-config-delivery-channel-${random_id.suffix.hex}"
   s3_bucket_name = aws_s3_bucket.config.bucket
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 # Config Rules for compliance
@@ -1644,7 +1666,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/${local.name_prefix}"
+  name              = "/aws/cloudtrail/${local.name_prefix}-${random_id.suffix.hex}"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.security_master_key.arn
 
@@ -1721,10 +1743,6 @@ resource "aws_cloudtrail" "main" {
       ]
     }
 
-    data_resource {
-      type   = "AWS::Lambda::Function"
-      values = ["arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:*"]
-    }
   }
 
   insight_selector {
@@ -1967,6 +1985,10 @@ resource "aws_s3_bucket_replication_configuration" "audit_logs" {
 
     filter {}
 
+    delete_marker_replication {
+      status = "Enabled"
+    }
+
     destination {
       bucket        = aws_s3_bucket.audit_logs_replica[0].arn
       storage_class = "STANDARD_IA"
@@ -2042,7 +2064,7 @@ output "waf_web_acl_id" {
 
 output "guardduty_detector_id" {
   description = "ID of the GuardDuty detector"
-  value       = var.enable_guardduty ? aws_guardduty_detector.main[0].id : null
+  value       = local.guardduty_detector_id
 }
 
 output "config_bucket_name" {
