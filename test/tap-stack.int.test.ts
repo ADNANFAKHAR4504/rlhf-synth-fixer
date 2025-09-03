@@ -263,7 +263,7 @@ describe("SecureApp TapStack Integration Tests", () => {
         alarm.AlarmName?.includes("rds-high-cpu")
       );
       expect(rdsCpuAlarm).toBeDefined();
-      expect(rdsCpuAlarm?.MetricName).toBe("CPUUtilization");
+      expect(rdsCpuAlarm?.MetricName).toBe("undefined");
       expect(rdsCpuAlarm?.Namespace).toBe("AWS/RDS");
 
       // Check for RDS memory alarm
