@@ -16,7 +16,7 @@ import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 
-import { LaunchConfiguration } from '@cdktf/provider-aws/lib/launch-configuration';
+// import { LaunchConfiguration } from '@cdktf/provider-aws/lib/launch-configuration';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
 
 import { Lb } from '@cdktf/provider-aws/lib/lb';
@@ -33,6 +33,7 @@ import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric
 
 import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 
 export interface WebAppModulesConfig {
   region: string;
@@ -382,16 +383,17 @@ export class WebAppModules extends Construct {
 
     // Launch configuration for Auto Scaling Group
     // Defines the template for EC2 instances
-    const launchConfig = new LaunchConfiguration(this, 'web-launch-config-ts', {
-      name: 'web-server-launch-config-ts',
+    const launchTemplate = new LaunchTemplate(this, 'web-launch-template', {
+      namePrefix: 'web-server-template-',
       imageId: config.amiId,
       instanceType: config.instanceType,
-      securityGroups: [ec2SecurityGroup.id],
-      iamInstanceProfile: instanceProfile.name,
-      dependsOn: [instanceProfile, ec2SecurityGroup, ec2Role],
-      lifecycle: {
-        createBeforeDestroy: true,
+
+      vpcSecurityGroupIds: [ec2SecurityGroup.id],
+
+      iamInstanceProfile: {
+        name: instanceProfile.name,
       },
+
       userData: Buffer.from(
         `#!/bin/bash
     yum update -y
@@ -403,13 +405,23 @@ export class WebAppModules extends Construct {
     yum install -y amazon-cloudwatch-agent
   `
       ).toString('base64'),
+
+      tagSpecifications: [
+        {
+          resourceType: 'instance',
+          tags: {
+            Name: 'web-server-instance',
+            Environment: config.environment,
+          },
+        },
+      ],
+
+      dependsOn: [instanceProfile, ec2SecurityGroup, ec2Role],
     });
 
-    // Auto Scaling Group for high availability and scalability
-    // Min 2 instances for redundancy, max 5 for cost control
+    // Update Auto Scaling Group to use Launch Template
     this.autoScalingGroup = new AutoscalingGroup(this, 'web-asg', {
-      name: 'web-server-asg',
-      launchConfiguration: launchConfig.name,
+      namePrefix: 'web-server-asg-',
       minSize: 2,
       maxSize: 5,
       desiredCapacity: 2,
@@ -417,7 +429,14 @@ export class WebAppModules extends Construct {
       targetGroupArns: [targetGroup.arn],
       healthCheckType: 'ELB',
       healthCheckGracePeriod: 300,
-      dependsOn: [launchConfig, targetGroup],
+
+      launchTemplate: {
+        id: launchTemplate.id,
+        version: '$Latest',
+      },
+
+      dependsOn: [launchTemplate, targetGroup],
+
       tag: [
         {
           key: 'Name',
