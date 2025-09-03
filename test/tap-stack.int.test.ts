@@ -128,8 +128,10 @@ describe("Terraform AWS Infrastructure Integration", () => {
       console.error("Error describing RDS instances:", err);
       throw err;
     }
+    const rdsEndpointHost = rdsEndpoint.split(":")[0]; // Remove port if present
+
     const db = (dbs.DBInstances ?? []).find(d =>
-      d.Endpoint?.Address && rdsEndpoint === d.Endpoint.Address
+      d.Endpoint?.Address && rdsEndpointHost === d.Endpoint.Address
     );
     if (!db) {
       console.error("RDS instance with endpoint", rdsEndpoint, "not found. Available:", dbs.DBInstances?.map(d => d.Endpoint?.Address));
