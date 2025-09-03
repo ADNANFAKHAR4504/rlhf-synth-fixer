@@ -5,7 +5,8 @@ import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
+import * as route53 from 'aws-cdk-lib/aws-route53';
 import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
@@ -16,7 +17,7 @@ export interface TapStackProps extends cdk.StackProps {
 
   /**
    * Domain name for the ACM certificate (e.g., 'example.com')
-   * If not provided, a self-signed certificate will be created
+   * Optional - if not provided, HTTPS listener will not be created
    */
   domainName?: string;
 
@@ -32,24 +33,18 @@ export class TapStack extends cdk.Stack {
   public readonly asg: autoscaling.AutoScalingGroup;
   public readonly database: rds.DatabaseInstance;
   public readonly s3Bucket: s3.Bucket;
+  public readonly certificate: acm.DnsValidatedCertificate | null;
 
   private readonly envSuffix: string;
 
-  constructor(scope: Construct, id: string, props?: TapStackProps) {
+  constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
     // Set environment suffix with default fallback
     this.envSuffix = props?.environmentSuffix || 'prod';
 
-    // Common tags for all resources
-    const commonTags = {
-      Environment: this.capitalizeFirst(this.envSuffix),
-      Project: 'CloudFormationSetup',
-    };
-
-    // Apply tags to the stack
-    cdk.Tags.of(this).add('Environment', commonTags.Environment);
-    cdk.Tags.of(this).add('Project', commonTags.Project);
+    // Apply common tags to the stack
+    this.applyCommonTags();
 
     // Create VPC
     this.vpc = this.createVpc();
@@ -66,6 +61,9 @@ export class TapStack extends cdk.Stack {
     // Create RDS Database
     this.database = this.createDatabase(securityGroups.databaseSg);
 
+    // Create ACM Certificate
+    this.certificate = this.createAcmCertificate(props);
+
     // Create Application Load Balancer
     this.alb = this.createApplicationLoadBalancer(securityGroups.albSg);
 
@@ -75,45 +73,49 @@ export class TapStack extends cdk.Stack {
       ec2Role
     );
 
-    // Create ALB Target Group and attach ASG
-    this.createTargetGroupAndListeners(securityGroups.albSg, props);
+    // Create ALB Target Group and Listeners
+    this.createTargetGroupAndListeners(securityGroups.albSg);
+
+    // Create CloudFormation outputs
+    this.createOutputs();
   }
 
-  private capitalizeFirst(str: string): string {
-    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  private applyCommonTags(): void {
+    cdk.Tags.of(this).add('Environment', 'Production');
+    cdk.Tags.of(this).add('Project', 'CloudFormationSetup');
   }
 
   private createVpc(): ec2.Vpc {
-    return new ec2.Vpc(this, `${this.envSuffix}-vpc`, {
-      vpcName: `${this.envSuffix}-vpc`,
+    return new ec2.Vpc(this, 'prod-vpc', {
+      vpcName: 'prod-vpc',
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
       maxAzs: 2,
       subnetConfiguration: [
         {
           cidrMask: 24,
-          name: `${this.envSuffix}-public-subnet`,
+          name: 'prod-public-subnet',
           subnetType: ec2.SubnetType.PUBLIC,
         },
         {
           cidrMask: 24,
-          name: `${this.envSuffix}-private-subnet`,
+          name: 'prod-private-subnet',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
         {
           cidrMask: 24,
-          name: `${this.envSuffix}-isolated-subnet`,
+          name: 'prod-isolated-subnet',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
         },
       ],
-      natGateways: 2, // One NAT Gateway per AZ for high availability
+      natGateways: 2, // One NAT Gateway per AZ
     });
   }
 
   private createSecurityGroups() {
     // ALB Security Group
-    const albSg = new ec2.SecurityGroup(this, `${this.envSuffix}-alb-sg`, {
+    const albSg = new ec2.SecurityGroup(this, 'prod-alb-sg', {
       vpc: this.vpc,
-      securityGroupName: `${this.envSuffix}-alb-sg`,
+      securityGroupName: 'prod-alb-sg',
       description: 'Security group for Application Load Balancer',
       allowAllOutbound: false,
     });
@@ -131,16 +133,12 @@ export class TapStack extends cdk.Stack {
     );
 
     // Application Security Group
-    const applicationSg = new ec2.SecurityGroup(
-      this,
-      `${this.envSuffix}-app-sg`,
-      {
-        vpc: this.vpc,
-        securityGroupName: `${this.envSuffix}-app-sg`,
-        description: 'Security group for application instances',
-        allowAllOutbound: false,
-      }
-    );
+    const applicationSg = new ec2.SecurityGroup(this, 'prod-app-sg', {
+      vpc: this.vpc,
+      securityGroupName: 'prod-app-sg',
+      description: 'Security group for application instances',
+      allowAllOutbound: false,
+    });
 
     // Allow traffic from ALB to application instances
     applicationSg.addIngressRule(
@@ -163,10 +161,22 @@ export class TapStack extends cdk.Stack {
       'Allow HTTP outbound for package updates'
     );
 
+    // Allow DNS resolution
+    applicationSg.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(53),
+      'Allow DNS TCP'
+    );
+    applicationSg.addEgressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.udp(53),
+      'Allow DNS UDP'
+    );
+
     // Database Security Group
-    const databaseSg = new ec2.SecurityGroup(this, `${this.envSuffix}-db-sg`, {
+    const databaseSg = new ec2.SecurityGroup(this, 'prod-db-sg', {
       vpc: this.vpc,
-      securityGroupName: `${this.envSuffix}-db-sg`,
+      securityGroupName: 'prod-db-sg',
       description: 'Security group for RDS database',
       allowAllOutbound: false,
     });
@@ -200,8 +210,8 @@ export class TapStack extends cdk.Stack {
   }
 
   private createEc2Role(): iam.Role {
-    const role = new iam.Role(this, `${this.envSuffix}-ec2-role`, {
-      roleName: `${this.envSuffix}-ec2-role`,
+    const role = new iam.Role(this, 'prod-ec2-role', {
+      roleName: 'prod-ec2-role',
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances in the application tier',
     });
@@ -211,22 +221,23 @@ export class TapStack extends cdk.Stack {
       iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
     );
 
-    // Add custom policy for S3 access
+    // Add custom policy for S3 access (least privilege)
     const s3Policy = new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-        's3:DeleteObject',
-        's3:ListBucket',
-      ],
+      actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
       resources: [
-        `arn:aws:s3:::${this.envSuffix}-tap-assets-${this.account}-${this.region}`,
-        `arn:aws:s3:::${this.envSuffix}-tap-assets-${this.account}-${this.region}/*`,
+        `${this.s3Bucket?.bucketArn || 'arn:aws:s3:::prod-tap-assets-*'}/*`,
       ],
     });
 
+    const s3ListPolicy = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:ListBucket'],
+      resources: [this.s3Bucket?.bucketArn || 'arn:aws:s3:::prod-tap-assets-*'],
+    });
+
     role.addToPolicy(s3Policy);
+    role.addToPolicy(s3ListPolicy);
 
     // Add CloudWatch logs policy
     const cloudWatchPolicy = new iam.PolicyStatement({
@@ -238,7 +249,10 @@ export class TapStack extends cdk.Stack {
         'logs:DescribeLogStreams',
         'logs:DescribeLogGroups',
       ],
-      resources: ['*'],
+      resources: [
+        `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/prod-*`,
+        `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/ec2/prod-*:*`,
+      ],
     });
 
     role.addToPolicy(cloudWatchPolicy);
@@ -256,7 +270,7 @@ export class TapStack extends cdk.Stack {
         {
           id: 'delete-old-versions',
           noncurrentVersionExpiration: cdk.Duration.days(30),
-          enabled: true, // Changed from status: s3.LifecycleRuleStatus.ENABLED
+          enabled: true,
         },
       ],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -265,21 +279,17 @@ export class TapStack extends cdk.Stack {
 
   private createDatabase(databaseSg: ec2.SecurityGroup): rds.DatabaseInstance {
     // Create DB subnet group using isolated subnets
-    const subnetGroup = new rds.SubnetGroup(
-      this,
-      `${this.envSuffix}-db-subnet-group`,
-      {
-        description: 'Subnet group for RDS database',
-        vpc: this.vpc,
-        subnetGroupName: `${this.envSuffix}-db-subnet-group`,
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-      }
-    );
+    const subnetGroup = new rds.SubnetGroup(this, 'prod-db-subnet-group', {
+      description: 'Subnet group for RDS database',
+      vpc: this.vpc,
+      subnetGroupName: 'prod-db-subnet-group',
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
+    });
 
-    return new rds.DatabaseInstance(this, `${this.envSuffix}-database`, {
-      instanceIdentifier: `${this.envSuffix}-postgresql-db`,
+    return new rds.DatabaseInstance(this, 'prod-database', {
+      instanceIdentifier: 'prod-postgresql-db',
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_4,
       }),
@@ -290,46 +300,58 @@ export class TapStack extends cdk.Stack {
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
       storageEncrypted: true,
-      multiAz: this.envSuffix === 'prod', // Only enable Multi-AZ for production
+      multiAz: true,
       vpc: this.vpc,
       subnetGroup,
       securityGroups: [databaseSg],
       databaseName: 'tapdb',
       credentials: rds.Credentials.fromGeneratedSecret('dbadmin', {
-        secretName: `${this.envSuffix}-db-credentials`,
+        secretName: 'prod-db-credentials',
       }),
-      backupRetention:
-        this.envSuffix === 'prod' ? cdk.Duration.days(7) : cdk.Duration.days(1),
-      deletionProtection: this.envSuffix === 'prod',
-      removalPolicy:
-        this.envSuffix === 'prod'
-          ? cdk.RemovalPolicy.RETAIN
-          : cdk.RemovalPolicy.DESTROY,
-      monitoringInterval:
-        this.envSuffix === 'prod'
-          ? cdk.Duration.seconds(60)
-          : cdk.Duration.seconds(0),
-      monitoringRole:
-        this.envSuffix === 'prod'
-          ? new iam.Role(this, `${this.envSuffix}-db-monitoring-role`, {
-              assumedBy: new iam.ServicePrincipal(
-                'monitoring.rds.amazonaws.com'
-              ),
-              managedPolicies: [
-                iam.ManagedPolicy.fromAwsManagedPolicyName(
-                  'service-role/AmazonRDSEnhancedMonitoringRole'
-                ),
-              ],
-            })
-          : undefined,
+      backupRetention: cdk.Duration.days(7),
+      deletionProtection: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      monitoringInterval: cdk.Duration.seconds(60),
+      monitoringRole: new iam.Role(this, 'prod-db-monitoring-role', {
+        assumedBy: new iam.ServicePrincipal('monitoring.rds.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AmazonRDSEnhancedMonitoringRole'
+          ),
+        ],
+      }),
+    });
+  }
+
+  private createAcmCertificate(
+    props: TapStackProps
+  ): acm.DnsValidatedCertificate | null {
+    if (!props.domainName || !props.hostedZoneId) {
+      return null;
+    }
+
+    const hostedZone = route53.HostedZone.fromHostedZoneAttributes(
+      this,
+      'hosted-zone',
+      {
+        hostedZoneId: props.hostedZoneId,
+        zoneName: props.domainName,
+      }
+    );
+
+    return new acm.DnsValidatedCertificate(this, 'prod-certificate', {
+      domainName: props.domainName,
+      subjectAlternativeNames: [`*.${props.domainName}`],
+      hostedZone,
+      region: this.region,
     });
   }
 
   private createApplicationLoadBalancer(
     albSg: ec2.SecurityGroup
   ): elbv2.ApplicationLoadBalancer {
-    return new elbv2.ApplicationLoadBalancer(this, `${this.envSuffix}-alb`, {
-      loadBalancerName: `${this.envSuffix}-alb`,
+    return new elbv2.ApplicationLoadBalancer(this, 'prod-alb', {
+      loadBalancerName: 'prod-alb',
       vpc: this.vpc,
       internetFacing: true,
       securityGroup: albSg,
@@ -343,143 +365,155 @@ export class TapStack extends cdk.Stack {
     applicationSg: ec2.SecurityGroup,
     ec2Role: iam.Role
   ): autoscaling.AutoScalingGroup {
+    // Create launch template
+    const launchTemplate = new ec2.LaunchTemplate(
+      this,
+      'prod-launch-template',
+      {
+        launchTemplateName: 'prod-launch-template',
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        securityGroup: applicationSg,
+        role: ec2Role,
+        userData: ec2.UserData.forLinux(),
+      }
+    );
+
     // User data script for application setup
-    const userData = ec2.UserData.forLinux();
-    userData.addCommands(
+    launchTemplate.userData?.addCommands(
       'yum update -y',
       'yum install -y amazon-cloudwatch-agent',
       'yum install -y httpd',
       'systemctl start httpd',
       'systemctl enable httpd',
-      `echo "<h1>${this.capitalizeFirst(this.envSuffix)} Application Server</h1>" > /var/www/html/index.html`,
-      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html'
+      'echo "<h1>Production Application Server</h1>" > /var/www/html/index.html',
+      'echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html',
+      'echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html'
     );
 
-    // Environment-specific capacity settings
-    const capacitySettings = this.getCapacitySettings();
-
-    return new autoscaling.AutoScalingGroup(this, `${this.envSuffix}-asg`, {
-      autoScalingGroupName: `${this.envSuffix}-asg`,
+    return new autoscaling.AutoScalingGroup(this, 'prod-asg', {
+      autoScalingGroupName: 'prod-asg',
       vpc: this.vpc,
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T3,
-        ec2.InstanceSize.MICRO
-      ),
-      machineImage: ec2.MachineImage.latestAmazonLinux2(),
-      userData,
-      role: ec2Role,
-      securityGroup: applicationSg,
+      launchTemplate,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
       },
-      minCapacity: capacitySettings.min,
-      maxCapacity: capacitySettings.max,
-      desiredCapacity: capacitySettings.desired,
+      minCapacity: 2,
+      maxCapacity: 6,
+      desiredCapacity: 2,
       healthCheck: autoscaling.HealthCheck.elb({
         grace: cdk.Duration.seconds(300),
       }),
       updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
         maxBatchSize: 1,
-        minInstancesInService: capacitySettings.min,
+        minInstancesInService: 1,
+        pauseTime: cdk.Duration.minutes(5),
       }),
     });
   }
 
-  private getCapacitySettings() {
-    // Environment-specific capacity settings
-    switch (this.envSuffix) {
-      case 'prod':
-        return { min: 2, max: 6, desired: 2 };
-      case 'staging':
-        return { min: 1, max: 3, desired: 1 };
-      case 'dev':
-      default:
-        return { min: 1, max: 2, desired: 1 };
-    }
-  }
-
-  private createTargetGroupAndListeners(
-    albSg: ec2.SecurityGroup,
-    props?: TapStackProps
-  ): void {
+  private createTargetGroupAndListeners(albSg: ec2.SecurityGroup): void {
     // Create target group
-    const targetGroup = new elbv2.ApplicationTargetGroup(
-      this,
-      `${this.envSuffix}-tg`,
-      {
-        targetGroupName: `${this.envSuffix}-tg`,
-        port: 80,
-        protocol: elbv2.ApplicationProtocol.HTTP,
-        vpc: this.vpc,
-        targets: [this.asg],
-        healthCheck: {
-          enabled: true,
-          healthyHttpCodes: '200',
-          interval: cdk.Duration.seconds(30),
-          path: '/',
-          protocol: elbv2.Protocol.HTTP,
-          timeout: cdk.Duration.seconds(5),
-          unhealthyThresholdCount: 2,
-          healthyThresholdCount: 2,
-        },
-      }
-    );
-
-    // HTTP Listener (redirects to HTTPS)
-    this.alb.addListener(`${this.envSuffix}-http-listener`, {
+    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'prod-tg', {
+      targetGroupName: 'prod-tg',
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: 'HTTPS',
-        port: '443',
-        permanent: true,
-      }),
+      vpc: this.vpc,
+      targets: [this.asg],
+      healthCheck: {
+        enabled: true,
+        healthyHttpCodes: '200',
+        interval: cdk.Duration.seconds(30),
+        path: '/',
+        protocol: elbv2.Protocol.HTTP,
+        timeout: cdk.Duration.seconds(5),
+        unhealthyThresholdCount: 2,
+        healthyThresholdCount: 2,
+      },
     });
 
-    // HTTPS Listener
-    let certificate: certificatemanager.ICertificate;
+    if (this.certificate) {
+      // HTTPS Listener with ACM certificate (redirects HTTP to HTTPS)
+      this.alb.addListener('prod-http-listener', {
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        defaultAction: elbv2.ListenerAction.redirect({
+          protocol: 'HTTPS',
+          port: '443',
+          permanent: true,
+        }),
+      });
 
-    if (props?.domainName && props?.hostedZoneId) {
-      // Use ACM certificate for the provided domain
-      certificate = new certificatemanager.Certificate(
-        this,
-        `${this.envSuffix}-certificate`,
-        {
-          domainName: props.domainName,
-          validation: certificatemanager.CertificateValidation.fromDns(),
-        }
-      );
+      this.alb.addListener('prod-https-listener', {
+        port: 443,
+        protocol: elbv2.ApplicationProtocol.HTTPS,
+        certificates: [this.certificate],
+        defaultAction: elbv2.ListenerAction.forward([targetGroup]),
+      });
     } else {
-      // Create a self-signed certificate for development/testing
-      // Note: In production, you should always use a proper ACM certificate
-      certificate = new certificatemanager.Certificate(
-        this,
-        `${this.envSuffix}-self-signed-cert`,
-        {
-          domainName: 'localhost',
-          validation: certificatemanager.CertificateValidation.fromEmail(),
-        }
-      );
+      // HTTP Listener only (for development without certificate)
+      this.alb.addListener('prod-http-listener', {
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        defaultAction: elbv2.ListenerAction.forward([targetGroup]),
+      });
     }
 
-    this.alb.addListener(`${this.envSuffix}-https-listener`, {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [certificate],
-      defaultAction: elbv2.ListenerAction.forward([targetGroup]),
+    // Add scaling policies
+    this.asg.scaleOnCpuUtilization('prod-cpu-scaling', {
+      targetUtilizationPercent: 70,
+      cooldown: cdk.Duration.seconds(300),
     });
 
-    // Add scaling policies (only for production and staging)
-    if (this.envSuffix === 'prod' || this.envSuffix === 'staging') {
-      this.asg.scaleOnCpuUtilization('prod-cpu-scaling', {
-        targetUtilizationPercent: 70,
-        cooldown: cdk.Duration.seconds(300),
-      });
+    this.asg.scaleOnRequestCount('prod-request-scaling', {
+      targetRequestsPerMinute: 1000,
+    });
+  }
 
-      this.asg.scaleOnRequestCount('prod-request-scaling', {
-        targetRequestsPerMinute: 1000,
-        // Remove targetGroups property entirely
-      });
-    }
+  private createOutputs(): void {
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `Tap${this.envSuffix}VpcId`,
+    });
+
+    new cdk.CfnOutput(this, 'PrivateSubnetIds', {
+      value: this.vpc.privateSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Private Subnet IDs',
+      exportName: `Tap${this.envSuffix}PrivateSubnetIds`,
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnetIds', {
+      value: this.vpc.publicSubnets.map(subnet => subnet.subnetId).join(','),
+      description: 'Public Subnet IDs',
+      exportName: `Tap${this.envSuffix}PublicSubnetIds`,
+    });
+
+    new cdk.CfnOutput(this, 'AlbDnsName', {
+      value: this.alb.loadBalancerDnsName,
+      description: 'Application Load Balancer DNS Name',
+      exportName: `Tap${this.envSuffix}AlbDnsName`,
+    });
+
+    new cdk.CfnOutput(this, 'AsgName', {
+      value: this.asg.autoScalingGroupName,
+      description: 'Auto Scaling Group Name',
+      exportName: `Tap${this.envSuffix}AsgName`,
+    });
+
+    new cdk.CfnOutput(this, 'RdsEndpoint', {
+      value: this.database.instanceEndpoint.hostname,
+      description: 'RDS Database Endpoint',
+      exportName: `Tap${this.envSuffix}RdsEndpoint`,
+    });
+
+    new cdk.CfnOutput(this, 'S3BucketName', {
+      value: this.s3Bucket.bucketName,
+      description: 'S3 Bucket Name',
+      exportName: `Tap${this.envSuffix}S3BucketName`,
+    });
   }
 }
