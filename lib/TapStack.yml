@@ -412,6 +412,9 @@ Conditions:
       !Equals [!Ref EnableLambdaProvisionedConcurrency, 'true'],
     ]
 
+  # CodeDeploy enablement
+  EnableCodeDeployTrue: !Equals [!Ref EnableCodeDeploy, 'true']
+
 Resources:
   # SNS Topic for CloudFormation Notifications
   CloudFormationNotificationTopic:
@@ -1541,6 +1544,15 @@ Resources:
                     !GetAtt KMSKey.Arn,
                     !Ref UseExistingKMSKeyId,
                   ]
+        - PolicyName: CodeDeployAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'codedeploy:UpdateDeploymentGroup'
+                  - 'codedeploy:GetDeploymentGroup'
+                Resource: '*'
 
   CodeDeployRole:
     Type: AWS::IAM::Role
@@ -1820,8 +1832,10 @@ Resources:
       DeploymentGroupName: !Sub '${Environment}-dg'
       ServiceRoleArn: !GetAtt CodeDeployRole.Arn
       DeploymentStyle:
-        DeploymentType: BLUE_GREEN
+        DeploymentType: IN_PLACE
         DeploymentOption: WITHOUT_TRAFFIC_CONTROL
+      AutoScalingGroups:
+        - !Ref WebServerASG
       AutoRollbackConfiguration:
         Enabled: true
         Events:
@@ -1953,7 +1967,7 @@ Resources:
 
   CodeDeployCustomConfigFunction:
     Type: AWS::Lambda::Function
-    Condition: HasLambdaCode
+    Condition: EnableCodeDeployTrue
     Properties:
       FunctionName: !Sub '${Environment}-codedeploy-configurer'
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -1962,7 +1976,21 @@ Resources:
       Timeout: 300
       Code:
         ZipFile: |
-          import json, boto3, cfnresponse, os
+          import json, boto3, urllib3, os
+          http = urllib3.PoolManager()
+          def send(event, context, status, data):
+              body = {
+                  'Status': status,
+                  'Reason': 'See CloudWatch Log Stream: ' + context.log_stream_name,
+                  'PhysicalResourceId': context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data,
+              }
+              encoded = json.dumps(body).encode('utf-8')
+              http.request('PUT', event['ResponseURL'], body=encoded, headers={'content-type': '', 'content-length': str(len(encoded))})
+
           def handler(event, context):
               try:
                   if event['RequestType'] in ('Create','Update') and os.environ.get('ENABLE_CODEDEPLOY','false')=='true':
@@ -1970,28 +1998,29 @@ Resources:
                       app = os.environ['APP']
                       dg = os.environ['DG']
                       asg = os.environ['ASG']
-                      tgBlue = os.environ['TGB']
-                      tgGreen = os.environ['TGG']
-                      step = int(os.environ.get('STEP','10'))
-                      bake = int(os.environ.get('BAKE','5'))
+                      tg_blue = os.environ['TGB']
+                      tg_green = os.environ['TGG']
+                      # Switch to BLUE_GREEN with traffic control and attach target groups
                       cd.update_deployment_group(
                           applicationName=app,
                           currentDeploymentGroupName=dg,
+                          deploymentStyle={'deploymentType':'BLUE_GREEN','deploymentOption':'WITH_TRAFFIC_CONTROL'},
                           blueGreenDeploymentConfiguration={
                               'terminateBlueInstancesOnDeploymentSuccess': {'action':'KEEP_ALIVE','terminationWaitTimeInMinutes':0},
                               'deploymentReadyOption': {'actionOnTimeout':'CONTINUE_DEPLOYMENT','waitTimeInMinutes':0},
                               'greenFleetProvisioningOption': {'action':'COPY_AUTO_SCALING_GROUP'}
                           },
+                          autoScalingGroups=[asg],
                           loadBalancerInfo={
                               'targetGroupPairInfoList':[{
-                                  'targetGroups':[{'name':tgBlue},{'name':tgGreen}],
+                                  'targetGroups':[{'name':tg_blue},{'name':tg_green}],
                                   'prodTrafficRoute':{}
                               }]
                           }
                       )
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  send(event, context, 'SUCCESS', {})
               except Exception as e:
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+                  send(event, context, 'FAILED', {'Error': str(e)})
       Environment:
         Variables:
           ENABLE_CODEDEPLOY: !Ref EnableCodeDeploy
@@ -2005,7 +2034,7 @@ Resources:
 
   CodeDeployCustomConfig:
     Type: Custom::CodeDeployBlueGreen
-    Condition: HasLambdaCode
+    Condition: EnableCodeDeployTrue
     DependsOn: CodeDeployDeploymentGroup
     Properties:
       ServiceToken: !GetAtt CodeDeployCustomConfigFunction.Arn
