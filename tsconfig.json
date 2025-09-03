@@ -24,5 +24,7 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
+  //"include": ["bin/tap.ts", "lib/tap-stack.ts"],
+  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "test", "cli", "lambda"]
   "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree"]
 }
