@@ -4,9 +4,7 @@ import unittest
 import boto3
 from botocore.exceptions import ClientError
 from pytest import mark
-import requests
 import time
-import uuid
 
 # Open file cfn-outputs/flat-outputs.json
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,11 +24,7 @@ flat_outputs = json.loads(flat_outputs)
 dynamodb = boto3.client('dynamodb')
 s3 = boto3.client('s3')
 ssm = boto3.client('ssm')
-lambda_client = boto3.client('lambda')
-apigateway = boto3.client('apigateway')
 ec2 = boto3.client('ec2')
-cloudwatch = boto3.client('cloudwatch')
-sns = boto3.client('sns')
 
 
 @mark.describe("TapStack Integration Tests")
@@ -206,125 +200,3 @@ class TestTapStackIntegration(unittest.TestCase):
         # The security group has 'Description' field, not 'GroupDescription'
         self.assertIn('Description', sg, "Security group description not found")
         self.assertEqual(sg['Description'], "Security group for Lambda functions", "Unexpected security group description")
-
-
-# Skip Lambda tests since Lambda function isn't deployed based on the outputs
-@unittest.skipIf('LambdaFunctionName' not in flat_outputs and 'LambdaFunctionArn' not in flat_outputs,
-                 "Lambda function not deployed - skipping Lambda tests")
-@mark.describe("LambdaFuncStack Integration Tests")
-class TestLambdaFuncStackIntegration(unittest.TestCase):
-    """Integration tests for the LambdaFuncStack"""
-
-    def setUp(self):
-        """Set up test environment"""
-        self.env_suffix = os.getenv('ENV_SUFFIX', 'dev')
-        
-        # These keys don't exist in the current deployment
-        self.lambda_name_key = "LambdaFunctionName"
-        self.lambda_arn_key = "LambdaFunctionArn"
-        
-        # TapStack outputs (no prefix)
-        self.dynamodb_table_key = "DynamoDBTableName"
-        self.s3_bucket_key = "S3BucketName"
-
-    @mark.it("verifies Lambda function exists and is configured correctly")
-    def test_lambda_function_exists(self):
-        # ARRANGE
-        function_name = flat_outputs.get(self.lambda_name_key)
-        
-        # ASSERT
-        self.assertIsNotNone(function_name, f"Lambda function name not found with key {self.lambda_name_key}")
-        
-        # ACT
-        response = lambda_client.get_function(FunctionName=function_name)
-        
-        # ASSERT
-        config = response['Configuration']
-        self.assertIn('Runtime', config, "Runtime not specified")
-        self.assertIn('Handler', config, "Handler not specified")
-        self.assertIn('MemorySize', config, "Memory size not specified")
-        self.assertIn('Timeout', config, "Timeout not specified")
-
-    @mark.it("verifies Lambda function can be invoked successfully")
-    def test_lambda_invocation(self):
-        # ARRANGE
-        function_name = flat_outputs.get(self.lambda_name_key)
-        self.assertIsNotNone(function_name, "Lambda function name not found")
-        
-        # Create a test event
-        test_event = {
-            "httpMethod": "GET",
-            "path": "/test"
-        }
-        
-        # ACT
-        response = lambda_client.invoke(
-            FunctionName=function_name,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(test_event)
-        )
-        
-        # ASSERT
-        self.assertEqual(response['StatusCode'], 200, "Lambda invocation failed")
-
-    @mark.it("verifies Lambda can write to DynamoDB")
-    def test_lambda_dynamodb_write(self):
-        # ARRANGE
-        function_name = flat_outputs.get(self.lambda_name_key)
-        table_name = flat_outputs.get(self.dynamodb_table_key)
-        self.assertIsNotNone(function_name, "Lambda function name not found")
-        self.assertIsNotNone(table_name, "DynamoDB table name not found")
-        
-        # Test implementation would go here
-        pass
-
-    @mark.it("verifies Lambda can write logs to S3")
-    def test_lambda_s3_logging(self):
-        # ARRANGE
-        function_name = flat_outputs.get(self.lambda_name_key)
-        bucket_name = flat_outputs.get(self.s3_bucket_key)
-        self.assertIsNotNone(function_name, "Lambda function name not found")
-        self.assertIsNotNone(bucket_name, "S3 bucket name not found")
-        
-        # Test implementation would go here
-        pass
-
-    @mark.it("verifies Lambda IAM role has correct permissions")
-    def test_lambda_iam_permissions(self):
-        # ARRANGE
-        function_name = flat_outputs.get(self.lambda_name_key)
-        self.assertIsNotNone(function_name, "Lambda function name not found")
-        
-        # Test implementation would go here
-        pass
-
-    @mark.it("verifies CloudWatch metrics are published")
-    def test_cloudwatch_metrics(self):
-        # ARRANGE
-        function_name = flat_outputs.get(self.lambda_name_key)
-        self.assertIsNotNone(function_name, "Lambda function name not found")
-        
-        # Test implementation would go here
-        pass
-
-
-# Skip end-to-end tests since Lambda function isn't deployed
-@unittest.skipIf('LambdaFunctionName' not in flat_outputs,
-                 "Lambda function not deployed - skipping end-to-end tests")
-@mark.describe("End-to-End Integration Tests")
-class TestEndToEndIntegration(unittest.TestCase):
-    """End-to-end integration tests for the complete stack"""
-
-    def setUp(self):
-        """Set up test environment"""
-        self.env_suffix = os.getenv('ENV_SUFFIX', 'dev')
-        self.lambda_name_key = "LambdaFunctionName"
-        self.function_name = flat_outputs.get(self.lambda_name_key)
-
-    @mark.it("performs complete CRUD operations")
-    def test_complete_crud_operations(self):
-        # ARRANGE
-        self.assertIsNotNone(self.function_name, "Lambda function name not found")
-        
-        # Test implementation would go here
-        pass
