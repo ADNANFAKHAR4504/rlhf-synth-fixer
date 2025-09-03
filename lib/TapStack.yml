@@ -176,15 +176,6 @@ Resources:
         - Key: Name
           Value: ALBHttpSecurityGroup
 
-  ShieldProtection:
-    Type: AWS::Shield::Protection
-    Properties:
-      Name: ShieldProtectionALB
-      ResourceArn: !GetAtt LoadBalancer.LoadBalancerArn
-      Tags:
-        - Key: Name
-          Value: ALBShieldProtection
-
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
