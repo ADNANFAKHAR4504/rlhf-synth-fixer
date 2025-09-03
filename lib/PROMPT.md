@@ -1,4 +1,4 @@
-Hey there! I need your help designing a serverless architecture using AWS CDK with Python. The goal is to create a scalable and secure system that leverages AWS services like Lambda, API Gateway, DynamoDB, and S3. Let me walk you through the requirements.
+Hey there! I need your help designing a serverless architecture using AWS CDK with Python(main.py- single stack). The goal is to create a scalable and secure system that leverages AWS services like Lambda, API Gateway, DynamoDB, and S3. Let me walk you through the requirements.
 
 First, we’ll use AWS Lambda with a Python runtime to handle serverless compute. These Lambda functions will be triggered by an API Gateway, which will serve as the entry point for the application. The API Gateway should also support a custom domain and have CORS policies enabled to allow cross-origin requests.
 
