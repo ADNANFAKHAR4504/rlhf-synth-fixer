@@ -16,6 +16,20 @@ variable "secondary_region" {
   default     = "us-west-1"
 }
 
+variable "aws_access_key" {
+  description = "The AWS access key for the provider."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "aws_secret_key" {
+  description = "The AWS secret key for the provider."
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
 variable "allowed_cidr_blocks" {
   description = "CIDR blocks allowed for SSH and HTTPS access"
   type        = list(string)
