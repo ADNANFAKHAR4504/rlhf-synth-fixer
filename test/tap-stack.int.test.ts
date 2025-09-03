@@ -65,8 +65,11 @@ describe('Secure API Integration Tests', () => {
 
     // Use AWS SDK to check if the Load Balancer exists
     try {
-      // Extract the short load balancer name from the full DNS name
-      const loadBalancerName = loadBalancerDns.split('-')[1];
+      // The DescribeLoadBalancersCommand expects the short load balancer name, not the full DNS.
+      // We extract the name by removing the random number suffix and the domain from the DNS.
+      const fullDnsWithoutDomain = loadBalancerDns.substring(0, loadBalancerDns.indexOf('.'));
+      const lastHyphenIndex = fullDnsWithoutDomain.lastIndexOf('-');
+      const loadBalancerName = fullDnsWithoutDomain.substring(0, lastHyphenIndex);
 
       const describeElbCommand = new DescribeLoadBalancersCommand({
         Names: [loadBalancerName],
@@ -119,4 +122,3 @@ describe('Secure API Integration Tests', () => {
     }
   });
 });
-
