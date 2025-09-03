@@ -1,4 +1,5 @@
 import { Construct } from 'constructs';
+import { TerraformLocal } from "cdktf";
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -32,6 +33,7 @@ import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric
 
 import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
+
 
 export interface WebAppModulesConfig {
   region: string;
@@ -305,6 +307,10 @@ export class WebAppModules extends Construct {
       }
     );
 
+    const iamDelay = new TerraformLocal(this, 'iam-delay', {
+      expression: 'sleep 10', // Wait 10 seconds for IAM propagation
+    });
+
     // Secrets Manager secret for RDS credentials
     // Provides secure storage and automatic rotation capabilities
     this.secretsManagerSecret = new SecretsmanagerSecret(
@@ -377,13 +383,13 @@ export class WebAppModules extends Construct {
 
     // Launch configuration for Auto Scaling Group
     // Defines the template for EC2 instances
-    const launchConfig = new LaunchConfiguration(this, 'web-launch-config', {
-      name: 'web-server-launch-config',
+    const launchConfig = new LaunchConfiguration(this, 'web-launch-config-ts', {
+      name: 'web-server-launch-config-ts',
       imageId: config.amiId,
       instanceType: config.instanceType,
       securityGroups: [ec2SecurityGroup.id],
       iamInstanceProfile: instanceProfile.name,
-      dependsOn: [instanceProfile, ec2SecurityGroup],
+      dependsOn: [instanceProfile, ec2SecurityGroup, ec2Role],
       // User data script to install and configure web server
       userData: Buffer.from(
         `#!/bin/bash
@@ -411,7 +417,7 @@ export class WebAppModules extends Construct {
       targetGroupArns: [targetGroup.arn],
       healthCheckType: 'ELB',
       healthCheckGracePeriod: 300,
-      dependsOn: [launchConfig],
+      dependsOn: [launchConfig, targetGroup],
       tag: [
         {
           key: 'Name',
