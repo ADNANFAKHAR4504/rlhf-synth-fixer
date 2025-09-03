@@ -36,5 +36,7 @@
     "Elastic Load Balancing (ALB)",
     "WAFv2",
     "GuardDuty"
-  ]
+  ],
+  "author": "olatunjym",
+  "dockerS3Location": ""
 }
