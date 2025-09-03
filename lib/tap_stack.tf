@@ -2,22 +2,15 @@
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
-# Regional provider mapping for for_each operations
-locals {
-  regional_providers = {
-    "us-east-1"     = aws.us_east_1
-    "eu-west-1"     = aws.eu_west_1
-    "ap-southeast-2" = aws.ap_southeast_2
-  }
-}
-
 # 1. GLOBAL TAGS - Applied via provider default_tags
 
 # 2. ENCRYPTION AT REST - KMS Customer Managed Keys per region
 resource "aws_kms_key" "regional_cmk" {
   for_each = toset(local.regions)
   
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   description             = "Customer managed key for ${local.name_prefix} in ${each.key}"
   deletion_window_in_days = 7
@@ -73,7 +66,9 @@ resource "aws_kms_key" "regional_cmk" {
 resource "aws_kms_alias" "regional_cmk" {
   for_each = toset(local.regions)
   
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   name          = "alias/${local.name_prefix}-cmk-${each.key}"
   target_key_id = aws_kms_key.regional_cmk[each.key].key_id
@@ -141,7 +136,9 @@ resource "aws_iam_group_policy_attachment" "mfa_enforcement" {
 # Try to find existing VPCs first, create minimal ones if not found
 data "aws_vpcs" "existing" {
   for_each = toset(local.regions)
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   tags = {
     Name = "${local.name_prefix}-vpc-${each.key}"
@@ -155,7 +152,9 @@ resource "aws_vpc" "main" {
     if length(data.aws_vpcs.existing[region].ids) == 0
   }
   
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   cidr_block           = "10.${index(local.regions, each.key)}.0.0/16"
   enable_dns_hostnames = true
@@ -180,7 +179,9 @@ locals {
 # Least privilege security group for application tier
 resource "aws_security_group" "app_tier" {
   for_each = toset(local.regions)
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   name        = "${local.name_prefix}-app-tier-${each.key}"
   description = "Least privilege security group for application tier"
@@ -396,7 +397,9 @@ resource "aws_cloudtrail" "main" {
 # 7. GUARDDUTY - Enable in all regions
 resource "aws_guardduty_detector" "main" {
   for_each = toset(local.regions)
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
@@ -513,7 +516,9 @@ resource "aws_iam_role_policy" "flow_logs" {
 # CloudWatch Log Groups for VPC Flow Logs (per region)
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   for_each = toset(local.regions)
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   name              = "/aws/vpc/flowlogs/${local.name_prefix}-${each.key}"
   retention_in_days = 30
@@ -523,7 +528,9 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 # VPC Flow Logs (per region)
 resource "aws_flow_log" "vpc_flow_logs" {
   for_each = toset(local.regions)
-  provider = local.regional_providers[each.key]
+  provider = each.key == "us-east-1" ? aws.us_east_1 : (
+    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
+  )
   
   iam_role_arn    = aws_iam_role.flow_logs.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs[each.key].arn
