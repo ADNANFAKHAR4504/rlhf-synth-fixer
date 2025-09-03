@@ -1,5 +1,5 @@
 import { Construct } from 'constructs';
-import { TerraformLocal } from "cdktf";
+import { TerraformLocal } from 'cdktf';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -33,7 +33,6 @@ import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric
 
 import { Route53Zone } from '@cdktf/provider-aws/lib/route53-zone';
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
-
 
 export interface WebAppModulesConfig {
   region: string;
@@ -307,7 +306,7 @@ export class WebAppModules extends Construct {
       }
     );
 
-    const iamDelay = new TerraformLocal(this, 'iam-delay', {
+    new TerraformLocal(this, 'iam-delay', {
       expression: 'sleep 10', // Wait 10 seconds for IAM propagation
     });
 
@@ -390,18 +389,19 @@ export class WebAppModules extends Construct {
       securityGroups: [ec2SecurityGroup.id],
       iamInstanceProfile: instanceProfile.name,
       dependsOn: [instanceProfile, ec2SecurityGroup, ec2Role],
-      // User data script to install and configure web server
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
       userData: Buffer.from(
         `#!/bin/bash
-        yum update -y
-        yum install -y httpd
-        systemctl start httpd
-        systemctl enable httpd
-        echo "<h1>Web Server Running</h1>" > /var/www/html/index.html
-        echo "OK" > /var/www/html/health
-        # Install CloudWatch agent for monitoring
-        yum install -y amazon-cloudwatch-agent
-      `
+    yum update -y
+    yum install -y httpd
+    systemctl start httpd
+    systemctl enable httpd
+    echo "<h1>Web Server Running</h1>" > /var/www/html/index.html
+    echo "OK" > /var/www/html/health
+    yum install -y amazon-cloudwatch-agent
+  `
       ).toString('base64'),
     });
 
