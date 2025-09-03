@@ -23,7 +23,7 @@ Parameters:
 
   KmsKeyAlias:
     Type: String
-    Default: alias/stack-key
+    Default: alias/tap_stack-key
     Description: Alias for KMS CMK used for encryption
 
   EnableGuardDuty:

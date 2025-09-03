@@ -25,7 +25,7 @@ describe("TapStack CloudFormation Template - Unit Tests", () => {
     expect(params.EnvironmentName.Default).toBe("dev");
     expect(params.VpcACidr.Default).toBe("10.0.0.0/16");
     expect(params.VpcBCidr.Default).toBe("10.1.0.0/16");
-    expect(params.KmsKeyAlias.Default).toBe("alias/stack-key");
+    expect(params.KmsKeyAlias.Default).toBe("alias/tap_stack-key");
     expect(params.Az1Name.Default).toBe("us-east-1a");
     expect(Object.keys(params)).toContain("EnableGuardDuty");
     expect(Object.keys(params)).toContain("EnableConfig");
