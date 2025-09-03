@@ -483,7 +483,7 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       DeletionProtection: true
-      EnableCloudwatchLogsExports: [error, general, slow-query]
+      EnableCloudwatchLogsExports: [error]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-database'
