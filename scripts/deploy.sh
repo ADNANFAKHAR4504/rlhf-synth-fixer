@@ -166,6 +166,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     cd lib
     echo "Installing dependencies..."
     npm install
+    npm run build
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
     echo "Deploying infrastructure ..."
