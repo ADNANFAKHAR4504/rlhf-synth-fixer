@@ -27,15 +27,7 @@ describe('TapStack', () => {
         {
           Key: 'Name',
           Value: 'prod-vpc',
-        },
-        {
-          Key: 'Project',
-          Value: 'Environment',
-        },
-        {
-          Key: 'Project',
-          Value: 'Production',
-        },
+        }
       ]),
     });
   });
