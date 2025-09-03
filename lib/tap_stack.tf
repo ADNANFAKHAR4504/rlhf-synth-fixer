@@ -174,12 +174,35 @@ resource "aws_s3_bucket_versioning" "app_assets_versioning" {
 }
 
 # S3 bucket lifecycle configuration
+# resource "aws_s3_bucket_lifecycle_configuration" "app_assets_lifecycle" {
+#   bucket = aws_s3_bucket.app_assets.id
+
+#   rule {
+#     id     = "cleanup_old_versions"
+#     status = "Enabled"
+
+#     noncurrent_version_expiration {
+#       noncurrent_days = 30
+#     }
+
+#     abort_incomplete_multipart_upload {
+#       days_after_initiation = 7
+#     }
+#   }
+# }
+
+# S3 bucket lifecycle configuration
 resource "aws_s3_bucket_lifecycle_configuration" "app_assets_lifecycle" {
   bucket = aws_s3_bucket.app_assets.id
 
   rule {
     id     = "cleanup_old_versions"
     status = "Enabled"
+
+    # Add filter to specify which objects the rule applies to
+    filter {
+      prefix = "" # Apply to all objects in the bucket
+    }
 
     noncurrent_version_expiration {
       noncurrent_days = 30
@@ -190,6 +213,52 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_assets_lifecycle" {
     }
   }
 }
+
+# DynamoDB table with on-demand billing
+# resource "aws_dynamodb_table" "app_data" {
+#   name         = "${local.name_prefix}-data"
+#   billing_mode = "PAY_PER_REQUEST" # On-demand as required
+#   hash_key     = "id"
+
+#   attribute {
+#     name = "id"
+#     type = "S"
+#   }
+
+#   # Optional GSI for querying by status
+#   attribute {
+#     name = "status"
+#     type = "S"
+#   }
+
+#   attribute {
+#     name = "created_at"
+#     type = "S"
+#   }
+
+#   global_secondary_index {
+#     name      = "status-created_at-index"
+#     hash_key  = "status"
+#     range_key = "created_at"
+#     # projection_type = "ALL"
+#   }
+
+#   # TTL attribute for automatic item expiration
+#   ttl {
+#     attribute_name = "expires_at"
+#     enabled        = true
+#   }
+
+#   # Server-side encryption
+#   server_side_encryption {
+#     enabled = true
+#   }
+
+#   tags = merge(local.tags, {
+#     Name        = "${local.name_prefix}-data"
+#     Description = "DynamoDB table for ProjectX application data with on-demand billing"
+#   })
+# }
 
 # DynamoDB table with on-demand billing
 resource "aws_dynamodb_table" "app_data" {
@@ -214,10 +283,10 @@ resource "aws_dynamodb_table" "app_data" {
   }
 
   global_secondary_index {
-    name      = "status-created_at-index"
-    hash_key  = "status"
-    range_key = "created_at"
-    # projection_type = "ALL"
+    name            = "status-created_at-index"
+    hash_key        = "status"
+    range_key       = "created_at"
+    projection_type = "ALL" # Required argument - projects all attributes
   }
 
   # TTL attribute for automatic item expiration
@@ -252,6 +321,31 @@ resource "aws_sns_topic_subscription" "lambda_errors_email" {
   topic_arn = aws_sns_topic.lambda_errors.arn
   protocol  = "email"
   endpoint  = var.notification_email
+}
+
+# SNS Topic Policy to allow Lambda functions to publish messages
+resource "aws_sns_topic_policy" "lambda_errors_policy" {
+  arn = aws_sns_topic.lambda_errors.arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowLambdaPublish"
+        Effect = "Allow"
+        Principal = {
+          AWS = [
+            aws_iam_role.lambda_execution_role.arn,
+            aws_iam_role.lambda_processor_role.arn
+          ]
+        }
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = aws_sns_topic.lambda_errors.arn
+      }
+    ]
+  })
 }
 
 # IAM Role for Lambda execution (API handler)
@@ -296,10 +390,10 @@ resource "aws_iam_role" "lambda_processor_role" {
   tags = local.tags
 }
 
-# IAM Policy for basic Lambda execution (CloudWatch Logs)
+# IAM Policy for basic Lambda execution (CloudWatch Logs, X-Ray, and SNS)
 resource "aws_iam_policy" "lambda_basic_execution" {
   name        = "${local.name_prefix}-lambda-basic-execution"
-  description = "Basic execution policy for Lambda functions - CloudWatch Logs and X-Ray"
+  description = "Basic execution policy for Lambda functions - CloudWatch Logs, X-Ray, and SNS"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -322,6 +416,14 @@ resource "aws_iam_policy" "lambda_basic_execution" {
           "xray:PutTelemetryRecords"
         ]
         Resource = "*"
+      },
+      {
+        # SNS publish permissions - required for error notifications
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = aws_sns_topic.lambda_errors.arn
       }
     ]
   })
@@ -606,8 +708,8 @@ resource "aws_lambda_function" "data_processor" {
   })
 }
 
-# Lambda Event Invoke Configuration for error handling
-resource "aws_lambda_event_invoke_config" "api_handler_invoke_config" {
+# Lambda Function Event Invoke Configuration for error handling
+resource "aws_lambda_function_event_invoke_config" "api_handler_invoke_config" {
   function_name = aws_lambda_function.api_handler.function_name
 
   destination_config {
@@ -619,7 +721,7 @@ resource "aws_lambda_event_invoke_config" "api_handler_invoke_config" {
   maximum_retry_attempts = 2
 }
 
-resource "aws_lambda_event_invoke_config" "data_processor_invoke_config" {
+resource "aws_lambda_function_event_invoke_config" "data_processor_invoke_config" {
   function_name = aws_lambda_function.data_processor.function_name
 
   destination_config {
