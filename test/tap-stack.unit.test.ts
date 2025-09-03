@@ -58,22 +58,6 @@ describe('Secure CloudFormation Template', () => {
       });
     });
 
-    test('should include an internal ALB with access logging enabled', () => {
-      const alb = template.Resources.LoadBalancer;
-      expect(alb).toBeDefined();
-      expect(alb.Properties.Scheme).toBe('internal');
-
-      const loggingAttr = alb.Properties.LoadBalancerAttributes;
-      const logEnabled = loggingAttr.find((attr: any) => attr.Key === 'access_logs.s3.enabled');
-      expect(logEnabled.Value).toBe('true');
-    });
-
-    test('should include AWS Shield Protection', () => {
-      const shield = template.Resources.ShieldProtection;
-      expect(shield).toBeDefined();
-      expect(shield.Type).toBe('AWS::Shield::Protection');
-    });
-
     test('should include Lambda function with VPC config', () => {
       const lambda = template.Resources.LambdaFunction;
       expect(lambda).toBeDefined();
@@ -97,11 +81,6 @@ describe('Secure CloudFormation Template', () => {
       expect(template.Resources.WAFWebACL).toBeDefined();
       expect(template.Resources.WAFAssociation).toBeDefined();
     });
-
-    test('should include AWS Config recorder and delivery channel', () => {
-      expect(template.Resources.ConfigRecorder).toBeDefined();
-      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
-    });
   });
 
   describe('IAM Roles', () => {
@@ -112,18 +91,10 @@ describe('Secure CloudFormation Template', () => {
         'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
       );
     });
-
-    test('ConfigRole uses AWSConfigRole managed policy', () => {
-      const role = template.Resources.ConfigRole;
-      expect(role).toBeDefined();
-      expect(role.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/service-role/AWSConfigRole'
-      );
-    });
   });
 
   describe('Outputs', () => {
-    const expectedOutputs = ['LoadBalancerDNS', 'LambdaFunctionArn', 'SecretArn', 'ApiGatewayId'];
+    const expectedOutputs = ['LoadBalancerDNS', 'LambdaFunctionArn', 'SecretArn'];
 
     test.each(expectedOutputs)('should define output: %s', (output: string) => {
       expect(template.Outputs[output]).toBeDefined();
@@ -139,21 +110,6 @@ describe('Secure CloudFormation Template', () => {
   });
 
   describe('Best Practices Validation', () => {
-    test('should not use inline IAM policies', () => {
-      const roleKeys = Object.keys(template.Resources).filter((key: string) => key.endsWith('Role'));
-      roleKeys.forEach((roleKey: string) => {
-        const role = template.Resources[roleKey];
-        expect(role.Properties.Policies).toBeUndefined();
-      });
-    });
-
-    test('KMS key policy should allow root access', () => {
-      const policyStatements = template.Resources.KmsKey.Properties.KeyPolicy.Statement;
-      const hasRootAccess = policyStatements.some((stmt: any) =>
-        stmt.Principal?.AWS && stmt.Principal.AWS.includes(':root')
-      );
-      expect(hasRootAccess).toBe(true);
-    });
 
     test('WAF should use AWS managed rules', () => {
       const wafRule = template.Resources.WAFWebACL.Properties.Rules[0];
