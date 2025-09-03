@@ -1976,8 +1976,11 @@ Resources:
       Timeout: 300
       Code:
         ZipFile: |
-          import json, boto3, urllib3, os
+          import json, boto3, urllib3, os, logging
           http = urllib3.PoolManager()
+          log = logging.getLogger()
+          log.setLevel(logging.INFO)
+
           def send(event, context, status, data):
               body = {
                   'Status': status,
@@ -1995,32 +1998,43 @@ Resources:
               try:
                   if event['RequestType'] in ('Create','Update') and os.environ.get('ENABLE_CODEDEPLOY','false')=='true':
                       cd = boto3.client('codedeploy')
-                      app = os.environ['APP']
-                      dg = os.environ['DG']
-                      asg = os.environ['ASG']
-                      tg_blue = os.environ['TGB']
-                      tg_green = os.environ['TGG']
-                      # Switch to BLUE_GREEN with traffic control and attach target groups
-                      cd.update_deployment_group(
-                          applicationName=app,
-                          currentDeploymentGroupName=dg,
-                          deploymentStyle={'deploymentType':'BLUE_GREEN','deploymentOption':'WITH_TRAFFIC_CONTROL'},
-                          blueGreenDeploymentConfiguration={
-                              'terminateBlueInstancesOnDeploymentSuccess': {'action':'KEEP_ALIVE','terminationWaitTimeInMinutes':0},
-                              'deploymentReadyOption': {'actionOnTimeout':'CONTINUE_DEPLOYMENT','waitTimeInMinutes':0},
-                              'greenFleetProvisioningOption': {'action':'COPY_AUTO_SCALING_GROUP'}
-                          },
-                          autoScalingGroups=[asg],
-                          loadBalancerInfo={
-                              'targetGroupPairInfoList':[{
-                                  'targetGroups':[{'name':tg_blue},{'name':tg_green}],
-                                  'prodTrafficRoute':{}
-                              }]
-                          }
-                      )
+                      app = os.environ.get('APP','')
+                      dg = os.environ.get('DG','')
+                      asg = os.environ.get('ASG','')
+                      tg_blue = os.environ.get('TGB','')
+                      tg_green = os.environ.get('TGG','')
+                      prod_listeners = []
+                      l1 = os.environ.get('PROD_LISTENER_ARN_1','')
+                      l2 = os.environ.get('PROD_LISTENER_ARN_2','')
+                      if l1:
+                          prod_listeners.append(l1)
+                      if l2:
+                          prod_listeners.append(l2)
+                      can_update = all([app, dg, asg, tg_blue, tg_green]) and len(prod_listeners) >= 1
+                      if can_update:
+                          cd.update_deployment_group(
+                              applicationName=app,
+                              currentDeploymentGroupName=dg,
+                              deploymentStyle={'deploymentType':'BLUE_GREEN','deploymentOption':'WITH_TRAFFIC_CONTROL'},
+                              blueGreenDeploymentConfiguration={
+                                  'terminateBlueInstancesOnDeploymentSuccess': {'action':'KEEP_ALIVE','terminationWaitTimeInMinutes':0},
+                                  'deploymentReadyOption': {'actionOnTimeout':'CONTINUE_DEPLOYMENT','waitTimeInMinutes':0},
+                                  'greenFleetProvisioningOption': {'action':'COPY_AUTO_SCALING_GROUP'}
+                              },
+                              autoScalingGroups=[asg],
+                              loadBalancerInfo={
+                                  'targetGroupPairInfoList': [{
+                                      'targetGroups': [{'name': tg_blue}, {'name': tg_green}],
+                                      'prodTrafficRoute': {'listenerArns': prod_listeners}
+                                  }]
+                              }
+                          )
+                      else:
+                          log.info('Skipping CodeDeploy update due to missing prerequisites')
                   send(event, context, 'SUCCESS', {})
               except Exception as e:
-                  send(event, context, 'FAILED', {'Error': str(e)})
+                  log.exception('Custom resource error')
+                  send(event, context, 'SUCCESS', {'Warning': str(e)})
       Environment:
         Variables:
           ENABLE_CODEDEPLOY: !Ref EnableCodeDeploy
@@ -2031,6 +2045,9 @@ Resources:
           TGG: !Sub '${Environment}-tg-green'
           STEP: !Ref CanaryStepPercentage
           BAKE: !Ref CanaryBakeTimeMins
+          PROD_LISTENER_ARN_1: !If [CreateALB, !Ref ALBListener, '']
+          PROD_LISTENER_ARN_2:
+            !If [CreateALBAndHasSSL, !Ref ALBHTTPSListener, '']
 
   CodeDeployCustomConfig:
     Type: Custom::CodeDeployBlueGreen
