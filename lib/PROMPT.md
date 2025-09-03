@@ -1,4 +1,4 @@
-Create Terraform Configuration for Serverless AWS Application
+## Create Terraform Configuration for Serverless AWS Application
 Create a Terraform configuration that sets up a serverless application environment with:
 Lambda function triggered by S3 object creation (30 second timeout)
 S3 bucket with versioning enabled and event triggers
