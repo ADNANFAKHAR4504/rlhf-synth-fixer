@@ -18,22 +18,26 @@ from typing import Dict, List, Optional, Tuple
 
 import aws_cdk as cdk
 from aws_cdk import (
-    Duration,
-    RemovalPolicy,
-    Tags,
-    aws_autoscaling as autoscaling,
-    aws_cloudtrail as cloudtrail,
-    aws_cloudwatch as cloudwatch,
-    aws_dynamodb as dynamodb,
+    Stack,
     aws_ec2 as ec2,
-    aws_iam as iam,
-    aws_kms as kms,
-    aws_logs as logs,
-    aws_elbv2 as elbv2,
-    aws_rds as rds,
+    aws_elasticloadbalancingv2 as elbv2,   # <-- FIXED: not aws_elbv2
     aws_s3 as s3,
-    aws_secretsmanager as secretsmanager,
+    aws_dynamodb as dynamodb,
+    aws_iam as iam,
     aws_ssm as ssm,
+    aws_secretsmanager as secretsmanager,
+    aws_cloudtrail as cloudtrail,
+    aws_logs as logs,
+    aws_cloudwatch as cloudwatch,
+    aws_sns as sns,
+    aws_sns_subscriptions as sns_subscriptions,
+    aws_kms as kms,
+    aws_rds as rds,
+    aws_autoscaling as autoscaling,
+    CfnOutput,
+    RemovalPolicy,
+    Duration,
+    Tags,
 )
 from constructs import Construct
 
