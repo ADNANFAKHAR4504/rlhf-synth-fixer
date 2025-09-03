@@ -22,9 +22,8 @@
     "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "dist"
   },
-  "include": ["lib/TapStack.yml"],
-  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "test", "cli", "lambda"]
   "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree"]
 }
