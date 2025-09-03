@@ -133,6 +133,11 @@ export class TapStack extends pulumi.ComponentResource {
       // Security Group outputs
       albSecurityGroupId: this.infrastructure.albSecurityGroup.id,
       ec2SecurityGroupId: this.infrastructure.ec2SecurityGroup.id,
+      cloudTrailBucketName: this.infrastructure.cloudTrailBucket.id,
+
+      rdsInstanceId: this.infrastructure.rdsInstance.id,
+      flowLogGroupName: this.infrastructure.flowLogGroup.name,
+      flowLogGroupArn: this.infrastructure.flowLogGroup.arn,
     });
   }
 }

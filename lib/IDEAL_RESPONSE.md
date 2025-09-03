@@ -5,6 +5,7 @@ Here's a complete, production-ready Pulumi Go implementation that meets all your
 ```typescript
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 
 export function getAlbServiceAccountId(region: string): string {
   const albAccounts: Record<string, string> = {
@@ -38,15 +39,29 @@ export class WebAppInfrastructure {
   public readonly provider: aws.Provider;
   public readonly albSecurityGroup: aws.ec2.SecurityGroup;
   public readonly ec2SecurityGroup: aws.ec2.SecurityGroup;
+  public readonly webSecurityGroup: aws.ec2.SecurityGroup;
+  public readonly vpcEndpointSecurityGroup: aws.ec2.SecurityGroup;
+  public readonly rdsInstance: aws.rds.Instance;
+  public readonly cloudTrailBucket: aws.s3.Bucket;
+  public readonly flowLogGroup: aws.cloudwatch.LogGroup;
+  private readonly caller: pulumi.Output<aws.GetCallerIdentityResult>;
+  private readonly region: string;
+  private readonly environment: string;
 
   constructor(
     region: string,
     environment: string,
     tags: pulumi.Input<Record<string, string>>
   ) {
+    this.region = region;
+    this.environment = environment;
     this.provider = new aws.Provider(`provider-${environment}`, {
       region: region,
     });
+
+    this.caller = pulumi.output(
+      aws.getCallerIdentity({}, { provider: this.provider })
+    );
 
     const resourceTags = pulumi.output(tags).apply(t => ({
       ...t,
@@ -250,21 +265,28 @@ export class WebAppInfrastructure {
       `alb-logs-policy-${environment}`,
       {
         bucket: albLogsBucket.id,
-        policy: albLogsBucket.arn.apply(bucketArn =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  AWS: `arn:aws:iam::${getAlbServiceAccountId(region)}:root`,
+        policy: pulumi
+          .all([albLogsBucket.arn, this.caller])
+          .apply(([bucketArn, caller]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    AWS: `arn:aws:iam::${getAlbServiceAccountId(region)}:root`,
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringEquals: {
+                      'aws:SourceAccount': caller.accountId,
+                    },
+                  },
                 },
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/*`,
-              },
-            ],
-          })
-        ),
+              ],
+            })
+          ),
       },
       { provider: this.provider }
     );
@@ -333,6 +355,128 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
+    // Dedicated security group for web traffic (used by ALB)
+    this.webSecurityGroup = new aws.ec2.SecurityGroup(
+      `web-sg-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for web traffic',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `web-sg-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // Dedicated security group for VPC endpoints
+    this.vpcEndpointSecurityGroup = new aws.ec2.SecurityGroup(
+      `vpc-endpoint-sg-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for VPC endpoints',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            securityGroups: [this.ec2SecurityGroup.id],
+          },
+        ],
+        egress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `vpc-endpoint-sg-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // AWS WAF for ALB protection
+    const webAcl = new aws.wafv2.WebAcl(
+      `web-acl-${environment}`,
+      {
+        scope: 'REGIONAL',
+        defaultAction: {
+          allow: {},
+        },
+        rules: [
+          {
+            name: 'AWSManagedRulesCommonRuleSet',
+            priority: 1,
+            overrideAction: {
+              none: {},
+            },
+            statement: {
+              managedRuleGroupStatement: {
+                name: 'AWSManagedRulesCommonRuleSet',
+                vendorName: 'AWS',
+              },
+            },
+            visibilityConfig: {
+              cloudwatchMetricsEnabled: true,
+              metricName: 'CommonRuleSetMetric',
+              sampledRequestsEnabled: true,
+            },
+          },
+          {
+            name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            priority: 2,
+            overrideAction: {
+              none: {},
+            },
+            statement: {
+              managedRuleGroupStatement: {
+                name: 'AWSManagedRulesKnownBadInputsRuleSet',
+                vendorName: 'AWS',
+              },
+            },
+            visibilityConfig: {
+              cloudwatchMetricsEnabled: true,
+              metricName: 'KnownBadInputsRuleSetMetric',
+              sampledRequestsEnabled: true,
+            },
+          },
+        ],
+        visibilityConfig: {
+          cloudwatchMetricsEnabled: true,
+          metricName: `WebACL-${environment}`,
+          sampledRequestsEnabled: true,
+        },
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
     this.loadBalancer = new aws.lb.LoadBalancer(
       `alb-${environment}`,
       {
@@ -348,6 +492,16 @@ export class WebAppInfrastructure {
           ...t,
           Name: `alb-${environment}`,
         })),
+      },
+      { provider: this.provider }
+    );
+
+    // Associate WAF with ALB
+    new aws.wafv2.WebAclAssociation(
+      `web-acl-association-${environment}`,
+      {
+        resourceArn: this.loadBalancer.arn,
+        webAclArn: webAcl.arn,
       },
       { provider: this.provider }
     );
@@ -407,6 +561,171 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
+    // KMS Key for encryption
+    const kmsKey = new aws.kms.Key(
+      `app-key-${environment}`,
+      {
+        description: `KMS key for ${environment} application`,
+        policy: pulumi.all([this.caller]).apply(([caller]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: {
+                  AWS: `arn:aws:iam::${caller.accountId}:root`,
+                },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow use of the key for RDS',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'rds.amazonaws.com',
+                },
+                Action: [
+                  'kms:Decrypt',
+                  'kms:GenerateDataKey',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:SourceAccount': caller.accountId,
+                  },
+                },
+              },
+              {
+                Sid: 'Allow use of the key for Secrets Manager',
+                Effect: 'Allow',
+                Principal: {
+                  Service: 'secretsmanager.amazonaws.com',
+                },
+                Action: [
+                  'kms:Decrypt',
+                  'kms:GenerateDataKey',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  StringEquals: {
+                    'aws:SourceAccount': caller.accountId,
+                  },
+                },
+              },
+              {
+                Sid: 'Allow use of the key for CloudWatch Logs',
+                Effect: 'Allow',
+                Principal: {
+                  Service: `logs.${region}.amazonaws.com`,
+                },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  ArnEquals: {
+                    'kms:EncryptionContext:aws:logs:arn': [
+                      `arn:aws:logs:${region}:${caller.accountId}:log-group:/ec2/app-logs/${environment}`,
+                      `arn:aws:logs:${region}:${caller.accountId}:log-group:vpc-flow-logs-${environment}`,
+                    ],
+                  },
+                },
+              },
+            ],
+          })
+        ),
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    new aws.kms.Alias(
+      `app-key-alias-${environment}`,
+      {
+        name: `alias/app-key-${environment}`,
+        targetKeyId: kmsKey.keyId,
+      },
+      { provider: this.provider }
+    );
+
+    // Database credentials secret
+    const dbSecret = new aws.secretsmanager.Secret(
+      `db-credentials-${environment}`,
+      {
+        description: `Database credentials for ${environment}`,
+        kmsKeyId: kmsKey.keyId,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    const dbPassword = new random.RandomPassword(`db-password-${environment}`, {
+      length: 32,
+      special: true,
+      overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+    });
+
+    new aws.secretsmanager.SecretVersion(
+      `db-credentials-version-${environment}`,
+      {
+        secretId: dbSecret.id,
+        secretString: pulumi.interpolate`{"username":"admin","password":"${dbPassword.result}"}`,
+      },
+      { provider: this.provider }
+    );
+
+    // Application secrets with rotation
+    const appSecret = new aws.secretsmanager.Secret(
+      `app-secrets-${environment}`,
+      {
+        description: `Application secrets for ${environment}`,
+        kmsKeyId: kmsKey.keyId,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    const jwtSecret = new random.RandomPassword(`jwt-secret-${environment}`, {
+      length: 64,
+      special: false,
+    });
+
+    const apiKey = new random.RandomPassword(`api-key-${environment}`, {
+      length: 32,
+      special: false,
+    });
+
+    new aws.secretsmanager.SecretVersion(
+      `app-secrets-version-${environment}`,
+      {
+        secretId: appSecret.id,
+        secretString: pulumi.interpolate`{"api_key":"${apiKey.result}","database_url":"placeholder","jwt_secret":"${jwtSecret.result}"}`,
+      },
+      { provider: this.provider }
+    );
+
+    // VPC Endpoint for Secrets Manager
+    new aws.ec2.VpcEndpoint(
+      `secretsmanager-endpoint-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        serviceName: `com.amazonaws.${region}.secretsmanager`,
+        vpcEndpointType: 'Interface',
+        subnetIds: this.privateSubnets.map(subnet => subnet.id),
+        securityGroupIds: [this.vpcEndpointSecurityGroup.id],
+        privateDnsEnabled: true,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
     const instanceRole = new aws.iam.Role(
       `instance-role-${environment}`,
       {
@@ -430,11 +749,64 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
+    // Custom policy for EC2 instances with least privilege
+    new aws.iam.RolePolicy(
+      `instance-policy-${environment}`,
+      {
+        role: instanceRole.id,
+        policy: pulumi
+          .all([this.caller, kmsKey.arn])
+          .apply(([caller, kmsArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                  Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:/ec2/app-logs/${environment}:*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: [
+                    `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:app-secrets-${environment}-*`,
+                    `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:db-credentials-${environment}-*`,
+                  ],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: kmsArn,
+                  Condition: {
+                    StringEquals: {
+                      'kms:ViaService': `secretsmanager.${region}.amazonaws.com`,
+                    },
+                  },
+                },
+              ],
+            })
+          ),
+      },
+      { provider: this.provider }
+    );
+
     new aws.iam.RolePolicyAttachment(
       `instance-role-policy-${environment}`,
       {
         role: instanceRole.name,
         policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+      },
+      { provider: this.provider }
+    );
+
+    // CloudWatch Log Group for EC2 instances
+    new aws.cloudwatch.LogGroup(
+      `ec2-app-logs-${environment}`,
+      {
+        name: `/ec2/app-logs/${environment}`,
+        retentionInDays: 30,
+        kmsKeyId: kmsKey.arn,
+        tags: resourceTags,
       },
       { provider: this.provider }
     );
@@ -630,15 +1002,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketAcl(
-      `cloudfront-logs-acl-${environment}`,
-      {
-        bucket: cloudFrontLogsBucket.id,
-        acl: 'private',
-      },
-      { provider: this.provider }
-    );
-
     new aws.s3.BucketOwnershipControls(
       `cloudfront-logs-ownership-${environment}`,
       {
@@ -715,122 +1078,22 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
     const flowLogRole = new aws.iam.Role(
       `vpc-flow-log-role-${environment}`,
       {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'vpc-flow-logs.amazonaws.com',
-              },
-            },
-          ],
-        }),
-      },
-      { provider: this.provider }
-    );
-
-    new aws.iam.RolePolicy(
-      `vpc-flow-log-policy-${environment}`,
-      {
-        role: flowLogRole.id,
-        policy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Action: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams',
-              ],
-              Resource: '*',
-            },
-          ],
-        }),
-      },
-      { provider: this.provider }
-    );
-
-    const flowLogGroup = new aws.cloudwatch.LogGroup(
-      `vpc-flow-logs-${environment}`,
-      {
-        retentionInDays: 30,
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    new aws.ec2.FlowLog(
-      `vpc-flow-log-${environment}`,
-      {
-        iamRoleArn: flowLogRole.arn,
-        logDestination: flowLogGroup.arn,
-        vpcId: this.vpc.id,
-        trafficType: 'ALL',
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    // CloudTrail
-    const cloudTrailBucket = new aws.s3.Bucket(
-      `cloudtrail-${environment}`,
-      {
-        tags: resourceTags.apply(t => ({
-          ...t,
-          Name: `cloudtrail-${environment}`,
-        })),
-      },
-      { provider: this.provider }
-    );
-
-    new aws.s3.BucketServerSideEncryptionConfiguration(
-      `cloudtrail-encryption-${environment}`,
-      {
-        bucket: cloudTrailBucket.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        ],
-      },
-      { provider: this.provider }
-    );
-
-    new aws.s3.BucketPolicy(
-      `cloudtrail-policy-${environment}`,
-      {
-        bucket: cloudTrailBucket.id,
-        policy: pulumi.all([cloudTrailBucket.arn]).apply(([bucketArn]) =>
+        assumeRolePolicy: pulumi.all([this.caller]).apply(([caller]) =>
           JSON.stringify({
             Version: '2012-10-17',
             Statement: [
               {
-                Sid: 'AWSCloudTrailAclCheck',
+                Action: 'sts:AssumeRole',
                 Effect: 'Allow',
                 Principal: {
-                  Service: 'cloudtrail.amazonaws.com',
+                  Service: 'vpc-flow-logs.amazonaws.com',
                 },
-                Action: 's3:GetBucketAcl',
-                Resource: bucketArn,
-              },
-              {
-                Sid: 'AWSCloudTrailWrite',
-                Effect: 'Allow',
-                Principal: {
-                  Service: 'cloudtrail.amazonaws.com',
-                },
-                Action: 's3:PutObject',
-                Resource: `${bucketArn}/*`,
                 Condition: {
                   StringEquals: {
-                    's3:x-amz-acl': 'bucket-owner-full-control',
+                    'aws:SourceAccount': caller.accountId,
+                  },
+                  ArnLike: {
+                    'aws:SourceArn': `arn:aws:ec2:${region}:${caller.accountId}:vpc-flow-log/*`,
                   },
                 },
               },
@@ -841,13 +1104,285 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
+    new aws.iam.RolePolicy(
+      `vpc-flow-log-policy-${environment}`,
+      {
+        role: flowLogRole.id,
+        policy: pulumi.all([this.caller]).apply(([caller]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:vpc-flow-logs-${environment}:*`,
+              },
+            ],
+          })
+        ),
+      },
+      { provider: this.provider }
+    );
+
+    this.flowLogGroup = new aws.cloudwatch.LogGroup(
+      `vpc-flow-logs-${environment}`,
+      {
+        name: `vpc-flow-logs-${environment}`,
+        retentionInDays: 30,
+        kmsKeyId: kmsKey.arn,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    new aws.ec2.FlowLog(
+      `vpc-flow-log-${environment}`,
+      {
+        iamRoleArn: flowLogRole.arn,
+        logDestination: this.flowLogGroup.arn,
+        vpcId: this.vpc.id,
+        trafficType: 'ALL',
+        tags: resourceTags,
+      },
+      { provider: this.provider, dependsOn: [this.flowLogGroup] }
+    );
+
+    // CloudTrail
+    this.cloudTrailBucket = new aws.s3.Bucket(
+      `cloudtrail-${environment}`,
+      {
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `cloudtrail-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    new aws.s3.BucketPolicy(
+      `cloudtrail-policy-${environment}`,
+      {
+        bucket: this.cloudTrailBucket.id,
+        policy: pulumi
+          .all([this.cloudTrailBucket.arn, this.caller])
+          .apply(([bucketArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Sid: 'AWSCloudTrailAclCheck',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:GetBucketAcl',
+                  Resource: bucketArn,
+                },
+                {
+                  Sid: 'AWSCloudTrailWrite',
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'cloudtrail.amazonaws.com',
+                  },
+                  Action: 's3:PutObject',
+                  Resource: `${bucketArn}/*`,
+                  Condition: {
+                    StringEquals: {
+                      's3:x-amz-acl': 'bucket-owner-full-control',
+                    },
+                  },
+                },
+              ],
+            })
+          ),
+      },
+      { provider: this.provider }
+    );
+
     new aws.cloudtrail.Trail(
       `cloudtrail-${environment}`,
       {
-        s3BucketName: cloudTrailBucket.bucket,
+        s3BucketName: this.cloudTrailBucket.bucket,
         includeGlobalServiceEvents: true,
-        isMultiRegionTrail: true,
+        isMultiRegionTrail: false,
         enableLogging: true,
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    // RDS Subnet Group
+    const dbSubnetGroup = new aws.rds.SubnetGroup(
+      `db-subnet-group-${environment}`,
+      {
+        subnetIds: this.privateSubnets.map(subnet => subnet.id),
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `db-subnet-group-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // RDS Security Group
+    const rdsSecurityGroup = new aws.ec2.SecurityGroup(
+      `rds-sg-${environment}`,
+      {
+        vpcId: this.vpc.id,
+        description: 'Security group for RDS database',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 3306,
+            toPort: 3306,
+            securityGroups: [this.ec2SecurityGroup.id],
+          },
+        ],
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `rds-sg-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // RDS Instance with AWS managed password
+    this.rdsInstance = new aws.rds.Instance(
+      `db-${environment}`,
+      {
+        identifier: `db-${environment}`,
+        engine: 'mysql',
+        engineVersion: '8.0',
+        instanceClass: 'db.t3.micro',
+        allocatedStorage: 20,
+        storageType: 'gp2',
+        storageEncrypted: true,
+        kmsKeyId: kmsKey.arn,
+        dbName: 'appdb',
+        username: 'admin',
+        manageMasterUserPassword: true,
+        vpcSecurityGroupIds: [rdsSecurityGroup.id],
+        dbSubnetGroupName: dbSubnetGroup.name,
+        backupRetentionPeriod: 7,
+        backupWindow: '03:00-04:00',
+        maintenanceWindow: 'sun:04:00-sun:05:00',
+        skipFinalSnapshot: true,
+        deletionProtection: false,
+        tags: resourceTags.apply(t => ({
+          ...t,
+          Name: `db-${environment}`,
+        })),
+      },
+      { provider: this.provider }
+    );
+
+    // CloudWatch Alarms for monitoring
+    // ALB Target Response Time
+    new aws.cloudwatch.MetricAlarm(
+      `alb-response-time-${environment}`,
+      {
+        name: `ALB-HighResponseTime-${environment}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'TargetResponseTime',
+        namespace: 'AWS/ApplicationELB',
+        period: 300,
+        statistic: 'Average',
+        threshold: 1.0,
+        alarmDescription: 'ALB response time is too high',
+        dimensions: {
+          LoadBalancer: this.loadBalancer.arnSuffix,
+        },
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    // ASG CPU Utilization
+    new aws.cloudwatch.MetricAlarm(
+      `asg-cpu-high-${environment}`,
+      {
+        name: `ASG-HighCPU-${environment}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/EC2',
+        period: 300,
+        statistic: 'Average',
+        threshold: 80,
+        alarmDescription: 'EC2 CPU utilization is too high',
+        dimensions: {
+          AutoScalingGroupName: this.autoScalingGroup.name,
+        },
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    // RDS CPU Utilization
+    new aws.cloudwatch.MetricAlarm(
+      `rds-cpu-high-${environment}`,
+      {
+        name: `RDS-HighCPU-${environment}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 80,
+        alarmDescription: 'RDS CPU utilization is too high',
+        dimensions: {
+          DBInstanceIdentifier: this.rdsInstance.identifier,
+        },
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    // RDS Free Storage Space
+    new aws.cloudwatch.MetricAlarm(
+      `rds-storage-low-${environment}`,
+      {
+        name: `RDS-LowStorage-${environment}`,
+        comparisonOperator: 'LessThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'FreeStorageSpace',
+        namespace: 'AWS/RDS',
+        period: 300,
+        statistic: 'Average',
+        threshold: 2000000000, // 2GB in bytes
+        alarmDescription: 'RDS free storage space is low',
+        dimensions: {
+          DBInstanceIdentifier: this.rdsInstance.identifier,
+        },
+        tags: resourceTags,
+      },
+      { provider: this.provider }
+    );
+
+    // EC2 Status Check Failed
+    new aws.cloudwatch.MetricAlarm(
+      `ec2-status-check-${environment}`,
+      {
+        name: `EC2-StatusCheckFailed-${environment}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'StatusCheckFailed',
+        namespace: 'AWS/EC2',
+        period: 300,
+        statistic: 'Maximum',
+        threshold: 0,
+        alarmDescription: 'EC2 status check failed',
+        dimensions: {
+          AutoScalingGroupName: this.autoScalingGroup.name,
+        },
         tags: resourceTags,
       },
       { provider: this.provider }
@@ -891,6 +1426,24 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       // Security Groups
       albSecurityGroupId: this.albSecurityGroup.id,
       ec2SecurityGroupId: this.ec2SecurityGroup.id,
+      webSecurityGroupId: this.webSecurityGroup.id,
+      vpcEndpointSecurityGroupId: this.vpcEndpointSecurityGroup.id,
+
+      // RDS Database
+      rdsInstanceId: this.rdsInstance.id,
+      rdsInstanceIdentifier: this.rdsInstance.identifier,
+      rdsInstanceEndpoint: this.rdsInstance.endpoint,
+      rdsInstancePort: this.rdsInstance.port,
+      dbInstanceId: this.rdsInstance.id, // Alternative naming for compatibility
+      DatabaseEndpoint: this.rdsInstance.endpoint, // Alternative naming for compatibility
+
+      // CloudTrail
+      cloudTrailBucketName: this.cloudTrailBucket.id,
+      cloudTrailBucketArn: this.cloudTrailBucket.arn,
+
+      // VPC Flow Logs
+      flowLogGroupName: this.flowLogGroup.name,
+      flowLogGroupArn: this.flowLogGroup.arn,
     };
   }
 }

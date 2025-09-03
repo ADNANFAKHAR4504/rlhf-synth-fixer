@@ -37,6 +37,8 @@ export class WebAppInfrastructure {
   public readonly webSecurityGroup: aws.ec2.SecurityGroup;
   public readonly vpcEndpointSecurityGroup: aws.ec2.SecurityGroup;
   public readonly rdsInstance: aws.rds.Instance;
+  public readonly cloudTrailBucket: aws.s3.Bucket;
+  public readonly flowLogGroup: aws.cloudwatch.LogGroup;
   private readonly caller: pulumi.Output<aws.GetCallerIdentityResult>;
   private readonly region: string;
   private readonly environment: string;
@@ -569,16 +571,7 @@ export class WebAppInfrastructure {
                 Principal: {
                   AWS: `arn:aws:iam::${caller.accountId}:root`,
                 },
-                Action: [
-                  'kms:Encrypt',
-                  'kms:Decrypt',
-                  'kms:ReEncrypt*',
-                  'kms:GenerateDataKey*',
-                  'kms:DescribeKey',
-                  'kms:CreateGrant',
-                  'kms:ListGrants',
-                  'kms:RevokeGrant',
-                ],
+                Action: 'kms:*',
                 Resource: '*',
               },
               {
@@ -694,19 +687,6 @@ export class WebAppInfrastructure {
       { provider: this.provider }
     );
 
-    // Secret rotation for database credentials
-    new aws.secretsmanager.SecretRotation(
-      `db-secret-rotation-${environment}`,
-      {
-        secretId: dbSecret.id,
-        rotationLambdaArn: `arn:aws:lambda:${region}:${this.caller.apply(c => c.accountId)}:function:SecretsManagerRDSMySQLRotationSingleUser`,
-        rotationRules: {
-          automaticallyAfterDays: 30,
-        },
-      },
-      { provider: this.provider }
-    );
-
     const jwtSecret = new random.RandomPassword(`jwt-secret-${environment}`, {
       length: 64,
       special: false,
@@ -769,36 +749,38 @@ export class WebAppInfrastructure {
       `instance-policy-${environment}`,
       {
         role: instanceRole.id,
-        policy: pulumi.all([this.caller]).apply(([caller]) =>
-          JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-                Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:/ec2/app-logs/${environment}:*`,
-              },
-              {
-                Effect: 'Allow',
-                Action: ['secretsmanager:GetSecretValue'],
-                Resource: [
-                  `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:app-secrets-${environment}-*`,
-                  `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:db-credentials-${environment}-*`,
-                ],
-              },
-              {
-                Effect: 'Allow',
-                Action: ['kms:Decrypt'],
-                Resource: pulumi.interpolate`${kmsKey.arn}`,
-                Condition: {
-                  StringEquals: {
-                    'kms:ViaService': `secretsmanager.${region}.amazonaws.com`,
+        policy: pulumi
+          .all([this.caller, kmsKey.arn])
+          .apply(([caller, kmsArn]) =>
+            JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Action: ['logs:CreateLogStream', 'logs:PutLogEvents'],
+                  Resource: `arn:aws:logs:${region}:${caller.accountId}:log-group:/ec2/app-logs/${environment}:*`,
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['secretsmanager:GetSecretValue'],
+                  Resource: [
+                    `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:app-secrets-${environment}-*`,
+                    `arn:aws:secretsmanager:${region}:${caller.accountId}:secret:db-credentials-${environment}-*`,
+                  ],
+                },
+                {
+                  Effect: 'Allow',
+                  Action: ['kms:Decrypt'],
+                  Resource: kmsArn,
+                  Condition: {
+                    StringEquals: {
+                      'kms:ViaService': `secretsmanager.${region}.amazonaws.com`,
+                    },
                   },
                 },
-              },
-            ],
-          })
-        ),
+              ],
+            })
+          ),
       },
       { provider: this.provider }
     );
@@ -818,7 +800,7 @@ export class WebAppInfrastructure {
       {
         name: `/ec2/app-logs/${environment}`,
         retentionInDays: 30,
-        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        kmsKeyId: kmsKey.arn,
         tags: resourceTags,
       },
       { provider: this.provider }
@@ -1015,15 +997,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketAcl(
-      `cloudfront-logs-acl-${environment}`,
-      {
-        bucket: cloudFrontLogsBucket.id,
-        acl: 'private',
-      },
-      { provider: this.provider }
-    );
-
     new aws.s3.BucketOwnershipControls(
       `cloudfront-logs-ownership-${environment}`,
       {
@@ -1152,12 +1125,12 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    const flowLogGroup = new aws.cloudwatch.LogGroup(
+    this.flowLogGroup = new aws.cloudwatch.LogGroup(
       `vpc-flow-logs-${environment}`,
       {
         name: `vpc-flow-logs-${environment}`,
         retentionInDays: 30,
-        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        kmsKeyId: kmsKey.arn,
         tags: resourceTags,
       },
       { provider: this.provider }
@@ -1167,107 +1140,16 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       `vpc-flow-log-${environment}`,
       {
         iamRoleArn: flowLogRole.arn,
-        logDestination: flowLogGroup.arn,
+        logDestination: this.flowLogGroup.arn,
         vpcId: this.vpc.id,
         trafficType: 'ALL',
         tags: resourceTags,
       },
-      { provider: this.provider, dependsOn: [flowLogGroup] }
-    );
-
-    // AWS Backup Plan for cross-region backup
-    const backupVault = new aws.backup.Vault(
-      `backup-vault-${environment}`,
-      {
-        kmsKeyArn: kmsKey.arn,
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    const backupPlan = new aws.backup.Plan(
-      `backup-plan-${environment}`,
-      {
-        rules: [
-          {
-            ruleName: `daily-backup-${environment}`,
-            targetVaultName: backupVault.name,
-            schedule: 'cron(0 5 ? * * *)', // Daily at 5 AM UTC
-            startWindow: 480, // 8 hours
-            completionWindow: 10080, // 7 days
-            lifecycle: {
-              coldStorageAfter: 30,
-              deleteAfter: 120,
-            },
-            copyActions: [
-              {
-                destinationVaultArn: `arn:aws:backup:us-west-2:${this.caller.apply(c => c.accountId)}:backup-vault:backup-vault-${environment}-replica`,
-                lifecycle: {
-                  coldStorageAfter: 30,
-                  deleteAfter: 120,
-                },
-              },
-            ],
-          },
-        ],
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    const backupRole = new aws.iam.Role(
-      `backup-role-${environment}`,
-      {
-        assumeRolePolicy: JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: 'sts:AssumeRole',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'backup.amazonaws.com',
-              },
-            },
-          ],
-        }),
-        tags: resourceTags,
-      },
-      { provider: this.provider }
-    );
-
-    new aws.iam.RolePolicyAttachment(
-      `backup-role-policy-${environment}`,
-      {
-        role: backupRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
-      },
-      { provider: this.provider }
-    );
-
-    new aws.iam.RolePolicyAttachment(
-      `backup-role-restore-policy-${environment}`,
-      {
-        role: backupRole.name,
-        policyArn:
-          'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores',
-      },
-      { provider: this.provider }
-    );
-
-    new aws.backup.Selection(
-      `backup-selection-${environment}`,
-      {
-        iamRoleArn: backupRole.arn,
-        name: `backup-selection-${environment}`,
-        planId: backupPlan.id,
-        resources: [this.rdsInstance.arn],
-      },
-      { provider: this.provider }
+      { provider: this.provider, dependsOn: [this.flowLogGroup] }
     );
 
     // CloudTrail
-    const cloudTrailBucket = new aws.s3.Bucket(
+    this.cloudTrailBucket = new aws.s3.Bucket(
       `cloudtrail-${environment}`,
       {
         tags: resourceTags.apply(t => ({
@@ -1278,28 +1160,13 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfiguration(
-      `cloudtrail-encryption-${environment}`,
-      {
-        bucket: cloudTrailBucket.id,
-        rules: [
-          {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'AES256',
-            },
-          },
-        ],
-      },
-      { provider: this.provider }
-    );
-
     new aws.s3.BucketPolicy(
       `cloudtrail-policy-${environment}`,
       {
-        bucket: cloudTrailBucket.id,
+        bucket: this.cloudTrailBucket.id,
         policy: pulumi
-          .all([cloudTrailBucket.arn, this.caller])
-          .apply(([bucketArn, caller]) =>
+          .all([this.cloudTrailBucket.arn, this.caller])
+          .apply(([bucketArn]) =>
             JSON.stringify({
               Version: '2012-10-17',
               Statement: [
@@ -1311,14 +1178,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
                   },
                   Action: 's3:GetBucketAcl',
                   Resource: bucketArn,
-                  Condition: {
-                    StringEquals: {
-                      'aws:SourceAccount': caller.accountId,
-                    },
-                    ArnEquals: {
-                      'aws:SourceArn': `arn:aws:cloudtrail:${region}:${caller.accountId}:trail/cloudtrail-${environment}`,
-                    },
-                  },
                 },
                 {
                   Sid: 'AWSCloudTrailWrite',
@@ -1331,10 +1190,6 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
                   Condition: {
                     StringEquals: {
                       's3:x-amz-acl': 'bucket-owner-full-control',
-                      'aws:SourceAccount': caller.accountId,
-                    },
-                    ArnEquals: {
-                      'aws:SourceArn': `arn:aws:cloudtrail:${region}:${caller.accountId}:trail/cloudtrail-${environment}`,
                     },
                   },
                 },
@@ -1348,9 +1203,9 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
     new aws.cloudtrail.Trail(
       `cloudtrail-${environment}`,
       {
-        s3BucketName: cloudTrailBucket.bucket,
+        s3BucketName: this.cloudTrailBucket.bucket,
         includeGlobalServiceEvents: true,
-        isMultiRegionTrail: true,
+        isMultiRegionTrail: false,
         enableLogging: true,
         tags: resourceTags,
       },
@@ -1392,16 +1247,7 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       { provider: this.provider }
     );
 
-    // RDS Instance with secrets from Secrets Manager
-    const dbCredentials = dbSecret.id.apply(secretId =>
-      aws.secretsmanager.getSecretVersion(
-        {
-          secretId: secretId,
-        },
-        { provider: this.provider }
-      )
-    );
-
+    // RDS Instance with AWS managed password
     this.rdsInstance = new aws.rds.Instance(
       `db-${environment}`,
       {
@@ -1412,14 +1258,10 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
         allocatedStorage: 20,
         storageType: 'gp2',
         storageEncrypted: true,
-        kmsKeyId: pulumi.interpolate`${kmsKey.arn}`,
+        kmsKeyId: kmsKey.arn,
         dbName: 'appdb',
-        username: dbCredentials.apply(
-          creds => JSON.parse(creds.secretString).username
-        ),
-        password: dbCredentials.apply(
-          creds => JSON.parse(creds.secretString).password
-        ),
+        username: 'admin',
+        manageMasterUserPassword: true,
         vpcSecurityGroupIds: [rdsSecurityGroup.id],
         dbSubnetGroupName: dbSubnetGroup.name,
         backupRetentionPeriod: 7,
@@ -1589,6 +1431,14 @@ echo "<h1>Hello from ${environment}</h1>" > /var/www/html/index.html`
       rdsInstancePort: this.rdsInstance.port,
       dbInstanceId: this.rdsInstance.id, // Alternative naming for compatibility
       DatabaseEndpoint: this.rdsInstance.endpoint, // Alternative naming for compatibility
+
+      // CloudTrail
+      cloudTrailBucketName: this.cloudTrailBucket.id,
+      cloudTrailBucketArn: this.cloudTrailBucket.arn,
+
+      // VPC Flow Logs
+      flowLogGroupName: this.flowLogGroup.name,
+      flowLogGroupArn: this.flowLogGroup.arn,
     };
   }
 }
