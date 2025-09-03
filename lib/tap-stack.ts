@@ -74,6 +74,34 @@ export class SecureInfrastructureStack extends cdk.Stack {
             ],
             resources: ['*'],
           }),
+          new iam.PolicyStatement({
+            sid: 'Allow EC2 Service for EBS encryption',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('ec2.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+            ],
+            resources: ['*'],
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow Auto Scaling Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('autoscaling.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+            ],
+            resources: ['*'],
+          }),
         ],
       }),
     });
@@ -329,6 +357,18 @@ export class SecureInfrastructureStack extends cdk.Stack {
               resources: [
                 `arn:aws:secretsmanager:${this.region}:${this.account}:secret:prod/app/*`,
               ],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'kms:Encrypt',
+                'kms:Decrypt',
+                'kms:ReEncrypt*',
+                'kms:GenerateDataKey*',
+                'kms:DescribeKey',
+                'kms:CreateGrant',
+              ],
+              resources: [kmsKey.keyArn],
             }),
           ],
         }),
