@@ -163,15 +163,14 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   elif [ "$LANGUAGE" = "ts" ]; then
     echo "🔧 TypeScript Pulumi project detected"
     pulumi login "$PULUMI_BACKEND_URL"
-    cd lib
     echo "Installing dependencies..."
     npm install
+    echo "Building TypeScript project..."
     npm run build
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
     echo "Deploying infrastructure ..."
     pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
-    cd ..
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
