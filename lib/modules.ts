@@ -539,7 +539,7 @@ export class InfrastructureModule extends Construct {
             block: {},
           },
           statement: {
-            // Fix: Use correct property name
+            // Fixed: Use snake_case property name
             sqliMatchStatement: {
               fieldToMatch: {
                 body: {
@@ -571,7 +571,7 @@ export class InfrastructureModule extends Construct {
             block: {},
           },
           statement: {
-            // Fix: Use correct property name
+            // Fixed: Use snake_case property name
             xssMatchStatement: {
               fieldToMatch: {
                 body: {
