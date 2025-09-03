@@ -415,7 +415,7 @@ export class TapStack extends cdk.Stack {
     });
   }
 
-  private createTargetGroupAndListeners(albSg: ec2.SecurityGroup): void {
+  private createTargetGroupAndListeners(_albSg: ec2.SecurityGroup): void {
     // Create target group
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'prod-tg', {
       targetGroupName: 'prod-tg',
