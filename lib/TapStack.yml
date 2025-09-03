@@ -1813,10 +1813,6 @@ Resources:
           - DEPLOYMENT_FAILURE
           - DEPLOYMENT_STOP_ON_ALARM
           - DEPLOYMENT_STOP_ON_REQUEST
-      LoadBalancerInfo:
-        TargetGroupInfoList:
-          - Name: !Sub '${Environment}-tg-blue'
-          - Name: !Sub '${Environment}-tg-green'
 
   # Lambda Function
   ExampleLambdaFunction:
