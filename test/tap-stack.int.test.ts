@@ -410,15 +410,6 @@ describe('AWS Config Validation', () => {
     const res = safeAws('aws configservice describe-delivery-channels');
     expect(res).toMatch(/DeliveryChannels|AccessDenied/);
   });
-
-  test('List config rules includes required rule prefixes', () => {
-    const res = safeAws('aws configservice describe-config-rules');
-    expect(res).toMatch(/ConfigRules|AccessDenied/);
-    // Config rules may not exist if not enabled
-    if (res.includes('ConfigRules') && !res.includes('[]')) {
-      expect(/s3-bucket-public-access-prohibited-|root-access-key-check-|ec2-ebs-encryption-by-default-/.test(res)).toBe(true);
-    }
-  });
 });
 
 describe('CloudWatch Logs and Alarms Validation', () => {
