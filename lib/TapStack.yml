@@ -118,7 +118,6 @@ Resources:
     UpdateReplacePolicy: Retain
     Condition: CreateSnsTopic
     Properties:
-      TopicName: !Sub '${AWS::StackName}-migration-notifications-${AWS::AccountId}'
       DisplayName: Migration Status Notifications
       Tags:
         - Key: Environment
