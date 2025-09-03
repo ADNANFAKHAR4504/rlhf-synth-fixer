@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291924",
+  "team": "3",
+  "startedAt": "2025-08-29T11:46:59.771Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akash-TuringOps",
+  "dockerS3Location": ""
+}
