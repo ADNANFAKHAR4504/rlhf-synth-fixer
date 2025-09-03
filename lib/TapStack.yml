@@ -1262,7 +1262,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      GlobalClusterIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}'
+      GlobalClusterIdentifier: !Sub
+        - '${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}-${Rand}'
+        - {
+            Rand:
+              !Select [
+                4,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.08.2'
       DeletionProtection: false
