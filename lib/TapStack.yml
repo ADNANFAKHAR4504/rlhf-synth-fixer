@@ -5,16 +5,24 @@ Parameters:
   VpcSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
     Description: Security Group ID for Lambda functions in VPC
-    
+    Default: sg-00000000000000000
+
   VpcSubnetIds:
     Type: List<AWS::EC2::Subnet::Id>
     Description: Subnet IDs for Lambda functions in VPC
-    
+    Default: 'subnet-00000000000000000'
+
   NotificationEmail:
     Type: String
     Description: Email address for migration status notifications
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
     ConstraintDescription: Must be a valid email address
+    Default: admin@example.com
+
+Conditions:
+  UseVpc: !Not [!Equals [!Ref VpcSecurityGroupId, 'sg-00000000000000000']]
+  CreateSubscription:
+    !Not [!Equals [!Ref NotificationEmail, 'admin@example.com']]
 
 Resources:
   # S3 Bucket for Migration Logs
@@ -49,6 +57,7 @@ Resources:
   # SNS Subscription for Email Notifications
   MigrationNotificationsSubscription:
     Type: AWS::SNS::Subscription
+    Condition: CreateSubscription
     Properties:
       Protocol: email
       TopicArn: !Ref MigrationNotificationsTopic
@@ -66,8 +75,10 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      ManagedPolicyArns: !If
+        - UseVpc
+        - - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - []
       Policies:
         - PolicyName: MigrationTriggerPolicy
           PolicyDocument:
@@ -97,8 +108,10 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      ManagedPolicyArns: !If
+        - UseVpc
+        - - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - []
       Policies:
         - PolicyName: StatusNotifierPolicy
           PolicyDocument:
@@ -122,21 +135,23 @@ Resources:
       Role: !GetAtt MigrationTriggerFunctionRole.Arn
       Timeout: 300
       MemorySize: 256
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref VpcSecurityGroupId
-        SubnetIds: !Ref VpcSubnetIds
+      VpcConfig: !If
+        - UseVpc
+        - SecurityGroupIds:
+            - !Ref VpcSecurityGroupId
+          SubnetIds: !Ref VpcSubnetIds
+        - !Ref AWS::NoValue
       Code:
         ZipFile: |
           import json
           import boto3
           import logging
           from datetime import datetime
-          
+
           # Configure logging
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-          
+
           def lambda_handler(event, context):
               logger.info(f"Migration trigger function invoked with event: {json.dumps(event)}")
               
@@ -215,21 +230,23 @@ Resources:
       Role: !GetAtt StatusNotifierFunctionRole.Arn
       Timeout: 60
       MemorySize: 128
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref VpcSecurityGroupId
-        SubnetIds: !Ref VpcSubnetIds
+      VpcConfig: !If
+        - UseVpc
+        - SecurityGroupIds:
+            - !Ref VpcSecurityGroupId
+          SubnetIds: !Ref VpcSubnetIds
+        - !Ref AWS::NoValue
       Code:
         ZipFile: |
           import json
           import boto3
           import logging
           from datetime import datetime
-          
+
           # Configure logging
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-          
+
           def lambda_handler(event, context):
               logger.info(f"Status notifier function invoked with event: {json.dumps(event)}")
               
