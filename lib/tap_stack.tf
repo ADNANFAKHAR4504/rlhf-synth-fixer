@@ -173,23 +173,6 @@ resource "aws_s3_bucket_versioning" "app_assets_versioning" {
   }
 }
 
-# S3 bucket lifecycle configuration
-# resource "aws_s3_bucket_lifecycle_configuration" "app_assets_lifecycle" {
-#   bucket = aws_s3_bucket.app_assets.id
-
-#   rule {
-#     id     = "cleanup_old_versions"
-#     status = "Enabled"
-
-#     noncurrent_version_expiration {
-#       noncurrent_days = 30
-#     }
-
-#     abort_incomplete_multipart_upload {
-#       days_after_initiation = 7
-#     }
-#   }
-# }
 
 # S3 bucket lifecycle configuration
 resource "aws_s3_bucket_lifecycle_configuration" "app_assets_lifecycle" {
@@ -214,51 +197,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_assets_lifecycle" {
   }
 }
 
-# DynamoDB table with on-demand billing
-# resource "aws_dynamodb_table" "app_data" {
-#   name         = "${local.name_prefix}-data"
-#   billing_mode = "PAY_PER_REQUEST" # On-demand as required
-#   hash_key     = "id"
-
-#   attribute {
-#     name = "id"
-#     type = "S"
-#   }
-
-#   # Optional GSI for querying by status
-#   attribute {
-#     name = "status"
-#     type = "S"
-#   }
-
-#   attribute {
-#     name = "created_at"
-#     type = "S"
-#   }
-
-#   global_secondary_index {
-#     name      = "status-created_at-index"
-#     hash_key  = "status"
-#     range_key = "created_at"
-#     # projection_type = "ALL"
-#   }
-
-#   # TTL attribute for automatic item expiration
-#   ttl {
-#     attribute_name = "expires_at"
-#     enabled        = true
-#   }
-
-#   # Server-side encryption
-#   server_side_encryption {
-#     enabled = true
-#   }
-
-#   tags = merge(local.tags, {
-#     Name        = "${local.name_prefix}-data"
-#     Description = "DynamoDB table for ProjectX application data with on-demand billing"
-#   })
-# }
 
 # DynamoDB table with on-demand billing
 resource "aws_dynamodb_table" "app_data" {
