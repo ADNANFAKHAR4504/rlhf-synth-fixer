@@ -19,7 +19,7 @@ common_tags = {
 }
 
 # Create VPC
-vpc = aws.ec2.Vpc(f"{prefix}-VPC",
+vpc = aws.ec2.Vpc(f"{prefix.lower()}-vpc",
     cidr_block=vpc_cidr,
     enable_dns_hostnames=True,
     enable_dns_support=True,
@@ -27,7 +27,7 @@ vpc = aws.ec2.Vpc(f"{prefix}-VPC",
 )
 
 # Create Internet Gateway
-internet_gateway = aws.ec2.InternetGateway(f"{prefix}-IGW",
+internet_gateway = aws.ec2.InternetGateway(f"{prefix.lower()}-igw",
     vpc_id=vpc.id,
     tags={**common_tags, "Name": f"{prefix}-InternetGateway"}
 )
@@ -35,7 +35,7 @@ internet_gateway = aws.ec2.InternetGateway(f"{prefix}-IGW",
 # Create public subnets
 public_subnets = []
 for i, az in enumerate(availability_zones):
-    subnet = aws.ec2.Subnet(f"{prefix}-PublicSubnet-{az}",
+    subnet = aws.ec2.Subnet(f"{prefix.lower()}-public-subnet-{az}",
         vpc_id=vpc.id,
         cidr_block=f"10.0.{i+1}.0/24",
         availability_zone=az,
@@ -47,7 +47,7 @@ for i, az in enumerate(availability_zones):
 # Create private subnets
 private_subnets = []
 for i, az in enumerate(availability_zones):
-    subnet = aws.ec2.Subnet(f"{prefix}-PrivateSubnet-{az}",
+    subnet = aws.ec2.Subnet(f"{prefix.lower()}-private-subnet-{az}",
         vpc_id=vpc.id,
         cidr_block=f"10.0.{i+10}.0/24",
         availability_zone=az,
@@ -57,20 +57,20 @@ for i, az in enumerate(availability_zones):
     private_subnets.append(subnet)
 
 # Create Elastic IP for NAT Gateway
-nat_eip = aws.ec2.Eip(f"{prefix}-NAT-EIP",
+nat_eip = aws.ec2.Eip(f"{prefix.lower()}-nat-eip",
     domain="vpc",
     tags={**common_tags, "Name": f"{prefix}-NAT-EIP"}
 )
 
 # Create NAT Gateway in first public subnet
-nat_gateway = aws.ec2.NatGateway(f"{prefix}-NAT",
+nat_gateway = aws.ec2.NatGateway(f"{prefix.lower()}-nat",
     allocation_id=nat_eip.id,
     subnet_id=public_subnets[0].id,
     tags={**common_tags, "Name": f"{prefix}-NAT-Gateway"}
 )
 
 # Create route table for public subnets
-public_route_table = aws.ec2.RouteTable(f"{prefix}-PublicRouteTable",
+public_route_table = aws.ec2.RouteTable(f"{prefix.lower()}-public-route-table",
     vpc_id=vpc.id,
     routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -84,14 +84,14 @@ public_route_table = aws.ec2.RouteTable(f"{prefix}-PublicRouteTable",
 # Associate public route table with public subnets
 public_route_table_associations = []
 for i, subnet in enumerate(public_subnets):
-    association = aws.ec2.RouteTableAssociation(f"{prefix}-PublicRTA-{i}",
+    association = aws.ec2.RouteTableAssociation(f"{prefix.lower()}-public-rta-{i}",
         subnet_id=subnet.id,
         route_table_id=public_route_table.id
     )
     public_route_table_associations.append(association)
 
 # Create route table for private subnets
-private_route_table = aws.ec2.RouteTable(f"{prefix}-PrivateRouteTable",
+private_route_table = aws.ec2.RouteTable(f"{prefix.lower()}-private-route-table",
     vpc_id=vpc.id,
     routes=[
         aws.ec2.RouteTableRouteArgs(
@@ -105,7 +105,7 @@ private_route_table = aws.ec2.RouteTable(f"{prefix}-PrivateRouteTable",
 # Associate private route table with private subnets
 private_route_table_associations = []
 for i, subnet in enumerate(private_subnets):
-    association = aws.ec2.RouteTableAssociation(f"{prefix}-PrivateRTA-{i}",
+    association = aws.ec2.RouteTableAssociation(f"{prefix.lower()}-private-rta-{i}",
         subnet_id=subnet.id,
         route_table_id=private_route_table.id
     )
@@ -113,7 +113,7 @@ for i, subnet in enumerate(private_subnets):
 
 # Create security groups
 # Security group for load balancer
-lb_security_group = aws.ec2.SecurityGroup(f"{prefix}-LB-SG",
+lb_security_group = aws.ec2.SecurityGroup(f"{prefix.lower()}-lb-sg",
     description="Security group for Application Load Balancer",
     vpc_id=vpc.id,
     ingress=[
@@ -144,7 +144,7 @@ lb_security_group = aws.ec2.SecurityGroup(f"{prefix}-LB-SG",
 )
 
 # Security group for EC2 instances
-ec2_security_group = aws.ec2.SecurityGroup(f"{prefix}-EC2-SG",
+ec2_security_group = aws.ec2.SecurityGroup(f"{prefix.lower()}-ec2-sg",
     description="Security group for EC2 instances",
     vpc_id=vpc.id,
     ingress=[
@@ -175,7 +175,7 @@ ec2_security_group = aws.ec2.SecurityGroup(f"{prefix}-EC2-SG",
 )
 
 # Security group for RDS
-rds_security_group = aws.ec2.SecurityGroup(f"{prefix}-RDS-SG",
+rds_security_group = aws.ec2.SecurityGroup(f"{prefix.lower()}-rds-sg",
     description="Security group for RDS instance",
     vpc_id=vpc.id,
     ingress=[
@@ -199,7 +199,7 @@ rds_security_group = aws.ec2.SecurityGroup(f"{prefix}-RDS-SG",
 )
 
 # Create IAM role for EC2 instances
-ec2_role = aws.iam.Role(f"{prefix}-EC2-Role",
+ec2_role = aws.iam.Role(f"{prefix.lower()}-ec2-role",
     assume_role_policy=aws.iam.get_policy_document(statements=[aws.iam.GetPolicyDocumentStatementArgs(
         actions=["sts:AssumeRole"],
         effect="Allow",
@@ -212,31 +212,31 @@ ec2_role = aws.iam.Role(f"{prefix}-EC2-Role",
 )
 
 # Attach policies to EC2 role
-aws.iam.RolePolicyAttachment(f"{prefix}-EC2-SSM-Policy",
+aws.iam.RolePolicyAttachment(f"{prefix.lower()}-ec2-ssm-policy",
     role=ec2_role.name,
     policy_arn="arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 )
 
-aws.iam.RolePolicyAttachment(f"{prefix}-EC2-SSM-Parameter-Policy",
+aws.iam.RolePolicyAttachment(f"{prefix.lower()}-ec2-ssm-parameter-policy",
     role=ec2_role.name,
     policy_arn="arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"
 )
 
 # Create instance profile
-ec2_instance_profile = aws.iam.InstanceProfile(f"{prefix}-EC2-Profile",
+ec2_instance_profile = aws.iam.InstanceProfile(f"{prefix.lower()}-ec2-profile",
     role=ec2_role.name,
     tags={**common_tags, "Name": f"{prefix}-EC2-InstanceProfile"}
 )
 
 # Create Parameter Store parameters
-db_host_param = aws.ssm.Parameter(f"{prefix}-DB-Host",
+db_host_param = aws.ssm.Parameter(f"{prefix.lower()}-db-host",
     name=f"/{environment}/database/host",
     type="String",
     value="placeholder",  # Will be updated after RDS creation
     tags={**common_tags, "Name": f"{prefix}-DB-Host-Parameter"}
 )
 
-db_name_param = aws.ssm.Parameter(f"{prefix}-DB-Name",
+db_name_param = aws.ssm.Parameter(f"{prefix.lower()}-db-name",
     name=f"/{environment}/database/name",
     type="String",
     value="webappdb",
@@ -250,7 +250,7 @@ rds_subnet_group = aws.rds.SubnetGroup(f"{prefix.lower()}-rds-subnet-group",
 )
 
 # Create RDS instance
-rds_instance = aws.rds.Instance(f"{prefix}-RDS",
+rds_instance = aws.rds.Instance(f"{prefix.lower()}-rds-instance",
     allocated_storage=20,
     storage_type="gp2",
     engine="mysql",
@@ -271,8 +271,8 @@ rds_instance = aws.rds.Instance(f"{prefix}-RDS",
 db_host_param.value = rds_instance.endpoint
 
 # Create launch template
-launch_template = aws.ec2.LaunchTemplate(f"{prefix}-LaunchTemplate",
-    name_prefix=f"{prefix}-LT",
+launch_template = aws.ec2.LaunchTemplate(f"{prefix.lower()}-launch-template",
+    name_prefix=f"{prefix.lower()}-lt",
     image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI - update for your region
     instance_type="t3.micro",
     key_name="",  # Add your key pair name if you want SSH access
@@ -335,7 +335,7 @@ chown -R apache:apache /var/www/html
 )
 
 # Create target group
-target_group = aws.lb.TargetGroup(f"{prefix}-TargetGroup",
+target_group = aws.lb.TargetGroup(f"{prefix.lower()}-target-group",
     port=80,
     protocol="HTTP",
     vpc_id=vpc.id,
@@ -355,7 +355,7 @@ target_group = aws.lb.TargetGroup(f"{prefix}-TargetGroup",
 )
 
 # Create Application Load Balancer
-load_balancer = aws.lb.LoadBalancer(f"{prefix}-ALB",
+load_balancer = aws.lb.LoadBalancer(f"{prefix.lower()}-alb",
     internal=False,
     load_balancer_type="application",
     security_groups=[lb_security_group.id],
@@ -365,7 +365,7 @@ load_balancer = aws.lb.LoadBalancer(f"{prefix}-ALB",
 )
 
 # Create listener
-listener = aws.lb.Listener(f"{prefix}-Listener",
+listener = aws.lb.Listener(f"{prefix.lower()}-listener",
     load_balancer_arn=load_balancer.arn,
     port=80,
     protocol="HTTP",
@@ -378,7 +378,7 @@ listener = aws.lb.Listener(f"{prefix}-Listener",
 )
 
 # Create Auto Scaling Group
-asg = aws.autoscaling.Group(f"{prefix}-ASG",
+asg = aws.autoscaling.Group(f"{prefix.lower()}-asg",
     desired_capacity=2,
     max_size=4,
     min_size=1,
@@ -399,14 +399,14 @@ asg = aws.autoscaling.Group(f"{prefix}-ASG",
 )
 
 # Create Auto Scaling policies
-scale_up_policy = aws.autoscaling.Policy(f"{prefix}-ScaleUpPolicy",
+scale_up_policy = aws.autoscaling.Policy(f"{prefix.lower()}-scale-up-policy",
     adjustment_type="ChangeInCapacity",
     autoscaling_group_name=asg.name,
     cooldown=300,
     scaling_adjustment=1
 )
 
-scale_down_policy = aws.autoscaling.Policy(f"{prefix}-ScaleDownPolicy",
+scale_down_policy = aws.autoscaling.Policy(f"{prefix.lower()}-scale-down-policy",
     adjustment_type="ChangeInCapacity",
     autoscaling_group_name=asg.name,
     cooldown=300,
@@ -414,7 +414,7 @@ scale_down_policy = aws.autoscaling.Policy(f"{prefix}-ScaleDownPolicy",
 )
 
 # Create CloudWatch alarms for Auto Scaling
-cpu_high_alarm = aws.cloudwatch.MetricAlarm(f"{prefix}-CPUHighAlarm",
+cpu_high_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-high-alarm",
     comparison_operator="GreaterThanThreshold",
     evaluation_periods=2,
     metric_name="CPUUtilization",
@@ -430,7 +430,7 @@ cpu_high_alarm = aws.cloudwatch.MetricAlarm(f"{prefix}-CPUHighAlarm",
     )]
 )
 
-cpu_low_alarm = aws.cloudwatch.MetricAlarm(f"{prefix}-CPULowAlarm",
+cpu_low_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-low-alarm",
     comparison_operator="LessThanThreshold",
     evaluation_periods=2,
     metric_name="CPUUtilization",
