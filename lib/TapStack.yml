@@ -337,7 +337,7 @@ Resources:
   BastionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-bastion-role'
+      RoleName: !Sub '${Environment}-bastion-role-latest'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:

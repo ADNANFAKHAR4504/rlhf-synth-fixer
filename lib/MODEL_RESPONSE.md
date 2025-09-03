@@ -8,14 +8,11 @@ Parameters:
     AllowedValues: ['dev', 'test', 'prod']
     Description: 'Environment designation for resource tagging and configuration'
 
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'EC2 Key Pair for bastion host access'
-
   AdminEmail:
     Type: String
     Description: 'Email address for security alerts'
     AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    Default: "mithilesh.s@turing.com"
 
 Mappings:
   EnvironmentMap:
@@ -340,7 +337,7 @@ Resources:
   BastionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${Environment}-bastion-role'
+      RoleName: !Sub '${Environment}-bastion-role-latest'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -381,7 +378,6 @@ Resources:
     Properties:
       ImageId: ami-0c02fb55956c7d316  # Update per region
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds: [!Ref BastionSecurityGroup]
       IamInstanceProfile: !Ref BastionInstanceProfile
