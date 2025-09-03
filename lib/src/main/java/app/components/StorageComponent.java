@@ -6,9 +6,26 @@ import com.pulumi.aws.outputs.GetCallerIdentityResult;
 import com.pulumi.aws.s3.BucketServerSideEncryptionConfigurationArgs;
 import com.pulumi.aws.s3.BucketVersioningArgs;
 import com.pulumi.core.Output;
-import com.pulumi.aws.kms.*;
-import com.pulumi.aws.s3.*;
-import com.pulumi.aws.s3.inputs.*;
+import com.pulumi.aws.kms.Alias;
+import com.pulumi.aws.kms.AliasArgs;
+import com.pulumi.aws.kms.Key;
+import com.pulumi.aws.kms.KeyArgs;
+import com.pulumi.aws.s3.Bucket;
+import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.aws.s3.BucketLifecycleConfiguration;
+import com.pulumi.aws.s3.BucketLifecycleConfigurationArgs;
+import com.pulumi.aws.s3.BucketPublicAccessBlock;
+import com.pulumi.aws.s3.BucketPublicAccessBlockArgs;
+import com.pulumi.aws.s3.BucketServerSideEncryptionConfiguration;
+import com.pulumi.aws.s3.BucketVersioning;
+import com.pulumi.aws.s3.inputs.BucketLifecycleConfigurationRuleAbortIncompleteMultipartUploadArgs;
+import com.pulumi.aws.s3.inputs.BucketLifecycleConfigurationRuleArgs;
+import com.pulumi.aws.s3.inputs.BucketLifecycleConfigurationRuleExpirationArgs;
+import com.pulumi.aws.s3.inputs.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs;
+import com.pulumi.aws.s3.inputs.BucketLifecycleConfigurationRuleTransitionArgs;
+import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs;
+import com.pulumi.aws.s3.inputs.BucketServerSideEncryptionConfigurationRuleArgs;
+import com.pulumi.aws.s3.inputs.BucketVersioningVersioningConfigurationArgs;
 import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
 import com.pulumi.resources.CustomResourceOptions;
@@ -23,11 +40,11 @@ public class StorageComponent extends ComponentResource {
     private final Bucket cloudTrailBucket;
     private final Output<String> accountId;
 
-    public StorageComponent(String name, String region) {
+    public StorageComponent(final String name, final String region) {
         this(name, region, null);
     }
 
-    public StorageComponent(String name, String region, ComponentResourceOptions opts) {
+    public StorageComponent(final String name, final String region, final ComponentResourceOptions opts) {
         super("custom:infrastructure:StorageComponent", name, opts);
 
         var identity = AwsFunctions.getCallerIdentity(GetCallerIdentityArgs.builder().build());
@@ -50,7 +67,7 @@ public class StorageComponent extends ComponentResource {
         this.cloudTrailBucket = createCloudTrailBucket(name);
     }
 
-    private Key createKmsKey(String name, String region) {
+    private Key createKmsKey(final String name, final String region) {
         return new Key(name + "-s3-kms-key", KeyArgs.builder()
                 .description("KMS Customer Managed Key for S3 bucket encryption")
                 .keyUsage("ENCRYPT_DECRYPT")
@@ -61,7 +78,7 @@ public class StorageComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private String createKmsKeyPolicy(String accountId) {
+    private String createKmsKeyPolicy(final String accountIdParam) {
         return """
             {
                 "Version": "2012-10-17",
@@ -104,26 +121,26 @@ public class StorageComponent extends ComponentResource {
                     }
                 ]
             }
-            """.formatted(accountId);
+            """.formatted(accountIdParam);
     }
 
-    private List<Bucket> createSecureBuckets(String name) {
-        var buckets = new ArrayList<Bucket>();
+    private List<Bucket> createSecureBuckets(final String name) {
+        var secureBuckets = new ArrayList<Bucket>();
         var bucketPurposes = List.of("critical-data", "application-logs", "backup-data", "compliance-archive");
 
         bucketPurposes.forEach(purpose -> {
             var bucket = createSecureBucket(name + "-" + purpose, purpose);
-            buckets.add(bucket);
+            secureBuckets.add(bucket);
         });
 
-        return buckets;
+        return secureBuckets;
     }
 
-    private Bucket createCloudTrailBucket(String name) {
+    private Bucket createCloudTrailBucket(final String name) {
         return createSecureBucket(name + "-cloudtrail-logs", "cloudtrail");
     }
 
-    private Bucket createSecureBucket(String bucketName, String purpose) {
+    private Bucket createSecureBucket(final String bucketName, final String purpose) {
         var timestamp = String.valueOf(System.currentTimeMillis());
         var uniqueBucketName = bucketName + "-" + timestamp;
 
@@ -177,7 +194,7 @@ public class StorageComponent extends ComponentResource {
         return bucket;
     }
 
-    private void createBucketLifecycle(String bucketName, Bucket bucket, String purpose) {
+    private void createBucketLifecycle(final String bucketName, final Bucket bucket, final String purpose) {
         var lifecycleRules = new ArrayList<BucketLifecycleConfigurationRuleArgs>();
 
         // Standard lifecycle rule
@@ -255,7 +272,7 @@ public class StorageComponent extends ComponentResource {
                         .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private Map<String, String> getTags(String name, String resourceType, Map<String, String> additional) {
+    private Map<String, String> getTags(final String name, final String resourceType, final Map<String, String> additional) {
         var baseTags = Map.of(
                 "Name", name,
                 "ResourceType", resourceType,
@@ -275,7 +292,9 @@ public class StorageComponent extends ComponentResource {
     }
 
     // Getters
-    public Output<String> getKmsKeyArn() { return kmsKey.arn(); }
+    public Output<String> getKmsKeyArn() {
+        return kmsKey.arn();
+    }
 
     public Output<List<String>> getBucketNames() {
         return Output.all(buckets.stream().map(Bucket::bucket).toList())

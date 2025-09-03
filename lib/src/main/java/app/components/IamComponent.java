@@ -1,6 +1,21 @@
 package app.components;
 
-import com.pulumi.aws.iam.*;
+import com.pulumi.aws.iam.Group;
+import com.pulumi.aws.iam.GroupArgs;
+import com.pulumi.aws.iam.GroupMembership;
+import com.pulumi.aws.iam.GroupMembershipArgs;
+import com.pulumi.aws.iam.GroupPolicyAttachment;
+import com.pulumi.aws.iam.GroupPolicyAttachmentArgs;
+import com.pulumi.aws.iam.InstanceProfile;
+import com.pulumi.aws.iam.InstanceProfileArgs;
+import com.pulumi.aws.iam.Policy;
+import com.pulumi.aws.iam.PolicyArgs;
+import com.pulumi.aws.iam.Role;
+import com.pulumi.aws.iam.RoleArgs;
+import com.pulumi.aws.iam.RolePolicyAttachment;
+import com.pulumi.aws.iam.RolePolicyAttachmentArgs;
+import com.pulumi.aws.iam.User;
+import com.pulumi.aws.iam.UserArgs;
 import com.pulumi.core.Output;
 import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
@@ -18,11 +33,11 @@ public class IamComponent extends ComponentResource {
     private final Policy mfaEnforcementPolicy;
     private final Group adminGroup;
 
-    public IamComponent(String name, String region) {
+    public IamComponent(final String name, final String region) {
         this(name, region, null);
     }
 
-    public IamComponent(String name, String region, ComponentResourceOptions opts) {
+    public IamComponent(final String name, final String region, final ComponentResourceOptions opts) {
         super("custom:infrastructure:IamComponent", name, opts);
 
         // Create EC2 service role with minimal permissions
@@ -40,7 +55,7 @@ public class IamComponent extends ComponentResource {
         attachPolicies(name);
     }
 
-    private Role createEc2Role(String name) {
+    private Role createEc2Role(final String name) {
         return new Role(name + "-ec2-role", RoleArgs.builder()
                 .name(name + "-ec2-role")
                 .assumeRolePolicy("""
@@ -66,7 +81,7 @@ public class IamComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private Policy createEc2Policy(String name) {
+    private Policy createEc2Policy(final String name) {
         return new Policy(name + "-ec2-policy", PolicyArgs.builder()
                 .name(name + "-ec2-policy")
                 .description("Minimal permissions for EC2 instances with logging and monitoring")
@@ -122,7 +137,7 @@ public class IamComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private InstanceProfile createInstanceProfile(String name) {
+    private InstanceProfile createInstanceProfile(final String name) {
         return new InstanceProfile(name + "-ec2-instance-profile",
                 InstanceProfileArgs.builder()
                         .name(name + "-ec2-instance-profile")
@@ -131,7 +146,7 @@ public class IamComponent extends ComponentResource {
                         .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private User createAdminUser(String name) {
+    private User createAdminUser(final String name) {
         return new User(name + "-admin-user", UserArgs.builder()
                 .name(name + "-admin-user")
                 .path("/administrators/")
@@ -144,7 +159,7 @@ public class IamComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private Policy createMfaEnforcementPolicy(String name) {
+    private Policy createMfaEnforcementPolicy(final String name) {
         return new Policy(name + "-mfa-enforcement", PolicyArgs.builder()
                 .name(name + "-mfa-enforcement-policy")
                 .description("Enforce MFA for all actions except MFA management")
@@ -212,7 +227,7 @@ public class IamComponent extends ComponentResource {
                 .build(),  CustomResourceOptions.builder().parent(this).build());
     }
 
-    private Policy createAdminPolicy(String name) {
+    private Policy createAdminPolicy(final String name) {
         return new Policy(name + "-admin-policy", PolicyArgs.builder()
                 .name(name + "-admin-policy")
                 .description("Administrative access with regional restrictions and MFA requirements")
@@ -252,14 +267,14 @@ public class IamComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private Group createAdminGroup(String name) {
+    private Group createAdminGroup(final String name) {
         return new Group(name + "-admin-group", GroupArgs.builder()
                 .name(name + "-administrators")
                 .path("/administrators/")
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private void attachPolicies(String name) {
+    private void attachPolicies(final String name) {
         // Attach EC2 policy to EC2 role
         new RolePolicyAttachment(name + "-ec2-policy-attachment", RolePolicyAttachmentArgs.builder()
                 .role(ec2Role.name())
@@ -298,11 +313,13 @@ public class IamComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private Map<String, String> getTags(String name, String resourceType, Map<String, String> additional) {
+    private Map<String, String> getTags(final String name, final String resourceType, final Map<String, String> additional) {
         return buildResourceTags(name, resourceType, additional);
     }
 
-    public static Map<String, String> buildResourceTags(String name, String resourceType, Map<String, String> additional) {
+    public static Map<String, String> buildResourceTags(final String name, 
+                                                        final String resourceType, 
+                                                        final Map<String, String> additional) {
         var baseTags = Map.of(
                 "Name", name,
                 "ResourceType", resourceType,
@@ -322,5 +339,7 @@ public class IamComponent extends ComponentResource {
     }
 
     // Getters
-    public Output<String> getEc2InstanceProfileName() { return ec2InstanceProfile.name(); }
+    public Output<String> getEc2InstanceProfileName() {
+        return ec2InstanceProfile.name();
+    }
 }

@@ -1,21 +1,33 @@
 package app.components;
 
 import com.pulumi.aws.AwsFunctions;
-import com.pulumi.aws.cloudtrail.*;
-import com.pulumi.aws.cloudtrail.inputs.*;
-import com.pulumi.aws.cloudwatch.*;
-import com.pulumi.aws.cloudwatch.inputs.*;
-import com.pulumi.aws.iam.*;
+import com.pulumi.aws.cloudtrail.Trail;
+import com.pulumi.aws.cloudtrail.TrailArgs;
+import com.pulumi.aws.cloudtrail.inputs.TrailAdvancedEventSelectorArgs;
+import com.pulumi.aws.cloudtrail.inputs.TrailAdvancedEventSelectorFieldSelectorArgs;
+import com.pulumi.aws.s3.BucketPolicy;
+import com.pulumi.aws.s3.BucketPolicyArgs;
+import com.pulumi.aws.cloudwatch.LogGroup;
+import com.pulumi.aws.cloudwatch.LogGroupArgs;
+import com.pulumi.aws.cloudwatch.LogMetricFilter;
+import com.pulumi.aws.cloudwatch.LogMetricFilterArgs;
+import com.pulumi.aws.cloudwatch.MetricAlarm;
+import com.pulumi.aws.cloudwatch.MetricAlarmArgs;
+import com.pulumi.aws.cloudwatch.inputs.LogMetricFilterMetricTransformationArgs;
+import com.pulumi.aws.iam.Policy;
+import com.pulumi.aws.iam.PolicyArgs;
+import com.pulumi.aws.iam.Role;
+import com.pulumi.aws.iam.RoleArgs;
+import com.pulumi.aws.iam.RolePolicyAttachment;
+import com.pulumi.aws.iam.RolePolicyAttachmentArgs;
 import com.pulumi.aws.inputs.GetCallerIdentityArgs;
 import com.pulumi.aws.outputs.GetCallerIdentityResult;
-import com.pulumi.aws.s3.*;
 import com.pulumi.core.Either;
 import com.pulumi.core.Output;
 import com.pulumi.resources.ComponentResource;
 import com.pulumi.resources.ComponentResourceOptions;
 import com.pulumi.resources.CustomResourceOptions;
 
-import java.util.List;
 import java.util.Map;
 
 import static app.components.IamComponent.buildResourceTags;
@@ -25,11 +37,11 @@ public class AuditingComponent extends ComponentResource {
     private final LogGroup cloudTrailLogGroup;
     private final Output<String> accountId;
 
-    public AuditingComponent(String name, StorageComponent storage, String region) {
+    public AuditingComponent(final String name, final StorageComponent storage, final String region) {
         this(name, storage, region, null);
     }
 
-    public AuditingComponent(String name, StorageComponent storage, String region, ComponentResourceOptions opts) {
+    public AuditingComponent(final String name, final StorageComponent storage, final String region, final ComponentResourceOptions opts) {
         super("custom:infrastructure:AuditingComponent", name, opts);
 
         var identity = AwsFunctions.getCallerIdentity(GetCallerIdentityArgs.builder().build());
@@ -51,7 +63,7 @@ public class AuditingComponent extends ComponentResource {
         createSecurityEventAlarm(name);
     }
 
-    private LogGroup createCloudTrailLogGroup(String name) {
+    private LogGroup createCloudTrailLogGroup(final String name) {
         return new LogGroup(name + "-cloudtrail-logs", LogGroupArgs.builder()
                 .name("/aws/cloudtrail/" + name)
                 .retentionInDays(90)
@@ -59,10 +71,10 @@ public class AuditingComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private BucketPolicy configureBucketPolicy(String name, StorageComponent storage) {
+    private BucketPolicy configureBucketPolicy(final String name, final StorageComponent storageComponent) {
         return new BucketPolicy(name + "-cloudtrail-bucket-policy", BucketPolicyArgs.builder()
-                .bucket(storage.getCloudTrailBucketName())
-                .policy(Output.all(storage.getCloudTrailBucketName(), accountId)
+                .bucket(storageComponent.getCloudTrailBucketName())
+                .policy(Output.all(storageComponent.getCloudTrailBucketName(), accountId)
                         .applyValue(values -> {
                             var bucketName = (String) values.get(0);
                             var account = (String) values.get(1);
@@ -71,7 +83,7 @@ public class AuditingComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private String createCloudTrailBucketPolicy(String bucketName, String accountId) {
+    private String createCloudTrailBucketPolicy(final String bucketName, final String accountIdParam) {
         return """
             {
                 "Version": "2012-10-17",
@@ -110,14 +122,15 @@ public class AuditingComponent extends ComponentResource {
                     }
                 ]
             }
-            """.formatted(bucketName, bucketName, accountId, bucketName);
+            """.formatted(bucketName, bucketName, accountIdParam, bucketName);
     }
 
-    private Trail createCloudTrail(String name, StorageComponent storage, String region, BucketPolicy bucketPolicy) {
+    private Trail createCloudTrail(final String name, final StorageComponent storageComponent, 
+                                   final String region, final BucketPolicy bucketPolicy) {
         return new Trail(name + "-cloudtrail", TrailArgs.builder()
                 .name(name + "-security-audit-trail")
-                .s3BucketName(storage.getCloudTrailBucketName())
-                .kmsKeyId(storage.getKmsKeyArn())
+                .s3BucketName(storageComponent.getCloudTrailBucketName())
+                .kmsKeyId(storageComponent.getKmsKeyArn())
                 .includeGlobalServiceEvents(true)
                 .isMultiRegionTrail(true)
                 .enableLogging(true)
@@ -142,7 +155,7 @@ public class AuditingComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).dependsOn(bucketPolicy).build());
     }
 
-    private Output<String> createCloudTrailRole(String name) {
+    private Output<String> createCloudTrailRole(final String name) {
         Role cloudTrailRole = new Role("cloudtrail-logs-role-" + name,
                 RoleArgs.builder()
                         .name("CloudTrail-LogsRole-" + name)
@@ -192,21 +205,21 @@ public class AuditingComponent extends ComponentResource {
         return cloudTrailRole.arn();
     }
 
-    private void createSecurityEventFilter(String name) {
+    private void createSecurityEventFilter(final String name) {
         new LogMetricFilter(name + "-security-events", LogMetricFilterArgs.builder()
                 .name(name + "-security-events-filter")
                 .logGroupName(cloudTrailLogGroup.name())
                 .pattern(accountId.applyValue(account -> 
-                    "{ ($.errorCode = \"*UnauthorizedOperation\") || " +
-                    "($.errorCode = \"AccessDenied*\") || " +
-                    "($.userIdentity.arn = \"arn:aws:iam::" + account + ":root\") || " +
-                    "($.eventName = \"ConsoleLogin\" && $.responseElements.ConsoleLogin = \"Failure\") || " +
-                    "($.eventName = \"CreateUser\") || " +
-                    "($.eventName = \"DeleteUser\") || " +
-                    "($.eventName = \"CreateRole\") || " +
-                    "($.eventName = \"DeleteRole\") || " +
-                    "($.eventName = \"AttachRolePolicy\") || " +
-                    "($.eventName = \"DetachRolePolicy\") }"
+                    "{ ($.errorCode = \"*UnauthorizedOperation\") || "
+                    + "($.errorCode = \"AccessDenied*\") || "
+                    + "($.userIdentity.arn = \"arn:aws:iam::" + account + ":root\") || "
+                    + "($.eventName = \"ConsoleLogin\" && $.responseElements.ConsoleLogin = \"Failure\") || "
+                    + "($.eventName = \"CreateUser\") || "
+                    + "($.eventName = \"DeleteUser\") || "
+                    + "($.eventName = \"CreateRole\") || "
+                    + "($.eventName = \"DeleteRole\") || "
+                    + "($.eventName = \"AttachRolePolicy\") || "
+                    + "($.eventName = \"DetachRolePolicy\") }"
                 ))
                 .metricTransformation(LogMetricFilterMetricTransformationArgs.builder()
                         .name("SecurityEvents")
@@ -217,7 +230,7 @@ public class AuditingComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private void createSecurityEventAlarm(String name) {
+    private void createSecurityEventAlarm(final String name) {
         new MetricAlarm(name + "-security-alarm", MetricAlarmArgs.builder()
                 .name(name + "-security-events-alarm")
                 .alarmDescription("Alarm for security-related events in CloudTrail")
@@ -233,10 +246,12 @@ public class AuditingComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private Map<String, String> getTags(String name, String resourceType, Map<String, String> additional) {
+    private Map<String, String> getTags(final String name, final String resourceType, final Map<String, String> additional) {
         return buildResourceTags(name, resourceType, additional);
     }
 
     // Getters
-    public Output<String> getCloudTrailArn() { return cloudTrail.arn(); }
+    public Output<String> getCloudTrailArn() {
+        return cloudTrail.arn();
+    }
 }

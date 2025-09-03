@@ -1,7 +1,18 @@
 package app.components;
 
 import com.pulumi.aws.AwsFunctions;
-import com.pulumi.aws.ec2.*;
+import com.pulumi.aws.ec2.InternetGateway;
+import com.pulumi.aws.ec2.InternetGatewayArgs;
+import com.pulumi.aws.ec2.Route;
+import com.pulumi.aws.ec2.RouteArgs;
+import com.pulumi.aws.ec2.RouteTable;
+import com.pulumi.aws.ec2.RouteTableArgs;
+import com.pulumi.aws.ec2.RouteTableAssociation;
+import com.pulumi.aws.ec2.RouteTableAssociationArgs;
+import com.pulumi.aws.ec2.Subnet;
+import com.pulumi.aws.ec2.SubnetArgs;
+import com.pulumi.aws.ec2.Vpc;
+import com.pulumi.aws.ec2.VpcArgs;
 import com.pulumi.aws.inputs.GetAvailabilityZonesArgs;
 import com.pulumi.core.Output;
 import com.pulumi.resources.ComponentResource;
@@ -17,11 +28,11 @@ public class NetworkingComponent extends ComponentResource {
     private final List<Subnet> publicSubnets;
     private final List<Subnet> privateSubnets;
 
-    public NetworkingComponent(String name, String region) {
+    public NetworkingComponent(final String name, final String region) {
         this(name, region, null);
     }
 
-    public NetworkingComponent(String name, String region, ComponentResourceOptions opts) {
+    public NetworkingComponent(final String name, final String region, final ComponentResourceOptions opts) {
         super("custom:infrastructure:NetworkingComponent", name, opts);
 
         // Create VPC with DNS support and IPv6
@@ -83,9 +94,9 @@ public class NetworkingComponent extends ComponentResource {
         createVpcFlowLogs(name);
     }
 
-    private List<Subnet> createSubnets(String baseName, String type, List<String> cidrs,
-                                       Output<com.pulumi.aws.outputs.GetAvailabilityZonesResult> azs,
-                                       boolean mapPublicIp) {
+    private List<Subnet> createSubnets(final String baseName, final String type, final List<String> cidrs,
+                                       final Output<com.pulumi.aws.outputs.GetAvailabilityZonesResult> azs,
+                                       final boolean mapPublicIp) {
         var subnets = new ArrayList<Subnet>();
 
         for (int i = 0; i < cidrs.size(); i++) {
@@ -107,8 +118,8 @@ public class NetworkingComponent extends ComponentResource {
         return subnets;
     }
 
-    private void associateSubnetsWithRouteTable(String baseName, String type,
-                                                List<Subnet> subnets, RouteTable routeTable) {
+    private void associateSubnetsWithRouteTable(final String baseName, final String type,
+                                                final List<Subnet> subnets, final RouteTable routeTable) {
         for (int i = 0; i < subnets.size(); i++) {
             new RouteTableAssociation("%s-%s-rta-%d".formatted(baseName, type, i + 1),
                     RouteTableAssociationArgs.builder()
@@ -118,12 +129,12 @@ public class NetworkingComponent extends ComponentResource {
         }
     }
 
-    private void createVpcFlowLogs(String name) {
+    private void createVpcFlowLogs(final String name) {
         // VPC Flow Logs for network monitoring (would require CloudWatch Log Group)
         // Implementation depends on logging strategy
     }
 
-    private Map<String, String> getTags(String name, String resourceType, Map<String, String> additional) {
+    private Map<String, String> getTags(final String name, final String resourceType, final Map<String, String> additional) {
         var baseTags = Map.of(
                 "Name", name,
                 "ResourceType", resourceType,
@@ -141,7 +152,9 @@ public class NetworkingComponent extends ComponentResource {
         return allTags;
     }
 
-    public Output<String> getVpcId() { return vpc.id(); }
+    public Output<String> getVpcId() {
+        return vpc.id();
+    }
 
     public Output<List<String>> getPublicSubnetIds() {
         return Output.all(publicSubnets.stream().map(Subnet::id).toList())

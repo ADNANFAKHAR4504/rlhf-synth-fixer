@@ -1,7 +1,19 @@
 package app.components;
 
-import com.pulumi.aws.ec2.*;
-import com.pulumi.aws.ec2.inputs.*;
+import com.pulumi.aws.ec2.Ec2Functions;
+import com.pulumi.aws.ec2.Instance;
+import com.pulumi.aws.ec2.InstanceArgs;
+import com.pulumi.aws.ec2.KeyPair;
+import com.pulumi.aws.ec2.KeyPairArgs;
+import com.pulumi.aws.ec2.SecurityGroup;
+import com.pulumi.aws.ec2.SecurityGroupArgs;
+import com.pulumi.aws.ec2.SecurityGroupRule;
+import com.pulumi.aws.ec2.SecurityGroupRuleArgs;
+import com.pulumi.aws.ec2.inputs.GetAmiArgs;
+import com.pulumi.aws.ec2.inputs.GetAmiFilterArgs;
+import com.pulumi.aws.ec2.inputs.InstanceRootBlockDeviceArgs;
+import com.pulumi.aws.ec2.inputs.SecurityGroupEgressArgs;
+import com.pulumi.aws.ec2.inputs.SecurityGroupIngressArgs;
 import com.pulumi.aws.ec2.outputs.GetAmiResult;
 import com.pulumi.core.Output;
 import com.pulumi.resources.ComponentResource;
@@ -21,13 +33,13 @@ public class ComputeComponent extends ComponentResource {
     private final List<Instance> instances;
     private final KeyPair keyPair;
 
-    public ComputeComponent(String name, NetworkingComponent networking,
-                            IamComponent iam, String region) {
+    public ComputeComponent(final String name, final NetworkingComponent networking,
+                            final IamComponent iam, final String region) {
         this(name, networking, iam, region, null);
     }
 
-    public ComputeComponent(String name, NetworkingComponent networking,
-                            IamComponent iam, String region, ComponentResourceOptions opts) {
+    public ComputeComponent(final String name, final NetworkingComponent networking,
+                            final IamComponent iam, final String region, final ComponentResourceOptions opts) {
         super("custom:infrastructure:ComputeComponent", name, opts);
 
         var genKey = new PrivateKey("compute-private-key", PrivateKeyArgs.builder()
@@ -51,7 +63,7 @@ public class ComputeComponent extends ComponentResource {
         this.instances = createInstances(name, networking, iam, region);
     }
 
-    private SecurityGroup createWebSecurityGroup(String name, NetworkingComponent networking) {
+    private SecurityGroup createWebSecurityGroup(final String name, final NetworkingComponent networking) {
         return new SecurityGroup(name + "-web-sg", SecurityGroupArgs.builder()
                 .name(name + "-web-tier-sg")
                 .description("Security group for web tier with restrictive access")
@@ -112,7 +124,7 @@ public class ComputeComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private SecurityGroup createAppSecurityGroup(String name, NetworkingComponent networking) {
+    private SecurityGroup createAppSecurityGroup(final String name, final NetworkingComponent networking) {
         return new SecurityGroup(name + "-app-sg", SecurityGroupArgs.builder()
                 .name(name + "-app-tier-sg")
                 .description("Security group for application tier")
@@ -121,7 +133,7 @@ public class ComputeComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private SecurityGroup createDatabaseSecurityGroup(String name, NetworkingComponent networking) {
+    private SecurityGroup createDatabaseSecurityGroup(final String name, final NetworkingComponent networking) {
         return new SecurityGroup(name + "-db-sg", SecurityGroupArgs.builder()
                 .name(name + "-database-tier-sg")
                 .description("Security group for database tier")
@@ -130,9 +142,9 @@ public class ComputeComponent extends ComponentResource {
                 .build(), CustomResourceOptions.builder().parent(this).build());
     }
 
-    private List<Instance> createInstances(String name, NetworkingComponent networking,
-                                           IamComponent iam, String region) {
-        var instances = new ArrayList<Instance>();
+    private List<Instance> createInstances(final String name, final NetworkingComponent networking,
+                                           final IamComponent iam, final String region) {
+        var instanceList = new ArrayList<Instance>();
 
         // Get latest Amazon Linux 2023 AMI
         var amiLookup = Ec2Functions.getAmi(GetAmiArgs.builder()
@@ -170,7 +182,7 @@ public class ComputeComponent extends ComponentResource {
                                 "PatchGroup", "web-servers"
                         )))
                         .build(), CustomResourceOptions.builder().parent(this).build());
-                instances.add(webInstance);
+                instanceList.add(webInstance);
             }
             return null;
         });
@@ -201,7 +213,7 @@ public class ComputeComponent extends ComponentResource {
                                 "PatchGroup", "app-servers"
                         )))
                         .build(), CustomResourceOptions.builder().parent(this).build());
-                instances.add(appInstance);
+                instanceList.add(appInstance);
             }
             return null;
         });
@@ -209,7 +221,7 @@ public class ComputeComponent extends ComponentResource {
         // Add security group rules after instances are created
         addSecurityGroupRules();
 
-        return instances;
+        return instanceList;
     }
 
     private void addSecurityGroupRules() {
@@ -386,7 +398,7 @@ public class ComputeComponent extends ComponentResource {
             """;
     }
 
-    public static Map<String, String> getTags(String name, String resourceType, Map<String, String> additional) {
+    public static Map<String, String> getTags(final String name, final String resourceType, final Map<String, String> additional) {
         var baseTags = Map.of(
                 "Name", name,
                 "ResourceType", resourceType,
