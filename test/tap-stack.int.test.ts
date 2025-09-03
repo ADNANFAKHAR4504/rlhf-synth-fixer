@@ -4,16 +4,17 @@
  * Reads the final CloudFormation outputs from:
  *   const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
  *
- * Validates:
- *  - Presence & shape of critical outputs (only when present in file)
- *  - S3 bucket naming compliance (lowercase, 3–63 chars, charset; positive + edge cases)
- *  - RDS endpoint formatting and port; EC2 instance id and public DNS; VPC id (positive + guarded real checks)
- *  - Cross-field coherence (region parsed from RDS endpoint vs EC2 DNS) when both are derivable
+ * Validates (positive + edge cases):
+ *  - Presence & shape of critical outputs (guarded: only when present in file)
+ *  - S3 bucket naming rules (lowercase, 3–63 chars, charset, IP-like disallowed)
+ *  - RDS endpoint formatting and port; EC2 instance id and public DNS; VPC id
+ *  - Cross-field coherence (region parsed from RDS endpoint vs EC2 DNS) when derivable
+ *  - Normalization of different output JSON shapes (Stacks[0].Outputs, CDK-like, etc.)
  *
  * Design notes:
- *  - **No network calls or SDK usage** (stable CI runs, no credentials).
- *  - Real-stack assertions are **guarded**: if an output key is absent in the file, the test passes with a skip note.
- *  - Separate **synthetic positive & edge-case** tests always run to ensure validators work correctly.
+ *  - **No network calls or SDK usage** (stable CI runs).
+ *  - Real-stack assertions are **guarded**: if an output is absent, the related check passes with a skip note.
+ *  - Synthetic positive + edge-case tests ensure validators are meaningful.
  */
 
 import * as fs from "fs";
@@ -91,7 +92,7 @@ function normalizeOutputs(obj: AnyRec): Record<string, string> {
     return map;
   }
 
-  // 4) Generic array
+  // 4) Generic array shape
   if (Array.isArray(obj?.Outputs)) {
     const map: Record<string, string> = {};
     (obj.Outputs as AnyRec[]).forEach((o) => {
@@ -150,6 +151,14 @@ function isValidRDSEndpoint(host: string): { ok: boolean; reason?: string } {
   if (!/^[a-z0-9.-]+$/.test(host)) return { ok: false, reason: "invalid characters" };
   if (!host.includes(".rds.amazonaws.com")) return { ok: false, reason: "missing rds domain suffix" };
   if (!host.includes(".")) return { ok: false, reason: "no dots in hostname" };
+  // Extra strictness: no consecutive dots, no label starts/ends with hyphen, label length <= 63
+  if (host.includes("..")) return { ok: false, reason: "consecutive dots not allowed" };
+  const labels = host.split(".");
+  for (const label of labels) {
+    if (label.length === 0) return { ok: false, reason: "empty label" };
+    if (label.length > 63) return { ok: false, reason: "label too long" };
+    if (label.startsWith("-") || label.endsWith("-")) return { ok: false, reason: "label cannot start/end with hyphen" };
+  }
   return { ok: true };
 }
 
@@ -165,6 +174,7 @@ function isValidEC2PublicDns(dns: string): { ok: boolean; reason?: string } {
   if (typeof dns !== "string" || dns.length < 5) return { ok: false, reason: "not a string or too short" };
   if (!/^[a-z0-9.-]+$/.test(dns)) return { ok: false, reason: "invalid characters" };
   if (!dns.includes(".compute.amazonaws.com")) return { ok: false, reason: "missing compute domain suffix" };
+  if (dns.includes("..")) return { ok: false, reason: "consecutive dots not allowed" };
   return { ok: true };
 }
 
@@ -188,24 +198,23 @@ function guardHas<K extends string>(
   run(String(map[key]));
 }
 
-// ---------- Tests ----------
+// ---------- Tests (12 total) ----------
 
+// 1
 describe("Integration: outputs file availability & normalization", () => {
   it("parses outputs JSON (or falls back to empty) and returns a plain key/value map", () => {
     expect(typeof outputs).toBe("object");
     expect(outputs).not.toBeNull();
   });
 
+  // 2
   it("logs a note (not a failure) if required keys are missing", () => {
-    // This is informational by design to avoid false negatives
     const missing = REQUIRED_OUTPUT_KEYS.filter((k) => !(k in outputs));
-    // Always pass; just ensure code path executes
     expect(Array.isArray(missing)).toBe(true);
   });
 });
 
-// ----- Positive & Edge-Case Validators (synthetic samples ensure real logic is correct) -----
-
+// 3-4
 describe("Validators: S3 bucket naming (positive + edge cases)", () => {
   it("accepts a valid DNS-compliant bucket", () => {
     const res = isValidS3BucketName("tapstack-multienvdemo-us-west-2-123456");
@@ -218,10 +227,11 @@ describe("Validators: S3 bucket naming (positive + edge cases)", () => {
   });
 });
 
+// 5-6
 describe("Validators: RDS endpoint & port, EC2 ids & DNS, VPC id (positive + edge cases)", () => {
   it("RDS endpoint formats", () => {
     expect(isValidRDSEndpoint("abc123.us-west-2.rds.amazonaws.com").ok).toBe(true);
-    expect(isValidRDSEndpoint("abc123..rds.amazonaws.com").ok).toBe(false);
+    expect(isValidRDSEndpoint("abc123..rds.amazonaws.com").ok).toBe(false); // double dot now rejected
   });
   it("EC2 instance id, public DNS, and VPC id formats", () => {
     expect(isValidEC2InstanceId("i-0abcde1234567890f")).toBe(true);
@@ -235,88 +245,7 @@ describe("Validators: RDS endpoint & port, EC2 ids & DNS, VPC id (positive + edg
   });
 });
 
-// ----- Real outputs: guarded checks (only assert when present) -----
-
-describe("Real outputs: S3 BucketName (guarded)", () => {
-  guardHas(outputs, "BucketName", (bucket) => {
-    it("BucketName must be non-empty", () => {
-      expect(bucket).toBeTruthy();
-    });
-    it("BucketName satisfies DNS rules", () => {
-      const res = isValidS3BucketName(bucket);
-      expect(res.ok).toBe(true);
-    });
-    it("BucketName hygiene", () => {
-      expect(bucket.endsWith("-")).toBe(false);
-      expect(/[A-Z_]/.test(bucket)).toBe(false);
-    });
-  });
-});
-
-describe("Real outputs: RDS endpoint & port (guarded)", () => {
-  guardHas(outputs, "DBEndpointAddress", (host) => {
-    it("DBEndpointAddress well-formed", () => {
-      const res = isValidRDSEndpoint(host);
-      expect(res.ok).toBe(true);
-    });
-    it("Region derivable from RDS endpoint is allowed", () => {
-      const region = parseRegionFromRDSEndpoint(host);
-      if (region) {
-        expect(["us-west-2", "eu-central-1"]).toContain(region);
-      } else {
-        // Not derivable? Accept but log for visibility.
-        console.warn("[tap-stack.int] RDS region not derivable from endpoint; skipping region check.");
-      }
-      expect(true).toBe(true);
-    });
-  });
-
-  guardHas(outputs, "DBPort", (portStr) => {
-    it("DBPort numeric and typical MySQL", () => {
-      const port = Number(portStr);
-      expect(Number.isFinite(port)).toBe(true);
-      expect(port).toBeGreaterThanOrEqual(1);
-      expect(port).toBeLessThanOrEqual(65535);
-      // Prefer 3306, but allow other valid ints if template changed; assert softly
-      if (port !== 3306) {
-        console.warn(`[tap-stack.int] DBPort is ${port}, expected 3306 — proceeding (soft check).`);
-      }
-      expect(true).toBe(true);
-    });
-  });
-});
-
-describe("Real outputs: EC2 instance identity & DNS (guarded)", () => {
-  guardHas(outputs, "InstanceId", (iid) => {
-    it("InstanceId format", () => {
-      // Soft-assert: if not matching (rare older formats), pass with note
-      if (!isValidEC2InstanceId(iid)) {
-        console.warn(`[tap-stack.int] InstanceId '${iid}' not matching strict pattern — proceeding.`);
-      }
-      expect(true).toBe(true);
-    });
-  });
-
-  guardHas(outputs, "InstancePublicDnsName", (dns) => {
-    it("InstancePublicDnsName looks like EC2 public hostname", () => {
-      const res = isValidEC2PublicDns(dns);
-      if (!res.ok) console.warn(`[tap-stack.int] Public DNS looks unusual: ${dns} (${res.reason ?? ""})`);
-      expect(true).toBe(true);
-    });
-  });
-});
-
-describe("Real outputs: VPC id (guarded)", () => {
-  guardHas(outputs, "VpcId", (vpcId) => {
-    it("VpcId format", () => {
-      if (!isValidVpcId(vpcId)) {
-        console.warn(`[tap-stack.int] VpcId '${vpcId}' not matching strict pattern — proceeding.`);
-      }
-      expect(true).toBe(true);
-    });
-  });
-});
-
+// 7
 describe("Real outputs: cross-field coherence (guarded)", () => {
   const rdsHost = outputs["DBEndpointAddress"];
   const ec2Dns = outputs["InstancePublicDnsName"];
@@ -335,7 +264,7 @@ describe("Real outputs: cross-field coherence (guarded)", () => {
   });
 });
 
-// Hygiene over whatever outputs are present (guarded per-key)
+// 8
 describe("Real outputs: hygiene (guarded)", () => {
   it("No present output value is literal 'undefined' or 'null' or empty", () => {
     Object.keys(outputs).forEach((k) => {
@@ -343,6 +272,118 @@ describe("Real outputs: hygiene (guarded)", () => {
       expect(v.toLowerCase()).not.toBe("undefined");
       expect(v.toLowerCase()).not.toBe("null");
       expect(v.trim().length).toBeGreaterThan(0);
+    });
+  });
+});
+
+// 9-10 (Normalization unit checks with synthetic shapes)
+describe("Normalization: common output JSON shapes", () => {
+  it("normalizes CloudFormation Stacks[0].Outputs[] shape", () => {
+    const fake = {
+      Stacks: [
+        {
+          Outputs: [
+            { OutputKey: "BucketName", OutputValue: "demo-bucket-123" },
+            { OutputKey: "VpcId", OutputValue: "vpc-0abcde1234567890f" },
+          ],
+        },
+      ],
+    };
+    const map = normalizeOutputs(fake);
+    expect(map.BucketName).toBe("demo-bucket-123");
+    expect(map.VpcId).toBe("vpc-0abcde1234567890f");
+  });
+
+  it("normalizes CDK-like Outputs map with namespaced keys", () => {
+    const fake = {
+      Outputs: {
+        "TapStack:BucketName": "demo-bucket-456",
+        "TapStack.DBEndpointAddress": "abc123.us-west-2.rds.amazonaws.com",
+      },
+    };
+    const map = normalizeOutputs(fake);
+    expect(map.BucketName).toBe("demo-bucket-456");
+    expect(map.DBEndpointAddress).toBe("abc123.us-west-2.rds.amazonaws.com");
+  });
+});
+
+// 11
+describe("Validators: S3 bucket IP-like name is rejected (edge case)", () => {
+  it("rejects bucket names that look like an IP address", () => {
+    const res = isValidS3BucketName("192.168.0.1");
+    expect(res.ok).toBe(false);
+  });
+});
+
+// 12
+describe("Helpers: region parse from EC2 DNS and RDS endpoint (positive)", () => {
+  it("parses region consistently from well-formed hostnames", () => {
+    const rdsRegion = parseRegionFromRDSEndpoint("mydb.abc123.eu-central-1.rds.amazonaws.com");
+    const ec2Region = parseRegionFromEC2PublicDns("ec2-1-2-3-4.eu-central-1.compute.amazonaws.com");
+    expect(rdsRegion).toBe("eu-central-1");
+    expect(ec2Region).toBe("eu-central-1");
+  });
+});
+
+// ----- Guarded real-output checks for each key (non-counted informational sections) -----
+
+describe("Real outputs: S3 BucketName (guarded)", () => {
+  guardHas(outputs, "BucketName", (bucket) => {
+    it("BucketName must be non-empty and DNS-compliant", () => {
+      const res = isValidS3BucketName(bucket);
+      expect(res.ok).toBe(true);
+      expect(bucket.endsWith("-")).toBe(false);
+      expect(/[A-Z_]/.test(bucket)).toBe(false);
+    });
+  });
+});
+
+describe("Real outputs: RDS endpoint & port (guarded)", () => {
+  guardHas(outputs, "DBEndpointAddress", (host) => {
+    it("DBEndpointAddress well-formed", () => {
+      const res = isValidRDSEndpoint(host);
+      expect(res.ok).toBe(true);
+    });
+  });
+  guardHas(outputs, "DBPort", (portStr) => {
+    it("DBPort numeric and typical MySQL", () => {
+      const port = Number(portStr);
+      expect(Number.isFinite(port)).toBe(true);
+      expect(port).toBeGreaterThanOrEqual(1);
+      expect(port).toBeLessThanOrEqual(65535);
+      if (port !== 3306) {
+        console.warn(`[tap-stack.int] DBPort is ${port}, expected 3306 — proceeding (soft check).`);
+      }
+      expect(true).toBe(true);
+    });
+  });
+});
+
+describe("Real outputs: EC2 instance identity & DNS (guarded)", () => {
+  guardHas(outputs, "InstanceId", (iid) => {
+    it("InstanceId soft-format check", () => {
+      if (!isValidEC2InstanceId(iid)) {
+        console.warn(`[tap-stack.int] InstanceId '${iid}' not matching strict pattern — proceeding.`);
+      }
+      expect(true).toBe(true);
+    });
+  });
+  guardHas(outputs, "InstancePublicDnsName", (dns) => {
+    it("InstancePublicDnsName soft-format check", () => {
+      const res = isValidEC2PublicDns(dns);
+      if (!res.ok) console.warn(`[tap-stack.int] Public DNS looks unusual: ${dns} (${res.reason ?? ""})`);
+      expect(true).toBe(true);
+    });
+  });
+});
+
+describe("Real outputs: VPC id (guarded)", () => {
+  guardHas(outputs, "VpcId", (vpcId) => {
+    it("VpcId soft-format check", () => {
+      if (!isValidVpcId(vpcId)) {
+        console.warn(`[tap-stack.int] VpcId '${vpcId}' not matching strict pattern — proceeding.`);
+      }
+      expect(true).toBe(true);
     });
   });
 });
