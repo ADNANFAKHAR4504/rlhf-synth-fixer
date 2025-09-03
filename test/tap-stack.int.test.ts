@@ -47,12 +47,20 @@ describe('TapStack Integration Tests', () => {
       let publicSubnetIds = outputs.publicSubnetIds || [];
       let privateSubnetIds = outputs.privateSubnetIds || [];
 
-      // Handle case where IDs might be strings instead of arrays
+      // Handle case where IDs might be JSON strings
       if (typeof publicSubnetIds === 'string') {
-        publicSubnetIds = [publicSubnetIds];
+        try {
+          publicSubnetIds = JSON.parse(publicSubnetIds);
+        } catch {
+          publicSubnetIds = [publicSubnetIds];
+        }
       }
       if (typeof privateSubnetIds === 'string') {
-        privateSubnetIds = [privateSubnetIds];
+        try {
+          privateSubnetIds = JSON.parse(privateSubnetIds);
+        } catch {
+          privateSubnetIds = [privateSubnetIds];
+        }
       }
 
       if (publicSubnetIds.length === 0 || privateSubnetIds.length === 0) {
@@ -112,7 +120,7 @@ describe('TapStack Integration Tests', () => {
   describe('e2e: Database Services', () => {
     it('should have RDS instance with Multi-AZ enabled', async () => {
       const client = new RDSClient({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       const dbInstanceId = `rds-${environmentSuffix}`;
 
       try {
@@ -154,7 +162,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should have Lambda function deployed in VPC', async () => {
       const client = new LambdaClient({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       const functionName = `lambda-${environmentSuffix}`;
 
       try {
@@ -178,7 +186,7 @@ describe('TapStack Integration Tests', () => {
   describe('e2e: Load Balancer and CDN', () => {
     it('should have ALB with cross-zone load balancing', async () => {
       const client = new ElasticLoadBalancingV2Client({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       const albName = `alb-${environmentSuffix}`;
 
       try {
@@ -231,7 +239,7 @@ describe('TapStack Integration Tests', () => {
   describe('e2e: Monitoring and Alarms', () => {
     it('should have CloudWatch alarms configured', async () => {
       const client = new CloudWatchClient({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
 
       const alarmNames = [
         `ec2-cpu-alarm-${environmentSuffix}`,
@@ -261,7 +269,7 @@ describe('TapStack Integration Tests', () => {
   describe('e2e: Security and Compliance', () => {
     it('should validate IAM roles have correct path', async () => {
       const client = new IAMClient({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       
       try {
         const command = new ListRolesCommand({ PathPrefix: '/service/' });
@@ -283,7 +291,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should validate KMS encryption is enabled', async () => {
       const client = new KMSClient({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       
       try {
         const command = new ListKeysCommand({});
@@ -380,7 +388,7 @@ describe('TapStack Integration Tests', () => {
 
     it('should validate Secrets Manager integration', async () => {
       const client = new SecretsManagerClient({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       
       try {
         const command = new ListSecretsCommand({});
@@ -404,7 +412,7 @@ describe('TapStack Integration Tests', () => {
   describe('e2e: Additional Infrastructure Validation', () => {
     it('should validate ALB target groups', async () => {
       const client = new ElasticLoadBalancingV2Client({ region });
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       
       try {
         const command = new DescribeTargetGroupsCommand({});
@@ -440,20 +448,25 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should validate resource tagging compliance', async () => {
-      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+      const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
       
       // This test validates that resources follow proper naming conventions
-      // which indicates proper tagging and environment management
-      expect(outputs.vpcId).toContain(environmentSuffix);
+      // AWS-generated IDs (like VPC ID) don't contain environment suffix
+      // but resource names should contain the environment suffix
       expect(outputs.s3BucketName).toContain(environmentSuffix);
       expect(outputs.dynamoTableName).toContain(environmentSuffix);
+      expect(outputs.lambdaFunctionName).toContain(environmentSuffix);
+      
+      // Validate AWS resource IDs exist but don't expect environment suffix in them
+      expect(outputs.vpcId).toMatch(/^vpc-[a-f0-9]+$/);
+      expect(outputs.ec2InstanceId).toMatch(/^i-[a-f0-9]+$/);
     });
   });
 });
 
 describe('TapStack Requirements Validation', () => {
   let outputs: any = {};
-  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2609';
   
   beforeAll(() => {
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
@@ -468,8 +481,24 @@ describe('TapStack Requirements Validation', () => {
     expect(outputs.publicSubnetIds).toBeDefined();
     expect(outputs.privateSubnetIds).toBeDefined();
     
-    const publicSubnets = Array.isArray(outputs.publicSubnetIds) ? outputs.publicSubnetIds : [outputs.publicSubnetIds];
-    const privateSubnets = Array.isArray(outputs.privateSubnetIds) ? outputs.privateSubnetIds : [outputs.privateSubnetIds];
+    let publicSubnets = outputs.publicSubnetIds;
+    let privateSubnets = outputs.privateSubnetIds;
+    
+    // Handle JSON string format
+    if (typeof publicSubnets === 'string') {
+      try {
+        publicSubnets = JSON.parse(publicSubnets);
+      } catch {
+        publicSubnets = [publicSubnets];
+      }
+    }
+    if (typeof privateSubnets === 'string') {
+      try {
+        privateSubnets = JSON.parse(privateSubnets);
+      } catch {
+        privateSubnets = [privateSubnets];
+      }
+    }
     
     expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
     expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
@@ -501,9 +530,48 @@ describe('TapStack Requirements Validation', () => {
   });
   
   it('should validate resource naming follows environment pattern', () => {
-    // All resources should include environment suffix
-    expect(outputs.vpcId).toMatch(new RegExp(environmentSuffix));
+    // Resource names (not AWS-generated IDs) should include environment suffix
     expect(outputs.s3BucketName).toMatch(new RegExp(environmentSuffix));
     expect(outputs.dynamoTableName).toMatch(new RegExp(environmentSuffix));
+    expect(outputs.lambdaFunctionName).toMatch(new RegExp(environmentSuffix));
+    
+    // Validate AWS-generated resource IDs have correct format
+    expect(outputs.vpcId).toMatch(/^vpc-[a-f0-9]+$/);
+    expect(outputs.ec2InstanceId).toMatch(/^i-[a-f0-9]+$/);
+    expect(outputs.kmsKeyId).toMatch(/^[a-f0-9-]{36}$/);
+  });
+  
+  it('should validate all required outputs are present', () => {
+    const requiredOutputs = [
+      'vpcId', 'publicSubnetIds', 'privateSubnetIds', 's3BucketName', 's3BucketArn',
+      'rdsEndpoint', 'lambdaFunctionArn', 'lambdaFunctionName', 'albDnsName', 'albArn',
+      'cloudFrontDomainName', 'cloudFrontDistributionId', 'ec2InstanceId', 'ec2PublicIp',
+      'dynamoTableName', 'dynamoTableArn', 'kmsKeyId', 'kmsKeyArn', 'secretArn', 'targetGroupArn'
+    ];
+    
+    requiredOutputs.forEach(output => {
+      expect(outputs[output]).toBeDefined();
+      expect(outputs[output]).not.toBe('');
+    });
+  });
+  
+  it('should validate ARN formats are correct', () => {
+    expect(outputs.s3BucketArn).toMatch(/^arn:aws:s3:::[a-z0-9-]+$/);
+    expect(outputs.lambdaFunctionArn).toMatch(/^arn:aws:lambda:[a-z0-9-]+:[0-9]+:function:[a-z0-9-]+$/);
+    expect(outputs.dynamoTableArn).toMatch(/^arn:aws:dynamodb:[a-z0-9-]+:[0-9]+:table\/[a-z0-9-]+$/);
+    expect(outputs.kmsKeyArn).toMatch(/^arn:aws:kms:[a-z0-9-]+:[0-9]+:key\/[a-f0-9-]{36}$/);
+    expect(outputs.albArn).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:[0-9]+:loadbalancer\/app\/[a-z0-9-]+\/[a-f0-9]+$/);
+    expect(outputs.targetGroupArn).toMatch(/^arn:aws:elasticloadbalancing:[a-z0-9-]+:[0-9]+:targetgroup\/[a-z0-9-]+\/[a-f0-9]+$/);
+    expect(outputs.secretArn).toMatch(/^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]+:secret:[a-z0-9-]+-[a-zA-Z0-9]+$/);
+  });
+  
+  it('should validate DNS names and endpoints format', () => {
+    expect(outputs.albDnsName).toMatch(/^[a-z0-9-]+\.[a-z0-9-]+\.elb\.amazonaws\.com$/);
+    expect(outputs.cloudFrontDomainName).toMatch(/^[a-z0-9]+\.cloudfront\.net$/);
+    expect(outputs.rdsEndpoint).toMatch(/^[a-z0-9-]+\.[a-z0-9]+\.[a-z0-9-]+\.rds\.amazonaws\.com:3306$/);
+  });
+  
+  it('should validate IP address format', () => {
+    expect(outputs.ec2PublicIp).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
   });
 });
