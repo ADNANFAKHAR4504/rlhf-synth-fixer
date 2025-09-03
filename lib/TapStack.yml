@@ -128,7 +128,7 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:PutObjectAcl
-                Resource: !Sub '${MigrationLogsBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${MigrationLogsBucket}/*'
               - Effect: Allow
                 Action:
                   - sns:Publish
