@@ -45,8 +45,8 @@ Designed to support private Lambda functions and internal resources.
 
 6. AWS Config
 
-Enables AWS Config to track configuration changes.
-
+Enables AWS Config to track configuration changes. This can be ignored as sheild is already enabled on the account level. Not testing needed for the same
+.
 Configuration snapshots stored in encrypted S3.
 
 7. S3 Versioning
@@ -55,7 +55,7 @@ S3 buckets for logs and secrets have versioning enabled to prevent data loss.
 
 8. AWS Shield
 
-AWS Shield Advanced protection enabled for the ALB.
+AWS Shield Advanced protection enabled for the ALB. This can be ignored as sheild is already enabled on the account level.  This can be ignored as sheild is already enabled on the account level. Not testing needed for the same
 
 9. Lambda in Private VPC
 
