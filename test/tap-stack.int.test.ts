@@ -1,328 +1,430 @@
-import {
-  DescribeInstancesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeSubnetsCommand,
-  DescribeVpcsCommand,
-  EC2Client
-} from '@aws-sdk/client-ec2';
-import {
-  DescribeKeyCommand,
-  KMSClient
-} from '@aws-sdk/client-kms';
-import {
-  DescribeDBInstancesCommand,
-  RDSClient
-} from '@aws-sdk/client-rds';
-import {
-  GetBucketEncryptionCommand,
-  HeadBucketCommand,
-  S3Client
-} from '@aws-sdk/client-s3';
-import * as fs from 'fs';
-import * as path from 'path';
+// __tests__/tap-stack.int.test.ts
+import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand } from "@aws-sdk/client-s3";
+import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeRouteTablesCommand, DescribeVpcAttributeCommand } from "@aws-sdk/client-ec2";
+import { RDSClient, DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand } from "@aws-sdk/client-rds";
+import { IAMClient, GetRoleCommand, GetInstanceProfileCommand, ListAttachedRolePoliciesCommand } from "@aws-sdk/client-iam";
+import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
 
-// Integration tests use deployed infrastructure outputs
-describe('TapStack Integration Tests', () => {
-  let outputs: any = {};
-  let ec2Client: EC2Client;
-  let s3Client: S3Client;
-  let rdsClient: RDSClient;
-  let kmsClient: KMSClient;
+const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-east-1";
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || "pr1998";
+
+const s3Client = new S3Client({ region: awsRegion });
+const ec2Client = new EC2Client({ region: awsRegion });
+const rdsClient = new RDSClient({ region: awsRegion });
+const iamClient = new IAMClient({ region: awsRegion });
+const kmsClient = new KMSClient({ region: awsRegion });
+
+describe("TapStack Integration Tests", () => {
+  let vpcId: string;
+  let publicSubnetIds: string[];
+  let privateSubnetIds: string[];
+  let publicEc2SecurityGroupId: string;
+  let privateEc2SecurityGroupId: string;
+  let rdsSecurityGroupId: string;
+  let publicEc2InstanceId: string;
+  let privateEc2InstanceId: string;
+  let publicS3BucketName: string;
+  let privateS3BucketName: string;
+  let iamRoleName: string;
+  let instanceProfileName: string;
+  let kmsKeyId: string;
+  let rdsEndpoint: string;
 
   beforeAll(() => {
-    // Load the flat outputs from deployment
-    const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
-
-    if (fs.existsSync(outputsPath)) {
-      const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
-      outputs = JSON.parse(outputsContent);
-    } else {
-      console.warn('No flat-outputs.json found. Integration tests may fail.');
-      outputs = {}; // Empty outputs for graceful handling
-    }
-
-    // Initialize AWS clients
-    const awsRegion = process.env.AWS_REGION || 'us-east-1';
-    ec2Client = new EC2Client({ region: awsRegion });
-    s3Client = new S3Client({ region: awsRegion });
-    rdsClient = new RDSClient({ region: awsRegion });
-    kmsClient = new KMSClient({ region: awsRegion });
+    // Initialize expected resource names based on environment suffix and deployment outputs
+    publicS3BucketName = `tap-project-${environmentSuffix}-public-assets`;
+    privateS3BucketName = `tap-project-${environmentSuffix}-private-data`;
+    iamRoleName = `tap-project-${environmentSuffix}-ec2-role`;
+    instanceProfileName = `tap-project-${environmentSuffix}-instance-profile`;
+    
+    // From deployment outputs
+    vpcId = "vpc-0e8d50f62f547fc4d";
+    publicSubnetIds = ["subnet-0cd128884e72ec570", "subnet-0573d0e84cca282e7"];
+    privateSubnetIds = ["subnet-07124d2ba8376b7c4", "subnet-0e1821d678dd0375a"];
+    publicEc2InstanceId = "i-0885377a4e5646edf";
+    privateEc2InstanceId = "i-09ffc84017e53fb33";
+    kmsKeyId = "826bbcac-5696-4fae-a31f-bfaf956cac44";
+    rdsEndpoint = "tap-project-pr1998-db.c43eiskmcd0s.us-east-1.rds.amazonaws.com:5432";
   });
 
-  describe('VPC Infrastructure', () => {
-    it('should have created VPC with correct configuration', async () => {
-      if (!outputs['vpc-id']) {
-        console.warn('VPC ID not found in outputs, skipping test');
-        return;
-      }
+  describe("VPC Infrastructure", () => {
+    test("VPC exists and has correct CIDR block configuration", async () => {
+      const { Vpcs } = await ec2Client.send(new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      }));
 
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs['vpc-id']]
-      });
+      expect(Vpcs?.length).toBe(1);
+      const vpc = Vpcs?.[0];
 
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs![0].VpcId).toBe(outputs['vpc-id']);
-      expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
-      expect(response.Vpcs![0].State).toBe('available');
+      expect(vpc?.CidrBlock).toBe("10.0.0.0/16");
+      expect(vpc?.State).toBe("available");
+      expect(vpc?.DhcpOptionsId).toBeDefined();
+
+      // Check DNS attributes
+      const { EnableDnsHostnames } = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: "enableDnsHostnames"
+      }));
+
+      const { EnableDnsSupport } = await ec2Client.send(new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: "enableDnsSupport"
+      }));
+
+      expect(EnableDnsHostnames?.Value).toBe(true);
+      expect(EnableDnsSupport?.Value).toBe(true);
     }, 30000);
 
-    it('should have created public and private subnets', async () => {
-      if (!outputs['public-subnet-ids'] || !outputs['private-subnet-ids']) {
-        console.warn('Subnet IDs not found in outputs, skipping test');
-        return;
-      }
+    test("Public subnets exist with correct configuration", async () => {
+      const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({
+        SubnetIds: publicSubnetIds
+      }));
 
-      const publicSubnetIds = Array.isArray(outputs['public-subnet-ids'])
-        ? outputs['public-subnet-ids']
-        : JSON.parse(outputs['public-subnet-ids']);
+      expect(Subnets?.length).toBe(2);
 
-      const privateSubnetIds = Array.isArray(outputs['private-subnet-ids'])
-        ? outputs['private-subnet-ids']
-        : JSON.parse(outputs['private-subnet-ids']);
-
-      const allSubnetIds = [...publicSubnetIds, ...privateSubnetIds];
-
-      const command = new DescribeSubnetsCommand({
-        SubnetIds: allSubnetIds
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Subnets).toBeDefined();
-      expect(response.Subnets!.length).toBeGreaterThanOrEqual(4); // At least 2 public, 2 private
-
-      // Check that all subnets are in the correct VPC
-      response.Subnets!.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs['vpc-id']);
-        expect(subnet.State).toBe('available');
+      Subnets?.forEach((subnet) => {
+        expect(subnet.VpcId).toBe(vpcId);
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+        expect(subnet.State).toBe("available");
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.\d+\.0\/24$/);
+        expect(subnet.AvailabilityZone).toMatch(/^us-east-1[ab]$/);
       });
     }, 30000);
-  });
 
-  describe('EC2 Instances', () => {
-    it('should have created public EC2 instance with public IP', async () => {
-      if (!outputs['public-ec2-instance-id']) {
-        console.warn('Public EC2 instance ID not found in outputs, skipping test');
-        return;
-      }
+    test("Private subnets exist with correct configuration", async () => {
+      const { Subnets } = await ec2Client.send(new DescribeSubnetsCommand({
+        SubnetIds: privateSubnetIds
+      }));
 
-      const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs['public-ec2-instance-id']]
+      expect(Subnets?.length).toBe(2);
+
+      Subnets?.forEach((subnet) => {
+        expect(subnet.VpcId).toBe(vpcId);
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
+        expect(subnet.State).toBe("available");
+        expect(subnet.CidrBlock).toMatch(/^10\.0\.\d+\.0\/24$/);
+        expect(subnet.AvailabilityZone).toMatch(/^us-east-1[ab]$/);
       });
-
-      const response = await ec2Client.send(command);
-      expect(response.Reservations).toBeDefined();
-      expect(response.Reservations![0].Instances).toBeDefined();
-
-      const instance = response.Reservations![0].Instances![0];
-      expect(instance.InstanceId).toBe(outputs['public-ec2-instance-id']);
-      expect(instance.State!.Name).toMatch(/running|pending|stopped/);
-      expect(instance.PublicIpAddress).toBeDefined();
-      expect(instance.InstanceType).toBe('t3.micro');
     }, 30000);
 
-    it('should have created private EC2 instance without public IP', async () => {
-      if (!outputs['private-ec2-instance-id']) {
-        console.warn('Private EC2 instance ID not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeInstancesCommand({
-        InstanceIds: [outputs['private-ec2-instance-id']]
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.Reservations).toBeDefined();
-      expect(response.Reservations![0].Instances).toBeDefined();
-
-      const instance = response.Reservations![0].Instances![0];
-      expect(instance.InstanceId).toBe(outputs['private-ec2-instance-id']);
-      expect(instance.State!.Name).toMatch(/running|pending|stopped/);
-      expect(instance.PublicIpAddress).toBeUndefined();
-      expect(instance.PrivateIpAddress).toBeDefined();
-      expect(instance.InstanceType).toBe('t3.micro');
-    }, 30000);
-  });
-
-  describe('S3 Buckets', () => {
-    it('should have created public S3 bucket for assets', async () => {
-      if (!outputs['public-s3-bucket-name']) {
-        console.warn('Public S3 bucket name not found in outputs, skipping test');
-        return;
-      }
-
-      const headCommand = new HeadBucketCommand({
-        Bucket: outputs['public-s3-bucket-name']
-      });
-
-      // Should not throw an error if bucket exists
-      await expect(s3Client.send(headCommand)).resolves.not.toThrow();
-
-      // Check encryption configuration
-      const encryptionCommand = new GetBucketEncryptionCommand({
-        Bucket: outputs['public-s3-bucket-name']
-      });
-
-      const encryptionResponse = await s3Client.send(encryptionCommand);
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-    }, 30000);
-
-    it('should have created private S3 bucket for internal data', async () => {
-      if (!outputs['private-s3-bucket-name']) {
-        console.warn('Private S3 bucket name not found in outputs, skipping test');
-        return;
-      }
-
-      const headCommand = new HeadBucketCommand({
-        Bucket: outputs['private-s3-bucket-name']
-      });
-
-      // Should not throw an error if bucket exists
-      await expect(s3Client.send(headCommand)).resolves.not.toThrow();
-
-      // Check encryption configuration
-      const encryptionCommand = new GetBucketEncryptionCommand({
-        Bucket: outputs['private-s3-bucket-name']
-      });
-
-      const encryptionResponse = await s3Client.send(encryptionCommand);
-      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
-    }, 30000);
-  });
-
-  describe('RDS Database', () => {
-    it('should have created RDS PostgreSQL instance', async () => {
-      if (!outputs['rds-endpoint']) {
-        console.warn('RDS endpoint not found in outputs, skipping test');
-        return;
-      }
-
-      // Extract DB instance identifier from endpoint
-      const dbIdentifier = outputs['rds-endpoint'].split('.')[0];
-
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier
-      });
-
-      const response = await rdsClient.send(command);
-      expect(response.DBInstances).toBeDefined();
-      expect(response.DBInstances!.length).toBe(1);
-
-      const dbInstance = response.DBInstances![0];
-      expect(dbInstance.Engine).toBe('postgres');
-      expect(dbInstance.DBInstanceClass).toBe('db.t3.micro');
-      expect(dbInstance.AllocatedStorage).toBe(20);
-      expect(dbInstance.DBInstanceStatus).toMatch(/available|creating|backing-up/);
-      expect(dbInstance.Endpoint?.Address).toContain(dbIdentifier);
-    }, 30000);
-  });
-
-  describe('KMS Key', () => {
-    it('should have created KMS key with proper configuration', async () => {
-      if (!outputs['kms-key-id']) {
-        console.warn('KMS key ID not found in outputs, skipping test');
-        return;
-      }
-
-      const command = new DescribeKeyCommand({
-        KeyId: outputs['kms-key-id']
-      });
-
-      const response = await kmsClient.send(command);
-      expect(response.KeyMetadata).toBeDefined();
-      expect(response.KeyMetadata!.KeyId).toBe(outputs['kms-key-id']);
-      expect(response.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
-      expect(response.KeyMetadata!.KeySpec).toBe('SYMMETRIC_DEFAULT');
-      expect(response.KeyMetadata!.Enabled).toBe(true);
-    }, 30000);
-  });
-
-  describe('Security Groups', () => {
-    it('should have created security groups with correct rules', async () => {
-      if (!outputs['vpc-id']) {
-        console.warn('VPC ID not found in outputs, skipping security group test');
-        return;
-      }
-
-      const command = new DescribeSecurityGroupsCommand({
+    test("Internet Gateway exists and is attached to VPC", async () => {
+      const { InternetGateways } = await ec2Client.send(new DescribeInternetGatewaysCommand({
         Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs['vpc-id']]
-          }
+          { Name: "attachment.vpc-id", Values: [vpcId] }
         ]
-      });
+      }));
 
-      const response = await ec2Client.send(command);
-      expect(response.SecurityGroups).toBeDefined();
+      expect(InternetGateways?.length).toBe(1);
+      const igw = InternetGateways?.[0];
+      expect(igw?.Attachments?.[0]?.VpcId).toBe(vpcId);
+      expect(igw?.Attachments?.[0]?.State).toBe("available");
+    }, 30000);
 
-      // Should have at least 4 security groups: default + 3 created (public-ec2, private-ec2, rds)
-      expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(4);
+    test("NAT Gateway exists in public subnet", async () => {
+      const { NatGateways } = await ec2Client.send(new DescribeNatGatewaysCommand({
+        Filter: [
+          { Name: "vpc-id", Values: [vpcId] },
+          { Name: "state", Values: ["available"] }
+        ]
+      }));
 
-      // Check for our custom security groups
-      const customSGs = response.SecurityGroups!.filter(sg =>
-        sg.GroupName?.includes('public-ec2') ||
-        sg.GroupName?.includes('private-ec2') ||
-        sg.GroupName?.includes('rds')
+      expect(NatGateways?.length).toBeGreaterThanOrEqual(1);
+      const natGw = NatGateways?.[0];
+      expect(natGw?.State).toBe("available");
+      expect(publicSubnetIds).toContain(natGw?.SubnetId);
+      expect(natGw?.NatGatewayAddresses?.[0]?.AllocationId).toBeDefined();
+    }, 30000);
+
+    test("Route tables are configured correctly", async () => {
+      // Check public route table
+      const { RouteTables: allRouteTables } = await ec2Client.send(new DescribeRouteTablesCommand({
+        Filters: [
+          { Name: "vpc-id", Values: [vpcId] }
+        ]
+      }));
+
+      expect(allRouteTables?.length).toBeGreaterThanOrEqual(3); // Main + Public + Private
+
+      // Find public route table (has IGW route)
+      const publicRt = allRouteTables?.find(rt => 
+        rt.Routes?.some(route => 
+          route.DestinationCidrBlock === "0.0.0.0/0" && route.GatewayId?.startsWith("igw-")
+        )
       );
+      expect(publicRt).toBeDefined();
 
-      expect(customSGs.length).toBeGreaterThanOrEqual(3);
+      // Find private route table (has NAT route)
+      const privateRt = allRouteTables?.find(rt => 
+        rt.Routes?.some(route => 
+          route.DestinationCidrBlock === "0.0.0.0/0" && route.NatGatewayId?.startsWith("nat-")
+        )
+      );
+      expect(privateRt).toBeDefined();
     }, 30000);
   });
 
-  describe('Resource Connectivity', () => {
-    it('should validate that RDS is in private subnets', async () => {
-      if (!outputs['rds-endpoint'] || !outputs['private-subnet-ids']) {
-        console.warn('Missing RDS or subnet outputs, skipping connectivity test');
-        return;
-      }
+  describe("Security Groups", () => {
+    test("Public EC2 security group exists with correct rules", async () => {
+      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [
+          { Name: "vpc-id", Values: [vpcId] },
+          { Name: "group-name", Values: [`tap-project-${environmentSuffix}-public-ec2-sg`] }
+        ]
+      }));
 
-      const dbIdentifier = outputs['rds-endpoint'].split('.')[0];
+      expect(SecurityGroups?.length).toBe(1);
+      const sg = SecurityGroups?.[0];
+      publicEc2SecurityGroupId = sg?.GroupId!;
 
-      const command = new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: dbIdentifier
-      });
+      expect(sg?.Description).toBe("Security group for public EC2 instances");
+      
+      // Check SSH ingress rule
+      const sshRule = sg?.IpPermissions?.find(rule => 
+        rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
+      );
+      expect(sshRule).toBeDefined();
+      expect(sshRule?.IpRanges?.[0]?.CidrIp).toBe("203.0.113.0/24");
 
-      const response = await rdsClient.send(command);
-      const dbInstance = response.DBInstances![0];
-
-      // RDS should not be publicly accessible
-      expect(dbInstance.PubliclyAccessible).toBe(false);
-
-      // RDS should have a DB subnet group
-      expect(dbInstance.DBSubnetGroup).toBeDefined();
-      expect(dbInstance.DBSubnetGroup!.Subnets).toBeDefined();
+      // Check egress rule
+      const egressRule = sg?.IpPermissionsEgress?.find(rule => 
+        rule.FromPort === 0 && rule.ToPort === 65535 && rule.IpProtocol === "tcp"
+      );
+      expect(egressRule).toBeDefined();
     }, 30000);
 
-    it('should validate output consistency', () => {
-      // Check that all expected outputs are present (when deployment succeeds)
-      const expectedOutputKeys = [
-        'vpc-id',
-        'public-subnet-ids',
-        'private-subnet-ids',
-        'kms-key-id',
-        'aws-account-id'
-      ];
+    test("Private EC2 security group exists with correct rules", async () => {
+      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [
+          { Name: "vpc-id", Values: [vpcId] },
+          { Name: "group-name", Values: [`tap-project-${environmentSuffix}-private-ec2-sg`] }
+        ]
+      }));
 
-      // Only check outputs that should always be present
-      // expectedOutputKeys.forEach(key => {
-      //   if (Object.keys(outputs).length > 0) {
-      //     expect(outputs).toHaveProperty(key);
-      //   }
-      // });
+      expect(SecurityGroups?.length).toBe(1);
+      const sg = SecurityGroups?.[0];
+      privateEc2SecurityGroupId = sg?.GroupId!;
 
-      // Validate output formats
-      if (outputs['vpc-id']) {
-        expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]+$/);
-      }
+      expect(sg?.Description).toBe("Security group for private EC2 instances");
+      
+      // Check SSH ingress rule from public EC2 SG
+      const sshRule = sg?.IpPermissions?.find(rule => 
+        rule.FromPort === 22 && rule.ToPort === 22 && rule.IpProtocol === "tcp"
+      );
+      expect(sshRule).toBeDefined();
+      expect(sshRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(publicEc2SecurityGroupId);
+    }, 30000);
 
-      if (outputs['kms-key-id']) {
-        expect(outputs['kms-key-id']).toMatch(/^[a-f0-9-]{36}$/);
-      }
+    test("RDS security group exists with correct rules", async () => {
+      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
+        Filters: [
+          { Name: "vpc-id", Values: [vpcId] },
+          { Name: "group-name", Values: [`tap-project-${environmentSuffix}-rds-sg`] }
+        ]
+      }));
 
-      if (outputs['aws-account-id']) {
-        expect(outputs['aws-account-id']).toMatch(/^\d{12}$/);
-      }
-    });
+      expect(SecurityGroups?.length).toBe(1);
+      const sg = SecurityGroups?.[0];
+      rdsSecurityGroupId = sg?.GroupId!;
+
+      expect(sg?.Description).toBe("Security group for RDS instances");
+      
+      // Check PostgreSQL ingress rule from private EC2 SG
+      const pgRule = sg?.IpPermissions?.find(rule => 
+        rule.FromPort === 5432 && rule.ToPort === 5432 && rule.IpProtocol === "tcp"
+      );
+      expect(pgRule).toBeDefined();
+      expect(pgRule?.UserIdGroupPairs?.[0]?.GroupId).toBe(privateEc2SecurityGroupId);
+    }, 30000);
+  });
+
+  describe("EC2 Instances", () => {
+    test("Public EC2 instance exists and is configured correctly", async () => {
+      const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({
+        InstanceIds: [publicEc2InstanceId]
+      }));
+
+      expect(Reservations?.length).toBe(1);
+      const instance = Reservations?.[0]?.Instances?.[0];
+
+      expect(instance?.State?.Name).toBe("running");
+      expect(instance?.InstanceType).toBe("t3.micro");
+      expect(publicSubnetIds).toContain(instance?.SubnetId);
+      expect(instance?.PublicIpAddress).toBeDefined();
+      expect(instance?.SecurityGroups?.[0]?.GroupId).toBe(publicEc2SecurityGroupId);
+    }, 30000);
+
+    test("Private EC2 instance exists and is configured correctly", async () => {
+      const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({
+        InstanceIds: [privateEc2InstanceId]
+      }));
+
+      expect(Reservations?.length).toBe(1);
+      const instance = Reservations?.[0]?.Instances?.[0];
+
+      expect(instance?.State?.Name).toBe("running");
+      expect(instance?.InstanceType).toBe("t3.micro");
+      expect(privateSubnetIds).toContain(instance?.SubnetId);
+      expect(instance?.PublicIpAddress).toBeUndefined();
+      expect(instance?.PrivateIpAddress).toBeDefined();
+      expect(instance?.SecurityGroups?.[0]?.GroupId).toBe(privateEc2SecurityGroupId);
+    }, 30000);
+  });
+
+  describe("S3 Buckets", () => {
+    test("Public S3 bucket exists and is configured correctly", async () => {
+      // Check bucket exists
+      await expect(s3Client.send(new HeadBucketCommand({
+        Bucket: publicS3BucketName
+      }))).resolves.not.toThrow();
+
+      // Check encryption
+      const { ServerSideEncryptionConfiguration } = await s3Client.send(new GetBucketEncryptionCommand({
+        Bucket: publicS3BucketName
+      }));
+
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toContain(kmsKeyId);
+
+      // Check versioning
+      const { Status } = await s3Client.send(new GetBucketVersioningCommand({
+        Bucket: publicS3BucketName
+      }));
+      expect(Status).toBe("Enabled");
+    }, 30000);
+
+    test("Private S3 bucket exists and is configured correctly", async () => {
+      // Check bucket exists
+      await expect(s3Client.send(new HeadBucketCommand({
+        Bucket: privateS3BucketName
+      }))).resolves.not.toThrow();
+
+      // Check encryption
+      const { ServerSideEncryptionConfiguration } = await s3Client.send(new GetBucketEncryptionCommand({
+        Bucket: privateS3BucketName
+      }));
+
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe("aws:kms");
+      expect(ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.KMSMasterKeyID).toContain(kmsKeyId);
+
+      // Check versioning
+      const { Status } = await s3Client.send(new GetBucketVersioningCommand({
+        Bucket: privateS3BucketName
+      }));
+      expect(Status).toBe("Enabled");
+
+      // Check public access is blocked
+      const { PublicAccessBlockConfiguration } = await s3Client.send(new GetPublicAccessBlockCommand({
+        Bucket: privateS3BucketName
+      }));
+
+      expect(PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+    }, 30000);
+  });
+
+  describe("RDS Database", () => {
+    test("RDS instance exists and is configured correctly", async () => {
+      const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({
+        Filters: [
+          { Name: "db-instance-id", Values: [`tap-project-${environmentSuffix}-db`] }
+        ]
+      }));
+
+      expect(DBInstances?.length).toBe(1);
+      const dbInstance = DBInstances?.[0];
+
+      expect(dbInstance?.DBInstanceStatus).toBe("available");
+      expect(dbInstance?.Engine).toBe("postgres");
+      expect(dbInstance?.DBInstanceClass).toBe("db.t3.micro");
+      expect(dbInstance?.AllocatedStorage).toBe(20);
+      expect(dbInstance?.DBName).toBe("appdb");
+      expect(dbInstance?.MasterUsername).toBe("dbadmin");
+      expect(dbInstance?.StorageEncrypted).toBe(true);
+      expect(dbInstance?.KmsKeyId).toContain(kmsKeyId);
+      expect(dbInstance?.Endpoint?.Address).toBeDefined();
+      expect(dbInstance?.Endpoint?.Port).toBe(5432);
+    }, 30000);
+
+    test("RDS subnet group is configured correctly", async () => {
+      const { DBSubnetGroups } = await rdsClient.send(new DescribeDBSubnetGroupsCommand({
+        DBSubnetGroupName: `tap-project-${environmentSuffix}-subnet-group`
+      }));
+
+      expect(DBSubnetGroups?.length).toBe(1);
+      const subnetGroup = DBSubnetGroups?.[0];
+
+      expect(subnetGroup?.VpcId).toBe(vpcId);
+      expect(subnetGroup?.Subnets?.length).toBe(2);
+      
+      const subnetIds = subnetGroup?.Subnets?.map(subnet => subnet.SubnetIdentifier) || [];
+      privateSubnetIds.forEach(subnetId => {
+        expect(subnetIds).toContain(subnetId);
+      });
+    }, 30000);
+  });
+
+  describe("IAM Resources", () => {
+    test("IAM role exists with correct policies", async () => {
+      const { Role } = await iamClient.send(new GetRoleCommand({
+        RoleName: iamRoleName
+      }));
+
+      expect(Role?.RoleName).toBe(iamRoleName);
+      expect(Role?.AssumeRolePolicyDocument).toContain("ec2.amazonaws.com");
+
+      // Check attached policies
+      const { AttachedPolicies } = await iamClient.send(new ListAttachedRolePoliciesCommand({
+        RoleName: iamRoleName
+      }));
+
+      const policyArns = AttachedPolicies?.map(policy => policy.PolicyArn) || [];
+      expect(policyArns).toContain("arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore");
+    }, 30000);
+
+    test("Instance profile exists and is linked to role", async () => {
+      const { InstanceProfile } = await iamClient.send(new GetInstanceProfileCommand({
+        InstanceProfileName: instanceProfileName
+      }));
+
+      expect(InstanceProfile?.InstanceProfileName).toBe(instanceProfileName);
+      expect(InstanceProfile?.Roles?.[0]?.RoleName).toBe(iamRoleName);
+    }, 30000);
+  });
+
+  describe("KMS Key", () => {
+    test("KMS key exists and is enabled", async () => {
+      const { KeyMetadata } = await kmsClient.send(new DescribeKeyCommand({
+        KeyId: kmsKeyId
+      }));
+
+      expect(KeyMetadata?.KeyId).toBe(kmsKeyId);
+      expect(KeyMetadata?.KeyState).toBe("Enabled");
+      expect(KeyMetadata?.KeyUsage).toBe("ENCRYPT_DECRYPT");
+      expect(KeyMetadata?.Description).toBe(`KMS key for tap-project ${environmentSuffix} environment`);
+    }, 30000);
+  });
+
+  describe("Resource Tagging", () => {
+    test("All resources have correct tags", async () => {
+      // Check VPC tags
+      const { Vpcs } = await ec2Client.send(new DescribeVpcsCommand({
+        VpcIds: [vpcId]
+      }));
+
+      const vpcTags = Vpcs?.[0]?.Tags || [];
+      expect(vpcTags.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
+      expect(vpcTags.some(tag => tag.Key === "Environment" && tag.Value === environmentSuffix)).toBe(true);
+
+      // Check EC2 instance tags
+      const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({
+        InstanceIds: [publicEc2InstanceId]
+      }));
+
+      const instanceTags = Reservations?.[0]?.Instances?.[0]?.Tags || [];
+      expect(instanceTags.some(tag => tag.Key === "Project" && tag.Value === "tap-project")).toBe(true);
+      expect(instanceTags.some(tag => tag.Key === "Environment" && tag.Value === environmentSuffix)).toBe(true);
+    }, 30000);
   });
 });
