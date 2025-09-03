@@ -77,11 +77,11 @@ Please organize the CloudFormation template with these sections:
 ## Validation Requirements
 
 The generated template must:
-- ✅ Pass AWS CloudFormation template validation
-- ✅ Follow AWS resource naming conventions
-- ✅ Include all required IAM permissions
-- ✅ Implement proper resource dependencies using DependsOn where necessary
-- ✅ Include comprehensive error handling and rollback configurations
+- Pass AWS CloudFormation template validation
+- Follow AWS resource naming conventions
+- Include all required IAM permissions
+- Implement proper resource dependencies using DependsOn where necessary
+- Include comprehensive error handling and rollback configurations
 
 ## Additional Context
 - This is for a development team's production workload
