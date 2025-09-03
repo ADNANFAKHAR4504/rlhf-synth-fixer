@@ -2,7 +2,7 @@ Design a production-ready serverless application CloudFormation template (YAML f
 
 AWS Lambda
 
-Deploy a Lambda function using Node.js 14.x runtime.
+Deploy a Lambda function using Node.js 22.x runtime.
 
 Grant the function permissions (via IAM role with least privilege) to interact with DynamoDB.
 
