@@ -40,7 +40,6 @@ ext {
 
     //Build settings
     def platform = (System.getenv("PLATFORM") ?: "default").trim()
-    println "DEBUG: Platform value is: '${platform}'"
 
     switch (platform) {
         case "pulumi":
