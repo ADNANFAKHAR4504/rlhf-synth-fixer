@@ -1,5 +1,10 @@
-```yml
+# Secure Multi-Region Infrastructure for HIPAA/PCI DSS Compliant Web Application
 
+This document contains the complete, production-ready AWS CloudFormation template that meets all requirements for a highly secure, compliant, and scalable infrastructure.
+
+## CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure Multi-Region Infrastructure for HIPAA/PCI DSS Compliant Web Application'
 
@@ -2086,3 +2091,21 @@ Outputs:
     Description: 'Name of the Lambda function'
     Value: !Ref ExampleLambdaFunction
     Condition: HasLambdaCode
+```
+
+## Summary
+
+This CloudFormation template provides a comprehensive, production-ready infrastructure that includes:
+
+- **Security & Compliance**: HIPAA/PCI DSS compliant with encryption at rest and in transit
+- **High Availability**: Multi-region deployment with failover capabilities
+- **Scalability**: Auto-scaling groups, load balancers, and serverless functions
+- **Monitoring**: CloudWatch integration with comprehensive logging
+- **Deployment**: CodeDeploy integration with blue/green deployment strategies
+- **Networking**: VPC with public/private subnets, security groups, and network ACLs
+- **Database**: Aurora Global Database with cross-region replication
+- **Storage**: S3 buckets with encryption and lifecycle policies
+- **Compute**: EC2 instances with launch templates and auto-scaling
+- **Serverless**: Lambda functions with provisioned concurrency support
+
+The template is designed to be reusable across different environments and includes comprehensive parameterization for customization.
