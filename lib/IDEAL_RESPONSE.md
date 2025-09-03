@@ -1,4 +1,4 @@
-```
+```python
 import pulumi
 import pulumi_aws as aws
 from typing import List, Dict, Any
@@ -244,7 +244,7 @@ db_name_param = aws.ssm.Parameter(f"{prefix}-DB-Name",
 )
 
 # Create subnet group for RDS
-rds_subnet_group = aws.rds.SubnetGroup(f"{prefix}-RDS-SubnetGroup",
+rds_subnet_group = aws.rds.SubnetGroup(f"{prefix.lower()}-rds-subnet-group",
     subnet_ids=[subnet.id for subnet in private_subnets],
     tags={**common_tags, "Name": f"{prefix}-RDS-SubnetGroup"}
 )
