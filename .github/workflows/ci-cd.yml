@@ -497,12 +497,12 @@ jobs:
   #         claude_args: |
   #           --allowedTools Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite
 
-  #     - name: Upload updated metadata.json
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: updated-metadata
-  #         path: metadata.json
-  #         if-no-files-found: warn
+      - name: Upload updated metadata.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-metadata
+          path: metadata.json
+          if-no-files-found: warn
 
   cleanup:
     name: Cleanup (Destroy Resources)
