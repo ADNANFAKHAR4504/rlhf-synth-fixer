@@ -4,7 +4,7 @@ import axios from 'axios';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'cfn-outputs/flat-outputs.json'), 'utf8')
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
 describe('Secure API Integration Tests', () => {
