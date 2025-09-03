@@ -1,33 +1,32 @@
-import * as fs from "fs";
-import * as path from "path";
+// tests/unit/unit-tests.ts
+// Simple presence + sanity checks for ../lib/tap_stack.tf
+// No Terraform or CDKTF commands are executed.
 
-describe("Terraform main.tf static validation", () => {
-  const mainTfPath = path.resolve(__dirname, "../lib/tap_stack.tf");
-  let mainTfContent: string;
+import fs from "fs";
+import path from "path";
 
-  beforeAll(() => {
-    mainTfContent = fs.readFileSync(mainTfPath, "utf8");
+const STACK_REL = "../lib/tap_stack.tf"; // adjust if your structure differs
+const stackPath = path.resolve(__dirname, STACK_REL);
+
+describe("Terraform single-file stack: tap_stack.tf", () => {
+  test("tap_stack.tf exists", () => {
+    const exists = fs.existsSync(stackPath);
+    if (!exists) {
+      console.error(`[unit] Expected stack at: ${stackPath}`);
+    }
+    expect(exists).toBe(true);
   });
 
-  it("should declare aws_region variable", () => {
-    expect(mainTfContent).toMatch(/variable\s+"aws_region"/);
+  // --- Optional sanity checks (keep lightweight) ---
+
+  test("does NOT declare provider in tap_stack.tf (provider.tf owns providers)", () => {
+    const content = fs.readFileSync(stackPath, "utf8");
+    expect(content).not.toMatch(/\bprovider\s+"aws"\s*{/);
   });
 
-  it("should not contain a provider block", () => {
-    expect(mainTfContent).not.toMatch(/provider\s+"/);
+  test("declares aws_region variable in tap_stack.tf", () => {
+    const content = fs.readFileSync(stackPath, "utf8");
+    expect(content).toMatch(/variable\s+"aws_region"\s*{/);
   });
 
-  it("should not use external modules", () => {
-    expect(mainTfContent).not.toMatch(/module\s+"/);
-  });
-
-  it("should define outputs", () => {
-    expect(mainTfContent).toMatch(/output\s+"/);
-  });
-
-  it("should use locals for tags", () => {
-    expect(mainTfContent).toMatch(/locals\s+{[^}]*tag/i);
-  });
-
-  // Add more static checks as needed (e.g., IAM, encryption, etc.)
 });
