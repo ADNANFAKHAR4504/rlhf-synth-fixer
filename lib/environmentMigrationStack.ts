@@ -7,12 +7,22 @@ interface StackOutputs {
   publicSubnetIds: pulumi.Output<string>[];
   privateSubnetIds: pulumi.Output<string>[];
   s3BucketName: pulumi.Output<string>;
+  s3BucketArn: pulumi.Output<string>;
   rdsEndpoint: pulumi.Output<string>;
   lambdaFunctionArn: pulumi.Output<string>;
+  lambdaFunctionName: pulumi.Output<string>;
   albDnsName: pulumi.Output<string>;
+  albArn: pulumi.Output<string>;
   cloudFrontDomainName: pulumi.Output<string>;
+  cloudFrontDistributionId: pulumi.Output<string>;
   ec2InstanceId: pulumi.Output<string>;
+  ec2PublicIp: pulumi.Output<string>;
   dynamoTableName: pulumi.Output<string>;
+  dynamoTableArn: pulumi.Output<string>;
+  kmsKeyId: pulumi.Output<string>;
+  kmsKeyArn: pulumi.Output<string>;
+  secretArn: pulumi.Output<string>;
+  targetGroupArn: pulumi.Output<string>;
 }
 
 export class EnvironmentMigrationStack {
@@ -23,6 +33,8 @@ export class EnvironmentMigrationStack {
   public readonly outputs: StackOutputs;
   public readonly vpc: aws.ec2.Vpc;
   public readonly kmsKey: aws.kms.Key;
+  public readonly targetGroup: aws.lb.TargetGroup;
+  public readonly secret: aws.secretsmanager.Secret;
 
   constructor(
     region: string,
@@ -38,24 +50,36 @@ export class EnvironmentMigrationStack {
     const { publicSubnets, privateSubnets } = this.createNetworking();
     const s3Bucket = this.createS3Bucket();
     const rdsInstance = this.createDatabase(privateSubnets);
-    this.createSecretsManager();
+    this.secret = this.createSecretsManager();
     const dynamoTable = this.createDynamoTable();
     const lambdaFunction = this.createLambda(privateSubnets);
-    const alb = this.createLoadBalancer(publicSubnets);
+    const { alb, targetGroup } = this.createLoadBalancer(publicSubnets);
+    this.targetGroup = targetGroup;
     const cloudFrontDistribution = this.createCloudFront(alb);
     const ec2Instance = this.createEC2Instance(publicSubnets[0]);
+    this.createTargetGroupAttachment(ec2Instance, targetGroup);
 
     this.outputs = {
       vpcId: this.vpc.id,
       publicSubnetIds: publicSubnets.map(s => s.id),
       privateSubnetIds: privateSubnets.map(s => s.id),
       s3BucketName: s3Bucket.bucket,
+      s3BucketArn: s3Bucket.arn,
       rdsEndpoint: rdsInstance.endpoint,
       lambdaFunctionArn: lambdaFunction.arn,
+      lambdaFunctionName: lambdaFunction.name,
       albDnsName: alb.dnsName,
+      albArn: alb.arn,
       cloudFrontDomainName: cloudFrontDistribution.domainName,
+      cloudFrontDistributionId: cloudFrontDistribution.id,
       ec2InstanceId: ec2Instance.id,
+      ec2PublicIp: ec2Instance.publicIp,
       dynamoTableName: dynamoTable.name,
+      dynamoTableArn: dynamoTable.arn,
+      kmsKeyId: this.kmsKey.keyId,
+      kmsKeyArn: this.kmsKey.arn,
+      secretArn: this.secret.arn,
+      targetGroupArn: targetGroup.arn,
     };
   }
 
@@ -440,9 +464,10 @@ export class EnvironmentMigrationStack {
     );
   }
 
-  private createLoadBalancer(
-    publicSubnets: aws.ec2.Subnet[]
-  ): aws.lb.LoadBalancer {
+  private createLoadBalancer(publicSubnets: aws.ec2.Subnet[]): {
+    alb: aws.lb.LoadBalancer;
+    targetGroup: aws.lb.TargetGroup;
+  } {
     const sg = new aws.ec2.SecurityGroup(
       `alb-security-group-${this.environment}`,
       {
@@ -484,6 +509,40 @@ export class EnvironmentMigrationStack {
       { provider: this.provider }
     );
 
+    const targetGroup = new aws.lb.TargetGroup(
+      `tg-${this.environment}`,
+      {
+        name: `tg-${this.environment}`,
+        port: 80,
+        protocol: 'HTTP',
+        vpcId: this.vpc.id,
+        healthCheck: {
+          enabled: true,
+          path: '/',
+          protocol: 'HTTP',
+        },
+        tags: this.tags,
+      },
+      { provider: this.provider }
+    );
+
+    new aws.lb.Listener(
+      `alb-listener-${this.environment}`,
+      {
+        loadBalancerArn: alb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
+          },
+        ],
+        tags: this.tags,
+      },
+      { provider: this.provider }
+    );
+
     new aws.cloudwatch.MetricAlarm(
       `alb-target-response-alarm-${this.environment}`,
       {
@@ -502,7 +561,7 @@ export class EnvironmentMigrationStack {
       { provider: this.provider }
     );
 
-    return alb;
+    return { alb, targetGroup };
   }
 
   private createCloudFront(
@@ -819,5 +878,20 @@ export class EnvironmentMigrationStack {
     );
 
     return secret;
+  }
+
+  private createTargetGroupAttachment(
+    instance: aws.ec2.Instance,
+    targetGroup: aws.lb.TargetGroup
+  ): void {
+    new aws.lb.TargetGroupAttachment(
+      `tg-attachment-${this.environment}`,
+      {
+        targetGroupArn: targetGroup.arn,
+        targetId: instance.id,
+        port: 80,
+      },
+      { provider: this.provider }
+    );
   }
 }

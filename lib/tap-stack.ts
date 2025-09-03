@@ -47,12 +47,22 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly publicSubnetIds: pulumi.Output<string>[];
   public readonly privateSubnetIds: pulumi.Output<string>[];
   public readonly s3BucketName: pulumi.Output<string>;
+  public readonly s3BucketArn: pulumi.Output<string>;
   public readonly rdsEndpoint: pulumi.Output<string>;
   public readonly lambdaFunctionArn: pulumi.Output<string>;
+  public readonly lambdaFunctionName: pulumi.Output<string>;
   public readonly albDnsName: pulumi.Output<string>;
+  public readonly albArn: pulumi.Output<string>;
   public readonly cloudFrontDomainName: pulumi.Output<string>;
+  public readonly cloudFrontDistributionId: pulumi.Output<string>;
   public readonly ec2InstanceId: pulumi.Output<string>;
+  public readonly ec2PublicIp: pulumi.Output<string>;
   public readonly dynamoTableName: pulumi.Output<string>;
+  public readonly dynamoTableArn: pulumi.Output<string>;
+  public readonly kmsKeyId: pulumi.Output<string>;
+  public readonly kmsKeyArn: pulumi.Output<string>;
+  public readonly secretArn: pulumi.Output<string>;
+  public readonly targetGroupArn: pulumi.Output<string>;
 
   /**
    * Creates a new TapStack component.
@@ -80,12 +90,22 @@ export class TapStack extends pulumi.ComponentResource {
     this.publicSubnetIds = webAppInfra.publicSubnetIds;
     this.privateSubnetIds = webAppInfra.privateSubnetIds;
     this.s3BucketName = webAppInfra.s3BucketName;
+    this.s3BucketArn = webAppInfra.s3BucketArn;
     this.rdsEndpoint = webAppInfra.rdsEndpoint;
     this.lambdaFunctionArn = webAppInfra.lambdaFunctionArn;
+    this.lambdaFunctionName = webAppInfra.lambdaFunctionName;
     this.albDnsName = webAppInfra.albDnsName;
+    this.albArn = webAppInfra.albArn;
     this.cloudFrontDomainName = webAppInfra.cloudFrontDomainName;
+    this.cloudFrontDistributionId = webAppInfra.cloudFrontDistributionId;
     this.ec2InstanceId = webAppInfra.ec2InstanceId;
+    this.ec2PublicIp = webAppInfra.ec2PublicIp;
     this.dynamoTableName = webAppInfra.dynamoTableName;
+    this.dynamoTableArn = webAppInfra.dynamoTableArn;
+    this.kmsKeyId = webAppInfra.kmsKeyId;
+    this.kmsKeyArn = webAppInfra.kmsKeyArn;
+    this.secretArn = webAppInfra.secretArn;
+    this.targetGroupArn = webAppInfra.targetGroupArn;
 
     // Register the outputs of this component.
     this.registerOutputs({
@@ -93,12 +113,22 @@ export class TapStack extends pulumi.ComponentResource {
       publicSubnetIds: this.publicSubnetIds,
       privateSubnetIds: this.privateSubnetIds,
       s3BucketName: this.s3BucketName,
+      s3BucketArn: this.s3BucketArn,
       rdsEndpoint: this.rdsEndpoint,
       lambdaFunctionArn: this.lambdaFunctionArn,
+      lambdaFunctionName: this.lambdaFunctionName,
       albDnsName: this.albDnsName,
+      albArn: this.albArn,
       cloudFrontDomainName: this.cloudFrontDomainName,
+      cloudFrontDistributionId: this.cloudFrontDistributionId,
       ec2InstanceId: this.ec2InstanceId,
+      ec2PublicIp: this.ec2PublicIp,
       dynamoTableName: this.dynamoTableName,
+      dynamoTableArn: this.dynamoTableArn,
+      kmsKeyId: this.kmsKeyId,
+      kmsKeyArn: this.kmsKeyArn,
+      secretArn: this.secretArn,
+      targetGroupArn: this.targetGroupArn,
     });
   }
 }
