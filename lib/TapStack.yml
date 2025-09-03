@@ -36,6 +36,32 @@ Parameters:
     MinValue: 1
     MaxValue: 900
 
+  # Optional: supply existing resources to skip creation
+  ExistingMigrationLogsBucketName:
+    Type: String
+    Description: Existing S3 bucket name for migration logs (leave empty to create)
+    Default: ''
+
+  ExistingSnsTopicArn:
+    Type: String
+    Description: Existing SNS Topic ARN for notifications (leave empty to create)
+    Default: ''
+
+  ExistingMigrationTriggerFunctionArn:
+    Type: String
+    Description: Existing Lambda ARN for Migration Trigger (leave empty to create)
+    Default: ''
+
+  ExistingStatusNotifierFunctionArn:
+    Type: String
+    Description: Existing Lambda ARN for Status Notifier (leave empty to create)
+    Default: ''
+
+  ExistingRestApiId:
+    Type: String
+    Description: Existing API Gateway RestApiId to reuse (leave empty to create)
+    Default: ''
+
 Conditions:
   UseVpc:
     !And [
@@ -43,6 +69,13 @@ Conditions:
       !Not [!Equals [!Ref VpcSubnetIds, '']],
     ]
   CreateSubscription: !Not [!Equals [!Ref NotificationEmail, '']]
+  CreateBucket: !Equals [!Ref ExistingMigrationLogsBucketName, '']
+  CreateSnsTopic: !Equals [!Ref ExistingSnsTopicArn, '']
+  CreateMigrationTriggerFunction:
+    !Equals [!Ref ExistingMigrationTriggerFunctionArn, '']
+  CreateStatusNotifierFunction:
+    !Equals [!Ref ExistingStatusNotifierFunctionArn, '']
+  CreateApi: !Equals [!Ref ExistingRestApiId, '']
 
 Resources:
   # S3 Bucket for Migration Logs with auto-generated unique name
@@ -50,6 +83,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateBucket
     Properties:
       BucketName: !Sub
         - 'secure-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}'
@@ -82,6 +116,7 @@ Resources:
     Type: AWS::SNS::Topic
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateSnsTopic
     Properties:
       TopicName: !Sub '${AWS::StackName}-migration-notifications-${AWS::AccountId}'
       DisplayName: Migration Status Notifications
@@ -97,7 +132,12 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       Protocol: email
-      TopicArn: !Ref MigrationNotificationsTopic
+      TopicArn:
+        !If [
+          CreateSnsTopic,
+          !Ref MigrationNotificationsTopic,
+          !Ref ExistingSnsTopicArn,
+        ]
       Endpoint: !Ref NotificationEmail
 
   # IAM Role for Migration Trigger Function with proper least privilege
@@ -105,6 +145,7 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateMigrationTriggerFunction
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -128,11 +169,17 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:PutObjectAcl
-                Resource: !Sub 'arn:aws:s3:::${MigrationLogsBucket}/*'
+                Resource: !If
+                  - CreateBucket
+                  - !Sub 'arn:aws:s3:::${MigrationLogsBucket}/*'
+                  - !Sub 'arn:aws:s3:::${ExistingMigrationLogsBucketName}/*'
               - Effect: Allow
                 Action:
                   - sns:Publish
-                Resource: !Ref MigrationNotificationsTopic
+                Resource: !If
+                  - CreateSnsTopic
+                  - !Ref MigrationNotificationsTopic
+                  - !Ref ExistingSnsTopicArn
       Tags:
         - Key: Environment
           Value: Migration
@@ -142,6 +189,7 @@ Resources:
     Type: AWS::IAM::Role
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateStatusNotifierFunction
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -164,7 +212,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - sns:Publish
-                Resource: !Ref MigrationNotificationsTopic
+                Resource: !If
+                  - CreateSnsTopic
+                  - !Ref MigrationNotificationsTopic
+                  - !Ref ExistingSnsTopicArn
       Tags:
         - Key: Environment
           Value: Migration
@@ -174,6 +225,7 @@ Resources:
     Type: AWS::Lambda::Function
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateMigrationTriggerFunction
     Properties:
       FunctionName: !Sub '${AWS::StackName}-migration-trigger-${AWS::AccountId}'
       Runtime: python3.13
@@ -183,8 +235,18 @@ Resources:
       MemorySize: !Ref LambdaMemorySize
       Environment:
         Variables:
-          S3_BUCKET_NAME: !Ref MigrationLogsBucket
-          SNS_TOPIC_ARN: !Ref MigrationNotificationsTopic
+          S3_BUCKET_NAME:
+            !If [
+              CreateBucket,
+              !Ref MigrationLogsBucket,
+              !Ref ExistingMigrationLogsBucketName,
+            ]
+          SNS_TOPIC_ARN:
+            !If [
+              CreateSnsTopic,
+              !Ref MigrationNotificationsTopic,
+              !Ref ExistingSnsTopicArn,
+            ]
       VpcConfig: !If
         - UseVpc
         - SecurityGroupIds:
@@ -275,6 +337,7 @@ Resources:
     Type: AWS::Lambda::Function
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateStatusNotifierFunction
     Properties:
       FunctionName: !Sub '${AWS::StackName}-status-notifier-${AWS::AccountId}'
       Runtime: python3.13
@@ -284,7 +347,12 @@ Resources:
       MemorySize: 128
       Environment:
         Variables:
-          SNS_TOPIC_ARN: !Ref MigrationNotificationsTopic
+          SNS_TOPIC_ARN:
+            !If [
+              CreateSnsTopic,
+              !Ref MigrationNotificationsTopic,
+              !Ref ExistingSnsTopicArn,
+            ]
       VpcConfig: !If
         - UseVpc
         - SecurityGroupIds:
@@ -364,6 +432,7 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateApi
     Properties:
       Name: !Sub '${AWS::StackName}-migration-api-${AWS::AccountId}'
       Description: 'REST API for triggering migration processes'
@@ -379,6 +448,7 @@ Resources:
     Type: AWS::ApiGateway::Resource
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateApi
     Properties:
       RestApiId: !Ref MigrationApi
       ParentId: !GetAtt MigrationApi.RootResourceId
@@ -389,6 +459,7 @@ Resources:
     Type: AWS::ApiGateway::Method
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateApi
     Properties:
       RestApiId: !Ref MigrationApi
       ResourceId: !Ref MigrateResource
@@ -397,7 +468,16 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MigrationTriggerFunction.Arn}/invocations'
+        Uri: !Sub
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations'
+          - {
+              FunctionArn:
+                !If [
+                  CreateMigrationTriggerFunction,
+                  !GetAtt MigrationTriggerFunction.Arn,
+                  !Ref ExistingMigrationTriggerFunctionArn,
+                ],
+            }
       MethodResponses:
         - StatusCode: 200
         - StatusCode: 500
@@ -407,8 +487,14 @@ Resources:
     Type: AWS::Lambda::Permission
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateApi
     Properties:
-      FunctionName: !Ref MigrationTriggerFunction
+      FunctionName:
+        !If [
+          CreateMigrationTriggerFunction,
+          !Ref MigrationTriggerFunction,
+          !Ref ExistingMigrationTriggerFunctionArn,
+        ]
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MigrationApi}/*/*'
@@ -420,6 +506,7 @@ Resources:
       - MigrateMethod
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateApi
     Properties:
       RestApiId: !Ref MigrationApi
       Description: !Sub 'Deployment for ${AWS::StackName} Migration API'
@@ -429,6 +516,7 @@ Resources:
     Type: AWS::ApiGateway::Stage
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
+    Condition: CreateApi
     Properties:
       RestApiId: !Ref MigrationApi
       DeploymentId: !Ref ApiDeployment
@@ -441,31 +529,52 @@ Resources:
 Outputs:
   ApiGatewayInvokeUrl:
     Description: 'Invoke URL for the Migration API Gateway'
+    Condition: CreateApi
     Value: !Sub 'https://${MigrationApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/migrate'
     Export:
       Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
 
   SnsTopicArn:
     Description: 'ARN of the Migration Notifications SNS Topic'
-    Value: !Ref MigrationNotificationsTopic
+    Value:
+      !If [
+        CreateSnsTopic,
+        !Ref MigrationNotificationsTopic,
+        !Ref ExistingSnsTopicArn,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-SnsTopicArn'
 
   MigrationLogsBucketName:
     Description: 'Name of the S3 bucket for migration logs'
-    Value: !Ref MigrationLogsBucket
+    Value:
+      !If [
+        CreateBucket,
+        !Ref MigrationLogsBucket,
+        !Ref ExistingMigrationLogsBucketName,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-LogsBucket'
 
   MigrationTriggerFunctionArn:
     Description: 'ARN of the Migration Trigger Lambda Function'
-    Value: !GetAtt MigrationTriggerFunction.Arn
+    Value:
+      !If [
+        CreateMigrationTriggerFunction,
+        !GetAtt MigrationTriggerFunction.Arn,
+        !Ref ExistingMigrationTriggerFunctionArn,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-MigrationTriggerArn'
 
   StatusNotifierFunctionArn:
     Description: 'ARN of the Status Notifier Lambda Function'
-    Value: !GetAtt StatusNotifierFunction.Arn
+    Value:
+      !If [
+        CreateStatusNotifierFunction,
+        !GetAtt StatusNotifierFunction.Arn,
+        !Ref ExistingStatusNotifierFunctionArn,
+      ]
     Export:
       Name: !Sub '${AWS::StackName}-StatusNotifierArn'
 
