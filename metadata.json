@@ -5,5 +5,34 @@
   "turn_type": "multi",
   "po_id": "348889",
   "team": "2",
-  "startedAt": "2025-09-02T16:24:44.684Z"
+  "startedAt": "2025-09-03T16:24:44.684Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Resource Scaling",
+    "Access Control",
+    "IaC Optimization"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "CloudWatch",
+    "IAM",
+    "Secrets Manager",
+    "AWS Backup",
+    "CloudFront",
+    "WAF",
+    "NAT Gateway",
+    "S3",
+    "KMS",
+    "Lambda",
+    "Session Manager"
+  ]
 }
