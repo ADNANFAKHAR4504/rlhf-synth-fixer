@@ -841,7 +841,7 @@ resource "aws_db_subnet_group" "main" {
 
 # DB Parameter Group
 resource "aws_db_parameter_group" "main" {
-  family = "postgres14"
+  family = "postgres15"
   name   = "${local.resource_prefix}-db-params"
 
   parameter {
@@ -891,7 +891,7 @@ resource "aws_db_instance" "main" {
   identifier = "${local.resource_prefix}-database"
 
   engine         = "postgres"
-  engine_version = "14.9"
+  engine_version = "15.7"
   instance_class = var.db_instance_class
 
   db_name  = var.db_name
@@ -1031,7 +1031,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # AWS Config Delivery Channel
