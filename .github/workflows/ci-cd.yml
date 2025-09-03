@@ -122,11 +122,12 @@ jobs:
     name: Infracost (Terraform Cost Estimation)
     needs: [detect-metadata, build, synth]
     runs-on: ubuntu-24.04
-    if: >
-      ${{
-      github.event_name == 'pull_request' &&
-      github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') &&
-      needs.detect-metadata.outputs.platform == 'tf'}}
+    # if: >
+    #   ${{
+    #   github.event_name == 'pull_request' &&
+    #   github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') &&
+    #   needs.detect-metadata.outputs.platform == 'tf'}}
+    if: false
     environment: dev
     permissions:
       contents: read
