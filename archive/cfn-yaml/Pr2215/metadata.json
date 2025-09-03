@@ -1,0 +1,40 @@
+{
+  "po_id": "292092",
+  "task_id": "292092",
+  "problem_id": "Security-Compliance_CloudFormation_YAML_Custom",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "startedAt": "2025-08-22T13:02:05.779Z",
+  "status": "in_progress",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Baseline",
+    "IAM Security",
+    "S3 Logging",
+    "CloudTrail",
+    "RDS Hardening",
+    "AWS Config",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "IAM",
+    "S3",
+    "CloudTrail",
+    "RDS",
+    "Config",
+    "CloudWatch",
+    "SNS",
+    "EC2",
+    "VPC"
+  ],
+  "turn_type": "single",
+  "team": "2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}
