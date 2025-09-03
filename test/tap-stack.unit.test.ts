@@ -4,7 +4,6 @@ import { TapStack } from '../lib/tap-stack';
 
 // --- Main Test Suite ---
 describe('TapStack Unit Tests', () => {
-
   // --- SCENARIO 1: Testing in "Test Mode" (isTest: true) ---
   describe('in Test Environment', () => {
     let app: cdk.App;
@@ -22,38 +21,52 @@ describe('TapStack Unit Tests', () => {
 
     // All your original tests for basic resource creation remain here
     test('should create VPC with correct CIDR block', () => {
-        template.hasResourceProperties('AWS::EC2::VPC', { CidrBlock: '10.0.0.0/16' });
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
     });
     test('should create public and private subnets', () => {
-        template.resourceCountIs('AWS::EC2::Subnet', 4);
-        template.resourceCountIs('AWS::EC2::NatGateway', 2);
+      template.resourceCountIs('AWS::EC2::Subnet', 4);
+      template.resourceCountIs('AWS::EC2::NatGateway', 2);
     });
     test('should create Secrets Manager VPC Endpoint', () => {
-        template.hasResourceProperties('AWS::EC2::VPCEndpoint', { ServiceName: 'com.amazonaws.us-west-2.secretsmanager' });
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        ServiceName: 'com.amazonaws.us-west-2.secretsmanager',
+      });
     });
     test('should create S3 bucket with website configuration', () => {
-        template.hasResourceProperties('AWS::S3::Bucket', { WebsiteConfiguration: { IndexDocument: 'index.html', ErrorDocument: 'error.html' } });
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        WebsiteConfiguration: {
+          IndexDocument: 'index.html',
+          ErrorDocument: 'error.html',
+        },
+      });
     });
     test('should create Secrets Manager secret correctly', () => {
-        template.hasResourceProperties('AWS::SecretsManager::Secret', { Description: 'PostgreSQL database credentials for MyWebApp' });
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Description: 'PostgreSQL database credentials for MyWebApp',
+      });
     });
     test('should create RDS PostgreSQL instance', () => {
-        template.hasResourceProperties('AWS::RDS::DBInstance', { Engine: 'postgres', EngineVersion: '14' });
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        Engine: 'postgres',
+        EngineVersion: '14',
+      });
     });
 
     describe('Lambda Function', () => {
-        test('should create Lambda function with correct base configuration', () => {
-          template.hasResourceProperties('AWS::Lambda::Function', {
-            Runtime: 'python3.8',
-            Handler: 'handler.lambda_handler',
-            Timeout: 60,
-          });
+      test('should create Lambda function with correct base configuration', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+          Runtime: 'python3.8',
+          Handler: 'handler.lambda_handler',
+          Timeout: 60,
         });
-        test('should use inline code for Lambda in test mode', () => {
-            template.hasResourceProperties('AWS::Lambda::Function', {
-                Code: { ZipFile: "def handler(event, context): pass" }
-            });
+      });
+      test('should use inline code for Lambda in test mode', () => {
+        template.hasResourceProperties('AWS::Lambda::Function', {
+          Code: { ZipFile: 'def handler(event, context): pass' },
         });
+      });
     });
   });
 
@@ -64,20 +77,20 @@ describe('TapStack Unit Tests', () => {
     let template: Template;
 
     beforeAll(() => {
-        app = new cdk.App();
-        stack = new TapStack(app, 'ProdTapStack', {
-          env: { region: 'us-west-2', account: '123456789012' },
-        });
-        template = Template.fromStack(stack);
+      app = new cdk.App();
+      stack = new TapStack(app, 'ProdTapStack', {
+        env: { region: 'us-west-2', account: '123456789012' },
+      });
+      template = Template.fromStack(stack);
     });
 
     test('should bundle Lambda code from asset', () => {
-        template.hasResourceProperties('AWS::Lambda::Function', {
-            Code: {
-                S3Bucket: Match.anyValue(),
-                S3Key: Match.stringLikeRegexp('\\.zip$'),
-            }
-        });
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Code: {
+          S3Bucket: Match.anyValue(),
+          S3Key: Match.stringLikeRegexp('\\.zip$'),
+        },
+      });
     });
   });
 
@@ -90,26 +103,25 @@ describe('TapStack Unit Tests', () => {
     const originalArch = process.env.TARGET_ARCHITECTURE;
 
     beforeAll(() => {
-        // Set the environment variable to trigger the 'arm64' path
-        process.env.TARGET_ARCHITECTURE = 'arm64';
-        app = new cdk.App();
-        stack = new TapStack(app, 'ArmTapStack', {
-            env: { region: 'us-west-2', account: '123456789012' },
-            isTest: true,
-        });
-        template = Template.fromStack(stack);
+      // Set the environment variable to trigger the 'arm64' path
+      process.env.TARGET_ARCHITECTURE = 'arm64';
+      app = new cdk.App();
+      stack = new TapStack(app, 'ArmTapStack', {
+        env: { region: 'us-west-2', account: '123456789012' },
+        isTest: true,
+      });
+      template = Template.fromStack(stack);
     });
 
     // Reset the environment variable after the test to avoid side effects
     afterAll(() => {
-        process.env.TARGET_ARCHITECTURE = originalArch;
+      process.env.TARGET_ARCHITECTURE = originalArch;
     });
 
     test('should configure Lambda with ARM64 architecture when specified', () => {
-        template.hasResourceProperties('AWS::Lambda::Function', {
-            Architectures: ['arm64'],
-        });
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Architectures: ['arm64'],
+      });
     });
   });
 });
-
