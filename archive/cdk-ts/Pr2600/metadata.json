@@ -9,7 +9,7 @@
   "subtask": "IaC Program Optimization",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "IaC Optimization", 
+    "IaC Optimization",
     "Security Configuration",
     "Monitoring Setup",
     "Performance Optimization"
@@ -18,7 +18,7 @@
   "aws_services": [
     "AWS KMS",
     "AWS IAM",
-    "AWS EC2", 
+    "AWS EC2",
     "AWS VPC",
     "AWS ELB",
     "AWS Auto Scaling",
@@ -28,5 +28,11 @@
     "AWS Lambda",
     "AWS SQS",
     "AWS CloudWatch"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
 }
