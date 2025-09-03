@@ -90,12 +90,15 @@ class TapStack extends Stack {
         // Get environment suffix from props, context, or use 'dev' as default
         this.environmentSuffix = Optional.ofNullable(props)
                 .map(TapStackProps::getEnvironmentSuffix)
-                .or(() -> Optional.of(this.getNode().tryGetContext("environmentSuffix"))
+                .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
                         .map(Object::toString))
                 .orElse("dev");
 
         // Determine VPC configuration based on region
         String region = this.getRegion();
+        if (region == null) {
+            region = "us-east-1"; // Default region for tests
+        }
         String vpcCidr;
         boolean shouldCreateEc2 = false;
 
@@ -122,33 +125,33 @@ class TapStack extends Stack {
 
             CfnOutput.Builder.create(this, region + "ec2InstanceIdOutput")
                     .value(ec2Construct.getInstanceId())
-                    .exportName(region + "ec2InstanceId")
+                    .exportName(region + "-ec2InstanceId")
                     .build();
 
             CfnOutput.Builder.create(this, region + "ec2InstanceRoleArnOutput")
                     .value(ec2Construct.getInstanceRoleArn())
-                    .exportName(region + "ec2InstanceRoleArn")
+                    .exportName(region + "-ec2InstanceRoleArn")
                     .build();
         }
 
         CfnOutput.Builder.create(this, region + "securityGroupIdOutput")
                 .value(securityGroupConstruct.getSecurityGroupId())
-                .exportName(region + "securityGroupId")
+                .exportName(region + "-securityGroupId")
                 .build();
 
         CfnOutput.Builder.create(this, region + "vpcIdOutput")
                 .value(vpcConstruct.getVpc().getVpcId())
-                .exportName(region + "vpcId")
+                .exportName(region + "-vpcId")
                 .build();
 
         CfnOutput.Builder.create(this, region + "vpcPrivateSubnetIdOutput")
                 .value(vpcConstruct.getPrivateSubnet().getSubnetId())
-                .exportName(region + "vpcPrivateSubnetId")
+                .exportName(region + "-vpcPrivateSubnetId")
                 .build();
 
         CfnOutput.Builder.create(this, region + "vpcPublicSubnetIdOutput")
                 .value(vpcConstruct.getPublicSubnet().getSubnetId())
-                .exportName(region + "vpcPublicSubnetId")
+                .exportName(region + "-vpcPublicSubnetId")
                 .build();
     }
 

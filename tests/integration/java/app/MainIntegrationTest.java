@@ -1,470 +1,564 @@
 package app;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
+import software.amazon.awssdk.services.cloudformation.model.DescribeStacksRequest;
+import software.amazon.awssdk.services.cloudformation.model.DescribeStacksResponse;
+import software.amazon.awssdk.services.cloudformation.model.Output;
+import software.amazon.awssdk.services.cloudformation.model.Stack;
+import software.amazon.awssdk.services.cloudformation.model.StackStatus;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesResponse;
 import software.amazon.awssdk.services.ec2.model.DescribeSecurityGroupsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeSecurityGroupsResponse;
+import software.amazon.awssdk.services.ec2.model.DescribeSubnetsRequest;
+import software.amazon.awssdk.services.ec2.model.DescribeSubnetsResponse;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeVpcsResponse;
+import software.amazon.awssdk.services.ec2.model.Instance;
+import software.amazon.awssdk.services.ec2.model.InstanceStateName;
+import software.amazon.awssdk.services.ec2.model.InstanceType;
+import software.amazon.awssdk.services.ec2.model.IpPermission;
+import software.amazon.awssdk.services.ec2.model.SecurityGroup;
+import software.amazon.awssdk.services.ec2.model.Subnet;
+import software.amazon.awssdk.services.ec2.model.Vpc;
+import software.amazon.awssdk.services.ec2.model.VpcState;
 import software.amazon.awssdk.services.iam.IamClient;
 import software.amazon.awssdk.services.iam.model.GetRoleRequest;
 import software.amazon.awssdk.services.iam.model.GetRoleResponse;
+import software.amazon.awssdk.services.iam.model.ListAttachedRolePoliciesRequest;
+import software.amazon.awssdk.services.iam.model.ListAttachedRolePoliciesResponse;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
+import java.io.File;
+import java.nio.file.Files;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 /**
- * Live AWS resource integration tests for deployed CDK infrastructure.
- * 
- * Tests actual AWS resources created by CDK deployment - NO MOCKING.
- * 
+ * Comprehensive integration tests for deployed AWS CDK infrastructure.
+ *
+ * These tests validate that the actual AWS infrastructure matches the CDK specifications
+ * and that all resources are properly configured and functional across both regions.
+ *
  * Prerequisites:
- * 1. Infrastructure must be deployed: cdk deploy
- * 2. Ensure AWS credentials are configured
- * 3. Set ENVIRONMENT_SUFFIX environment variable or PULUMI_STACK
- * 
- * Run with: ./gradlew integrationTest
+ * - AWS credentials configured (AWS CLI, IAM roles, or environment variables)
+ * - CDK stacks deployed to AWS in both us-east-1 and us-west-2
+ * - Stack outputs available in cfn-outputs/flat-outputs.json
  */
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class MainIntegrationTest {
 
-    private static final String TEST_REGION_US_EAST_1 = "us-east-1";
-    private static final String TEST_REGION_US_WEST_2 = "us-west-2";
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
-    // Deployment outputs - populated from actual CDK stack
-    private static JsonNode allOutputs;
-    private static String vpcIdUsEast1;
-    private static String vpcIdUsWest2;
-    private static String ec2InstanceId;
-    private static String securityGroupIdUsEast1;
-    private static String securityGroupIdUsWest2;
-    private static String ec2InstanceRoleArn;
-    private static String vpcPrivateSubnetIdEast1;
-    private static String vpcPrivateSubnetIdWest2;
-    private static String vpcPublicSubnetIdEast1;
-    private static String vpcPublicSubnetIdWest2;
+    private static final String ENVIRONMENT_SUFFIX = System.getenv("ENVIRONMENT_SUFFIX") != null 
+        ? System.getenv("ENVIRONMENT_SUFFIX") : "dev";
+    private static final String STACK_NAME_US_EAST_1 = "TapStack-" + ENVIRONMENT_SUFFIX + "-us-east-1";
+    private static final String STACK_NAME_US_WEST_2 = "TapStack-" + ENVIRONMENT_SUFFIX + "-us-west-2";
+    
+    private static CloudFormationClient cloudFormationClientUsEast1;
+    private static CloudFormationClient cloudFormationClientUsWest2;
+    private static Ec2Client ec2ClientUsEast1;
+    private static Ec2Client ec2ClientUsWest2;
+    private static IamClient iamClientUsEast1;
+    
+    private static Map<String, String> stackOutputs;
+    private static final Region regionUsEast1 = Region.US_EAST_1;
+    private static final Region regionUsWest2 = Region.US_WEST_2;
 
     @BeforeAll
-    static void setUpDeploymentOutputs() {
-        String TEST_STACK_NAME;
+    static void setUp() {
         try {
-            String stackName = getStackName();
-            TEST_STACK_NAME = stackName; // Set the test stack name for other methods
+            // Initialize AWS SDK clients for both regions
+            DefaultCredentialsProvider credentialsProvider = DefaultCredentialsProvider.create();
             
-            System.out.println("=== Loading Deployment Outputs ===");
-            System.out.println("Stack Name: " + stackName);
-            
-            // Try to get outputs from CloudFormation
-            String outputsJson = getCdkStackOutputs(stackName);
-            if (outputsJson != null) {
-                allOutputs = objectMapper.readTree(outputsJson);
+            cloudFormationClientUsEast1 = CloudFormationClient.builder()
+                .region(regionUsEast1)
+                .credentialsProvider(credentialsProvider)
+                .build();
                 
-                // Extract specific outputs
-                vpcIdUsEast1 = getOutputValue("us-east-1", "us-east-1-VpcId", stackName);
-                vpcIdUsWest2 = getOutputValue("us-west-2", "us-west-2-VpcId", stackName);
-
-                securityGroupIdUsEast1 = getOutputValue("us-east-1", "us-east-1-securityGroupId", stackName);
-                securityGroupIdUsWest2 = getOutputValue("us-west-2", "us-west-2-securityGroupId", stackName);
-
-                ec2InstanceId = getOutputValue("us-east-1", "us-east-1-ec2InstanceId", stackName);
-                ec2InstanceRoleArn = getOutputValue("us-east-1", "us-east-1-ec2InstanceRoleArn", stackName);
-
-                vpcPrivateSubnetIdEast1 = getOutputValue("us-east-1", "us-east-1-vpcPrivateSubnetId", stackName);
-                vpcPrivateSubnetIdWest2 = getOutputValue("us-west-2", "us-west-2-vpcPrivateSubnetId", stackName);
-
-                vpcPublicSubnetIdEast1 = getOutputValue("us-east-1", "us-east-1-vpcPublicSubnetId", stackName);
-                vpcPublicSubnetIdWest2 = getOutputValue("us-west-2", "us-west-2-vpcPublicSubnetId", stackName);
+            cloudFormationClientUsWest2 = CloudFormationClient.builder()
+                .region(regionUsWest2)
+                .credentialsProvider(credentialsProvider)
+                .build();
                 
-                System.out.println("=== Deployment Outputs Loaded Successfully ===");
-                System.out.println("VPC ID US-East-1: " + vpcIdUsEast1);
-                System.out.println("VPC ID US-West-2: " + vpcIdUsWest2);
-                System.out.println("EC2 Instance ID: " + ec2InstanceId);
-                System.out.println("EC2 Role ARN: " + ec2InstanceRoleArn);
-                System.out.println("Security Group ID US-East-1: " + securityGroupIdUsEast1);
-                System.out.println("Security Group ID US-West-2: " + securityGroupIdUsWest2);
-                System.out.println("VPC Private Subnet ID US-East-1: " + vpcPrivateSubnetIdEast1);
-                System.out.println("VPC Private Subnet ID US-West-2: " + vpcPrivateSubnetIdWest2);
-                System.out.println("VPC Public Subnet ID US-East-1: " + vpcPublicSubnetIdEast1);
-                System.out.println("VPC Public Subnet ID US-West-2: " + vpcPublicSubnetIdWest2);
-            }
+            ec2ClientUsEast1 = Ec2Client.builder()
+                .region(regionUsEast1)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+            ec2ClientUsWest2 = Ec2Client.builder()
+                .region(regionUsWest2)
+                .credentialsProvider(credentialsProvider)
+                .build();
+                
+            iamClientUsEast1 = IamClient.builder()
+                .region(regionUsEast1)
+                .credentialsProvider(credentialsProvider)
+                .build();
+
+            // Load stack outputs
+            loadStackOutputs();
             
         } catch (Exception e) {
-            String errorMsg = e.getMessage();
-            System.err.println("Failed to load deployment outputs: " + errorMsg);
-        }
-    }
-    
-    private static String getStackName() {
-        // Build stack name using TapStack + ENVIRONMENT_SUFFIX pattern
-        String envSuffix = System.getenv("ENVIRONMENT_SUFFIX");
-        if (envSuffix != null && !envSuffix.isEmpty()) {
-            return "TapStack" + envSuffix;
-        }
-        
-        // Try to get current stack from CDK CLI or CloudFormation
-        try {
-            String currentStack = executeCommand("aws", "cloudformation", "describe-stacks", 
-                    "--query", "Stacks[?starts_with(StackName, 'TapStack')].StackName", 
-                    "--output", "text").trim();
-            if (!currentStack.isEmpty() && !currentStack.equals("None")) {
-                String[] stacks = currentStack.split("\t");
-                if (stacks.length > 0) {
-                    return stacks[0]; // Return first matching stack
-                }
-            }
-        } catch (Exception e) {
-            System.out.println("Could not get current stack from AWS CLI: " + e.getMessage());
-        }
-        
-        // Fallback - look for any TapStack* pattern
-        return "TapStack";
-    }
-    
-    private static String getCdkStackOutputs(final String stackName) {
-        try {
-            // Get outputs from both regions
-            StringBuilder outputs = new StringBuilder();
-            outputs.append("{");
-            
-            String[] regions = {TEST_REGION_US_EAST_1, TEST_REGION_US_WEST_2};
-            boolean first = true;
-            
-            for (String region : regions) {
-                try {
-                    String regionOutputs = executeCommand("aws", "cloudformation", "describe-stacks",
-                            "--stack-name", stackName,
-                            "--region", region,
-                            "--query", "Stacks[0].Outputs",
-                            "--output", "json");
-                    
-                    if (!regionOutputs.trim().equals("null") && !regionOutputs.trim().isEmpty()) {
-                        JsonNode outputsArray = objectMapper.readTree(regionOutputs);
-                        for (JsonNode output : outputsArray) {
-                            if (!first) outputs.append(",");
-                            outputs.append("\"").append(output.get("OutputKey").asText()).append("\":");
-                            outputs.append("\"").append(output.get("OutputValue").asText()).append("\"");
-                            first = false;
-                        }
-                    }
-                } catch (Exception e) {
-                    System.out.println("Could not get outputs for region " + region + ": " + e.getMessage());
-                }
-            }
-            
-            outputs.append("}");
-            return outputs.toString();
-        } catch (Exception e) {
-            System.err.println("Error getting CDK stack outputs: " + e.getMessage());
-            return null;
-        }
-    }
-    
-    private static String getOutputValue(final String region, final String outputKey, final String stackName) {
-        try {
-            
-            String result = executeCommand("aws", "cloudformation", "describe-stacks", 
-                    "--stack-name", stackName,
-                    "--region", region,
-                    "--query", "Stacks[0].Outputs[?OutputKey=='" + outputKey + "'].OutputValue",
-                    "--output", "text");
-            
-            return result.trim().equals("None") ? null : result.trim();
-        } catch (Exception e) {
-            return null;
+            System.err.println("Failed to initialize AWS clients or load stack outputs: " + e.getMessage());
+            fail("Setup failed: " + e.getMessage());
         }
     }
 
-    @BeforeEach
-    void setUp() {
-        // Validate that outputs are available before each test
-        if (allOutputs == null) {
-            boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-            if (isCI) {
-                System.out.println("Warning: Running in CI but deployment outputs not available. Test will be skipped.");
-            } else {
-                System.out.println("Warning: Deployment outputs not available. Test will be skipped. (Run after cdk deploy)");
+    private static void loadStackOutputs() {
+        try {
+            // First try to load from flat-outputs.json file
+            File flatOutputsFile = new File("cfn-outputs/flat-outputs.json");
+            if (flatOutputsFile.exists()) {
+                String content = Files.readString(flatOutputsFile.toPath());
+                ObjectMapper mapper = new ObjectMapper();
+                stackOutputs = mapper.readValue(content, new TypeReference<Map<String, String>>(){});
+                System.out.println("Loaded stack outputs from flat-outputs.json: " + stackOutputs.keySet());
+                return;
             }
+
+            // Fallback: Query CloudFormation directly for stack outputs from both regions
+            System.out.println("flat-outputs.json not found, querying CloudFormation directly...");
+            stackOutputs = new HashMap<>();
+            
+            // Load outputs from us-east-1
+            try {
+                DescribeStacksRequest requestUsEast1 = DescribeStacksRequest.builder()
+                    .stackName(STACK_NAME_US_EAST_1)
+                    .build();
+                DescribeStacksResponse responseUsEast1 = cloudFormationClientUsEast1.describeStacks(requestUsEast1);
+                
+                if (!responseUsEast1.stacks().isEmpty()) {
+                    Stack stackUsEast1 = responseUsEast1.stacks().get(0);
+                    Map<String, String> usEast1Outputs = stackUsEast1.outputs().stream()
+                        .collect(Collectors.toMap(Output::outputKey, Output::outputValue));
+                    stackOutputs.putAll(usEast1Outputs);
+                    System.out.println("Loaded US-East-1 outputs: " + usEast1Outputs.keySet());
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to load US-East-1 stack outputs: " + e.getMessage());
+            }
+            
+            // Load outputs from us-west-2
+            try {
+                DescribeStacksRequest requestUsWest2 = DescribeStacksRequest.builder()
+                    .stackName(STACK_NAME_US_WEST_2)
+                    .build();
+                DescribeStacksResponse responseUsWest2 = cloudFormationClientUsWest2.describeStacks(requestUsWest2);
+                
+                if (!responseUsWest2.stacks().isEmpty()) {
+                    Stack stackUsWest2 = responseUsWest2.stacks().get(0);
+                    Map<String, String> usWest2Outputs = stackUsWest2.outputs().stream()
+                        .collect(Collectors.toMap(Output::outputKey, Output::outputValue));
+                    stackOutputs.putAll(usWest2Outputs);
+                    System.out.println("Loaded US-West-2 outputs: " + usWest2Outputs.keySet());
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to load US-West-2 stack outputs: " + e.getMessage());
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Failed to load stack outputs: " + e.getMessage());
+            stackOutputs = new HashMap<>(); // Initialize empty map to avoid null pointer exceptions
         }
     }
-
-    // ================== Live AWS Resource Integration Tests ==================
 
     @Test
-    void testDeploymentOutputsExist() {
-        Assumptions.assumeTrue(vpcIdUsEast1 != null || vpcIdUsWest2 != null, 
-                "At least one VPC should be deployed");
-        
-        assertDoesNotThrow(() -> {
-            // Validate at least one VPC exists
-            assertTrue(vpcIdUsEast1 != null || vpcIdUsWest2 != null, 
-                    "At least one VPC should be available from live deployment");
+    @Order(1)
+    public void testStacksExistInBothRegions() {
+        try {
+            // Test US-East-1 stack
+            DescribeStacksRequest requestUsEast1 = DescribeStacksRequest.builder()
+                .stackName(STACK_NAME_US_EAST_1)
+                .build();
+            DescribeStacksResponse responseUsEast1 = cloudFormationClientUsEast1.describeStacks(requestUsEast1);
+            
+            assertThat(responseUsEast1.stacks()).isNotEmpty();
+            Stack stackUsEast1 = responseUsEast1.stacks().get(0);
+            assertThat(stackUsEast1.stackName()).isEqualTo(STACK_NAME_US_EAST_1);
+            assertThat(stackUsEast1.stackStatus()).isIn(
+                StackStatus.CREATE_COMPLETE,
+                StackStatus.UPDATE_COMPLETE
+            );
+            System.out.println("✅ Stack " + STACK_NAME_US_EAST_1 + " exists and is in " + stackUsEast1.stackStatus() + " state");
+            
+            // Test US-West-2 stack
+            DescribeStacksRequest requestUsWest2 = DescribeStacksRequest.builder()
+                .stackName(STACK_NAME_US_WEST_2)
+                .build();
+            DescribeStacksResponse responseUsWest2 = cloudFormationClientUsWest2.describeStacks(requestUsWest2);
+            
+            assertThat(responseUsWest2.stacks()).isNotEmpty();
+            Stack stackUsWest2 = responseUsWest2.stacks().get(0);
+            assertThat(stackUsWest2.stackName()).isEqualTo(STACK_NAME_US_WEST_2);
+            assertThat(stackUsWest2.stackStatus()).isIn(
+                StackStatus.CREATE_COMPLETE,
+                StackStatus.UPDATE_COMPLETE
+            );
+            System.out.println("✅ Stack " + STACK_NAME_US_WEST_2 + " exists and is in " + stackUsWest2.stackStatus() + " state");
+            
+        } catch (Exception e) {
+            fail("Stack validation failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @Order(2)
+    public void testVpcConfigurationUsEast1() {
+        try {
+            // Get VPC ID from outputs
+            String vpcId = stackOutputs.get("us-east-1vpcId");
+            assertThat(vpcId).isNotNull().withFailMessage("us-east-1vpcId not found in stack outputs");
+            System.out.println("Testing US-East-1 VPC: " + vpcId);
+            
+            // Verify VPC exists and has correct configuration
+            DescribeVpcsRequest request = DescribeVpcsRequest.builder()
+                .vpcIds(vpcId)
+                .build();
+            DescribeVpcsResponse response = ec2ClientUsEast1.describeVpcs(request);
+            
+            assertThat(response.vpcs()).hasSize(1);
+            Vpc vpc = response.vpcs().get(0);
+            assertThat(vpc.vpcId()).isEqualTo(vpcId);
+            assertThat(vpc.cidrBlock()).isEqualTo("10.0.0.0/16");
+            assertThat(vpc.state()).isEqualTo(VpcState.AVAILABLE);
+            System.out.println("✅ US-East-1 VPC configuration verified: " + vpc.cidrBlock());
+            
+            // Verify subnets
+            String publicSubnetId = stackOutputs.get("us-east-1vpcPublicSubnetId");
+            String privateSubnetId = stackOutputs.get("us-east-1vpcPrivateSubnetId");
+            
+            assertThat(publicSubnetId).isNotNull().withFailMessage("us-east-1vpcPublicSubnetId not found");
+            assertThat(privateSubnetId).isNotNull().withFailMessage("us-east-1vpcPrivateSubnetId not found");
+            
+            DescribeSubnetsRequest subnetsRequest = DescribeSubnetsRequest.builder()
+                .subnetIds(publicSubnetId, privateSubnetId)
+                .build();
+            DescribeSubnetsResponse subnetsResponse = ec2ClientUsEast1.describeSubnets(subnetsRequest);
+            
+            assertThat(subnetsResponse.subnets()).hasSize(2);
+            
+            Subnet publicSubnet = subnetsResponse.subnets().stream()
+                .filter(s -> s.subnetId().equals(publicSubnetId))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Public subnet not found"));
+                
+            Subnet privateSubnet = subnetsResponse.subnets().stream()
+                .filter(s -> s.subnetId().equals(privateSubnetId))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Private subnet not found"));
+            
+            assertThat(publicSubnet.mapPublicIpOnLaunch()).isTrue();
+            assertThat(privateSubnet.mapPublicIpOnLaunch()).isFalse();
+            System.out.println("✅ US-East-1 subnets configuration verified");
+            
+        } catch (Exception e) {
+            fail("US-East-1 VPC validation failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @Order(3)
+    public void testVpcConfigurationUsWest2() {
+        try {
+            // Get VPC ID from outputs
+            String vpcId = stackOutputs.get("us-west-2vpcId");
+            assertThat(vpcId).isNotNull().withFailMessage("us-west-2vpcId not found in stack outputs");
+            System.out.println("Testing US-West-2 VPC: " + vpcId);
+            
+            // Verify VPC exists and has correct configuration
+            DescribeVpcsRequest request = DescribeVpcsRequest.builder()
+                .vpcIds(vpcId)
+                .build();
+            DescribeVpcsResponse response = ec2ClientUsWest2.describeVpcs(request);
+            
+            assertThat(response.vpcs()).hasSize(1);
+            Vpc vpc = response.vpcs().get(0);
+            assertThat(vpc.vpcId()).isEqualTo(vpcId);
+            assertThat(vpc.cidrBlock()).isEqualTo("192.168.0.0/16");
+            assertThat(vpc.state()).isEqualTo(VpcState.AVAILABLE);
+            System.out.println("✅ US-West-2 VPC configuration verified: " + vpc.cidrBlock());
+            
+            // Verify subnets
+            String publicSubnetId = stackOutputs.get("us-west-2vpcPublicSubnetId");
+            String privateSubnetId = stackOutputs.get("us-west-2vpcPrivateSubnetId");
+            
+            assertThat(publicSubnetId).isNotNull().withFailMessage("us-west-2vpcPublicSubnetId not found");
+            assertThat(privateSubnetId).isNotNull().withFailMessage("us-west-2vpcPrivateSubnetId not found");
+            
+            DescribeSubnetsRequest subnetsRequest = DescribeSubnetsRequest.builder()
+                .subnetIds(publicSubnetId, privateSubnetId)
+                .build();
+            DescribeSubnetsResponse subnetsResponse = ec2ClientUsWest2.describeSubnets(subnetsRequest);
+            
+            assertThat(subnetsResponse.subnets()).hasSize(2);
+            System.out.println("✅ US-West-2 subnets configuration verified");
+            
+        } catch (Exception e) {
+            fail("US-West-2 VPC validation failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @Order(4)
+    public void testSecurityGroupsConfiguration() {
+        try {
+            // Test US-East-1 Security Group
+            String securityGroupIdUsEast1 = stackOutputs.get("us-east-1securityGroupId");
+            assertThat(securityGroupIdUsEast1).isNotNull().withFailMessage("us-east-1securityGroupId not found");
+            
+            DescribeSecurityGroupsRequest requestUsEast1 = DescribeSecurityGroupsRequest.builder()
+                .groupIds(securityGroupIdUsEast1)
+                .build();
+            DescribeSecurityGroupsResponse responseUsEast1 = ec2ClientUsEast1.describeSecurityGroups(requestUsEast1);
+            
+            assertThat(responseUsEast1.securityGroups()).hasSize(1);
+            SecurityGroup sgUsEast1 = responseUsEast1.securityGroups().get(0);
+            
+            // Verify HTTP and HTTPS rules
+            List<IpPermission> ingressRules = sgUsEast1.ipPermissions();
+            boolean hasHttpRule = ingressRules.stream()
+                .anyMatch(rule -> rule.fromPort() == 80 && rule.toPort() == 80 && "tcp".equals(rule.ipProtocol()));
+            boolean hasHttpsRule = ingressRules.stream()
+                .anyMatch(rule -> rule.fromPort() == 443 && rule.toPort() == 443 && "tcp".equals(rule.ipProtocol()));
+                
+            assertThat(hasHttpRule).isTrue().withFailMessage("HTTP rule not found in US-East-1 security group");
+            assertThat(hasHttpsRule).isTrue().withFailMessage("HTTPS rule not found in US-East-1 security group");
+            System.out.println("✅ US-East-1 Security Group HTTP/HTTPS rules verified");
+            
+            // Test US-West-2 Security Group
+            String securityGroupIdUsWest2 = stackOutputs.get("us-west-2securityGroupId");
+            assertThat(securityGroupIdUsWest2).isNotNull().withFailMessage("us-west-2securityGroupId not found");
+            
+            DescribeSecurityGroupsRequest requestUsWest2 = DescribeSecurityGroupsRequest.builder()
+                .groupIds(securityGroupIdUsWest2)
+                .build();
+            DescribeSecurityGroupsResponse responseUsWest2 = ec2ClientUsWest2.describeSecurityGroups(requestUsWest2);
+            
+            assertThat(responseUsWest2.securityGroups()).hasSize(1);
+            SecurityGroup sgUsWest2 = responseUsWest2.securityGroups().get(0);
+            
+            // Verify HTTP and HTTPS rules
+            List<IpPermission> ingressRulesUsWest2 = sgUsWest2.ipPermissions();
+            boolean hasHttpRuleUsWest2 = ingressRulesUsWest2.stream()
+                .anyMatch(rule -> rule.fromPort() == 80 && rule.toPort() == 80 && "tcp".equals(rule.ipProtocol()));
+            boolean hasHttpsRuleUsWest2 = ingressRulesUsWest2.stream()
+                .anyMatch(rule -> rule.fromPort() == 443 && rule.toPort() == 443 && "tcp".equals(rule.ipProtocol()));
+                
+            assertThat(hasHttpRuleUsWest2).isTrue().withFailMessage("HTTP rule not found in US-West-2 security group");
+            assertThat(hasHttpsRuleUsWest2).isTrue().withFailMessage("HTTPS rule not found in US-West-2 security group");
+            System.out.println("✅ US-West-2 Security Group HTTP/HTTPS rules verified");
+            
+        } catch (Exception e) {
+            fail("Security Groups validation failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @Order(5)
+    public void testEc2InstanceConfiguration() {
+        try {
+            // EC2 instance should only exist in US-East-1
+            String ec2InstanceId = stackOutputs.get("us-east-1ec2InstanceId");
+            assertThat(ec2InstanceId).isNotNull().withFailMessage("us-east-1ec2InstanceId not found in stack outputs");
+            System.out.println("Testing EC2 instance: " + ec2InstanceId);
+            
+            DescribeInstancesRequest request = DescribeInstancesRequest.builder()
+                .instanceIds(ec2InstanceId)
+                .build();
+            DescribeInstancesResponse response = ec2ClientUsEast1.describeInstances(request);
+            
+            assertThat(response.reservations()).isNotEmpty();
+            assertThat(response.reservations().get(0).instances()).hasSize(1);
+            
+            Instance instance = response.reservations().get(0).instances().get(0);
+            assertThat(instance.instanceId()).isEqualTo(ec2InstanceId);
+            assertThat(instance.instanceType()).isEqualTo(InstanceType.T3_MICRO);
+            assertThat(instance.state().name()).isIn(InstanceStateName.RUNNING, InstanceStateName.PENDING, InstanceStateName.STOPPED);
+            System.out.println("✅ EC2 instance configuration verified: " + instance.instanceType() + " in state " + instance.state().name());
+            
+            // Verify instance is in the correct VPC and subnet
+            String expectedVpcId = stackOutputs.get("us-east-1vpcId");
+            String expectedSubnetId = stackOutputs.get("us-east-1vpcPublicSubnetId");
+            
+            assertThat(instance.vpcId()).isEqualTo(expectedVpcId);
+            assertThat(instance.subnetId()).isEqualTo(expectedSubnetId);
+            System.out.println("✅ EC2 instance VPC and subnet placement verified");
+            
+        } catch (Exception e) {
+            fail("EC2 instance validation failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @Order(6)
+    public void testIamRoleConfiguration() {
+        try {
+            // Test EC2 instance role
+            String ec2InstanceRoleArn = stackOutputs.get("us-east-1ec2InstanceRoleArn");
+            assertThat(ec2InstanceRoleArn).isNotNull().withFailMessage("us-east-1ec2InstanceRoleArn not found in stack outputs");
+            System.out.println("Testing IAM role: " + ec2InstanceRoleArn);
+            
+            // Extract role name from ARN
+            String roleName = ec2InstanceRoleArn.substring(ec2InstanceRoleArn.lastIndexOf("/") + 1);
+            
+            GetRoleRequest request = GetRoleRequest.builder()
+                .roleName(roleName)
+                .build();
+            GetRoleResponse response = iamClientUsEast1.getRole(request);
+            
+            assertThat(response.role().arn()).isEqualTo(ec2InstanceRoleArn);
+            assertThat(response.role().assumeRolePolicyDocument()).contains("ec2.amazonaws.com");
+            System.out.println("✅ IAM role configuration verified: " + roleName);
+            
+            // Verify attached managed policies
+            ListAttachedRolePoliciesRequest policiesRequest = ListAttachedRolePoliciesRequest.builder()
+                .roleName(roleName)
+                .build();
+            ListAttachedRolePoliciesResponse policiesResponse = iamClientUsEast1.listAttachedRolePolicies(policiesRequest);
+            
+            boolean hasSSMPolicy = policiesResponse.attachedPolicies().stream()
+                .anyMatch(policy -> policy.policyArn().contains("AmazonSSMManagedInstanceCore"));
+            boolean hasCloudWatchPolicy = policiesResponse.attachedPolicies().stream()
+                .anyMatch(policy -> policy.policyArn().contains("CloudWatchAgentServerPolicy"));
+                
+            assertThat(hasSSMPolicy).isTrue().withFailMessage("SSM managed policy not attached");
+            assertThat(hasCloudWatchPolicy).isTrue().withFailMessage("CloudWatch managed policy not attached");
+            System.out.println("✅ IAM role managed policies verified");
+            
+        } catch (Exception e) {
+            fail("IAM role validation failed: " + e.getMessage());
+        }
+    }
+
+    @Test
+    @Order(7)
+    public void testResourceNamingAndTagging() {
+        try {
+            // Verify stack naming conventions
+            assertThat(STACK_NAME_US_EAST_1).matches("TapStack-.*-us-east-1");
+            assertThat(STACK_NAME_US_WEST_2).matches("TapStack-.*-us-west-2");
+            System.out.println("✅ Stack naming conventions verified");
+            
+            // Verify resource outputs follow expected patterns
+            String vpcIdUsEast1 = stackOutputs.get("us-east-1vpcId");
+            String vpcIdUsWest2 = stackOutputs.get("us-west-2vpcId");
+            String ec2InstanceId = stackOutputs.get("us-east-1ec2InstanceId");
             
             if (vpcIdUsEast1 != null) {
-                assertFalse(vpcIdUsEast1.trim().isEmpty(), "VPC ID US-East-1 should not be empty");
-                System.out.println("✓ VPC US-East-1 exists: " + vpcIdUsEast1);
+                assertThat(vpcIdUsEast1).startsWith("vpc-");
+                System.out.println("✅ VPC ID format verified: " + vpcIdUsEast1);
             }
             
             if (vpcIdUsWest2 != null) {
-                assertFalse(vpcIdUsWest2.trim().isEmpty(), "VPC ID US-West-2 should not be empty");
-                System.out.println("✓ VPC US-West-2 exists: " + vpcIdUsWest2);
+                assertThat(vpcIdUsWest2).startsWith("vpc-");
+                System.out.println("✅ VPC ID format verified: " + vpcIdUsWest2);
             }
             
-            System.out.println("✓ All live deployment outputs are present and non-empty");
-        });
-    }
-    
-    @Test
-    void testLiveVpcValidationUsEast1() {
-        Assumptions.assumeTrue(vpcIdUsEast1 != null, "VPC ID US-East-1 should be available from live deployment");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (Ec2Client ec2Client = Ec2Client.builder().region(Region.US_EAST_1).build()) {
-                // Validate actual deployed VPC exists in AWS
-                DescribeVpcsResponse response = ec2Client.describeVpcs(
-                        DescribeVpcsRequest.builder()
-                                .vpcIds(vpcIdUsEast1)
-                                .build());
-                
-                assertFalse(response.vpcs().isEmpty(), "Live VPC should exist in AWS EC2");
-                
-                var vpc = response.vpcs().get(0);
-                assertEquals("10.0.0.0/16", vpc.cidrBlock(), "VPC should have correct CIDR block for us-east-1");
-                assertEquals("available", vpc.state().toString(), "VPC should be in available state");
-                // Note: DNS attributes are not directly available on VPC object in AWS SDK v2
-                
-                System.out.println("✓ Live VPC US-East-1 validation passed: " + vpc.vpcId());
-                System.out.println("  - CIDR Block: " + vpc.cidrBlock());
-                System.out.println("  - State: " + vpc.state());
-                System.out.println("  - VPC ID: " + vpc.vpcId());
-            }
-        });
-    }
-    
-    @Test
-    void testLiveVpcValidationUsWest2() {
-        Assumptions.assumeTrue(vpcIdUsWest2 != null, "VPC ID US-West-2 should be available from live deployment");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (Ec2Client ec2Client = Ec2Client.builder().region(Region.US_WEST_2).build()) {
-                // Validate actual deployed VPC exists in AWS
-                DescribeVpcsResponse response = ec2Client.describeVpcs(
-                        DescribeVpcsRequest.builder()
-                                .vpcIds(vpcIdUsWest2)
-                                .build());
-                
-                assertFalse(response.vpcs().isEmpty(), "Live VPC should exist in AWS EC2");
-                
-                var vpc = response.vpcs().get(0);
-                assertEquals("192.168.0.0/16", vpc.cidrBlock(), "VPC should have correct CIDR block for us-west-2");
-                assertEquals("available", vpc.state().toString(), "VPC should be in available state");
-                // Note: DNS attributes are not directly available on VPC object in AWS SDK v2
-                
-                System.out.println("✓ Live VPC US-West-2 validation passed: " + vpc.vpcId());
-                System.out.println("  - CIDR Block: " + vpc.cidrBlock());
-                System.out.println("  - State: " + vpc.state());
-                System.out.println("  - VPC ID: " + vpc.vpcId());
-            }
-        });
-    }
-    
-    @Test
-    void testLiveEc2InstanceValidation() {
-        Assumptions.assumeTrue(ec2InstanceId != null, "EC2 Instance ID should be available from live deployment");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (Ec2Client ec2Client = Ec2Client.builder().region(Region.US_EAST_1).build()) {
-                // Validate actual deployed EC2 instance exists in AWS
-                DescribeInstancesResponse response = ec2Client.describeInstances(
-                        DescribeInstancesRequest.builder()
-                                .instanceIds(ec2InstanceId)
-                                .build());
-                
-                assertFalse(response.reservations().isEmpty(), "Live EC2 instance should exist in AWS");
-                assertFalse(response.reservations().get(0).instances().isEmpty(), 
-                        "EC2 reservation should contain instances");
-                
-                var instance = response.reservations().get(0).instances().get(0);
-                assertEquals("t3.micro", instance.instanceType().toString(), 
-                        "Instance should be t3.micro type");
-                assertTrue(List.of("running", "pending", "stopped").contains(instance.state().name().toString()), 
-                        "Instance should be in a valid state");
-                
-                System.out.println("✓ Live EC2 Instance validation passed: " + instance.instanceId());
-                System.out.println("  - Instance Type: " + instance.instanceType());
-                System.out.println("  - State: " + instance.state().name());
-                System.out.println("  - VPC ID: " + instance.vpcId());
-                System.out.println("  - Subnet ID: " + instance.subnetId());
-            }
-        });
-    }
-    
-    @Test
-    void testLiveSecurityGroupValidation() {
-        Assumptions.assumeTrue(securityGroupIdUsEast1 != null, "Security Group ID should be available from live deployment");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (Ec2Client ec2Client = Ec2Client.builder().region(Region.US_EAST_1).build()) {
-                // Validate actual deployed security group exists in AWS
-                DescribeSecurityGroupsResponse response = ec2Client.describeSecurityGroups(
-                        DescribeSecurityGroupsRequest.builder()
-                                .groupIds(securityGroupIdUsEast1)
-                                .build());
-                
-                assertFalse(response.securityGroups().isEmpty(), "Live Security Group should exist in AWS");
-                
-                var securityGroup = response.securityGroups().get(0);
-                assertEquals(vpcIdUsEast1, securityGroup.vpcId(), "Security Group should be in correct VPC");
-                
-                // Validate ingress rules for HTTP and HTTPS
-                var ingressRules = securityGroup.ipPermissions();
-                boolean hasHttpRule = ingressRules.stream()
-                        .anyMatch(rule -> rule.fromPort() == 80 && rule.toPort() == 80 && 
-                                rule.ipProtocol().equals("tcp"));
-                boolean hasHttpsRule = ingressRules.stream()
-                        .anyMatch(rule -> rule.fromPort() == 443 && rule.toPort() == 443 && 
-                                rule.ipProtocol().equals("tcp"));
-                
-                assertTrue(hasHttpRule, "Security Group should allow HTTP traffic");
-                assertTrue(hasHttpsRule, "Security Group should allow HTTPS traffic");
-                
-                System.out.println("✓ Live Security Group validation passed: " + securityGroup.groupId());
-                System.out.println("  - Group Name: " + securityGroup.groupName());
-                System.out.println("  - VPC ID: " + securityGroup.vpcId());
-                System.out.println("  - Ingress Rules: " + ingressRules.size());
-            }
-        });
-    }
-    
-    @Test
-    void testLiveIamRoleValidation() {
-        Assumptions.assumeTrue(ec2InstanceRoleArn != null, "IAM Role ARN should be available from live deployment");
-        Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
-        
-        assertDoesNotThrow(() -> {
-            try (IamClient iamClient = IamClient.builder().region(Region.US_EAST_1).build()) {
-                // Extract role name from ARN
-                String roleName = ec2InstanceRoleArn.substring(ec2InstanceRoleArn.lastIndexOf("/") + 1);
-                
-                // Validate actual deployed IAM role exists in AWS
-                GetRoleResponse response = iamClient.getRole(
-                        GetRoleRequest.builder()
-                                .roleName(roleName)
-                                .build());
-                
-                assertNotNull(response.role(), "Live IAM Role should exist in AWS IAM");
-                assertEquals(ec2InstanceRoleArn, response.role().arn(), "Role ARN should match");
-                
-                // Validate role has proper trust policy for EC2 service
-                assertNotNull(response.role().assumeRolePolicyDocument(), "Role should have assume role policy");
-                assertTrue(response.role().assumeRolePolicyDocument().contains("ec2.amazonaws.com"), 
-                        "Role should trust EC2 service");
-                
-                System.out.println("✓ Live IAM Role validation passed: " + response.role().roleName());
-                System.out.println("  - ARN: " + response.role().arn());
-                System.out.println("  - Created: " + response.role().createDate());
-                System.out.println("  - Path: " + response.role().path());
-            }
-        });
-    }
-    
-    @Test 
-    void testLiveDeploymentConfigurationValues() {
-        Assumptions.assumeTrue(vpcIdUsEast1 != null || vpcIdUsWest2 != null, 
-                "At least one VPC should be deployed");
-        
-        assertDoesNotThrow(() -> {
-            // Extract and validate configuration from actual deployed resources
-            System.out.println("=== Live Deployment Configuration Analysis ===");
-            
-            // Validate VPC naming and configuration
-            if (vpcIdUsEast1 != null) {
-                System.out.println("Live VPC US-East-1: " + vpcIdUsEast1);
-                assertTrue(vpcIdUsEast1.startsWith("vpc-"), "VPC ID should be valid AWS VPC identifier");
-            }
-            
-            if (vpcIdUsWest2 != null) {
-                System.out.println("Live VPC US-West-2: " + vpcIdUsWest2);
-                assertTrue(vpcIdUsWest2.startsWith("vpc-"), "VPC ID should be valid AWS VPC identifier");
-            }
-            
-            // Validate EC2 instance configuration if exists
             if (ec2InstanceId != null) {
-                System.out.println("Live EC2 Instance: " + ec2InstanceId);
-                assertTrue(ec2InstanceId.startsWith("i-"), "Instance ID should be valid AWS instance identifier");
+                assertThat(ec2InstanceId).startsWith("i-");
+                System.out.println("✅ EC2 Instance ID format verified: " + ec2InstanceId);
             }
             
-            // Validate Security Group configuration
-            if (securityGroupIdUsEast1 != null) {
-                System.out.println("Live Security Group: " + securityGroupIdUsEast1);
-                assertTrue(securityGroupIdUsEast1.startsWith("sg-"), "Security Group ID should be valid AWS identifier");
-            }
-            
-            // Validate IAM Role configuration
-            if (ec2InstanceRoleArn != null) {
-                System.out.println("Live IAM Role ARN: " + ec2InstanceRoleArn);
-                assertTrue(ec2InstanceRoleArn.startsWith("arn:aws:iam::"), "IAM Role ARN should be valid AWS ARN format");
-                assertTrue(ec2InstanceRoleArn.contains("role/"), "ARN should be for an IAM role");
-            }
-            
-            System.out.println("✓ Live deployment configuration validation passed");
-        });
+        } catch (Exception e) {
+            fail("Resource naming validation failed: " + e.getMessage());
+        }
     }
 
-    // ================== Helper Methods ==================
-    
-    private static boolean hasAwsCredentials() {
-        return (System.getenv("AWS_ACCESS_KEY_ID") != null && System.getenv("AWS_SECRET_ACCESS_KEY") != null) ||
-               System.getenv("AWS_PROFILE") != null ||
-               System.getProperty("aws.accessKeyId") != null;
-    }
-    
-    private static String executeCommand(final String... command) throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder(command)
-                .directory(Paths.get(".").toFile())
-                .redirectErrorStream(true);
-                
-        Process process = pb.start();
-        boolean finished = process.waitFor(60, TimeUnit.SECONDS);
-        
-        if (!finished) {
-            process.destroyForcibly();
-            throw new RuntimeException("Command timed out: " + String.join(" ", command));
+    @Test
+    @Order(8)
+    public void testStackOutputsCompleteness() {
+        try {
+            // Verify all expected outputs are present for US-East-1
+            List<String> expectedUsEast1Outputs = Arrays.asList(
+                "us-east-1vpcId",
+                "us-east-1vpcPublicSubnetId",
+                "us-east-1vpcPrivateSubnetId",
+                "us-east-1securityGroupId",
+                "us-east-1ec2InstanceId",
+                "us-east-1ec2InstanceRoleArn"
+            );
+            
+            for (String expectedOutput : expectedUsEast1Outputs) {
+                assertThat(stackOutputs).containsKey(expectedOutput)
+                    .withFailMessage("Expected US-East-1 output not found: " + expectedOutput);
+                assertThat(stackOutputs.get(expectedOutput)).isNotNull()
+                    .withFailMessage("US-East-1 output value is null: " + expectedOutput);
+            }
+            System.out.println("✅ All US-East-1 outputs present and non-null");
+            
+            // Verify all expected outputs are present for US-West-2
+            List<String> expectedUsWest2Outputs = Arrays.asList(
+                "us-west-2vpcId",
+                "us-west-2vpcPublicSubnetId", 
+                "us-west-2vpcPrivateSubnetId",
+                "us-west-2securityGroupId"
+            );
+            
+            for (String expectedOutput : expectedUsWest2Outputs) {
+                assertThat(stackOutputs).containsKey(expectedOutput)
+                    .withFailMessage("Expected US-West-2 output not found: " + expectedOutput);
+                assertThat(stackOutputs.get(expectedOutput)).isNotNull()
+                    .withFailMessage("US-West-2 output value is null: " + expectedOutput);
+            }
+            System.out.println("✅ All US-West-2 outputs present and non-null");
+            
+            // Verify US-West-2 should NOT have EC2-related outputs
+            assertThat(stackOutputs).doesNotContainKey("us-west-2ec2InstanceId")
+                .withFailMessage("US-West-2 should not have EC2 instance");
+            assertThat(stackOutputs).doesNotContainKey("us-west-2ec2InstanceRoleArn")
+                .withFailMessage("US-West-2 should not have EC2 IAM role");
+            System.out.println("✅ US-West-2 correctly excludes EC2-related outputs");
+            
+        } catch (Exception e) {
+            fail("Stack outputs completeness validation failed: " + e.getMessage());
         }
-        
-        if (process.exitValue() != 0) {
-            String output = readProcessOutput(process);
-            throw new RuntimeException("Command failed with exit code " + process.exitValue() + ": " + output);
-        }
-        
-        return readProcessOutput(process);
     }
-    
-    private static String readProcessOutput(final Process process) throws IOException {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            return reader.lines().collect(Collectors.joining("\n"));
+
+    @Test
+    @Order(9) 
+    public void testRegionalResourceIsolation() {
+        try {
+            // Verify resources are properly isolated between regions
+            String vpcIdUsEast1 = stackOutputs.get("us-east-1vpcId");
+            String vpcIdUsWest2 = stackOutputs.get("us-west-2vpcId");
+            
+            assertThat(vpcIdUsEast1).isNotEqualTo(vpcIdUsWest2)
+                .withFailMessage("VPC IDs should be different between regions");
+            System.out.println("✅ Regional VPC isolation verified");
+            
+            // Verify different CIDR blocks
+            DescribeVpcsRequest requestUsEast1 = DescribeVpcsRequest.builder()
+                .vpcIds(vpcIdUsEast1)
+                .build();
+            DescribeVpcsResponse responseUsEast1 = ec2ClientUsEast1.describeVpcs(requestUsEast1);
+            
+            DescribeVpcsRequest requestUsWest2 = DescribeVpcsRequest.builder()
+                .vpcIds(vpcIdUsWest2)
+                .build();
+            DescribeVpcsResponse responseUsWest2 = ec2ClientUsWest2.describeVpcs(requestUsWest2);
+            
+            String cidrUsEast1 = responseUsEast1.vpcs().get(0).cidrBlock();
+            String cidrUsWest2 = responseUsWest2.vpcs().get(0).cidrBlock();
+            
+            assertThat(cidrUsEast1).isNotEqualTo(cidrUsWest2)
+                .withFailMessage("CIDR blocks should be different between regions");
+            assertThat(cidrUsEast1).isEqualTo("10.0.0.0/16");
+            assertThat(cidrUsWest2).isEqualTo("192.168.0.0/16");
+            System.out.println("✅ Regional CIDR isolation verified: " + cidrUsEast1 + " vs " + cidrUsWest2);
+            
+        } catch (Exception e) {
+            fail("Regional resource isolation validation failed: " + e.getMessage());
         }
     }
 }
