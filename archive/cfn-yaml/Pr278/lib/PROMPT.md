@@ -2,7 +2,7 @@ Prompt: Request for CloudFormation Template
 
 You are tasked with creating a production-grade AWS CloudFormation template in YAML format named web-app-deployment.yaml. This template must define infrastructure to deploy a high-availability web application in the us-west-2 region. The requirements are as follows:
 
-🧩 Problem Statement & Constraints
+Problem Statement & Constraints
 The architecture must include an Application Load Balancer to distribute traffic across two EC2 instances.
 
 All resources should use a Prod prefix in their names (e.g., ProdInstance1, ProdVPC, etc.).
@@ -11,7 +11,7 @@ The infrastructure must span two Availability Zones for redundancy and high avai
 
 The template must pass AWS CloudFormation YAML validation and deploy successfully without errors.
 
-🏗️ Environment Setup Requirements
+Environment Setup Requirements
 VPC
 
 Use default VPC settings (CIDR block, DNS support, etc.).
@@ -40,9 +40,9 @@ Security Groups
 
 ALB Security Group: Allow inbound HTTP (port 80) from the internet.
 
-EC2 Security Group: Allow inbound HTTP from the ALB only (reference the ALB’s security group).
+EC2 Security Group: Allow inbound HTTP from the ALB only (reference the ALBs security group).
 
-✅ Expected Output
+Expected Output
 A single YAML file named web-app-deployment.yaml.
 
 The file should:

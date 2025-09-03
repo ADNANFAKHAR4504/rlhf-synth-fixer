@@ -2,8 +2,6 @@
 
 # Get ready.
 
-# Since now Claude Code is available and ready for attempting to complete TAP tasks.
-
 # Medium: solution in 30 mins
 
 # Hard: 2h
@@ -109,11 +107,17 @@ npm ci
 This command will launch an interactive prompt that guides you through:
 
 1. **Platform Selection**: Choose the Infrastructure as Code platform:
-   - **CDK**: AWS Cloud Development Kit (TypeScript)
+   - **CDK**: AWS Cloud Development Kit (TypeScript, Python)
+   - **CDKTF**: CDK for Terraform (TypeScript, Python)
    - **CloudFormation**: AWS CloudFormation (YAML or JSON)
+   - **Terraform**: Terraform HCL
+   - **Pulumi**: Pulumi (TypeScript, Python, Java)
 2. **Language Selection**: Select based on your platform choice:
-   - **CDK**: TypeScript
+   - **CDK**: TypeScript, Python
+   - **CDKTF**: TypeScript, Python
    - **CloudFormation**: YAML or JSON
+   - **Terraform**: HCL
+   - **Pulumi**: TypeScript, Python, Java
 3. **Complexity Level**: Set the task complexity (Medium, Hard, Expert)
 4. **Turn Type**: Choose between Single or Multi-turn interactions
 5. **Task ID**: Enter a unique identifier for the task
@@ -148,6 +152,15 @@ Choose **CloudFormation** platform and **JSON** language to create a CloudFormat
 - JSON template definitions
 - CloudFormation-specific deploy and destroy scripts
 - Stack-level parameter and tag support
+
+#### Creating a Pulumi Java Task
+
+Choose **Pulumi** platform and **Java** language to create a Pulumi project with:
+
+- Java source code using Pulumi AWS SDK
+- Gradle build configuration with testing framework
+- Unit and integration tests using JUnit
+- Checkstyle linting configuration
 
 ### Generated Files
 
@@ -196,6 +209,120 @@ Install terraform cli on your computer: https://developer.hashicorp.com/terrafor
 - For Quick reminder: `npm run tf:help`
 - For Validate Hashicorp syntax: `npm run tf:validate`
 - For Get TF state in json: `npm run tf:output`
+
+### Java Development Commands
+
+**Prerequisites for Java Development:**
+
+- **Java 17 or later** (required for CI compatibility)
+- **Gradle** (included as wrapper in project)
+
+#### Gradle Installation Guide
+
+If you don't have Java installed or need Java 17:
+
+**Option 1: Using SDKMAN (Recommended)**
+```bash
+# Install SDKMAN
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Install Java 17
+sdk install java 17.0.9-tem
+sdk use java 17.0.9-tem
+
+# Verify installation
+java -version  # Should show Java 17
+```
+
+**Option 2: Using Package Managers**
+
+On macOS:
+```bash
+brew install openjdk@17
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+```
+
+On Ubuntu/Debian:
+```bash
+sudo apt update
+sudo apt install openjdk-17-jdk
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+```
+
+On Windows:
+- Download OpenJDK 17 from [Adoptium](https://adoptium.net/)
+- Install and set JAVA_HOME environment variable
+
+#### Java Build Commands
+
+**Note**: This project uses Gradle wrapper (`./gradlew`), so you don't need to install Gradle separately.
+
+```bash
+# Build the Java project
+./gradlew build
+
+# Clean build artifacts
+./gradlew clean
+
+# View available Gradle tasks
+./gradlew tasks
+```
+
+#### Java Testing Commands
+
+**Unit Tests:**
+```bash
+# Run all unit tests (shows pass/fail results)
+./gradlew test
+
+# Run unit tests with coverage report and summary
+./gradlew test showCoverage
+
+# Run specific test class
+./gradlew test --tests "app.MainTest"
+
+# Force clean run (ignore cache)
+./gradlew clean test showCoverage
+```
+
+**Integration Tests:**
+```bash
+# Run integration tests
+./gradlew integrationTest
+
+# Run ALL tests with detailed results and coverage
+./gradlew testAll
+
+# Run all tests (unit + integration) with coverage verification
+./gradlew check showCoverage
+
+# View coverage report only (after running tests)
+./gradlew showCoverage
+```
+
+**Test Reports:**
+After running tests, reports are available at:
+- Unit test report: `build/reports/tests/test/index.html`
+- Integration test report: `build/reports/tests/integrationTest/index.html`
+- Coverage report: `build/reports/jacoco/test/html/index.html`
+
+#### Java Linting Commands
+
+This project uses Checkstyle for Java code quality:
+
+```bash
+# Run Checkstyle linting
+./gradlew checkstyleMain checkstyleTest
+
+# Run all quality checks (includes tests + linting)
+./gradlew check
+
+# Generate Checkstyle reports
+./gradlew checkstyleMain
+# Report available at: build/reports/checkstyle/main.html
+```
+
 ### CloudFormation (cfn-yaml/cfn-json) S3 Bucket Setup
 
 **Important Note**: When deploying CloudFormation templates to a specific AWS region for the first time, you need to create the S3 bucket that stores the CloudFormation state files.

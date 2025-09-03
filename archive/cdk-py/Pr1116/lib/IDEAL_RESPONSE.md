@@ -1,4 +1,8 @@
-```
+# TAP Stack - Secure Infrastructure with VPC, RDS, and S3
+
+## `tap_stack.py` - Complete CDK Implementation
+
+```python
 import aws_cdk as cdk
 from aws_cdk import (
   Stack,

@@ -1,0 +1,15 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291718",
+  "team": "5",
+  "startedAt": "2025-08-13T09:59:17.191Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

@@ -1,4 +1,8 @@
-```
+# TAP Stack - AWS CDK Security Infrastructure
+
+## `tap_stack.py` - Complete CDK Implementation
+
+```python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
 the TAP (Test Automation Platform) project.
@@ -21,7 +25,6 @@ from aws_cdk import (
   aws_logs as logs,
   aws_cloudtrail as cloudtrail,
   aws_cloudwatch as cloudwatch,
-  aws_guardduty as guardduty,
   aws_wafv2 as waf,
   aws_backup as backup,
   aws_events as events,
@@ -76,7 +79,7 @@ class TapStack(Stack):
     super().__init__(scope, construct_id, **kwargs)
 
     # Get environment suffix from props, context, or use 'dev' as default
-    environment_suffix = (
+    self.environment_suffix = (
         props.environment_suffix if props else None
     ) or self.node.try_get_context('environmentSuffix') or 'dev'
 
@@ -174,7 +177,7 @@ class TapStack(Stack):
     # VPC Flow Logs
     flow_logs_group = logs.LogGroup(
       self, "sec-vpc-flow-logs",
-      log_group_name="/aws/vpc/flowlogs",
+      log_group_name=f"/aws/vpc/flowlogs/{self.environment_suffix}",
       retention=logs.RetentionDays.ONE_MONTH,
       removal_policy=RemovalPolicy.DESTROY
     )
@@ -308,13 +311,6 @@ class TapStack(Stack):
         }
       ),
       targets=[targets.SnsTopic(alert_topic)]
-    )
-
-    # 7. GuardDuty
-    guardduty_detector = guardduty.CfnDetector(
-      self, "sec-guardduty-detector",
-      enable=True,
-      finding_publishing_frequency="FIFTEEN_MINUTES"
     )
 
     # 8. Auto Scaling Group with EC2
@@ -463,7 +459,6 @@ class TapStack(Stack):
     CfnOutput(self, "VpcId", value=vpc.vpc_id, description="VPC ID")
     CfnOutput(self, "AppBucketName", value=app_bucket.bucket_name, description="Application S3 Bucket Name")
     CfnOutput(self, "CloudTrailArn", value=cloudtrail_trail.trail_arn, description="CloudTrail ARN")
-    CfnOutput(self, "GuardDutyDetectorId", value=guardduty_detector.ref, description="GuardDuty Detector ID")
     CfnOutput(self, "WebAclArn", value=web_acl.attr_arn, description="WAF ACL ARN")
     CfnOutput(self, "BackupVaultName", value=backup_vault.backup_vault_name, description="Backup Vault Name")
     CfnOutput(self, "Ec2InstanceType", value=asg.auto_scaling_group_name, description="EC2 Instance Type")

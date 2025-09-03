@@ -23,8 +23,8 @@ Create two public subnets:
 
 ### 4. Security Configuration
 - Create a security group allowing:
-  - **SSH (port 22)** from anywhere (`0.0.0.0/0`)
-  - **HTTP (port 80)** from anywhere (`0.0.0.0/0`)
+- **SSH (port 22)** from anywhere (`0.0.0.0/0`)
+- **HTTP (port 80)** from anywhere (`0.0.0.0/0`)
 - Attach this security group to both instances
 
 ### 5. Internet Connectivity
@@ -47,34 +47,34 @@ Return the following in the Outputs section:
 
 ### 9. Resource Tagging
 - Tag **all resources** with:
-  - Key: `Environment`
-  - Value: `Development`
+- Key: `Environment`
+- Value: `Development`
 
 ## Success Criteria
-- ✅ Template must be **fully deployable** in us-east-1 with no errors
-- ✅ All instances must be accessible via SSH and HTTP
-- ✅ All resources must be properly tagged
-- ✅ Template must follow CloudFormation best practices
-- ✅ Use proper YAML syntax and CloudFormation intrinsic functions
+- Template must be **fully deployable** in us-east-1 with no errors
+- All instances must be accessible via SSH and HTTP
+- All resources must be properly tagged
+- Template must follow CloudFormation best practices
+- Use proper YAML syntax and CloudFormation intrinsic functions
 
 ## Template Structure
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
-  Basic Development Environment in us-east-1 with two public subnets,
-  EC2 instances, security groups, Internet access, and tagging.
+Basic Development Environment in us-east-1 with two public subnets,
+EC2 instances, security groups, Internet access, and tagging.
 
 Parameters:
-  # KeyPair parameter here
+# KeyPair parameter here
 
 Mappings:
-  # AMI mappings here
+# AMI mappings here
 
 Resources:
-  # All AWS resources here
+# All AWS resources here
 
 Outputs:
-  # Instance DNS outputs here
+# Instance DNS outputs here
 ```
 
 The output should be a YAML CloudFormation template that satisfies all the requirements above.

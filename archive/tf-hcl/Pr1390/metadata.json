@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291746",
+  "team": "6",
+  "startedAt": "2025-08-15T13:07:02.305Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
+}

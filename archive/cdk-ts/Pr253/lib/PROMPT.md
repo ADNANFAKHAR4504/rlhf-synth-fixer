@@ -25,26 +25,26 @@ Your AWS CDK TypeScript project must comply with the following detailed requirem
 - **Runtime**: Use Node.js 14.x as the Lambda runtime
 - **Functionality**: Deploy a sample function that logs input data (the actual processing logic can be minimal for this infrastructure definition)
 - **IAM Permissions**: The Lambda function must have an IAM role (not inline policies) that grants it the appropriate permissions to:
-  - Write data to the `CorpUserDataBucket` S3 bucket
-  - Write logs to CloudWatch
+- Write data to the `CorpUserDataBucket` S3 bucket
+- Write logs to CloudWatch
 
 ### 3. API Gateway with IP Whitelisting
 
 - **Integration**: Set up an API Gateway to trigger the Lambda function from HTTP requests
 - **Lambda Integration**: Ensure the API Gateway is properly integrated with the Lambda function
 - **Security (Critical)**: Secure the API Gateway with IP Whitelisting by:
-  - Configuring the API Gateway (e.g., using a Resource Policy) to allow access only from specified IP ranges
-  - Defining a parameter in your CDK stack to accept these allowed IP CIDR blocks
+- Configuring the API Gateway (e.g., using a Resource Policy) to allow access only from specified IP ranges
+- Defining a parameter in your CDK stack to accept these allowed IP CIDR blocks
 
 ## Success Criteria
 
 The solution should demonstrate:
 
-1. ✅ Proper CDK TypeScript implementation
-2. ✅ All resources following Corp naming convention
-3. ✅ S3 bucket with versioning enabled
-4. ✅ Lambda function with appropriate IAM role
-5. ✅ API Gateway with Lambda integration
-6. ✅ IP whitelisting security implementation
-7. ✅ Deployment to us-east-1 region
+1. Proper CDK TypeScript implementation
+2. All resources following Corp naming convention
+3. S3 bucket with versioning enabled
+4. Lambda function with appropriate IAM role
+5. API Gateway with Lambda integration
+6. IP whitelisting security implementation
+7. Deployment to us-east-1 region
 

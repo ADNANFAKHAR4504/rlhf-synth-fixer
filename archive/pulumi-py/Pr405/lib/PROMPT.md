@@ -19,5 +19,5 @@ Core Requirements
   * Apply automatic backups and retention policies for RDS.
   * Enable AWS GuardDuty for threat detection and continuous monitoring.
 
-* **Aditional Requirements**:
+* **Additional Requirements**:
    Your Pulumi-python code must be modular and deploys to us-west-2 and us-east-1 regions

@@ -1,10 +1,10 @@
-### ✅ Prompt
+### Prompt
 
-You are an expert **AWS Solutions Architect** specializing in **event-driven** and **serverless** architectures. Your mission is to design an AWS infrastructure using **AWS CDK with Python**, based on the user’s requirements.
+You are an expert **AWS Solutions Architect** specializing in **event-driven** and **serverless** architectures. Your mission is to design an AWS infrastructure using **AWS CDK with Python**, based on the users requirements.
 
 ---
 
-### 📋 Instructions
+### Instructions
 
 * **Understand the Architecture:** Carefully read the task below and understand how each component should interact.
 * **Write CDK Code (Python):** Generate a single Python file containing AWS CDK code that provisions the entire architecture.
@@ -14,7 +14,7 @@ You are an expert **AWS Solutions Architect** specializing in **event-driven** a
 
 ---
 
-### 📦 Output Format
+### Output Format
 
 * One **Python file** containing the full AWS CDK app.
 * Code should be production-grade and ready to deploy using `cdk deploy`.
@@ -22,60 +22,60 @@ You are an expert **AWS Solutions Architect** specializing in **event-driven** a
 
 ---
 
-### 🔧 Requirements to Implement (Translate to CDK Code):
+### Requirements to Implement (Translate to CDK Code):
 
 > Create a **serverless web backend architecture** using **AWS CDK (Python)**. The infrastructure must include the following components:
 
 ---
 
-#### 🚀 1. **Lambda Functions (Python 3.8)**
+#### 1. **Lambda Functions (Python 3.8)**
 
 * Implement backend logic in Python 3.8.
 * Include **unit tests** (only mention testing structure, don't implement tests here).
 * Deployment should only proceed if tests pass (assume external CI pipeline).
 
-#### 🌐 2. **API Gateway (HTTP API)**
+#### 2. **API Gateway (HTTP API)**
 
 * Front HTTP API that integrates with Lambda functions.
 * Must **enable CORS** for static frontend hosted on S3.
 
-#### 🪣 3. **S3 Bucket (Static Website Hosting)**
+#### 3. **S3 Bucket (Static Website Hosting)**
 
 * Host the frontend (React or static HTML).
 * Enable **versioning** and **server-side encryption (SSE-S3)**.
 * Block all public access, with a note to use **CloudFront** or signed URLs if needed.
 
-#### 📊 4. **DynamoDB Table**
+#### 4. **DynamoDB Table**
 
 * Store visit logs (timestamp, IP, and path).
 * Enable **encryption at rest**.
 * Include a **Global Secondary Index** (GSI) for querying by timestamp or path.
 
-#### 🔐 5. **IAM Roles and Policies**
+#### 5. **IAM Roles and Policies**
 
 * Use **least-privilege IAM roles**:
 
-  * Lambda → DynamoDB
-  * API Gateway → Lambda
-  * Lambda → CloudWatch Logs
+* Lambda DynamoDB
+* API Gateway Lambda
+* Lambda CloudWatch Logs
 
-#### 📈 6. **CloudWatch Monitoring**
+#### 6. **CloudWatch Monitoring**
 
 * Enable logging for Lambda and API Gateway.
 * Set up **alarms** for:
 
-  * Lambda invocation errors
-  * Throttling
-  * High latency
+* Lambda invocation errors
+* Throttling
+* High latency
 
-#### 🔑 7. **Environment Variables & Secrets**
+#### 7. **Environment Variables & Secrets**
 
 * Pass configuration securely to Lambda using environment variables.
 * Load sensitive information from **Secrets Manager** or **CDK context** (no hardcoded values).
 
 ---
 
-### 🧾 Expected Output
+### Expected Output
 
 * A **single Python CDK file** that defines all components above.
 * Modular and clean code with comments.

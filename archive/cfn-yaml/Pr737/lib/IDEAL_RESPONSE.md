@@ -1,314 +1,407 @@
-# Ideal CloudFormation Template for Secure Web Application Infrastructure
+# CloudFormation Infrastructure Solution
 
-## Overview
+This solution implements the infrastructure requirements using AWS CloudFormation.
 
-This CloudFormation template deploys a highly available, scalable, and secure web application infrastructure on AWS, implementing a classic three-tier architecture with the following components:
+## Template Structure
 
-- **Presentation Tier**: Application Load Balancer in public subnets
-- **Application Tier**: Auto Scaling Group with EC2 instances in private subnets  
-- **Data Tier**: RDS PostgreSQL Multi-AZ database in private subnets
+The infrastructure is defined in the following CloudFormation template:
 
-## Architecture Components
+### Main Template (TapStack.yml)
 
-### VPC Configuration
 ```yaml
-# VPC with 10.0.0.0/16 CIDR
-VPC:
-  Type: AWS::EC2::VPC
-  Properties:
-    CidrBlock: 10.0.0.0/16
-    EnableDnsHostnames: true
-    EnableDnsSupport: true
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure, highly available, and scalable web application infrastructure'
 
-# Public Subnets (10.0.1.0/24, 10.0.2.0/24) across 2 AZs
-PublicSubnet1:
-  Type: AWS::EC2::Subnet
-  Properties:
-    CidrBlock: 10.0.1.0/24
-    AvailabilityZone: !Select [0, !GetAZs '']
-    MapPublicIpOnLaunch: true
+Parameters:
+  DBUsername:
+    Type: String
+    Default: 'webappuser'
+    Description: 'Master username for RDS PostgreSQL database'
+    MinLength: 1
+    MaxLength: 63
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
 
-PublicSubnet2:
-  Type: AWS::EC2::Subnet
-  Properties:
-    CidrBlock: 10.0.2.0/24
-    AvailabilityZone: !Select [1, !GetAZs '']
-    MapPublicIpOnLaunch: true
+  SSHAccessCIDR:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: 'CIDR block allowed for SSH access (use your specific IP range)'
+    AllowedPattern: '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+    ConstraintDescription: 'Must be a valid CIDR notation (e.g., 192.168.1.0/24)'
 
-# Private Subnets (10.0.10.0/24, 10.0.11.0/24) across 2 AZs
-PrivateSubnet1:
-  Type: AWS::EC2::Subnet
-  Properties:
-    CidrBlock: 10.0.10.0/24
-    AvailabilityZone: !Select [0, !GetAZs '']
+Mappings:
+  AWSRegionAMI:
+    us-east-1:
+      AMI: ami-084a7d336e816906b
+    us-west-2:
+      AMI: ami-08221e706f343d7b7
+    eu-west-1:
+      AMI: ami-0d1891272a8f97fb4
 
-PrivateSubnet2:
-  Type: AWS::EC2::Subnet
-  Properties:
-    CidrBlock: 10.0.11.0/24
-    AvailabilityZone: !Select [1, !GetAZs '']
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-IGW'
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Public-Subnet-AZ1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Public-Subnet-AZ2'
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.10.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Private-Subnet-AZ1'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.11.0/24
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Private-Subnet-AZ2'
+
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ALB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for web servers
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAccessCIDR
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for DB
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+
+  # New Secrets Manager Secret
+  DatabasePasswordSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: secure-web-app-db-password
+      Description: 'Master password for RDS PostgreSQL database'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+        - PolicyName: SecretsManagerAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref DatabasePasswordSecret
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
+        InstanceType: t3.micro
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            systemctl start httpd
+            systemctl enable httpd
+            echo "Welcome to the secure web app" > /var/www/html/index.html
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: instance
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      DesiredCapacity: 2
+      MaxSize: 6
+      TargetGroupARNs:
+        - !Ref TargetGroup
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceClass: db.t3.medium
+      Engine: postgres
+      EngineVersion: '13.21'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      MultiAZ: true
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabasePasswordSecret}::password}}'
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '03:00-04:00'
+      PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
+
+Outputs:
+  VPCId:
+    Value: !Ref VPC
+  LoadBalancerURL:
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+  DatabaseEndpoint:
+    Value: !GetAtt Database.Endpoint.Address
+  DatabasePort:
+    Value: !GetAtt Database.Endpoint.Port
+
 ```
 
-### Internet Connectivity
-```yaml
-# Internet Gateway for public internet access
-InternetGateway:
-  Type: AWS::EC2::InternetGateway
+## Key Features
 
-# NAT Gateways for private subnet outbound connectivity
-NatGateway1:
-  Type: AWS::EC2::NatGateway
-  Properties:
-    AllocationId: !GetAtt NatGateway1EIP.AllocationId
-    SubnetId: !Ref PublicSubnet1
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
 
-NatGateway2:
-  Type: AWS::EC2::NatGateway
-  Properties:
-    AllocationId: !GetAtt NatGateway2EIP.AllocationId
-    SubnetId: !Ref PublicSubnet2
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 ```
-
-### Security Groups (Least Privilege)
-```yaml
-# ALB Security Group - Allow HTTP/HTTPS from internet
-ALBSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        CidrIp: 0.0.0.0/0
-      - IpProtocol: tcp
-        FromPort: 443
-        ToPort: 443
-        CidrIp: 0.0.0.0/0
-
-# Web Server Security Group - Allow HTTP from ALB only + SSH for admin
-WebServerSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 80
-        ToPort: 80
-        SourceSecurityGroupId: !Ref ALBSecurityGroup
-      - IpProtocol: tcp
-        FromPort: 22
-        ToPort: 22
-        CidrIp: !Ref SSHAccessCIDR
-
-# Database Security Group - Allow PostgreSQL from web servers only
-DatabaseSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 5432
-        ToPort: 5432
-        SourceSecurityGroupId: !Ref WebServerSecurityGroup
-```
-
-### Application Load Balancer
-```yaml
-# Internet-facing ALB in public subnets
-ApplicationLoadBalancer:
-  Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-  Properties:
-    Scheme: internet-facing
-    Type: application
-    SecurityGroups:
-      - !Ref ALBSecurityGroup
-    Subnets:
-      - !Ref PublicSubnet1
-      - !Ref PublicSubnet2
-
-# Target Group for EC2 instances
-TargetGroup:
-  Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  Properties:
-    Port: 80
-    Protocol: HTTP
-    VpcId: !Ref VPC
-    TargetType: instance
-
-# ALB Listener for HTTP traffic
-ALBListener:
-  Type: AWS::ElasticLoadBalancingV2::Listener
-  Properties:
-    DefaultActions:
-      - Type: forward
-        TargetGroupArn: !Ref TargetGroup
-    LoadBalancerArn: !Ref ApplicationLoadBalancer
-    Port: 80
-    Protocol: HTTP
-```
-
-### Auto Scaling Group
-```yaml
-# Launch Template with t3.micro instances
-LaunchTemplate:
-  Type: AWS::EC2::LaunchTemplate
-  Properties:
-    LaunchTemplateData:
-      ImageId: !FindInMap [AWSRegionAMI, !Ref 'AWS::Region', AMI]
-      InstanceType: t3.micro
-      IamInstanceProfile:
-        Arn: !GetAtt EC2InstanceProfile.Arn
-      SecurityGroupIds:
-        - !Ref WebServerSecurityGroup
-      UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          yum update -y
-          yum install -y httpd
-          systemctl start httpd
-          systemctl enable httpd
-          echo "Welcome to the secure web app" > /var/www/html/index.html
-
-# Auto Scaling Group in private subnets
-AutoScalingGroup:
-  Type: AWS::AutoScaling::AutoScalingGroup
-  Properties:
-    VPCZoneIdentifier:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
-    LaunchTemplate:
-      LaunchTemplateId: !Ref LaunchTemplate
-      Version: !GetAtt LaunchTemplate.LatestVersionNumber
-    MinSize: 2
-    DesiredCapacity: 2
-    MaxSize: 6
-    TargetGroupARNs:
-      - !Ref TargetGroup
-```
-
-### RDS Database
-```yaml
-# Secrets Manager for database password
-DatabasePasswordSecret:
-  Type: AWS::SecretsManager::Secret
-  Properties:
-    GenerateSecretString:
-      SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
-      GenerateStringKey: 'password'
-      PasswordLength: 16
-      ExcludeCharacters: '"@/\\'
-
-# Database Subnet Group for private subnets
-DatabaseSubnetGroup:
-  Type: AWS::RDS::DBSubnetGroup
-  Properties:
-    DBSubnetGroupDescription: Subnet group for RDS
-    SubnetIds:
-      - !Ref PrivateSubnet1
-      - !Ref PrivateSubnet2
-
-# PostgreSQL Multi-AZ Database
-Database:
-  Type: AWS::RDS::DBInstance
-  DeletionPolicy: Snapshot
-  UpdateReplacePolicy: Snapshot
-  Properties:
-    DBInstanceClass: db.t3.medium
-    Engine: postgres
-    EngineVersion: '13.21'
-    AllocatedStorage: 20
-    StorageType: gp2
-    StorageEncrypted: true
-    MultiAZ: true
-    PubliclyAccessible: false
-    VPCSecurityGroups:
-      - !Ref DatabaseSecurityGroup
-    DBSubnetGroupName: !Ref DatabaseSubnetGroup
-    MasterUsername: !Ref DBUsername
-    MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabasePasswordSecret}::password}}'
-    BackupRetentionPeriod: 7
-    PreferredBackupWindow: '03:00-04:00'
-    PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-```
-
-### IAM Roles (Least Privilege)
-```yaml
-# EC2 Role with minimal permissions
-EC2Role:
-  Type: AWS::IAM::Role
-  Properties:
-    AssumeRolePolicyDocument:
-      Version: '2012-10-17'
-      Statement:
-        - Effect: Allow
-          Principal:
-            Service: ec2.amazonaws.com
-          Action: sts:AssumeRole
-    ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-    Policies:
-      - PolicyName: CloudWatchLogsPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
-      - PolicyName: SecretsManagerAccessPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - secretsmanager:GetSecretValue
-              Resource: !Ref DatabasePasswordSecret
-
-# Instance Profile for EC2 instances
-EC2InstanceProfile:
-  Type: AWS::IAM::InstanceProfile
-  Properties:
-    Roles:
-      - !Ref EC2Role
-```
-
-## Security Best Practices Implemented
-
-1. **Network Isolation**: 
-   - Private subnets for application and database tiers
-   - Public subnets only for load balancer
-
-2. **Least Privilege Access**:
-   - Security groups with minimal required permissions
-   - IAM roles with specific policy attachments
-   - Database accessible only from web servers
-
-3. **Encryption**:
-   - RDS storage encryption enabled
-   - Secrets Manager for password management
-
-4. **High Availability**:
-   - Multi-AZ RDS deployment
-   - Resources distributed across 2 Availability Zones
-   - Auto Scaling Group ensures minimum 2 instances
-
-5. **Monitoring and Management**:
-   - SSM access for instance management
-   - CloudWatch Logs integration
-   - Backup retention and maintenance windows
-
-## Parameters
-
-- `DBUsername`: Master username for PostgreSQL database
-- `SSHAccessCIDR`: CIDR block for SSH access (should be restricted in production)
-
-## Outputs
-
-- `VPCId`: VPC identifier
-- `LoadBalancerURL`: HTTP endpoint for the application
-- `DatabaseEndpoint`: RDS database endpoint
-- `DatabasePort`: Database port (5432)
-
-## Complete Template File
-
-The complete implementation is available in `lib/TapStack.yml` and `lib/TapStack.json`.

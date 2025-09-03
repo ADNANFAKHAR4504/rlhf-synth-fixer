@@ -2,7 +2,7 @@
 
 ---
 
-I want a complete Terraform configuration for AWS written in a **single `main.tf` file** (do not include provider configuration — I already have `provider.tf` set up).
+I want a complete Terraform configuration for AWS written in a **single `main.tf` file** (do not include provider configuration I already have `provider.tf` set up).
 
 **Requirements:**
 
@@ -15,16 +15,16 @@ I want a complete Terraform configuration for AWS written in a **single `main.tf
 7. Deploy a bastion host EC2 instance in one of the public subnets, allowing SSH access from anywhere.
 8. Configure appropriate security groups:
 
-   * Bastion host: allow inbound SSH from anywhere.
-   * Private EC2 instances: allow inbound SSH only from the bastion host.
+* Bastion host: allow inbound SSH from anywhere.
+* Private EC2 instances: allow inbound SSH only from the bastion host.
 9. Use **variables** for VPC CIDR block, subnet CIDRs, AWS region, instance types, key pair name, and any other configurable inputs. Initialize all variables with reasonable defaults inside the same `main.tf`.
 10. Define **outputs** for:
 
-    * VPC ID
-    * Public subnet IDs
-    * Private subnet IDs
-    * Bastion host public IP
-    * Private EC2 instance IDs
+* VPC ID
+* Public subnet IDs
+* Private subnet IDs
+* Bastion host public IP
+* Private EC2 instance IDs
 
 All resource names should be prefixed with `"project-"`.
 

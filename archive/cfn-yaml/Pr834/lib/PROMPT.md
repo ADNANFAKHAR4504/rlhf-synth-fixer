@@ -7,34 +7,34 @@ You are tasked with creating a **CloudFormation template** (`TapStack.yml`) to *
 The **CloudFormation template** must meet the following **requirements**:
 
 1. **Amazon S3**
-   - All S3 buckets must have **default encryption** enabled.
+- All S3 buckets must have **default encryption** enabled.
 2. **IAM Roles**
-   - All IAM roles must include policies that follow the **least privilege** principle.
+- All IAM roles must include policies that follow the **least privilege** principle.
 3. **AWS CloudTrail**
-   - Must be configured to capture and store **all account activity logs**.
+- Must be configured to capture and store **all account activity logs**.
 4. **Multi-Factor Authentication (MFA)**
-   - Enforce MFA for all IAM users.
+- Enforce MFA for all IAM users.
 5. **DynamoDB**
-   - Enable **point-in-time recovery** for all DynamoDB tables.
+- Enable **point-in-time recovery** for all DynamoDB tables.
 6. **VPC Flow Logs**
-   - Capture and securely store **VPC flow logs** for monitoring.
+- Capture and securely store **VPC flow logs** for monitoring.
 7. **Security Groups**
-   - No rules should allow SSH access from `0.0.0.0/0`.
+- No rules should allow SSH access from `0.0.0.0/0`.
 8. **Load Balancers**
-   - Must have **HTTPS** listeners configured for secure communication.
+- Must have **HTTPS** listeners configured for secure communication.
 
 ---
 
 ## Constraints
 
-- **S3 Buckets** → Default encryption must be enabled.
-- **IAM Roles** → Use least privilege policies only.
-- **CloudTrail** → Enable and log all account activity.
-- **MFA** → Mandatory for all IAM users.
-- **DynamoDB** → Point-in-time recovery must be enabled.
-- **VPC Flow Logs** → Must be securely stored.
-- **Security Groups** → No `0.0.0.0/0` SSH access.
-- **Load Balancers** → Only HTTPS listeners allowed.
+- **S3 Buckets** Default encryption must be enabled.
+- **IAM Roles** Use least privilege policies only.
+- **CloudTrail** Enable and log all account activity.
+- **MFA** Mandatory for all IAM users.
+- **DynamoDB** Point-in-time recovery must be enabled.
+- **VPC Flow Logs** Must be securely stored.
+- **Security Groups** No `0.0.0.0/0` SSH access.
+- **Load Balancers** Only HTTPS listeners allowed.
 
 ---
 
@@ -60,5 +60,5 @@ Design an **AWS Cloud environment** that follows **security best practices** acr
 ```plaintext
 project-root/
 └── lib/
-    └── TapStack.yml
+└── TapStack.yml
 ```

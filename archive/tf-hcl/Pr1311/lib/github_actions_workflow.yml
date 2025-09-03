@@ -1,0 +1,56 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  trigger-pipeline:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+        
+    - name: Run local tests
+      run: |
+        echo "Running local tests before triggering pipeline"
+        python -m pytest tests/ -v || exit 1
+        
+    - name: Trigger CodePipeline
+      run: |
+        echo "Triggering AWS CodePipeline"
+        aws codepipeline start-pipeline-execution \
+          --name microservices-cicd-pipeline \
+          --region ${{ env.AWS_REGION }}
+          
+    - name: Wait for pipeline completion
+      run: |
+        echo "Monitoring pipeline execution"
+        # This is a simplified monitoring - in practice you'd want more robust polling
+        sleep 300  # Wait 5 minutes for pipeline to complete
+        
+    - name: Check pipeline status
+      run: |
+        PIPELINE_STATUS=$(aws codepipeline get-pipeline-state \
+          --name microservices-cicd-pipeline \
+          --query 'stageStates[?stageName==`Deploy`].latestExecution.status' \
+          --output text \
+          --region ${{ env.AWS_REGION }})
+        echo "Pipeline status: $PIPELINE_STATUS"
+        if [ "$PIPELINE_STATUS" = "Failed" ]; then
+          echo "Pipeline failed"
+          exit 1
+        fi

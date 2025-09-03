@@ -1,0 +1,213 @@
+"""Unit tests for ComputeStack"""
+
+import unittest
+import aws_cdk as cdk
+from aws_cdk import aws_ec2 as ec2
+from aws_cdk.assertions import Template, Match
+from pytest import mark
+
+from lib.compute_stack import ComputeStack
+
+
+@mark.describe("ComputeStack")
+class TestComputeStack(unittest.TestCase):
+    """Test cases for the ComputeStack"""
+
+    def setUp(self):
+        """Set up a fresh CDK app for each test"""
+        self.app = cdk.App()
+        self.stack = cdk.Stack(self.app, "TestStack")
+        
+        # Create VPC and security groups for testing
+        self.vpc = ec2.Vpc(self.stack, "TestVPC")
+        self.alb_sg = ec2.SecurityGroup(self.stack, "TestALBSG",
+                                        vpc=self.vpc,
+                                        description="Test ALB SG")
+        self.web_sg = ec2.SecurityGroup(self.stack, "TestWebSG",
+                                        vpc=self.vpc,
+                                        description="Test Web SG")
+
+    @mark.it("creates Application Load Balancer")
+    def test_creates_alb(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT
+        template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
+        template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
+            "Type": "application",
+            "Scheme": "internet-facing",
+            "Name": f"prod-alb-{env_suffix}"
+        })
+
+    @mark.it("creates Auto Scaling Group with correct configuration")
+    def test_creates_auto_scaling_group(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT
+        template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
+        template.has_resource_properties("AWS::AutoScaling::AutoScalingGroup", {
+            "MinSize": "2",
+            "MaxSize": "6",
+            "DesiredCapacity": "2",
+            "HealthCheckGracePeriod": 300,
+            "HealthCheckType": "ELB"
+        })
+
+    @mark.it("creates launch template for EC2 instances")
+    def test_creates_launch_template(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT
+        template.resource_count_is("AWS::EC2::LaunchTemplate", 1)
+        template.has_resource_properties("AWS::EC2::LaunchTemplate", {
+            "LaunchTemplateName": f"prod-launch-template-{env_suffix}",
+            "LaunchTemplateData": Match.object_like({
+                "InstanceType": "t3.micro",
+                "Monitoring": Match.object_like({
+                    "Enabled": True
+                })
+            })
+        })
+
+    @mark.it("SSL certificate disabled for testing")
+    def test_creates_ssl_certificate(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT - Certificate creation disabled for testing (requires domain validation)
+        # In production, this would create a certificate
+        template.resource_count_is("AWS::CertificateManager::Certificate", 0)
+
+    @mark.it("creates HTTP listener")
+    def test_creates_listeners(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT
+        template.resource_count_is("AWS::ElasticLoadBalancingV2::Listener", 1)  # HTTP only (HTTPS disabled for testing)
+        
+        # Check HTTP listener
+        template.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {
+            "Port": 80,
+            "Protocol": "HTTP"
+        })
+
+    @mark.it("creates target group with health checks")
+    def test_creates_target_group(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT
+        template.resource_count_is("AWS::ElasticLoadBalancingV2::TargetGroup", 1)
+        template.has_resource_properties("AWS::ElasticLoadBalancingV2::TargetGroup", {
+            "Port": 80,
+            "Protocol": "HTTP",
+            "Name": f"prod-tg-{env_suffix}",
+            "HealthCheckPath": "/",
+            "HealthCheckIntervalSeconds": 30
+        })
+
+    @mark.it("creates IAM role for EC2 instances")
+    def test_creates_iam_role(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT
+        template.resource_count_is("AWS::IAM::Role", 1)
+        template.has_resource_properties("AWS::IAM::Role", {
+            "RoleName": f"prod-ec2-role-{env_suffix}",
+            "AssumeRolePolicyDocument": Match.object_like({
+                "Statement": Match.array_with([
+                    Match.object_like({
+                        "Principal": Match.object_like({
+                            "Service": "ec2.amazonaws.com"
+                        })
+                    })
+                ])
+            })
+        })
+
+    @mark.it("creates CPU-based scaling policy")
+    def test_creates_scaling_policy(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+        template = Template.from_stack(compute)
+
+        # ASSERT
+        template.resource_count_is("AWS::AutoScaling::ScalingPolicy", 1)
+        template.has_resource_properties("AWS::AutoScaling::ScalingPolicy", {
+            "PolicyType": "TargetTrackingScaling",
+            "TargetTrackingConfiguration": Match.object_like({
+                "TargetValue": 70,
+                "PredefinedMetricSpecification": Match.object_like({
+                    "PredefinedMetricType": "ASGAverageCPUUtilization"
+                })
+            })
+        })
+
+    @mark.it("exposes load balancer and auto scaling group")
+    def test_exposes_resources(self):
+        # ARRANGE
+        env_suffix = "test"
+        compute = ComputeStack(self.stack, "TestCompute",
+                              vpc=self.vpc,
+                              alb_security_group=self.alb_sg,
+                              web_security_group=self.web_sg,
+                              environment_suffix=env_suffix)
+
+        # ASSERT
+        assert compute.load_balancer is not None
+        assert compute.auto_scaling_group is not None
+        assert compute.ec2_role is not None
+        # Certificate is None for testing (requires domain validation)
+        assert compute.certificate is None

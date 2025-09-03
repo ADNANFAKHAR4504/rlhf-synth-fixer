@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr113",
+  "team": "synth",
+  "startedAt": "2025-08-12T15:14:57-05:00",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "hernanmog-turing",
+  "dockerS3Location": ""
+}

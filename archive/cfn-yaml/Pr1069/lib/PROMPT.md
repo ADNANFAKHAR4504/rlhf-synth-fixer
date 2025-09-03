@@ -11,17 +11,17 @@ Attach Security Group allowing HTTP (80) from anywhere and SSH (22) from a param
 
 Allocate and associate one Elastic IP per instance.
 
-Create a Route 53 HealthCheck that checks the primary EIP over HTTP :80 and resource path (parameter, default “/”).
+Create a Route 53 HealthCheck that checks the primary EIP over HTTP :80 and resource path (parameter, default /).
 
 Create two A records in Route 53 (same name), Failover routing:
 
-PRIMARY → points to the primary EIP and references the HealthCheck
+PRIMARY points to the primary EIP and references the HealthCheck
 
-SECONDARY → points to the standby EIP
+SECONDARY points to the standby EIP
 
 Automated failover & failback must occur solely via Route 53 health status.
 
-Parameters must include at least: HostedZoneId, RecordName, InstanceType, KeyName (optional), AllowedSSHCidr, HealthCheckPort (default 80), HealthCheckPath (default “/”), LatestAmiId as an SSM Parameter of type AWS::SSM::Parameter::Value<AWS::EC2::Image::Id> defaulting to /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64.
+Parameters must include at least: HostedZoneId, RecordName, InstanceType, KeyName (optional), AllowedSSHCidr, HealthCheckPort (default 80), HealthCheckPath (default /), LatestAmiId as an SSM Parameter of type AWS::SSM::Parameter::Value<AWS::EC2::Image::Id> defaulting to /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64.
 
 Add Tags (e.g., Project=IaC - AWS Nova Model Breaking, Role=Primary/Standby).
 

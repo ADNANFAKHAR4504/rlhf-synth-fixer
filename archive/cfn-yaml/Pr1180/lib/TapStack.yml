@@ -1,0 +1,508 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Secure AWS infrastructure for storing sensitive data across multiple regions.
+  Implements enterprise-grade security controls including encryption, IAM with MFA,
+  audit logging, and lifecycle management for compliance requirements.
+
+# Simplified metadata for CloudFormation console
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Basic Configuration'
+        Parameters:
+          - EnvironmentSuffix
+          - BucketPrefix
+      - Label:
+          default: 'Security & Storage'
+        Parameters:
+          - EnableMFA
+          - EnableReplication
+          - LifecycleDays
+
+Parameters:
+  # Standardized naming convention: all parameters use consistent format
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+    MinLength: 2
+    MaxLength: 10
+
+  BucketPrefix:
+    Type: String
+    Default: 'secure-data'
+    Description: 'Prefix for S3 bucket names'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+    MinLength: 3
+    MaxLength: 20
+
+  EnableMFA:
+    Type: String
+    Default: 'true'
+    Description: 'Require MFA for sensitive operations'
+    AllowedValues: ['true', 'false']
+
+  EnableReplication:
+    Type: String
+    Default: 'false'
+    Description: 'Enable cross-region replication'
+    AllowedValues: ['true', 'false']
+
+  LifecycleDays:
+    Type: Number
+    Default: 30
+    Description: 'Days before transitioning to Glacier'
+    MinValue: 1
+    MaxValue: 365
+
+# Simplified conditions
+Conditions:
+  MFAEnabled: !Equals [!Ref EnableMFA, 'true']
+  ReplicationEnabled: !Equals [!Ref EnableReplication, 'true']
+
+Resources:
+  # KMS Key for encryption
+  DataEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS key for encrypting sensitive data'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: 'key-policy-1'
+        Statement:
+          - Sid: 'Enable IAM policies'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: 'Allow services to use the key'
+            Effect: Allow
+            Principal:
+              Service:
+                - s3.amazonaws.com
+                - cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: 'Data Encryption'
+
+  # KMS Key Alias for easier reference
+  DataEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/${EnvironmentSuffix}-data-encryption-key'
+      TargetKeyId: !Ref DataEncryptionKey
+
+  # S3 Bucket for CloudTrail logs
+  CloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-audit-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref DataEncryptionKey
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'TransitionToGlacier'
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: 90
+          - Id: 'DeleteOldLogs'
+            Status: Enabled
+            ExpirationInDays: 2555  # 7 years retention for compliance
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: 'Audit Logs'
+
+  # S3 Bucket Policy for CloudTrail
+  CloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'AWSCloudTrailAclCheck'
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailBucket.Arn
+          - Sid: 'AWSCloudTrailWrite'
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+
+  # IAM Role for S3 Replication (must be created before the bucket)
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Condition: ReplicationEnabled
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'S3ReplicationPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetReplicationConfiguration'
+                  - 's3:ListBucket'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObjectVersionForReplication'
+                  - 's3:GetObjectVersionAcl'
+                  - 's3:GetObjectVersionTagging'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action:
+                  - 's3:ReplicateObject'
+                  - 's3:ReplicateDelete'
+                  - 's3:ReplicateTags'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt DataEncryptionKey.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Primary S3 Bucket for sensitive data storage
+  SensitiveDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref DataEncryptionKey
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'TransitionToGlacier'
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref LifecycleDays
+          - Id: 'DeleteIncompleteMultipartUploads'
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      ReplicationConfiguration: !If
+        - ReplicationEnabled
+        - Role: !GetAtt S3ReplicationRole.Arn
+          Rules:
+            - Id: 'ReplicateAll'
+              Status: Enabled
+              Priority: 1
+              Filter: {}
+              DeleteMarkerReplication:
+                Status: Enabled
+              Destination:
+                Bucket: !GetAtt ReplicationBucket.Arn
+                ReplicationTime:
+                  Status: Enabled
+                  Time:
+                    Minutes: 15
+                Metrics:
+                  Status: Enabled
+                  EventThreshold:
+                    Minutes: 15
+                StorageClass: STANDARD_IA
+        - !Ref 'AWS::NoValue'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: 'Sensitive Data Storage'
+        - Key: Compliance
+          Value: 'Required'
+
+  # Replication bucket for disaster recovery (conditional)
+  ReplicationBucket:
+    Type: AWS::S3::Bucket
+    Condition: ReplicationEnabled
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-${EnvironmentSuffix}-${AWS::AccountId}-replica'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref DataEncryptionKey
+            BucketKeyEnabled: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'TransitionToGlacier'
+            Status: Enabled
+            Transitions:
+              - StorageClass: GLACIER
+                TransitionInDays: !Ref LifecycleDays
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: 'Disaster Recovery Replica'
+
+  # IAM Group for data administrators
+  DataAdministratorsGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      ManagedPolicyArns:
+        - !Ref DataAdminManagedPolicy
+
+  # IAM Managed Policy for data administrators
+  DataAdminManagedPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: 'Policy for data administrators with MFA requirements'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Allow basic operations without MFA
+          - Sid: 'AllowListingWithoutMFA'
+            Effect: Allow
+            Action:
+              - 's3:ListBucket'
+              - 's3:ListBucketVersions'
+              - 's3:GetBucketLocation'
+              - 's3:GetBucketVersioning'
+            Resource:
+              - !GetAtt SensitiveDataBucket.Arn
+              - !If
+                - ReplicationEnabled
+                - !GetAtt ReplicationBucket.Arn
+                - !Ref 'AWS::NoValue'
+          # Require MFA for sensitive operations
+          - Sid: 'RequireMFAForSensitiveOperations'
+            Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:DeleteObjectVersion'
+            Resource:
+              - !Sub '${SensitiveDataBucket.Arn}/*'
+              - !If
+                - ReplicationEnabled
+                - !Sub '${ReplicationBucket.Arn}/*'
+                - !Ref 'AWS::NoValue'
+            Condition: !If
+              - MFAEnabled
+              - Bool:
+                  'aws:MultiFactorAuthPresent': 'true'
+              - !Ref 'AWS::NoValue'
+          # KMS permissions with MFA
+          - Sid: 'AllowKMSOperations'
+            Effect: Allow
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:DescribeKey'
+            Resource: !GetAtt DataEncryptionKey.Arn
+            Condition: !If
+              - MFAEnabled
+              - Bool:
+                  'aws:MultiFactorAuthPresent': 'true'
+              - !Ref 'AWS::NoValue'
+
+  # IAM Role for read-only access
+  ReadOnlyAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition: !If
+              - MFAEnabled
+              - Bool:
+                  'aws:MultiFactorAuthPresent': 'true'
+              - !Ref 'AWS::NoValue'
+      Policies:
+        - PolicyName: 'ReadOnlyAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                Resource:
+                  - !GetAtt SensitiveDataBucket.Arn
+                  - !Sub '${SensitiveDataBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt DataEncryptionKey.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Sample IAM User (in production, users should be created separately)
+  SampleDataAdmin:
+    Type: AWS::IAM::User
+    Properties:
+      Groups:
+        - !Ref DataAdministratorsGroup
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Note
+          Value: 'Enable MFA after creation'
+
+  # CloudTrail for audit logging
+  AuditTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
+    Properties:
+      TrailName: !Sub '${EnvironmentSuffix}-audit-trail'
+      S3BucketName: !Ref CloudTrailBucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - ReadWriteType: All
+          IncludeManagementEvents: true
+          DataResources:
+            - Type: 'AWS::S3::Object'
+              Values:
+                - !Sub '${SensitiveDataBucket.Arn}/'
+                - !If
+                  - ReplicationEnabled
+                  - !Sub '${ReplicationBucket.Arn}/'
+                  - !Ref 'AWS::NoValue'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Purpose
+          Value: 'Compliance Audit Trail'
+
+# Outputs for reference
+Outputs:
+  DataEncryptionKeyId:
+    Description: 'ID of the KMS key used for encryption'
+    Value: !Ref DataEncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-DataEncryptionKeyId'
+
+  DataEncryptionKeyArn:
+    Description: 'ARN of the KMS key used for encryption'
+    Value: !GetAtt DataEncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DataEncryptionKeyArn'
+
+  SensitiveDataBucketName:
+    Description: 'Name of the primary S3 bucket for sensitive data'
+    Value: !Ref SensitiveDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-SensitiveDataBucketName'
+
+  SensitiveDataBucketArn:
+    Description: 'ARN of the primary S3 bucket'
+    Value: !GetAtt SensitiveDataBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SensitiveDataBucketArn'
+
+  ReplicationBucketName:
+    Condition: ReplicationEnabled
+    Description: 'Name of the replication S3 bucket'
+    Value: !Ref ReplicationBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ReplicationBucketName'
+
+  CloudTrailBucketName:
+    Description: 'Name of the S3 bucket for CloudTrail logs'
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucketName'
+
+  AuditTrailName:
+    Description: 'Name of the CloudTrail for audit logging'
+    Value: !Ref AuditTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-AuditTrailName'
+
+  DataAdministratorsGroupName:
+    Description: 'Name of the IAM group for data administrators'
+    Value: !Ref DataAdministratorsGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-DataAdministratorsGroupName'
+
+  ReadOnlyAccessRoleArn:
+    Description: 'ARN of the read-only access role'
+    Value: !GetAtt ReadOnlyAccessRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ReadOnlyAccessRoleArn'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentSuffixOutput:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+

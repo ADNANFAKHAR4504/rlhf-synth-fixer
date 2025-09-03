@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "274828",
+  "team": "4",
+  "startedAt": "2025-08-28T12:33:41.182Z",
+  "author": "voidha1rsh",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::VPCGatewayAttachment",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SubnetRouteTableAssociation",
+    "AWS::EC2::EIP",
+    "AWS::EC2::NatGateway",
+    "AWS::EC2::SecurityGroup",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::RDS::DBInstance"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

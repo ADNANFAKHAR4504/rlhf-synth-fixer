@@ -1,0 +1,30 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291908",
+  "team": "2",
+  "startedAt": "2025-08-19T11:43:24.954Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Secure Infrastructure Foundation",
+    "Infrastructure as Code & Deployment",
+    "Data Encryption & Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
+}

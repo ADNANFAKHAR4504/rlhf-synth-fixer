@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr439",
+  "team": "synth",
+  "startedAt": "2025-08-25T22:49:37+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Performance Optimization",
+    "Access Control",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "Route53",
+    "CloudWatch",
+    "IAM",
+    "Systems Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

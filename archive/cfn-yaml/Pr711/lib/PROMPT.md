@@ -22,20 +22,20 @@ Generate a complete AWS CloudFormation YAML template that creates a robust netwo
 ### Network Architecture:
 - **VPC CIDR**: Exactly `10.0.0.0/16`
 - **Public Subnet 1**: `10.0.1.0/24` in first AZ
-- **Public Subnet 2**: `10.0.2.0/24` in second AZ  
+- **Public Subnet 2**: `10.0.2.0/24` in second AZ 
 - **Private Subnet 1**: `10.0.3.0/24` in first AZ
 - **Private Subnet 2**: `10.0.4.0/24` in second AZ
 - Use `!Select [0, !GetAZs '']` and `!Select [1, !GetAZs '']` for AZ selection
 
 ### Security Requirements:
 - Security group must allow:
-  - **SSH**: Port 22, Protocol TCP, Source: 0.0.0.0/0
-  - **HTTP**: Port 80, Protocol TCP, Source: 0.0.0.0/0
+- **SSH**: Port 22, Protocol TCP, Source: 0.0.0.0/0
+- **HTTP**: Port 80, Protocol TCP, Source: 0.0.0.0/0
 - Apply security group to EC2 instance
 
 ### Routing Configuration:
-- **Public Route Table**: Default route (0.0.0.0/0) → Internet Gateway
-- **Private Route Table**: Default route (0.0.0.0/0) → NAT Gateway
+- **Public Route Table**: Default route (0.0.0.0/0) Internet Gateway
+- **Private Route Table**: Default route (0.0.0.0/0) NAT Gateway
 - Proper subnet associations for each route table
 
 ### Resource Dependencies:
@@ -60,7 +60,7 @@ InstanceType: Type: String Default: t3.micro AllowedValues: t3.micro, t3.s
 Provide these essential outputs:
 - VPC ID
 - Public subnet IDs
-- Private subnet IDs  
+- Private subnet IDs 
 - EC2 instance ID
 - Security group ID
 - NAT Gateway ID
@@ -100,12 +100,12 @@ Base your implementation on established AWS patterns for VPC creation with publi
 
 ## Success Criteria
 Your template will be considered successful when it:
--  Deploys without errors in us-east-1 region  
-- Creates all required infrastructure components  
-- Enables SSH and HTTP access to EC2 instance  
-- Provides internet access to public subnets  
-- Provides outbound internet access to private subnets via NAT  
-- Follows AWS CloudFormation best practices  
-- Includes comprehensive outputs for resource references  
+- Deploys without errors in us-east-1 region 
+- Creates all required infrastructure components 
+- Enables SSH and HTTP access to EC2 instance 
+- Provides internet access to public subnets 
+- Provides outbound internet access to private subnets via NAT 
+- Follows AWS CloudFormation best practices 
+- Includes comprehensive outputs for resource references 
 
 Generate the complete CloudFormation YAML template now, ensuring it meets all specified requirements and constraints.

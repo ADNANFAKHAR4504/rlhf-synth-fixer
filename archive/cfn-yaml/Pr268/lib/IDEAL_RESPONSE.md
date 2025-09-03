@@ -1,4 +1,11 @@
-```
+# CloudFormation Template - IDEAL RESPONSE
+
+## Overview
+This CloudFormation template creates a secure, scalable serverless infrastructure with all required AWS resources properly configured.
+
+## CloudFormation Template
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, Scalable, Fully Serverless Web Application Infrastructure'
 
@@ -9,12 +16,9 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
-          - S3BucketName
     ParameterLabels:
       EnvironmentSuffix:
         default: 'Environment Suffix'
-      S3BucketName:
-        default: 'S3 Bucket Name'
 
 Parameters:
   EnvironmentSuffix:
@@ -24,13 +28,6 @@ Parameters:
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
 
-  S3BucketName:
-    Type: String
-    Default: 'serverless-app-data'
-    Description: 'Name for the S3 bucket (will be suffixed with account ID and environment)'
-    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
-    ConstraintDescription: 'Must be a valid S3 bucket name pattern'
-
 Resources:
   # KMS Key for encryption - FIXED VERSION
   KMSKey:
@@ -38,7 +35,7 @@ Resources:
     Properties:
       Description: !Sub 'KMS Key for ${EnvironmentSuffix} serverless application encryption'
       KeyPolicy:
-        Version: '2012-10-17'  # ✅ Added missing Version
+        Version: '2012-10-17'
         Statement:
           - Sid: Enable IAM User Permissions
             Effect: Allow
@@ -57,7 +54,7 @@ Resources:
               - 'kms:GenerateDataKey*'
               - 'kms:DescribeKey'
             Resource: '*'
-          - Sid: Allow Lambda Service  # ✅ Added Lambda permissions
+          - Sid: Allow Lambda Service
             Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
@@ -67,7 +64,7 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix  # ✅ FIXED: Dynamic environment tag
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-serverless-kms-key'
 
@@ -81,7 +78,6 @@ Resources:
   S3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${S3BucketName}-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -110,7 +106,7 @@ Resources:
         TopicConfigurations: []
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix  # ✅ FIXED: Dynamic environment tag
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-serverless-app-bucket'
     DeletionPolicy: Retain
@@ -134,16 +130,16 @@ Resources:
       BillingMode: PAY_PER_REQUEST
       SSESpecification:
         SSEEnabled: true
-        SSEType: KMS  # ✅ Added required SSEType
+        SSEType: KMS
         KMSMasterKeyId: !Ref KMSKey
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
-      DeletionProtectionEnabled: true
+      DeletionProtectionEnabled: false
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix  # ✅ FIXED: Dynamic environment tag
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-serverless-app-table'
 
@@ -156,11 +152,11 @@ Resources:
       KmsKeyId: !GetAtt KMSKey.Arn
       Tags:
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentSuffix  # ✅ FIXED: Dynamic environment tag
         - Key: Name
           Value: !Sub '${EnvironmentSuffix}-lambda-logs'
 
-  # IAM Role for Lambda - FIXED VERSION
+  # IAM Role for Lambda
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -209,7 +205,7 @@ Resources:
                 Action:
                   - kms:Decrypt
                   - kms:GenerateDataKey
-                  - kms:DescribeKey  # ✅ Added missing permission
+                  - kms:DescribeKey
                 Resource: !GetAtt KMSKey.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
@@ -217,14 +213,13 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup  # ✅ Added missing permission
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: 
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentSuffix}-serverless-app-function:*'  # ✅ More specific resource
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentSuffix}-serverless-app-function:*'
 
-
-  # Lambda Function - FIXED VERSION
+  # Lambda Function - COMPLETE CODE FIXED
   LambdaFunction:
     Type: AWS::Lambda::Function
     DependsOn: 
@@ -250,6 +245,7 @@ Resources:
           import os
           from datetime import datetime
           import decimal
+          import uuid
           
           # Helper class to handle decimal serialization
           class DecimalEncoder(json.JSONEncoder):
@@ -262,25 +258,573 @@ Resources:
           s3 = boto3.client('s3')
           
           def lambda_handler(event, context):
+              print(f"Received event: {json.dumps(event)}")
+              
               table_name = os.environ['DYNAMODB_TABLE']
               table = dynamodb.Table(table_name)
               
+              # CORS headers for all responses
+              cors_headers = {
+                  'Access-Control-Allow-Origin': '*',
+                  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+                  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+                  'Content-Type': 'application/json'
+              }
+              
               try:
-                  # Process the request
-                  if event.get('httpMethod') == 'GET':
-                      response = table.scan()
+                  # Handle OPTIONS requests for CORS preflight
+                  if event.get('httpMethod') == 'OPTIONS':
                       return {
                           'statusCode': 200,
-                          'headers': {
-                              'Access-Control-Allow-Origin': '*',
-                              'Content-Type': 'application/json'
-                          },
+                          'headers': cors_headers,
+                          'body': json.dumps({'message': 'CORS preflight'})
+                      }
+                  
+                  # Handle GET requests - retrieve all items
+                  elif event.get('httpMethod') == 'GET':
+                      print("Processing GET request")
+                      response = table.scan()
+                      
+                      return {
+                          'statusCode': 200,
+                          'headers': cors_headers,
                           'body': json.dumps({
-                              'message': 'Success',
+                              'message': 'Data retrieved successfully',
                               'data': response.get('Items', []),
+                              'count': len(response.get('Items', [])),
+                              'environment': os.environ['ENVIRONMENT'],
+                              'timestamp': datetime.utcnow().isoformat()
+                          }, cls=DecimalEncoder)
+                      }
+                  
+                  # Handle POST requests - create new item
+                  elif event.get('httpMethod') == 'POST':
+                      print("Processing POST request")
+                      
+                      # Parse request body
+                      if event.get('body'):
+                          try:
+                              body = json.loads(event['body'])
+                          except json.JSONDecodeError:
+                              return {
+                                  'statusCode': 400,
+                                  'headers': cors_headers,
+                                  'body': json.dumps({
+                                      'error': 'Invalid JSON in request body',
+                                      'message': 'Request body must be valid JSON'
+                                  })
+                              }
+                      else:
+                          body = {}
+                      
+                      # Generate unique ID and timestamp
+                      item_id = body.get('id', str(uuid.uuid4()))
+                      timestamp = datetime.utcnow().isoformat()
+                      
+                      # Create item for DynamoDB
+                      item = {
+                          'id': item_id,
+                          'timestamp': timestamp,
+                          'data': body.get('data', {}),
+                          'environment': os.environ['ENVIRONMENT'],
+                          'created_at': timestamp
+                      }
+                      
+                      # Store item in DynamoDB
+                      table.put_item(Item=item)
+                      
+                      # Optionally store in S3 for backup
+                      try:
+                          s3_key = f"data/{item_id}-{timestamp}.json"
+                          s3.put_object(
+                              Bucket=os.environ['S3_BUCKET'],
+                              Key=s3_key,
+                              Body=json.dumps(item, cls=DecimalEncoder),
+                              ContentType='application/json'
+                          )
+                          print(f"Item also stored in S3: {s3_key}")
+                      except Exception as s3_error:
+                          print(f"S3 storage failed: {str(s3_error)}")
+                          # Continue even if S3 fails
+                      
+                      return {
+                          'statusCode': 201,
+                          'headers': cors_headers,
+                          'body': json.dumps({
+                              'message': 'Item created successfully',
+                              'item': item,
                               'environment': os.environ['ENVIRONMENT']
                           }, cls=DecimalEncoder)
                       }
-                  elif event.get('httpMethod') == 'POST':
-                   
+                  
+                  # Handle PUT requests - update existing item
+                  elif event.get('httpMethod') == 'PUT':
+                      print("Processing PUT request")
+                      
+                      if not event.get('body'):
+                          return {
+                              'statusCode': 400,
+                              'headers': cors_headers,
+                              'body': json.dumps({
+                                  'error': 'Missing request body',
+                                  'message': 'PUT request requires a JSON body'
+                              })
+                          }
+                      
+                      try:
+                          body = json.loads(event['body'])
+                      except json.JSONDecodeError:
+                          return {
+                              'statusCode': 400,
+                              'headers': cors_headers,
+                              'body': json.dumps({
+                                  'error': 'Invalid JSON in request body'
+                              })
+                          }
+                      
+                      if not body.get('id'):
+                          return {
+                              'statusCode': 400,
+                              'headers': cors_headers,
+                              'body': json.dumps({
+                                  'error': 'Missing required field: id'
+                              })
+                          }
+                      
+                      # Update item in DynamoDB
+                      response = table.update_item(
+                          Key={
+                              'id': body['id'],
+                              'timestamp': body.get('timestamp', datetime.utcnow().isoformat())
+                          },
+                          UpdateExpression='SET #data = :data, updated_at = :updated_at',
+                          ExpressionAttributeNames={
+                              '#data': 'data'
+                          },
+                          ExpressionAttributeValues={
+                              ':data': body.get('data', {}),
+                              ':updated_at': datetime.utcnow().isoformat()
+                          },
+                          ReturnValues='ALL_NEW'
+                      )
+                      
+                      return {
+                          'statusCode': 200,
+                          'headers': cors_headers,
+                          'body': json.dumps({
+                              'message': 'Item updated successfully',
+                              'item': response['Attributes'],
+                              'environment': os.environ['ENVIRONMENT']
+                          }, cls=DecimalEncoder)
+                      }
+                  
+                  # Handle DELETE requests
+                  elif event.get('httpMethod') == 'DELETE':
+                      print("Processing DELETE request")
+                      
+                      # Get ID from path parameters or query parameters
+                      item_id = None
+                      if event.get('pathParameters') and event['pathParameters'].get('id'):
+                          item_id = event['pathParameters']['id']
+                      elif event.get('queryStringParameters') and event['queryStringParameters'].get('id'):
+                          item_id = event['queryStringParameters']['id']
+                      
+                      if not item_id:
+                          return {
+                              'statusCode': 400,
+                              'headers': cors_headers,
+                              'body': json.dumps({
+                                  'error': 'Missing required parameter: id'
+                              })
+                          }
+                      
+                      # Delete item from DynamoDB
+                      try:
+                          table.delete_item(
+                              Key={'id': item_id}
+                          )
+                          
+                          return {
+                              'statusCode': 200,
+                              'headers': cors_headers,
+                              'body': json.dumps({
+                                  'message': f'Item {item_id} deleted successfully',
+                                  'environment': os.environ['ENVIRONMENT']
+                              })
+                          }
+                      except Exception as delete_error:
+                          return {
+                              'statusCode': 404,
+                              'headers': cors_headers,
+                              'body': json.dumps({
+                                  'error': 'Item not found',
+                                  'message': str(delete_error)
+                              })
+                          }
+                  
+                  # Handle unsupported methods
+                  else:
+                      return {
+                          'statusCode': 405,
+                          'headers': cors_headers,
+                          'body': json.dumps({
+                              'error': 'Method Not Allowed',
+                              'message': f'HTTP method {event.get("httpMethod", "UNKNOWN")} is not supported',
+                              'supported_methods': ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+                          })
+                      }
+              
+              except Exception as e:
+                  print(f"Error processing request: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': cors_headers,
+                      'body': json.dumps({
+                          'error': 'Internal Server Error',
+                          'message': str(e),
+                          'environment': os.environ['ENVIRONMENT']
+                      })
+                  }
+
+  # CloudWatch Log Group for API Gateway
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${EnvironmentSuffix}-serverless-app-api'
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt KMSKey.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-api-gateway-logs'
+
+  # API Gateway REST API
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-serverless-app-api'
+      Description: !Sub 'Serverless Application API for ${EnvironmentSuffix} environment'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-serverless-app-api'
+
+  # API Gateway Resource
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: 'data'
+
+  # API Gateway Method - GET
+  ApiMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: GET
+      AuthorizationType: AWS_IAM
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
+
+  # API Gateway Method - POST
+  ApiMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      ApiKeyRequired: true
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations'
+
+  # API Gateway Method - OPTIONS (for CORS)
+  ApiMethodOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      ApiKeyRequired: false
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Lambda Permission for API Gateway
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*'
+
+  # API Gateway Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ApiMethodGet
+      - ApiMethodPost
+      - ApiMethodOptions
+      - LambdaApiGatewayPermission
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: !Sub 'Deployment for ${EnvironmentSuffix} environment'
+
+  # API Gateway Stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      StageName: !Ref EnvironmentSuffix
+      DeploymentId: !Ref ApiDeployment
+      Description: !Sub 'Stage for ${EnvironmentSuffix} environment'
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          ThrottlingRateLimit: 1000
+          ThrottlingBurstLimit: 2000
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: '$context.requestId $context.status $context.error.message $context.error.messageString'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-api-stage'
+
+  # API Key
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+      - ApiStage
+    Properties:
+      Name: !Sub '${EnvironmentSuffix}-serverless-app-api-key'
+      Description: !Sub 'API Key for ${EnvironmentSuffix} serverless application'
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref RestApi
+          StageName: !Ref EnvironmentSuffix
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-api-key'
+
+  # Usage Plan
+  UsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - ApiStage
+    Properties:
+      UsagePlanName: !Sub '${EnvironmentSuffix}-serverless-app-usage-plan'
+      Description: !Sub 'Usage plan for ${EnvironmentSuffix} serverless application'
+      ApiStages:
+        - ApiId: !Ref RestApi
+          Stage: !Ref EnvironmentSuffix  # Must match ApiStage.StageName
+      Throttle:
+        RateLimit: 1000
+        BurstLimit: 2000
+      Quota:
+        Limit: 10000
+        Period: DAY
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Name
+          Value: !Sub '${EnvironmentSuffix}-usage-plan'
+
+  # Usage Plan Key
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsagePlan
+
+# ✅ FIXED: Added complete Outputs section
+Outputs:
+  # Stack Information
+  StackName:
+    Description: Name of the CloudFormation stack
+    Value: !Ref 'AWS::StackName'
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  Environment:
+    Description: Environment suffix used for this deployment
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
+
+  # KMS Key Outputs
+  KMSKeyId:
+    Description: ID of the KMS key used for encryption
+    Value: !Ref KMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  KMSKeyArn:
+    Description: ARN of the KMS key used for encryption
+    Value: !GetAtt KMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+
+  KMSKeyAlias:
+    Description: Alias of the KMS key
+    Value: !Ref KMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyAlias'
+
+  # S3 Bucket Outputs
+  S3BucketName:
+    Description: Name of the S3 bucket for data storage
+    Value: !Ref S3Bucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketName'
+
+  S3BucketArn:
+    Description: ARN of the S3 bucket
+    Value: !GetAtt S3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketArn'
+
+  S3BucketDomainName:
+    Description: Domain name of the S3 bucket
+    Value: !GetAtt S3Bucket.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-S3BucketDomainName'
+
+  # DynamoDB Table Outputs
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table
+    Value: !Ref DynamoDBTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+
+  DynamoDBTableArn:
+    Description: ARN of the DynamoDB table
+    Value: !GetAtt DynamoDBTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableArn'
+
+  DynamoDBTableStreamArn:
+    Description: ARN of the DynamoDB table stream
+    Value: !GetAtt DynamoDBTable.StreamArn
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableStreamArn'
+
+  # Lambda Function Outputs
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref LambdaFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionName'
+
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
+
+  # IAM Role Outputs
+  LambdaExecutionRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaExecutionRoleArn'
+
+  # API Gateway Outputs
+  RestApiId:
+    Description: ID of the REST API
+    Value: !Ref RestApi
+    Export:
+      Name: !Sub '${AWS::StackName}-RestApiId'
+
+  RestApiRootResourceId:
+    Description: Root resource ID of the REST API
+    Value: !GetAtt RestApi.RootResourceId
+    Export:
+      Name: !Sub '${AWS::StackName}-RestApiRootResourceId'
+
+  ApiGatewayUrl:
+    Description: URL of the API Gateway endpoint
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayUrl'
+
+  ApiGatewayDataEndpoint:
+    Description: Full URL for the data endpoint
+    Value: !Sub 'https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/data'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayDataEndpoint'
+
+  # API Key Outputs
+  ApiKeyId:
+    Description: ID of the API Gateway API key
+    Value: !Ref ApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKeyId'
+
+  # CloudWatch Log Groups
+  LambdaLogGroupName:
+    Description: Name of the Lambda function log group
+    Value: !Ref LambdaLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaLogGroupName'
+
+  LambdaLogGroupArn:
+    Description: ARN of the Lambda function log group
+    Value: !GetAtt LambdaLogGroup.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaLogGroupArn'
+
+  ApiGatewayLogGroupName:
+    Description: Name of the API Gateway log group
+    Value: !Ref ApiGatewayLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayLogGroupName'
+
+  # Usage Plan Outputs
+  UsagePlanId:
+    Description: ID of the API Gateway usage plan
+    Value: !Ref UsagePlan
+    Export:
+      Name: !Sub '${AWS::StackName}-UsagePlanId'
+
+  # Deployment Information
+  DeploymentTimestamp:
+    Description: Timestamp of the deployment
+    Value: !Sub '${AWS::StackName}-deployed-at-${AWS::Region}'
+    Export:
+      Name: !Sub '${AWS::StackName}-DeploymentInfo'
 ```

@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291554",
+  "team": "3",
+  "startedAt": "2025-08-28T05:30:47.114Z",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "CI/CD Pipeline Infrastructure",
+    "Security Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "S3",
+    "SNS",
+    "IAM",
+    "CloudWatch Events",
+    "EventBridge"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

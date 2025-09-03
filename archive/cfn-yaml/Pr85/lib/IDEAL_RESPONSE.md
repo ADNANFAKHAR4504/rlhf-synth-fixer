@@ -103,6 +103,8 @@ This template represents a complete and secure VPC architecture following AWS be
 It is suitable for a wide range of real-world use cases—from training environments to scalable production workloads.
 
 ## Template:
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: TAP Stack VPC with Public & Private Subnets, NAT Gateway, and EC2 Instances
 
@@ -351,3 +353,4 @@ Outputs:
   PublicInstancePublicIP:
     Description: Public IP of the EC2 instance in the public subnet
     Value: !GetAtt PublicInstance.PublicIp
+```

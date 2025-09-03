@@ -11,8 +11,8 @@ Design and deploy a highly secure and scalable web infrastructure using AWS Clou
 - Define IAM custom roles/policies based on least privilege
 - Deploy Amazon RDS (MySQL) with Multi-AZ enabled
 - S3 Buckets must:
-  - Use server-side encryption (SSE)
-  - Apply bucket policies to control access
+- Use server-side encryption (SSE)
+- Apply bucket policies to control access
 - Enable CloudWatch monitoring and alerts
 - Use Auto Scaling Groups for EC2 in multiple AZs
 - Deploy CloudFront for global content distribution using S3 as origin
@@ -25,6 +25,6 @@ Design and deploy a highly secure and scalable web infrastructure using AWS Clou
 
 ## Turn Instructions
 
-Single-turn generation — the model should return the complete CloudFormation YAML file named `secure-web-infrastructure.yaml`.
+Single-turn generation the model should return the complete CloudFormation YAML file named `secure-web-infrastructure.yaml`.
 
 ---

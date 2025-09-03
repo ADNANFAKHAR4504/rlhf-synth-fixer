@@ -1,0 +1,29 @@
+name: TapStack
+runtime: java
+description: Production-grade financial services infrastructure with advanced security controls and multi-layered architecture using Pulumi Java
+config:
+  aws:region: us-east-1
+  aws:profile: default
+  environmentSuffix:
+    default: "dev"
+    description: "Environment suffix for resource naming to avoid conflicts"
+  enableDetailedMonitoring:
+    default: true
+    description: "Enable detailed CloudWatch monitoring for EC2 instances"
+  cpuAlarmThreshold:
+    default: 70.0
+    description: "CPU utilization threshold for CloudWatch alarms (percentage)"
+  deletionWindow:
+    default: 7
+    description: "KMS key deletion window in days (7-30)"
+template:
+  description: Financial services infrastructure with enterprise security
+  config:
+    aws:region:
+      description: AWS region for resource deployment
+      default: us-east-1
+    environmentSuffix:
+      description: Suffix for resource naming
+      default: dev
+backend:
+  url: file://./state

@@ -28,6 +28,6 @@ Please write a complete Python AWS CDK application (in one or more stacks, if ap
 
 ### Key Focus:
 
-- Ensure **resource connectivity** — API Gateway must be connected to Lambda.
+- Ensure **resource connectivity** - API Gateway must be connected to Lambda.
 - Ensure logging flows to CloudWatch.
 - Ensure Lambda is configured to scale to the required concurrency.

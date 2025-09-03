@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291258",
+  "team": "4",
+  "startedAt": "2025-08-14T07:13:21.594Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "pchauhan77",
+  "dockerS3Location": ""
+}

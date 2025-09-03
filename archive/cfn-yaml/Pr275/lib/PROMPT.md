@@ -3,13 +3,13 @@
 
 ---
 
-### 🔍 **Objective:**
+### **Objective:**
 
-To define a **CloudFormation YAML template** that provisions a secure production environment, with strict resource tagging, encryption, and IAM access controls—**without any hardcoded sensitive data**.
+To define a **CloudFormation YAML template** that provisions a secure production environment, with strict resource tagging, encryption, and IAM access controls**without any hardcoded sensitive data**.
 
 ---
 
-### 📦 **Key Requirements:**
+### **Key Requirements:**
 
 #### 1. **Environment Tagging (All Resources):**
 
@@ -17,8 +17,8 @@ All AWS resources must be tagged with:
 
 ```yaml
 Tags:
-  - Key: Environment
-    Value: production
+- Key: Environment
+Value: production
 ```
 
 This applies to EC2 instances, S3 buckets, IAM roles, KMS keys, EBS volumes, and more.
@@ -30,13 +30,13 @@ This applies to EC2 instances, S3 buckets, IAM roles, KMS keys, EBS volumes, and
 You must use **AWS Key Management Service (KMS)** to encrypt all data at rest. This includes:
 
 * **Amazon S3 Buckets**:
-  Use `BucketEncryption` with KMS-managed keys (SSE-KMS).
+Use `BucketEncryption` with KMS-managed keys (SSE-KMS).
 
 * **Amazon EBS Volumes** (attached to EC2):
-  Enable encryption with a custom or default KMS key.
+Enable encryption with a custom or default KMS key.
 
 * **AWS::KMS::Key Resource**:
-  If appropriate, define your own KMS key with key rotation enabled.
+If appropriate, define your own KMS key with key rotation enabled.
 
 ---
 
@@ -48,9 +48,9 @@ Define one or more **IAM roles** that enforce **Multi-Factor Authentication (MFA
 
 ```json
 "Condition": {
-  "Bool": {
-    "aws:MultiFactorAuthPresent": "true"
-  }
+"Bool": {
+"aws:MultiFactorAuthPresent": "true"
+}
 }
 ```
 
@@ -65,33 +65,33 @@ Ensure:
 * No plaintext credentials or secret strings in the template.
 * Use **CloudFormation Intrinsic Functions**:
 
-  * `Ref`, `Fn::Sub`, `Fn::Join`, etc.
+* `Ref`, `Fn::Sub`, `Fn::Join`, etc.
 * Use **Dynamic References** for:
 
-  * Secrets Manager
-  * SSM Parameter Store (`{{resolve:ssm:/secure/parameter}}`)
+* Secrets Manager
+* SSM Parameter Store (`{{resolve:ssm:/secure/parameter}}`)
 
 ---
 
-### 🧱 **Resources to Include in Template:**
+### **Resources to Include in Template:**
 
-Here’s a list of expected resources to define in the template:
+Heres a list of expected resources to define in the template:
 
-| Resource                     | Purpose                                                                       |
+| Resource | Purpose |
 | ---------------------------- | ----------------------------------------------------------------------------- |
-| `AWS::S3::Bucket`            | Store application data, must be encrypted with SSE-KMS and versioning enabled |
-| `AWS::KMS::Key`              | KMS key used for encrypting resources like S3, EBS                            |
-| `AWS::IAM::Role`             | IAM role for EC2/Lambda, enforce MFA via trust policy                         |
-| `AWS::IAM::Policy`           | Permissions adhering to least-privilege principles                            |
-| `AWS::EC2::Instance`         | (Optional) EC2 instance with encrypted EBS                                    |
-| `AWS::EC2::Volume`           | Encrypted EBS volume attached to EC2                                          |
-| `AWS::EC2::VolumeAttachment` | Attach volume to EC2 if needed                                                |
-| `AWS::SSM::Parameter`        | Store secure values dynamically referenced                                    |
-| `AWS::CloudFormation::Stack` | If nesting stacks for modularity                                              |
+| `AWS::S3::Bucket` | Store application data, must be encrypted with SSE-KMS and versioning enabled |
+| `AWS::KMS::Key` | KMS key used for encrypting resources like S3, EBS |
+| `AWS::IAM::Role` | IAM role for EC2/Lambda, enforce MFA via trust policy |
+| `AWS::IAM::Policy` | Permissions adhering to least-privilege principles |
+| `AWS::EC2::Instance` | (Optional) EC2 instance with encrypted EBS |
+| `AWS::EC2::Volume` | Encrypted EBS volume attached to EC2 |
+| `AWS::EC2::VolumeAttachment` | Attach volume to EC2 if needed |
+| `AWS::SSM::Parameter` | Store secure values dynamically referenced |
+| `AWS::CloudFormation::Stack` | If nesting stacks for modularity |
 
 ---
 
-### ✅ **Expected Output:**
+### **Expected Output:**
 
 A **CloudFormation YAML template** that:
 

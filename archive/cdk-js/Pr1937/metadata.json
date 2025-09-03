@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "js",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291506",
+  "team": "2",
+  "startedAt": "2025-08-21T18:25:01.194Z",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "S3",
+    "KMS",
+    "Systems Manager Parameter Store",
+    "IAM",
+    "Cloud Map",
+    "Certificate Manager",
+    "Route 53"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

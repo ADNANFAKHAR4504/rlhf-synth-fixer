@@ -1,0 +1,36 @@
+{
+  "task_id": "trainr354",
+  "subtask": "General Infrastructure Provisioning",
+  "platform": "pulumi",
+  "language": "go",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Access Control"
+  ],
+  "po_id": "synth-trainr354",
+  "team": "synth",
+  "startedAt": "2025-08-26T04:35:27.029Z",
+  "training_quality": 9,
+  "complexity": "hard",
+  "author": "Ashwin-DevAsh",
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Route Table",
+    "Security Group",
+    "IAM",
+    "S3",
+    "KMS",
+    "VPC Endpoints"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

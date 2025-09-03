@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr892",
+  "team": "synth",
+  "startedAt": "2025-08-19T14:25:45+00:00",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Route Table",
+    "Security Group",
+    "EBS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

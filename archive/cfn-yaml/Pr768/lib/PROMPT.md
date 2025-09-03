@@ -14,7 +14,7 @@ Requirements (functional) 1. VPC & Networking
 • Ensure EBS root and additional volumes (if any) are encrypted using a KMS key created in this template (see KMS section).
 • Attach an IAM instance role with least privilege required to:
 • Use SSM (AmazonSSMManagedInstanceCore) for session manager (no SSH port open).
-• Read specific S3 bucket (if the app needs S3) or read Secrets Manager secret (if present) — but restrict to resources created in this template using exact ARNs.
+• Read specific S3 bucket (if the app needs S3) or read Secrets Manager secret (if present) but restrict to resources created in this template using exact ARNs.
 • Do not open SSH (22) to 0.0.0.0/0. If SSH is required, make it parameterized and default to a safe CIDR. 3. IAM / Least Privilege
 • Create IAM roles and policies with least privilege for:
 • Lambda/EC2 roles where needed (only required actions on the created resources).
@@ -27,7 +27,7 @@ Requirements (functional) 1. VPC & Networking
 • Use the KMS key to encrypt:
 • EBS volumes (via KmsKeyId on AWS::EC2::Volume or BlockDeviceMappings in LaunchTemplate).
 • S3 bucket server-side encryption (default encryption configuration using the KMS key).
-• Any other resources created (RDS, EFS, Secrets Manager) — if included, ensure KmsKeyId is used.
+• Any other resources created (RDS, EFS, Secrets Manager) if included, ensure KmsKeyId is used.
 • Ensure the KMS key is configured with a sensible EnableKeyRotation (optional but recommended). 5. S3
 • Create an S3 bucket with:
 • Default encryption using the KMS key.
@@ -37,7 +37,7 @@ Requirements (functional) 1. VPC & Networking
 • Do not store plaintext secrets in the template. 7. CloudFormation Best Practices
 • Parameterize common values: Environment, VpcCidr, PublicSubnetCidrs, PrivateSubnetCidrs, InstanceType, KeyPairName (optional), EnableNatGateway boolean.
 • Add tagging on all resources (Environment, Project, Owner).
-• Include DeletionPolicy where appropriate (e.g., for KMS key/Secrets decide carefully — if template will be tested and then deleted, do not set Retain unless explained).
+• Include DeletionPolicy where appropriate (e.g., for KMS key/Secrets decide carefully if template will be tested and then deleted, do not set Retain unless explained).
 • Template must declare required capabilities in deployment instructions (CAPABILITY_NAMED_IAM) if needed.
 
 ⸻
@@ -46,7 +46,7 @@ Non-functional / Constraints
 • Output format: Single YAML CloudFormation template only (no nested stacks or multiple files).
 • No hardcoded region-dependent AMI IDs; prefer SSM parameter store or accept AMI param.
 • Everything should be deployable from CloudFormation console: no manual post-deploy actions required to make the stack succeed.
-• Minimize broad permissions (no Resource: "\*") — use specific ARNs or !Sub with resource names created in the stack.
+• Minimize broad permissions (no Resource: "\*") use specific ARNs or !Sub with resource names created in the stack.
 • For testing: the template must work in a fresh test account (limits permitting) in us-east-1 or any specified region.
 
 ⸻

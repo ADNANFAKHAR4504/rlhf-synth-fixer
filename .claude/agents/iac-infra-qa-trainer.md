@@ -13,7 +13,12 @@ Expert that validates and improves IaC through automated testing pipeline.
 
 ### 1. Project Analysis
 
-- Read `lib/PROMPT.md`, `metadata.json`, and `lib/MODEL_RESPONSE.md`
+- **Identify Latest Files**: 
+  - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
+  (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
+  - If only PROMPT.md exists, use that file
+  - If only MODEL_RESPONSE.md exists, use that file
+- Read the PROMPT files, `metadata.json`, and the latest MODEL_RESPONSE file
 - Detect platform (CDK/CDKTF/CFN/Terraform/Pulumi) and language
 
 ### 2. Code Quality
@@ -45,7 +50,7 @@ that can be deployed with the current configuration of the ci-cd pipelines.
   - If you are not able to deploy, report this error and finish your execution with an error message.
   - If there are AWS Quota Limit issues while deploying. Report this to the user, and await for user
   input to continue.
-- Important: Verify that the deployed resources are consistent with the `lib/PROMPT.md` requirements. If
+- Important: Verify that the deployed resources are consistent with the PROMPT files requirements. If
 they are not, fix the code to match the requirements (Except for the guardrails stablished in your agent description)
 - Important: Every deployment should be self-sufficient. There should not be references to resources
     that should be already created. Make sure that every deploy execution can run in isolation.
@@ -102,12 +107,14 @@ The result should be similar to this (an object based on plain key, value).
 ### 5. Final Steps
 
 - Create `lib/IDEAL_RESPONSE.md` with perfect IaC solution (code-focused). Make the `lib/IDEAL_RESPONSE.md` similar
-in structure to the `lib/MODEL_RESPONSE.md`.
+in structure to the latest MODEL_RESPONSE file.
 - Verify solution meets requirements
 - Important!: Re-run all build, synth (when needed), lint, unit tests with coverage and integration tests to ensure quality.
   - Dont forget to Fix them if they are failing.
 - Generate `lib/MODEL_FAILURES.md` explaining the fixes made to reach the `lib/IDEAL_RESPONSE.md` from the
-initial `lib/MODEL_RESPONSE`. Do not mention the QA process. only focus in the infrastructure changes needed to fix the MODEL_RESPONSE.
+conversation logged in the PROMPT and MODEL_RESPONSE files(`lib/MODEL_PROMPT.md` => `lib/MODEL_RESPONSE.md`,
+`lib/MODEL_PROMPT2.md` => `lib/MODEL_RESPONSE2.md`...) file. Do not mention the QA process. Only focus in
+the infrastructure changes needed to fix the latest MODEL_RESPONSE.
 
 ### 6. Cleanup
 
@@ -127,4 +134,14 @@ initial `lib/MODEL_RESPONSE`. Do not mention the QA process. only focus in the i
 Use your best judgement to decide.
 - Never create or updated code outside of the lib, bin, test folders. That should be your working space to do the QA task.
 - Do not create specific github actions or workflows. Those are already created.
-- Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside the lib/ folder
+- Do not create any file outside lib/ folder. You can install packages if you need, but DO NOT create garbage files outside
+the lib/ folder
+
+### Agent-Specific Reporting
+- Report start of each QA pipeline stage with current infrastructure being tested
+- Report deployment attempt results (success/failure with attempt number)
+- Report any deployment blockers (missing dependencies, AWS access issues, resource conflicts)
+- Report test execution progress and coverage metrics with current test being run
+- Report cleanup completion status and any cleanup failures
+- Report blocking conditions if infrastructure deployment fails repeatedly
+- Report unit-test coverage.

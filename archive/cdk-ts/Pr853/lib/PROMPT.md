@@ -11,8 +11,8 @@ yaml
 Copy
 Edit
 Tags:
-  - Key: env
-    Value: production
+- Key: env
+Value: production
 RDS: Deploy an Amazon RDS instance in Multi-AZ mode with encryption at rest enabled.
 
 IAM Role: Create an IAM role granting S3 read-only access, attach it to all EC2 instances.
@@ -41,7 +41,7 @@ Create a VPC with public and private subnets across two AZs.
 
 Configure routing for internet access in public subnets and NAT gateway for private subnets.
 
-CloudWatch: Create CloudWatch alarms to monitor EC2 instances’ CPU utilization and send alerts when usage exceeds a threshold.
+CloudWatch: Create CloudWatch alarms to monitor EC2 instances CPU utilization and send alerts when usage exceeds a threshold.
 
 Security Groups: Restrict inbound traffic to HTTP (80), HTTPS (443), and SSH (22) only.
 
@@ -58,4 +58,4 @@ Use YAML syntax only.
 Expected Output:
 A single YAML CloudFormation template implementing the above infrastructure. Ensure modular readability with !Ref, !Sub, and parameterization where appropriate (e.g., instance types, CIDR ranges, DB username/password, certificate ARN for HTTPS).
 
-If you want, I can now turn this refined prompt into the IDEAL_RESPONSE.md format you asked about earlier so it’s directly usable in your repo. That way it fits your existing IaC compliance automation workflow.
+If you want, I can now turn this refined prompt into the IDEAL_RESPONSE.md format you asked about earlier so its directly usable in your repo. That way it fits your existing IaC compliance automation workflow.

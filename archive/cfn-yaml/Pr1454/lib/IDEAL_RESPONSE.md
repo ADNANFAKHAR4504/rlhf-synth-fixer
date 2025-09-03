@@ -1,0 +1,459 @@
+```yaml 
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+    CloudFormation template for prooduction application infrastructure.
+Resources:
+  # -------------------- VPC & Subnets --------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags: [{ Key: Environment, Value: Production }]
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: [{ Key: Environment, Value: Production }]
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Environment, Value: Production }]
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      Tags: [{ Key: Environment, Value: Production }]
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Environment, Value: Production }]
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+      MapPublicIpOnLaunch: false
+      Tags: [{ Key: Environment, Value: Production }]
+
+  # -------------------- Routing --------------------
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Environment, Value: Production }]
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+    DependsOn: VPCGatewayAttachment
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags: [{ Key: Environment, Value: Production }]
+
+  NatEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags: [{ Key: Environment, Value: Production }]
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      AllocationId: !GetAtt NatEIP.AllocationId
+      Tags: [{ Key: Environment, Value: Production }]
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # -------------------- S3 with versioning, encryption, RO policy --------------------
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration: { Status: Enabled }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      Tags: [{ Key: Environment, Value: Production }]
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowInstanceRoleReadOnly
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt InstanceRole.Arn
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+            Resource:
+              - !Sub '${S3Bucket.Arn}'
+              - !Sub '${S3Bucket.Arn}/*'
+
+  # -------------------- DynamoDB with KMS + PITR --------------------
+  AppTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: AppTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: Id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: Id, KeyType: HASH }
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags: [{ Key: Environment, Value: Production }]
+
+  # -------------------- IAM for EC2 --------------------
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InstanceAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [ s3:ListBucket, s3:GetObject ]
+                Resource:
+                  - !Sub '${S3Bucket.Arn}'
+                  - !Sub '${S3Bucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt AppTable.Arn
+              - Effect: Allow
+                Action: cloudwatch:PutMetricData
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+      Tags: [{ Key: Environment, Value: Production }]
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles: [ !Ref InstanceRole ]
+
+  # -------------------- Security Groups --------------------
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound HTTP from Internet
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0 }
+      Tags: [{ Key: Environment, Value: Production }]
+
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from ALB only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref ALBSecurityGroup }
+      Tags: [{ Key: Environment, Value: Production }]
+
+  # -------------------- ALB & Target Group --------------------
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Join [ '-', [ !Ref 'AWS::StackName', 'ALB' ] ]
+      Scheme: internet-facing
+      Subnets: [ !Ref PublicSubnet1, !Ref PublicSubnet2 ]
+      SecurityGroups: [ !Ref ALBSecurityGroup ]
+      Tags: [{ Key: Environment, Value: Production }]
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      Tags: [{ Key: Environment, Value: Production }]
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # -------------------- Launch Template & ASG --------------------
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceType: t3.micro
+        ImageId: "resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        IamInstanceProfile: { Name: !Ref InstanceProfile }
+        SecurityGroupIds: [ !Ref InstanceSecurityGroup ]
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash
+            amazon-linux-extras install -y nginx1
+            systemctl enable nginx
+            systemctl start nginx
+            echo "<h1>Welcome to the EC2 instance behind ALB</h1>" > /usr/share/nginx/html/index.html
+        TagSpecifications:
+          - ResourceType: instance
+            Tags: [{ Key: Environment, Value: Production }]
+          - ResourceType: volume
+            Tags: [{ Key: Environment, Value: Production }]
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 10
+      DesiredCapacity: 2
+      TargetGroupARNs: [ !Ref TargetGroup ]
+      Tags:
+        - Key: Environment
+          Value: Production
+          PropagateAtLaunch: true
+
+  # -------------------- API Gateway (MOCK) --------------------
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: ExampleApi
+      EndpointConfiguration: { Types: [ REGIONAL ] }
+      Tags: [{ Key: Environment, Value: Production }]
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: dummy
+
+  DummyGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: '{"message": "Hello from API Gateway"}'
+      MethodResponses:
+        - StatusCode: 200
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: Deployment for dummy API
+    DependsOn: DummyGetMethod
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+
+  # -------------------- WAFv2 (block example CIDR) --------------------
+  WAFIPSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: BlockList
+      Description: IP block list
+      IPAddressVersion: IPV4
+      Scope: REGIONAL
+      Addresses: [ 203.0.113.0/24 ]
+      Tags: [{ Key: Environment, Value: Production }]
+
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: ApiWebACL
+      Scope: REGIONAL
+      DefaultAction: { Allow: {} }
+      Rules:
+        - Name: BlockSpecificIP
+          Priority: 0
+          Statement:
+            IPSetReferenceStatement:
+              Arn: !GetAtt WAFIPSet.Arn
+          Action: { Block: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BlockSpecificIP
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: ApiWebACL
+      Tags: [{ Key: Environment, Value: Production }]
+
+  WAFWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub "arn:aws:apigateway:${AWS::Region}::/restapis/${RestApi}/stages/prod"
+      WebACLArn: !GetAtt WAFWebACL.Arn
+    DependsOn: ApiStage
+
+  # -------------------- SNS & CloudWatch Alarm --------------------
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: High NetworkOut Alarm Topic
+      Tags: [{ Key: Environment, Value: Production }]
+
+  HighNetworkOutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if NetworkOut > 5 GB in 5 minutes for any instance in ASG
+      Namespace: AWS/EC2
+      MetricName: NetworkOut
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref AutoScalingGroup
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5368709120
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions: [ !Ref AlarmTopic ]
+      TreatMissingData: notBreaching
+      Tags: [{ Key: Environment, Value: Production }]
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  S3BucketName:
+    Description: S3 bucket name
+    Value: !Ref S3Bucket
+
+  DynamoDBTableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt AppTable.Arn
+
+  AutoScalingGroupName:
+    Description: EC2 Auto Scaling Group name
+    Value: !Ref AutoScalingGroup
+
+  ApiInvokeURL:
+    Description: API Gateway invoke URL (prod)
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod/"
+
+  CloudWatchAlarmArn:
+    Description: CloudWatch Alarm ARN
+    Value: !GetAtt HighNetworkOutAlarm.Arn
+
+  WAFWebACLID:
+    Description: WAF Web ACL ID
+    Value: !GetAtt WAFWebACL.Id
+
+
+```

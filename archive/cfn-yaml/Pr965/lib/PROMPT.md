@@ -2,7 +2,7 @@ Prompt to Generate the Template (NO AWS Config)
 You are an AWS CloudFormation expert specializing in secure, compliant infrastructure as code. Create a complete, production-ready CloudFormation template in YAML for the us-west-2 AWS region that meets the following requirements.
 
 Critical constraint (do this first):
-Do NOT include AWS Config. Do not create AWS::Config::ConfigurationRecorder, AWS::Config::DeliveryChannel, AWS::Config::ConfigurationRecorderStatus, AWS::Config::ConfigRule, ConformancePack, RemediationConfiguration, or any other AWS Config–related resources or references.
+Do NOT include AWS Config. Do not create AWS::Config::ConfigurationRecorder, AWS::Config::DeliveryChannel, AWS::Config::ConfigurationRecorderStatus, AWS::Config::ConfigRule, ConformancePack, RemediationConfiguration, or any other AWS Configrelated resources or references.
 
 Requirements
 Networking
@@ -10,7 +10,7 @@ Create a VPC with both public and private subnets across at least two Availabili
 
 Attach an Internet Gateway for public subnet access.
 
-Create one NAT Gateway in a public subnet and route private subnets’ outbound internet traffic through it.
+Create one NAT Gateway in a public subnet and route private subnets outbound internet traffic through it.
 
 Proper route tables and associations for public/private subnets.
 
@@ -51,7 +51,7 @@ Create a CloudWatch Alarm on that metric.
 
 Create an SNS Topic for alerts and an email subscription (parameterize the email).
 
-Create a Lambda function (least-privilege IAM) that sends enriched alerts to SNS when the alarm triggers (Alarm → Event rule → Lambda → SNS, or Alarm → SNS → Lambda if you prefer; ensure it works end-to-end).
+Create a Lambda function (least-privilege IAM) that sends enriched alerts to SNS when the alarm triggers (Alarm Event rule Lambda SNS, or Alarm SNS Lambda if you prefer; ensure it works end-to-end).
 
 Best Practices & Constraints
 Use parameterization for CIDR ranges, instance types, email address, DynamoDB table name, etc.

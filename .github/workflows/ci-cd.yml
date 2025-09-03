@@ -17,6 +17,7 @@ permissions:
 
 env:
   NODE_VERSION: '22.17.0'
+  GO_VERSION: '1.23.12'
   # Use PR number for resource isolation, fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
@@ -26,8 +27,13 @@ env:
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
   S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
+  PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  # Go caching optimization
+  GOCACHE: ${{ github.workspace }}/.cache/go-build
+  GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
 
 jobs:
   detect-metadata:
@@ -42,57 +48,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Read metadata.json
+      - name: Detect metadata and validate project
         id: metadata
-        run: |
-          if [ ! -f "metadata.json" ]; then
-            echo "❌ metadata.json not found, exiting with failure"
-            exit 1
-          fi
-
-          PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
-          LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
-          PO_ID=$(jq -r '.po_id // empty' metadata.json)
-          TEAM=$(jq -r '.team // "unknown"' metadata.json)
-          STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
-          COMPLEXITY=$(jq -r '.complexity // "unknown"' metadata.json)
-
-          # If team or started_at is unknown, fail the job
-          if [ "$TEAM" == "unknown" ] || [ "$STARTED_AT" == "unknown" ]; then
-            echo "❌ Missing required metadata: team or started_at"
-            exit 1
-          fi
-
-          # If PO_ID is empty, raise error
-          if [ -z "$PO_ID" ]; then
-            echo "❌ PO_ID is required but not found in metadata.json"
-            exit 1
-          fi
-
-          # If complexity is unknown, raise error
-          if [ "$COMPLEXITY" == "unknown" ]; then
-            echo "❌ Complexity is required but not found in metadata.json"
-            exit 1
-          fi
-
-          echo "Detected platform: $PLATFORM, language: $LANGUAGE"
-
-          echo "platform=$PLATFORM" >> $GITHUB_OUTPUT
-          echo "language=$LANGUAGE" >> $GITHUB_OUTPUT
-          echo "po_id=$PO_ID" >> $GITHUB_OUTPUT
-
-      - name: Check for required documentation files
-        id: docs-check
-        run: |
-          if [ ! -f "lib/PROMPT.md" ]; then
-            echo "❌ lib/PROMPT.md not found, exiting with failure"
-            exit 1
-          fi
-
-          if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-            echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
-            exit 1
-          fi
+        run: ./scripts/detect-metadata.sh
 
   build:
     name: Build
@@ -112,9 +70,10 @@ jobs:
           download-artifacts: 'false'
           upload-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Build
-        run: npm run build
+        run: ./scripts/build.sh
 
   synth:
     name: Synth
@@ -139,6 +98,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
@@ -146,32 +106,93 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Synth
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
-        run: |
-          echo "Project: platform=${{ needs.detect-metadata.outputs.platform }}, language=${{ needs.detect-metadata.outputs.language }}"
-
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          if [ "$PLATFORM" = "cdk" ]; then
-            echo "✅ CDK project detected, running CDK synth..."
-            npm run cdk:synth
-          elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, running CDKTF get and synth..."
-            npm run cdktf:get
-            npm run cdktf:synth
-          else
-            echo "ℹ️ Not a CDK project, skipping CDK synth"
-          fi
+        run: ./scripts/synth.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
+
+
+  infracost:
+    name: Infracost (Terraform Cost Estimation)
+    needs: [detect-metadata, build, synth]
+    runs-on: ubuntu-24.04
+    if: >
+      ${{
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      needs.detect-metadata.outputs.platform == 'tf'}}
+    environment: dev
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for Terraform files
+        id: tf-check
+        run: |
+          if ! find lib -maxdepth 1 -name "*.tf" | grep -q .; then
+            echo "No Terraform files found in lib/. Skipping Infracost job."
+            echo "skip_infracost=true" >> $GITHUB_ENV
+            exit 0
+          fi
+
+      - name: Setup Terraform
+        if: env.skip_infracost != 'true'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Infracost
+        if: env.skip_infracost != 'true'
+        uses: infracost/actions/setup@v3
+
+      - name: Setup Environment (variables)
+        if: env.skip_infracost != 'true'
+        run: |
+          echo "TERRAFORM_STATE_BUCKET=${{ env.TERRAFORM_STATE_BUCKET }}" >> $GITHUB_ENV
+          echo "TERRAFORM_STATE_BUCKET_REGION=${{ env.TERRAFORM_STATE_BUCKET_REGION }}" >> $GITHUB_ENV
+          echo "ENVIRONMENT_SUFFIX=${{ env.ENVIRONMENT_SUFFIX }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform init
+
+      - name: Terraform Plan
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform plan -out=tfplan
+
+      - name: Convert plan to JSON
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform show -json tfplan > plan.json
+
+      - name: Run Infracost breakdown
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: infracost breakdown --path=plan.json --format=json --out-file=../infracost.json
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Post Infracost comment
+        if: env.skip_infracost != 'true'
+        run: |
+          infracost comment github --path=../infracost.json \
+                                 --pull-request=${{ github.event.pull_request.number }} \
+                                 --repo=${{ github.repository }} \
+                                 --github-token=${{ secrets.GITHUB_TOKEN }} \
+                                 --behavior=update
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
 
   deploy:
     name: Deploy
@@ -190,13 +211,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       # Terraform State Management Setup
       - name: Set up Terraform
@@ -205,126 +227,16 @@ jobs:
       # (Removed DynamoDB lock table step per PR review)
 
       - name: Bootstrap
-        run: |
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          if [ "$PLATFORM" = "cdk" ]; then
-            npm run cdk:bootstrap
-
-          elif [ "$PLATFORM" = "pulumi" ]; then
-            echo "✅ Pulumi project detected, setting up environment..."
-            # Login to Pulumi S3 backend
-            pipenv run pulumi-login
-            echo "✅ Pulumi bootstrap completed"
-
-          elif [ "$PLATFORM" = "tf" ]; then
-            echo "✅ Terraform project detected, setting up environment..."
-            
-            # Set up PR-specific state management
-            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
-            echo "Using state key: $STATE_KEY"
-            
-            cd lib
-            
-            # Set up backend configuration with PR-specific settings (no DynamoDB; use lockfile)
-            export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
-                -backend-config=key=$STATE_KEY \
-                -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }} \
-                -backend-config=encrypt=true \
-                -backend-config=use_lockfile=true"
-            
-            # Initialize Terraform (no fallback init without backend)
-            echo "Initializing Terraform with PR-specific backend..."
-            echo "TF_INIT_OPTS: $TF_INIT_OPTS"
-            terraform init -reconfigure -upgrade $TF_INIT_OPTS
-            
-            # Check if state file exists
-            echo "Checking if Terraform state file exists..."
-            aws s3 ls "s3://${{ env.TERRAFORM_STATE_BUCKET }}/$STATE_KEY" || {
-              echo "State file does not exist yet. This is normal for new environments."
-              echo "Creating empty state file..."
-              echo '{"version": 4, "terraform_version": "1.0.0", "serial": 1, "lineage": "", "outputs": {}, "resources": []}' | aws s3 cp - "s3://${{ env.TERRAFORM_STATE_BUCKET }}/$STATE_KEY" || echo "Could not create state file, continuing..."
-            }
-            
-            # Run terraform plan
-            echo "Running Terraform plan..."
-            npm run tf:plan || echo "Terraform plan failed, but continuing..."
-            
-            # Verify the plan was created
-            if [ -f "tfplan" ]; then
-              echo "✅ Terraform plan file created successfully"
-            else
-              echo "⚠️ Terraform plan file not found, but continuing..."
-            fi
-            
-            cd ..
-            echo "✅ Terraform bootstrap completed"
-
-          else
-            echo "ℹ️ Unknown or unsupported platform: $PLATFORM. Skipping bootstrap."
-          fi
+        run: ./scripts/bootstrap.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
           COMMIT_AUTHOR: ${{ github.event.head_commit.author.name || github.actor }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
       - name: Deploy
-        run: |
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          echo "AWS_REGION is set to: $AWS_REGION"
-          echo "AWS_DEFAULT_REGION is set to: $AWS_DEFAULT_REGION"
-
-          if [ "$PLATFORM" = "cdk" ]; then
-            echo "✅ CDK project detected, running CDK deploy..."
-            npm run cdk:deploy
-          elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, running CDKTF deploy..."
-            npm run cdktf:deploy
-          elif [ "$PLATFORM" = "tf" ]; then
-            echo "✅ Terraform HCL project detected, running Terraform deploy..."
-            
-            # Set up PR-specific state management
-            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
-            echo "Using state key: $STATE_KEY"
-            
-            # Change to bin directory where Terraform files are located
-            cd lib
-            
-            # Check if plan file exists
-            if [ -f "tfplan" ]; then
-              echo "✅ Terraform plan file found, proceeding with deployment..."
-              npm run tf:deploy
-            else
-              echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-              # Create a new plan and deploy
-              terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
-              terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan || terraform apply -auto-approve -lock=true -lock-timeout=300s || echo "Deployment failed"
-            fi
-            
-            cd ..
-          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
-            echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
-            npm run cfn:deploy-yaml
-          elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
-            echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-            npm run cfn:deploy-json
-          elif [ "$PLATFORM" = "pulumi" ]; then
-            echo "✅ Pulumi project detected, running Pulumi deploy..."
-            echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
-            echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-            export PYTHONPATH=.:bin
-            pipenv run pulumi-create-stack
-            echo "Deploying infrastructure ..."
-            pipenv run pulumi-deploy
-          else
-            echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-            echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json"
-          fi
+        run: ./scripts/deploy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           REPOSITORY: ${{ github.repository }}
@@ -332,144 +244,11 @@ jobs:
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-      - name: Get Deployment Outputs
-        run: |
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          if [ "$PLATFORM" = "cdk" ]; then
-            echo "✅ CDK project detected, getting CDK outputs..."
-            npx cdk list --json > cdk-stacks.json
-            mkdir -p cfn-outputs
-            echo "Getting all CloudFormation stacks..."
-            aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, \`TapStack${{ env.ENVIRONMENT_SUFFIX }}\`)].StackName" --output text > cf-stacks.txt
-            echo "{}" > cfn-outputs/all-outputs.json
-            if [ -s cf-stacks.txt ]; then
-              for stack in $(cat cf-stacks.txt); do
-                echo "Getting outputs for CloudFormation stack: $stack"
-                aws cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].Outputs' --output json > "temp-${stack}-outputs.json" 2>/dev/null || echo "No outputs for $stack"
-                if [ -f "temp-${stack}-outputs.json" ]; then
-                  output_count=$(jq 'length' "temp-${stack}-outputs.json" 2>/dev/null || echo "0")
-                  if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
-                    jq -n --arg stack "$stack" --slurpfile outputs "temp-${stack}-outputs.json" '{($stack): $outputs[0]}' > "temp-stack.json"
-                    jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
-                    mv temp-merged.json cfn-outputs/all-outputs.json
-                    if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
-                      echo "{}" > cfn-outputs/flat-outputs.json
-                    fi
-                    jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
-                      jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
-                      mv temp-flat.json cfn-outputs/flat-outputs.json
-                    done
-                  fi
-                  rm -f "temp-${stack}-outputs.json"
-                fi
-              done
-              rm -f temp-stack.json temp-merged.json temp-flat.json
-            else
-              echo "No TapStack CloudFormation stacks found"
-            fi
-            echo "Consolidated outputs:"
-            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
-            echo "Flat outputs:"
-            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
-          elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, writing outputs to cfn-outputs..."
-            mkdir -p cfn-outputs/
-            touch cfn-outputs/flat-outputs.json
-            cdktf output --outputs-file cfn-outputs/flat-outputs.json
-            cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
-          elif [ "${{ needs.detect-metadata.outputs.platform }}" = "cfn" ]; then
-            echo "✅ CloudFormation project detected, getting stack outputs..."
-            mkdir -p cfn-outputs
-            # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
-            STACK_NAME="TapStack${{ env.ENVIRONMENT_SUFFIX }}"
-            echo "Getting outputs for CloudFormation stack: $STACK_NAME"
-            aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json > temp-${STACK_NAME}-outputs.json 2>/dev/null || echo "No outputs for $STACK_NAME"
-            echo "{}" > cfn-outputs/all-outputs.json
-            if [ -f "temp-${STACK_NAME}-outputs.json" ]; then
-              output_count=$(jq 'length' "temp-${STACK_NAME}-outputs.json" 2>/dev/null || echo "0")
-              if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
-                jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
-                jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
-                mv temp-merged.json cfn-outputs/all-outputs.json
-                if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
-                  echo "{}" > cfn-outputs/flat-outputs.json
-                fi
-                jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
-                  jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
-                  mv temp-flat.json cfn-outputs/flat-outputs.json
-                done
-              fi
-              rm -f "temp-${STACK_NAME}-outputs.json"
-            fi
-            rm -f temp-stack.json temp-merged.json temp-flat.json
-            echo "Consolidated outputs:"
-            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
-            echo "Flat outputs:"
-            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
-
-          elif [ "$PLATFORM" = "pulumi" ]; then
-            echo "✅ Pulumi project detected, getting Pulumi stack outputs..."
-            mkdir -p cfn-outputs
-            echo "{}" > cfn-outputs/all-outputs.json
-            echo "{}" > cfn-outputs/flat-outputs.json
-            # Get the current stack name
-            STACK_NAME=$(pulumi stack --show-name)
-            echo "Fetching outputs from Pulumi stack: $STACK_NAME"
-            pulumi stack output --json > temp-${STACK_NAME}-outputs.json || echo "{}" > temp-${STACK_NAME}-outputs.json
-            jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
-            jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json && mv temp-merged.json cfn-outputs/all-outputs.json
-            jq -r 'to_entries[] | "\(.key)=\(.value)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
-              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
-              mv temp-flat.json cfn-outputs/flat-outputs.json
-            done
-            echo "Consolidated outputs:"
-            cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
-            echo "Flat outputs:"
-            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
-            rm -f temp-${STACK_NAME}-outputs.json temp-stack.json temp-merged.json temp-flat.json
-
-          elif [ "$PLATFORM" = "tf" ]; then
-            echo "✅ Terraform project detected, writing outputs to cfn-outputs..."
-            mkdir -p cfn-outputs/
-            touch cfn-outputs/flat-outputs.json
-            
-            # Change to bin directory where Terraform files are located
-            cd lib
-            
-            # Get structured outputs (JSON)
-            terraform output -json > ../cfn-outputs/all-outputs.json
-            
-            # Create flat key=value version
-            echo "{}" > ../cfn-outputs/flat-outputs.json
-            jq -r 'to_entries[] | "\(.key)=\(.value.value)"' ../cfn-outputs/all-outputs.json | while IFS='=' read -r key value; do
-              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' ../cfn-outputs/flat-outputs.json > ../temp-flat.json
-              mv ../temp-flat.json ../cfn-outputs/flat-outputs.json
-            done
-            
-            # Go back to root directory
-            cd ..
-
-            echo "✅ Consolidated Terraform outputs:"
-            cat cfn-outputs/all-outputs.json || echo "No structured outputs"
-
-            echo "✅ Flat outputs:"
-            cat cfn-outputs/flat-outputs.json || echo "No flat outputs"    
-
-          else
-            echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
-            mkdir -p cfn-outputs
-            echo "{}" > cfn-outputs/all-outputs.json
-            echo "{}" > cfn-outputs/flat-outputs.json
-            echo "# No CDK outputs for non-CDK projects" > cdk-stacks.json
-          fi
-
-      # Debuging Terraform Output - End
+      # Note: Deployment outputs are now collected by the deploy.sh script
 
       - name: Upload Deployment Outputs
         uses: actions/upload-artifact@v4
@@ -498,68 +277,12 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       # Python setup is handled by the setup-environment action
 
       - name: Run Linting
-        run: |
-          # Enable shell debugging - prints each command before execution
-          set -x
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          echo "Running linting for platform: $PLATFORM, language: $LANGUAGE"
-
-          if [ "$LANGUAGE" = "ts" ]; then
-            echo "✅ TypeScript project detected, running ESLint..."
-            npm run lint
-          elif [ "$LANGUAGE" = "py" ]; then
-            echo "Executing pipenv run lint..."
-            LINT_OUTPUT=$(pipenv run lint 2>&1 || true)
-            LINT_EXIT_CODE=$?
-            echo "--- START PYLINT OUTPUT (Raw) ---"
-            echo "$LINT_OUTPUT"
-            echo "--- END PYLINT OUTPUT (Raw) ---"
-            echo "Pylint command raw exit code: $LINT_EXIT_CODE"
-
-            if [ "$LINT_EXIT_CODE" -ne 0 ]; then
-              echo "⚠️ Pylint command exited with non-zero status code: $LINT_EXIT_CODE."
-              # We will still attempt to parse the score, but this is a warning.
-              # If score parsing also fails, the next check will catch it.
-            fi
-            # Step 3: Extract the score from the Pylint output.
-            # This `sed` command looks for lines containing "rated at X/10" and extracts X.
-            # It handles both integer (e.g., 7) and float (e.g., 7.50) scores.
-            SCORE=$(echo "$LINT_OUTPUT" | sed -n 's/.*rated at \([0-9.]*\)\/10.*/\1/p')
-            if [[ -z "$SCORE" || ! "$SCORE" =~ ^[0-9.]+$ ]]; then
-              echo "❌ ERROR: Could not extract linting score from Pylint output."
-              echo "Please verify Pylint's output format or if it ran successfully enough to produce a score."
-              exit 1 # Fail the step if the score cannot be determined
-            fi
-            echo "Detected Pylint Score: $SCORE/10"
-            # Step 5: Define the minimum acceptable score
-            MIN_SCORE=7.0
-            # Step 6: Compare the extracted score with the minimum threshold.
-            # `bc -l` is used for floating-point arithmetic comparison in shell scripts.
-            if (( $(echo "$SCORE >= $MIN_SCORE" | bc -l) )); then
-              echo "✅ Linting score $SCORE/10 is greater than or equal to $MIN_SCORE. Linting passed."
-              exit 0 # Explicitly exit with 0 to indicate success for the step
-            else
-              echo "❌ Linting score $SCORE/10 is less than $MIN_SCORE. Linting failed."
-              exit 1 # Explicitly exit with 1 to indicate failure for the step
-            fi
-          elif [ "$PLATFORM" = "cfn" ]; then
-            echo "✅ CloudFormation project detected, running CloudFormation validation..."
-            if [ "$LANGUAGE" = "json" ]; then
-              pipenv run cfn-validate-json -D
-            elif [ "$LANGUAGE" = "yaml" ]; then
-              pipenv run cfn-validate-yaml -D
-            fi
-          else
-            echo "ℹ️ Unknown platform/language combination: $PLATFORM/$LANGUAGE"
-            echo "💡 Running default ESLint only"
-            npm run lint
-          fi
+        run: ./scripts/lint.sh
 
   unit-tests:
     name: Unit Testing
@@ -578,29 +301,50 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
-
-      - name: Convert YAML to JSON for CloudFormation projects
-        if: ${{ needs.lint.outputs.platform == 'cfn' && needs.lint.outputs.language == 'yaml' }}
-        run: |
-          echo "✅ CloudFormation YAML project detected, converting YAML to JSON for unit tests..."
-          pipenv run cfn-flip-to-json > lib/TapStack.json
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run unit tests
+        run: ./scripts/unit-tests.sh
+
+      - name: Prepare coverage reports for Java projects
+        if: ${{ needs.detect-metadata.outputs.language == 'java' }}
         run: |
-          if [ "${{ needs.lint.outputs.language }}" = "ts" ] && [ "${{ needs.lint.outputs.platform }}" = "cdktf" ]; then
-            echo "✅ Terraform TypeScript project detected, running unit tests..."
-            npm run test:unit-cdktf
-          elif [ "${{ needs.lint.outputs.language }}" = "ts" ]; then
-            echo "✅ TypeScript project detected, running unit tests..."
-            npm run test:unit
-          elif [ "${{ needs.lint.outputs.language }}" = "py" ]; then
-            echo "✅ Python project detected, running pytest unit tests..."
-            pipenv run test-py-unit
+          echo "Preparing Java coverage reports for upload..."
+          echo "Debug: Checking current directory structure:"
+          ls -la
+
+          echo "Debug: Checking build directory:"
+          if [ -d "build" ]; then
+            ls -la build/
+            if [ -d "build/reports" ]; then
+              echo "Reports directory contents:"
+              ls -la build/reports/
+              if [ -d "build/reports/jacoco" ]; then
+                echo "JaCoCo directory contents:"
+                find build/reports/jacoco -type f | head -10
+              fi
+            fi
           else
-            echo "✅ Running default unit tests..."
-            npm run test:unit
+            echo "No build directory found"
           fi
 
+          mkdir -p coverage
+
+          # Try different possible locations for JaCoCo reports
+          if [ -d "build/reports/jacoco/test/" ]; then
+            cp -r build/reports/jacoco/test/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/test/ to coverage/ directory"
+          elif [ -d "build/reports/jacoco/" ]; then
+            cp -r build/reports/jacoco/* coverage/
+            echo "✅ Copied JaCoCo reports from build/reports/jacoco/ to coverage/ directory"
+          else
+            echo "⚠️ JaCoCo reports not found in expected locations"
+            # Create a placeholder to avoid upload failure
+            echo "No coverage reports generated" > coverage/no-reports.txt
+          fi
+
+          echo "Final coverage directory contents:"
+          ls -la coverage/
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
         with:
@@ -661,21 +405,14 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Run integration tests against live environment
-        run: |
-          if [ "${{ needs.lint.outputs.language }}" = "py" ]; then
-            echo "✅ Python compatible project detected, running integration tests..."
-            pipenv run test-py-integration
-          else
-            echo "✅ Running default integration tests..."
-            npm run test:integration
-          fi
+        run: ./scripts/integration-tests.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           CI: '1' # Set CI for the entire step
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
@@ -720,15 +457,52 @@ jobs:
           fi
 
       - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          timeout_minutes: '60'
-          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
           trigger_phrase: ''
-          custom_instructions: |
-            Follow instructions in .claude/agents/iac-code-reviewer.md
+          prompt: |
+            CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
+            1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
+            2. Read the PROMPT files
+            3. Assess whether the content looks human-generated or AI-generated
+            4. Look for signs of AI generation such as:
+               - Emojis or special symbols (icons) used for formatting
+               - Table structures
+               - Overly formal or template-like language
+               - Perfect formatting that suggests AI assistance
+               - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
+            5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
+            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
+
+            CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
+            1. Read lib/IDEAL_RESPONSE.md if it exists
+            2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
+            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
+            4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
+            5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
+            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, immediately FAIL the check by exiting with an error and fail the pipeline.
+
+            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
+            Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the 
+            metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
+            - subtask
+            - subject_labels
+            - training_quality
+            - aws_services
+            then immediately FAIL the check by exiting with an error and fail the pipeline.
+
+            This validation is mandatory and must be completed before any other review activities.
+          claude_args: |
+            --allowedTools Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite
+
+      - name: Upload updated metadata.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-metadata
+          path: metadata.json
+          if-no-files-found: warn
 
   cleanup:
     name: Cleanup (Destroy Resources)
@@ -747,79 +521,29 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           download-artifacts: 'false'
           platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (cleanup any leftover resources)
-        run: |
-          PLATFORM="${{ needs.detect-metadata.outputs.platform }}"
-          LANGUAGE="${{ needs.detect-metadata.outputs.language }}"
-
-          if [ "$PLATFORM" = "cdk" ]; then
-            echo "✅ CDK project detected, running CDK destroy..."
-            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
-            npm run cdk:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, running CDKTF destroy..."
-            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
-            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "tf" ]; then
-            echo "✅ Terraform HCL project detected, running Terraform destroy..."
-            
-            # Set up PR-specific state management
-            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
-            echo "Using state key: $STATE_KEY"
-            
-            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
-            cd lib
-
-            # Initialize backend with lockfile (no DynamoDB)
-            export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
-                -backend-config=key=$STATE_KEY \
-                -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }} \
-                -backend-config=encrypt=true \
-                -backend-config=use_lockfile=true"
-            terraform init -reconfigure -upgrade $TF_INIT_OPTS || echo "Terraform init failed"
-
-            npm run tf:destroy || echo "No resources to destroy or destruction failed"
-            cd ..
-            
-            # Clean up PR-specific state file
-            echo "Cleaning up PR-specific state file..."
-            aws s3 rm "s3://${{ env.TERRAFORM_STATE_BUCKET }}/$STATE_KEY" || echo "State file not found or already cleaned up"
-          elif [ "$PLATFORM" = "cfn" ]; then
-            echo "✅ CloudFormation project detected, running CloudFormation destroy..."
-            # Try to destroy any leftover resources from PRs, but don't fail if they don't exist
-            npm run cfn:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "pulumi" ]; then
-            echo "✅ Pulumi project detected, running Pulumi destroy..."
-            echo "Selecting dev stack..."
-            pipenv run pulumi-create-stack || echo "Stack selection failed"
-            echo "Destroying Pulumi infrastructure..."
-            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
-            echo "Removing Pulumi stack..."
-            pipenv run pulumi-remove-stack || echo "Stack removal failed or stack doesn't exist"
-          else
-            echo "ℹ️ Platform '$PLATFORM' with language '$LANGUAGE' not supported for destruction, skipping destroy"
-            echo "💡 Consider adding cleanup logic for $PLATFORM/$LANGUAGE projects here"
-          fi
+        run: ./scripts/destroy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, cleanup]
+    needs: [detect-metadata, cleanup, claude-code-action]
     environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
@@ -840,12 +564,18 @@ jobs:
           name: coverage-reports
           path: coverage/
 
+      - name: Download updated metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: updated-metadata
+          path: .
+
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Archive folders and reset repository
         run: |
@@ -880,6 +610,16 @@ jobs:
               fi
             else
               echo "Warning: cov.json not found, setting default coverage values"
+              LINES_COVERAGE=100
+              BRANCHES_COVERAGE=100
+            fi
+          elif [ "$LANGUAGE" = "go" ]; then
+            echo "Extracting Go coverage from coverage-summary.json..."
+            if [ -f "coverage/coverage-summary.json" ]; then
+              LINES_COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+              BRANCHES_COVERAGE=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+            else
+              echo "Warning: Go coverage-summary.json not found, setting default coverage values"
               LINES_COVERAGE=100
               BRANCHES_COVERAGE=100
             fi
@@ -939,6 +679,7 @@ jobs:
             "cdk.json"
             "metadata.json"
             "tap.py"
+            "tap.go"
             "setup.js"
             "cdktf.json"
             "Pulumi.yaml"
@@ -986,7 +727,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Extract platform and language for S3 upload
         id: extract-metadata
@@ -1072,65 +813,15 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Destroy Resources (if resources exist)
-        run: |
-          # Read metadata directly since this job runs independently
-          if [ ! -f "metadata.json" ]; then
-            echo "⚠️ metadata.json not found, skipping resource destruction"
-            exit 0
-          fi
-
-          PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
-          LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
-
-          if [ "$PLATFORM" = "cdk" ]; then
-            echo "✅ CDK TypeScript project detected, running CDK destroy..."
-            # Try to destroy resources, but don't fail if they don't exist
-            npm run cdk:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "cdktf" ]; then
-            echo "✅ CDKTF project detected, running CDKTF destroy..."
-            # Try to destroy resources, but don't fail if they don't exist
-            npm run cdktf:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "cfn" ]; then
-            echo "✅ CloudFormation project detected, running CloudFormation destroy..."
-            # Try to destroy resources, but don't fail if they don't exist
-            npm run cfn:destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "pulumi" ]; then
-            echo "✅ Pulumi project detected, running Pulumi destroy..."
-            pipenv run pulumi-destroy || echo "No resources to destroy or destruction failed"
-          elif [ "$PLATFORM" = "tf" ]; then
-            echo "✅ Terraform project detected, running terraform destroy..."
-            
-            # Set up PR-specific state management
-            STATE_KEY="prs/${{ env.ENVIRONMENT_SUFFIX }}/terraform.tfstate"
-            echo "Using state key: $STATE_KEY"
-            
-            # Try to destroy resources, but don't fail if they don't exist
-            cd lib
-            # Initialize backend with lockfile (no DynamoDB)
-            export TF_INIT_OPTS="-backend-config=bucket=${{ env.TERRAFORM_STATE_BUCKET }} \
-                -backend-config=key=$STATE_KEY \
-                -backend-config=region=${{ env.TERRAFORM_STATE_BUCKET_REGION }} \
-                -backend-config=encrypt=true \
-                -backend-config=use_lockfile=true"
-            npm run tf:init || echo "Terraform init failed"
-            npm run tf:destroy || echo "No resources to destroy or destruction failed"
-            cd ..
-            
-            # Clean up PR-specific state file
-            echo "Cleaning up PR-specific state file..."
-            aws s3 rm "s3://${{ env.TERRAFORM_STATE_BUCKET }}/$STATE_KEY" || echo "State file not found or already cleaned up"
-          else
-            echo "ℹ️ Platform '$PLATFORM' not supported for destruction, skipping destroy"
-            echo "💡 Consider adding cleanup logic for $PLATFORM projects here"
-          fi
+        run: ./scripts/destroy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
-          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}
+          PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
   # TODO: For future use

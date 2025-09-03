@@ -2,7 +2,7 @@
 You are an **expert Prompt Engineer** with **10 years of experience**. Your task is to create Infrastructure as Code (IaC) using **CDK for Terraform (CDKTF)** with **TypeScript**.
 
 **Goal:**
-Generate a complete, functional, and validated CDKTF TypeScript codebase that provisions a **robust, scalable, and secure multi-region AWS infrastructure** as described below. All provided details must remain **exactly intact** — do not modify or omit any data.
+Generate a complete, functional, and validated CDKTF TypeScript codebase that provisions a **robust, scalable, and secure multi-region AWS infrastructure** as described below. All provided details must remain **exactly intact** do not modify or omit any data.
 
 ---
 

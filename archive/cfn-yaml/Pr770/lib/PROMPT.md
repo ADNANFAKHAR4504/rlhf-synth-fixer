@@ -42,7 +42,7 @@ The stack must produce these outputs, clearly labeled:
 
 The API Gateway invocation URL (for testing/consuming the API).
 
-The Lambda function’s Amazon Resource Name (ARN).
+The Lambda functions Amazon Resource Name (ARN).
 
 The S3 bucket name.
 
@@ -57,4 +57,4 @@ All encryption, permissions, and logging must be automated by the template.
 The CloudFormation stack outputs must be readily verifiable immediately after deployment.
 
 Expected Output:
-A single, production-grade CloudFormation YAML file fully meeting the above requirements and constraints, designed for direct deployment in the us-east-1 AWS region. Place explanations or comments inline as YAML comments—not in the main output document.
+A single, production-grade CloudFormation YAML file fully meeting the above requirements and constraints, designed for direct deployment in the us-east-1 AWS region. Place explanations or comments inline as YAML commentsnot in the main output document.

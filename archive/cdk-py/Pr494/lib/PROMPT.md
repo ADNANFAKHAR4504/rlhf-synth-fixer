@@ -1,6 +1,6 @@
 Your mission is to act as a Senior AWS Cloud Infrastructure Engineer specializing in security-first infrastructure as code using AWS CDK (Python). You are tasked with provisioning a secure environment for the SecureApp application, adhering to strict compliance, encryption, and access control policies.
 
-📂 Project Structure
+Project Structure
 graphql
 Copy
 Edit
@@ -13,7 +13,7 @@ root/
     │   └── test_tap_stack.py  # Unit tests for individual constructs
     └── integration/
         └── test_tap_stack.py  # Integration tests for stack output and deployment
-🛠️ Task Requirements
+Task Requirements
 Your CDK project must meet all of the following:
 
 Region & Naming:
@@ -62,7 +62,7 @@ Use CDK constructs and tagging for traceability.
 
 All logs should be sent to secureapp-logs S3 bucket with encryption and lifecycle policies.
 
-📦 Output Expectation
+Output Expectation
 You must generate the entire CDK project with the following:
 
 tap.py: Bootstraps the CDK app and environment

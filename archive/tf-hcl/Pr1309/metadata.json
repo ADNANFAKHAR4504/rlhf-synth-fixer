@@ -1,0 +1,26 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "trainr861",
+  "team": "synth",
+  "startedAt": "2025-08-15T06:33:54+00:00",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Performance Optimization",
+    "Security Configuration",
+    "Database Management",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

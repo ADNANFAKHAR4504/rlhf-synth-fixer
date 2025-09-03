@@ -49,7 +49,7 @@ Project
 
 Owner
 
-📦 Output Requirements:
+Output Requirements:
 A CloudFormation YAML template that:
 
 Is deployable without modification
@@ -60,7 +60,7 @@ Fulfills all specified functional requirements
 
 Optional: Use parameters for region, CIDR blocks, environment name, and tags for reusability.
 
-🛠️ Implementation Notes:
+Implementation Notes:
 Use !Ref and !Sub for dynamic references.
 
 Use Mappings or Parameters for AZs and CIDR blocks if applicable.
