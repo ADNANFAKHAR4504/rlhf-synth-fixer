@@ -1,0 +1,67 @@
+# Example GitHub Actions workflow for Terraform
+# This shows how to properly configure AWS credentials in CI/CD
+
+name: Terraform Plan and Apply
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  TERRAFORM_VERSION: 1.5.0
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    
+    # Important: Configure permissions for OIDC
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Method 1: Using OIDC (Recommended - most secure)
+    - name: Configure AWS credentials via OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        role-session-name: terraform-github-actions
+        aws-region: ${{ env.AWS_REGION }}
+        
+    # Method 2: Using static credentials (Alternative - less secure)
+    # - name: Configure AWS credentials via secrets
+    #   uses: aws-actions/configure-aws-credentials@v4
+    #   with:
+    #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    #     aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+    - name: Terraform Init
+      run: terraform init
+      working-directory: ./lib
+
+    - name: Terraform Validate
+      run: terraform validate
+      working-directory: ./lib
+
+    - name: Terraform Plan
+      run: terraform plan -out=tfplan
+      working-directory: ./lib
+
+    - name: Terraform Apply (on main branch only)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: terraform apply -auto-approve tfplan
+      working-directory: ./lib
