@@ -217,8 +217,8 @@ public class MainIntegrationTest {
     public void testVpcConfigurationUsEast1() {
         try {
             // Get VPC ID from outputs
-            String vpcId = stackOutputs.get("us-east-1vpcId");
-            assertThat(vpcId).isNotNull().withFailMessage("us-east-1vpcId not found in stack outputs");
+            String vpcId = stackOutputs.get("us-east-1-vpcId");
+            assertThat(vpcId).isNotNull().withFailMessage("us-east-1-vpcId not found in stack outputs");
             System.out.println("Testing US-East-1 VPC: " + vpcId);
             
             // Verify VPC exists and has correct configuration
@@ -235,11 +235,11 @@ public class MainIntegrationTest {
             System.out.println("✅ US-East-1 VPC configuration verified: " + vpc.cidrBlock());
             
             // Verify subnets
-            String publicSubnetId = stackOutputs.get("us-east-1vpcPublicSubnetId");
-            String privateSubnetId = stackOutputs.get("us-east-1vpcPrivateSubnetId");
+            String publicSubnetId = stackOutputs.get("us-east-1-vpcPublicSubnetId");
+            String privateSubnetId = stackOutputs.get("us-east-1-vpcPrivateSubnetId");
             
-            assertThat(publicSubnetId).isNotNull().withFailMessage("us-east-1vpcPublicSubnetId not found");
-            assertThat(privateSubnetId).isNotNull().withFailMessage("us-east-1vpcPrivateSubnetId not found");
+            assertThat(publicSubnetId).isNotNull().withFailMessage("us-east-1-vpcPublicSubnetId not found");
+            assertThat(privateSubnetId).isNotNull().withFailMessage("us-east-1-vpcPrivateSubnetId not found");
             
             DescribeSubnetsRequest subnetsRequest = DescribeSubnetsRequest.builder()
                 .subnetIds(publicSubnetId, privateSubnetId)
@@ -272,8 +272,8 @@ public class MainIntegrationTest {
     public void testVpcConfigurationUsWest2() {
         try {
             // Get VPC ID from outputs
-            String vpcId = stackOutputs.get("us-west-2vpcId");
-            assertThat(vpcId).isNotNull().withFailMessage("us-west-2vpcId not found in stack outputs");
+            String vpcId = stackOutputs.get("us-west-2-vpcId");
+            assertThat(vpcId).isNotNull().withFailMessage("us-west-2-vpcId not found in stack outputs");
             System.out.println("Testing US-West-2 VPC: " + vpcId);
             
             // Verify VPC exists and has correct configuration
@@ -290,11 +290,11 @@ public class MainIntegrationTest {
             System.out.println("✅ US-West-2 VPC configuration verified: " + vpc.cidrBlock());
             
             // Verify subnets
-            String publicSubnetId = stackOutputs.get("us-west-2vpcPublicSubnetId");
-            String privateSubnetId = stackOutputs.get("us-west-2vpcPrivateSubnetId");
+            String publicSubnetId = stackOutputs.get("us-west-2-vpcPublicSubnetId");
+            String privateSubnetId = stackOutputs.get("us-west-2-vpcPrivateSubnetId");
             
-            assertThat(publicSubnetId).isNotNull().withFailMessage("us-west-2vpcPublicSubnetId not found");
-            assertThat(privateSubnetId).isNotNull().withFailMessage("us-west-2vpcPrivateSubnetId not found");
+            assertThat(publicSubnetId).isNotNull().withFailMessage("us-west-2-vpcPublicSubnetId not found");
+            assertThat(privateSubnetId).isNotNull().withFailMessage("us-west-2-vpcPrivateSubnetId not found");
             
             DescribeSubnetsRequest subnetsRequest = DescribeSubnetsRequest.builder()
                 .subnetIds(publicSubnetId, privateSubnetId)
@@ -314,8 +314,8 @@ public class MainIntegrationTest {
     public void testSecurityGroupsConfiguration() {
         try {
             // Test US-East-1 Security Group
-            String securityGroupIdUsEast1 = stackOutputs.get("us-east-1securityGroupId");
-            assertThat(securityGroupIdUsEast1).isNotNull().withFailMessage("us-east-1securityGroupId not found");
+            String securityGroupIdUsEast1 = stackOutputs.get("us-east-1-securityGroupId");
+            assertThat(securityGroupIdUsEast1).isNotNull().withFailMessage("us-east-1-securityGroupId not found");
             
             DescribeSecurityGroupsRequest requestUsEast1 = DescribeSecurityGroupsRequest.builder()
                 .groupIds(securityGroupIdUsEast1)
@@ -337,8 +337,8 @@ public class MainIntegrationTest {
             System.out.println("✅ US-East-1 Security Group HTTP/HTTPS rules verified");
             
             // Test US-West-2 Security Group
-            String securityGroupIdUsWest2 = stackOutputs.get("us-west-2securityGroupId");
-            assertThat(securityGroupIdUsWest2).isNotNull().withFailMessage("us-west-2securityGroupId not found");
+            String securityGroupIdUsWest2 = stackOutputs.get("us-west-2-securityGroupId");
+            assertThat(securityGroupIdUsWest2).isNotNull().withFailMessage("us-west-2-securityGroupId not found");
             
             DescribeSecurityGroupsRequest requestUsWest2 = DescribeSecurityGroupsRequest.builder()
                 .groupIds(securityGroupIdUsWest2)
@@ -369,8 +369,8 @@ public class MainIntegrationTest {
     public void testEc2InstanceConfiguration() {
         try {
             // EC2 instance should only exist in US-East-1
-            String ec2InstanceId = stackOutputs.get("us-east-1ec2InstanceId");
-            assertThat(ec2InstanceId).isNotNull().withFailMessage("us-east-1ec2InstanceId not found in stack outputs");
+            String ec2InstanceId = stackOutputs.get("us-east-1-ec2InstanceId");
+            assertThat(ec2InstanceId).isNotNull().withFailMessage("us-east-1-ec2InstanceId not found in stack outputs");
             System.out.println("Testing EC2 instance: " + ec2InstanceId);
             
             DescribeInstancesRequest request = DescribeInstancesRequest.builder()
@@ -388,8 +388,8 @@ public class MainIntegrationTest {
             System.out.println("✅ EC2 instance configuration verified: " + instance.instanceType() + " in state " + instance.state().name());
             
             // Verify instance is in the correct VPC and subnet
-            String expectedVpcId = stackOutputs.get("us-east-1vpcId");
-            String expectedSubnetId = stackOutputs.get("us-east-1vpcPublicSubnetId");
+            String expectedVpcId = stackOutputs.get("us-east-1-vpcId");
+            String expectedSubnetId = stackOutputs.get("us-east-1-vpcPublicSubnetId");
             
             assertThat(instance.vpcId()).isEqualTo(expectedVpcId);
             assertThat(instance.subnetId()).isEqualTo(expectedSubnetId);
@@ -405,8 +405,8 @@ public class MainIntegrationTest {
     public void testIamRoleConfiguration() {
         try {
             // Test EC2 instance role
-            String ec2InstanceRoleArn = stackOutputs.get("us-east-1ec2InstanceRoleArn");
-            assertThat(ec2InstanceRoleArn).isNotNull().withFailMessage("us-east-1ec2InstanceRoleArn not found in stack outputs");
+            String ec2InstanceRoleArn = stackOutputs.get("us-east-1-ec2InstanceRoleArn");
+            assertThat(ec2InstanceRoleArn).isNotNull().withFailMessage("us-east-1-ec2InstanceRoleArn not found in stack outputs");
             System.out.println("Testing IAM role: " + ec2InstanceRoleArn);
             
             // Extract role name from ARN
@@ -451,9 +451,9 @@ public class MainIntegrationTest {
             System.out.println("✅ Stack naming conventions verified");
             
             // Verify resource outputs follow expected patterns
-            String vpcIdUsEast1 = stackOutputs.get("us-east-1vpcId");
-            String vpcIdUsWest2 = stackOutputs.get("us-west-2vpcId");
-            String ec2InstanceId = stackOutputs.get("us-east-1ec2InstanceId");
+            String vpcIdUsEast1 = stackOutputs.get("us-east-1-vpcId");
+            String vpcIdUsWest2 = stackOutputs.get("us-west-2-vpcId");
+            String ec2InstanceId = stackOutputs.get("us-east-1-ec2InstanceId");
             
             if (vpcIdUsEast1 != null) {
                 assertThat(vpcIdUsEast1).startsWith("vpc-");
@@ -481,12 +481,12 @@ public class MainIntegrationTest {
         try {
             // Verify all expected outputs are present for US-East-1
             List<String> expectedUsEast1Outputs = Arrays.asList(
-                "us-east-1vpcId",
-                "us-east-1vpcPublicSubnetId",
-                "us-east-1vpcPrivateSubnetId",
-                "us-east-1securityGroupId",
-                "us-east-1ec2InstanceId",
-                "us-east-1ec2InstanceRoleArn"
+                "us-east-1-vpcId",
+                "us-east-1-vpcPublicSubnetId",
+                "us-east-1-vpcPrivateSubnetId",
+                "us-east-1-securityGroupId",
+                "us-east-1-ec2InstanceId",
+                "us-east-1-ec2InstanceRoleArn"
             );
             
             for (String expectedOutput : expectedUsEast1Outputs) {
@@ -499,10 +499,10 @@ public class MainIntegrationTest {
             
             // Verify all expected outputs are present for US-West-2
             List<String> expectedUsWest2Outputs = Arrays.asList(
-                "us-west-2vpcId",
-                "us-west-2vpcPublicSubnetId", 
-                "us-west-2vpcPrivateSubnetId",
-                "us-west-2securityGroupId"
+                "us-west-2-vpcId",
+                "us-west-2-vpcPublicSubnetId", 
+                "us-west-2-vpcPrivateSubnetId",
+                "us-west-2-securityGroupId"
             );
             
             for (String expectedOutput : expectedUsWest2Outputs) {
@@ -514,9 +514,9 @@ public class MainIntegrationTest {
             System.out.println("✅ All US-West-2 outputs present and non-null");
             
             // Verify US-West-2 should NOT have EC2-related outputs
-            assertThat(stackOutputs).doesNotContainKey("us-west-2ec2InstanceId")
+            assertThat(stackOutputs).doesNotContainKey("us-west-2-ec2InstanceId")
                 .withFailMessage("US-West-2 should not have EC2 instance");
-            assertThat(stackOutputs).doesNotContainKey("us-west-2ec2InstanceRoleArn")
+            assertThat(stackOutputs).doesNotContainKey("us-west-2-ec2InstanceRoleArn")
                 .withFailMessage("US-West-2 should not have EC2 IAM role");
             System.out.println("✅ US-West-2 correctly excludes EC2-related outputs");
             
@@ -530,8 +530,8 @@ public class MainIntegrationTest {
     public void testRegionalResourceIsolation() {
         try {
             // Verify resources are properly isolated between regions
-            String vpcIdUsEast1 = stackOutputs.get("us-east-1vpcId");
-            String vpcIdUsWest2 = stackOutputs.get("us-west-2vpcId");
+            String vpcIdUsEast1 = stackOutputs.get("us-east-1-vpcId");
+            String vpcIdUsWest2 = stackOutputs.get("us-west-2-vpcId");
             
             assertThat(vpcIdUsEast1).isNotEqualTo(vpcIdUsWest2)
                 .withFailMessage("VPC IDs should be different between regions");
