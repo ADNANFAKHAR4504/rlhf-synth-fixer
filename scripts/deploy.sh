@@ -160,6 +160,17 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "Deploying infrastructure ..."
     pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
     cd ..
+  elif [ "$LANGUAGE" = "typescript" ]; then
+    echo "🔧 TypeScript Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+    cd lib
+    echo "Installing dependencies..."
+    npm install
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    echo "Deploying infrastructure ..."
+    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    cd ..
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
@@ -170,7 +181,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python, pulumi+java"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+typescript, pulumi+python, pulumi+go"
   exit 1
 fi
 
