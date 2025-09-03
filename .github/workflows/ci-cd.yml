@@ -118,6 +118,82 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+
+  infracost:
+    name: Infracost (Terraform Cost Estimation)
+    needs: [detect-metadata, build, synth]
+    runs-on: ubuntu-24.04
+    if: >
+      ${{
+      github.event_name == 'pull_request' &&
+      github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') &&
+      needs.detect-metadata.outputs.platform == 'tf'}}
+    environment: dev
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for Terraform files
+        id: tf-check
+        run: |
+          if ! find lib -maxdepth 1 -name "*.tf" | grep -q .; then
+            echo "No Terraform files found in lib/. Skipping Infracost job."
+            echo "skip_infracost=true" >> $GITHUB_ENV
+            exit 0
+          fi
+
+      - name: Setup Terraform
+        if: env.skip_infracost != 'true'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Infracost
+        if: env.skip_infracost != 'true'
+        uses: infracost/actions/setup@v3
+
+      - name: Setup Environment (variables)
+        if: env.skip_infracost != 'true'
+        run: |
+          echo "TERRAFORM_STATE_BUCKET=${{ env.TERRAFORM_STATE_BUCKET }}" >> $GITHUB_ENV
+          echo "TERRAFORM_STATE_BUCKET_REGION=${{ env.TERRAFORM_STATE_BUCKET_REGION }}" >> $GITHUB_ENV
+          echo "ENVIRONMENT_SUFFIX=${{ env.ENVIRONMENT_SUFFIX }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform init
+
+      - name: Terraform Plan
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform plan -out=tfplan
+
+      - name: Convert plan to JSON
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform show -json tfplan > plan.json
+
+      - name: Run Infracost breakdown
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: infracost breakdown --path=plan.json --format=json --out-file=../infracost.json
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Post Infracost comment
+        if: env.skip_infracost != 'true'
+        run: |
+          infracost comment github --path=../infracost.json \
+                                 --pull-request=${{ github.event.pull_request.number }} \
+                                 --repo=${{ github.repository }} \
+                                 --github-token=${{ secrets.GITHUB_TOKEN }} \
+                                 --behavior=update
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
