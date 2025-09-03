@@ -269,7 +269,7 @@
                 "CidrBlock": "10.0.2.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        0,
+                        1,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -352,7 +352,7 @@
                 "CidrBlock": "10.0.4.0/24",
                 "AvailabilityZone": {
                     "Fn::Select": [
-                        0,
+                        1,
                         {
                             "Fn::GetAZs": ""
                         }
@@ -1115,6 +1115,9 @@
         },
         "ECSService": {
             "Type": "AWS::ECS::Service",
+            "DependsOn": [
+                "ALBListener"
+            ],
             "Properties": {
                 "ServiceName": {
                     "Ref": "ServiceName"
@@ -1129,7 +1132,7 @@
                 "LaunchType": "FARGATE",
                 "NetworkConfiguration": {
                     "AwsvpcConfiguration": {
-                        "AssignPublicIp": "ENABLED",
+                        "AssignPublicIp": "DISABLED",
                         "SecurityGroups": [
                             {
                                 "Ref": "ECSSecurityGroup"
@@ -1176,9 +1179,6 @@
         },
         "CloudWatchLogsGroup": {
             "Type": "AWS::Logs::LogGroup",
-            "DependsOn": [
-                "KMSKeyAlias"
-            ],
             "Properties": {
                 "LogGroupName": {
                     "Fn::Sub": "/ecs/${CompanyName}-${EnvironmentName}"
@@ -1191,9 +1191,6 @@
         },
         "LogsBucket": {
             "Type": "AWS::S3::Bucket",
-            "DependsOn": [
-                "KMSKeyAlias"
-            ],
             "Properties": {
                 "BucketName": {
                     "Fn::Sub": "${CompanyName}-${EnvironmentName}-logs-${AWS::AccountId}"
@@ -1276,9 +1273,6 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": [
-                "KMSKeyAlias"
-            ],
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "${CompanyName}-${EnvironmentName}-trail"
@@ -1294,42 +1288,6 @@
                     "Ref": "KMSKey"
                 },
                 "IsLogging": true,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "RAMShare": {
-            "Type": "AWS::RAM::ResourceShare",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-share"
-                },
-                "AllowExternalPrincipals": false,
-                "Principals": [
-                    {
-                        "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                    }
-                ],
-                "ResourceArns": [
-                    {
-                        "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet1}"
-                    },
-                    {
-                        "Fn::Sub": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet2}"
-                    }
-                ],
                 "Tags": [
                     {
                         "Key": "Environment",

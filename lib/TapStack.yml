@@ -14,26 +14,10 @@ Parameters:
     Type: String
     Default: appdb
     Description: RDS database name
-  # DatabaseUsername:
-  #   Type: String
-  #   Default: admin
-  #   Description: RDS master username
-  #   NoEcho: true
-  # DatabasePassword:
-  #   Type: String
-  #   NoEcho: true
-  #   Description: RDS master password
-  #   MinLength: 8
-  #   MaxLength: 41
-  #   AllowedPattern: "[a-zA-Z0-9!@#$%^&*()_+-=]+"
   DatabaseInstanceClass:
     Type: String
     Default: db.t3.micro
     Description: RDS instance type
-  # ECSInstanceType:
-  #   Type: String
-  #   Default: t3.medium
-  #   Description: ECS container instance type
   ServiceName:
     Type: String
     Default: app-service
@@ -59,13 +43,10 @@ Metadata:
           default: Database Configuration
         Parameters:
           - DatabaseName
-          # - DatabaseUsername
-          # - DatabasePassword
           - DatabaseInstanceClass
       - Label:
           default: ECS Configuration
         Parameters:
-          # - ECSInstanceType
           - ServiceName
           - ContainerPort
           - ContainerImage
@@ -168,7 +149,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone: !Select [1, !GetAZs ""]
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -201,7 +182,7 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !Select [0, !GetAZs ""]
+      AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
           Value: !Sub ${CompanyName}-${EnvironmentName}-private-subnet-2
@@ -408,8 +389,8 @@ Resources:
       DBInstanceClass: !Ref DatabaseInstanceClass
       Engine: mysql
       EngineVersion: "8.0.40"
-      MasterUsername: ! "{{resolve:secretsmanager:my-db-secret:SecretString:username}}"
-      MasterUserPassword: ! "{{resolve:secretsmanager:my-db-secret:SecretString:password}}"
+      MasterUsername: "{{resolve:secretsmanager:my-db-secret:SecretString:username}}"
+      MasterUserPassword: "{{resolve:secretsmanager:my-db-secret:SecretString:password}}"
       AllocatedStorage: 20
       MaxAllocatedStorage: 100
       StorageEncrypted: true
@@ -553,6 +534,8 @@ Resources:
 
   ECSService:
     Type: AWS::ECS::Service
+    DependsOn:
+      - ALBListener
     Properties:
       ServiceName: !Ref ServiceName
       Cluster: !Ref ECSCluster
@@ -561,7 +544,7 @@ Resources:
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
+          AssignPublicIp: DISABLED
           SecurityGroups:
             - !Ref ECSSecurityGroup
           Subnets:
@@ -580,8 +563,6 @@ Resources:
   # CloudWatch Logs
   CloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
-    DependsOn:
-      - KMSKeyAlias
     Properties:
       LogGroupName: !Sub /ecs/${CompanyName}-${EnvironmentName}
       RetentionInDays: 90
@@ -590,8 +571,6 @@ Resources:
   # S3 Buckets for Logs
   LogsBucket:
     Type: AWS::S3::Bucket
-    DependsOn:
-      - KMSKeyAlias
     Properties:
       BucketName: !Sub ${CompanyName}-${EnvironmentName}-logs-${AWS::AccountId}
       BucketEncryption:
@@ -635,8 +614,6 @@ Resources:
   # CloudTrail
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn:
-      - KMSKeyAlias
     Properties:
       TrailName: !Sub ${CompanyName}-${EnvironmentName}-trail
       S3BucketName: !Ref LogsBucket
@@ -646,23 +623,6 @@ Resources:
       EnableLogFileValidation: true
       KMSKeyId: !Ref KMSKey
       IsLogging: true
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Company
-          Value: !Ref CompanyName
-
-  # RAM Resource Share (example)
-  RAMShare:
-    Type: AWS::RAM::ResourceShare
-    Properties:
-      Name: !Sub ${CompanyName}-${EnvironmentName}-share
-      AllowExternalPrincipals: false
-      Principals:
-        - !Sub arn:aws:iam::${AWS::AccountId}:root
-      ResourceArns:
-        - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet1}
-        - !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:subnet/${PrivateSubnet2}
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
