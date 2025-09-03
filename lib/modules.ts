@@ -246,6 +246,7 @@ export class InfrastructureModule extends Construct {
     // S3 Bucket Policy - Restricts access to VPC endpoints only
     // Critical security measure for financial data
     // S3 Bucket Policy - Updated to include CloudTrail permissions
+    // S3 Bucket Policy - Updated with proper CloudTrail permissions
     new S3BucketPolicy(this, 'app-logs-policy', {
       bucket: this.s3Bucket.id,
       policy: JSON.stringify({
@@ -263,7 +264,7 @@ export class InfrastructureModule extends Construct {
               },
             },
           },
-          // CloudTrail permissions
+          // CloudTrail permissions - GetBucketAcl
           {
             Sid: 'AWSCloudTrailAclCheck',
             Effect: 'Allow',
@@ -272,12 +273,8 @@ export class InfrastructureModule extends Construct {
             },
             Action: 's3:GetBucketAcl',
             Resource: 'arn:aws:s3:::app-logs-prod-ts',
-            Condition: {
-              StringEquals: {
-                'AWS:SourceArn': `arn:aws:cloudtrail:*:*:trail/${config.environment}-audit-trail`,
-              },
-            },
           },
+          // CloudTrail permissions - PutObject
           {
             Sid: 'AWSCloudTrailWrite',
             Effect: 'Allow',
@@ -289,9 +286,18 @@ export class InfrastructureModule extends Construct {
             Condition: {
               StringEquals: {
                 's3:x-amz-acl': 'bucket-owner-full-control',
-                'AWS:SourceArn': `arn:aws:cloudtrail:*:*:trail/${config.environment}-audit-trail`,
               },
             },
+          },
+          // CloudTrail permissions - GetBucketLocation
+          {
+            Sid: 'AWSCloudTrailGetBucketLocation',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketLocation',
+            Resource: 'arn:aws:s3:::app-logs-prod-ts',
           },
         ],
       }),
