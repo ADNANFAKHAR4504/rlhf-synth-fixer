@@ -76,7 +76,7 @@ Parameters:
     Type: String
     NoEcho: true
     Description: SSM Parameter Store path for DB master password (e.g., /tapstack/dev/db/master_password)
-    Default: !Sub '/tapstack/${Environment}/db/master_password'
+    Default: /tapstack/dev/db/master_password
 
   AllowHttpFromWorld:
     Type: String
@@ -380,7 +380,9 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - logs:DescribeLogStreams
-                Resource: !GetAtt CloudWatchLogGroup.Arn
+                Resource:
+                  - !GetAtt CloudWatchLogGroup.Arn
+                  - !Sub '${CloudWatchLogGroup.Arn}:log-stream:*'
         - PolicyName: CloudWatchAgent
           PolicyDocument:
             Version: '2012-10-17'
@@ -476,7 +478,7 @@ Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}"
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds:
@@ -605,7 +607,7 @@ Resources:
       Family: mysql8.0
       Description: Parameter group for MySQL 8.0
       Parameters:
-        max_connections: 150
+        max_connections: '150'
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-db-parameter-group'
@@ -623,7 +625,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-db'
       DBName: !Ref DBName
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: 20
       StorageType: gp3
