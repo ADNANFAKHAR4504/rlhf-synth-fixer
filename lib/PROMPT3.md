@@ -8,4 +8,4 @@ It looks like the template is expecting KeyName (for EC2 key pair) and Certifica
 
 These parameters either have safe defaults (for testing) or are made optional.
 
-The stack can still deploy without requiring me to manually input values each time.
+The stack can still deploy without requiring me to manually input values each  time.
