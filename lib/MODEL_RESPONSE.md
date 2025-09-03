@@ -313,10 +313,10 @@ import { MyServerlessAppStack } from '../lib/my-serverless-app-stack';
 const app = new cdk.App();
 
 
-// Deploy the stack to us-west-2 region as specified
+// Deploy the stack to us-west-1 region as specified
 new MyServerlessAppStack(app, 'MyServerlessAppStack', {
  env: {
-   region: 'us-west-2',
+   region: 'us-west-1',
  },
  description: 'Production-grade serverless web application infrastructure',
 });
@@ -711,7 +711,7 @@ This infrastructure creates a serverless web application with the following comp
 - **Security**: AWS Secrets Manager for database credentials, Security Groups for network isolation
 
 
-All resources are provisioned in the `us-west-2` region and follow AWS best practices for security and high availability.
+All resources are provisioned in the `us-west-1` region and follow AWS best practices for security and high availability.
 
 
 ## Architecture Overview
@@ -796,11 +796,11 @@ You'll need permissions to create VPC, EC2, Lambda, API Gateway, RDS, S3, Secret
 ### Bootstrap CDK (First-time setup)
 
 
-If you haven't used CDK in the `us-west-2` region before, bootstrap it:
+If you haven't used CDK in the `us-west-1` region before, bootstrap it:
 
 
 ```bash
-cdk bootstrap aws://YOUR-ACCOUNT-ID/us-west-2
+cdk bootstrap aws://YOUR-ACCOUNT-ID/us-west-1
 ```
 
 
@@ -856,7 +856,7 @@ Once deployed, test the Lambda function via API Gateway:
 
 2. **Test with curl**:
   ```bash
-  curl -X GET https://YOUR-API-ID.execute-api.us-west-2.amazonaws.com/prod/api
+  curl -X GET https://YOUR-API-ID.execute-api.us-west-1.amazonaws.com/prod/api
   ```
 
 

@@ -13,7 +13,7 @@ describe('TapStack Unit Tests', () => {
     beforeAll(() => {
       app = new cdk.App();
       stack = new TapStack(app, 'TestTapStack', {
-        env: { region: 'us-west-2', account: '123456789012' },
+        env: { region: 'us-west-1', account: '123456789012' },
         isTest: true,
       });
       template = Template.fromStack(stack);
@@ -31,7 +31,7 @@ describe('TapStack Unit Tests', () => {
     });
     test('should create Secrets Manager VPC Endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
-        ServiceName: 'com.amazonaws.us-west-2.secretsmanager',
+        ServiceName: 'com.amazonaws.us-west-1.secretsmanager',
       });
     });
     test('should create S3 bucket with website configuration', () => {
@@ -75,13 +75,30 @@ describe('TapStack Unit Tests', () => {
     let app: cdk.App;
     let stack: TapStack;
     let template: Template;
+    const fs = require('fs');
+    const path = require('path');
+    const lambdaDir = path.join(__dirname, '..', 'lib', 'lambda');
+    const nestedDir = path.join(lambdaDir, 'nested');
+    const nestedFile = path.join(nestedDir, 'dummy.txt');
 
     beforeAll(() => {
-      app = new cdk.App();
+      // Ensure a nested directory exists so local bundling exercises
+      // both directory and file copy branches for coverage
+      fs.mkdirSync(nestedDir, { recursive: true });
+      fs.writeFileSync(nestedFile, 'dummy');
+      // Provide a context flag to skip Docker bundling during unit tests
+      app = new cdk.App({ context: { skipBundling: true } });
       stack = new TapStack(app, 'ProdTapStack', {
-        env: { region: 'us-west-2', account: '123456789012' },
+        env: { region: 'us-west-1', account: '123456789012' },
       });
       template = Template.fromStack(stack);
+    });
+
+    afterAll(() => {
+      try {
+        if (fs.existsSync(nestedFile)) fs.unlinkSync(nestedFile);
+        if (fs.existsSync(nestedDir)) fs.rmdirSync(nestedDir);
+      } catch {}
     });
 
     test('should bundle Lambda code from asset', () => {
@@ -107,7 +124,7 @@ describe('TapStack Unit Tests', () => {
       process.env.TARGET_ARCHITECTURE = 'arm64';
       app = new cdk.App();
       stack = new TapStack(app, 'ArmTapStack', {
-        env: { region: 'us-west-2', account: '123456789012' },
+        env: { region: 'us-west-1', account: '123456789012' },
         isTest: true,
       });
       template = Template.fromStack(stack);

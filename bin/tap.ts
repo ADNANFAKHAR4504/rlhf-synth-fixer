@@ -12,7 +12,7 @@ const stackName = `TapStack${environmentSuffix}`;
 new TapStack(app, stackName, {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-west-2',
+    region: 'us-west-1',
   },
   description: `Serverless web application infrastructure (${environmentSuffix})`,
 });

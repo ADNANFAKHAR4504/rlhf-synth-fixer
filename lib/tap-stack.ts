@@ -8,6 +8,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import * as fs from 'fs';
 
 export interface TapStackProps extends cdk.StackProps {
   isTest?: boolean;
@@ -153,6 +154,12 @@ export class TapStack extends cdk.Stack {
         ? lambda.Architecture.ARM_64
         : lambda.Architecture.X86_64;
 
+    const skipBundling = Boolean(
+      this.node.tryGetContext('skipBundling') ||
+        process.env.CDK_SKIP_BUNDLING ||
+        process.env.JEST_WORKER_ID
+    );
+
     const lambdaFunction = new lambda.Function(this, 'MyWebAppLambdaFunction', {
       runtime: lambda.Runtime.PYTHON_3_8,
       handler: 'handler.lambda_handler',
@@ -165,6 +172,28 @@ export class TapStack extends cdk.Stack {
               image: lambda.Runtime.PYTHON_3_8.bundlingImage,
               // THE FIX: Force the build to be for an x86 CPU
               platform: 'linux/amd64',
+              local: {
+                tryBundle: (outputDir: string) => {
+                  if (!skipBundling) return false;
+                  const srcDir = path.join(__dirname, 'lambda');
+                  const copyDir = (src: string, dest: string) => {
+                    fs.mkdirSync(dest, { recursive: true });
+                    for (const entry of fs.readdirSync(src, {
+                      withFileTypes: true,
+                    })) {
+                      const srcPath = path.join(src, entry.name);
+                      const destPath = path.join(dest, entry.name);
+                      if (entry.isDirectory()) {
+                        copyDir(srcPath, destPath);
+                      } else if (entry.isFile()) {
+                        fs.copyFileSync(srcPath, destPath);
+                      }
+                    }
+                  };
+                  copyDir(srcDir, outputDir);
+                  return true; // Skip docker bundling in tests
+                },
+              },
               command: [
                 'bash',
                 '-c',

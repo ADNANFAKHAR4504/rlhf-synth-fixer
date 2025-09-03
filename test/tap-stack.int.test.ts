@@ -2,7 +2,7 @@ import * as AWS from 'aws-sdk';
 import axios from 'axios';
 
 // AWS SDK Configuration
-AWS.config.update({ region: 'us-west-2' });
+AWS.config.update({ region: 'us-west-1' });
 const cloudformation = new AWS.CloudFormation();
 const s3 = new AWS.S3();
 const secretsManager = new AWS.SecretsManager();

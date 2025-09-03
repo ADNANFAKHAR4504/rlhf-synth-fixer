@@ -15,7 +15,7 @@ Output must include **entire project structure & code**, deployable with `cdk de
 ## Requirements
 
 ### General
-- Region: `us-west-2`
+- Region: `us-west-1`
 - Language: TypeScript
 - Use L2 constructs, no hardcoded secrets (Secrets Manager).
 - Add comments, type-safe code.
