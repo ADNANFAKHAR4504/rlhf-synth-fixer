@@ -3,14 +3,18 @@ Description: 'Production-grade migration infrastructure stack for web applicatio
 
 Parameters:
   VpcSecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
+    Type: String
     Description: Security Group ID for Lambda functions in VPC (leave empty for no VPC)
     Default: ''
+    AllowedPattern: '^$|^sg-[a-z0-9]+$'
+    ConstraintDescription: Must be empty or a valid security group ID (sg-xxxxxxxxx)
 
   VpcSubnetIds:
-    Type: CommaDelimitedList
+    Type: String
     Description: Comma-separated list of Subnet IDs for Lambda functions in VPC (leave empty for no VPC)
     Default: ''
+    AllowedPattern: '^$|^subnet-[a-z0-9]+(,subnet-[a-z0-9]+)*$'
+    ConstraintDescription: Must be empty or a comma-separated list of valid subnet IDs (subnet-xxxxxxxxx)
 
   NotificationEmail:
     Type: String
@@ -36,7 +40,7 @@ Conditions:
   UseVpc:
     !And [
       !Not [!Equals [!Ref VpcSecurityGroupId, '']],
-      !Not [!Equals [!Join ['', !Ref VpcSubnetIds], '']],
+      !Not [!Equals [!Ref VpcSubnetIds, '']],
     ]
   CreateSubscription: !Not [!Equals [!Ref NotificationEmail, '']]
 
@@ -185,7 +189,7 @@ Resources:
         - UseVpc
         - SecurityGroupIds:
             - !Ref VpcSecurityGroupId
-          SubnetIds: !Ref VpcSubnetIds
+          SubnetIds: !Split [',', !Ref VpcSubnetIds]
         - !Ref AWS::NoValue
       Code:
         ZipFile: |
@@ -285,7 +289,7 @@ Resources:
         - UseVpc
         - SecurityGroupIds:
             - !Ref VpcSecurityGroupId
-          SubnetIds: !Ref VpcSubnetIds
+          SubnetIds: !Split [',', !Ref VpcSubnetIds]
         - !Ref AWS::NoValue
       Code:
         ZipFile: |
