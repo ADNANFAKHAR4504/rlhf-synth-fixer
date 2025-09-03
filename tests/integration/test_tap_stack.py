@@ -198,7 +198,10 @@ class TestTapStackIntegration(unittest.TestCase):
         # ASSERT
         self.assertEqual(len(response['SecurityGroups']), 1, "Security group not found")
         sg = response['SecurityGroups'][0]
-        self.assertIn('GroupDescription', sg, "Security group description not found")
+        
+        # The security group has 'Description' field, not 'GroupDescription'
+        self.assertIn('Description', sg, "Security group description not found")
+        self.assertEqual(sg['Description'], "Security group for Lambda functions", "Unexpected security group description")
 
 
 # Skip Lambda tests since Lambda function isn't deployed based on the outputs
@@ -299,7 +302,6 @@ class TestLambdaFuncStackIntegration(unittest.TestCase):
         
         # Test implementation would go here
         pass
-
 
 
 @unittest.skipIf('LambdaFunctionName' not in flat_outputs,
