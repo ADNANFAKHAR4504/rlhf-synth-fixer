@@ -251,9 +251,9 @@ rds_subnet_group = aws.rds.SubnetGroup(f"{prefix.lower()}-rds-subnet-group",
 # Create RDS instance
 rds_instance = aws.rds.Instance(f"{prefix.lower()}-rds-instance",
     allocated_storage=20,
-    storage_type="gp2",
+    storage_type="gp3",
     engine="mysql",
-    engine_version="8.0.35",
+    engine_version="8.0.40",  # Updated to supported version
     instance_class="db.t3.micro",
     db_name="webappdb",
     username="admin",
