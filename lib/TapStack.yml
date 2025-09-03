@@ -1798,6 +1798,8 @@ Resources:
       DeploymentStyle:
         DeploymentType: BLUE_GREEN
         DeploymentOption: WITH_TRAFFIC_CONTROL
+      AutoScalingGroups:
+        - !Ref WebServerASG
       BlueGreenDeploymentConfiguration:
         TerminateBlueInstancesOnDeploymentSuccess:
           Action: KEEP_ALIVE
