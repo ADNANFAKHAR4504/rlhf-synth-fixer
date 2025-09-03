@@ -1,12 +1,13 @@
 package app;
 
-import app.components.Ec2Component;
-import app.components.SecurityGroupComponent;
-import app.components.VpcComponent;
+import app.constructs.Ec2Construct;
+import app.constructs.SecurityGroupConstruct;
+import app.constructs.VpcConstruct;
 import software.amazon.awscdk.App;
-import software.amazon.awscdk.Environment;
-import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.CfnOutput;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.Environment;
 import software.constructs.Construct;
 
 import java.util.List;
@@ -89,7 +90,7 @@ class TapStack extends Stack {
         // Get environment suffix from props, context, or use 'dev' as default
         this.environmentSuffix = Optional.ofNullable(props)
                 .map(TapStackProps::getEnvironmentSuffix)
-                .or(() -> Optional.ofNullable(this.getNode().tryGetContext("environmentSuffix"))
+                .or(() -> Optional.of(this.getNode().tryGetContext("environmentSuffix"))
                         .map(Object::toString))
                 .orElse("dev");
 
@@ -106,19 +107,49 @@ class TapStack extends Stack {
         }
 
         // Create VPC component
-        VpcComponent vpcComponent = new VpcComponent(this, "VpcComponent", vpcCidr);
+        VpcConstruct vpcConstruct = new VpcConstruct(this, "VpcComponent", vpcCidr);
 
         // Create security group component
-        SecurityGroupComponent securityGroupComponent = new SecurityGroupComponent(
-                this, "SecurityGroupComponent", vpcComponent.getVpc());
+        SecurityGroupConstruct securityGroupConstruct = new SecurityGroupConstruct(
+                this, "SecurityGroupComponent", vpcConstruct.getVpc());
 
         // Create EC2 instance only in the first VPC (us-east-1)
         if (shouldCreateEc2) {
-            new Ec2Component(this, "Ec2Component",
-                    vpcComponent.getVpc(),
-                    vpcComponent.getPublicSubnet(),
-                    securityGroupComponent.getWebSecurityGroup());
+            Ec2Construct ec2Construct = new Ec2Construct(this, "Ec2Component",
+                    vpcConstruct.getVpc(),
+                    vpcConstruct.getPublicSubnet(),
+                    securityGroupConstruct.getWebSecurityGroup());
+
+            CfnOutput.Builder.create(this, region + "ec2InstanceIdOutput")
+                    .value(ec2Construct.getInstanceId())
+                    .exportName(region + "ec2InstanceId")
+                    .build();
+
+            CfnOutput.Builder.create(this, region + "ec2InstanceRoleArnOutput")
+                    .value(ec2Construct.getInstanceRoleArn())
+                    .exportName(region + "ec2InstanceRoleArn")
+                    .build();
         }
+
+        CfnOutput.Builder.create(this, region + "securityGroupIdOutput")
+                .value(securityGroupConstruct.getSecurityGroupId())
+                .exportName(region + "securityGroupId")
+                .build();
+
+        CfnOutput.Builder.create(this, region + "vpcIdOutput")
+                .value(vpcConstruct.getVpc().getVpcId())
+                .exportName(region + "vpcId")
+                .build();
+
+        CfnOutput.Builder.create(this, region + "vpcPrivateSubnetIdOutput")
+                .value(vpcConstruct.getPrivateSubnet().getSubnetId())
+                .exportName(region + "vpcPrivateSubnetId")
+                .build();
+
+        CfnOutput.Builder.create(this, region + "vpcPublicSubnetIdOutput")
+                .value(vpcConstruct.getPublicSubnet().getSubnetId())
+                .exportName(region + "vpcPublicSubnetId")
+                .build();
     }
 
     /**

@@ -1,4 +1,4 @@
-package app.components;
+package app.constructs;
 
 import software.amazon.awscdk.services.ec2.CfnEIP;
 import software.amazon.awscdk.services.ec2.CfnInternetGateway;
@@ -12,11 +12,13 @@ import software.amazon.awscdk.services.ec2.Subnet;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.constructs.Construct;
 
-public class VpcComponent extends Construct {
+public class VpcConstruct extends Construct {
     private final Vpc vpc;
     private final Subnet publicSubnet;
 
-    public VpcComponent(final Construct scope, final String id, final String vpcCidr) {
+    private final Subnet privateSubnet;
+
+    public VpcConstruct(final Construct scope, final String id, final String vpcCidr) {
         super(scope, id);
 
         // Create VPC
@@ -51,7 +53,7 @@ public class VpcComponent extends Construct {
 
         // Create private subnet
         // Second subnet
-        Subnet privateSubnet = Subnet.Builder.create(this, "PrivateSubnet")
+        this.privateSubnet = Subnet.Builder.create(this, "PrivateSubnet")
                 .vpcId(vpc.getVpcId())
                 .cidrBlock(calculateSubnetCidr(vpcCidr, 1)) // Second subnet
                 .availabilityZone(availabilityZone)
@@ -107,9 +109,6 @@ public class VpcComponent extends Construct {
     }
 
     private String calculateSubnetCidr(final String vpcCidr, final int subnetIndex) {
-        // Simple CIDR calculation for /24 subnets
-        // For 10.0.0.0/16: subnet 0 = 10.0.0.0/24, subnet 1 = 10.0.1.0/24
-        // For 192.168.0.0/16: subnet 0 = 192.168.0.0/24, subnet 1 = 192.168.1.0/24
         String[] parts = vpcCidr.split("\\.");
         return parts[0] + "." + parts[1] + "." + subnetIndex + ".0/24";
     }
@@ -120,5 +119,9 @@ public class VpcComponent extends Construct {
 
     public Subnet getPublicSubnet() {
         return publicSubnet;
+    }
+
+    public Subnet getPrivateSubnet() {
+        return privateSubnet;
     }
 }

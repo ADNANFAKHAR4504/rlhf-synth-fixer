@@ -1,4 +1,4 @@
-package app.components;
+package app.constructs;
 
 import software.amazon.awscdk.services.ec2.Peer;
 import software.amazon.awscdk.services.ec2.Port;
@@ -6,10 +6,10 @@ import software.amazon.awscdk.services.ec2.SecurityGroup;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.constructs.Construct;
 
-public class SecurityGroupComponent extends Construct {
+public class SecurityGroupConstruct extends Construct {
     private final SecurityGroup webSecurityGroup;
 
-    public SecurityGroupComponent(final Construct scope, final String id, final Vpc vpc) {
+    public SecurityGroupConstruct(final Construct scope, final String id, final Vpc vpc) {
         super(scope, id);
 
         // Create security group for web traffic
@@ -43,5 +43,9 @@ public class SecurityGroupComponent extends Construct {
 
     public SecurityGroup getWebSecurityGroup() {
         return webSecurityGroup;
+    }
+
+    public String getSecurityGroupId() {
+        return this.webSecurityGroup.getSecurityGroupId();
     }
 }

@@ -7,10 +7,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assumptions;
 import software.amazon.awssdk.regions.Region;
-import software.amazon.awssdk.services.cloudformation.CloudFormationClient;
-import software.amazon.awssdk.services.cloudformation.model.DescribeStacksRequest;
-import software.amazon.awssdk.services.cloudformation.model.DescribeStacksResponse;
-import software.amazon.awssdk.services.cloudformation.model.Stack;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesResponse;
@@ -53,25 +49,29 @@ public class MainIntegrationTest {
     private static final String TEST_REGION_US_EAST_1 = "us-east-1";
     private static final String TEST_REGION_US_WEST_2 = "us-west-2";
     private static final ObjectMapper objectMapper = new ObjectMapper();
-    private static String TEST_STACK_NAME; // Will be populated from actual stack
 
     // Deployment outputs - populated from actual CDK stack
     private static JsonNode allOutputs;
     private static String vpcIdUsEast1;
     private static String vpcIdUsWest2;
     private static String ec2InstanceId;
-    private static String securityGroupId;
-    private static String iamRoleArn;
+    private static String securityGroupIdUsEast1;
+    private static String securityGroupIdUsWest2;
+    private static String ec2InstanceRoleArn;
+    private static String vpcPrivateSubnetIdEast1;
+    private static String vpcPrivateSubnetIdWest2;
+    private static String vpcPublicSubnetIdEast1;
+    private static String vpcPublicSubnetIdWest2;
 
     @BeforeAll
     static void setUpDeploymentOutputs() {
-        // Get deployment outputs from actual CDK stack
+        String TEST_STACK_NAME;
         try {
             String stackName = getStackName();
             TEST_STACK_NAME = stackName; // Set the test stack name for other methods
             
             System.out.println("=== Loading Deployment Outputs ===");
-            System.out.println("Stack Name: " + TEST_STACK_NAME);
+            System.out.println("Stack Name: " + stackName);
             
             // Try to get outputs from CloudFormation
             String outputsJson = getCdkStackOutputs(stackName);
@@ -79,53 +79,41 @@ public class MainIntegrationTest {
                 allOutputs = objectMapper.readTree(outputsJson);
                 
                 // Extract specific outputs
-                vpcIdUsEast1 = getOutputValue(TEST_STACK_NAME + "-us-east-1", "VpcId");
-                vpcIdUsWest2 = getOutputValue(TEST_STACK_NAME + "-us-west-2", "VpcId");
-                ec2InstanceId = getOutputValue(TEST_STACK_NAME + "-us-east-1", "Ec2InstanceId");
-                securityGroupId = getOutputValue(TEST_STACK_NAME + "-us-east-1", "SecurityGroupId");
-                iamRoleArn = getOutputValue(TEST_STACK_NAME + "-us-east-1", "IamRoleArn");
+                vpcIdUsEast1 = getOutputValue("us-east-1", "us-east-1-VpcId", stackName);
+                vpcIdUsWest2 = getOutputValue("us-west-2", "us-west-2-VpcId", stackName);
+
+                securityGroupIdUsEast1 = getOutputValue("us-east-1", "us-east-1-securityGroupId", stackName);
+                securityGroupIdUsWest2 = getOutputValue("us-west-2", "us-west-2-securityGroupId", stackName);
+
+                ec2InstanceId = getOutputValue("us-east-1", "us-east-1-ec2InstanceId", stackName);
+                ec2InstanceRoleArn = getOutputValue("us-east-1", "us-east-1-ec2InstanceRoleArn", stackName);
+
+                vpcPrivateSubnetIdEast1 = getOutputValue("us-east-1", "us-east-1-vpcPrivateSubnetId", stackName);
+                vpcPrivateSubnetIdWest2 = getOutputValue("us-west-2", "us-west-2-vpcPrivateSubnetId", stackName);
+
+                vpcPublicSubnetIdEast1 = getOutputValue("us-east-1", "us-east-1-vpcPublicSubnetId", stackName);
+                vpcPublicSubnetIdWest2 = getOutputValue("us-west-2", "us-west-2-vpcPublicSubnetId", stackName);
                 
                 System.out.println("=== Deployment Outputs Loaded Successfully ===");
                 System.out.println("VPC ID US-East-1: " + vpcIdUsEast1);
                 System.out.println("VPC ID US-West-2: " + vpcIdUsWest2);
                 System.out.println("EC2 Instance ID: " + ec2InstanceId);
-                System.out.println("Security Group ID: " + securityGroupId);
-                System.out.println("IAM Role ARN: " + iamRoleArn);
+                System.out.println("EC2 Role ARN: " + ec2InstanceRoleArn);
+                System.out.println("Security Group ID US-East-1: " + securityGroupIdUsEast1);
+                System.out.println("Security Group ID US-West-2: " + securityGroupIdUsWest2);
+                System.out.println("VPC Private Subnet ID US-East-1: " + vpcPrivateSubnetIdEast1);
+                System.out.println("VPC Private Subnet ID US-West-2: " + vpcPrivateSubnetIdWest2);
+                System.out.println("VPC Public Subnet ID US-East-1: " + vpcPublicSubnetIdEast1);
+                System.out.println("VPC Public Subnet ID US-West-2: " + vpcPublicSubnetIdWest2);
             }
             
         } catch (Exception e) {
             String errorMsg = e.getMessage();
             System.err.println("Failed to load deployment outputs: " + errorMsg);
-            
-            // Check if we're running in CI
-            boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-            
-            if (errorMsg.contains("does not exist") || errorMsg.contains("not found")) {
-                System.out.println("💡 Stack Setup Help:");
-                System.out.println("   • Run 'cdk deploy --all' to deploy infrastructure first");
-                System.out.println("   • Or set ENVIRONMENT_SUFFIX environment variable to correct stack suffix");
-            } else if (errorMsg.contains("not authenticated") || errorMsg.contains("credentials")) {
-                System.out.println("💡 Authentication Help:");
-                System.out.println("   • Configure AWS credentials using aws configure");
-                System.out.println("   • Or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables");
-            }
-            
-            if (isCI) {
-                System.out.println("ℹ️  CI: Integration tests will skip live resource validation");
-            } else {
-                System.out.println("ℹ️  Local: Integration tests will skip live resource validation (run after cdk deploy)");
-            }
-            TEST_STACK_NAME = "TapStack-dev"; // fallback
         }
     }
     
     private static String getStackName() {
-        // Check for explicit PULUMI_STACK environment variable first
-        String stackName = System.getenv("PULUMI_STACK");
-        if (stackName != null && !stackName.isEmpty()) {
-            return stackName;
-        }
-        
         // Build stack name using TapStack + ENVIRONMENT_SUFFIX pattern
         String envSuffix = System.getenv("ENVIRONMENT_SUFFIX");
         if (envSuffix != null && !envSuffix.isEmpty()) {
@@ -162,9 +150,8 @@ public class MainIntegrationTest {
             
             for (String region : regions) {
                 try {
-                    String stackFullName = stackName + "-" + region;
-                    String regionOutputs = executeCommand("aws", "cloudformation", "describe-stacks", 
-                            "--stack-name", stackFullName,
+                    String regionOutputs = executeCommand("aws", "cloudformation", "describe-stacks",
+                            "--stack-name", stackName,
                             "--region", region,
                             "--query", "Stacks[0].Outputs",
                             "--output", "json");
@@ -191,10 +178,8 @@ public class MainIntegrationTest {
         }
     }
     
-    private static String getOutputValue(final String stackName, final String outputKey) {
+    private static String getOutputValue(final String region, final String outputKey, final String stackName) {
         try {
-            // Determine region from stack name
-            String region = stackName.contains("us-west-2") ? TEST_REGION_US_WEST_2 : TEST_REGION_US_EAST_1;
             
             String result = executeCommand("aws", "cloudformation", "describe-stacks", 
                     "--stack-name", stackName,
@@ -337,7 +322,7 @@ public class MainIntegrationTest {
     
     @Test
     void testLiveSecurityGroupValidation() {
-        Assumptions.assumeTrue(securityGroupId != null, "Security Group ID should be available from live deployment");
+        Assumptions.assumeTrue(securityGroupIdUsEast1 != null, "Security Group ID should be available from live deployment");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         
         assertDoesNotThrow(() -> {
@@ -345,7 +330,7 @@ public class MainIntegrationTest {
                 // Validate actual deployed security group exists in AWS
                 DescribeSecurityGroupsResponse response = ec2Client.describeSecurityGroups(
                         DescribeSecurityGroupsRequest.builder()
-                                .groupIds(securityGroupId)
+                                .groupIds(securityGroupIdUsEast1)
                                 .build());
                 
                 assertFalse(response.securityGroups().isEmpty(), "Live Security Group should exist in AWS");
@@ -375,13 +360,13 @@ public class MainIntegrationTest {
     
     @Test
     void testLiveIamRoleValidation() {
-        Assumptions.assumeTrue(iamRoleArn != null, "IAM Role ARN should be available from live deployment");
+        Assumptions.assumeTrue(ec2InstanceRoleArn != null, "IAM Role ARN should be available from live deployment");
         Assumptions.assumeTrue(hasAwsCredentials(), "AWS credentials should be configured");
         
         assertDoesNotThrow(() -> {
             try (IamClient iamClient = IamClient.builder().region(Region.US_EAST_1).build()) {
                 // Extract role name from ARN
-                String roleName = iamRoleArn.substring(iamRoleArn.lastIndexOf("/") + 1);
+                String roleName = ec2InstanceRoleArn.substring(ec2InstanceRoleArn.lastIndexOf("/") + 1);
                 
                 // Validate actual deployed IAM role exists in AWS
                 GetRoleResponse response = iamClient.getRole(
@@ -390,7 +375,7 @@ public class MainIntegrationTest {
                                 .build());
                 
                 assertNotNull(response.role(), "Live IAM Role should exist in AWS IAM");
-                assertEquals(iamRoleArn, response.role().arn(), "Role ARN should match");
+                assertEquals(ec2InstanceRoleArn, response.role().arn(), "Role ARN should match");
                 
                 // Validate role has proper trust policy for EC2 service
                 assertNotNull(response.role().assumeRolePolicyDocument(), "Role should have assume role policy");
@@ -432,16 +417,16 @@ public class MainIntegrationTest {
             }
             
             // Validate Security Group configuration
-            if (securityGroupId != null) {
-                System.out.println("Live Security Group: " + securityGroupId);
-                assertTrue(securityGroupId.startsWith("sg-"), "Security Group ID should be valid AWS identifier");
+            if (securityGroupIdUsEast1 != null) {
+                System.out.println("Live Security Group: " + securityGroupIdUsEast1);
+                assertTrue(securityGroupIdUsEast1.startsWith("sg-"), "Security Group ID should be valid AWS identifier");
             }
             
             // Validate IAM Role configuration
-            if (iamRoleArn != null) {
-                System.out.println("Live IAM Role ARN: " + iamRoleArn);
-                assertTrue(iamRoleArn.startsWith("arn:aws:iam::"), "IAM Role ARN should be valid AWS ARN format");
-                assertTrue(iamRoleArn.contains("role/"), "ARN should be for an IAM role");
+            if (ec2InstanceRoleArn != null) {
+                System.out.println("Live IAM Role ARN: " + ec2InstanceRoleArn);
+                assertTrue(ec2InstanceRoleArn.startsWith("arn:aws:iam::"), "IAM Role ARN should be valid AWS ARN format");
+                assertTrue(ec2InstanceRoleArn.contains("role/"), "ARN should be for an IAM role");
             }
             
             System.out.println("✓ Live deployment configuration validation passed");

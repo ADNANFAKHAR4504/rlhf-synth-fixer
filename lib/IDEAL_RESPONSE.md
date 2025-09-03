@@ -241,9 +241,9 @@ public class VpcComponent extends Construct {
 ```java
 package app;
 
-import app.components.Ec2Component;
-import app.components.SecurityGroupComponent;
-import app.components.VpcComponent;
+import app.components.Ec2Construct;
+import app.components.SecurityGroupConstruct;
+import app.components.VpcConstruct;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.Stack;
@@ -347,15 +347,15 @@ class TapStack extends Stack {
         }
 
         // Create VPC component
-        VpcComponent vpcComponent = new VpcComponent(this, "VpcComponent", vpcCidr);
+        VpcConstruct vpcComponent = new VpcConstruct(this, "VpcComponent", vpcCidr);
 
         // Create security group component
-        SecurityGroupComponent securityGroupComponent = new SecurityGroupComponent(
+        SecurityGroupConstruct securityGroupComponent = new SecurityGroupConstruct(
                 this, "SecurityGroupComponent", vpcComponent.getVpc());
 
         // Create EC2 instance only in the first VPC (us-east-1)
         if (shouldCreateEc2) {
-            new Ec2Component(this, "Ec2Component",
+            new Ec2Construct(this, "Ec2Component",
                     vpcComponent.getVpc(),
                     vpcComponent.getPublicSubnet(),
                     securityGroupComponent.getWebSecurityGroup());
@@ -426,14 +426,14 @@ public final class Main {
         List.of(usEast1, usWest2).forEach((environment) -> new TapStack(
                 app, "TapStack-" + finalEnvironmentSuffix + "-" + environment.getRegion(),
                 TapStackProps.builder()
-                .environmentSuffix(finalEnvironmentSuffix)
-                .stackProps(StackProps.builder()
-                        .env(Environment.builder()
-                                .account(environment.getAccount())
-                                .region(environment.getRegion())
+                        .environmentSuffix(finalEnvironmentSuffix)
+                        .stackProps(StackProps.builder()
+                                .env(Environment.builder()
+                                        .account(environment.getAccount())
+                                        .region(environment.getRegion())
+                                        .build())
                                 .build())
-                        .build())
-                .build()));
+                        .build()));
 
         app.synth();
     }
