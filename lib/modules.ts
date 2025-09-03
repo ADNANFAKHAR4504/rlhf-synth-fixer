@@ -441,7 +441,6 @@ export class InfrastructureModule extends Construct {
     this.rdsInstance = new DbInstance(this, 'database', {
       identifier: `${config.environment}-database`,
       engine: 'mysql',
-      engineVersion: '8.0',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageEncrypted: true, // Encryption at rest for financial data
@@ -488,20 +487,6 @@ export class InfrastructureModule extends Construct {
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableLogging: true,
-
-      // Event selectors for comprehensive logging
-      eventSelector: [
-        {
-          readWriteType: 'All',
-          includeManagementEvents: true,
-          dataResource: [
-            {
-              type: 'AWS::S3::Object',
-              values: [`${this.s3Bucket.arn}/*`],
-            },
-          ],
-        },
-      ],
 
       tags: {
         Name: `${config.environment}-audit-trail`,
