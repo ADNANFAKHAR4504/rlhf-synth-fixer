@@ -25,15 +25,15 @@ Metadata:
           default: "Monitoring Configuration"
         Parameters:
           - AlarmEmail
+    ParameterLabels:
+      DBPasswordSSMParam:
+        default: "(Optional) SSM SecureString path for DB password (leave blank to auto-generate via Secrets Manager)"
 
 Parameters:
   Environment:
     Type: String
     Default: dev
-    AllowedValues:
-      - dev
-      - staging
-      - prod
+    AllowedValues: [dev, staging, prod]
     Description: Environment name for resource tagging and naming
 
   VpcCidr:
@@ -45,15 +45,13 @@ Parameters:
   InstanceType:
     Type: String
     Default: t3.small
-    AllowedValues:
-      - t3.small
+    AllowedValues: [t3.small]
     Description: EC2 instance type
 
   DBInstanceClass:
     Type: String
     Default: db.t3.micro
-    AllowedValues:
-      - db.t3.micro
+    AllowedValues: [db.t3.micro]
     Description: RDS instance class
 
   DBName:
@@ -75,15 +73,15 @@ Parameters:
   DBPasswordSSMParam:
     Type: String
     NoEcho: true
-    Description: SSM Parameter Store path for DB master password (e.g., /tapstack/dev/db/master_password)
-    Default: /tapstack/dev/db/master_password
+    Default: ''
+    Description: >
+      (Optional) SSM Parameter Store SecureString path for DB master password (must exist, e.g., /tapstack/dev/db/master_password).
+      If left blank, the template will generate a password using Secrets Manager automatically.
 
   AllowHttpFromWorld:
     Type: String
     Default: 'true'
-    AllowedValues:
-      - 'true'
-      - 'false'
+    AllowedValues: ['true', 'false']
     Description: Allow HTTP access from anywhere (0.0.0.0/0)
 
   AlarmEmail:
@@ -94,6 +92,7 @@ Parameters:
 Conditions:
   EnableHttpAccess: !Equals [!Ref AllowHttpFromWorld, 'true']
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+  HasDBPasswordPath: !Not [!Equals [!Ref DBPasswordSSMParam, '']]
 
 Resources:
   # VPC
@@ -104,28 +103,20 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-vpc'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-vpc' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-igw'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-igw' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -142,14 +133,10 @@ Resources:
       CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-public-subnet-1'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-public-subnet-1' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -159,14 +146,10 @@ Resources:
       CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-public-subnet-2'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-public-subnet-2' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # Private Subnets
   PrivateSubnet1:
@@ -176,14 +159,10 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: !Select [2, !Cidr [!Ref VpcCidr, 4, 8]]
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-subnet-1'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-private-subnet-1' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -192,14 +171,10 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: !Select [3, !Cidr [!Ref VpcCidr, 4, 8]]
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-subnet-2'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-private-subnet-2' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # NAT Gateway
   NatGatewayEIP:
@@ -208,14 +183,10 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-eip'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-nat-eip' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   NatGateway:
     Type: AWS::EC2::NatGateway
@@ -223,14 +194,10 @@ Resources:
       AllocationId: !GetAtt NatGatewayEIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-gateway'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-nat-gateway' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # Route Tables
   PublicRouteTable:
@@ -238,14 +205,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-public-rt'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-public-rt' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -272,14 +235,10 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-rt'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-private-rt' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   DefaultPrivateRoute:
     Type: AWS::EC2::Route
@@ -311,6 +270,11 @@ Resources:
           RandomSuffix: !Select [0, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
       VersioningConfiguration:
         Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -323,14 +287,10 @@ Resources:
               - TransitionInDays: 30
                 StorageClass: GLACIER
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-bucket'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-bucket' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # CloudWatch Log Group
   CloudWatchLogGroup:
@@ -339,14 +299,10 @@ Resources:
       LogGroupName: !Sub '/aws/ec2/${AWS::StackName}'
       RetentionInDays: 30
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-log-group'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-log-group' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # IAM Role for EC2
   EC2Role:
@@ -356,8 +312,7 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
+            Principal: { Service: ec2.amazonaws.com }
             Action: sts:AssumeRole
       Policies:
         - PolicyName: S3BucketAccess
@@ -365,9 +320,7 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - s3:GetObject
-                  - s3:ListBucket
+                Action: [s3:GetObject, s3:ListBucket]
                 Resource:
                   - !GetAtt S3Bucket.Arn
                   - !Sub '${S3Bucket.Arn}/*'
@@ -376,10 +329,7 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - logs:DescribeLogStreams
+                Action: [logs:CreateLogStream, logs:PutLogEvents, logs:DescribeLogStreams]
                 Resource:
                   - !GetAtt CloudWatchLogGroup.Arn
                   - !Sub '${CloudWatchLogGroup.Arn}:log-stream:*'
@@ -388,36 +338,26 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
-                  - ec2:DescribeVolumes
-                  - ec2:DescribeTags
+                Action: [cloudwatch:PutMetricData, ec2:DescribeVolumes, ec2:DescribeTags]
                 Resource: '*'
         - PolicyName: SSMParameterAccess
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                  - ssm:GetParameters
+                Action: [ssm:GetParameter, ssm:GetParameters]
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tapstack/${Environment}/app/secret'
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-ec2-role'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-ec2-role' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      Roles:
-        - !Ref EC2Role
+      Roles: [!Ref EC2Role]
 
   # Security Groups
   EC2SecurityGroup:
@@ -440,18 +380,12 @@ Resources:
             Description: HTTP access from anywhere
           - !Ref AWS::NoValue
       SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: All outbound traffic
+        - { IpProtocol: -1, CidrIp: 0.0.0.0/0, Description: All outbound traffic }
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-ec2-sg'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-ec2-sg' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -465,14 +399,27 @@ Resources:
           SourceSecurityGroupId: !Ref EC2SecurityGroup
           Description: MySQL access from EC2 security group
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-rds-sg'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-rds-sg' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
+
+  # Secrets Manager secret for DB password (used if no SSM path is provided)
+  DBMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}/db/master-credentials'
+      Description: Auto-generated RDS master credentials (used when DBPasswordSSMParam is not provided)
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DBUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 20
+        ExcludePunctuation: true
+        RequireEachIncludedType: true
+      Tags:
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # EC2 Instance
   EC2Instance:
@@ -481,8 +428,7 @@ Resources:
       ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}"
       InstanceType: !Ref InstanceType
       SubnetId: !Ref PublicSubnet1
-      SecurityGroupIds:
-        - !Ref EC2SecurityGroup
+      SecurityGroupIds: [!Ref EC2SecurityGroup]
       IamInstanceProfile: !Ref EC2InstanceProfile
       UserData:
         Fn::Base64: !Sub |
@@ -491,10 +437,10 @@ Resources:
           yum install -y httpd
           systemctl start httpd
           systemctl enable httpd
-          
+
           # Install CloudWatch Agent
           yum install -y amazon-cloudwatch-agent
-          
+
           # Create CloudWatch Agent config
           cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
           {
@@ -502,21 +448,9 @@ Resources:
               "logs_collected": {
                 "files": {
                   "collect_list": [
-                    {
-                      "file_path": "/var/log/messages",
-                      "log_group_name": "${CloudWatchLogGroup}",
-                      "log_stream_name": "{instance_id}/var/log/messages"
-                    },
-                    {
-                      "file_path": "/var/log/httpd/access_log",
-                      "log_group_name": "${CloudWatchLogGroup}",
-                      "log_stream_name": "{instance_id}/httpd/access_log"
-                    },
-                    {
-                      "file_path": "/var/log/httpd/error_log",
-                      "log_group_name": "${CloudWatchLogGroup}",
-                      "log_stream_name": "{instance_id}/httpd/error_log"
-                    }
+                    { "file_path": "/var/log/messages", "log_group_name": "${CloudWatchLogGroup}", "log_stream_name": "{instance_id}/var/log/messages" },
+                    { "file_path": "/var/log/httpd/access_log", "log_group_name": "${CloudWatchLogGroup}", "log_stream_name": "{instance_id}/httpd/access_log" },
+                    { "file_path": "/var/log/httpd/error_log", "log_group_name": "${CloudWatchLogGroup}", "log_stream_name": "{instance_id}/httpd/error_log" }
                   ]
                 }
               }
@@ -524,81 +458,60 @@ Resources:
             "metrics": {
               "namespace": "CWAgent",
               "metrics_collected": {
-                "cpu": {
-                  "measurement": [
-                    "cpu_usage_idle",
-                    "cpu_usage_iowait",
-                    "cpu_usage_user",
-                    "cpu_usage_system"
-                  ],
-                  "metrics_collection_interval": 60
-                }
+                "cpu": { "measurement": ["cpu_usage_idle","cpu_usage_iowait","cpu_usage_user","cpu_usage_system"], "metrics_collection_interval": 60 }
               }
             }
           }
           EOF
-          
+
           # Start CloudWatch Agent
           /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-          
+
           # Get app secret from SSM (optional)
           APP_SECRET=""
           if aws ssm get-parameter --name "/tapstack/${Environment}/app/secret" --with-decryption --region ${AWS::Region} --query 'Parameter.Value' --output text 2>/dev/null; then
             APP_SECRET=$(aws ssm get-parameter --name "/tapstack/${Environment}/app/secret" --with-decryption --region ${AWS::Region} --query 'Parameter.Value' --output text 2>/dev/null || echo "")
             echo "App secret retrieved from SSM" > /var/log/app-secret.log
           fi
-          
+
           # Create index.html
           INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
           REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-          
+
           cat > /var/www/html/index.html << EOF
           <!DOCTYPE html>
           <html>
-          <head>
-              <title>TapStack Demo</title>
-          </head>
+          <head><title>TapStack Demo</title></head>
           <body>
-              <h1>TapStack Multi-Environment Demo</h1>
-              <p><strong>Region:</strong> $REGION</p>
-              <p><strong>Instance ID:</strong> $INSTANCE_ID</p>
-              <p><strong>Environment:</strong> ${Environment}</p>
-              <p><strong>Stack Name:</strong> ${AWS::StackName}</p>
-              <p><strong>S3 Bucket:</strong> ${S3Bucket}</p>
-              <p>This instance is running Apache HTTP Server with CloudWatch monitoring enabled.</p>
+            <h1>TapStack Multi-Environment Demo</h1>
+            <p><strong>Region:</strong> $REGION</p>
+            <p><strong>Instance ID:</strong> $INSTANCE_ID</p>
+            <p><strong>Environment:</strong> ${Environment}</p>
+            <p><strong>Stack Name:</strong> ${AWS::StackName}</p>
+            <p><strong>S3 Bucket:</strong> ${S3Bucket}</p>
+            <p>This instance is running Apache HTTP Server with CloudWatch monitoring enabled.</p>
           </body>
           </html>
           EOF
-          
-          # Restart httpd to ensure everything is working
+
           systemctl restart httpd
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-ec2-instance'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-ec2-instance' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # RDS Subnet Group
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: Subnet group for RDS instance
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-db-subnet-group'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-db-subnet-group' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # RDS Parameter Group
   DBParameterGroup:
@@ -609,14 +522,10 @@ Resources:
       Parameters:
         max_connections: '150'
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-db-parameter-group'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-db-parameter-group' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # RDS Instance
   DBInstance:
@@ -630,9 +539,12 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp3
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:${DBPasswordSSMParam}:1}}'
-      VPCSecurityGroups:
-        - !Ref RDSSecurityGroup
+      MasterUserPassword:
+        Fn::If:
+          - HasDBPasswordPath
+          - !Sub '{{resolve:ssm-secure:${DBPasswordSSMParam}:1}}'
+          - !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString:password}}'
+      VPCSecurityGroups: [!Ref RDSSecurityGroup]
       DBSubnetGroupName: !Ref DBSubnetGroup
       DBParameterGroupName: !Ref DBParameterGroup
       BackupRetentionPeriod: 7
@@ -640,14 +552,10 @@ Resources:
       PreferredMaintenanceWindow: "sun:04:00-sun:05:00"
       PubliclyAccessible: false
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-db-instance'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-db-instance' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   # SNS Topic for Alarms
   SNSTopic:
@@ -655,14 +563,10 @@ Resources:
     Properties:
       TopicName: !Sub '${AWS::StackName}-alarms'
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-sns-topic'
-        - Key: Project
-          Value: MultiEnvDemo
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: StackName
-          Value: !Ref AWS::StackName
+        - { Key: Name,        Value: !Sub '${AWS::StackName}-sns-topic' }
+        - { Key: Project,     Value: MultiEnvDemo }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: StackName,   Value: !Ref AWS::StackName }
 
   SNSSubscription:
     Type: AWS::SNS::Subscription
@@ -686,44 +590,36 @@ Resources:
       Threshold: 70
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
-        - Name: InstanceId
-          Value: !Ref EC2Instance
-      AlarmActions:
-        - !Ref SNSTopic
+        - { Name: InstanceId, Value: !Ref EC2Instance }
+      AlarmActions: [!Ref SNSTopic]
 
 Outputs:
   BucketName:
     Description: Name of the S3 bucket
     Value: !Ref S3Bucket
-    Export:
-      Name: !Sub '${AWS::StackName}-BucketName'
+    Export: { Name: !Sub '${AWS::StackName}-BucketName' }
 
   DBEndpointAddress:
     Description: RDS instance endpoint address
     Value: !GetAtt DBInstance.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-DBEndpointAddress'
+    Export: { Name: !Sub '${AWS::StackName}-DBEndpointAddress' }
 
   DBPort:
     Description: RDS instance port
     Value: !GetAtt DBInstance.Endpoint.Port
-    Export:
-      Name: !Sub '${AWS::StackName}-DBPort'
+    Export: { Name: !Sub '${AWS::StackName}-DBPort' }
 
   InstanceId:
     Description: EC2 instance ID
     Value: !Ref EC2Instance
-    Export:
-      Name: !Sub '${AWS::StackName}-InstanceId'
+    Export: { Name: !Sub '${AWS::StackName}-InstanceId' }
 
   InstancePublicDnsName:
     Description: Public DNS name of the EC2 instance
     Value: !GetAtt EC2Instance.PublicDnsName
-    Export:
-      Name: !Sub '${AWS::StackName}-InstancePublicDnsName'
+    Export: { Name: !Sub '${AWS::StackName}-InstancePublicDnsName' }
 
   VpcId:
     Description: VPC ID
     Value: !Ref VPC
-    Export:
-      Name: !Sub '${AWS::StackName}-VpcId'
+    Export: { Name: !Sub '${AWS::StackName}-VpcId' }
