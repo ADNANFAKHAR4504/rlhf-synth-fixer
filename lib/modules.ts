@@ -440,7 +440,6 @@ export class WebAppModules extends Construct {
     this.rdsInstance = new DbInstance(this, 'main-database', {
       identifier: 'main-database',
       engine: 'mysql',
-      engineVersion: '8.0',
       instanceClass: 'db.t3.micro',
       allocatedStorage: 20,
       storageType: 'gp2',
