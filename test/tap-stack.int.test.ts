@@ -1,5 +1,8 @@
 import fs from 'fs';
 import axios, { AxiosError } from 'axios';
+import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
+import { SecretsManagerClient, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
+import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
@@ -11,8 +14,13 @@ describe('Secure API Integration Tests', () => {
   let apiUrl: string;
   let lambdaArn: string;
   let secretArn: string;
+  let loadBalancerDns: string;
+  const region = process.env.AWS_REGION || 'us-east-1';
+  const lambdaClient = new LambdaClient({ region });
+  const secretsClient = new SecretsManagerClient({ region });
+  const elbClient = new ElasticLoadBalancingV2Client({ region });
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Get the API Gateway URL from the CloudFormation outputs
     apiUrl = outputs.ApiGatewayInvokeURL;
     if (!apiUrl) {
@@ -28,6 +36,47 @@ describe('Secure API Integration Tests', () => {
     secretArn = outputs.SecretArn;
     if (!secretArn) {
       throw new Error('SecretArn not found in cfn-outputs.json');
+    }
+
+    loadBalancerDns = outputs.LoadBalancerDNS;
+    if (!loadBalancerDns) {
+      throw new Error('LoadBalancerDNS not found in cfn-outputs.json');
+    }
+    
+    // Use AWS SDK to check if the Lambda function exists
+    try {
+      const getFunctionCommand = new GetFunctionCommand({ FunctionName: lambdaArn });
+      await lambdaClient.send(getFunctionCommand);
+      console.log('Successfully found Lambda function:', lambdaArn);
+    } catch (error) {
+      console.error(`Lambda function not found or inaccessible: ${lambdaArn}`);
+      throw error;
+    }
+
+    // Use AWS SDK to check if the Secrets Manager secret exists
+    try {
+      const describeSecretCommand = new DescribeSecretCommand({ SecretId: secretArn });
+      await secretsClient.send(describeSecretCommand);
+      console.log('Successfully found Secrets Manager secret:', secretArn);
+    } catch (error) {
+      console.error(`Secrets Manager secret not found or inaccessible: ${secretArn}`);
+      throw error;
+    }
+
+    // Use AWS SDK to check if the Load Balancer exists
+    try {
+      const describeElbCommand = new DescribeLoadBalancersCommand({
+        Names: [loadBalancerDns],
+      });
+      const result = await elbClient.send(describeElbCommand);
+      if (result.LoadBalancers && result.LoadBalancers.length > 0) {
+        console.log('Successfully found Load Balancer:', loadBalancerDns);
+      } else {
+        throw new Error('Load Balancer not found by DNS name.');
+      }
+    } catch (error) {
+      console.error(`Load Balancer not found or inaccessible: ${loadBalancerDns}`);
+      throw error;
     }
   });
 
