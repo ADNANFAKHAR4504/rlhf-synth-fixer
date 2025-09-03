@@ -28,6 +28,7 @@ import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { Password } from '@cdktf/provider-random/lib/password';
 
 // KMS Module - Creates customer-managed KMS key
 export interface KmsModuleProps {
@@ -616,13 +617,26 @@ export interface RdsModuleProps {
 export class RdsModule extends Construct {
   public readonly dbInstance: DbInstance;
   public readonly subnetGroup: DbSubnetGroup;
+  public readonly generatedPassword: Password; // Add this
 
   constructor(scope: Construct, id: string, props: RdsModuleProps) {
     super(scope, id);
 
+    // Generate a random password that meets AWS requirements
+    this.generatedPassword = new Password(this, 'db-password', {
+      length: 16,
+      special: true,
+      // Exclude forbidden characters: /, @, ", and space
+      overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+      minLower: 1,
+      minUpper: 1,
+      minNumeric: 1,
+      minSpecial: 1,
+    });
+
     // Create DB subnet group
     this.subnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `${props.project}-${props.environment}-db-subnet-group`,
+      name: `${props.project}-${props.environment}-db-subnet-group-v2`,
       subnetIds: props.subnetIds,
       tags: {
         Name: `${props.project}-${props.environment}-db-subnet-group`,
@@ -631,16 +645,15 @@ export class RdsModule extends Construct {
       },
     });
 
-    // Create RDS instance
     this.dbInstance = new DbInstance(this, 'db-instance', {
-      identifier: `${props.project}-${props.environment}-db`,
+      identifier: `${props.project}-${props.environment}-db-ts`,
       engine: props.engine,
       engineVersion: props.engineVersion,
       instanceClass: props.instanceClass,
       allocatedStorage: props.allocatedStorage,
       dbName: props.dbName,
       username: props.username,
-      password: props.password,
+      password: this.generatedPassword.result, // Use generated password
       dbSubnetGroupName: this.subnetGroup.name,
       vpcSecurityGroupIds: props.securityGroupIds,
       storageEncrypted: true,
@@ -648,9 +661,8 @@ export class RdsModule extends Construct {
       backupRetentionPeriod: 7,
       backupWindow: '03:00-04:00',
       maintenanceWindow: 'sun:04:00-sun:05:00',
-      skipFinalSnapshot: false,
-      finalSnapshotIdentifier: `${props.project}-${props.environment}-db-final-snapshot`,
-      deletionProtection: true,
+      skipFinalSnapshot: true,
+      deletionProtection: false,
       publiclyAccessible: false,
       tags: {
         Name: `${props.project}-${props.environment}-db`,
@@ -670,9 +682,9 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider'; // Add this line
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { Construct } from 'constructs';
 
 // Import your modules
@@ -693,6 +705,8 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags;
+  // Add this for testing - allows overriding the region override
+  _regionOverrideForTesting?: string | null;
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
@@ -704,9 +718,17 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
+
+    // Use the testing override if provided, otherwise use the constant
+    const regionOverride =
+      props?._regionOverrideForTesting !== undefined
+        ? props._regionOverrideForTesting
+        : AWS_REGION_OVERRIDE;
+
+    const awsRegion = regionOverride
+      ? regionOverride
       : props?.awsRegion || 'us-east-1';
+
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags ? [props.defaultTags] : [];
@@ -716,6 +738,9 @@ export class TapStack extends TerraformStack {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    // Add Random Provider - ADD THIS
+    new RandomProvider(this, 'random');
 
     // Get current AWS account information
     const current = new DataAwsCallerIdentity(this, 'current');
@@ -749,15 +774,6 @@ export class TapStack extends TerraformStack {
       bucketName: `${project}-${environmentSuffix}-app-data`,
       kmsKey: kmsModule.key,
     });
-
-    // Get database credentials from AWS Secrets Manager
-    const dbPasswordSecret = new DataAwsSecretsmanagerSecretVersion(
-      this,
-      'db-password-secret',
-      {
-        secretId: 'my-db-password',
-      }
-    );
 
     // Create CloudTrail for auditing
     const cloudTrailModule = new CloudTrailModule(this, 'cloudtrail', {
@@ -834,10 +850,10 @@ export class TapStack extends TerraformStack {
       subnetId: vpcModule.privateSubnets[0].id, // Deploy in private subnet
       securityGroupIds: [ec2SecurityGroup.securityGroup.id],
       instanceProfile: iamModule.instanceProfile,
-      keyName: 'turing-key', // Uncomment and set if you have a key pair
+      keyName: 'compute-key', // Uncomment and set if you have a key pair
     });
 
-    // Create RDS instance
+    // Update the RDS module instantiation
     const rdsModule = new RdsModule(this, 'rds', {
       project,
       environment: environmentSuffix,
@@ -847,7 +863,7 @@ export class TapStack extends TerraformStack {
       allocatedStorage: 20,
       dbName: 'appdb',
       username: 'admin',
-      password: dbPasswordSecret.secretString,
+      password: '', // This will be ignored since we're generating it in the module
       subnetIds: vpcModule.privateSubnets.map(subnet => subnet.id),
       securityGroupIds: [rdsSecurityGroup.securityGroup.id],
       kmsKey: kmsModule.key,
@@ -919,9 +935,17 @@ export class TapStack extends TerraformStack {
       description: 'Current AWS Account ID',
     });
 
+    // Add output for the generated password
+    new TerraformOutput(this, 'rds-password', {
+      value: rdsModule.generatedPassword.result,
+      description: 'RDS instance password',
+      sensitive: true, // Mark as sensitive to hide in logs
+    });
+
     // ? Add your stack instantiations here
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
   }
 }
+
 ```
