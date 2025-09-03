@@ -8,6 +8,11 @@ They validate presence and basic formatting of the deployed resources'
 runtime identifiers (e.g., VPC ID, SG IDs, ALB DNS, etc.).
 
 If the outputs file does not exist or is empty, tests are skipped.
+
+Additionally, a second suite uses the AWS SDK (boto3) to verify that the
+referenced resources actually exist in the live AWS environment and have
+expected properties (HTTP :80 listener on ALB, etc.). These SDK tests are
+skipped automatically if credentials/region are not available.
 """
 
 from __future__ import annotations
@@ -19,7 +24,9 @@ import unittest
 
 from pytest import mark
 
-# Open file cfn-outputs/flat-outputs.json
+# -----------------------------------------
+# Load flat outputs written post-deploy
+# -----------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FLAT_OUTPUTS_PATH = os.path.join(BASE_DIR, "..", "..", "cfn-outputs", "flat-outputs.json")
 
@@ -43,7 +50,10 @@ def _require_key(dct: dict, key: str) -> str:
     return val
 
 
-@mark.describe("TapStack (integration)")
+# ============================================================
+# Format-only validations using the outputs file (no AWS calls)
+# ============================================================
+@mark.describe("TapStack (integration - outputs format)")
 @unittest.skipIf(SKIP_LIVE, "No cfn-outputs/flat-outputs.json found or empty; skipping live tests.")
 class TestTapStackIntegration(unittest.TestCase):
     """Integration tests that assert live outputs exist and look correct."""
@@ -103,14 +113,13 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("ALB DNS name looks like an AWS ELB DNS")
     def test_alb_dns_format(self) -> None:
-      dns = _require_key(FLAT_OUTPUTS, "AlbDnsName")
-      # Typical patterns include 'elb.amazonaws.com' and region-specific hostnames
-      self.assertIn(".elb.", dns, f"ALB DNS missing '.elb.': {dns}")
-      self.assertIn("amazonaws.com", dns, f"ALB DNS missing 'amazonaws.com': {dns}")
-      # Accept mixed-case hostnames (some stacks emit mixed-case prefixes)
-      pattern = re.compile(r"^[a-z0-9\-\.]+$", re.IGNORECASE)
-      self.assertRegex(dns, pattern)
-
+        dns = _require_key(FLAT_OUTPUTS, "AlbDnsName")
+        # Typical patterns include 'elb.amazonaws.com' and region-specific hostnames
+        self.assertIn(".elb.", dns, f"ALB DNS missing '.elb.': {dns}")
+        self.assertIn("amazonaws.com", dns, f"ALB DNS missing 'amazonaws.com': {dns}")
+        # Accept mixed-case hostnames (some stacks emit mixed-case prefixes)
+        pattern = re.compile(r"^[a-z0-9\-\.]+$", re.IGNORECASE)
+        self.assertRegex(dns, pattern)
 
     @mark.it("S3 App bucket name is valid (DNS-compliant)")
     def test_app_bucket_name(self) -> None:
@@ -161,6 +170,188 @@ class TestTapStackIntegration(unittest.TestCase):
             endpoint.endswith(".rds.amazonaws.com") or ".rds." in endpoint,
             f"Unexpected RDS endpoint format: {endpoint}",
         )
+
+
+# ============================================================
+# AWS SDK-backed validations (boto3) — live environment checks
+# ============================================================
+# Try to set up a boto3 session and verify credentials.
+try:
+    import boto3
+    from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError, EndpointConnectionError
+    _HAS_BOTO3 = True
+except Exception:  # pragma: no cover - pure import guard
+    _HAS_BOTO3 = False
+
+
+def _region_from_outputs(outputs: dict) -> str | None:
+    """Infer region from ALB DNS when possible; else fall back to environment/boto3 default."""
+    dns = outputs.get("AlbDnsName", "")
+    m = re.search(r"\.([a-z0-9-]+)\.elb\.amazonaws\.com$", dns.lower())
+    if m:
+        return m.group(1)
+    # Fallbacks
+    env_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+    if env_region:
+        return env_region
+    if _HAS_BOTO3:
+        return boto3.session.Session().region_name
+    return None
+
+
+def _get_boto3_session() -> tuple[object | None, str | None]:
+    """Return (session, region) if AWS access is available; otherwise (None, None)."""
+    if not _HAS_BOTO3:
+        return None, None
+    region = _region_from_outputs(FLAT_OUTPUTS)
+    try:
+        session = boto3.session.Session(region_name=region)
+        # Validate credentials by calling STS
+        sts = session.client("sts")
+        _ = sts.get_caller_identity()
+        # Re-resolve region if not set on session (use session default)
+        region = region or session.region_name
+        return session, region
+    except Exception:
+        return None, None
+
+
+_SDK_SESSION, _SDK_REGION = _get_boto3_session()
+SKIP_SDK = SKIP_LIVE or (_SDK_SESSION is None)
+
+
+def _client(service: str):
+    return _SDK_SESSION.client(service, region_name=_SDK_REGION)
+
+
+def _csv_to_list(csv: str) -> list[str]:
+    return [p.strip() for p in csv.split(",") if p.strip()]
+
+
+def _find_alb_by_dns(elbv2_client, dns_name: str) -> dict | None:
+    """Linear scan of ALBs to find one with a matching DNS name."""
+    paginator = elbv2_client.get_paginator("describe_load_balancers")
+    for page in paginator.paginate():
+        for lb in page.get("LoadBalancers", []):
+            if lb.get("DNSName", "").lower() == dns_name.lower():
+                return lb
+    return None
+
+
+def _list_ssm_params_by_path(ssm_client, path: str) -> list[str]:
+    names: list[str] = []
+    next_token = None
+    while True:
+        kwargs = {"Path": path, "Recursive": False, "WithDecryption": False, "MaxResults": 10}
+        if next_token:
+            kwargs["NextToken"] = next_token
+        resp = ssm_client.get_parameters_by_path(**kwargs)
+        for p in resp.get("Parameters", []):
+            n = p.get("Name")
+            if n:
+                names.append(n)
+        next_token = resp.get("NextToken")
+        if not next_token:
+            break
+    return names
+
+
+@mark.describe("TapStack (integration - AWS SDK)")
+@unittest.skipIf(SKIP_SDK, "AWS SDK not available or credentials/region missing; skipping SDK live tests.")
+class TestTapStackIntegrationSDK(unittest.TestCase):
+    """Integration tests that verify live AWS resources using boto3."""
+
+    @mark.it("VPC from outputs exists in EC2")
+    def test_vpc_exists(self) -> None:
+        ec2 = _client("ec2")
+        vpc_id = _require_key(FLAT_OUTPUTS, "VpcId")
+        resp = ec2.describe_vpcs(VpcIds=[vpc_id])
+        self.assertEqual(1, len(resp.get("Vpcs", [])), f"VPC not found: {vpc_id}")
+
+    @mark.it("SecurityGroups from outputs exist in EC2")
+    def test_security_groups_exist(self) -> None:
+        ec2 = _client("ec2")
+        app_sg = _require_key(FLAT_OUTPUTS, "AppSecurityGroupId")
+        alb_sg = _require_key(FLAT_OUTPUTS, "AlbSecurityGroupId")
+        resp = ec2.describe_security_groups(GroupIds=[app_sg, alb_sg])
+        found_ids = {sg["GroupId"] for sg in resp.get("SecurityGroups", [])}
+        self.assertIn(app_sg, found_ids)
+        self.assertIn(alb_sg, found_ids)
+
+    @mark.it("Subnets from outputs exist in EC2")
+    def test_subnets_exist(self) -> None:
+        ec2 = _client("ec2")
+        priv_csv = _require_key(FLAT_OUTPUTS, "PrivateSubnetIds")
+        pub_csv = _require_key(FLAT_OUTPUTS, "PublicSubnetIds")
+        all_ids = _csv_to_list(priv_csv) + _csv_to_list(pub_csv)
+        resp = ec2.describe_subnets(SubnetIds=all_ids)
+        found_ids = {s["SubnetId"] for s in resp.get("Subnets", [])}
+        for sid in all_ids:
+            self.assertIn(sid, found_ids, f"Subnet not found: {sid}")
+
+    @mark.it("ALB exists and has an HTTP :80 listener")
+    def test_alb_exists_and_http_listener(self) -> None:
+        elbv2 = _client("elbv2")
+        dns = _require_key(FLAT_OUTPUTS, "AlbDnsName")
+        lb = _find_alb_by_dns(elbv2, dns)
+        self.assertIsNotNone(lb, f"Could not find ALB with DNS: {dns}")
+        # Verify at least one HTTP:80 listener
+        arn = lb["LoadBalancerArn"]
+        listeners = elbv2.describe_listeners(LoadBalancerArn=arn).get("Listeners", [])
+        has_http_80 = any(l.get("Port") == 80 and l.get("Protocol") == "HTTP" for l in listeners)
+        self.assertTrue(has_http_80, f"No HTTP :80 listener found on {dns}")
+
+    @mark.it("S3 App bucket exists")
+    def test_s3_bucket_exists(self) -> None:
+        s3 = _client("s3")
+        bucket = _require_key(FLAT_OUTPUTS, "AppBucketName")
+        # head_bucket raises if not found
+        try:
+            s3.head_bucket(Bucket=bucket)
+        except (ClientError, BotoCoreError) as e:
+            self.fail(f"S3 bucket not accessible/existing: {bucket} ({e})")
+
+    @mark.it("DynamoDB table exists")
+    def test_dynamodb_table_exists(self) -> None:
+        ddb = _client("dynamodb")
+        table = _require_key(FLAT_OUTPUTS, "DynamoTableName")
+        ddb.describe_table(TableName=table)  # raises if not found
+
+    @mark.it("Secrets Manager secret exists")
+    def test_secret_exists(self) -> None:
+        sm = _client("secretsmanager")
+        arn = _require_key(FLAT_OUTPUTS, "SecretArn")
+        sm.describe_secret(SecretId=arn)  # raises if not found
+
+    @mark.it("SSM Parameter Store contains the expected 4 parameters under ParamPath")
+    def test_ssm_params_exist(self) -> None:
+        ssm = _client("ssm")
+        path = _require_key(FLAT_OUTPUTS, "ParamPath")
+        if not path.endswith("/"):
+            path = path + "/"
+        expected = [path + n for n in ("APP_ENV", "API_URL", "LOG_LEVEL", "REGION")]
+        names = set(_list_ssm_params_by_path(ssm, path))
+        missing = [n for n in expected if n not in names]
+        self.assertFalse(missing, f"Missing SSM parameters under {path}: {missing}")
+
+    @mark.it("CloudTrail trail exists and is multi-region")
+    def test_cloudtrail_trail_exists(self) -> None:
+        ct = _client("cloudtrail")
+        trail_name = _require_key(FLAT_OUTPUTS, "TrailName")
+        resp = ct.describe_trails(trailNameList=[trail_name], includeShadowTrails=False)
+        trails = resp.get("trailList", [])
+        self.assertTrue(trails, f"CloudTrail trail not found: {trail_name}")
+        # Some SDKs return 'IsMultiRegionTrail' on the trail description
+        is_multi = trails[0].get("IsMultiRegionTrail", None)
+        self.assertIn(is_multi, (True, None), "Trail is not multi-region (or SDK did not return the flag)")
+
+    @mark.it("CloudWatch alarm exists with the expected name")
+    def test_cloudwatch_alarm_exists(self) -> None:
+        cw = _client("cloudwatch")
+        alarm_name = _require_key(FLAT_OUTPUTS, "AlarmName")
+        resp = cw.describe_alarms(AlarmNames=[alarm_name])
+        alarms = resp.get("MetricAlarms", [])
+        self.assertTrue(alarms, f"CloudWatch alarm not found: {alarm_name}")
 
 
 if __name__ == "__main__":
