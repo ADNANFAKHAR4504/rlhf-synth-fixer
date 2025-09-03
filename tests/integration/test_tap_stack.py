@@ -103,11 +103,14 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("ALB DNS name looks like an AWS ELB DNS")
     def test_alb_dns_format(self) -> None:
-        dns = _require_key(FLAT_OUTPUTS, "AlbDnsName")
-        # Typical patterns include 'elb.amazonaws.com' and region-specific hostnames
-        self.assertIn(".elb.", dns, f"ALB DNS missing '.elb.': {dns}")
-        self.assertIn("amazonaws.com", dns, f"ALB DNS missing 'amazonaws.com': {dns}")
-        self.assertRegex(dns, r"^[a-z0-9\-\.]+$")
+      dns = _require_key(FLAT_OUTPUTS, "AlbDnsName")
+      # Typical patterns include 'elb.amazonaws.com' and region-specific hostnames
+      self.assertIn(".elb.", dns, f"ALB DNS missing '.elb.': {dns}")
+      self.assertIn("amazonaws.com", dns, f"ALB DNS missing 'amazonaws.com': {dns}")
+      # Accept mixed-case hostnames (some stacks emit mixed-case prefixes)
+      pattern = re.compile(r"^[a-z0-9\-\.]+$", re.IGNORECASE)
+      self.assertRegex(dns, pattern)
+
 
     @mark.it("S3 App bucket name is valid (DNS-compliant)")
     def test_app_bucket_name(self) -> None:
