@@ -291,7 +291,7 @@ export class TapStack extends cdk.Stack {
     return new rds.DatabaseInstance(this, 'prod-database', {
       instanceIdentifier: 'prod-postgresql-db',
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15_4,
+        version: rds.PostgresEngineVersion.VER_15_7,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
