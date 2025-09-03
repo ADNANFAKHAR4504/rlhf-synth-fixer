@@ -451,6 +451,14 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: 's3:GetBucketAcl'
             Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
+          - Sid: AWSCloudTrailBucketRead
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 's3:GetBucketLocation'
+              - 's3:ListBucket'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -460,6 +468,17 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${OrganizationTrail}'
+          - Sid: EnforceTLSOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
+              - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
 
   OrganizationTrail:
     Type: AWS::CloudTrail::Trail
