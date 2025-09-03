@@ -297,9 +297,9 @@ export class WebAppModules extends Construct {
     // Instance profile to attach IAM role to EC2 instances
     const instanceProfile = new IamInstanceProfile(
       this,
-      'ec2-instance-profile',
+      'ec2-instance-profile-ts',
       {
-        name: 'ec2-instance-profile',
+        name: 'ec2-instance-profile-ts',
         role: ec2Role.name,
       }
     );
@@ -426,11 +426,11 @@ export class WebAppModules extends Construct {
     // DB subnet group for RDS Multi-AZ deployment
     // Spans multiple AZs for high availability
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: 'main-db-subnet-group',
+      name: 'main-db-subnet-group-ts',
       subnetIds: this.privateSubnets.map(subnet => subnet.id),
       description: 'Subnet group for RDS database',
       tags: {
-        Name: 'main-db-subnet-group',
+        Name: 'main-db-subnet-group-ts',
         Environment: config.environment,
       },
     });
