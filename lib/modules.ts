@@ -417,7 +417,7 @@ export class InfrastructureModule extends Construct {
       },
 
       // User data script to enable auto recovery
-      userData: Buffer.from(
+      userDataBase64: Buffer.from(
         `#!/bin/bash
         yum update -y
         # Enable auto recovery
@@ -525,7 +525,6 @@ export class InfrastructureModule extends Construct {
         allow: {},
       },
 
-      // Add the missing top-level visibilityConfig
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudwatchMetricsEnabled: true,
@@ -540,9 +539,12 @@ export class InfrastructureModule extends Construct {
             block: {},
           },
           statement: {
+            // Fix: Use correct property name
             sqliMatchStatement: {
               fieldToMatch: {
-                body: {},
+                body: {
+                  oversizeHandling: 'CONTINUE',
+                },
               },
               textTransformation: [
                 {
@@ -569,9 +571,12 @@ export class InfrastructureModule extends Construct {
             block: {},
           },
           statement: {
+            // Fix: Use correct property name
             xssMatchStatement: {
               fieldToMatch: {
-                body: {},
+                body: {
+                  oversizeHandling: 'CONTINUE',
+                },
               },
               textTransformation: [
                 {
