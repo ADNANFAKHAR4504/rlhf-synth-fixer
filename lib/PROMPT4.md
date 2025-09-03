@@ -1,9 +1,4 @@
-Generated response by model had below failures - 
-
-1. Model was not able to generate the full response in single Turn. So had to genertae multiple turns.
-
-2. Model applied tags wrongly to the api gateway which doesn't accept the tags directly and deployment threw below errors
-
+Can you help fix this error , seems tags are not expected for this resource -
 ```
 │ Error: Unsupported argument
 │ 
