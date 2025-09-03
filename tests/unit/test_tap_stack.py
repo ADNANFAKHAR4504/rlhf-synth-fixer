@@ -17,11 +17,12 @@ Matches the current stack shape:
 
 from __future__ import annotations
 
+import json
 import unittest
 
 import aws_cdk as cdk
-from aws_cdk.assertions import Match, Template
 import pytest
+from aws_cdk.assertions import Match, Template
 
 from lib.tap_stack import TapStack, TapStackProps
 
@@ -118,8 +119,12 @@ class TestTapStack(unittest.TestCase):
 
     @pytest.mark.it("ALB, HTTP :80 listener, TG on app port with health checks")
     def test_alb_listener_and_target_group(self) -> None:
-        self.template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
-        self.template.resource_count_is("AWS::ElasticLoadBalancingV2::TargetGroup", 1)
+        self.template.resource_count_is(
+            "AWS::ElasticLoadBalancingV2::LoadBalancer", 1
+        )
+        self.template.resource_count_is(
+            "AWS::ElasticLoadBalancingV2::TargetGroup", 1
+        )
         # HTTP listener :80 (no HTTPS)
         self.template.has_resource_properties(
             "AWS::ElasticLoadBalancingV2::Listener",
@@ -196,7 +201,9 @@ class TestTapStack(unittest.TestCase):
                                     {
                                         "Action": "s3:*",
                                         "Effect": "Deny",
-                                        "Condition": {"Bool": {"aws:SecureTransport": "false"}},
+                                        "Condition": {
+                                            "Bool": {"aws:SecureTransport": "false"}
+                                        },
                                     }
                                 )
                             ]
@@ -216,7 +223,9 @@ class TestTapStack(unittest.TestCase):
                             [
                                 Match.object_like(
                                     {
-                                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                                        "Principal": {
+                                            "Service": "cloudtrail.amazonaws.com"
+                                        },
                                         "Action": "s3:PutObject",
                                         "Condition": Match.object_like(
                                             {
@@ -246,7 +255,9 @@ class TestTapStack(unittest.TestCase):
 
     @pytest.mark.it("KMS key has rotation enabled")
     def test_kms_key_rotation_enabled(self) -> None:
-        self.template.has_resource_properties("AWS::KMS::Key", {"EnableKeyRotation": True})
+        self.template.has_resource_properties(
+            "AWS::KMS::Key", {"EnableKeyRotation": True}
+        )
 
     # ---------- SSM Parameters & Secret ----------
 
@@ -289,7 +300,10 @@ class TestTapStack(unittest.TestCase):
             if "KmsKeyId" in props or "KMSKeyId" in props:
                 kms_present = True
                 break
-        self.assertTrue(kms_present, "CloudTrail must specify a KMS key id (KmsKeyId/KMSKeyId)")
+        self.assertTrue(
+            kms_present,
+            "CloudTrail must specify a KMS key id (KmsKeyId/KMSKeyId)",
+        )
 
     # ---------- CloudWatch Logs + Alarm ----------
 
@@ -315,7 +329,7 @@ class TestTapStack(unittest.TestCase):
 
     @pytest.mark.it("Instance role has SSM core + CW agent + scoped inline policies")
     def test_instance_role_policies_minimum_required(self) -> None:
-        # Match the EC2 instance role specifically (by Description) and assume-role principal.
+        # Role exists with EC2 assume-role and description
         self.template.has_resource_properties(
             "AWS::IAM::Role",
             Match.object_like(
@@ -334,34 +348,35 @@ class TestTapStack(unittest.TestCase):
             ),
         )
 
-        # Managed policies: CDK often emits Fn::Join/Sub; check by substring instead of literal string.
+        # Managed policies (check by substring due to Fn::Join/Sub)
         roles = self.template.find_resources("AWS::IAM::Role")
-        found_ssm = False
-        found_cw_agent = False
-        for role in roles.values():
-            rendered = str(role)
-            if "AmazonSSMManagedInstanceCore" in rendered:
-                found_ssm = True
-            if "CloudWatchAgentServerPolicy" in rendered:
-                found_cw_agent = True
-        self.assertTrue(found_ssm, "EC2 role must include AmazonSSMManagedInstanceCore managed policy")
-        self.assertTrue(found_cw_agent, "EC2 role must include CloudWatchAgentServerPolicy managed policy")
+        found_ssm = any(
+            "AmazonSSMManagedInstanceCore" in str(r) for r in roles.values()
+        )
+        found_cw_agent = any(
+            "CloudWatchAgentServerPolicy" in str(r) for r in roles.values()
+        )
+        self.assertTrue(
+            found_ssm,
+            "EC2 role must include AmazonSSMManagedInstanceCore managed policy",
+        )
+        self.assertTrue(
+            found_cw_agent,
+            "EC2 role must include CloudWatchAgentServerPolicy managed policy",
+        )
 
-        # Verify the inline statements are present on an IAM::Policy attached to the role
+        # Inline policy attached to the *instance* role: verify SSM + Logs via matchers
         self.template.has_resource_properties(
             "AWS::IAM::Policy",
             Match.object_like(
                 {
+                    # Narrow to the instance-role inline policy to avoid matching CloudTrail's policy
+                    "PolicyName": Match.string_like_regexp(
+                        r"^NovaInstanceRoleDefaultPolicy"
+                    ),
                     "PolicyDocument": {
                         "Statement": Match.array_with(
                             [
-                                # secretsmanager read
-                                Match.object_like(
-                                    {
-                                        "Effect": "Allow",
-                                        "Action": Match.array_with(["secretsmanager:GetSecretValue"]),
-                                    }
-                                ),
                                 # SSM parameter gets (prefix-scoped)
                                 Match.object_like(
                                     {
@@ -391,12 +406,51 @@ class TestTapStack(unittest.TestCase):
                             ]
                         )
                     },
-                    # <-- change here: don't nest any_value() inside array_with()
                     "Roles": Match.any_value(),
                 }
             ),
         )
 
+        # Secrets Manager read MUST be present, but CDK may render Action as string or list.
+        policies = self.template.find_resources("AWS::IAM::Policy")
+
+        # Find the inline policy attached to the instance role
+        inst_policy = None
+        for _, pol in policies.items():
+            props = (pol or {}).get("Properties", {})
+            pname = props.get("PolicyName", "")
+            if isinstance(pname, str) and pname.startswith(
+                "NovaInstanceRoleDefaultPolicy"
+            ):
+                inst_policy = pol
+                break
+        self.assertIsNotNone(
+            inst_policy, "Could not find inline policy for NovaInstanceRole"
+        )
+
+        statements = (
+            inst_policy.get("Properties", {})
+            .get("PolicyDocument", {})
+            .get("Statement", [])
+            or []
+        )
+
+        has_secret = False
+        for st in statements:
+            actions = st.get("Action")
+            if isinstance(actions, list) and any(
+                a == "secretsmanager:GetSecretValue" for a in actions
+            ):
+                has_secret = True
+                break
+            if isinstance(actions, str) and actions == "secretsmanager:GetSecretValue":
+                has_secret = True
+                break
+
+        self.assertTrue(
+            has_secret,
+            "EC2 role inline policy must allow secretsmanager:GetSecretValue (string or list).",
+        )
 
     # ---------- Outputs ----------
 
