@@ -225,8 +225,8 @@ for ((i=0; i<TASK_COUNT; i++)); do
         # echo "Docker image removed."
     fi
     
-    # Run aws-nuke every 20 tasks
-    if (( (i + 1) % 20 == 0 )); then
+    # Run aws-nuke every 30 tasks
+    if (( (i + 1) % 30 == 0 )); then
         echo "Running aws-nuke cleanup after processing $((i + 1)) tasks..."
         NUKE_REPORT_FILE="aws-nuke-report-batch-$((i + 1)).txt"
         if ! aws-nuke run --config "$NUKE_CONFIG_RUNTIME" --no-alias-check --no-dry-run --force > "$NUKE_REPORT_FILE" 2>&1; then
