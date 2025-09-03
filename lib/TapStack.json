@@ -1,0 +1,428 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Migration infrastructure stack for web application environment in us-east-1",
+    "Parameters": {
+        "VpcSecurityGroupId": {
+            "Type": "AWS::EC2::SecurityGroup::Id",
+            "Description": "Security Group ID for Lambda functions in VPC"
+        },
+        "VpcSubnetIds": {
+            "Type": "List<AWS::EC2::Subnet::Id>",
+            "Description": "Subnet IDs for Lambda functions in VPC"
+        },
+        "NotificationEmail": {
+            "Type": "String",
+            "Description": "Email address for migration status notifications",
+            "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+            "ConstraintDescription": "Must be a valid email address"
+        }
+    },
+    "Resources": {
+        "MigrationLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${AWS::StackName}-migration-logs-${AWS::AccountId}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            },
+                            "BucketKeyEnabled": true
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        },
+        "MigrationNotificationsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${AWS::StackName}-migration-notifications"
+                },
+                "DisplayName": "Migration Status Notifications",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        },
+        "MigrationNotificationsSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "TopicArn": {
+                    "Ref": "MigrationNotificationsTopic"
+                },
+                "Endpoint": {
+                    "Ref": "NotificationEmail"
+                }
+            }
+        },
+        "MigrationTriggerFunctionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-migration-trigger-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "MigrationTriggerPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${MigrationLogsBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "MigrationNotificationsTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        },
+        "StatusNotifierFunctionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${AWS::StackName}-status-notifier-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "StatusNotifierPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "MigrationNotificationsTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        },
+        "MigrationTriggerFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-migration-trigger"
+                },
+                "Runtime": "python3.13",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "MigrationTriggerFunctionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 300,
+                "MemorySize": 256,
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "VpcSecurityGroupId"
+                        }
+                    ],
+                    "SubnetIds": {
+                        "Ref": "VpcSubnetIds"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport logging\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Migration trigger function invoked with event: {json.dumps(event)}\")\n    \n    try:\n        # Initialize AWS clients\n        s3_client = boto3.client('s3')\n        sns_client = boto3.client('sns')\n        \n        # Get environment variables (these would be set in a real deployment)\n        bucket_name = event.get('bucket_name', 'migration-logs-bucket')\n        sns_topic_arn = event.get('sns_topic_arn', '')\n        \n        # Create migration log entry\n        timestamp = datetime.utcnow().isoformat()\n        log_content = {\n            'timestamp': timestamp,\n            'event': 'migration_triggered',\n            'status': 'started',\n            'request_id': context.aws_request_id,\n            'event_data': event\n        }\n        \n        # Write log to S3 (placeholder implementation)\n        log_key = f\"migration-logs/{timestamp}-{context.aws_request_id}.json\"\n        logger.info(f\"Writing migration log to S3: {bucket_name}/{log_key}\")\n        \n        # In a real implementation, you would uncomment this:\n        # s3_client.put_object(\n        #     Bucket=bucket_name,\n        #     Key=log_key,\n        #     Body=json.dumps(log_content),\n        #     ContentType='application/json'\n        # )\n        \n        # Send notification (placeholder implementation)\n        if sns_topic_arn:\n            message = f\"Migration process started at {timestamp}\"\n            logger.info(f\"Sending notification to SNS: {sns_topic_arn}\")\n            \n            # In a real implementation, you would uncomment this:\n            # sns_client.publish(\n            #     TopicArn=sns_topic_arn,\n            #     Message=message,\n            #     Subject='Migration Status Update'\n            # )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Migration process initiated successfully',\n                'timestamp': timestamp,\n                'request_id': context.aws_request_id\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error in migration trigger: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Migration trigger failed',\n                'message': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        },
+        "StatusNotifierFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${AWS::StackName}-status-notifier"
+                },
+                "Runtime": "python3.13",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "StatusNotifierFunctionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "MemorySize": 128,
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "VpcSecurityGroupId"
+                        }
+                    ],
+                    "SubnetIds": {
+                        "Ref": "VpcSubnetIds"
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport logging\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Status notifier function invoked with event: {json.dumps(event)}\")\n    \n    try:\n        # Initialize SNS client\n        sns_client = boto3.client('sns')\n        \n        # Extract notification details from event\n        status = event.get('status', 'unknown')\n        message_body = event.get('message', 'Migration status update')\n        sns_topic_arn = event.get('sns_topic_arn', '')\n        \n        timestamp = datetime.utcnow().isoformat()\n        \n        # Construct notification message\n        notification_message = {\n            'timestamp': timestamp,\n            'status': status,\n            'message': message_body,\n            'request_id': context.aws_request_id\n        }\n        \n        if sns_topic_arn:\n            logger.info(f\"Sending status notification to SNS: {sns_topic_arn}\")\n            \n            # In a real implementation, you would uncomment this:\n            # response = sns_client.publish(\n            #     TopicArn=sns_topic_arn,\n            #     Message=json.dumps(notification_message, indent=2),\n            #     Subject=f'Migration Status: {status.upper()}'\n            # )\n            # logger.info(f\"SNS publish response: {response}\")\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Status notification sent successfully',\n                'timestamp': timestamp,\n                'status': status\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error in status notifier: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Status notification failed',\n                'message': str(e)\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        },
+        "MigrationApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-migration-api"
+                },
+                "Description": "REST API for triggering migration processes",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        },
+        "MigrateResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MigrationApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "MigrationApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "migrate"
+            }
+        },
+        "MigrateMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MigrationApi"
+                },
+                "ResourceId": {
+                    "Ref": "MigrateResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MigrationTriggerFunction.Arn}/invocations"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200
+                    },
+                    {
+                        "StatusCode": 500
+                    }
+                ]
+            }
+        },
+        "ApiGatewayInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "MigrationTriggerFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MigrationApi}/*/*"
+                }
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "MigrateMethod"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MigrationApi"
+                },
+                "Description": "Initial deployment of Migration API"
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "MigrationApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": "prod",
+                "Description": "Production stage for Migration API",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Migration"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ApiGatewayInvokeUrl": {
+            "Description": "Invoke URL for the Migration API Gateway",
+            "Value": {
+                "Fn::Sub": "https://${MigrationApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}/migrate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayUrl"
+                }
+            }
+        },
+        "SnsTopicArn": {
+            "Description": "ARN of the Migration Notifications SNS Topic",
+            "Value": {
+                "Ref": "MigrationNotificationsTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SnsTopicArn"
+                }
+            }
+        },
+        "MigrationLogsBucketName": {
+            "Description": "Name of the S3 bucket for migration logs",
+            "Value": {
+                "Ref": "MigrationLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogsBucket"
+                }
+            }
+        },
+        "MigrationTriggerFunctionArn": {
+            "Description": "ARN of the Migration Trigger Lambda Function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MigrationTriggerFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MigrationTriggerArn"
+                }
+            }
+        },
+        "StatusNotifierFunctionArn": {
+            "Description": "ARN of the Status Notifier Lambda Function",
+            "Value": {
+                "Fn::GetAtt": [
+                    "StatusNotifierFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StatusNotifierArn"
+                }
+            }
+        }
+    }
+}
