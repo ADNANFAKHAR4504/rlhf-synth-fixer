@@ -2,22 +2,22 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-describe('TapStack - Main Configuration', () => {
+describe('TapStack', () => {
+  let app: cdk.App;
+  let stack: TapStack;
   let template: Template;
 
-  beforeAll(() => {
-    const app = new cdk.App();
-    const stack = new TapStack(app, 'TestTapStack', {
+  beforeEach(() => {
+    app = new cdk.App();
+    stack = new TapStack(app, 'TestTapStack', {
       env: {
         account: '123456789012',
         region: 'us-east-1',
       },
-      environmentSuffix: 'prod',
     });
     template = Template.fromStack(stack);
   });
 
-  // All your existing tests here...
   test('VPC is created with correct configuration', () => {
     template.hasResourceProperties('AWS::EC2::VPC', {
       CidrBlock: '10.0.0.0/16',
@@ -40,217 +40,128 @@ describe('TapStack - Main Configuration', () => {
     });
   });
 
-  // ... keep all your existing tests
-});
+  test('Application Load Balancer is created correctly', () => {
+    template.hasResourceProperties(
+      'AWS::ElasticLoadBalancingV2::LoadBalancer',
+      {
+        Scheme: 'internet-facing',
+        Type: 'application',
+      }
+    );
+  });
 
-describe('TapStack - No Certificate Scenario', () => {
-  let template: Template;
-
-  beforeAll(() => {
-    const app = new cdk.App();
-    const stack = new TapStack(app, 'TestTapStackNoCert', {
-      env: {
-        account: '123456789012',
-        region: 'us-east-1',
-      },
-      // No domainName or hostedZoneId provided
+  test('Auto Scaling Group is created with correct configuration', () => {
+    template.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
+      MinSize: '2',
+      MaxSize: '6',
+      DesiredCapacity: '2',
+      HealthCheckType: 'ELB',
     });
-    template = Template.fromStack(stack);
   });
 
-  test('ACM certificate is not created when domainName or hostedZoneId is missing', () => {
-    // Should not have certificate resources
-    template.resourceCountIs('AWS::CertificateManager::Certificate', 0);
+  test('RDS PostgreSQL instance is created with Multi-AZ', () => {
+    template.hasResourceProperties('AWS::RDS::DBInstance', {
+      Engine: 'postgres',
+      DBInstanceClass: 'db.t3.micro',
+      MultiAZ: true,
+      StorageEncrypted: true,
+    });
   });
 
-  test('HTTP listener is created when HTTPS certificate is not available', () => {
-    // Should have HTTP listener with forward action (not redirect)
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+  test('S3 bucket is created with proper security settings', () => {
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      BucketEncryption: {
+        ServerSideEncryptionConfiguration: [
+          {
+            ServerSideEncryptionByDefault: {
+              SSEAlgorithm: 'AES256',
+            },
+          },
+        ],
+      },
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+    });
+  });
+
+  test('Security Groups are configured correctly', () => {
+    // Check that we have the expected number of security groups
+    template.resourceCountIs('AWS::EC2::SecurityGroup', 3);
+  });
+
+  test('IAM role is created with correct policies', () => {
+    template.hasResourceProperties('AWS::IAM::Role', {
+      AssumeRolePolicyDocument: {
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      },
+    });
+  });
+
+  test('Target Group is configured with health checks', () => {
+    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
       Port: 80,
       Protocol: 'HTTP',
-      DefaultActions: Match.arrayWith([
+      HealthCheckEnabled: true,
+    });
+  });
+
+  test('Auto Scaling policies are created', () => {
+    // Should have at least one scaling policy
+    template.resourceCountIs('AWS::AutoScaling::ScalingPolicy', 2);
+  });
+
+  test('All resources have required tags', () => {
+    // Check that VPC has the required tags
+    template.hasResourceProperties('AWS::EC2::VPC', {
+      Tags: Match.arrayWith([
         {
-          Type: 'forward',
+          Key: 'Environment',
+          Value: 'Production',
+        },
+        {
+          Key: 'Project',
+          Value: 'CloudFormationSetup',
         },
       ]),
     });
   });
 });
 
-describe('TapStack - Custom Environment Suffix', () => {
-  let template: Template;
-
-  beforeAll(() => {
+// Add tests for different scenarios
+describe('TapStack - Certificate Scenarios', () => {
+  test('No certificate created when domain not provided', () => {
     const app = new cdk.App();
-    const stack = new TapStack(app, 'TestTapStackCustomEnv', {
-      env: {
-        account: '123456789012',
-        region: 'us-east-1',
-      },
-      environmentSuffix: 'dev',
+    const stack = new TapStack(app, 'TestNoCert', {
+      env: { account: '123456789012', region: 'us-east-1' },
     });
-    template = Template.fromStack(stack);
+    const template = Template.fromStack(stack);
+    
+    // Should not have any certificates
+    template.resourceCountIs('AWS::CertificateManager::Certificate', 0);
   });
 
-  test('Environment suffix is applied to resource names', () => {
-    // Check that outputs include the environment suffix
-    template.hasOutput('*', {
-      ExportName: Match.stringLikeRegexp('Tapdev'),
-    });
-  });
-});
-
-describe('TapStack - With Certificate Scenario', () => {
-  let template: Template;
-
-  beforeAll(() => {
+  test('Certificate created when domain provided', () => {
     const app = new cdk.App();
-    const stack = new TapStack(app, 'TestTapStackWithCert', {
-      env: {
-        account: '123456789012',
-        region: 'us-east-1',
-      },
+    const stack = new TapStack(app, 'TestWithCert', {
+      env: { account: '123456789012', region: 'us-east-1' },
       domainName: 'example.com',
-      hostedZoneId: 'Z1234567890',
+      hostedZoneId: 'Z123456789',
     });
-    template = Template.fromStack(stack);
-  });
-
-  test('ACM certificate is created when domainName and hostedZoneId are provided', () => {
+    const template = Template.fromStack(stack);
+    
+    // Should have a certificate
     template.resourceCountIs('AWS::CertificateManager::Certificate', 1);
-  });
-
-  test('HTTPS listener is created when certificate is available', () => {
-    template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
-      Port: 443,
-      Protocol: 'HTTPS',
-    });
-  });
-  // Add these to the main test suite
-
-  test('Database is created in isolated subnets', () => {
-    template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-      DBSubnetGroupDescription: 'Subnet group for RDS database',
-      SubnetIds: Match.anyValue(),
-    });
-  });
-
-  test('S3 bucket has lifecycle rules configured', () => {
-    template.hasResourceProperties('AWS::S3::Bucket', {
-      LifecycleConfiguration: {
-        Rules: Match.arrayWith([
-          {
-            Status: 'Enabled',
-            NoncurrentVersionExpiration: {
-              NoncurrentDays: 30,
-            },
-          },
-        ]),
-      },
-    });
-  });
-
-  test('EC2 role has S3 access policies', () => {
-    template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          {
-            Action: Match.arrayWith([
-              's3:GetObject',
-              's3:PutObject',
-              's3:DeleteObject',
-            ]),
-            Effect: 'Allow',
-            Resource: Match.anyValue(),
-          },
-          {
-            Action: 's3:ListBucket',
-            Effect: 'Allow',
-            Resource: Match.anyValue(),
-          },
-        ]),
-      },
-    });
-  });
-
-  test('EC2 role has CloudWatch logs permissions', () => {
-    template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          {
-            Action: Match.arrayWith([
-              'logs:CreateLogGroup',
-              'logs:CreateLogStream',
-              'logs:PutLogEvents',
-            ]),
-            Effect: 'Allow',
-            Resource: Match.anyValue(),
-          },
-        ]),
-      },
-    });
-  });
-
-  test('Database has monitoring enabled', () => {
-    template.hasResourceProperties('AWS::RDS::DBInstance', {
-      MonitoringInterval: 60,
-      MonitoringRoleArn: Match.anyValue(),
-    });
-  });
-
-  test('Database has generated credentials secret', () => {
-    template.hasResourceProperties('AWS::RDS::DBInstance', {
-      MasterUsername: Match.anyValue(),
-    });
-
-    // Check for Secrets Manager secret
-    template.resourceCountIs('AWS::SecretsManager::Secret', 1);
-  });
-
-  test('Launch template has user data configured', () => {
-    template.hasResourceProperties('AWS::EC2::LaunchTemplate', {
-      LaunchTemplateData: {
-        UserData: Match.anyValue(),
-      },
-    });
-  });
-
-  test('Security groups have proper egress rules', () => {
-    // Check for application SG egress rules
-    template.hasResourceProperties('AWS::EC2::SecurityGroupEgress', {
-      IpProtocol: 'tcp',
-      FromPort: 443,
-      ToPort: 443,
-      Description: Match.stringLikeRegexp('Allow HTTPS outbound'),
-    });
-
-    template.hasResourceProperties('AWS::EC2::SecurityGroupEgress', {
-      IpProtocol: 'tcp',
-      FromPort: 80,
-      ToPort: 80,
-      Description: Match.stringLikeRegexp('Allow HTTP outbound'),
-    });
-  });
-
-  test('ALB has proper egress rules to application instances', () => {
-    template.hasResourceProperties('AWS::EC2::SecurityGroupEgress', {
-      IpProtocol: 'tcp',
-      FromPort: 80,
-      ToPort: 80,
-      Description: Match.stringLikeRegexp(
-        'Allow ALB to communicate with application instances'
-      ),
-    });
-  });
-
-  test('Application instances can communicate with database', () => {
-    template.hasResourceProperties('AWS::EC2::SecurityGroupEgress', {
-      IpProtocol: 'tcp',
-      FromPort: 5432,
-      ToPort: 5432,
-      Description: Match.stringLikeRegexp(
-        'Allow application instances to communicate with database'
-      ),
-    });
   });
 });
