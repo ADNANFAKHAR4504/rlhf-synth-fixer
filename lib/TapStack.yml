@@ -378,7 +378,7 @@ Outputs:
     Description: VPC ID for the environment
     Value: !Ref VPC
     Export:
-      Name: !Sub "${EnvironmentName}-VPCId"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-VPCId"
 
   PrivateSubnet1Id:
     Description: ID of the first private subnet
@@ -408,102 +408,101 @@ Outputs:
     Description: Internet Gateway ID
     Value: !Ref InternetGateway
     Export:
-      Name: !Sub "${EnvironmentName}-InternetGatewayId"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-InternetGatewayId"
 
   NatGateway1Id:
     Description: NAT Gateway in AZ1
     Value: !Ref NatGateway1
     Export:
-      Name: !Sub "${EnvironmentName}-NatGateway1Id"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-NatGateway1Id"
 
   NatGateway2Id:
     Description: NAT Gateway in AZ2
     Value: !Ref NatGateway2
     Export:
-      Name: !Sub "${EnvironmentName}-NatGateway2Id"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-NatGateway2Id"
 
   LoadBalancerArn:
     Description: Application Load Balancer ARN
     Value: !Ref LoadBalancer
     Export:
-      Name: !Sub "${EnvironmentName}-LoadBalancerArn"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-LoadBalancerArn"
 
   LoadBalancerDNS:
     Description: DNS name of the ALB
     Value: !GetAtt LoadBalancer.DNSName
     Export:
-      Name: !Sub "${EnvironmentName}-LoadBalancerDNS"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-LoadBalancerDNS"
 
   TargetGroupArn:
     Description: Target Group ARN
     Value: !Ref TargetGroup
     Export:
-      Name: !Sub "${EnvironmentName}-TargetGroupArn"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-TargetGroupArn"
 
   ListenerHTTPArn:
     Description: ARN of the HTTP listener
     Value: !Ref ListenerHTTP
     Export:
-      Name: !Sub "${EnvironmentName}-ListenerHTTPArn"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-ListenerHTTPArn"
 
   ListenerHTTPSArn:
     Condition: HasCertificate
     Description: ARN of the HTTPS listener
     Value: !Ref ListenerHTTPS
     Export:
-      Name: !Sub "${EnvironmentName}-ListenerHTTPSArn"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-ListenerHTTPSArn"
 
   AutoScalingGroupName:
     Description: Auto Scaling Group logical name
     Value: !Ref AutoScalingGroup
     Export:
-      Name: !Sub "${EnvironmentName}-AutoScalingGroupName"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-AutoScalingGroupName"
 
   LaunchTemplateId:
     Description: EC2 Launch Template ID
     Value: !Ref LaunchTemplate
     Export:
-      Name: !Sub "${EnvironmentName}-LaunchTemplateId"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-LaunchTemplateId"
 
   LaunchTemplateVersion:
     Description: Latest version number of Launch Template
     Value: !GetAtt LaunchTemplate.LatestVersionNumber
     Export:
-      Name: !Sub "${EnvironmentName}-LaunchTemplateVersion"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-LaunchTemplateVersion"
 
   InstanceSecurityGroupId:
     Description: Security Group ID for EC2 instances
     Value: !Ref InstanceSG
     Export:
-      Name: !Sub "${EnvironmentName}-InstanceSecurityGroupId"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-InstanceSecurityGroupId"
 
   LoadBalancerSecurityGroupId:
     Description: Security Group ID for ALB
     Value: !Ref LoadBalancerSG
     Export:
-      Name: !Sub "${EnvironmentName}-LoadBalancerSecurityGroupId"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-LoadBalancerSecurityGroupId"
 
   LogBucketName:
     Description: Centralized S3 Log Bucket
     Value: !Ref LogBucket
     Export:
-      Name: !Sub "${EnvironmentName}-LogBucketName"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-LogBucketName"
 
   LogBucketArn:
     Description: ARN of the S3 Log Bucket
     Value: !GetAtt LogBucket.Arn
     Export:
-      Name: !Sub "${EnvironmentName}-LogBucketArn"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-LogBucketArn"
 
   CPUAlarmHighName:
     Description: Name of the High CPU CloudWatch Alarm
     Value: !Ref CPUAlarmHigh
     Export:
-      Name: !Sub "${EnvironmentName}-CPUAlarmHigh"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-CPUAlarmHigh"
 
   CPUAlarmLowName:
     Description: Name of the Low CPU CloudWatch Alarm
     Value: !Ref CPUAlarmLow
     Export:
-      Name: !Sub "${EnvironmentName}-CPUAlarmLow"
-
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-CPUAlarmLow"
