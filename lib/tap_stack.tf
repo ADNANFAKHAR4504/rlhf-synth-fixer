@@ -100,7 +100,7 @@ variable "db_name" {
 variable "db_username" {
   description = "Database username"
   type        = string
-  default     = "admin"
+  default     = "dbadmin"
   sensitive   = true
 }
 
@@ -127,6 +127,12 @@ variable "sns_email" {
   description = "Email address for SNS notifications"
   type        = string
   default     = "admin@example.com"
+}
+
+variable "enable_config_recorder" {
+  description = "Enable AWS Config recorder (set to false if one already exists)"
+  type        = bool
+  default     = false
 }
 
 # Locals
@@ -1027,8 +1033,9 @@ resource "aws_config_delivery_channel" "main" {
   ]
 }
 
-# AWS Config Configuration Recorder
+# AWS Config Configuration Recorder (conditional)
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config_recorder ? 1 : 0
   name     = "${local.resource_prefix}-config-recorder"
   role_arn = aws_iam_role.config.arn
 
@@ -1045,7 +1052,8 @@ resource "aws_config_configuration_recorder" "main" {
 
 # Start the configuration recorder
 resource "aws_config_configuration_recorder_status" "main" {
-  name       = aws_config_configuration_recorder.main.name
+  count      = var.enable_config_recorder ? 1 : 0
+  name       = aws_config_configuration_recorder.main[0].name
   is_enabled = true
 
   depends_on = [aws_config_configuration_recorder.main]
@@ -1053,7 +1061,8 @@ resource "aws_config_configuration_recorder_status" "main" {
 
 # Config Rules
 resource "aws_config_config_rule" "s3_bucket_ssl_requests_only" {
-  name = "${local.resource_prefix}-s3-bucket-ssl-requests-only"
+  count = var.enable_config_recorder ? 1 : 0
+  name  = "${local.resource_prefix}-s3-bucket-ssl-requests-only"
 
   source {
     owner             = "AWS"
@@ -1064,7 +1073,8 @@ resource "aws_config_config_rule" "s3_bucket_ssl_requests_only" {
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "${local.resource_prefix}-encrypted-volumes"
+  count = var.enable_config_recorder ? 1 : 0
+  name  = "${local.resource_prefix}-encrypted-volumes"
 
   source {
     owner             = "AWS"
@@ -1275,7 +1285,7 @@ output "sns_topic_arn" {
 
 output "config_recorder_name" {
   description = "Name of the Config recorder"
-  value       = aws_config_configuration_recorder.main.name
+  value       = var.enable_config_recorder ? aws_config_configuration_recorder.main[0].name : "disabled"
 }
 
 output "lambda_execution_role_arn" {
