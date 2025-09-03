@@ -8,13 +8,13 @@
 variable "aws_region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
-  default     = "dev"
+  default     = "production"
 }
 
 variable "lambda_memory_size" {
@@ -40,7 +40,7 @@ variable "common_tags" {
 }
 
 # Local values for consistent naming and configuration
-# Local values for consistent naming and configuration
+
 locals {
   project = "projectx" # Changed from "projectX" to lowercase
   region  = var.aws_region
@@ -52,6 +52,7 @@ locals {
   tags = merge(var.common_tags, {
     Project     = "ProjectX" # Keep original casing for tags
     Environment = var.environment
+    Department  = "IT"
     Region      = local.region
   })
 
@@ -400,6 +401,289 @@ resource "aws_iam_policy" "lambda_dynamodb_access" {
 
   tags = local.tags
 }
+
+# -----------------------------------------------------------------------------
+# VPC, EC2, RDS (Postgres), and CloudTrail to satisfy prompt.md requirements
+# -----------------------------------------------------------------------------
+
+# Create a basic VPC spanning two AZs with public and private subnets
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-vpc" })
+}
+
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+resource "aws_subnet" "public_a" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 1)
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-public-a" })
+}
+
+resource "aws_subnet" "public_b" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 8, 2)
+  availability_zone       = data.aws_availability_zones.available.names[1]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-public-b" })
+}
+
+resource "aws_subnet" "private_a" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, 11)
+  availability_zone = data.aws_availability_zones.available.names[0]
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-private-a" })
+}
+
+resource "aws_subnet" "private_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 8, 12)
+  availability_zone = data.aws_availability_zones.available.names[1]
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-private-b" })
+}
+
+# Internet gateway and route table for public subnets
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags   = merge(local.tags, { Name = "${local.name_prefix}-igw" })
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+  tags = merge(local.tags, { Name = "${local.name_prefix}-public-rt" })
+}
+
+resource "aws_route_table_association" "rta_pub_a" {
+  subnet_id      = aws_subnet.public_a.id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "rta_pub_b" {
+  subnet_id      = aws_subnet.public_b.id
+  route_table_id = aws_route_table.public.id
+}
+
+# Security group for web server (allow only HTTPS from internet)
+resource "aws_security_group" "web_sg" {
+  name   = "${local.name_prefix}-web-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    description = "Allow HTTPS from internet"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-web-sg" })
+}
+
+# Security group for RDS (allow postgres only from web_sg)
+resource "aws_security_group" "db_sg" {
+  name   = "${local.name_prefix}-db-sg"
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    description     = "Postgres from web servers"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.web_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-db-sg" })
+}
+
+# EC2 instance in a public subnet
+resource "aws_instance" "web" {
+  ami                    = data.aws_ami.amazon_linux.id
+  instance_type          = "t3.micro"
+  subnet_id              = aws_subnet.public_a.id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+
+  # attach an instance profile (created below) to provide a minimal IAM role
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-web" })
+}
+
+data "aws_ami" "amazon_linux" {
+  most_recent = true
+  owners      = ["amazon"]
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+}
+
+# Minimal IAM role and instance profile for EC2 (basic, least-privilege)
+resource "aws_iam_role" "ec2_role" {
+  name = "${local.name_prefix}-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = local.tags
+}
+
+# Inline policy granting minimal CloudWatch Logs permissions so instance can
+# write logs if needed (keeps role useful but small).
+resource "aws_iam_role_policy" "ec2_basic" {
+  name = "${local.name_prefix}-ec2-basic-policy"
+  role = aws_iam_role.ec2_role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "arn:aws:logs:${local.region}:${data.aws_caller_identity.current.account_id}:*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${local.name_prefix}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
+# DB subnet group for RDS in private subnets
+resource "aws_db_subnet_group" "main" {
+  name       = "${local.name_prefix}-db-subnet-group"
+  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-db-subnet-group" })
+}
+
+# Encrypted RDS Postgres instance in private subnets
+resource "aws_db_instance" "postgres" {
+  identifier        = "${local.name_prefix}-postgres"
+  engine            = "postgres"
+  engine_version    = "15"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  storage_encrypted = true
+  # Credentials are managed by Secrets Manager; values are injected via the
+  # secret version generated below and read from the created secret version.
+  username               = jsondecode(aws_secretsmanager_secret_version.postgres.secret_string).username
+  password               = jsondecode(aws_secretsmanager_secret_version.postgres.secret_string).password
+  skip_final_snapshot    = true
+  multi_az               = false
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-postgres" })
+}
+
+# CloudTrail bucket for storing logs
+resource "aws_s3_bucket" "cloudtrail_bucket" {
+  bucket = "${local.project}-cloudtrail-logs-${random_id.suffix.hex}"
+  tags   = merge(local.tags, { Name = "${local.name_prefix}-cloudtrail-bucket" })
+}
+
+# CloudTrail bucket - separate resources for versioning and encryption to avoid
+# deprecated inline blocks.
+resource "aws_s3_bucket_versioning" "cloudtrail_versioning" {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail_pab" {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_encryption" {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Secrets Manager secret for RDS credentials. We generate a strong password and
+# include a username in the secret string; the RDS instance reads these back.
+resource "aws_secretsmanager_secret" "postgres" {
+  name        = "${local.name_prefix}-postgres-credentials"
+  description = "Autogenerated Postgres credentials for ${local.name_prefix} RDS instance"
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-postgres-secret" })
+}
+
+# Generate a random password and publish it as a secret version
+resource "random_password" "postgres" {
+  length           = 24
+  override_special = false
+}
+
+resource "aws_secretsmanager_secret_version" "postgres" {
+  secret_id     = aws_secretsmanager_secret.postgres.id
+  secret_string = jsonencode({ username = "postgres_admin", password = random_password.postgres.result })
+}
+
+resource "aws_cloudtrail" "main" {
+  name                          = "${local.name_prefix}-cloudtrail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+
+  tags = merge(local.tags, { Name = "${local.name_prefix}-cloudtrail" })
+}
+
 
 # IAM Policy for S3 access
 resource "aws_iam_policy" "lambda_s3_access" {
