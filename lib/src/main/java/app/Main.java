@@ -18,13 +18,13 @@ import java.util.Optional;
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
-    private TapStackProps(String environmentSuffix, StackProps stackProps) {
-        this.environmentSuffix = environmentSuffix;
-        this.stackProps = stackProps != null ? stackProps : StackProps.builder().build();
+    private TapStackProps(final String envSuffix, final StackProps props) {
+        this.environmentSuffix = envSuffix;
+        this.stackProps = props != null ? props : StackProps.builder().build();
     }
 
     public String getEnvironmentSuffix() {
@@ -43,13 +43,13 @@ class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String envSuffix) {
+            this.environmentSuffix = envSuffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
-            this.stackProps = stackProps;
+        public Builder stackProps(final StackProps props) {
+            this.stackProps = props;
             return this;
         }
 
@@ -83,7 +83,7 @@ class TapStack extends Stack {
      * @param id The unique identifier for this stack
      * @param props Optional properties for configuring the stack, including environment suffix
      */
-    public TapStack(final Construct scope, final String id, final TapStackProps props) {
+    TapStack(final Construct scope, final String id, final TapStackProps props) {
         super(scope, id, props != null ? props.getStackProps() : null);
 
         // Get environment suffix from props, context, or use 'dev' as default

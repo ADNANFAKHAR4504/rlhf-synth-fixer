@@ -1,6 +1,9 @@
 package app.components;
 
-import software.amazon.awscdk.services.ec2.*;
+import software.amazon.awscdk.services.ec2.Peer;
+import software.amazon.awscdk.services.ec2.Port;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Vpc;
 import software.constructs.Construct;
 
 public class SecurityGroupComponent extends Construct {

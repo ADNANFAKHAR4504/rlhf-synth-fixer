@@ -1,7 +1,18 @@
 package app.components;
 
-import software.amazon.awscdk.services.ec2.*;
-import software.amazon.awscdk.services.iam.*;
+import software.amazon.awscdk.services.ec2.Instance;
+import software.amazon.awscdk.services.ec2.InstanceClass;
+import software.amazon.awscdk.services.ec2.InstanceSize;
+import software.amazon.awscdk.services.ec2.InstanceType;
+import software.amazon.awscdk.services.ec2.MachineImage;
+import software.amazon.awscdk.services.ec2.SecurityGroup;
+import software.amazon.awscdk.services.ec2.Subnet;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
+import software.amazon.awscdk.services.ec2.UserData;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.iam.ManagedPolicy;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.constructs.Construct;
 import java.util.List;
 

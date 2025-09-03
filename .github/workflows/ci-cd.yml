@@ -282,6 +282,9 @@ jobs:
       # Python setup is handled by the setup-environment action
 
       - name: Run Linting
+        env:
+          PLATFORM: ${{ needs.detect-metadata.outputs.platform }}
+          LANGUAGE: ${{ needs.detect-metadata.outputs.language }}
         run: ./scripts/lint.sh
 
   unit-tests:
