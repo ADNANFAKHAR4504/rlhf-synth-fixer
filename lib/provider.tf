@@ -29,7 +29,7 @@ provider "aws" {
   skip_region_validation      = true
   skip_credentials_validation = false
 }
-i
+
 provider "aws" {
   alias  = "us_west_1"
   region = var.secondary_region
