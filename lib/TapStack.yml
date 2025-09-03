@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure Multi-Environment AWS Infrastructure with Comprehensive Security Controls'
 
+
 Parameters:
   Environment:
     Type: String
