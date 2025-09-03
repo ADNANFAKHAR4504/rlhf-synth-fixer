@@ -211,7 +211,6 @@ export class TapStack extends cdk.Stack {
 
   private createEc2Role(): iam.Role {
     const role = new iam.Role(this, 'prod-ec2-role', {
-      roleName: `prod-ec2-role-${this.envSuffix}`, // Add environment suffix
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances in the application tier',
     });
@@ -262,7 +261,6 @@ export class TapStack extends cdk.Stack {
 
   private createS3Bucket(): s3.Bucket {
     return new s3.Bucket(this, 'prod-assets-bucket', {
-      bucketName: `prod-tap-assets-${this.account}-${this.region}-${this.envSuffix}`, // Add
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
