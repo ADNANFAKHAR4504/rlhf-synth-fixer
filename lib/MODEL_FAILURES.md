@@ -1,131 +1,154 @@
-## 1. Infrastructure as Code (IaC) Failures
+# Model Failures Analysis for TAP Stack Infrastructure Template
 
-### Terraform Failures
-- **State Lock Issues**: Unable to acquire state lock due to concurrent operations
-- **Provider Version Conflicts**: Incompatible provider versions causing deployment failures
-- **Resource Dependency Cycles**: Circular dependencies between resources
-- **State File Corruption**: Corrupted state files leading to resource tracking issues
-- **Backend Configuration Errors**: S3, Azure, or GCP backend configuration failures
+This document outlines the main ways an AI model could fail when generating the `tap-stack.ts` template for a secure, scalable web application infrastructure.
 
-### CloudFormation Failures
-- **Stack Rollback Failures**: Incomplete rollbacks leaving resources in inconsistent state
-- **Template Validation Errors**: Invalid YAML/JSON syntax or resource definitions
-- **Resource Creation Timeouts**: Resources taking longer than expected to provision
-- **IAM Permission Issues**: Insufficient permissions for resource creation
-- **Service Quota Exceeded**: Hitting AWS service limits
+## 1. Security Configuration Failures
 
-## 2. Container Orchestration Failures
+### KMS Key Policy Misconfiguration
+- **Failure**: Incorrect IAM policy statements for KMS keys
+- **Example**: Missing `kms:CreateGrant` permission for S3 service principal
+- **Impact**: S3 bucket encryption failures, service disruptions
+- **Detection**: CloudTrail logs, S3 encryption errors
 
-### Kubernetes Failures
-- **Pod Scheduling Failures**: Insufficient resources or node affinity issues
-- **Image Pull Errors**: Registry authentication or network connectivity issues
-- **Service Discovery Issues**: DNS resolution or service mesh problems
-- **Resource Quota Violations**: Exceeding namespace or cluster resource limits
-- **Storage Provisioning Failures**: Persistent volume claim issues
+### Security Group Rule Errors
+- **Failure**: Overly permissive ingress/egress rules
+- **Example**: Allowing `0.0.0.0/0` instead of restricted IP ranges
+- **Impact**: Security vulnerabilities, unauthorized access
+- **Detection**: Security group audits, network flow logs
 
-### Docker Failures
-- **Image Build Failures**: Dockerfile syntax errors or build context issues
-- **Container Runtime Errors**: OOM kills or resource exhaustion
-- **Network Configuration Issues**: Port conflicts or network mode problems
-- **Volume Mount Failures**: Permission or path resolution issues
+### IAM Role Permission Issues
+- **Failure**: Excessive permissions or missing MFA conditions
+- **Example**: Admin role without MFA requirement or overly broad permissions
+- **Impact**: Privilege escalation, security breaches
+- **Detection**: IAM access analyzer, CloudTrail logs
 
-## 3. CI/CD Pipeline Failures
+## 2. Infrastructure Design Failures
 
-### Build Failures
-- **Dependency Resolution Issues**: Version conflicts or missing packages
-- **Compilation Errors**: Syntax errors or type mismatches
-- **Test Failures**: Unit, integration, or end-to-end test failures
-- **Code Quality Issues**: Linting errors or security scan failures
+### VPC Configuration Problems
+- **Failure**: Incorrect subnet CIDR allocations or AZ distribution
+- **Example**: Overlapping CIDR ranges, insufficient IP addresses
+- **Impact**: Network conflicts, deployment failures
+- **Detection**: CDK deployment errors, VPC validation
 
-### Deployment Failures
-- **Environment Configuration Mismatches**: Different configs between environments
-- **Database Migration Failures**: Schema changes or data integrity issues
-- **Service Discovery Failures**: Load balancer or proxy configuration issues
-- **Rollback Failures**: Inability to revert to previous working version
+### Resource Naming Conflicts
+- **Failure**: Non-unique resource names across environments
+- **Example**: S3 bucket names without timestamp or environment suffix
+- **Impact**: Deployment conflicts, resource overwrites
+- **Detection**: CloudFormation stack errors
 
-## 4. Monitoring and Observability Failures
+### Tagging Inconsistencies
+- **Failure**: Missing or incorrect resource tagging
+- **Example**: Resources without cost center or environment tags
+- **Impact**: Cost allocation issues, compliance violations
+- **Detection**: Tag compliance reports, cost analysis
 
-### Logging Issues
-- **Log Aggregation Failures**: Centralized logging system outages
-- **Log Parsing Errors**: Incorrect log format or parsing logic
-- **Storage Exhaustion**: Log storage capacity issues
+## 3. Scalability and Performance Failures
 
-### Metrics and Alerting
-- **Metric Collection Failures**: Data collection agent issues
-- **Alert Fatigue**: Too many false positive alerts
-- **Dashboard Rendering Issues**: Visualization or query failures
+### Resource Limits and Quotas
+- **Failure**: Exceeding AWS service limits
+- **Example**: Too many subnets, security groups, or KMS keys
+- **Impact**: Deployment failures, service throttling
+- **Detection**: CloudFormation errors, service quota monitoring
 
-## 5. Security and Compliance Failures
+### Auto-scaling Configuration
+- **Failure**: Missing auto-scaling groups or load balancers
+- **Example**: No auto-scaling policies for web tier
+- **Impact**: Poor performance under load, manual scaling required
+- **Detection**: Performance monitoring, load testing
 
-### Authentication Failures
-- **SSO Integration Issues**: Identity provider connectivity problems
-- **Token Expiration**: JWT or session token management issues
-- **Permission Escalation**: Unauthorized access to resources
+### Monitoring and Alerting Gaps
+- **Failure**: Insufficient CloudWatch alarms
+- **Example**: Missing alarms for critical metrics like CPU, memory, or errors
+- **Impact**: Delayed incident response, service degradation
+- **Detection**: CloudWatch dashboard review, incident post-mortems
 
-### Compliance Violations
-- **Data Encryption Failures**: Unencrypted data in transit or at rest
-- **Audit Log Gaps**: Missing or incomplete audit trails
-- **Policy Enforcement Failures**: Security policies not properly applied
+## 4. Compliance and Governance Failures
 
-## 6. Network and Connectivity Failures
+### Data Retention Policies
+- **Failure**: Incorrect S3 lifecycle rules
+- **Example**: Missing transition to IA storage or deletion policies
+- **Impact**: Compliance violations, increased storage costs
+- **Detection**: S3 lifecycle policy audits, cost analysis
 
-### Load Balancer Issues
-- **Health Check Failures**: Incorrect health check configurations
-- **SSL/TLS Certificate Expiration**: Expired or invalid certificates
-- **Traffic Routing Problems**: Incorrect routing rules or backend selection
+### Encryption Standards
+- **Failure**: Missing or incorrect encryption configurations
+- **Example**: S3 bucket without KMS encryption or EBS volumes unencrypted
+- **Impact**: Data security risks, compliance failures
+- **Detection**: Security configuration checks, compliance scans
 
-### Network Security
-- **Firewall Rule Conflicts**: Overly restrictive or permissive rules
-- **VPN Connectivity Issues**: Tunnel establishment or maintenance failures
-- **DNS Resolution Problems**: Name resolution or caching issues
+### Audit Trail Configuration
+- **Failure**: Missing CloudTrail or logging configurations
+- **Example**: No VPC flow logs or S3 access logs
+- **Impact**: Limited visibility, compliance gaps
+- **Detection**: Log analysis, compliance audits
 
-## 7. Data and Storage Failures
+## 5. Operational Failures
 
-### Database Issues
-- **Connection Pool Exhaustion**: Too many concurrent connections
-- **Query Performance Degradation**: Slow queries or missing indexes
-- **Data Corruption**: Integrity issues or partial data loss
-- **Backup Failures**: Incomplete or corrupted backups
+### Backup and Recovery
+- **Failure**: Missing backup strategies
+- **Example**: No RDS snapshots, S3 versioning, or disaster recovery plan
+- **Impact**: Data loss, extended downtime
+- **Detection**: Backup verification, disaster recovery testing
 
-### File System Issues
-- **Disk Space Exhaustion**: Storage capacity limits reached
-- **Permission Denied Errors**: File access control issues
-- **Mount Point Failures**: Storage device connectivity issues
+### Network Connectivity
+- **Failure**: Incorrect routing or NAT gateway configuration
+- **Example**: Private subnets without internet access for updates
+- **Impact**: Service unavailability, security patch failures
+- **Detection**: Network connectivity tests, security group audits
 
-## 8. Third-Party Service Failures
+### Cost Optimization
+- **Failure**: Inefficient resource sizing or unused resources
+- **Example**: Over-provisioned instances, unused EBS volumes
+- **Impact**: Increased operational costs, resource waste
+- **Detection**: Cost analysis, resource utilization monitoring
 
-### API Integration Issues
-- **Rate Limiting**: Exceeding API call limits
-- **Authentication Failures**: Invalid API keys or tokens
-- **Response Format Changes**: Breaking changes in external APIs
-- **Service Outages**: External service unavailability
+## 6. Code Quality and Maintenance Failures
 
-### Vendor Dependencies
-- **License Expiration**: Software license renewal issues
-- **Version Compatibility**: Incompatible vendor software versions
-- **Support Contract Issues**: Expired or insufficient support coverage
+### CDK Best Practices
+- **Failure**: Poor code structure or missing error handling
+- **Example**: No input validation, hardcoded values, or missing comments
+- **Impact**: Difficult maintenance, deployment errors
+- **Detection**: Code review, static analysis tools
 
-## 9. Human Error and Process Failures
+### Environment Management
+- **Failure**: Poor environment separation or configuration drift
+- **Example**: Shared resources between environments, inconsistent configurations
+- **Impact**: Environment conflicts, deployment issues
+- **Detection**: Infrastructure drift detection, environment audits
 
-### Configuration Errors
-- **Environment Variable Issues**: Missing or incorrect environment variables
-- **Feature Flag Misconfigurations**: Incorrect feature toggle settings
-- **Manual Override Failures**: Bypassing automated processes incorrectly
+### Documentation and Knowledge Transfer
+- **Failure**: Insufficient documentation or runbooks
+- **Example**: Missing deployment instructions or troubleshooting guides
+- **Impact**: Operational delays, knowledge gaps
+- **Detection**: Documentation reviews, team training assessments
 
-### Process Failures
-- **Change Management Issues**: Insufficient testing or approval processes
-- **Documentation Gaps**: Missing or outdated operational procedures
-- **Training Deficiencies**: Team members lacking necessary skills
+## 7. Testing and Validation Failures
 
-## 10. Recovery and Mitigation Strategies
+### Infrastructure Testing
+- **Failure**: No automated testing or validation
+- **Example**: Missing CDK assertions, security group tests, or compliance checks
+- **Impact**: Undetected issues, production failures
+- **Detection**: Test coverage analysis, deployment validation
 
-### Immediate Response
-- **Incident Response Procedures**: Clear escalation and communication protocols
-- **Rollback Procedures**: Quick reversion to last known good state
-- **Emergency Access**: Break-glass procedures for critical systems
+### Security Testing
+- **Failure**: Insufficient security validation
+- **Example**: No penetration testing, security group validation, or compliance scanning
+- **Impact**: Security vulnerabilities, compliance failures
+- **Detection**: Security assessments, compliance audits
 
-### Long-term Prevention
-- **Chaos Engineering**: Proactive failure testing and resilience building
-- **Automated Testing**: Comprehensive test coverage for failure scenarios
-- **Monitoring Improvements**: Enhanced observability and early warning systems
-- **Process Refinement**: Continuous improvement of operational procedures
+### Performance Testing
+- **Failure**: No load testing or performance validation
+- **Example**: Missing stress tests, capacity planning, or performance baselines
+- **Impact**: Poor user experience, service degradation under load
+- **Detection**: Performance monitoring, load testing results
+
+## Mitigation Strategies
+
+1. **Automated Validation**: Implement CDK assertions and automated testing
+2. **Security Reviews**: Regular security assessments and penetration testing
+3. **Compliance Monitoring**: Continuous compliance scanning and reporting
+4. **Cost Monitoring**: Regular cost analysis and optimization reviews
+5. **Documentation**: Maintain comprehensive runbooks and troubleshooting guides
+6. **Training**: Regular team training on security and operational best practices
+7. **Monitoring**: Comprehensive logging, alerting, and dashboard monitoring
+8. **Backup Testing**: Regular backup verification and disaster recovery testing
