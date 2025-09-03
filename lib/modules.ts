@@ -200,9 +200,9 @@ export class InfrastructureModule extends Construct {
 
     // S3 Bucket for Application Logs - Critical for audit trails and compliance
     this.s3Bucket = new S3Bucket(this, 'app-logs-bucket', {
-      bucket: 'app-logs-prod',
+      bucket: 'app-logs-prod-ts',
       tags: {
-        Name: 'app-logs-prod',
+        Name: 'app-logs-prod-ts',
         Environment: config.environment,
         Purpose: 'Application Logs Storage',
         Compliance: 'Financial Services',
@@ -255,7 +255,7 @@ export class InfrastructureModule extends Construct {
             Effect: 'Allow',
             Principal: '*',
             Action: ['s3:GetObject', 's3:PutObject'],
-            Resource: 'arn:aws:s3:::app-logs-prod/*',
+            Resource: 'arn:aws:s3:::app-logs-prod-ts/*',
             Condition: {
               StringEquals: {
                 'aws:sourceVpc': this.vpc.id,

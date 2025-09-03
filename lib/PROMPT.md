@@ -41,7 +41,7 @@ The original requirements are defined for CloudFormation YAML, but we will imple
 - Trigger alarms if CPU usage exceeds **80%**.  
 
 ### Security Services
-- Protect the application using **AWS WAF** against SQL injection and XSS.  
+- Protect the application using **AWS WAF**.
 
 ### Safety Controls
 - Define a **stack policy** that prevents accidental deletions of critical resources.  
@@ -60,7 +60,7 @@ The original requirements are defined for CloudFormation YAML, but we will imple
   - Security groups for app + DB.  
   - CloudTrail → S3 logging.  
   - CloudWatch alarms.  
-  - AWS WAF for web protection.  
+  - AWS WAF.
   - Stack policy config.  
 
 - **tap-stack.ts**  
@@ -86,7 +86,7 @@ The original requirements are defined for CloudFormation YAML, but we will imple
 - RDS = Multi-AZ with minor upgrades enabled.  
 - NAT Gateway for private subnets.  
 - Security groups locked to company IP ranges.  
-- WAF enabled for SQL injection/XSS protection.  
+- WAF enabled.
 - CloudWatch alarms at 80% CPU threshold.  
 - Auto Recovery for EC2.  
 - Stack policy prevents deletion of critical infra.  
