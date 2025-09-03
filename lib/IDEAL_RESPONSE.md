@@ -1,4 +1,4 @@
-Below is the final, corrected `lib/TapStack.yml` that satisfies all requirements, avoids previous deploy errors, and includes extended Outputs for downstream use.
+Below is the final, corrected `lib/TapStack.yml` that satisfies all requirements, avoids previous deploy errors, and includes extended Outputs for downstream use. The code is:
 
 ```yaml
 AWSTemplateFormatVersion: "2010-09-09"
