@@ -1,54 +1,49 @@
-You are an expert AWS solutions architect. I need you to generate a production-grade AWS CloudFormation template in JSON. The template should set up a scalable, secure, and SOC2-compliant AWS environment in the us-east-1 region with the following requirements:
+Design a production-ready serverless application CloudFormation template (YAML format) for the us-west-2 region. Name the file serverless-infrastructure.yaml. The template should follow AWS best practices and meet the following requirements:
 
-Networking
+AWS Lambda
 
-Create a VPC with public and private subnets.
+Deploy a Lambda function using Node.js 14.x runtime.
 
-Configure routing, Internet Gateway, and a NAT Gateway for outbound traffic from the private subnet.
+Grant the function permissions (via IAM role with least privilege) to interact with DynamoDB.
 
-Apply Security Groups and NACLs to enforce least-privilege and secure communication between services.
+Enable CloudWatch logging for monitoring Lambda executions.
 
-Database
+Amazon API Gateway
 
-Deploy an Amazon RDS instance in the private subnet.
+Create an HTTP endpoint integrated with the Lambda function.
 
-Ensure RDS storage is encrypted with KMS.
+Expose a specific resource path that accepts HTTP GET requests.
 
-Compute & Scaling
+Enable CORS for requests from any origin.
 
-Set up an ECS cluster for containerized applications.
+Configure API Gateway to log to CloudWatch.
 
-Place an Application Load Balancer (ALB) in front of the ECS cluster.
+Return a 500 error response when Lambda execution fails.
 
-Configure an Auto Scaling Group to manage ECS container instances.
+Amazon DynamoDB
 
-Security & Access Control
+Provision a DynamoDB table with a partition key id (string).
 
-Use IAM roles and policies with deny-all by default, granting only explicit permissions as needed.
+Configure with 5 read capacity units and 5 write capacity units.
 
-Implement Resource Access Manager (RAM) to share resources across AWS accounts.
+Enable server-side encryption.
 
-Monitoring & Logging
+Amazon S3 (Logging)
 
-Enable and configure AWS CloudTrail for auditing.
+Create an S3 bucket dedicated for logs.
 
-Enable Amazon CloudWatch metrics for infrastructure health and performance.
+Enable server-side encryption (SSE-S3).
 
-Create S3 buckets for application logs, with lifecycle policies to manage storage.
+Turn on versioning to preserve log history.
 
-Compliance & Management
+Security and Monitoring
 
-Ensure all resources are tagged according to company standards for cost tracking and identification.
+Ensure all resources use encryption where possible.
 
-Confirm the entire environment is SOC2-compliant, with encryption enforced for data at rest and in transit.
+Configure CloudWatch monitoring for API Gateway and Lambda.
 
-Constraints:
+Tagging
 
-The entire setup must be defined using CloudFormation JSON.
+Apply a resource tag to all resources with key: Environment and value: Production.
 
-The template must pass security and performance tests.
-
-Use company naming conventions for all resources.
-
-Expected Output:
-Provide the complete json CloudFormation template with all the above configurations.
+Ensure the YAML template is valid and deployable with AWS CloudFormation without errors.

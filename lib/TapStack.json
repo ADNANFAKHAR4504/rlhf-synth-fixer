@@ -1,1249 +1,46 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "SOC2-compliant AWS infrastructure with VPC, RDS, ECS, and monitoring",
+    "Description": "Production-ready serverless application with Lambda, API Gateway, DynamoDB, and S3 logging",
     "Parameters": {
-        "EnvironmentName": {
+        "Environment": {
             "Type": "String",
-            "Default": "production",
-            "Description": "Environment name (dev, staging, production)"
+            "Default": "Production",
+            "Description": "Environment name for resource tagging"
         },
-        "CompanyName": {
+        "LambdaFunctionName": {
             "Type": "String",
-            "Default": "company",
-            "Description": "Company name for resource naming"
+            "Default": "ServerlessFunction",
+            "Description": "Name for the Lambda function"
         },
-        "DatabaseName": {
+        "DynamoDBTableName": {
             "Type": "String",
-            "Default": "appdb",
-            "Description": "RDS database name"
+            "Default": "ServerlessTable",
+            "Description": "Name for the DynamoDB table"
         },
-        "DatabaseInstanceClass": {
+        "S3LogsBucketName": {
             "Type": "String",
-            "Default": "db.t3.micro",
-            "Description": "RDS instance type"
-        },
-        "ServiceName": {
-            "Type": "String",
-            "Default": "app-service",
-            "Description": "ECS service name"
-        },
-        "ContainerPort": {
-            "Type": "Number",
-            "Default": 80,
-            "Description": "Container port for ALB"
-        },
-        "ContainerImage": {
-            "Type": "String",
-            "Default": "nginx:latest",
-            "Description": "ECS container image"
-        }
-    },
-    "Metadata": {
-        "AWS::CloudFormation::Interface": {
-            "ParameterGroups": [
-                {
-                    "Label": {
-                        "default": "Environment Configuration"
-                    },
-                    "Parameters": [
-                        "EnvironmentName",
-                        "CompanyName"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "Database Configuration"
-                    },
-                    "Parameters": [
-                        "DatabaseName",
-                        "DatabaseInstanceClass"
-                    ]
-                },
-                {
-                    "Label": {
-                        "default": "ECS Configuration"
-                    },
-                    "Parameters": [
-                        "ServiceName",
-                        "ContainerPort",
-                        "ContainerImage"
-                    ]
-                }
-            ]
-        }
-    },
-    "Conditions": {
-        "IsProduction": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentName"
-                },
-                "production"
-            ]
+            "Default": "serverless-logs",
+            "Description": "Name for the S3 logs bucket (will be appended with account ID and region)"
         }
     },
     "Resources": {
-        "KMSKey": {
-            "Type": "AWS::KMS::Key",
-            "Properties": {
-                "Description": "KMS key for encrypting RDS and S3 data",
-                "KeyPolicy": {
-                    "Version": "2012-10-17",
-                    "Id": "key-default-1",
-                    "Statement": [
-                        {
-                            "Sid": "Enable IAM User Permissions",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "AWS": {
-                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
-                                }
-                            },
-                            "Action": "kms:*",
-                            "Resource": "*"
-                        },
-                        {
-                            "Sid": "Allow CloudTrail to encrypt logs",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "cloudtrail.amazonaws.com"
-                            },
-                            "Action": [
-                                "kms:GenerateDataKey",
-                                "kms:Decrypt"
-                            ],
-                            "Resource": "*",
-                            "Condition": {
-                                "StringLike": {
-                                    "kms:EncryptionContext:aws:cloudtrail:arn": {
-                                        "Fn::Sub": "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*"
-                                    }
-                                }
-                            }
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    },
-                    {
-                        "Key": "Purpose",
-                        "Value": "encryption"
-                    }
-                ]
-            }
-        },
-        "KMSKeyAlias": {
-            "Type": "AWS::KMS::Alias",
-            "Properties": {
-                "AliasName": {
-                    "Fn::Sub": "alias/${CompanyName}-${EnvironmentName}-key"
-                },
-                "TargetKeyId": {
-                    "Ref": "KMSKey"
-                }
-            }
-        },
-        "VPC": {
-            "Type": "AWS::EC2::VPC",
-            "Properties": {
-                "CidrBlock": "10.0.0.0/16",
-                "EnableDnsSupport": true,
-                "EnableDnsHostnames": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-vpc"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "InternetGateway": {
-            "Type": "AWS::EC2::InternetGateway",
-            "Properties": {
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-igw"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "VPCGatewayAttachment": {
-            "Type": "AWS::EC2::VPCGatewayAttachment",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "InternetGatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "PublicSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": "10.0.1.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-subnet-1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    },
-                    {
-                        "Key": "Tier",
-                        "Value": "public"
-                    }
-                ]
-            }
-        },
-        "PublicSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": "10.0.2.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "MapPublicIpOnLaunch": true,
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-subnet-2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    },
-                    {
-                        "Key": "Tier",
-                        "Value": "public"
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet1": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": "10.0.3.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        0,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-subnet-1"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    },
-                    {
-                        "Key": "Tier",
-                        "Value": "private"
-                    }
-                ]
-            }
-        },
-        "PrivateSubnet2": {
-            "Type": "AWS::EC2::Subnet",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "CidrBlock": "10.0.4.0/24",
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-subnet-2"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    },
-                    {
-                        "Key": "Tier",
-                        "Value": "private"
-                    }
-                ]
-            }
-        },
-        "PublicRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-rt"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRouteTable": {
-            "Type": "AWS::EC2::RouteTable",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-rt"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicRoute": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "GatewayId": {
-                    "Ref": "InternetGateway"
-                }
-            }
-        },
-        "PublicSubnetRouteTableAssociation1": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                }
-            }
-        },
-        "PublicSubnetRouteTableAssociation2": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PublicSubnet2"
-                },
-                "RouteTableId": {
-                    "Ref": "PublicRouteTable"
-                }
-            }
-        },
-        "PrivateSubnetRouteTableAssociation1": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet1"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
-                }
-            }
-        },
-        "PrivateSubnetRouteTableAssociation2": {
-            "Type": "AWS::EC2::SubnetRouteTableAssociation",
-            "Properties": {
-                "SubnetId": {
-                    "Ref": "PrivateSubnet2"
-                },
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
-                }
-            }
-        },
-        "EIP": {
-            "Type": "AWS::EC2::EIP",
-            "Properties": {
-                "Domain": "vpc",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-nat-eip"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "NATGateway": {
-            "Type": "AWS::EC2::NatGateway",
-            "Properties": {
-                "AllocationId": {
-                    "Fn::GetAtt": [
-                        "EIP",
-                        "AllocationId"
-                    ]
-                },
-                "SubnetId": {
-                    "Ref": "PublicSubnet1"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-nat-gw"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateRoute": {
-            "Type": "AWS::EC2::Route",
-            "Properties": {
-                "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
-                },
-                "DestinationCidrBlock": "0.0.0.0/0",
-                "NatGatewayId": {
-                    "Ref": "NATGateway"
-                }
-            }
-        },
-        "ALBSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Security group for ALB",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 80,
-                        "ToPort": 80,
-                        "CidrIp": "0.0.0.0/0"
-                    },
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 443,
-                        "ToPort": 443,
-                        "CidrIp": "0.0.0.0/0"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-alb-sg"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Security group for ECS tasks",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": {
-                            "Ref": "ContainerPort"
-                        },
-                        "ToPort": {
-                            "Ref": "ContainerPort"
-                        },
-                        "SourceSecurityGroupId": {
-                            "Ref": "ALBSecurityGroup"
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-ecs-sg"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "RDSSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Security group for RDS",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 3306,
-                        "ToPort": 3306,
-                        "SourceSecurityGroupId": {
-                            "Ref": "ECSSecurityGroup"
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-rds-sg"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "PublicNACL": {
-            "Type": "AWS::EC2::NetworkAcl",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-public-nacl"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "PrivateNACL": {
-            "Type": "AWS::EC2::NetworkAcl",
-            "Properties": {
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-private-nacl"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "DBSubnetGroup": {
-            "Type": "AWS::RDS::DBSubnetGroup",
-            "Properties": {
-                "DBSubnetGroupDescription": "Subnet group for RDS",
-                "SubnetIds": [
-                    {
-                        "Ref": "PrivateSubnet1"
-                    },
-                    {
-                        "Ref": "PrivateSubnet2"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-db-subnet-group"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "RDSInstance": {
-            "Type": "AWS::RDS::DBInstance",
-            "DependsOn": [
-                "KMSKeyAlias"
-            ],
-            "Properties": {
-                "DBName": {
-                    "Ref": "DatabaseName"
-                },
-                "DBInstanceClass": {
-                    "Ref": "DatabaseInstanceClass"
-                },
-                "Engine": "mysql",
-                "EngineVersion": "8.0.40",
-                "MasterUsername": "{{resolve:secretsmanager:my-db-secret:SecretString:username}}",
-                "MasterUserPassword": "{{resolve:secretsmanager:my-db-secret:SecretString:password}}",
-                "AllocatedStorage": 20,
-                "MaxAllocatedStorage": 100,
-                "StorageEncrypted": true,
-                "KmsKeyId": {
-                    "Ref": "KMSKey"
-                },
-                "DBSubnetGroupName": {
-                    "Ref": "DBSubnetGroup"
-                },
-                "VPCSecurityGroups": [
-                    {
-                        "Fn::GetAtt": [
-                            "RDSSecurityGroup",
-                            "GroupId"
-                        ]
-                    }
-                ],
-                "MultiAZ": {
-                    "Fn::If": [
-                        "IsProduction",
-                        true,
-                        false
-                    ]
-                },
-                "BackupRetentionPeriod": {
-                    "Fn::If": [
-                        "IsProduction",
-                        35,
-                        7
-                    ]
-                },
-                "DeletionProtection": {
-                    "Fn::If": [
-                        "IsProduction",
-                        true,
-                        false
-                    ]
-                },
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": "${CompanyName}-${EnvironmentName}-rds"
-                        }
-                    },
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSCluster": {
-            "Type": "AWS::ECS::Cluster",
-            "Properties": {
-                "ClusterName": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-cluster"
-                },
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSTaskExecutionRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "AssumeRolePolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "ecs-tasks.amazonaws.com"
-                            },
-                            "Action": "sts:AssumeRole"
-                        }
-                    ]
-                },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-                ],
-                "Policies": [
-                    {
-                        "PolicyName": "ECSExecutionPolicy",
-                        "PolicyDocument": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Allow",
-                                    "Action": [
-                                        "ecr:GetAuthorizationToken",
-                                        "ecr:BatchCheckLayerAvailability",
-                                        "ecr:GetDownloadUrlForLayer",
-                                        "ecr:BatchGetImage",
-                                        "logs:CreateLogStream",
-                                        "logs:PutLogEvents",
-                                        "kms:Decrypt"
-                                    ],
-                                    "Resource": "*"
-                                }
-                            ]
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "TaskDefinition": {
-            "Type": "AWS::ECS::TaskDefinition",
-            "Properties": {
-                "Family": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-task"
-                },
-                "NetworkMode": "awsvpc",
-                "RequiresCompatibilities": [
-                    "FARGATE"
-                ],
-                "Cpu": 256,
-                "Memory": 512,
-                "ExecutionRoleArn": {
-                    "Fn::GetAtt": [
-                        "ECSTaskExecutionRole",
-                        "Arn"
-                    ]
-                },
-                "TaskRoleArn": {
-                    "Fn::GetAtt": [
-                        "ECSTaskExecutionRole",
-                        "Arn"
-                    ]
-                },
-                "ContainerDefinitions": [
-                    {
-                        "Name": {
-                            "Ref": "ServiceName"
-                        },
-                        "Image": {
-                            "Ref": "ContainerImage"
-                        },
-                        "PortMappings": [
-                            {
-                                "ContainerPort": {
-                                    "Ref": "ContainerPort"
-                                }
-                            }
-                        ],
-                        "LogConfiguration": {
-                            "LogDriver": "awslogs",
-                            "Options": {
-                                "awslogs-group": {
-                                    "Ref": "CloudWatchLogsGroup"
-                                },
-                                "awslogs-region": {
-                                    "Ref": "AWS::Region"
-                                },
-                                "awslogs-stream-prefix": "ecs"
-                            }
-                        },
-                        "Environment": [
-                            {
-                                "Name": "DATABASE_HOST",
-                                "Value": {
-                                    "Fn::GetAtt": [
-                                        "RDSInstance",
-                                        "Endpoint.Address"
-                                    ]
-                                }
-                            },
-                            {
-                                "Name": "DATABASE_NAME",
-                                "Value": {
-                                    "Ref": "DatabaseName"
-                                }
-                            }
-                        ]
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "ApplicationLoadBalancer": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-alb"
-                },
-                "Scheme": "internet-facing",
-                "Subnets": [
-                    {
-                        "Ref": "PublicSubnet1"
-                    },
-                    {
-                        "Ref": "PublicSubnet2"
-                    }
-                ],
-                "SecurityGroups": [
-                    {
-                        "Ref": "ALBSecurityGroup"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "ALBListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "LoadBalancerArn": {
-                    "Ref": "ApplicationLoadBalancer"
-                },
-                "Port": 80,
-                "Protocol": "HTTP",
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ALBTargetGroup"
-                        }
-                    }
-                ]
-            }
-        },
-        "ALBTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-tg"
-                },
-                "Port": {
-                    "Ref": "ContainerPort"
-                },
-                "Protocol": "HTTP",
-                "VpcId": {
-                    "Ref": "VPC"
-                },
-                "TargetType": "ip",
-                "HealthCheckPath": "/",
-                "HealthCheckIntervalSeconds": 30,
-                "HealthCheckTimeoutSeconds": 5,
-                "HealthyThresholdCount": 2,
-                "UnhealthyThresholdCount": 2,
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "ECSService": {
-            "Type": "AWS::ECS::Service",
-            "DependsOn": [
-                "ALBListener"
-            ],
-            "Properties": {
-                "ServiceName": {
-                    "Ref": "ServiceName"
-                },
-                "Cluster": {
-                    "Ref": "ECSCluster"
-                },
-                "TaskDefinition": {
-                    "Ref": "TaskDefinition"
-                },
-                "DesiredCount": 2,
-                "LaunchType": "FARGATE",
-                "NetworkConfiguration": {
-                    "AwsvpcConfiguration": {
-                        "AssignPublicIp": "DISABLED",
-                        "SecurityGroups": [
-                            {
-                                "Ref": "ECSSecurityGroup"
-                            }
-                        ],
-                        "Subnets": [
-                            {
-                                "Ref": "PrivateSubnet1"
-                            },
-                            {
-                                "Ref": "PrivateSubnet2"
-                            }
-                        ]
-                    }
-                },
-                "LoadBalancers": [
-                    {
-                        "ContainerName": {
-                            "Ref": "ServiceName"
-                        },
-                        "ContainerPort": {
-                            "Ref": "ContainerPort"
-                        },
-                        "TargetGroupArn": {
-                            "Ref": "ALBTargetGroup"
-                        }
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Environment",
-                        "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
-                        }
-                    }
-                ]
-            }
-        },
-        "CloudWatchLogsGroup": {
-            "Type": "AWS::Logs::LogGroup",
-            "Properties": {
-                "LogGroupName": {
-                    "Fn::Sub": "/ecs/${CompanyName}-${EnvironmentName}"
-                },
-                "RetentionInDays": 90,
-                "KmsKeyId": {
-                    "Ref": "KMSKey"
-                }
-            }
-        },
         "LogsBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-logs-${AWS::AccountId}"
+                    "Fn::Sub": "${S3LogsBucketName}-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
-                                "SSEAlgorithm": "aws:kms",
-                                "KMSMasterKeyID": {
-                                    "Ref": "KMSKey"
-                                }
+                                "SSEAlgorithm": "AES256"
                             }
                         }
                     ]
                 },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
-                },
-                "LifecycleConfiguration": {
-                    "Rules": [
-                        {
-                            "Id": "TransitionToIA",
-                            "Status": "Enabled",
-                            "Transitions": [
-                                {
-                                    "TransitionInDays": 30,
-                                    "StorageClass": "STANDARD_IA"
-                                }
-                            ]
-                        },
-                        {
-                            "Id": "TransitionToGlacier",
-                            "Status": "Enabled",
-                            "Transitions": [
-                                {
-                                    "TransitionInDays": 60,
-                                    "StorageClass": "GLACIER"
-                                }
-                            ]
-                        },
-                        {
-                            "Id": "ExpireOldVersions",
-                            "Status": "Enabled",
-                            "NoncurrentVersionTransitions": [
-                                {
-                                    "TransitionInDays": 30,
-                                    "StorageClass": "STANDARD_IA"
-                                }
-                            ],
-                            "NoncurrentVersionExpirationInDays": 90
-                        }
-                    ]
                 },
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": true,
@@ -1255,115 +52,452 @@
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
+                            "Ref": "Environment"
                         }
                     },
                     {
                         "Key": "Purpose",
-                        "Value": "logs"
+                        "Value": "Logging"
                     }
                 ]
             }
         },
-        "CloudTrail": {
-            "Type": "AWS::CloudTrail::Trail",
+        "ServerlessTable": {
+            "Type": "AWS::DynamoDB::Table",
             "Properties": {
-                "TrailName": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-trail"
+                "TableName": {
+                    "Ref": "DynamoDBTableName"
                 },
-                "S3BucketName": {
-                    "Ref": "LogsBucket"
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "id",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "id",
+                        "KeyType": "HASH"
+                    }
+                ],
+                "ProvisionedThroughput": {
+                    "ReadCapacityUnits": 5,
+                    "WriteCapacityUnits": 5
                 },
-                "S3KeyPrefix": "cloudtrail",
-                "IncludeGlobalServiceEvents": true,
-                "IsMultiRegionTrail": true,
-                "EnableLogFileValidation": true,
-                "KMSKeyId": {
-                    "Ref": "KMSKey"
+                "SSESpecification": {
+                    "SSEEnabled": true,
+                    "SSEType": "KMS",
+                    "KMSMasterKeyId": "alias/aws/dynamodb"
                 },
-                "IsLogging": true,
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": {
-                            "Ref": "EnvironmentName"
-                        }
-                    },
-                    {
-                        "Key": "Company",
-                        "Value": {
-                            "Ref": "CompanyName"
+                            "Ref": "Environment"
                         }
                     }
                 ]
             }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${LambdaFunctionName}-execution-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "DynamoDBAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DeleteItem",
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ServerlessTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ServerlessFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "LambdaFunctionName"
+                },
+                "Runtime": "nodejs22.x",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "const AWS = require('aws-sdk');\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\n\nexports.handler = async (event) => {\n    console.log('Event received:', JSON.stringify(event, null, 2));\n    \n    try {\n        // Get the table name from environment variables\n        const tableName = process.env.DYNAMODB_TABLE_NAME;\n        \n        // Example: Get item from DynamoDB\n        const params = {\n            TableName: tableName,\n            Key: {\n                id: 'sample-id'\n            }\n        };\n        \n        const result = await dynamodb.get(params).promise();\n        \n        const response = {\n            statusCode: 200,\n            headers: {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                'Access-Control-Allow-Methods': 'GET,OPTIONS'\n            },\n            body: JSON.stringify({\n                message: 'Hello from Lambda!',\n                timestamp: new Date().toISOString(),\n                data: result.Item || null\n            })\n        };\n        \n        return response;\n    } catch (error) {\n        console.error('Error:', error);\n        \n        const errorResponse = {\n            statusCode: 500,\n            headers: {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            body: JSON.stringify({\n                error: 'Internal Server Error',\n                message: error.message\n            })\n        };\n        \n        return errorResponse;\n    }\n};\n"
+                },
+                "Environment": {
+                    "Variables": {
+                        "DYNAMODB_TABLE_NAME": {
+                            "Ref": "ServerlessTable"
+                        }
+                    }
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${LambdaFunctionName}"
+                },
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayCloudWatchRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "apigateway.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayAccount": {
+            "Type": "AWS::ApiGateway::Account",
+            "Properties": {
+                "CloudWatchRoleArn": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayCloudWatchRole",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "ServerlessApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": "ServerlessAPI",
+                "Description": "Serverless application API Gateway",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ServerlessApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "data"
+            }
+        },
+        "ApiMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResource"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ServerlessFunction.Arn}/invocations"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            }
+                        },
+                        {
+                            "StatusCode": 500,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            }
+                        }
+                    ]
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    },
+                    {
+                        "StatusCode": 500,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiMethodOptions": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiResource"
+                },
+                "HttpMethod": "OPTIONS",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "MOCK",
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200,
+                            "ResponseParameters": {
+                                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
+                                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                            },
+                            "ResponseTemplates": {
+                                "application/json": ""
+                            }
+                        }
+                    ],
+                    "RequestTemplates": {
+                        "application/json": "{\"statusCode\": 200}"
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseParameters": {
+                            "method.response.header.Access-Control-Allow-Headers": true,
+                            "method.response.header.Access-Control-Allow-Methods": true,
+                            "method.response.header.Access-Control-Allow-Origin": true
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "DependsOn": [
+                "ApiMethod",
+                "ApiMethodOptions"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessApi"
+                },
+                "StageName": "prod"
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ServerlessApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiDeployment"
+                },
+                "StageName": "prod",
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "LoggingLevel": "INFO",
+                        "DataTraceEnabled": true,
+                        "MetricsEnabled": true
+                    }
+                ],
+                "AccessLogSetting": {
+                    "DestinationArn": {
+                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ServerlessApi}"
+                    },
+                    "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"caller\":\"$context.identity.caller\",\"user\":\"$context.identity.user\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\"}"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/${ServerlessApi}"
+                },
+                "RetentionInDays": 14,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ServerlessFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ServerlessApi}/*/GET/data"
+                }
+            }
         }
     },
     "Outputs": {
-        "VPCId": {
-            "Description": "VPC ID",
+        "ApiEndpoint": {
+            "Description": "API Gateway endpoint URL",
             "Value": {
-                "Ref": "VPC"
+                "Fn::Sub": "https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/prod/data"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-VPCId"
+                    "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
                 }
             }
         },
-        "ALBDNSName": {
-            "Description": "Application Load Balancer DNS Name",
+        "LambdaFunctionArn": {
+            "Description": "Lambda function ARN",
             "Value": {
                 "Fn::GetAtt": [
-                    "ApplicationLoadBalancer",
-                    "DNSName"
+                    "ServerlessFunction",
+                    "Arn"
                 ]
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-ALBDNSName"
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
                 }
             }
         },
-        "RDSEndpoint": {
-            "Description": "RDS Endpoint",
+        "DynamoDBTableName": {
+            "Description": "DynamoDB table name",
             "Value": {
-                "Fn::GetAtt": [
-                    "RDSInstance",
-                    "Endpoint.Address"
-                ]
+                "Ref": "ServerlessTable"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-RDSEndpoint"
+                    "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
                 }
             }
         },
-        "ECSClusterName": {
-            "Description": "ECS Cluster Name",
-            "Value": {
-                "Ref": "ECSCluster"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-ECSClusterName"
-                }
-            }
-        },
-        "LogsBucketName": {
-            "Description": "S3 Logs Bucket Name",
+        "S3LogsBucketName": {
+            "Description": "S3 logs bucket name",
             "Value": {
                 "Ref": "LogsBucket"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${CompanyName}-${EnvironmentName}-LogsBucketName"
+                    "Fn::Sub": "${AWS::StackName}-S3LogsBucketName"
                 }
             }
         }

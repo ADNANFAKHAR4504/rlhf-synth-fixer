@@ -1,43 +1,17 @@
-The model should output a **complete AWS CloudFormation template in JSON** that provisions a **secure, SOC2-compliant, production-grade AWS environment in the us-east-1 region**.
+The ideal response would be a complete and valid CloudFormation YAML template named serverless-infrastructure.yaml that ticks every box in the prompt.
 
-## Requirements
+Here’s what it should look like:
 
-### Networking
+A Lambda function running Node.js 14.x, with an IAM execution role that only allows logging to CloudWatch and read/write access to the DynamoDB table.
 
-- Define a VPC with both public and private subnets.
-- Attach an Internet Gateway to the VPC and route public subnet traffic.
-- Deploy a NAT Gateway in the public subnet to allow private subnet instances secure outbound internet access.
-- Configure route tables, Security Groups, and NACLs for least-privilege and secure communication.
+An API Gateway endpoint with a specific GET method path integrated with the Lambda function, including CORS enabled for any origin and a 500 response mapping for Lambda errors.
 
-### Database
+A DynamoDB table with a partition key called id, 5 read/write capacity units, and server-side encryption enabled.
 
-- Deploy an Amazon RDS instance in the private subnet.
-- Enable storage encryption using AWS KMS.
-- Ensure backups, Multi-AZ deployment, and secure parameter configurations.
+An S3 bucket for logging with SSE-S3 encryption, versioning turned on, and proper bucket policies if needed.
 
-### Compute & Scaling
+CloudWatch log groups for both the Lambda and API Gateway, ensuring that monitoring is covered.
 
-- Provision an ECS Cluster to run containerized applications.
-- Place an Application Load Balancer (ALB) in front of the ECS cluster.
-- Set up an Auto Scaling Group to manage ECS container instances.
+Environment=Production tags applied to every resource.
 
-### Security & Access Control
-
-- Use IAM policies with “deny by default” and explicitly grant necessary permissions.
-- Configure IAM roles for ECS tasks, RDS access, and logging services.
-- Implement Resource Access Manager (RAM) for sharing resources across accounts.
-
-### Monitoring & Logging
-
-- Enable AWS CloudTrail for auditing and log delivery to S3.
-- Enable CloudWatch metrics and alarms for infrastructure health.
-- Configure S3 buckets with lifecycle policies for application and audit logs.
-
-### Compliance & Management
-
-- Enforce encryption for all sensitive data (at rest and in transit).
-- Apply company-standard tagging for all resources.
-- Ensure all configurations align with SOC2 compliance requirements.
-
-**Expected Output:**  
-A fully valid CloudFormation JSON template containing all the above components, ready for deployment without errors.
+This version should be clean, well-structured, and deploy successfully in AWS without modification.
