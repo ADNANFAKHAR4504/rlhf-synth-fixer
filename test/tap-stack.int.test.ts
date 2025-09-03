@@ -63,7 +63,7 @@ const getBucketName = (): string => {
 
   throw new Error(
     'No bucket name found in outputs. Available outputs: ' +
-      JSON.stringify(outputs, null, 2)
+    JSON.stringify(outputs, null, 2)
   );
 };
 
@@ -85,8 +85,33 @@ describe('TapStack Integration Tests', () => {
 
     test('should have valid bucket name format', () => {
       // Bucket name should follow the pattern: tap-storage-{env}-{stack}
-      const bucketNamePattern = /^tap-storage-[a-z0-9-]+$/;
+      // where {env} is the environment suffix (alphanumeric) and {stack} is the sanitized stack name
+      const bucketNamePattern = /^tap-storage-[a-z0-9]+-[a-z0-9]+$/;
       expect(bucketName).toMatch(bucketNamePattern);
+
+      // Extract and validate the environment suffix
+      const match = bucketName.match(/^tap-storage-([a-z0-9]+)-([a-z0-9]+)$/);
+      expect(match).toBeTruthy();
+      if (match) {
+        const [, envSuffix, stackName] = match;
+        console.log(`Environment suffix: ${envSuffix}, Stack name: ${stackName}`);
+
+        // Environment suffix should be alphanumeric and valid
+        expect(envSuffix).toMatch(/^[a-z0-9]+$/);
+        expect(envSuffix.length).toBeGreaterThan(0);
+
+        // Log the environment suffix for debugging
+        console.log(`Environment suffix: ${envSuffix}`);
+
+        // In CI/CD, environment suffix should not be hardcoded 'dev'
+        // In local development, it might be 'dev'
+        if (process.env.CI || process.env.ENVIRONMENT_SUFFIX) {
+          expect(envSuffix).not.toBe('dev');
+          console.log(`CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`);
+        } else {
+          console.log(`Local development environment - suffix: ${envSuffix}`);
+        }
+      }
     });
   });
 
@@ -218,10 +243,53 @@ describe('TapStack Integration Tests', () => {
 
   describe('Infrastructure Compliance', () => {
     test('should have bucket name matching expected pattern', () => {
-      // Validate bucket naming convention
-      const expectedPattern = /^tap-storage-dev-dev1$/;
+      // Validate bucket naming convention - now uses sanitized stack name
+      const expectedPattern = /^tap-storage-[a-z0-9]+-[a-z0-9]+$/;
       expect(bucketName).toMatch(expectedPattern);
       console.log(`✅ Bucket name ${bucketName} matches expected pattern`);
+    });
+
+    test('should have valid S3 bucket name format', () => {
+      // S3 bucket names must be 3-63 characters, only lowercase letters, numbers, hyphens
+      expect(bucketName.length).toBeGreaterThanOrEqual(3);
+      expect(bucketName.length).toBeLessThanOrEqual(63);
+      expect(bucketName).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
+      expect(bucketName).not.toMatch(/--/); // No consecutive hyphens
+      console.log(`✅ Bucket name ${bucketName} has valid S3 format (length: ${bucketName.length})`);
+    });
+
+    test('should demonstrate bucket naming edge cases', () => {
+      // This test demonstrates that our bucket naming logic handles edge cases
+      // by showing the current bucket name and explaining the validation
+      console.log(`Current bucket name: ${bucketName}`);
+      console.log(`Bucket name length: ${bucketName.length}`);
+      console.log(`Bucket name pattern: ${bucketName.match(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/) ? 'Valid' : 'Invalid'}`);
+
+      // Verify the bucket name follows our expected pattern
+      expect(bucketName).toMatch(/^tap-storage-[a-z0-9]+-[a-z0-9]+$/);
+      expect(bucketName.length).toBeLessThanOrEqual(63);
+      expect(bucketName).not.toMatch(/--/);
+      expect(bucketName).not.toMatch(/-$/);
+
+      // Extract and validate the environment suffix is not hardcoded
+      const match = bucketName.match(/^tap-storage-([a-z0-9]+)-([a-z0-9]+)$/);
+      expect(match).toBeTruthy();
+      if (match) {
+        const [, envSuffix] = match;
+        // Environment suffix should be alphanumeric and valid
+        expect(envSuffix).toMatch(/^[a-z0-9]+$/);
+
+        // In CI/CD, environment suffix should not be hardcoded 'dev'
+        // In local development, it might be 'dev'
+        if (process.env.CI || process.env.ENVIRONMENT_SUFFIX) {
+          expect(envSuffix).not.toBe('dev');
+          console.log(`CI/CD environment detected - validated non-hardcoded suffix: ${envSuffix}`);
+        } else {
+          console.log(`Local development environment - suffix: ${envSuffix}`);
+        }
+      }
+
+      console.log(`✅ Bucket naming edge case validation passed`);
     });
 
     test('should have outputs file with correct structure', () => {

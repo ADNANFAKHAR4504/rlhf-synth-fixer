@@ -69,7 +69,25 @@ export class TapStack extends pulumi.ComponentResource {
     // }, { parent: this });
 
     // Create S3 bucket for TAP project
-    const bucketName = `tap-storage-${environmentSuffix}-${pulumi.getStack()}`;
+    // Use a more controlled naming scheme to avoid invalid S3 bucket names
+    const stackName = pulumi.getStack();
+    const shortStackId = stackName ? stackName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() : 'default';
+
+    // Ensure the bucket name is valid (3-63 characters, only lowercase letters, numbers, hyphens)
+    let bucketName = `tap-storage-${environmentSuffix}-${shortStackId}`;
+
+    // Truncate if too long (S3 bucket names must be 3-63 characters)
+    if (bucketName.length > 63) {
+      bucketName = bucketName.substring(0, 63);
+    }
+
+    // Ensure it doesn't end with a hyphen
+    if (bucketName.endsWith('-')) {
+      bucketName = bucketName.slice(0, -1);
+    }
+
+    // Log the bucket name for debugging
+    console.log(`Creating S3 bucket with name: ${bucketName} (length: ${bucketName.length})`);
 
     // Create the S3 bucket
     this.bucket = new aws.s3.Bucket(
