@@ -58,7 +58,7 @@ Acceptance Checklist (self-verify before finalizing)
 
  Public route table with default route to IGW, associated with both public subnets
 
- HCL validates with terraform init && terraform validate
+HCL validates with terraform init && terraform validate
 
 Return the code now.
-output should be in tap_stack.tf and provider.tf
+output should be in tap_stack.tf and provider.tf.
