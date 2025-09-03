@@ -3,11 +3,12 @@
 Matches the current stack shape:
 - VPC: 2 AZs, public+private (egress), single NAT
 - ALB: internet-facing, HTTP :80 only; TG on 8080 with /health
-- SG rules: world->ALB:80 (CidrIp), ALB SG->App SG:8080, App SG->RDS SG:5432
+- SG rules: world->ALB:80 (may be inline on SG or a discrete ingress resource),
+            ALB SG->App SG:8080, App SG->RDS SG:5432
 - DynamoDB: PAY_PER_REQUEST
 - S3: app bucket versioned + KMS; logs bucket w/ CloudTrail write ACL condition
 - CloudTrail: multi-region, includes global events, KMS-encrypted, logs to logs bucket
-- IAM: EC2 role with SSM core + CW agent and scoped inline perms
+- IAM: EC2 role with SSM core + CW agent and scoped inline perms (as AWS::IAM::Policy)
 - Logs: log group /nova/<env>/app with 30d retention
 - Alarm: CPU >= 70%
 - SSM params: 4 under path; one Secrets Manager secret
@@ -57,18 +58,35 @@ class TestTapStack(unittest.TestCase):
         # 3 SGs: ALB, App, RDS
         self.template.resource_count_is("AWS::EC2::SecurityGroup", 3)
 
-        # Ingress: world -> ALB:80 (explicit L1 with CidrIp)
-        self.template.has_resource_properties(
-            "AWS::EC2::SecurityGroupIngress",
-            {
-                "IpProtocol": "tcp",
-                "FromPort": 80,
-                "ToPort": 80,
-                "CidrIp": "0.0.0.0/0",
-            },
-        )
+        # Ingress: world -> ALB:80 (allow either inline on SG or discrete ingress resource)
+        inline_ok = False
+        for sg in self.template.find_resources("AWS::EC2::SecurityGroup").values():
+            props = sg.get("Properties", {})
+            for rule in props.get("SecurityGroupIngress", []) or []:
+                if (
+                    rule.get("IpProtocol") == "tcp"
+                    and rule.get("FromPort") == 80
+                    and rule.get("ToPort") == 80
+                    and rule.get("CidrIp") == "0.0.0.0/0"
+                ):
+                    inline_ok = True
+                    break
+            if inline_ok:
+                break
 
-        # Ingress: ALB SG -> App SG :8080 (explicit L1 with SourceSecurityGroupId)
+        if not inline_ok:
+            # Fall back to a discrete ingress resource with CidrIp
+            self.template.has_resource_properties(
+                "AWS::EC2::SecurityGroupIngress",
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 80,
+                    "ToPort": 80,
+                    "CidrIp": "0.0.0.0/0",
+                },
+            )
+
+        # Ingress: ALB SG -> App SG :8080 (explicit SG->SG ingress)
         self.template.has_resource_properties(
             "AWS::EC2::SecurityGroupIngress",
             Match.object_like(
@@ -82,7 +100,7 @@ class TestTapStack(unittest.TestCase):
             ),
         )
 
-        # Ingress: App SG -> RDS SG :5432 (explicit L1 with SourceSecurityGroupId)
+        # Ingress: App SG -> RDS SG :5432 (explicit SG->SG ingress)
         self.template.has_resource_properties(
             "AWS::EC2::SecurityGroupIngress",
             Match.object_like(
@@ -252,16 +270,26 @@ class TestTapStack(unittest.TestCase):
 
     @pytest.mark.it("CloudTrail is multi-region, includes global events, uses KMS and logs to logs bucket")
     def test_cloudtrail_multi_region_and_kms(self) -> None:
+        # Core properties verified directly
         self.template.has_resource_properties(
             "AWS::CloudTrail::Trail",
             {
                 "IsMultiRegionTrail": True,
                 "IncludeGlobalServiceEvents": True,
-                # BucketName and KmsKeyId are tokens; object_like is sufficient
                 "S3BucketName": Match.any_value(),
-                "KmsKeyId": Match.any_value(),
             },
         )
+
+        # KMS property name varies by CFN/CDK version: accept KmsKeyId or KMSKeyId
+        trails = self.template.find_resources("AWS::CloudTrail::Trail")
+        self.assertTrue(trails, "Expected at least one CloudTrail::Trail resource")
+        kms_present = False
+        for t in trails.values():
+            props = (t or {}).get("Properties", {})
+            if "KmsKeyId" in props or "KMSKeyId" in props:
+                kms_present = True
+                break
+        self.assertTrue(kms_present, "CloudTrail must specify a KMS key id (KmsKeyId/KMSKeyId)")
 
     # ---------- CloudWatch Logs + Alarm ----------
 
@@ -287,6 +315,7 @@ class TestTapStack(unittest.TestCase):
 
     @pytest.mark.it("Instance role has SSM core + CW agent + scoped inline policies")
     def test_instance_role_policies_minimum_required(self) -> None:
+        # Verify Role assume-role and managed policies
         self.template.has_resource_properties(
             "AWS::IAM::Role",
             Match.object_like(
@@ -310,57 +339,55 @@ class TestTapStack(unittest.TestCase):
                             ),
                         ]
                     ),
-                    "Policies": Match.array_with(
-                        [
-                            Match.object_like(
-                                {
-                                    "PolicyDocument": {
-                                        "Statement": Match.array_with(
-                                            [
-                                                # secretsmanager read
-                                                Match.object_like(
-                                                    {
-                                                        "Action": Match.array_with(
-                                                            ["secretsmanager:GetSecretValue"]
-                                                        ),
-                                                        "Effect": "Allow",
-                                                    }
-                                                ),
-                                                # SSM parameter gets (prefix-scoped)
-                                                Match.object_like(
-                                                    {
-                                                        "Action": Match.array_with(
-                                                            Match.array_with(
-                                                                [
-                                                                    "ssm:GetParameter",
-                                                                    "ssm:GetParameters",
-                                                                    "ssm:GetParametersByPath",
-                                                                ]
-                                                            )
-                                                        ),
-                                                        "Effect": "Allow",
-                                                    }
-                                                ),
-                                                # CloudWatch Logs writes
-                                                Match.object_like(
-                                                    {
-                                                        "Action": Match.array_with(
-                                                            [
-                                                                "logs:CreateLogGroup",
-                                                                "logs:CreateLogStream",
-                                                                "logs:PutLogEvents",
-                                                            ]
-                                                        ),
-                                                        "Effect": "Allow",
-                                                    }
-                                                ),
-                                            ]
-                                        )
+                }
+            ),
+        )
+
+        # Verify the inline statements are present on an IAM::Policy attached to the role
+        self.template.has_resource_properties(
+            "AWS::IAM::Policy",
+            Match.object_like(
+                {
+                    "PolicyDocument": {
+                        "Statement": Match.array_with(
+                            [
+                                # secretsmanager read
+                                Match.object_like(
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": Match.array_with(["secretsmanager:GetSecretValue"]),
                                     }
-                                }
-                            )
-                        ]
-                    ),
+                                ),
+                                # SSM parameter gets (prefix-scoped)
+                                Match.object_like(
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": Match.array_with(
+                                            [
+                                                "ssm:GetParameter",
+                                                "ssm:GetParameters",
+                                                "ssm:GetParametersByPath",
+                                            ]
+                                        ),
+                                    }
+                                ),
+                                # CloudWatch Logs writes
+                                Match.object_like(
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": Match.array_with(
+                                            [
+                                                "logs:CreateLogGroup",
+                                                "logs:CreateLogStream",
+                                                "logs:PutLogEvents",
+                                            ]
+                                        ),
+                                    }
+                                ),
+                            ]
+                        )
+                    },
+                    "Roles": Match.array_with([Match.any_value()]),
                 }
             ),
         )
