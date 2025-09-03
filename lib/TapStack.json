@@ -39,17 +39,45 @@
             "Description": "EC2 instance type for Auto Scaling Group"
         },
         "KeyName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "Name of an existing EC2 KeyPair"
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) Name of an existing EC2 KeyPair. Leave blank to disable SSH access."
         },
         "CertificateArn": {
             "Type": "String",
-            "Description": "ACM certificate ARN for HTTPS"
+            "Default": "",
+            "Description": "(Optional) ACM certificate ARN for HTTPS. Leave blank to skip HTTPS listener."
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
             "Description": "Latest Amazon Linux 2 AMI ID from SSM Parameter Store"
+        }
+    },
+    "Conditions": {
+        "HasKeyName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -389,9 +417,6 @@
                     "InstanceType": {
                         "Ref": "InstanceType"
                     },
-                    "KeyName": {
-                        "Ref": "KeyName"
-                    },
                     "ImageId": {
                         "Ref": "LatestAmiId"
                     },
@@ -400,6 +425,17 @@
                             "Ref": "InstanceSG"
                         }
                     ],
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyName",
+                            {
+                                "Ref": "KeyName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
                     "TagSpecifications": [
                         {
                             "ResourceType": "instance",
@@ -494,7 +530,26 @@
                 }
             }
         },
-        "Listener": {
+        "ListenerHTTP": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "LoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "TargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "ListenerHTTPS": {
+            "Condition": "HasCertificate",
             "Type": "AWS::ElasticLoadBalancingV2::Listener",
             "Properties": {
                 "LoadBalancerArn": {
