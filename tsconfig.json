@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "outDir": "bin",
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -23,7 +22,9 @@
     "types": ["node", "jest"],
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "outDir": "dist"
   },
-  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "bin"]
+  "include": ["bin/tap.ts", "lib/tap-stack.ts"],
+  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "test", "cli", "lambda"]
 }
