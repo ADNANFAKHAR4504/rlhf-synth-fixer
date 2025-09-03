@@ -12,7 +12,8 @@ from aws_cdk import (
     Duration,
     RemovalPolicy,
     CfnOutput,
-    Tags
+    Tags,
+    Environment
 )
 from aws_cdk import aws_ec2 as ec2
 from aws_cdk import aws_rds as rds
@@ -36,8 +37,8 @@ class TapStackProps(cdk.StackProps):
         environment_suffix (Optional[str]): Stores the environment suffix for the stack.
     """
 
-    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, environment_suffix: Optional[str] = None, env: Optional[cdk.Environment] = None, **kwargs):
+        super().__init__(env=env, **kwargs)
         self.environment_suffix = environment_suffix
 
 
