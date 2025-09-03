@@ -278,7 +278,7 @@ resource "aws_kms_key" "security_master_key" {
         Resource = "*"
         Condition = {
           StringEquals = {
-            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-security-trail"
+            "kms:EncryptionContext:aws:cloudtrail:arn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-security-trail-${random_id.suffix.hex}"
           }
         }
       },
@@ -330,7 +330,7 @@ resource "aws_iam_account_password_policy" "strict" {
 # ==============================================================================
 
 resource "aws_iam_role" "security_admin" {
-  name = "${local.name_prefix}-security-admin"
+  name = "${local.name_prefix}-security-admin-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -366,7 +366,7 @@ resource "aws_iam_role" "security_admin" {
 }
 
 resource "aws_iam_policy" "security_admin" {
-  name        = "${local.name_prefix}-security-admin-policy"
+  name        = "${local.name_prefix}-security-admin-policy-${random_id.suffix.hex}"
   description = "Comprehensive security administration policy"
 
   policy = jsonencode({
@@ -474,7 +474,7 @@ resource "aws_iam_role_policy_attachment" "security_admin" {
 # ==============================================================================
 
 resource "aws_iam_role" "developer" {
-  name = "${local.name_prefix}-developer"
+  name = "${local.name_prefix}-developer-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -506,7 +506,7 @@ resource "aws_iam_role" "developer" {
 }
 
 resource "aws_iam_policy" "developer" {
-  name        = "${local.name_prefix}-developer-policy"
+  name        = "${local.name_prefix}-developer-policy-${random_id.suffix.hex}"
   description = "Developer policy with security restrictions"
 
   policy = jsonencode({
@@ -632,7 +632,7 @@ resource "aws_iam_role_policy_attachment" "developer" {
 # ==============================================================================
 
 resource "aws_iam_role" "auditor" {
-  name = "${local.name_prefix}-auditor"
+  name = "${local.name_prefix}-auditor-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -839,7 +839,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_log" {
 }
 
 resource "aws_iam_role" "flow_log" {
-  name = "${local.name_prefix}-vpc-flow-log-role"
+  name = "${local.name_prefix}-vpc-flow-log-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -860,7 +860,7 @@ resource "aws_iam_role" "flow_log" {
 }
 
 resource "aws_iam_role_policy" "flow_log" {
-  name = "${local.name_prefix}-vpc-flow-log-policy"
+  name = "${local.name_prefix}-vpc-flow-log-policy-${random_id.suffix.hex}"
   role = aws_iam_role.flow_log.id
 
   policy = jsonencode({
@@ -1126,7 +1126,7 @@ resource "aws_network_acl" "database" {
 resource "aws_wafv2_web_acl" "main" {
   count = var.enable_waf ? 1 : 0
 
-  name  = "${local.name_prefix}-security-waf"
+  name  = "${local.name_prefix}-security-waf-${random_id.suffix.hex}"
   scope = "REGIONAL"
 
   default_action {
@@ -1138,8 +1138,8 @@ resource "aws_wafv2_web_acl" "main" {
     name     = "RateLimitRule"
     priority = 1
 
-    override_action {
-      none {}
+    action {
+      block {}
     }
 
     statement {
@@ -1153,10 +1153,6 @@ resource "aws_wafv2_web_acl" "main" {
       cloudwatch_metrics_enabled = true
       metric_name                = "RateLimitRule"
       sampled_requests_enabled   = true
-    }
-
-    action {
-      block {}
     }
   }
 
@@ -1277,7 +1273,7 @@ resource "aws_wafv2_web_acl" "main" {
 resource "aws_wafv2_ip_set" "blocked_ips" {
   count = length(var.blocked_ips) > 0 ? 1 : 0
 
-  name               = "${local.name_prefix}-blocked-ips"
+  name               = "${local.name_prefix}-blocked-ips-${random_id.suffix.hex}"
   scope              = "REGIONAL"
   ip_address_version = "IPV4"
   addresses          = var.blocked_ips
@@ -1329,6 +1325,10 @@ resource "aws_guardduty_detector" "main" {
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
 
+  lifecycle {
+    ignore_changes = [enable]
+  }
+
   datasources {
     s3_logs {
       enable = true
@@ -1361,6 +1361,10 @@ resource "aws_securityhub_account" "main" {
 
   control_finding_generator = "SECURITY_CONTROL"
   auto_enable_controls      = true
+
+  lifecycle {
+    ignore_changes = [enable_default_standards]
+  }
 }
 
 # Enable Security Hub standards with correct ARN format
@@ -1476,11 +1480,15 @@ resource "aws_s3_bucket_policy" "config" {
 # Config Service Role
 resource "aws_iam_service_linked_role" "config" {
   aws_service_name = "config.amazonaws.com"
+
+  lifecycle {
+    ignore_changes = [aws_service_name]
+  }
 }
 
 # Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
-  name     = "${local.name_prefix}-config-recorder"
+  name     = "${local.name_prefix}-config-recorder-${random_id.suffix.hex}"
   role_arn = aws_iam_service_linked_role.config.arn
 
   recording_group {
@@ -1488,12 +1496,16 @@ resource "aws_config_configuration_recorder" "main" {
     include_global_resource_types = true
   }
 
+  lifecycle {
+    ignore_changes = [name]
+  }
+
   depends_on = [aws_config_delivery_channel.main]
 }
 
 # Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
-  name           = "${local.name_prefix}-config-delivery-channel"
+  name           = "${local.name_prefix}-config-delivery-channel-${random_id.suffix.hex}"
   s3_bucket_name = aws_s3_bucket.config.bucket
 }
 
@@ -1579,6 +1591,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
     id     = "cloudtrail_lifecycle"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = 2555 # 7 years
     }
@@ -1605,7 +1619,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-security-trail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-security-trail-${random_id.suffix.hex}"
           }
         }
       },
@@ -1620,7 +1634,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
-            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-security-trail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-security-trail-${random_id.suffix.hex}"
           }
         }
       }
@@ -1628,14 +1642,70 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
   })
 }
 
+# CloudWatch Log Group for CloudTrail
+resource "aws_cloudwatch_log_group" "cloudtrail" {
+  name              = "/aws/cloudtrail/${local.name_prefix}"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = aws_kms_key.security_master_key.arn
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail-log-group"
+  })
+}
+
+# IAM Role for CloudTrail CloudWatch Logs
+resource "aws_iam_role" "cloudtrail_cloudwatch" {
+  name = "${local.name_prefix}-cloudtrail-cloudwatch-role-${random_id.suffix.hex}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail-cloudwatch-role"
+  })
+}
+
+resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
+  name = "${local.name_prefix}-cloudtrail-cloudwatch-policy-${random_id.suffix.hex}"
+  role = aws_iam_role.cloudtrail_cloudwatch.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+      }
+    ]
+  })
+}
+
 # CloudTrail
 resource "aws_cloudtrail" "main" {
-  name                          = "${local.name_prefix}-security-trail"
+  name                          = "${local.name_prefix}-security-trail-${random_id.suffix.hex}"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.bucket
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_logging                = true
   kms_key_id                    = aws_kms_key.security_master_key.arn
+
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch.arn
 
   event_selector {
     read_write_type                  = "All"
@@ -1643,13 +1713,17 @@ resource "aws_cloudtrail" "main" {
     exclude_management_event_sources = []
 
     data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+      type = "AWS::S3::Object"
+      values = [
+        "${aws_s3_bucket.cloudtrail.arn}/*",
+        "${aws_s3_bucket.config.arn}/*",
+        "${aws_s3_bucket.audit_logs.arn}/*"
+      ]
     }
 
     data_resource {
       type   = "AWS::Lambda::Function"
-      values = ["arn:aws:lambda:*"]
+      values = ["arn:aws:lambda:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:function:*"]
     }
   }
 
@@ -1661,7 +1735,11 @@ resource "aws_cloudtrail" "main" {
     Name = "${local.name_prefix}-cloudtrail"
   })
 
-  depends_on = [aws_s3_bucket_policy.cloudtrail]
+  depends_on = [
+    aws_s3_bucket_policy.cloudtrail,
+    aws_cloudwatch_log_group.cloudtrail,
+    aws_iam_role_policy.cloudtrail_cloudwatch
+  ]
 }
 
 # ==============================================================================
@@ -1669,7 +1747,7 @@ resource "aws_cloudtrail" "main" {
 # ==============================================================================
 
 resource "aws_sns_topic" "security_alerts" {
-  name              = "${local.name_prefix}-security-alerts"
+  name              = "${local.name_prefix}-security-alerts-${random_id.suffix.hex}"
   kms_master_key_id = aws_kms_key.security_master_key.arn
 
   tags = merge(local.common_tags, {
@@ -1689,9 +1767,9 @@ resource "aws_sns_topic_subscription" "security_email" {
 
 # Root account usage alarm
 resource "aws_cloudwatch_log_metric_filter" "root_usage" {
-  name           = "${local.name_prefix}-root-access-metric-filter"
+  name           = "${local.name_prefix}-root-access-metric-filter-${random_id.suffix.hex}"
   pattern        = "{ ($.userIdentity.type = \"Root\") && ($.userIdentity.invokedBy NOT EXISTS) && ($.eventType != \"AwsServiceEvent\") }"
-  log_group_name = "/aws/cloudtrail/${local.name_prefix}"
+  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
 
   metric_transformation {
     name      = "RootAccessCount"
@@ -1701,7 +1779,7 @@ resource "aws_cloudwatch_log_metric_filter" "root_usage" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "root_usage" {
-  alarm_name          = "${local.name_prefix}-root-access-alarm"
+  alarm_name          = "${local.name_prefix}-root-access-alarm-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "1"
   metric_name         = "RootAccessCount"
@@ -1719,9 +1797,9 @@ resource "aws_cloudwatch_metric_alarm" "root_usage" {
 
 # Unauthorized API calls alarm
 resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
-  name           = "${local.name_prefix}-unauthorized-api-calls-metric-filter"
+  name           = "${local.name_prefix}-unauthorized-api-calls-metric-filter-${random_id.suffix.hex}"
   pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
-  log_group_name = "/aws/cloudtrail/${local.name_prefix}"
+  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
 
   metric_transformation {
     name      = "UnauthorizedAPICalls"
@@ -1731,7 +1809,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
-  alarm_name          = "${local.name_prefix}-unauthorized-api-calls-alarm"
+  alarm_name          = "${local.name_prefix}-unauthorized-api-calls-alarm-${random_id.suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "UnauthorizedAPICalls"
@@ -1813,7 +1891,7 @@ resource "aws_s3_bucket_versioning" "audit_logs_replica" {
 resource "aws_iam_role" "replication" {
   count = var.enable_cross_region_backup ? 1 : 0
 
-  name = "${local.name_prefix}-s3-replication-role"
+  name = "${local.name_prefix}-s3-replication-role-${random_id.suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1836,7 +1914,7 @@ resource "aws_iam_role" "replication" {
 resource "aws_iam_policy" "replication" {
   count = var.enable_cross_region_backup ? 1 : 0
 
-  name = "${local.name_prefix}-s3-replication-policy"
+  name = "${local.name_prefix}-s3-replication-policy-${random_id.suffix.hex}"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1886,6 +1964,8 @@ resource "aws_s3_bucket_replication_configuration" "audit_logs" {
   rule {
     id     = "audit-logs-replication"
     status = "Enabled"
+
+    filter {}
 
     destination {
       bucket        = aws_s3_bucket.audit_logs_replica[0].arn

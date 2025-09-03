@@ -434,6 +434,18 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
         expect(cloudTrailMatch[0]).toMatch(/data_resource\s*{/);
       }
     });
+
+    test("declares CloudWatch log group for CloudTrail", () => {
+      expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"cloudtrail"\s*{/);
+    });
+
+    test("CloudTrail integrates with CloudWatch logs", () => {
+      const cloudTrailMatch = terraformContent.match(/resource\s+"aws_cloudtrail"\s+"main"\s*{[\s\S]*?}(?=\n\nresource|\n\n#)/);
+      if (cloudTrailMatch) {
+        expect(cloudTrailMatch[0]).toMatch(/cloud_watch_logs_group_arn/);
+        expect(cloudTrailMatch[0]).toMatch(/cloud_watch_logs_role_arn/);
+      }
+    });
   });
 
   describe("Monitoring and Alerting", () => {
@@ -601,8 +613,29 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"random_id"\s+"suffix"\s*{/);
     });
 
-    test("random ID is used in bucket names for uniqueness", () => {
+    test("random ID is used in resource names for uniqueness", () => {
       expect(terraformContent).toMatch(/\$\{random_id\.suffix\.hex\}/);
+      
+      // Check that random ID is used in various resource types for uniqueness
+      const randomIdMatches = terraformContent.match(/\$\{random_id\.suffix\.hex\}/g);
+      expect(randomIdMatches).toBeTruthy();
+      if (randomIdMatches) {
+        expect(randomIdMatches.length).toBeGreaterThan(15); // Should be used extensively for unique naming
+      }
+    });
+
+    test("IAM resources use random suffixes to prevent name conflicts", () => {
+      // Check that key IAM resources include random suffix
+      expect(terraformContent).toMatch(/name\s*=\s*"\$\{local\.name_prefix\}-security-admin-\$\{random_id\.suffix\.hex\}"/);
+      expect(terraformContent).toMatch(/name\s*=\s*"\$\{local\.name_prefix\}-developer-\$\{random_id\.suffix\.hex\}"/);
+      expect(terraformContent).toMatch(/name\s*=\s*"\$\{local\.name_prefix\}-auditor-\$\{random_id\.suffix\.hex\}"/);
+    });
+
+    test("security service resources use random suffixes", () => {
+      // Check that security services include random suffix
+      expect(terraformContent).toMatch(/name\s*=\s*"\$\{local\.name_prefix\}-security-waf-\$\{random_id\.suffix\.hex\}"/);
+      expect(terraformContent).toMatch(/name\s*=\s*"\$\{local\.name_prefix\}-security-trail-\$\{random_id\.suffix\.hex\}"/);
+      expect(terraformContent).toMatch(/name\s*=\s*"\$\{local\.name_prefix\}-config-recorder-\$\{random_id\.suffix\.hex\}"/);
     });
   });
 });
