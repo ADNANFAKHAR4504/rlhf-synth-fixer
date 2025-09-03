@@ -1,0 +1,15 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348830",
+  "team": "5",
+  "startedAt": "2025-09-01T14:41:31.422Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "divyam-turing",
+  "dockerS3Location": ""
+}

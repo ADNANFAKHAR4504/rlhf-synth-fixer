@@ -17,22 +17,25 @@ if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
 fi
 
 # Build the project based on language
-if [ "$LANGUAGE" = "java" ]; then
-  echo "Building Java project with Gradle..."
-  echo "Current working directory: $(pwd)"
-  echo "Gradle wrapper: $(ls -la gradlew)"
-  
-  # Make sure gradlew is executable
-  chmod +x ./gradlew
-  
-  # Run with explicit working directory and clear task specification
-  # Use 'assemble' instead of 'build' to avoid running tests during build stage
-  ./gradlew assemble --build-cache --parallel --no-daemon
-  echo "✅ Java build completed successfully"
-elif [ "$LANGUAGE" != "py" ]; then
-  echo "Building project..."
-  npm run build
-  echo "✅ Build completed successfully"
-else
-  echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
-fi
+case "$LANGUAGE" in
+  java)
+    echo "⚡ Building Java project with Gradle..."
+    chmod +x ./gradlew
+    ./gradlew assemble \
+      --build-cache \
+      --parallel \
+      --max-workers=$(nproc) \
+      --no-daemon
+    echo "✅ Java build completed successfully"
+    ;;
+
+  py)
+    echo "⏭️ Skipping build for Python project (language=$LANGUAGE)"
+    ;;
+
+  *)
+    echo "📦 Running generic build (npm)..."
+    npm run build
+    echo "✅ Build completed successfully"
+    ;;
+esac
