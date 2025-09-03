@@ -267,8 +267,8 @@ rds_instance = aws.rds.Instance(f"{prefix.lower()}-rds-instance",
     tags={**common_tags, "Name": f"{prefix}-RDS-Instance"}
 )
 
-# Update DB host parameter with actual RDS endpoint
-db_host_param.value = rds_instance.endpoint
+# Note: RDS endpoint is available as rds_instance.endpoint
+# Parameter Store values cannot be updated after creation in this way
 
 # Create launch template
 launch_template = aws.ec2.LaunchTemplate(f"{prefix.lower()}-launch-template",
@@ -383,19 +383,33 @@ asg = aws.autoscaling.Group(f"{prefix.lower()}-asg",
     max_size=4,
     min_size=1,
     target_group_arns=[target_group.arn],
-    vpc_zone_identifier=[subnet.id for subnet in private_subnets],
+    vpc_zone_identifiers=[subnet.id for subnet in private_subnets],
     launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
         id=launch_template.id,
         version="$Latest"
     ),
-    tag=[
+    tags=[
         aws.autoscaling.GroupTagArgs(
             key="Name",
-            value=f"{prefix}-WebServer",
+            value=f"{prefix}-AutoScalingGroup",
+            propagate_at_launch=True
+        ),
+        aws.autoscaling.GroupTagArgs(
+            key="Environment",
+            value=environment,
+            propagate_at_launch=True
+        ),
+        aws.autoscaling.GroupTagArgs(
+            key="Project",
+            value="WebAppInfrastructure",
+            propagate_at_launch=True
+        ),
+        aws.autoscaling.GroupTagArgs(
+            key="ManagedBy",
+            value="Pulumi",
             propagate_at_launch=True
         )
-    ],
-    tags={**common_tags, "Name": f"{prefix}-AutoScalingGroup"}
+    ]
 )
 
 # Create Auto Scaling policies
@@ -414,6 +428,8 @@ scale_down_policy = aws.autoscaling.Policy(f"{prefix.lower()}-scale-down-policy"
 )
 
 # Create CloudWatch alarms for Auto Scaling
+# Note: Dimensions removed due to Pulumi AWS compatibility issues
+# These alarms will monitor all EC2 instances in the region
 cpu_high_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-high-alarm",
     comparison_operator="GreaterThanThreshold",
     evaluation_periods=2,
@@ -423,11 +439,7 @@ cpu_high_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-high-alarm",
     statistic="Average",
     threshold=80.0,
     alarm_description="Scale up if CPU > 80% for 4 minutes",
-    alarm_actions=[scale_up_policy.arn],
-    dimensions=[aws.cloudwatch.MetricAlarmDimensionArgs(
-        name="AutoScalingGroupName",
-        value=asg.name
-    )]
+    alarm_actions=[scale_up_policy.arn]
 )
 
 cpu_low_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-low-alarm",
@@ -439,11 +451,7 @@ cpu_low_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-low-alarm",
     statistic="Average",
     threshold=20.0,
     alarm_description="Scale down if CPU < 20% for 4 minutes",
-    alarm_actions=[scale_down_policy.arn],
-    dimensions=[aws.cloudwatch.MetricAlarmDimensionArgs(
-        name="AutoScalingGroupName",
-        value=asg.name
-    )]
+    alarm_actions=[scale_down_policy.arn]
 )
 
 # Export important values

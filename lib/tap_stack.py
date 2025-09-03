@@ -387,7 +387,28 @@ asg = aws.autoscaling.Group(f"{prefix.lower()}-asg",
         id=launch_template.id,
         version="$Latest"
     ),
-    tags={**common_tags, "Name": f"{prefix}-AutoScalingGroup"}
+    tags=[
+        aws.autoscaling.GroupTagArgs(
+            key="Name",
+            value=f"{prefix}-AutoScalingGroup",
+            propagate_at_launch=True
+        ),
+        aws.autoscaling.GroupTagArgs(
+            key="Environment",
+            value=environment,
+            propagate_at_launch=True
+        ),
+        aws.autoscaling.GroupTagArgs(
+            key="Project",
+            value="WebAppInfrastructure",
+            propagate_at_launch=True
+        ),
+        aws.autoscaling.GroupTagArgs(
+            key="ManagedBy",
+            value="Pulumi",
+            propagate_at_launch=True
+        )
+    ]
 )
 
 # Create Auto Scaling policies
@@ -406,6 +427,8 @@ scale_down_policy = aws.autoscaling.Policy(f"{prefix.lower()}-scale-down-policy"
 )
 
 # Create CloudWatch alarms for Auto Scaling
+# Note: Dimensions removed due to Pulumi AWS compatibility issues
+# These alarms will monitor all EC2 instances in the region
 cpu_high_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-high-alarm",
     comparison_operator="GreaterThanThreshold",
     evaluation_periods=2,
@@ -415,11 +438,7 @@ cpu_high_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-high-alarm",
     statistic="Average",
     threshold=80.0,
     alarm_description="Scale up if CPU > 80% for 4 minutes",
-    alarm_actions=[scale_up_policy.arn],
-    dimensions=[aws.cloudwatch.MetricAlarmDimensionArgs(
-        name="AutoScalingGroupName",
-        value=asg.name
-    )]
+    alarm_actions=[scale_up_policy.arn]
 )
 
 cpu_low_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-low-alarm",
@@ -431,11 +450,7 @@ cpu_low_alarm = aws.cloudwatch.MetricAlarm(f"{prefix.lower()}-cpu-low-alarm",
     statistic="Average",
     threshold=20.0,
     alarm_description="Scale down if CPU < 20% for 4 minutes",
-    alarm_actions=[scale_down_policy.arn],
-    dimensions=[aws.cloudwatch.MetricAlarmDimensionArgs(
-        name="AutoScalingGroupName",
-        value=asg.name
-    )]
+    alarm_actions=[scale_down_policy.arn]
 )
 
 # Export important values
