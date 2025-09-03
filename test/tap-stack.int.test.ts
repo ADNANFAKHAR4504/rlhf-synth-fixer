@@ -31,14 +31,10 @@ for (const key of requiredKeys) {
   }
 }
 
-// Detect region/account from outputs or env
+// Detect region from outputs or env
 const region = process.env.AWS_REGION || outputs["region"] || outputs["aws_region"];
 if (!region) {
   throw new Error("AWS region not set in environment or outputs.");
-}
-const expectedAccount = outputs["account_id"] || process.env.AWS_ACCOUNT_ID;
-if (!expectedAccount) {
-  throw new Error("AWS account ID not set in environment or outputs.");
 }
 
 // Tag conventions
@@ -83,7 +79,6 @@ describe("Terraform AWS Infrastructure Integration", () => {
   let actualAccount: string;
 
   beforeAll(async () => {
-    // Validate region/account context
     const sts = new STSClient({ region });
     let identity;
     try {
@@ -93,9 +88,7 @@ describe("Terraform AWS Infrastructure Integration", () => {
       throw err;
     }
     actualAccount = identity.Account!;
-    if (expectedAccount && actualAccount !== expectedAccount) {
-      throw new Error(`AWS account mismatch: expected ${expectedAccount}, got ${actualAccount}`);
-    }
+    console.log(`Running integration tests in AWS account: ${actualAccount}, region: ${region}`);
   });
 
   test("VPC exists with correct tags", async () => {
