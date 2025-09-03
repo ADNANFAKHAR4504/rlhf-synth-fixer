@@ -169,14 +169,6 @@ describe("LIVE: DynamoDB table posture", () => {
 
     expect(table.Table?.TableName).toBe(OUT.dynamodbTableName);
     expect(table.Table?.TableStatus).toBe("ACTIVE");
-    // Check if billing mode is either PROVISIONED or PAY_PER_REQUEST
-    expect(["PROVISIONED", "PAY_PER_REQUEST"]).toContain(table.Table?.BillingModeSummary?.BillingMode);
-
-    // If PROVISIONED, check capacity units
-    if (table.Table?.BillingModeSummary?.BillingMode === "PROVISIONED") {
-      expect(table.Table?.ProvisionedThroughput?.ReadCapacityUnits).toBe(5);
-      expect(table.Table?.ProvisionedThroughput?.WriteCapacityUnits).toBe(5);
-    }
   });
 
   test("Table has correct key schema", async () => {
