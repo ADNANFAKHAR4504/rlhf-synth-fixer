@@ -67,7 +67,7 @@ export class TapStack extends cdk.Stack {
     this.database = this.createDatabase(securityGroups.databaseSg);
 
     // Create Application Load Balancer
-    this.alb = this.createApplicationLoadBalancer(securityGroups.albSg, props);
+    this.alb = this.createApplicationLoadBalancer(securityGroups.albSg);
 
     // Create Auto Scaling Group
     this.asg = this.createAutoScalingGroup(
@@ -326,8 +326,7 @@ export class TapStack extends cdk.Stack {
   }
 
   private createApplicationLoadBalancer(
-    albSg: ec2.SecurityGroup,
-    props?: TapStackProps
+    albSg: ec2.SecurityGroup
   ): elbv2.ApplicationLoadBalancer {
     return new elbv2.ApplicationLoadBalancer(this, `${this.envSuffix}-alb`, {
       loadBalancerName: `${this.envSuffix}-alb`,
