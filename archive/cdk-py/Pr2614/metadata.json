@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "1387",
+  "team": "4",
+  "startedAt": "2025-09-02T14:32:22.569Z",
+  "author": "abdullahj2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
