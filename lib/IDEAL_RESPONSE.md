@@ -336,7 +336,7 @@ resource "aws_route_table_association" "database" {
 
 # VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_log" {
-  name              = "/aws/vpc/flowlogs/${local.resource_prefix}"
+  name              = "/aws/vpc/flowlogs/${local.resource_prefix}-${random_string.suffix.result}"
   retention_in_days = 30
 
   tags = merge(local.common_tags, {
@@ -345,7 +345,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_log" {
 }
 
 resource "aws_iam_role" "flow_log" {
-  name = "${local.resource_prefix}-flow-log-role"
+  name = "${local.resource_prefix}-flow-log-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -364,7 +364,7 @@ resource "aws_iam_role" "flow_log" {
 }
 
 resource "aws_iam_role_policy" "flow_log" {
-  name = "${local.resource_prefix}-flow-log-policy"
+  name = "${local.resource_prefix}-flow-log-policy-${random_string.suffix.result}"
   role = aws_iam_role.flow_log.id
 
   policy = jsonencode({
@@ -467,7 +467,7 @@ resource "aws_kms_key" "main" {
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${local.resource_prefix}"
+  name          = "alias/${local.resource_prefix}-${random_string.suffix.result}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -590,7 +590,7 @@ resource "aws_security_group_rule" "rds_from_lambda" {
 
 # IAM Role for Lambda execution
 resource "aws_iam_role" "lambda_execution" {
-  name = "${local.resource_prefix}-lambda-execution-role"
+  name = "${local.resource_prefix}-lambda-execution-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -775,7 +775,7 @@ resource "aws_lambda_function" "data_processor" {
 
 resource "aws_lambda_function" "data_validator" {
   filename      = data.archive_file.lambda_zip.output_path
-  function_name = "${local.resource_prefix}-data-validator"
+  function_name = "${local.resource_prefix}-data-validator-${random_string.suffix.result}"
   role          = aws_iam_role.lambda_execution.arn
   handler       = "lambda_function.lambda_handler"
   runtime       = "python3.11"
@@ -831,7 +831,7 @@ resource "aws_cloudwatch_log_group" "lambda_validator_logs" {
 
 # DB Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.resource_prefix}-db-subnet-group"
+  name       = "${local.resource_prefix}-db-subnet-group-${random_string.suffix.result}"
   subnet_ids = aws_subnet.database[*].id
 
   tags = merge(local.common_tags, {
@@ -842,7 +842,7 @@ resource "aws_db_subnet_group" "main" {
 # DB Parameter Group
 resource "aws_db_parameter_group" "main" {
   family = "postgres15"
-  name   = "${local.resource_prefix}-db-params"
+  name   = "${local.resource_prefix}-db-params-${random_string.suffix.result}"
 
   parameter {
     name  = "log_statement"
@@ -861,7 +861,7 @@ resource "aws_db_parameter_group" "main" {
 
 # RDS Monitoring Role
 resource "aws_iam_role" "rds_monitoring" {
-  name = "${local.resource_prefix}-rds-monitoring-role"
+  name = "${local.resource_prefix}-rds-monitoring-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -888,7 +888,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${local.resource_prefix}-database"
+  identifier = "${local.resource_prefix}-database-${random_string.suffix.result}"
 
   engine         = "postgres"
   engine_version = "15.7"
@@ -1011,7 +1011,7 @@ resource "aws_s3_bucket_policy" "config" {
 
 # IAM role for AWS Config
 resource "aws_iam_role" "config" {
-  name = "${local.resource_prefix}-config-role"
+  name = "${local.resource_prefix}-config-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
