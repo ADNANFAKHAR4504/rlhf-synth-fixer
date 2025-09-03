@@ -60,8 +60,12 @@ export const s3_bucket_name = stack.s3BucketName;
 export const kms_key_id = stack.kmsKeyId;
 export const lambda_function_name = stack.lambdaFunctionName;
 export const vpc_id = stack.vpcId;
-export const public_subnet_ids = stack.publicSubnetIds;
-export const private_subnet_ids = stack.privateSubnetIds;
+export const public_subnet_ids = stack.publicSubnetIds.apply(ids =>
+  ids.join(',')
+);
+export const private_subnet_ids = stack.privateSubnetIds.apply(ids =>
+  ids.join(',')
+);
 export const rds_endpoint = stack.rdsEndpoint;
 export const alb_dns_name = stack.albDnsName;
 export const cloudfront_domain_name = stack.cloudFrontDomainName;
