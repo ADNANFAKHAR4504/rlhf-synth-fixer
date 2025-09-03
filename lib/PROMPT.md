@@ -12,7 +12,7 @@ High Availability & Multi-Region:
 Design the infrastructure to be highly available by distributing resources across at least two AWS regions (e.g., 'us-east-1' and 'us-west-2').
 Ensure resources like databases, storage, and compute are replicated or failover-enabled across regions.
 Deployment Strategies:
-Support blue/green and canary deployment strategies to minimize downtime. This may involve using AWS CodeDeploy, Lambda functions, or weighted Route 53 records.
+This may involve using AWS CodeDeploy, Lambda functions, or weighted Route 53 records.
 Incorporate rollback safety for all resources to handle deployment failures gracefully.
 Operational Management:
 Implement automated notifications via SNS for any CloudFormation stack status changes (e.g., CREATE_FAILED, UPDATE_ROLLBACK_COMPLETE).

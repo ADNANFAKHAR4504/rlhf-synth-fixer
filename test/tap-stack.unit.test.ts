@@ -61,6 +61,15 @@ const cfnSchema = yaml.DEFAULT_SCHEMA.extend([
     kind: 'scalar',
     construct: (v: any) => ({ 'Fn::GetAZs': v }),
   }),
+  // Added support for non-standard but used tags in the template
+  new yaml.Type('!Condition', {
+    kind: 'scalar',
+    construct: (v: string) => ({ Condition: v }),
+  }),
+  new yaml.Type('!Split', {
+    kind: 'sequence',
+    construct: (v: any[]) => ({ 'Fn::Split': v }),
+  }),
 ]);
 
 describe('TapStack CloudFormation Template', () => {

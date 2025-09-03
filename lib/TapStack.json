@@ -230,7 +230,7 @@
         },
         "EnableGreenFleet": {
             "Type": "String",
-            "Default": "false",
+            "Default": "true",
             "AllowedValues": [
                 "true",
                 "false"
@@ -239,14 +239,14 @@
         },
         "BlueTrafficWeight": {
             "Type": "Number",
-            "Default": 100,
+            "Default": 90,
             "MinValue": 0,
             "MaxValue": 100,
             "Description": "Weight percentage for blue target group"
         },
         "GreenTrafficWeight": {
             "Type": "Number",
-            "Default": 0,
+            "Default": 10,
             "MinValue": 0,
             "MaxValue": 100,
             "Description": "Weight percentage for green target group"
@@ -268,6 +268,29 @@
             "Default": 1,
             "MinValue": 0,
             "Description": "Green ASG desired capacity when green fleet is enabled"
+        },
+        "EnableCodeDeploy": {
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Enable CodeDeploy blue/green canary for EC2/OnPrem via custom resource"
+        },
+        "CanaryStepPercentage": {
+            "Type": "Number",
+            "Default": 10,
+            "MinValue": 1,
+            "MaxValue": 99,
+            "Description": "Initial traffic percentage to shift to green during canary"
+        },
+        "CanaryBakeTimeMins": {
+            "Type": "Number",
+            "Default": 5,
+            "MinValue": 1,
+            "MaxValue": 60,
+            "Description": "Bake time (minutes) before shifting remaining traffic"
         },
         "EnableCrossRegionFailover": {
             "Type": "String",
@@ -325,7 +348,7 @@
         },
         "EnableCloudTrail": {
             "Type": "String",
-            "Default": "true",
+            "Default": "false",
             "AllowedValues": [
                 "true",
                 "false"
@@ -803,6 +826,14 @@
                     ]
                 }
             ]
+        },
+        "EnableCodeDeployTrue": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableCodeDeploy"
+                },
+                "true"
+            ]
         }
     },
     "Resources": {
@@ -936,6 +967,20 @@
                             }
                         },
                         {
+                            "Sid": "AWSCloudTrailBucketRead",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetBucketLocation",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${CloudTrailS3Bucket}"
+                            }
+                        },
+                        {
                             "Sid": "AWSCloudTrailWrite",
                             "Effect": "Allow",
                             "Principal": {
@@ -947,7 +992,29 @@
                             },
                             "Condition": {
                                 "StringEquals": {
-                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                    "s3:x-amz-acl": "bucket-owner-full-control",
+                                    "aws:SourceArn": {
+                                        "Fn::Sub": "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${OrganizationTrail}"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "EnforceTLSOnly",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${CloudTrailS3Bucket}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${CloudTrailS3Bucket}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
                                 }
                             }
                         }
@@ -1683,14 +1750,6 @@
                 "VpcId": {
                     "Ref": "VPC"
                 },
-                "AvailabilityZone": {
-                    "Fn::Select": [
-                        1,
-                        {
-                            "Fn::GetAZs": ""
-                        }
-                    ]
-                },
                 "CidrBlock": "10.0.21.0/24",
                 "Tags": [
                     {
@@ -2361,6 +2420,8 @@
         },
         "DatabaseSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "DBSubnetGroupDescription": "Subnet group for RDS database",
                 "SubnetIds": [
@@ -2434,7 +2495,34 @@
             "UpdateReplacePolicy": "Retain",
             "Properties": {
                 "GlobalClusterIdentifier": {
-                    "Fn::Sub": "${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}"
+                    "Fn::Sub": [
+                        "${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}-${Rand}",
+                        {
+                            "Rand": {
+                                "Fn::Select": [
+                                    4,
+                                    {
+                                        "Fn::Split": [
+                                            "-",
+                                            {
+                                                "Fn::Select": [
+                                                    2,
+                                                    {
+                                                        "Fn::Split": [
+                                                            "/",
+                                                            {
+                                                                "Ref": "AWS::StackId"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 "Engine": "aurora-mysql",
                 "EngineVersion": "8.0.mysql_aurora.3.08.2",
@@ -2782,35 +2870,38 @@
                                 }
                             },
                             {
-                                "PolicyName": "KMSOnlyAccess",
-                                "PolicyDocument": {
-                                    "Version": "2012-10-17",
-                                    "Statement": [
-                                        {
-                                            "Effect": "Allow",
-                                            "Action": [
-                                                "kms:Decrypt",
-                                                "kms:GenerateDataKey"
-                                            ],
-                                            "Resource": {
-                                                "Fn::If": [
-                                                    "CreateKMSKey",
-                                                    {
-                                                        "Fn::GetAtt": [
-                                                            "KMSKey",
-                                                            "Arn"
-                                                        ]
-                                                    },
-                                                    {
-                                                        "Ref": "UseExistingKMSKeyId"
-                                                    }
-                                                ]
-                                            }
-                                        }
-                                    ]
-                                }
+                                "Ref": "AWS::NoValue"
                             }
                         ]
+                    },
+                    {
+                        "PolicyName": "KMSOnlyAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::If": [
+                                            "CreateKMSKey",
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "KMSKey",
+                                                    "Arn"
+                                                ]
+                                            },
+                                            {
+                                                "Ref": "UseExistingKMSKeyId"
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
                     },
                     {
                         "PolicyName": "ParameterStoreAccess",
@@ -2924,6 +3015,22 @@
                                             }
                                         ]
                                     }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "CodeDeployAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codedeploy:UpdateDeploymentGroup",
+                                        "codedeploy:GetDeploymentGroup"
+                                    ],
+                                    "Resource": "*"
                                 }
                             ]
                         }
@@ -3530,72 +3637,20 @@
                     ]
                 },
                 "DeploymentStyle": {
-                    "DeploymentType": "BLUE_GREEN",
-                    "DeploymentOption": "WITH_TRAFFIC_CONTROL"
+                    "DeploymentType": "IN_PLACE",
+                    "DeploymentOption": "WITHOUT_TRAFFIC_CONTROL"
                 },
-                "BlueGreenDeploymentConfiguration": {
-                    "TerminateBlueInstancesOnDeploymentSuccess": {
-                        "Action": "KEEP_ALIVE",
-                        "TerminationWaitTimeInMinutes": 0
-                    },
-                    "DeploymentReadyOption": {
-                        "ActionOnTimeout": "CONTINUE_DEPLOYMENT",
-                        "WaitTimeInMinutes": 0
-                    },
-                    "GreenFleetProvisioningOption": {
-                        "Action": "COPY_AUTO_SCALING_GROUP"
+                "AutoScalingGroups": [
+                    {
+                        "Ref": "WebServerASG"
                     }
-                },
+                ],
                 "AutoRollbackConfiguration": {
                     "Enabled": true,
                     "Events": [
                         "DEPLOYMENT_FAILURE",
                         "DEPLOYMENT_STOP_ON_ALARM",
                         "DEPLOYMENT_STOP_ON_REQUEST"
-                    ]
-                },
-                "LoadBalancerInfo": {
-                    "TargetGroupPairInfoList": [
-                        {
-                            "TargetGroups": [
-                                {
-                                    "Name": {
-                                        "Ref": "ALBTargetGroupBlue"
-                                    }
-                                },
-                                {
-                                    "Name": {
-                                        "Ref": "ALBTargetGroupGreen"
-                                    }
-                                }
-                            ],
-                            "ProdTrafficRoute": {
-                                "ListenerArns": [
-                                    {
-                                        "Fn::If": [
-                                            "CreateALB",
-                                            {
-                                                "Ref": "ALBListener"
-                                            },
-                                            {
-                                                "Ref": "AWS::NoValue"
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "Fn::If": [
-                                            "CreateALBAndHasSSL",
-                                            {
-                                                "Ref": "ALBHTTPSListener"
-                                            },
-                                            {
-                                                "Ref": "AWS::NoValue"
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
                     ]
                 }
             }
@@ -3839,6 +3894,86 @@
                         }
                     }
                 ]
+            }
+        },
+        "CodeDeployCustomConfigFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Condition": "EnableCodeDeployTrue",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-codedeploy-configurer"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Timeout": 300,
+                "Code": {
+                    "ZipFile": "import json, boto3, urllib3, os, logging\nhttp = urllib3.PoolManager()\nlog = logging.getLogger()\nlog.setLevel(logging.INFO)\n\ndef send(event, context, status, data):\n    body = {\n        'Status': status,\n        'Reason': 'See CloudWatch Log Stream: ' + context.log_stream_name,\n        'PhysicalResourceId': context.log_stream_name,\n        'StackId': event['StackId'],\n        'RequestId': event['RequestId'],\n        'LogicalResourceId': event['LogicalResourceId'],\n        'Data': data,\n    }\n    encoded = json.dumps(body).encode('utf-8')\n    http.request('PUT', event['ResponseURL'], body=encoded, headers={'content-type': '', 'content-length': str(len(encoded))})\n\ndef handler(event, context):\n    try:\n        if event['RequestType'] in ('Create','Update') and os.environ.get('ENABLE_CODEDEPLOY','false')=='true':\n            cd = boto3.client('codedeploy')\n            app = os.environ.get('APP','')\n            dg = os.environ.get('DG','')\n            asg = os.environ.get('ASG','')\n            tg_blue = os.environ.get('TGB','')\n            tg_green = os.environ.get('TGG','')\n            prod_listeners = []\n            l1 = os.environ.get('PROD_LISTENER_ARN_1','')\n            l2 = os.environ.get('PROD_LISTENER_ARN_2','')\n            if l1:\n                prod_listeners.append(l1)\n            if l2:\n                prod_listeners.append(l2)\n            can_update = all([app, dg, asg, tg_blue, tg_green]) and len(prod_listeners) >= 1\n            if can_update:\n                cd.update_deployment_group(\n                    applicationName=app,\n                    currentDeploymentGroupName=dg,\n                    deploymentStyle={'deploymentType':'BLUE_GREEN','deploymentOption':'WITH_TRAFFIC_CONTROL'},\n                    blueGreenDeploymentConfiguration={\n                        'terminateBlueInstancesOnDeploymentSuccess': {'action':'KEEP_ALIVE','terminationWaitTimeInMinutes':0},\n                        'deploymentReadyOption': {'actionOnTimeout':'CONTINUE_DEPLOYMENT','waitTimeInMinutes':0},\n                        'greenFleetProvisioningOption': {'action':'COPY_AUTO_SCALING_GROUP'}\n                    },\n                    autoScalingGroups=[asg],\n                    loadBalancerInfo={\n                        'targetGroupPairInfoList': [{\n                            'targetGroups': [{'name': tg_blue}, {'name': tg_green}],\n                            'prodTrafficRoute': {'listenerArns': prod_listeners}\n                        }]\n                    }\n                )\n            else:\n                log.info('Skipping CodeDeploy update due to missing prerequisites')\n        send(event, context, 'SUCCESS', {})\n    except Exception as e:\n        log.exception('Custom resource error')\n        send(event, context, 'SUCCESS', {'Warning': str(e)})\n"
+                },
+                "Environment": {
+                    "Variables": {
+                        "ENABLE_CODEDEPLOY": {
+                            "Ref": "EnableCodeDeploy"
+                        },
+                        "APP": {
+                            "Ref": "CodeDeployApplication"
+                        },
+                        "DG": {
+                            "Fn::Sub": "${Environment}-dg"
+                        },
+                        "ASG": {
+                            "Fn::Sub": "${Environment}-asg"
+                        },
+                        "TGB": {
+                            "Fn::Sub": "${Environment}-tg-blue"
+                        },
+                        "TGG": {
+                            "Fn::Sub": "${Environment}-tg-green"
+                        },
+                        "STEP": {
+                            "Ref": "CanaryStepPercentage"
+                        },
+                        "BAKE": {
+                            "Ref": "CanaryBakeTimeMins"
+                        },
+                        "PROD_LISTENER_ARN_1": {
+                            "Fn::If": [
+                                "CreateALB",
+                                {
+                                    "Ref": "ALBListener"
+                                },
+                                ""
+                            ]
+                        },
+                        "PROD_LISTENER_ARN_2": {
+                            "Fn::If": [
+                                "CreateALBAndHasSSL",
+                                {
+                                    "Ref": "ALBHTTPSListener"
+                                },
+                                ""
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "CodeDeployCustomConfig": {
+            "Type": "Custom::CodeDeployBlueGreen",
+            "Condition": "EnableCodeDeployTrue",
+            "DependsOn": "CodeDeployDeploymentGroup",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "CodeDeployCustomConfigFunction",
+                        "Arn"
+                    ]
+                }
             }
         }
     },

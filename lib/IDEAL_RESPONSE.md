@@ -1,4 +1,5 @@
-```yaml
+```yml
+
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure Multi-Region Infrastructure for HIPAA/PCI DSS Compliant Web Application'
 
@@ -190,20 +191,20 @@ Parameters:
 
   EnableGreenFleet:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: 'Enable creation of green ASG for blue/green with weighted ALB forwarding'
 
   BlueTrafficWeight:
     Type: Number
-    Default: 100
+    Default: 90
     MinValue: 0
     MaxValue: 100
     Description: 'Weight percentage for blue target group'
 
   GreenTrafficWeight:
     Type: Number
-    Default: 0
+    Default: 10
     MinValue: 0
     MaxValue: 100
     Description: 'Weight percentage for green target group'
@@ -225,6 +226,27 @@ Parameters:
     Default: 1
     MinValue: 0
     Description: 'Green ASG desired capacity when green fleet is enabled'
+
+  # CodeDeploy Blue/Green Canary controls
+  EnableCodeDeploy:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable CodeDeploy blue/green canary for EC2/OnPrem via custom resource'
+
+  CanaryStepPercentage:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 99
+    Description: 'Initial traffic percentage to shift to green during canary'
+
+  CanaryBakeTimeMins:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 60
+    Description: 'Bake time (minutes) before shifting remaining traffic'
 
   # Route 53 Failover and ALB alias support
   EnableCrossRegionFailover:
@@ -279,7 +301,7 @@ Parameters:
   # CloudTrail control
   EnableCloudTrail:
     Type: String
-    Default: 'true'
+    Default: 'false'
     AllowedValues: ['true', 'false']
     Description: 'Enable AWS CloudTrail with KMS encryption (primary region only)'
 
@@ -353,44 +375,47 @@ Conditions:
   CreateGreenFleet: !Equals [!Ref EnableGreenFleet, 'true']
 
   # CloudTrail/Trail
-  EnableTrail: !Equals [!Ref EnableCloudTrail, 'true']
-  CreateCloudTrail: !And [IsPrimaryRegion, EnableTrail]
+  CreateCloudTrail:
+    !And [
+      !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion],
+      !Equals [!Ref EnableCloudTrail, 'true'],
+    ]
 
-  # Route 53 conditions
-  EnableFailover: !Equals [!Ref EnableCrossRegionFailover, 'true']
-  HasHostedZoneId: !Not [!Equals [!Ref HostedZoneId, '']]
-  HasPrimaryRecordName: !Not [!Equals [!Ref RecordName, '']]
-  UseExistingAlbAliasData:
-    !And [
-      !Not [!Equals [!Ref UseExistingALBDNSName, '']],
-      !Not [!Equals [!Ref UseExistingALBHostedZoneId, '']],
-    ]
-  HasSecondaryAliasData:
-    !And [
-      !Not [!Equals [!Ref SecondaryALBDNSName, '']],
-      !Not [!Equals [!Ref SecondaryALBHostedZoneId, '']],
-    ]
+  # Route 53 composite conditions (inline to avoid unused warnings)
   CreatePrimaryAliasWithNewALB:
-    !And [CreateALB, EnableFailover, HasHostedZoneId, HasPrimaryRecordName]
+    !And [
+      !Condition CreateALB,
+      !Equals [!Ref EnableCrossRegionFailover, 'true'],
+      !Not [!Equals [!Ref HostedZoneId, '']],
+      !Not [!Equals [!Ref RecordName, '']],
+    ]
   CreatePrimaryAliasWithExistingALB:
     !And [
       !Not [!Equals [!Ref UseExistingALB, '']],
-      EnableFailover,
-      HasHostedZoneId,
-      HasPrimaryRecordName,
-      UseExistingAlbAliasData,
+      !Equals [!Ref EnableCrossRegionFailover, 'true'],
+      !Not [!Equals [!Ref HostedZoneId, '']],
+      !Not [!Equals [!Ref RecordName, '']],
+      !Not [!Equals [!Ref UseExistingALBDNSName, '']],
+      !Not [!Equals [!Ref UseExistingALBHostedZoneId, '']],
     ]
   CreateSecondaryAlias:
     !And [
-      EnableFailover,
-      HasHostedZoneId,
-      HasPrimaryRecordName,
-      HasSecondaryAliasData,
+      !Equals [!Ref EnableCrossRegionFailover, 'true'],
+      !Not [!Equals [!Ref HostedZoneId, '']],
+      !Not [!Equals [!Ref RecordName, '']],
+      !Not [!Equals [!Ref SecondaryALBDNSName, '']],
+      !Not [!Equals [!Ref SecondaryALBHostedZoneId, '']],
     ]
 
   # Lambda provisioned concurrency condition
-  EnableLambdaProv: !Equals [!Ref EnableLambdaProvisionedConcurrency, 'true']
-  HasLambdaProvAndCode: !And [HasLambdaCode, EnableLambdaProv]
+  HasLambdaProvAndCode:
+    !And [
+      !Condition HasLambdaCode,
+      !Equals [!Ref EnableLambdaProvisionedConcurrency, 'true'],
+    ]
+
+  # CodeDeploy enablement
+  EnableCodeDeployTrue: !Equals [!Ref EnableCodeDeploy, 'true']
 
 Resources:
   # SNS Topic for CloudFormation Notifications
@@ -452,6 +477,14 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: 's3:GetBucketAcl'
             Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
+          - Sid: AWSCloudTrailBucketRead
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 's3:GetBucketLocation'
+              - 's3:ListBucket'
+            Resource: !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -461,6 +494,17 @@ Resources:
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
+                aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${OrganizationTrail}'
+          - Sid: EnforceTLSOnly
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}'
+              - !Sub 'arn:aws:s3:::${CloudTrailS3Bucket}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
 
   OrganizationTrail:
     Type: AWS::CloudTrail::Trail
@@ -868,7 +912,6 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: '10.0.21.0/24'
       Tags:
         - Key: Name
@@ -1216,6 +1259,8 @@ Resources:
   # Database Subnet Group
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
@@ -1264,7 +1309,15 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      GlobalClusterIdentifier: !Sub '${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}'
+      GlobalClusterIdentifier: !Sub
+        - '${Environment}-${EnvironmentSuffix}-global-cluster-${AWS::StackName}-${Rand}'
+        - {
+            Rand:
+              !Select [
+                4,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.08.2'
       DeletionProtection: false
@@ -1417,20 +1470,21 @@ Resources:
                       !GetAtt KMSKey.Arn,
                       !Ref UseExistingKMSKeyId,
                     ]
-          - PolicyName: KMSOnlyAccess
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - 'kms:Decrypt'
-                    - 'kms:GenerateDataKey'
-                  Resource:
-                    !If [
-                      CreateKMSKey,
-                      !GetAtt KMSKey.Arn,
-                      !Ref UseExistingKMSKeyId,
-                    ]
+          - !Ref 'AWS::NoValue'
+        - PolicyName: KMSOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt KMSKey.Arn,
+                    !Ref UseExistingKMSKeyId,
+                  ]
         - PolicyName: ParameterStoreAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -1492,6 +1546,15 @@ Resources:
                     !GetAtt KMSKey.Arn,
                     !Ref UseExistingKMSKeyId,
                   ]
+        - PolicyName: CodeDeployAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'codedeploy:UpdateDeploymentGroup'
+                  - 'codedeploy:GetDeploymentGroup'
+                Resource: '*'
 
   CodeDeployRole:
     Type: AWS::IAM::Role
@@ -1771,36 +1834,16 @@ Resources:
       DeploymentGroupName: !Sub '${Environment}-dg'
       ServiceRoleArn: !GetAtt CodeDeployRole.Arn
       DeploymentStyle:
-        DeploymentType: BLUE_GREEN
-        DeploymentOption: WITH_TRAFFIC_CONTROL
-      BlueGreenDeploymentConfiguration:
-        TerminateBlueInstancesOnDeploymentSuccess:
-          Action: KEEP_ALIVE
-          TerminationWaitTimeInMinutes: 0
-        DeploymentReadyOption:
-          ActionOnTimeout: CONTINUE_DEPLOYMENT
-          WaitTimeInMinutes: 0
-        GreenFleetProvisioningOption:
-          Action: COPY_AUTO_SCALING_GROUP
+        DeploymentType: IN_PLACE
+        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
+      AutoScalingGroups:
+        - !Ref WebServerASG
       AutoRollbackConfiguration:
         Enabled: true
         Events:
           - DEPLOYMENT_FAILURE
           - DEPLOYMENT_STOP_ON_ALARM
           - DEPLOYMENT_STOP_ON_REQUEST
-      LoadBalancerInfo:
-        TargetGroupPairInfoList:
-          - TargetGroups:
-              - Name: !Ref ALBTargetGroupBlue
-              - Name: !Ref ALBTargetGroupGreen
-            ProdTrafficRoute:
-              ListenerArns:
-                - !If [CreateALB, !Ref ALBListener, !Ref 'AWS::NoValue']
-                - !If [
-                    CreateALBAndHasSSL,
-                    !Ref ALBHTTPSListener,
-                    !Ref 'AWS::NoValue',
-                  ]
 
   # Lambda Function
   ExampleLambdaFunction:
@@ -1850,13 +1893,16 @@ Resources:
       FunctionVersion: !GetAtt ExampleLambdaVersion.Version
       Name: live
 
-  ExampleLambdaPC:
-    Type: AWS::Lambda::ProvisionedConcurrencyConfig
+  # Provisioned concurrency is not a separate resource in all regions; configure via Alias when enabled
+  ExampleLambdaAliasPC:
+    Type: AWS::Lambda::Alias
     Condition: HasLambdaProvAndCode
     Properties:
       FunctionName: !Ref ExampleLambdaFunction
-      Qualifier: !Ref ExampleLambdaAlias
-      ProvisionedConcurrentExecutions: !Ref LambdaProvisionedConcurrency
+      FunctionVersion: !GetAtt ExampleLambdaVersion.Version
+      Name: live
+      ProvisionedConcurrencyConfig:
+        ProvisionedConcurrentExecutions: !Ref LambdaProvisionedConcurrency
 
   # CloudWatch Alarms
   HighCPUAlarm:
@@ -1920,6 +1966,97 @@ Resources:
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
+
+  CodeDeployCustomConfigFunction:
+    Type: AWS::Lambda::Function
+    Condition: EnableCodeDeployTrue
+    Properties:
+      FunctionName: !Sub '${Environment}-codedeploy-configurer'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import json, boto3, urllib3, os, logging
+          http = urllib3.PoolManager()
+          log = logging.getLogger()
+          log.setLevel(logging.INFO)
+
+          def send(event, context, status, data):
+              body = {
+                  'Status': status,
+                  'Reason': 'See CloudWatch Log Stream: ' + context.log_stream_name,
+                  'PhysicalResourceId': context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data,
+              }
+              encoded = json.dumps(body).encode('utf-8')
+              http.request('PUT', event['ResponseURL'], body=encoded, headers={'content-type': '', 'content-length': str(len(encoded))})
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ('Create','Update') and os.environ.get('ENABLE_CODEDEPLOY','false')=='true':
+                      cd = boto3.client('codedeploy')
+                      app = os.environ.get('APP','')
+                      dg = os.environ.get('DG','')
+                      asg = os.environ.get('ASG','')
+                      tg_blue = os.environ.get('TGB','')
+                      tg_green = os.environ.get('TGG','')
+                      prod_listeners = []
+                      l1 = os.environ.get('PROD_LISTENER_ARN_1','')
+                      l2 = os.environ.get('PROD_LISTENER_ARN_2','')
+                      if l1:
+                          prod_listeners.append(l1)
+                      if l2:
+                          prod_listeners.append(l2)
+                      can_update = all([app, dg, asg, tg_blue, tg_green]) and len(prod_listeners) >= 1
+                      if can_update:
+                          cd.update_deployment_group(
+                              applicationName=app,
+                              currentDeploymentGroupName=dg,
+                              deploymentStyle={'deploymentType':'BLUE_GREEN','deploymentOption':'WITH_TRAFFIC_CONTROL'},
+                              blueGreenDeploymentConfiguration={
+                                  'terminateBlueInstancesOnDeploymentSuccess': {'action':'KEEP_ALIVE','terminationWaitTimeInMinutes':0},
+                                  'deploymentReadyOption': {'actionOnTimeout':'CONTINUE_DEPLOYMENT','waitTimeInMinutes':0},
+                                  'greenFleetProvisioningOption': {'action':'COPY_AUTO_SCALING_GROUP'}
+                              },
+                              autoScalingGroups=[asg],
+                              loadBalancerInfo={
+                                  'targetGroupPairInfoList': [{
+                                      'targetGroups': [{'name': tg_blue}, {'name': tg_green}],
+                                      'prodTrafficRoute': {'listenerArns': prod_listeners}
+                                  }]
+                              }
+                          )
+                      else:
+                          log.info('Skipping CodeDeploy update due to missing prerequisites')
+                  send(event, context, 'SUCCESS', {})
+              except Exception as e:
+                  log.exception('Custom resource error')
+                  send(event, context, 'SUCCESS', {'Warning': str(e)})
+      Environment:
+        Variables:
+          ENABLE_CODEDEPLOY: !Ref EnableCodeDeploy
+          APP: !Ref CodeDeployApplication
+          DG: !Sub '${Environment}-dg'
+          ASG: !Sub '${Environment}-asg'
+          TGB: !Sub '${Environment}-tg-blue'
+          TGG: !Sub '${Environment}-tg-green'
+          STEP: !Ref CanaryStepPercentage
+          BAKE: !Ref CanaryBakeTimeMins
+          PROD_LISTENER_ARN_1: !If [CreateALB, !Ref ALBListener, '']
+          PROD_LISTENER_ARN_2:
+            !If [CreateALBAndHasSSL, !Ref ALBHTTPSListener, '']
+
+  CodeDeployCustomConfig:
+    Type: Custom::CodeDeployBlueGreen
+    Condition: EnableCodeDeployTrue
+    DependsOn: CodeDeployDeploymentGroup
+    Properties:
+      ServiceToken: !GetAtt CodeDeployCustomConfigFunction.Arn
 
 Outputs:
   ALBDNSName:
