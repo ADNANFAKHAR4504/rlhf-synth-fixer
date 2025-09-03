@@ -450,7 +450,7 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${Environment}/database/credential'
+      Name: !Sub '${Environment}/database/credentials-testing'
       Description: 'Database credentials'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
