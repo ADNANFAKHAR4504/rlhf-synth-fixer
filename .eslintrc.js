@@ -6,16 +6,19 @@ module.exports = {
     'eslint:recommended',
     '@typescript-eslint/recommended',
     'airbnb-base',
+    'airbnb-typescript/base',
     'prettier',
   ],
   parserOptions: {
     ecmaVersion: 2020,
     sourceType: 'module',
+    project: './tsconfig.json',
   },
   settings: {
     'import/resolver': {
       typescript: {
         alwaysTryTypes: true,
+        project: './tsconfig.json',
       },
     },
   },
@@ -53,5 +56,5 @@ module.exports = {
     'class-methods-use-this': 'off',
     'no-new': 'off', // CDK uses 'new' for constructs
   },
-  ignorePatterns: ['node_modules/', 'cdk.out/', 'coverage/', '*.js', '*.d.ts', 'worktree/', 'cli/', 'lambda/', 'test/'],
+  ignorePatterns: ['node_modules/', 'cdk.out/', 'coverage/', '*.js', '*.d.ts', 'worktree/'],
 };
