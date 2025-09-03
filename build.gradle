@@ -39,7 +39,8 @@ ext {
     googleCodeGsonVersion = '2.10.1'
 
     //Build settings
-    def platform = System.getenv("PLATFORM") ?: "default"
+    def platform = (System.getenv("PLATFORM") ?: "default").trim()
+    println "DEBUG: Platform value is: '${platform}'"
 
     switch (platform) {
         case "pulumi":

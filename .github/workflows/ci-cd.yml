@@ -282,9 +282,6 @@ jobs:
       # Python setup is handled by the setup-environment action
 
       - name: Run Linting
-        env:
-          PLATFORM: ${{ needs.detect-metadata.outputs.platform }}
-          LANGUAGE: ${{ needs.detect-metadata.outputs.language }}
         run: ./scripts/lint.sh
 
   unit-tests:
@@ -307,6 +304,9 @@ jobs:
           language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run unit tests
+        env:
+          PLATFORM: ${{ needs.detect-metadata.outputs.platform }}
+          LANGUAGE: ${{ needs.detect-metadata.outputs.language }}
         run: ./scripts/unit-tests.sh
 
       - name: Prepare coverage reports for Java projects
