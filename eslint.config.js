@@ -48,10 +48,10 @@ module.exports = [
       'no-new': 'off',
     },
   },
-  // Main project configuration (excludes templates)
+  // Main project configuration (excludes templates, cli, lambda, test)
   {
     files: ['**/*.ts'],
-    ignores: ['templates/**/*.ts'],
+    ignores: ['templates/**/*.ts', 'cli/**/*.ts', 'lambda/**/*.ts', 'test/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

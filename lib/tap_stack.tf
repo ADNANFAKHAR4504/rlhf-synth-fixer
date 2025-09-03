@@ -40,16 +40,17 @@ variable "common_tags" {
 }
 
 # Local values for consistent naming and configuration
+# Local values for consistent naming and configuration
 locals {
-  project = "projectX"
+  project = "projectx" # Changed from "projectX" to lowercase
   region  = var.aws_region
 
-  # Naming conventions
+  # Naming conventions - ensure all lowercase for S3 compatibility
   name_prefix = "${local.project}-${var.environment}"
 
   # Common tags merged with user-provided tags
   tags = merge(var.common_tags, {
-    Project     = local.project
+    Project     = "ProjectX" # Keep original casing for tags
     Environment = var.environment
     Region      = local.region
   })
@@ -131,9 +132,10 @@ resource "aws_kms_alias" "lambda_env_key_alias" {
 # Data sources
 data "aws_caller_identity" "current" {}
 
+
 # S3 Bucket for application assets (private, encrypted)
 resource "aws_s3_bucket" "app_assets" {
-  bucket = "${local.project}-assets-${random_id.suffix.hex}"
+  bucket = "${local.project}-assets-${random_id.suffix.hex}" # Now uses lowercase "projectx"
 
   tags = merge(local.tags, {
     Name        = "${local.name_prefix}-assets"
@@ -758,8 +760,11 @@ resource "aws_lambda_permission" "api_gateway_invoke" {
 
 # WAF Web ACL for API Gateway protection
 resource "aws_wafv2_web_acl" "api_protection" {
-  name  = "${local.name_prefix}-api-waf"
+
+  name = "${local.name_prefix}-api-waf" # This will now be "projectx-dev-api-waf"
+
   scope = "REGIONAL" # Required for API Gateway
+
 
   description = "WAF Web ACL for ProjectX API Gateway protection against common exploits"
 
@@ -872,9 +877,28 @@ resource "aws_wafv2_web_acl" "api_protection" {
 }
 
 # Associate WAF Web ACL with API Gateway Stage
+# resource "aws_wafv2_web_acl_association" "api_gateway_association" {
+#   resource_arn = aws_apigatewayv2_stage.main.arn
+#   web_acl_arn  = aws_wafv2_web_acl.api_protection.arn
+# }
+
+# Data source to get the correct API Gateway stage ARN for WAF association
+data "aws_apigatewayv2_stage" "main_stage_data" {
+  api_id     = aws_apigatewayv2_api.main.id
+  stage_name = aws_apigatewayv2_stage.main.name
+
+  depends_on = [aws_apigatewayv2_stage.main]
+}
+
+# Associate WAF Web ACL with API Gateway Stage using data source ARN
 resource "aws_wafv2_web_acl_association" "api_gateway_association" {
-  resource_arn = aws_apigatewayv2_stage.main.arn
+  resource_arn = "arn:aws:apigateway:${local.region}::/apis/${aws_apigatewayv2_api.main.id}/stages/${aws_apigatewayv2_stage.main.name}"
   web_acl_arn  = aws_wafv2_web_acl.api_protection.arn
+
+  depends_on = [
+    aws_apigatewayv2_stage.main,
+    aws_wafv2_web_acl.api_protection
+  ]
 }
 
 # CloudWatch Metric Alarm for Lambda errors

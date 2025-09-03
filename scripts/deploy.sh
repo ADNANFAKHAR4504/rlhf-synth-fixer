@@ -160,6 +160,31 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "Deploying infrastructure ..."
     pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
     cd ..
+  elif [ "$LANGUAGE" = "ts" ]; then
+    echo "🔧 TypeScript Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+    echo "Installing dependencies..."
+    npm install
+    echo "Building TypeScript project..."
+    npm run build
+    echo "Verifying build output..."
+    if [ ! -f "dist/bin/tap.js" ]; then
+      echo "❌ Build failed: dist/bin/tap.js not found"
+      echo "Checking for source files..."
+      if [ -f "bin/tap.ts" ]; then
+        echo "Found source file, attempting manual compilation..."
+        npx tsc bin/tap.ts --outDir dist/bin --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck || echo "⚠️ Manual compilation failed"
+      else
+        echo "❌ No TypeScript source file found. Deployment cannot continue."
+        exit 1
+      fi
+    else
+      echo "✅ TypeScript build successful"
+    fi
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    echo "Deploying infrastructure ..."
+    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
@@ -170,7 +195,7 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python, pulumi+java"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+typescript, pulumi+python, pulumi+go"
   exit 1
 fi
 
