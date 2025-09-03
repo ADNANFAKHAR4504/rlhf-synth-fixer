@@ -3,7 +3,7 @@ import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwa
 import { DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
 import { DescribeListenersCommand, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { IAMClient } from "@aws-sdk/client-iam";
-import { GetKeyRotationStatusCommand, KMSClient, ListKeysCommand, ListResourceTagsCommand } from "@aws-sdk/client-kms";
+import { GetKeyRotationStatusCommand, KMSClient, ListAliasesCommand } from "@aws-sdk/client-kms";
 import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
 import { S3Client } from "@aws-sdk/client-s3";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
@@ -67,7 +67,10 @@ describe("Terraform E2E Integration: AWS Resources", () => {
     const sgs = await ec2.send(new DescribeSecurityGroupsCommand({}));
     ["alb", "web", "database"].forEach(sgType => {
       const sg = sgs.SecurityGroups?.find(
-        (sg: SecurityGroup) => sg.GroupName?.startsWith(`${projectName}-${sgType}-`)
+        (sg: SecurityGroup) => sg.Tags?.some(
+          (tag: { Key?: string; Value?: string }) =>
+            tag.Key === "Name" && tag.Value === `${projectName}-${sgType}-sg`
+        )
       );
       expect(sg).toBeDefined();
       if (sgType === "alb") {
@@ -98,28 +101,20 @@ describe("Terraform E2E Integration: AWS Resources", () => {
     const s3 = new S3Client({ region });
     for (const bucketSuffix of ["app-data", "cloudtrail-logs"]) {
       const bucketName = `${projectName}-${bucketSuffix}`;
-      // Use GetPublicAccessBlockCommand if available
+      // Use GetPublicAccessBlock
       expect(true).toBe(true); // Placeholder, implement as needed
     }
   });
 
   test("KMS key exists and has key rotation enabled", async () => {
     const kms = new KMSClient({ region });
-    const keys = await kms.send(new ListKeysCommand({}));
-    let foundKeyId: string | undefined;
-    for (const key of keys.Keys || []) {
-      const tagsResp = await kms.send(new ListResourceTagsCommand({ KeyId: key.KeyId! }));
-      console.log("KMS Key Tags:", tagsResp.Tags);
-      const hasProjectTag = tagsResp.Tags?.some(
-        tag => tag.TagKey === "Name" && tag.TagValue === `${projectName}-kms-key`
-      );
-      if (hasProjectTag) {
-        foundKeyId = key.KeyId;
-        const rotationStatus = await kms.send(new GetKeyRotationStatusCommand({ KeyId: key.KeyId }));
-        expect(rotationStatus.KeyRotationEnabled).toBe(true);
-      }
-    }
-    expect(foundKeyId).toBeDefined();
+    const aliasesResp = await kms.send(new ListAliasesCommand({}));
+    const aliasObj = aliasesResp.Aliases?.find(
+      alias => alias.AliasName === `alias/${projectName}-key`
+    );
+    expect(aliasObj).toBeDefined();
+    const rotationStatus = await kms.send(new GetKeyRotationStatusCommand({ KeyId: aliasObj?.TargetKeyId! }));
+    expect(rotationStatus.KeyRotationEnabled).toBe(true);
   });
 
   test("IAM instance profile exists", async () => {
@@ -189,6 +184,7 @@ describe("Terraform E2E Integration: AWS Resources", () => {
   test("CloudWatch alarms exist and are configured", async () => {
     const cw = new CloudWatchClient({ region });
     const alarms = await cw.send(new DescribeAlarmsCommand({}));
+    console.log("Alarm Names:", alarms.MetricAlarms?.map(a => a.AlarmName));
     [
       "high-cpu", "low-disk-space", "high-memory", "rds-backup-failure", "elb-5xx",
       "rds-cpu-utilization", "rds-storage-space", "elb-request-count", "high-network-in",
@@ -219,8 +215,14 @@ interface IpPermission {
   // Add other properties as needed
 }
 
+interface Tag {
+  Key?: string;
+  Value?: string;
+}
+
 interface SecurityGroup {
   GroupName?: string;
   IpPermissions?: IpPermission[];
+  Tags?: Tag[];
   // Add other properties as needed
 }
