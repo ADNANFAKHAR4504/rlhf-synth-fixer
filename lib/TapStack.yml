@@ -438,7 +438,7 @@ Resources:
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${Environment}-db-subnet-group-latest'
+      DBSubnetGroupName: !Sub '${Environment}-db-subnet-group-lat'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds: [!Ref DatabaseSubnet, !Ref PrivateSubnet]
       Tags:
