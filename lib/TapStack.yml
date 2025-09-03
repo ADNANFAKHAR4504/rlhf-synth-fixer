@@ -4,26 +4,20 @@ Description: 'Production-grade migration infrastructure stack for web applicatio
 Parameters:
   VpcSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
-    Description: Security Group ID for Lambda functions in VPC
-    # Removed default value to avoid hardcoding
+    Description: Security Group ID for Lambda functions in VPC (leave empty for no VPC)
+    Default: ''
 
   VpcSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Subnet IDs for Lambda functions in VPC
-    # Removed default value to avoid hardcoding
+    Type: CommaDelimitedList
+    Description: Comma-separated list of Subnet IDs for Lambda functions in VPC (leave empty for no VPC)
+    Default: ''
 
   NotificationEmail:
     Type: String
-    Description: Email address for migration status notifications
-    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
-    ConstraintDescription: Must be a valid email address
-    # Removed default value to enforce proper configuration
-
-  S3BucketPrefix:
-    Type: String
-    Description: Prefix for the S3 bucket name (will be appended with random string)
-    Default: migration-logs
-    MaxLength: 37 # Ensures total bucket name stays under 63 characters
+    Description: Email address for migration status notifications (leave empty for no notifications)
+    AllowedPattern: '^$|^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    ConstraintDescription: Must be empty or a valid email address
+    Default: ''
 
   LambdaMemorySize:
     Type: Number
@@ -50,8 +44,18 @@ Resources:
   # S3 Bucket for Migration Logs with auto-generated unique name
   MigrationLogsBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub '${S3BucketPrefix}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub
+        - 'secure-${AWS::AccountId}-${AWS::Region}-production-tapstack-${Suffix}'
+        - {
+            Suffix:
+              !Select [
+                0,
+                !Split ['-', !Select [2, !Split ['/', !Ref 'AWS::StackId']]],
+              ],
+          }
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -72,8 +76,10 @@ Resources:
   # SNS Topic for Notifications
   MigrationNotificationsTopic:
     Type: AWS::SNS::Topic
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      TopicName: !Sub '${AWS::StackName}-migration-notifications'
+      TopicName: !Sub '${AWS::StackName}-migration-notifications-${AWS::AccountId}'
       DisplayName: Migration Status Notifications
       Tags:
         - Key: Environment
@@ -83,6 +89,8 @@ Resources:
   MigrationNotificationsSubscription:
     Type: AWS::SNS::Subscription
     Condition: CreateSubscription
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Protocol: email
       TopicArn: !Ref MigrationNotificationsTopic
@@ -91,6 +99,8 @@ Resources:
   # IAM Role for Migration Trigger Function with proper least privilege
   MigrationTriggerFunctionRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -106,7 +116,7 @@ Resources:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
           - !Ref AWS::NoValue
       Policies:
-        - PolicyName: MigrationTriggerPolicy
+        - PolicyName: !Sub '${AWS::StackName}-MigrationTriggerPolicy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -126,6 +136,8 @@ Resources:
   # IAM Role for Status Notifier Function
   StatusNotifierFunctionRole:
     Type: AWS::IAM::Role
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -141,7 +153,7 @@ Resources:
           - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
           - !Ref AWS::NoValue
       Policies:
-        - PolicyName: StatusNotifierPolicy
+        - PolicyName: !Sub '${AWS::StackName}-StatusNotifierPolicy'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -156,8 +168,10 @@ Resources:
   # Migration Trigger Lambda Function with Python 3.13 runtime
   MigrationTriggerFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-migration-trigger'
+      FunctionName: !Sub '${AWS::StackName}-migration-trigger-${AWS::AccountId}'
       Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt MigrationTriggerFunctionRole.Arn
@@ -255,8 +269,10 @@ Resources:
   # Status Notifier Lambda Function with Python 3.13 runtime
   StatusNotifierFunction:
     Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-status-notifier'
+      FunctionName: !Sub '${AWS::StackName}-status-notifier-${AWS::AccountId}'
       Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt StatusNotifierFunctionRole.Arn
@@ -342,8 +358,10 @@ Resources:
   # API Gateway REST API
   MigrationApi:
     Type: AWS::ApiGateway::RestApi
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
-      Name: !Sub '${AWS::StackName}-migration-api'
+      Name: !Sub '${AWS::StackName}-migration-api-${AWS::AccountId}'
       Description: 'REST API for triggering migration processes'
       EndpointConfiguration:
         Types:
@@ -355,6 +373,8 @@ Resources:
   # API Gateway Resource
   MigrateResource:
     Type: AWS::ApiGateway::Resource
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       RestApiId: !Ref MigrationApi
       ParentId: !GetAtt MigrationApi.RootResourceId
@@ -363,6 +383,8 @@ Resources:
   # API Gateway Method
   MigrateMethod:
     Type: AWS::ApiGateway::Method
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       RestApiId: !Ref MigrationApi
       ResourceId: !Ref MigrateResource
@@ -379,6 +401,8 @@ Resources:
   # Lambda Permission for API Gateway
   ApiGatewayInvokePermission:
     Type: AWS::Lambda::Permission
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       FunctionName: !Ref MigrationTriggerFunction
       Action: lambda:InvokeFunction
@@ -390,6 +414,8 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - MigrateMethod
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       RestApiId: !Ref MigrationApi
       Description: !Sub 'Deployment for ${AWS::StackName} Migration API'
@@ -397,6 +423,8 @@ Resources:
   # API Gateway Stage
   ApiStage:
     Type: AWS::ApiGateway::Stage
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       RestApiId: !Ref MigrationApi
       DeploymentId: !Ref ApiDeployment
