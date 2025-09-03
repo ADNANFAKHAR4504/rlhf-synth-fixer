@@ -8,7 +8,7 @@ public final class TagUtils {
     private TagUtils() {
         // Utility class should not be instantiated
     }
-    public static Map<String, String> getDefaultTags(AppConfig config) {
+    public static Map<String, String> getDefaultTags(final AppConfig config) {
         return Map.of(
                 "Environment", config.getDefaultEnvironment(),
                 "Project", config.getProjectName(),
@@ -16,7 +16,7 @@ public final class TagUtils {
         );
     }
 
-    public static Map<String, String> getTagsWithName(String name, AppConfig config) {
+    public static Map<String, String> getTagsWithName(final String name, final AppConfig config) {
         var tags = new java.util.HashMap<>(getDefaultTags(config));
         tags.put("Name", name);
         return tags;

@@ -25,15 +25,15 @@ import com.pulumi.resources.CustomResourceOptions;
 import java.util.Objects;
 
 public class NetworkStack extends ComponentResource {
-    public final Output<String> vpcId;
-    public final Output<String> publicSubnetPrimaryId;
-    public final Output<String> publicSubnetSecondaryId;
-    public final Output<String> privateSubnetPrimaryId;
-    public final Output<String> privateSubnetSecondaryId;
-    public final Output<String> internetGatewayId;
-    public final Output<String> publicRouteTableId;
+    private final Output<String> vpcId;
+    private final Output<String> publicSubnetPrimaryId;
+    private final Output<String> publicSubnetSecondaryId;
+    private final Output<String> privateSubnetPrimaryId;
+    private final Output<String> privateSubnetSecondaryId;
+    private final Output<String> internetGatewayId;
+    private final Output<String> publicRouteTableId;
 
-    public NetworkStack(String name, AppConfig config, ComponentResourceOptions options) {
+    public NetworkStack(final String name, final AppConfig config, final ComponentResourceOptions options) {
         super("custom:infrastructure:NetworkStack", name, options);
 
         // Get availability zones
@@ -150,5 +150,33 @@ public class NetworkStack extends ComponentResource {
                         .build(), CustomResourceOptions.builder()
                 .parent(this)
                 .build());
+    }
+
+    public Output<String> getVpcId() {
+        return vpcId;
+    }
+
+    public Output<String> getPublicSubnetPrimaryId() {
+        return publicSubnetPrimaryId;
+    }
+
+    public Output<String> getPublicSubnetSecondaryId() {
+        return publicSubnetSecondaryId;
+    }
+
+    public Output<String> getPrivateSubnetPrimaryId() {
+        return privateSubnetPrimaryId;
+    }
+
+    public Output<String> getPrivateSubnetSecondaryId() {
+        return privateSubnetSecondaryId;
+    }
+
+    public Output<String> getInternetGatewayId() {
+        return internetGatewayId;
+    }
+
+    public Output<String> getPublicRouteTableId() {
+        return publicRouteTableId;
     }
 }

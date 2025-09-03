@@ -14,9 +14,9 @@ import com.pulumi.resources.CustomResourceOptions;
 import java.util.List;
 
 public class SecurityStack extends ComponentResource {
-    public final Output<String> webSecurityGroupId;
+    private final Output<String> webSecurityGroupId;
 
-    public SecurityStack(String name, Output<String> vpcId, AppConfig config, ComponentResourceOptions options) {
+    public SecurityStack(final String name, final Output<String> vpcId, final AppConfig config, final ComponentResourceOptions options) {
         super("custom:infrastructure:SecurityStack", name, options);
 
         // Create Security Group for Web Servers
@@ -60,5 +60,9 @@ public class SecurityStack extends ComponentResource {
                 .build());
 
         this.webSecurityGroupId = webSecurityGroup.id();
+    }
+
+    public Output<String> getWebSecurityGroupId() {
+        return webSecurityGroupId;
     }
 }

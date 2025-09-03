@@ -40,7 +40,7 @@ public final class Main {
      * 
      * @param args Command line arguments (not used in this example)
      */
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
         Pulumi.run(Main::defineInfrastructure);
     }
 
@@ -52,7 +52,7 @@ public final class Main {
      * 
      * @param ctx The Pulumi context for exporting outputs
      */
-    static void defineInfrastructure(Context ctx) {
+    static void defineInfrastructure(final Context ctx) {
 
         AppConfig config = new AppConfig(ctx);
 
@@ -82,33 +82,33 @@ public final class Main {
 
             // Deploy Security Stack
             var securityStack = new SecurityStack(region + "-security",
-                    networkStack.vpcId, config, options);
+                    networkStack.getVpcId(), config, options);
 
             // Deploy Storage Stack
             var storageStack = new StorageStack(region + "-storage", config, options);
 
             // Deploy Compute Stack
             var computeStack = new ComputeStack(region + "-compute",
-                    networkStack.publicSubnetPrimaryId,
-                    securityStack.webSecurityGroupId,
-                    storageStack.instanceProfileName,
+                    networkStack.getPublicSubnetPrimaryId(),
+                    securityStack.getWebSecurityGroupId(),
+                    storageStack.getInstanceProfileName(),
                     config, options);
 
             // Export outputs
-            ctx.export(region + "-vpcId", networkStack.vpcId);
-            ctx.export(region + "-publicSubnetPrimaryId", networkStack.publicSubnetPrimaryId);
-            ctx.export(region + "-publicSubnetSecondaryId", networkStack.publicSubnetSecondaryId);
-            ctx.export(region + "-privateSubnetPrimaryId", networkStack.privateSubnetPrimaryId);
-            ctx.export(region + "-privateSubnetSecondaryId", networkStack.privateSubnetSecondaryId);
-            ctx.export(region + "-internetGatewayId", networkStack.internetGatewayId);
-            ctx.export(region + "-publicRouteTableId", networkStack.publicRouteTableId);
-            ctx.export(region + "-webSecurityGroupId", securityStack.webSecurityGroupId);
-            ctx.export(region + "-bucketId", storageStack.bucketId);
-            ctx.export(region + "-bucketArn", storageStack.bucketArn);
-            ctx.export(region + "-iamRoleArn", storageStack.iamRoleArn);
-            ctx.export(region + "-instanceProfileName", storageStack.instanceProfileName);
-            ctx.export(region + "-instanceId", computeStack.instanceId);
-            ctx.export(region + "-publicIp", computeStack.publicIp);
+            ctx.export(region + "-vpcId", networkStack.getVpcId());
+            ctx.export(region + "-publicSubnetPrimaryId", networkStack.getPublicSubnetPrimaryId());
+            ctx.export(region + "-publicSubnetSecondaryId", networkStack.getPublicSubnetSecondaryId());
+            ctx.export(region + "-privateSubnetPrimaryId", networkStack.getPrivateSubnetPrimaryId());
+            ctx.export(region + "-privateSubnetSecondaryId", networkStack.getPrivateSubnetSecondaryId());
+            ctx.export(region + "-internetGatewayId", networkStack.getInternetGatewayId());
+            ctx.export(region + "-publicRouteTableId", networkStack.getPublicRouteTableId());
+            ctx.export(region + "-webSecurityGroupId", securityStack.getWebSecurityGroupId());
+            ctx.export(region + "-bucketId", storageStack.getBucketId());
+            ctx.export(region + "-bucketArn", storageStack.getBucketArn());
+            ctx.export(region + "-iamRoleArn", storageStack.getIamRoleArn());
+            ctx.export(region + "-instanceProfileName", storageStack.getInstanceProfileName());
+            ctx.export(region + "-instanceId", computeStack.getInstanceId());
+            ctx.export(region + "-publicIp", computeStack.getPublicIp());
         });
     }
 }

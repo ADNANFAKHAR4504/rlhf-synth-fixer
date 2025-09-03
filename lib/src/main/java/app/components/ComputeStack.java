@@ -18,15 +18,15 @@ import java.util.List;
 import java.util.Objects;
 
 public class ComputeStack extends ComponentResource {
-    public final Output<String> instanceId;
-    public final Output<String> publicIp;
+    private final Output<String> instanceId;
+    private final Output<String> publicIp;
 
-    public ComputeStack(String name,
-                        Output<String> subnetId,
-                        Output<String> securityGroupId,
-                        Output<String> instanceProfileName,
-                        AppConfig config,
-                        ComponentResourceOptions options) {
+    public ComputeStack(final String name,
+                        final Output<String> subnetId,
+                        final Output<String> securityGroupId,
+                        final Output<String> instanceProfileName,
+                        final AppConfig config,
+                        final ComponentResourceOptions options) {
         super("custom:infrastructure:ComputeStack", name, options);
 
         // Get the latest Amazon Linux 2 AMI
@@ -69,5 +69,13 @@ public class ComputeStack extends ComponentResource {
 
         this.instanceId = instance.id();
         this.publicIp = instance.publicIp();
+    }
+
+    public Output<String> getInstanceId() {
+        return instanceId;
+    }
+
+    public Output<String> getPublicIp() {
+        return publicIp;
     }
 }

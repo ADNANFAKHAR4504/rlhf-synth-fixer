@@ -7,7 +7,7 @@ public class AppConfig {
 
     private final Config config;
 
-    public AppConfig(Context ctx) {
+    public AppConfig(final Context ctx) {
         this.config = ctx.config();
     }
 

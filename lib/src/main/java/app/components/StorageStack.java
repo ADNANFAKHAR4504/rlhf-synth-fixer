@@ -25,12 +25,12 @@ import com.pulumi.resources.ComponentResourceOptions;
 import com.pulumi.resources.CustomResourceOptions;
 
 public class StorageStack extends ComponentResource {
-    public final Output<String> bucketId;
-    public final Output<String> bucketArn;
-    public final Output<String> iamRoleArn;
-    public final Output<String> instanceProfileName;
+    private final Output<String> bucketId;
+    private final Output<String> bucketArn;
+    private final Output<String> iamRoleArn;
+    private final Output<String> instanceProfileName;
 
-    public StorageStack(String name, AppConfig config, ComponentResourceOptions options) {
+    public StorageStack(final String name, final AppConfig config, final ComponentResourceOptions options) {
         super("custom:infrastructure:StorageStack", name, options);
 
         // Create S3 Bucket for static website hosting
@@ -147,5 +147,21 @@ public class StorageStack extends ComponentResource {
                 .build());
 
         this.instanceProfileName = instanceProfile.name();
+    }
+
+    public Output<String> getBucketId() {
+        return bucketId;
+    }
+
+    public Output<String> getBucketArn() {
+        return bucketArn;
+    }
+
+    public Output<String> getIamRoleArn() {
+        return iamRoleArn;
+    }
+
+    public Output<String> getInstanceProfileName() {
+        return instanceProfileName;
     }
 }
