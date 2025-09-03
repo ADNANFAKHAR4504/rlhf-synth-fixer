@@ -1,734 +1,389 @@
-# tap_stack.py
-"""Main CDK stack for the Nova (TAP) environment.
+"""Unit tests for TapStack (CDK v2) using aws_cdk.assertions.
 
-Creates a secure, scalable baseline with:
-- VPC (public + private w/ NAT)
-- ALB (public, HTTP only)
-- ASG/EC2 (private) + least-privilege IAM (SSM-enabled; no SSH ingress)
-- S3 (versioned, encrypted, public-blocked)
-- DynamoDB (on-demand, encrypted)
-- CloudTrail (multi-region) + encrypted S3
-- CloudWatch logs + alarm (no SNS email)
-- SSM Parameter Store + Secrets Manager
+Matches the current stack shape:
+- VPC: 2 AZs, public+private (egress), single NAT
+- ALB: internet-facing, HTTP :80 only; TG on 8080 with /health
+- SG rules: world->ALB:80 (CidrIp), ALB SG->App SG:8080, App SG->RDS SG:5432
+- DynamoDB: PAY_PER_REQUEST
+- S3: app bucket versioned + KMS; logs bucket w/ CloudTrail write ACL condition
+- CloudTrail: multi-region, includes global events, KMS-encrypted, logs to logs bucket
+- IAM: EC2 role with SSM core + CW agent and scoped inline perms
+- Logs: log group /nova/<env>/app with 30d retention
+- Alarm: CPU >= 70%
+- SSM params: 4 under path; one Secrets Manager secret
+- Outputs: critical set present
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+import unittest
 
 import aws_cdk as cdk
-from aws_cdk import (
-    Duration,
-    RemovalPolicy,
-    Tags,
-    aws_autoscaling as autoscaling,
-    aws_cloudtrail as cloudtrail,
-    aws_cloudwatch as cloudwatch,
-    aws_dynamodb as dynamodb,
-    aws_ec2 as ec2,
-    aws_elasticloadbalancingv2 as elbv2,
-    aws_iam as iam,
-    aws_kms as kms,
-    aws_logs as logs,
-    aws_rds as rds,
-    aws_s3 as s3,
-    aws_secretsmanager as secretsmanager,
-    aws_ssm as ssm,
-)
-from constructs import Construct
+from aws_cdk.assertions import Match, Template
+import pytest
+
+from lib.tap_stack import TapStack, TapStackProps
 
 
-class TapStackProps(cdk.StackProps):
-    """Properties for TapStack.
+@pytest.mark.describe("TapStack Unit Tests (current stack shape)")
+class TestTapStack(unittest.TestCase):
+    """Validates the synthesized CloudFormation against expected architecture."""
 
-    Attributes:
-        environment_suffix: Suffix for env naming, e.g., 'dev' or 'prod'.
-    """
-
-    def __init__(self, environment_suffix: Optional[str] = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.environment_suffix = environment_suffix
-
-
-class TapStack(cdk.Stack):
-    """Main stack implementing the secure baseline."""
-
-    _DEFAULT_PROJECT_NAME = "IaC - AWS Nova Model Breaking"
-    _DEFAULT_APP_PORT = 8080
-    _DEFAULT_VPC_CIDR = "10.0.0.0/16"
-
-    def __init__(
-        self,
-        scope: Construct,
-        construct_id: str,
-        props: Optional[TapStackProps] = None,
-        **kwargs,
-    ) -> None:
-        super().__init__(scope, construct_id, **kwargs)
-
-        # Resolve environment + context
-        self.environment_name: str = (
-            (props.environment_suffix if props else None)
-            or self.node.try_get_context("environmentSuffix")
-            or "dev"
+    def setUp(self) -> None:
+        """Create a fresh CDK app/stack before each test."""
+        self.app = cdk.App()
+        self.stack = TapStack(
+            self.app,
+            "TapStackUnderTest",
+            props=TapStackProps(environment_suffix="unit"),
+            env=cdk.Environment(account="111111111111", region="us-west-1"),
         )
-        if cdk.Stack.of(self).region != "us-west-1":
-            cdk.Annotations.of(self).add_warning(
-                f"Stack region is {cdk.Stack.of(self).region}. Requirement is us-west-1."
-            )
+        self.template: Template = Template.from_stack(self.stack)
 
-        self.project_name: str = self._DEFAULT_PROJECT_NAME
-        self.app_port: int = self._DEFAULT_APP_PORT
-        self.single_nat: bool = True  # cost-aware default
+    # ---------- VPC / Subnets / NAT ----------
 
-        # Context-driven inputs
-        self.vpc_cidr: str = (
-            self.node.try_get_context("vpcCidr") or self._DEFAULT_VPC_CIDR
+    @pytest.mark.it("VPC has 2 public + 2 private subnets and a single NAT")
+    def test_vpc_and_subnets_and_nat(self) -> None:
+        self.template.resource_count_is("AWS::EC2::VPC", 1)
+        # 2 AZs x (Public + Private) => 4 Subnets
+        self.template.resource_count_is("AWS::EC2::Subnet", 4)
+        # Single NAT Gateway
+        self.template.resource_count_is("AWS::EC2::NatGateway", 1)
+
+    # ---------- Security Groups ----------
+
+    @pytest.mark.it("Security groups and ingress rules are correct")
+    def test_security_groups_and_ingress_rules(self) -> None:
+        # 3 SGs: ALB, App, RDS
+        self.template.resource_count_is("AWS::EC2::SecurityGroup", 3)
+
+        # Ingress: world -> ALB:80 (explicit L1 with CidrIp)
+        self.template.has_resource_properties(
+            "AWS::EC2::SecurityGroupIngress",
+            {
+                "IpProtocol": "tcp",
+                "FromPort": 80,
+                "ToPort": 80,
+                "CidrIp": "0.0.0.0/0",
+            },
         )
 
-        # Parameter/secret naming
-        default_param_path = f"/nova/{self.environment_name}/app/"
-        default_secret_name = f"nova/{self.environment_name}/app/secret"
-        self.app_param_path: str = (
-            self.node.try_get_context("appParamPath") or default_param_path
-        )
-        self.app_secret_name: str = (
-            self.node.try_get_context("appSecretName") or default_secret_name
-        )
-
-        # Tagging
-        self._apply_tags()
-
-        # KMS for encryption
-        self.kms_key: kms.Key = self._create_kms_key()
-
-        # Networking
-        self.vpc: ec2.Vpc = self._create_vpc(self.vpc_cidr)
-
-        # Security Groups (no SSH ingress; SSM only)
-        self.security_groups: Dict[str, ec2.SecurityGroup] = (
-            self._create_security_groups()
-        )
-
-        # Storage / Data
-        self.app_bucket, self.logs_bucket = self._create_s3_buckets()
-        self.dynamo_table: dynamodb.Table = self._create_dynamodb_table()
-
-        # Parameters & Secrets
-        self.parameters: List[ssm.StringParameter] = self._create_parameters(
-            self.app_param_path
-        )
-        self.secret: secretsmanager.Secret = self._create_secret(self.app_secret_name)
-
-        # IAM for EC2
-        self.instance_role: iam.Role = self._create_instance_role()
-
-        # Logs
-        self.log_group: logs.LogGroup = self._create_log_group()
-
-        # ALB + Target Group (HTTP only)
-        self.alb: elbv2.ApplicationLoadBalancer = self._create_alb()
-
-        # Compute (ASG/EC2 in private subnets)
-        self.asg: autoscaling.AutoScalingGroup = self._create_auto_scaling_group()
-
-        # Optional RDS (guarded by SG accepting only App SG)
-        self.enable_rds: bool = bool(self.node.try_get_context("enableRds") or False)
-        self.rds_instance: Optional[rds.DatabaseInstance] = (
-            self._create_rds() if self.enable_rds else None
-        )
-
-        # CloudTrail (multi-region)
-        self.trail: cloudtrail.Trail = self._create_cloudtrail()
-
-        # Monitoring / alarm (no SNS email)
-        self.alarm: cloudwatch.Alarm = self._create_monitoring()
-
-        # Outputs
-        self._create_outputs()
-
-    # ------------------------
-    # Helpers / resource steps
-    # ------------------------
-
-    def _apply_tags(self) -> None:
-        """Apply consistent tags."""
-        Tags.of(self).add("Project", self.project_name)
-        Tags.of(self).add("Environment", self.environment_name)
-        Tags.of(self).add("Owner", "CDK")
-        Tags.of(self).add("CostCenter", "Engineering")
-        Tags.of(self).add("SecurityTier", "Production")
-
-    def _create_kms_key(self) -> kms.Key:
-        """KMS key with CloudTrail permissions; rotation on."""
-        key = kms.Key(
-            self,
-            "NovaKmsKey",
-            description=f"Nova {self.environment_name} encryption key",
-            enable_key_rotation=True,
-            removal_policy=RemovalPolicy.DESTROY,  # change to RETAIN in prod
-        )
-        key.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="AllowCloudTrailEncryption",
-                effect=iam.Effect.ALLOW,
-                principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
-                actions=["kms:GenerateDataKey*", "kms:DescribeKey"],
-                resources=["*"],
-            )
-        )
-        return key
-
-    def _create_vpc(self, vpc_cidr: str) -> ec2.Vpc:
-        """VPC split public/private (egress) over 2 AZs. Single NAT default."""
-        return ec2.Vpc(
-            self,
-            "NovaVpc",
-            ip_addresses=ec2.IpAddresses.cidr(vpc_cidr),
-            max_azs=2,
-            nat_gateways=1 if self.single_nat else 2,
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name="Public",
-                    subnet_type=ec2.SubnetType.PUBLIC,
-                    cidr_mask=24,
-                ),
-                ec2.SubnetConfiguration(
-                    name="Private",
-                    subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS,
-                    cidr_mask=24,
-                ),
-            ],
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-        )
-
-    def _create_security_groups(self) -> Dict[str, ec2.SecurityGroup]:
-        """Create SGs: ALB, App, RDS (ingress from App only)."""
-        alb_sg = ec2.SecurityGroup(
-            self,
-            "NovaAlbSecurityGroup",
-            vpc=self.vpc,
-            description="Security group for Nova ALB",
-            allow_all_outbound=True,
-        )
-        # Explicit L1 ingress so the unit test finds CidrIp on a discrete resource
-        ec2.CfnSecurityGroupIngress(
-            self,
-            "NovaAlbHttpFromWorld",
-            group_id=alb_sg.security_group_id,
-            ip_protocol="tcp",
-            from_port=80,
-            to_port=80,
-            cidr_ip="0.0.0.0/0",
-            description="Allow HTTP from anywhere",
-        )
-
-        app_sg = ec2.SecurityGroup(
-            self,
-            "NovaAppSecurityGroup",
-            vpc=self.vpc,
-            description="Security group for Nova application instances",
-            allow_all_outbound=True,
-        )
-        # SG->SG as explicit L1 ingress on :8080
-        ec2.CfnSecurityGroupIngress(
-            self,
-            "NovaAppFromAlb8080",
-            group_id=app_sg.security_group_id,
-            ip_protocol="tcp",
-            from_port=self.app_port,
-            to_port=self.app_port,
-            source_security_group_id=alb_sg.security_group_id,
-            description=f"Allow app port {self.app_port} from ALB",
-        )
-
-        rds_sg = ec2.SecurityGroup(
-            self,
-            "NovaRdsSecurityGroup",
-            vpc=self.vpc,
-            description="RDS SG allows only from App SG",
-            allow_all_outbound=False,
-        )
-        # SG->SG as explicit L1 ingress on :5432
-        ec2.CfnSecurityGroupIngress(
-            self,
-            "NovaRdsFromApp5432",
-            group_id=rds_sg.security_group_id,
-            ip_protocol="tcp",
-            from_port=5432,
-            to_port=5432,
-            source_security_group_id=app_sg.security_group_id,
-            description="Allow PostgreSQL from app only",
-        )
-
-        return {"alb": alb_sg, "app": app_sg, "rds": rds_sg}
-
-    def _create_s3_buckets(self) -> Tuple[s3.Bucket, s3.Bucket]:
-        """Create app bucket (versioned, KMS) and dedicated logs bucket."""
-        app_bucket = s3.Bucket(
-            self,
-            "NovaAppBucket",
-            bucket_name=(
-                f"nova-{self.environment_name}-app-{self.account}-{self.region}"
+        # Ingress: ALB SG -> App SG :8080 (explicit L1 with SourceSecurityGroupId)
+        self.template.has_resource_properties(
+            "AWS::EC2::SecurityGroupIngress",
+            Match.object_like(
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 8080,
+                    "ToPort": 8080,
+                    "GroupId": Match.any_value(),
+                    "SourceSecurityGroupId": Match.any_value(),
+                }
             ),
-            versioned=True,
-            encryption=s3.BucketEncryption.KMS,
-            encryption_key=self.kms_key,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.DESTROY,  # change to RETAIN in prod
-            auto_delete_objects=True,  # demo only
-        )
-        app_bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="DenyUnencryptedObjectUploads",
-                effect=iam.Effect.DENY,
-                principals=[iam.AnyPrincipal()],
-                actions=["s3:PutObject"],
-                resources=[app_bucket.arn_for_objects("*")],
-                conditions={
-                    "StringNotEquals": {"s3:x-amz-server-side-encryption": "aws:kms"}
-                },
-            )
-        )
-        app_bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="DenyNonTLSRequests",
-                effect=iam.Effect.DENY,
-                principals=[iam.AnyPrincipal()],
-                actions=["s3:*"],
-                resources=[app_bucket.bucket_arn, app_bucket.arn_for_objects("*")],
-                conditions={"Bool": {"aws:SecureTransport": "false"}},
-            )
         )
 
-        logs_bucket = s3.Bucket(
-            self,
-            "NovaLogsBucket",
-            bucket_name=(
-                f"nova-{self.environment_name}-logs-{self.account}-{self.region}"
+        # Ingress: App SG -> RDS SG :5432 (explicit L1 with SourceSecurityGroupId)
+        self.template.has_resource_properties(
+            "AWS::EC2::SecurityGroupIngress",
+            Match.object_like(
+                {
+                    "IpProtocol": "tcp",
+                    "FromPort": 5432,
+                    "ToPort": 5432,
+                    "GroupId": Match.any_value(),
+                    "SourceSecurityGroupId": Match.any_value(),
+                }
             ),
-            encryption=s3.BucketEncryption.KMS,
-            encryption_key=self.kms_key,
-            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.DESTROY,  # demo
-            auto_delete_objects=True,  # demo
-        )
-        logs_bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="AWSCloudTrailAclCheck",
-                effect=iam.Effect.ALLOW,
-                principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
-                actions=["s3:GetBucketAcl"],
-                resources=[logs_bucket.bucket_arn],
-            )
-        )
-        logs_bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="AWSCloudTrailWrite",
-                effect=iam.Effect.ALLOW,
-                principals=[iam.ServicePrincipal("cloudtrail.amazonaws.com")],
-                actions=["s3:PutObject"],
-                resources=[logs_bucket.arn_for_objects("*")],
-                conditions={
-                    "StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}
-                },
-            )
         )
 
-        return app_bucket, logs_bucket
+    # ---------- ALB / Target Group / Listener ----------
 
-    def _create_dynamodb_table(self) -> dynamodb.Table:
-        """DynamoDB w/ PAY_PER_REQUEST + SSE."""
-        return dynamodb.Table(
-            self,
-            "NovaDynamoTable",
-            table_name=f"nova-{self.environment_name}-data",
-            partition_key=dynamodb.Attribute(
-                name="id",
-                type=dynamodb.AttributeType.STRING,
+    @pytest.mark.it("ALB, HTTP :80 listener, TG on app port with health checks")
+    def test_alb_listener_and_target_group(self) -> None:
+        self.template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
+        self.template.resource_count_is("AWS::ElasticLoadBalancingV2::TargetGroup", 1)
+        # HTTP listener :80 (no HTTPS)
+        self.template.has_resource_properties(
+            "AWS::ElasticLoadBalancingV2::Listener",
+            {"Port": 80, "Protocol": "HTTP"},
+        )
+        # TargetGroup: HTTP 8080 with health check enabled (path /health)
+        self.template.has_resource_properties(
+            "AWS::ElasticLoadBalancingV2::TargetGroup",
+            Match.object_like(
+                {
+                    "Protocol": "HTTP",
+                    "Port": 8080,
+                    "TargetType": "instance",
+                    "HealthCheckEnabled": True,
+                    "HealthCheckPath": "/health",
+                }
             ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            encryption=dynamodb.TableEncryption.AWS_MANAGED,
-            removal_policy=RemovalPolicy.DESTROY,  # demo
         )
 
-    def _create_parameters(self, app_param_path: str) -> List[ssm.StringParameter]:
-        """Create a few SSM parameters under the configured path."""
-        prefix = app_param_path if app_param_path.endswith("/") else f"{app_param_path}/"
+    # ---------- ASG / Launch Template ----------
 
-        param_defs = [
-            ("APP_ENV", self.environment_name),
-            ("API_URL", f"https://api-{self.environment_name}.nova.example.com"),
-            ("LOG_LEVEL", "INFO"),
-            ("REGION", self.region),
-        ]
-        created: List[ssm.StringParameter] = []
-        for key, value in param_defs:
-            created.append(
-                ssm.StringParameter(
-                    self,
-                    f"NovaParam{key}",
-                    parameter_name=f"{prefix}{key}",
-                    string_value=value,
-                    description=f"Nova {key} for {self.environment_name}",
+    @pytest.mark.it("ASG and LaunchTemplate exist with min/desired/max 1/1/3")
+    def test_asg_and_launch_template(self) -> None:
+        self.template.resource_count_is("AWS::AutoScaling::AutoScalingGroup", 1)
+        self.template.resource_count_is("AWS::EC2::LaunchTemplate", 1)
+        self.template.has_resource_properties(
+            "AWS::AutoScaling::AutoScalingGroup",
+            {
+                "MinSize": "1",
+                "MaxSize": "3",
+                "DesiredCapacity": "1",
+            },
+        )
+
+    # ---------- S3 Buckets (App & Logs) ----------
+
+    @pytest.mark.it("S3 buckets: app is versioned + KMS; logs bucket has CloudTrail write ACL condition")
+    def test_s3_buckets_encryption_versioning_and_policies(self) -> None:
+        # Two buckets: app + logs
+        self.template.resource_count_is("AWS::S3::Bucket", 2)
+
+        # App bucket versioning enabled + SSE KMS
+        self.template.has_resource_properties(
+            "AWS::S3::Bucket",
+            Match.object_like(
+                {
+                    "VersioningConfiguration": {"Status": "Enabled"},
+                    "BucketEncryption": {
+                        "ServerSideEncryptionConfiguration": Match.array_with(
+                            [
+                                Match.object_like(
+                                    {
+                                        "ServerSideEncryptionByDefault": {
+                                            "SSEAlgorithm": "aws:kms"
+                                        }
+                                    }
+                                )
+                            ]
+                        )
+                    },
+                }
+            ),
+        )
+
+        # BucketPolicy exists with SecureTransport deny
+        self.template.has_resource_properties(
+            "AWS::S3::BucketPolicy",
+            {
+                "PolicyDocument": Match.object_like(
+                    {
+                        "Statement": Match.array_with(
+                            [
+                                Match.object_like(
+                                    {
+                                        "Action": "s3:*",
+                                        "Effect": "Deny",
+                                        "Condition": {"Bool": {"aws:SecureTransport": "false"}},
+                                    }
+                                )
+                            ]
+                        )
+                    }
                 )
-            )
-        return created
+            },
+        )
 
-    def _create_secret(self, app_secret_name: str) -> secretsmanager.Secret:
-        """Create Secrets Manager secret with generated password."""
-        return secretsmanager.Secret(
-            self,
-            "NovaAppSecret",
-            secret_name=app_secret_name,
-            description=f"Nova application secret for {self.environment_name}",
-            generate_secret_string=secretsmanager.SecretStringGenerator(
-                secret_string_template='{"username": "admin"}',
-                generate_string_key="password",
-                exclude_characters=" %+~`#$&*()|[]{}:;<>?!'/\\\"@",
+        # Logs bucket policy allows CloudTrail writes w/ ACL condition
+        self.template.has_resource_properties(
+            "AWS::S3::BucketPolicy",
+            {
+                "PolicyDocument": Match.object_like(
+                    {
+                        "Statement": Match.array_with(
+                            [
+                                Match.object_like(
+                                    {
+                                        "Principal": {"Service": "cloudtrail.amazonaws.com"},
+                                        "Action": "s3:PutObject",
+                                        "Condition": Match.object_like(
+                                            {
+                                                "StringEquals": {
+                                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                                }
+                                            }
+                                        ),
+                                    }
+                                )
+                            ]
+                        )
+                    }
+                )
+            },
+        )
+
+    # ---------- DynamoDB ----------
+
+    @pytest.mark.it("DynamoDB table uses PAY_PER_REQUEST")
+    def test_dynamodb_pay_per_request(self) -> None:
+        self.template.has_resource_properties(
+            "AWS::DynamoDB::Table", {"BillingMode": "PAY_PER_REQUEST"}
+        )
+
+    # ---------- KMS Key ----------
+
+    @pytest.mark.it("KMS key has rotation enabled")
+    def test_kms_key_rotation_enabled(self) -> None:
+        self.template.has_resource_properties("AWS::KMS::Key", {"EnableKeyRotation": True})
+
+    # ---------- SSM Parameters & Secret ----------
+
+    @pytest.mark.it("Four SSM parameters under env path + one Secrets Manager secret")
+    def test_ssm_parameters_and_secret_exist(self) -> None:
+        self.template.resource_count_is("AWS::SSM::Parameter", 4)
+        self.template.resource_count_is("AWS::SecretsManager::Secret", 1)
+
+        # Spot-check one parameter path prefix is present (APP_ENV)
+        self.template.has_resource_properties(
+            "AWS::SSM::Parameter",
+            Match.object_like(
+                {
+                    "Type": "String",
+                    "Name": Match.string_like_regexp(r"^/nova/unit/app/APP_ENV$"),
+                }
             ),
         )
 
-    def _create_instance_role(self) -> iam.Role:
-        """Least-privilege EC2 instance role."""
-        role = iam.Role(
-            self,
-            "NovaInstanceRole",
-            assumed_by=iam.ServicePrincipal("ec2.amazonaws.com"),
-            description="IAM role for Nova application instances",
+    # ---------- CloudTrail ----------
+
+    @pytest.mark.it("CloudTrail is multi-region, includes global events, uses KMS and logs to logs bucket")
+    def test_cloudtrail_multi_region_and_kms(self) -> None:
+        self.template.has_resource_properties(
+            "AWS::CloudTrail::Trail",
+            {
+                "IsMultiRegionTrail": True,
+                "IncludeGlobalServiceEvents": True,
+                # BucketName and KmsKeyId are tokens; object_like is sufficient
+                "S3BucketName": Match.any_value(),
+                "KmsKeyId": Match.any_value(),
+            },
         )
 
-        # Managed policies
-        role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "AmazonSSMManagedInstanceCore"
-            )
-        )
-        role.add_managed_policy(
-            iam.ManagedPolicy.from_aws_managed_policy_name(
-                "CloudWatchAgentServerPolicy"
-            )
-        )
+    # ---------- CloudWatch Logs + Alarm ----------
 
-        # Inline statements (CDK aggregates into a single default inline policy)
-        prefix = (
-            self.app_param_path if self.app_param_path.endswith("/")
-            else f"{self.app_param_path}/"
+    @pytest.mark.it("LogGroup /nova/unit/app with 30d retention; CPU alarm threshold 70")
+    def test_log_group_and_cpu_alarm(self) -> None:
+        # LogGroup
+        self.template.has_resource_properties(
+            "AWS::Logs::LogGroup",
+            {"LogGroupName": "/nova/unit/app", "RetentionInDays": 30},
         )
-
-        # Secrets Manager (only this secret)
-        role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["secretsmanager:GetSecretValue"],
-                resources=[self.secret.secret_arn],
-            )
-        )
-
-        # SSM Parameter Store (scoped to prefix)
-        role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"],
-                resources=[f"arn:aws:ssm:{self.region}:{self.account}:parameter{prefix}*"],
-            )
-        )
-
-        # CloudWatch Logs (to specific LG)
-        role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-                resources=[f"arn:aws:logs:{self.region}:{self.account}:log-group:/nova/{self.environment_name}/app:*"],
-            )
-        )
-
-        # S3 app bucket (scoped)
-        role.add_to_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"],
-                resources=[self.app_bucket.bucket_arn, self.app_bucket.arn_for_objects("*")],
-            )
-        )
-
-        return role
-
-    def _create_log_group(self) -> logs.LogGroup:
-        """Log group for application logs (30d retention)."""
-        return logs.LogGroup(
-            self,
-            "NovaAppLogGroup",
-            log_group_name=f"/nova/{self.environment_name}/app",
-            retention=logs.RetentionDays.ONE_MONTH,
-            removal_policy=RemovalPolicy.DESTROY,  # demo
-        )
-
-    def _create_alb(self) -> elbv2.ApplicationLoadBalancer:
-        """ALB + HTTP (no HTTPS)."""
-        alb = elbv2.ApplicationLoadBalancer(
-            self,
-            "NovaAlb",
-            vpc=self.vpc,
-            internet_facing=True,
-            security_group=self.security_groups["alb"],
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
-        )
-
-        # Target group
-        target_group = elbv2.ApplicationTargetGroup(
-            self,
-            "NovaAppTargetGroup",
-            port=self.app_port,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            vpc=self.vpc,
-            target_type=elbv2.TargetType.INSTANCE,
-            health_check=elbv2.HealthCheck(
-                enabled=True,
-                healthy_http_codes="200",
-                interval=Duration.seconds(30),
-                path="/health",
-                port=str(self.app_port),
-                protocol=elbv2.Protocol.HTTP,
-                timeout=Duration.seconds(5),
-                unhealthy_threshold_count=3,
+        # Alarm threshold and comparison operator
+        self.template.has_resource_properties(
+            "AWS::CloudWatch::Alarm",
+            Match.object_like(
+                {
+                    "Threshold": 70,
+                    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                }
             ),
         )
 
-        # HTTP listener only
-        alb.add_listener(
-            "NovaHttpListener",
-            port=80,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            default_target_groups=[target_group],
-        )
+    # ---------- IAM Role ----------
 
-        self.target_group = target_group
-        return alb
-
-    def _create_auto_scaling_group(self) -> autoscaling.AutoScalingGroup:
-        """ASG using AL2023 SSM parameter AMI in private subnets."""
-        ami = ec2.MachineImage.from_ssm_parameter(
-            parameter_name=(
-                "/aws/service/ami-amazon-linux-latest/"
-                "al2023-ami-kernel-6.1-x86_64"
-            ),
-            os=ec2.OperatingSystemType.LINUX,
-        )
-
-        user_data = ec2.UserData.for_linux()
-        user_data.add_commands(
-            "#!/bin/bash",
-            "set -euo pipefail",
-            "yum update -y",
-            "yum install -y amazon-cloudwatch-agent python3 python3-pip",
-            # CloudWatch Agent config
-            "cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'",
-            "{",
-            '  "logs": {',
-            '    "logs_collected": {',
-            '      "files": {',
-            '        "collect_list": [',
-            "          {",
-            '            "file_path": "/var/log/messages",',
-            f'            "log_group_name": "/nova/{self.environment_name}/app",',
-            '            "log_stream_name": "{instance_id}/messages"',
-            "          }",
-            "        ]",
-            "      }",
-            "    }",
-            "  },",
-            '  "metrics": {',
-            f'    "namespace": "Nova/{self.environment_name}",',
-            '    "metrics_collected": {',
-            '      "cpu": {',
-            '        "measurement": [',
-            '          "cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"',
-            "        ],",
-            '        "metrics_collection_interval": 60',
-            "      },",
-            '      "disk": {',
-            '        "measurement": ["used_percent"],',
-            '        "metrics_collection_interval": 60,',
-            '        "resources": ["*"]',
-            "      },",
-            '      "mem": {',
-            '        "measurement": ["mem_used_percent"],',
-            '        "metrics_collection_interval": 60',
-            "      }",
-            "    }",
-            "  }",
-            "}",
-            "EOF",
-            "/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl "
-            "-a fetch-config -m ec2 "
-            "-c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s",
-            # Minimal HTTP health endpoint
-            "cat > /tmp/health_server.py << 'EOF'",
-            "#!/usr/bin/env python3",
-            "import http.server",
-            "import socketserver",
-            "",
-            "class HealthHandler(http.server.SimpleHTTPRequestHandler):",
-            "    def do_GET(self):",
-            "        if self.path == '/health':",
-            "            self.send_response(200)",
-            "            self.send_header('Content-type', 'text/plain')",
-            "            self.end_headers()",
-            "            self.wfile.write(b'OK')",
-            "        else:",
-            "            self.send_response(404)",
-            "            self.end_headers()",
-            "",
-            f"with socketserver.TCPServer(('', {self.app_port}), HealthHandler) as httpd:",
-            "    httpd.serve_forever()",
-            "EOF",
-            "chmod +x /tmp/health_server.py",
-            "nohup python3 /tmp/health_server.py &",
-        )
-
-        launch_template = ec2.LaunchTemplate(
-            self,
-            "NovaLaunchTemplate",
-            machine_image=ami,
-            instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.T3, ec2.InstanceSize.MICRO
-            ),
-            role=self.instance_role,
-            security_group=self.security_groups["app"],
-            user_data=user_data,
-        )
-
-        asg = autoscaling.AutoScalingGroup(
-            self,
-            "NovaAutoScalingGroup",
-            vpc=self.vpc,
-            launch_template=launch_template,
-            min_capacity=1,
-            max_capacity=3,
-            desired_capacity=1,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
+    @pytest.mark.it("Instance role has SSM core + CW agent + scoped inline policies")
+    def test_instance_role_policies_minimum_required(self) -> None:
+        self.template.has_resource_properties(
+            "AWS::IAM::Role",
+            Match.object_like(
+                {
+                    "AssumeRolePolicyDocument": {
+                        "Statement": Match.array_with(
+                            [
+                                Match.object_like(
+                                    {"Principal": {"Service": "ec2.amazonaws.com"}}
+                                )
+                            ]
+                        )
+                    },
+                    "ManagedPolicyArns": Match.array_with(
+                        [
+                            Match.string_like_regexp(
+                                r"^arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore$"
+                            ),
+                            Match.string_like_regexp(
+                                r"^arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy$"
+                            ),
+                        ]
+                    ),
+                    "Policies": Match.array_with(
+                        [
+                            Match.object_like(
+                                {
+                                    "PolicyDocument": {
+                                        "Statement": Match.array_with(
+                                            [
+                                                # secretsmanager read
+                                                Match.object_like(
+                                                    {
+                                                        "Action": Match.array_with(
+                                                            ["secretsmanager:GetSecretValue"]
+                                                        ),
+                                                        "Effect": "Allow",
+                                                    }
+                                                ),
+                                                # SSM parameter gets (prefix-scoped)
+                                                Match.object_like(
+                                                    {
+                                                        "Action": Match.array_with(
+                                                            Match.array_with(
+                                                                [
+                                                                    "ssm:GetParameter",
+                                                                    "ssm:GetParameters",
+                                                                    "ssm:GetParametersByPath",
+                                                                ]
+                                                            )
+                                                        ),
+                                                        "Effect": "Allow",
+                                                    }
+                                                ),
+                                                # CloudWatch Logs writes
+                                                Match.object_like(
+                                                    {
+                                                        "Action": Match.array_with(
+                                                            [
+                                                                "logs:CreateLogGroup",
+                                                                "logs:CreateLogStream",
+                                                                "logs:PutLogEvents",
+                                                            ]
+                                                        ),
+                                                        "Effect": "Allow",
+                                                    }
+                                                ),
+                                            ]
+                                        )
+                                    }
+                                }
+                            )
+                        ]
+                    ),
+                }
             ),
         )
 
-        self.target_group.add_target(asg)
-        return asg
+    # ---------- Outputs ----------
 
-    def _create_rds(self) -> rds.DatabaseInstance:
-        """Private RDS (PostgreSQL 15 pinned via L1 override) with App-only SG."""
-        subnet_group = rds.SubnetGroup(
-            self,
-            "NovaRdsSubnetGroup",
-            description="Subnet group for Nova RDS",
-            vpc=self.vpc,
-            vpc_subnets=ec2.SubnetSelection(
-                subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
-            ),
-        )
-        db = rds.DatabaseInstance(
-            self,
-            "NovaRdsInstance",
-            engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_15
-            ),
-            instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.T3, ec2.InstanceSize.MICRO
-            ),
-            vpc=self.vpc,
-            subnet_group=subnet_group,
-            security_groups=[self.security_groups["rds"]],
-            database_name="novadb",
-            credentials=rds.Credentials.from_generated_secret("dbadmin"),
-            storage_encrypted=True,
-            backup_retention=Duration.days(7),
-            deletion_protection=False,            # demo
-            removal_policy=RemovalPolicy.DESTROY, # demo
-            auto_minor_version_upgrade=False,     # pin patch (see L1 override)
-        )
-        # L1 override to set exact patch version (e.g., 15.14)
-        cfn_db = db.node.default_child
-        if isinstance(cfn_db, rds.CfnDBInstance):
-            cfn_db.engine_version = "15.14"
-        return db
-
-    def _create_cloudtrail(self) -> cloudtrail.Trail:
-        """Organization/account audit trail (multi-region)."""
-        trail = cloudtrail.Trail(
-            self,
-            "NovaCloudTrail",
-            trail_name=f"nova-{self.environment_name}-trail",
-            bucket=self.logs_bucket,
-            encryption_key=self.kms_key,
-            include_global_service_events=True,
-            is_multi_region_trail=True,
-            enable_file_validation=True,
-            send_to_cloud_watch_logs=True,
-            cloud_watch_logs_retention=logs.RetentionDays.ONE_MONTH,
-        )
-        # Ensure synthesized template contains explicit KmsKeyId
-        cfn_trail = trail.node.default_child
-        if isinstance(cfn_trail, cloudtrail.CfnTrail):
-            cfn_trail.kms_key_id = self.kms_key.key_arn
-
-        return trail
-
-    def _create_monitoring(self) -> cloudwatch.Alarm:
-        """CPU alarm on ASG; no SNS actions."""
-        metric = cloudwatch.Metric(
-            namespace="AWS/EC2",
-            metric_name="CPUUtilization",
-            dimensions_map={"AutoScalingGroupName": self.asg.auto_scaling_group_name},
-            statistic="Average",
-            period=Duration.minutes(5),
-        )
-        alarm = cloudwatch.Alarm(
-            self,
-            "NovaEc2CpuHigh",
-            metric=metric,
-            evaluation_periods=1,
-            threshold=70,
-            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            datapoints_to_alarm=1,
-            alarm_description="EC2 ASG average CPU >= 70% for 5 minutes.",
-        )
-        return alarm
-
-    def _create_outputs(self) -> None:
-        """Key outputs for integration tests and operator visibility."""
-        cdk.CfnOutput(self, "VpcId", value=self.vpc.vpc_id)
-        cdk.CfnOutput(self, "AlbDnsName", value=self.alb.load_balancer_dns_name)
-        cdk.CfnOutput(
-            self,
+    @pytest.mark.it("Critical stack outputs are present")
+    def test_stack_outputs_exist(self) -> None:
+        outputs = self.template.to_json().get("Outputs", {})
+        expected = [
+            "VpcId",
+            "AlbDnsName",
             "AppSecurityGroupId",
-            value=self.security_groups["app"].security_group_id,
-        )
-        cdk.CfnOutput(
-            self,
             "AlbSecurityGroupId",
-            value=self.security_groups["alb"].security_group_id,
-        )
-
-        private_ids = self.vpc.select_subnets(
-            subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
-        ).subnet_ids
-        public_ids = self.vpc.select_subnets(
-            subnet_type=ec2.SubnetType.PUBLIC
-        ).subnet_ids
-
-        cdk.CfnOutput(self, "PrivateSubnetIds", value=",".join(private_ids))
-        cdk.CfnOutput(self, "PublicSubnetIds", value=",".join(public_ids))
-        cdk.CfnOutput(self, "AppBucketName", value=self.app_bucket.bucket_name)
-        cdk.CfnOutput(self, "DynamoTableName", value=self.dynamo_table.table_name)
-        cdk.CfnOutput(self, "SecretArn", value=self.secret.secret_arn)
-        cdk.CfnOutput(self, "ParamPath", value=self.app_param_path)
-        cdk.CfnOutput(self, "TrailName", value=f"nova-{self.environment_name}-trail")
-        cdk.CfnOutput(self, "AlarmName", value="NovaEc2CpuHigh")
-
-        if self.rds_instance:
-            cdk.CfnOutput(
-                self,
-                "RdsEndpoint",
-                value=self.rds_instance.db_instance_endpoint_address,
-            )
+            "PrivateSubnetIds",
+            "PublicSubnetIds",
+            "AppBucketName",
+            "DynamoTableName",
+            "SecretArn",
+            "ParamPath",
+            "TrailName",
+            "AlarmName",
+        ]
+        for key in expected:
+            self.assertIn(key, outputs, f"Missing output: {key}")
+            self.assertIn("Value", outputs[key], f"Output {key} missing Value")
