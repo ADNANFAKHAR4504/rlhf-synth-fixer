@@ -299,10 +299,10 @@ describe('TapStack CloudFormation Template Validation', () => {
     });
 
     test('should have S3LogsBucketName output', () => {
-      const output = template.Outputs.S3LogsBucketName;
-      expect(output.Description).toBe('S3 logs bucket name');
-      expect(isIntrinsicFunction(output.Value)).toBe(true);
-      expect(output?.Export?.Name).toBeDefined();
+              const output = template.Outputs.S3LogsBucketName;
+              expect(output.Description).toBe('S3 logs bucket name');
+              expect(isIntrinsicFunction(output.Value)).toBe(true);
+              expect(output?.Export?.Name).toBeDefined();
     });
   });
 
