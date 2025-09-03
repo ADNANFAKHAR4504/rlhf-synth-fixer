@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Migration infrastructure stack for web application environment in us-east-1",
+    "Description": "Production-grade migration infrastructure stack for web application environment in us-east-1",
     "Parameters": {
         "VpcSecurityGroupId": {
             "Type": "AWS::EC2::SecurityGroup::Id",
@@ -15,6 +15,78 @@
             "Description": "Email address for migration status notifications",
             "AllowedPattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
             "ConstraintDescription": "Must be a valid email address"
+        },
+        "S3BucketPrefix": {
+            "Type": "String",
+            "Description": "Prefix for the S3 bucket name (will be appended with random string)",
+            "Default": "migration-logs",
+            "MaxLength": 37
+        },
+        "LambdaMemorySize": {
+            "Type": "Number",
+            "Description": "Memory size (MB) for Lambda functions",
+            "Default": 256,
+            "AllowedValues": [
+                128,
+                256,
+                512,
+                1024,
+                2048
+            ]
+        },
+        "LambdaTimeout": {
+            "Type": "Number",
+            "Description": "Timeout (seconds) for Lambda functions",
+            "Default": 300,
+            "MinValue": 1,
+            "MaxValue": 900
+        }
+    },
+    "Conditions": {
+        "UseVpc": {
+            "Fn::And": [
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "VpcSecurityGroupId"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Fn::Join": [
+                                        "",
+                                        {
+                                            "Ref": "VpcSubnetIds"
+                                        }
+                                    ]
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "CreateSubscription": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "NotificationEmail"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -22,15 +94,14 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "${AWS::StackName}-migration-logs-${AWS::AccountId}"
+                    "Fn::Sub": "${S3BucketPrefix}-${AWS::AccountId}-${AWS::Region}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
                             "ServerSideEncryptionByDefault": {
                                 "SSEAlgorithm": "AES256"
-                            },
-                            "BucketKeyEnabled": true
+                            }
                         }
                     ]
                 },
@@ -40,10 +111,17 @@
                     "IgnorePublicAcls": true,
                     "RestrictPublicBuckets": true
                 },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
                         "Value": "Migration"
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "MigrationLogs"
                     }
                 ]
             }
@@ -65,6 +143,7 @@
         },
         "MigrationNotificationsSubscription": {
             "Type": "AWS::SNS::Subscription",
+            "Condition": "CreateSubscription",
             "Properties": {
                 "Protocol": "email",
                 "TopicArn": {
@@ -78,9 +157,6 @@
         "MigrationTriggerFunctionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-migration-trigger-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -94,7 +170,16 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    {
+                        "Fn::If": [
+                            "UseVpc",
+                            "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
                 ],
                 "Policies": [
                     {
@@ -105,7 +190,8 @@
                                 {
                                     "Effect": "Allow",
                                     "Action": [
-                                        "s3:PutObject"
+                                        "s3:PutObject",
+                                        "s3:PutObjectAcl"
                                     ],
                                     "Resource": {
                                         "Fn::Sub": "${MigrationLogsBucket}/*"
@@ -135,9 +221,6 @@
         "StatusNotifierFunctionRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${AWS::StackName}-status-notifier-role"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -151,7 +234,16 @@
                     ]
                 },
                 "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    {
+                        "Fn::If": [
+                            "UseVpc",
+                            "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
                 ],
                 "Policies": [
                     {
@@ -194,20 +286,42 @@
                         "Arn"
                     ]
                 },
-                "Timeout": 300,
-                "MemorySize": 256,
-                "VpcConfig": {
-                    "SecurityGroupIds": [
-                        {
-                            "Ref": "VpcSecurityGroupId"
+                "Timeout": {
+                    "Ref": "LambdaTimeout"
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemorySize"
+                },
+                "Environment": {
+                    "Variables": {
+                        "S3_BUCKET_NAME": {
+                            "Ref": "MigrationLogsBucket"
+                        },
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "MigrationNotificationsTopic"
                         }
-                    ],
-                    "SubnetIds": {
-                        "Ref": "VpcSubnetIds"
                     }
                 },
+                "VpcConfig": {
+                    "Fn::If": [
+                        "UseVpc",
+                        {
+                            "SecurityGroupIds": [
+                                {
+                                    "Ref": "VpcSecurityGroupId"
+                                }
+                            ],
+                            "SubnetIds": {
+                                "Ref": "VpcSubnetIds"
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
                 "Code": {
-                    "ZipFile": "import json\nimport boto3\nimport logging\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Migration trigger function invoked with event: {json.dumps(event)}\")\n    \n    try:\n        # Initialize AWS clients\n        s3_client = boto3.client('s3')\n        sns_client = boto3.client('sns')\n        \n        # Get environment variables (these would be set in a real deployment)\n        bucket_name = event.get('bucket_name', 'migration-logs-bucket')\n        sns_topic_arn = event.get('sns_topic_arn', '')\n        \n        # Create migration log entry\n        timestamp = datetime.utcnow().isoformat()\n        log_content = {\n            'timestamp': timestamp,\n            'event': 'migration_triggered',\n            'status': 'started',\n            'request_id': context.aws_request_id,\n            'event_data': event\n        }\n        \n        # Write log to S3 (placeholder implementation)\n        log_key = f\"migration-logs/{timestamp}-{context.aws_request_id}.json\"\n        logger.info(f\"Writing migration log to S3: {bucket_name}/{log_key}\")\n        \n        # In a real implementation, you would uncomment this:\n        # s3_client.put_object(\n        #     Bucket=bucket_name,\n        #     Key=log_key,\n        #     Body=json.dumps(log_content),\n        #     ContentType='application/json'\n        # )\n        \n        # Send notification (placeholder implementation)\n        if sns_topic_arn:\n            message = f\"Migration process started at {timestamp}\"\n            logger.info(f\"Sending notification to SNS: {sns_topic_arn}\")\n            \n            # In a real implementation, you would uncomment this:\n            # sns_client.publish(\n            #     TopicArn=sns_topic_arn,\n            #     Message=message,\n            #     Subject='Migration Status Update'\n            # )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Migration process initiated successfully',\n                'timestamp': timestamp,\n                'request_id': context.aws_request_id\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error in migration trigger: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Migration trigger failed',\n                'message': str(e)\n            })\n        }\n"
+                    "ZipFile": "import json\nimport boto3\nimport logging\nimport os\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Migration trigger function invoked with event: {json.dumps(event)}\")\n    \n    try:\n        # Initialize AWS clients\n        s3_client = boto3.client('s3')\n        sns_client = boto3.client('sns')\n        \n        # Get environment variables\n        bucket_name = os.environ.get('S3_BUCKET_NAME')\n        sns_topic_arn = os.environ.get('SNS_TOPIC_ARN')\n        \n        # Create migration log entry\n        timestamp = datetime.utcnow().isoformat()\n        log_content = {\n            'timestamp': timestamp,\n            'event': 'migration_triggered',\n            'status': 'started',\n            'request_id': context.aws_request_id,\n            'event_data': event\n        }\n        \n        # Write log to S3\n        log_key = f\"migration-logs/{timestamp}-{context.aws_request_id}.json\"\n        logger.info(f\"Writing migration log to S3: {bucket_name}/{log_key}\")\n        \n        s3_client.put_object(\n            Bucket=bucket_name,\n            Key=log_key,\n            Body=json.dumps(log_content),\n            ContentType='application/json'\n        )\n        \n        # Send notification\n        if sns_topic_arn:\n            message = f\"Migration process started at {timestamp}\"\n            logger.info(f\"Sending notification to SNS: {sns_topic_arn}\")\n            \n            sns_client.publish(\n                TopicArn=sns_topic_arn,\n                Message=message,\n                Subject='Migration Status Update'\n            )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Migration process initiated successfully',\n                'timestamp': timestamp,\n                'request_id': context.aws_request_id,\n                'log_location': f\"s3://{bucket_name}/{log_key}\"\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error in migration trigger: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Migration trigger failed',\n                'message': str(e)\n            })\n        }\n"
                 },
                 "Tags": [
                     {
@@ -233,18 +347,33 @@
                 },
                 "Timeout": 60,
                 "MemorySize": 128,
-                "VpcConfig": {
-                    "SecurityGroupIds": [
-                        {
-                            "Ref": "VpcSecurityGroupId"
+                "Environment": {
+                    "Variables": {
+                        "SNS_TOPIC_ARN": {
+                            "Ref": "MigrationNotificationsTopic"
                         }
-                    ],
-                    "SubnetIds": {
-                        "Ref": "VpcSubnetIds"
                     }
                 },
+                "VpcConfig": {
+                    "Fn::If": [
+                        "UseVpc",
+                        {
+                            "SecurityGroupIds": [
+                                {
+                                    "Ref": "VpcSecurityGroupId"
+                                }
+                            ],
+                            "SubnetIds": {
+                                "Ref": "VpcSubnetIds"
+                            }
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
                 "Code": {
-                    "ZipFile": "import json\nimport boto3\nimport logging\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Status notifier function invoked with event: {json.dumps(event)}\")\n    \n    try:\n        # Initialize SNS client\n        sns_client = boto3.client('sns')\n        \n        # Extract notification details from event\n        status = event.get('status', 'unknown')\n        message_body = event.get('message', 'Migration status update')\n        sns_topic_arn = event.get('sns_topic_arn', '')\n        \n        timestamp = datetime.utcnow().isoformat()\n        \n        # Construct notification message\n        notification_message = {\n            'timestamp': timestamp,\n            'status': status,\n            'message': message_body,\n            'request_id': context.aws_request_id\n        }\n        \n        if sns_topic_arn:\n            logger.info(f\"Sending status notification to SNS: {sns_topic_arn}\")\n            \n            # In a real implementation, you would uncomment this:\n            # response = sns_client.publish(\n            #     TopicArn=sns_topic_arn,\n            #     Message=json.dumps(notification_message, indent=2),\n            #     Subject=f'Migration Status: {status.upper()}'\n            # )\n            # logger.info(f\"SNS publish response: {response}\")\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Status notification sent successfully',\n                'timestamp': timestamp,\n                'status': status\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error in status notifier: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Status notification failed',\n                'message': str(e)\n            })\n        }\n"
+                    "ZipFile": "import json\nimport boto3\nimport logging\nimport os\nfrom datetime import datetime\n\n# Configure logging\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Status notifier function invoked with event: {json.dumps(event)}\")\n    \n    try:\n        # Initialize SNS client\n        sns_client = boto3.client('sns')\n        \n        # Get SNS topic from environment variables\n        sns_topic_arn = os.environ.get('SNS_TOPIC_ARN')\n        \n        # Extract notification details from event\n        status = event.get('status', 'unknown')\n        message_body = event.get('message', 'Migration status update')\n        \n        timestamp = datetime.utcnow().isoformat()\n        \n        # Construct notification message\n        notification_message = {\n            'timestamp': timestamp,\n            'status': status,\n            'message': message_body,\n            'request_id': context.aws_request_id\n        }\n        \n        if sns_topic_arn:\n            logger.info(f\"Sending status notification to SNS: {sns_topic_arn}\")\n            \n            response = sns_client.publish(\n                TopicArn=sns_topic_arn,\n                Message=json.dumps(notification_message, indent=2),\n                Subject=f'Migration Status: {status.upper()}'\n            )\n            logger.info(f\"SNS publish response: {response}\")\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({\n                'message': 'Status notification sent successfully',\n                'timestamp': timestamp,\n                'status': status\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error in status notifier: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'body': json.dumps({\n                'error': 'Status notification failed',\n                'message': str(e)\n            })\n        }\n"
                 },
                 "Tags": [
                     {
@@ -339,7 +468,9 @@
                 "RestApiId": {
                     "Ref": "MigrationApi"
                 },
-                "Description": "Initial deployment of Migration API"
+                "Description": {
+                    "Fn::Sub": "Deployment for ${AWS::StackName} Migration API"
+                }
             }
         },
         "ApiStage": {
@@ -352,7 +483,9 @@
                     "Ref": "ApiDeployment"
                 },
                 "StageName": "prod",
-                "Description": "Production stage for Migration API",
+                "Description": {
+                    "Fn::Sub": "Production stage for ${AWS::StackName} Migration API"
+                },
                 "Tags": [
                     {
                         "Key": "Environment",
@@ -421,6 +554,17 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-StatusNotifierArn"
+                }
+            }
+        },
+        "StackRegion": {
+            "Description": "AWS Region where the stack is deployed",
+            "Value": {
+                "Ref": "AWS::Region"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-Region"
                 }
             }
         }
