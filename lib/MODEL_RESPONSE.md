@@ -1,14 +1,55 @@
-The CloudFormation template looks solid and production-ready.  
-It defines a full serverless stack with the main building blocks:
+# Model Response Documentation
 
-- **S3 Logs Bucket**: Encrypted, versioned, and blocked from public access. Good setup for compliance.
-- **DynamoDB Table**: Uses KMS encryption and includes proper read/write capacity units.
-- **IAM Roles**: Separate execution role for Lambda and logging role for API Gateway, which is aligned with AWS best practices.
-- **Lambda Function**: Runs on Node.js 22.x, has environment variables for the DynamoDB table, and is properly connected to CloudWatch Logs.
-- **API Gateway**: Configured with both GET and OPTIONS (CORS), integrated with Lambda using AWS_PROXY, and includes deployment with logging enabled.
-- **CloudWatch**: Log groups are explicitly declared for Lambda and API Gateway with retention set to 14 days.
+## Infrastructure Overview
 
-The template is parameterized (environment, table name, bucket name, function name), which makes it reusable across different stacks.  
-The outputs section exports useful references like API endpoint, Lambda ARN, DynamoDB table, and logs bucket.
+The CloudFormation template successfully implements a production-ready serverless architecture in **AWS us-west-2** region with the following components:
 
-Overall, this is a clean, production-grade CloudFormation file that follows AWS recommended practices. The resource dependencies and permissions look consistent, and the template should deploy successfully in `us-west-2` with no major issues.
+---
+
+## Architecture Components
+
+### AWS Lambda Function
+
+- Node.js 22.x runtime
+- 128MB memory, 30-second timeout
+- Integrated with DynamoDB via IAM role
+- Environment variable for table name reference
+
+### Amazon API Gateway
+
+- REST API with regional endpoint
+- `GET` method on `/data` resource path
+- CORS enabled for all origins
+- CloudWatch logging enabled
+- Proper error handling (500 responses)
+
+### Amazon DynamoDB
+
+- Table with string partition key `id`
+- 5 RCU and 5 WCU provisioned capacity
+- Server-side encryption using AWS KMS
+
+### Amazon S3
+
+- Dedicated log bucket with account/region suffix
+- Server-side encryption (SSE-S3)
+- Versioning enabled for log preservation
+
+### Security & Monitoring
+
+- Encryption enabled on all supported resources
+- CloudWatch logging for both Lambda and API Gateway
+- Least privilege IAM roles
+- Resource tagging with `Environment:Production`
+
+---
+
+## Template Structure
+
+```yaml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Production-ready serverless application with Lambda, API Gateway, DynamoDB, and S3 logging"
+Parameters: # Configurable input parameters
+Resources: # All AWS resources definitions
+Outputs: # Exported values for cross-stack references
+```
