@@ -406,6 +406,7 @@ resource "aws_iam_policy" "lambda_dynamodb_access" {
 # VPC, EC2, RDS (Postgres), and CloudTrail to satisfy prompt.md requirements
 # -----------------------------------------------------------------------------
 
+
 # Create a basic VPC spanning two AZs with public and private subnets
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -683,7 +684,6 @@ resource "aws_cloudtrail" "main" {
 
   tags = merge(local.tags, { Name = "${local.name_prefix}-cloudtrail" })
 }
-
 
 # IAM Policy for S3 access
 resource "aws_iam_policy" "lambda_s3_access" {
