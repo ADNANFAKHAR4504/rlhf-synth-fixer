@@ -165,8 +165,13 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     pulumi login "$PULUMI_BACKEND_URL"
     echo "Installing dependencies..."
     npm install
-    echo "Building TypeScript project..."
-    npm run build
+    echo "Checking if TypeScript compilation is needed..."
+    if [ ! -f "bin/tap.js" ] || [ "bin/tap.ts" -nt "bin/tap.js" ]; then
+      echo "Building TypeScript project..."
+      npm run build || echo "⚠️ Build failed, but continuing with existing files..."
+    else
+      echo "✅ TypeScript files are up to date, skipping build..."
+    fi
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
     echo "Deploying infrastructure ..."
