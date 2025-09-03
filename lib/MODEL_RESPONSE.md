@@ -1,5 +1,3 @@
-# Model Response Documentation
-
 ## Infrastructure Overview
 
 The CloudFormation template successfully implements a production-ready serverless architecture in **AWS us-west-2** region with the following components:

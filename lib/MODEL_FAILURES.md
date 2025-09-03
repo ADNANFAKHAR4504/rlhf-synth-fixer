@@ -1,5 +1,3 @@
-# Model Failures Analysis
-
 ## Overview
 
 This document outlines potential failure scenarios and mitigation strategies for the serverless infrastructure defined in the CloudFormation template.
