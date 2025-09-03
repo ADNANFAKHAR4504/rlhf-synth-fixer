@@ -387,13 +387,6 @@ asg = aws.autoscaling.Group(f"{prefix.lower()}-asg",
         id=launch_template.id,
         version="$Latest"
     ),
-    tag=[
-        aws.autoscaling.GroupTagArgs(
-            key="Name",
-            value=f"{prefix}-WebServer",
-            propagate_at_launch=True
-        )
-    ],
     tags={**common_tags, "Name": f"{prefix}-AutoScalingGroup"}
 )
 
