@@ -64,6 +64,20 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey*
             Resource: '*'
+          - Sid: Allow logs to use the key
+            Effect: Allow
+            Principal:
+              Service: logs.us-east-1.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:GenerateDataKey*
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:CreateGrant
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -419,7 +433,7 @@ Resources:
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${Environment}-db-subnet-group'
+      DBSubnetGroupName: !Sub '${Environment}-db-subnet-group-latest'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds: [!Ref DatabaseSubnet, !Ref PrivateSubnet]
       Tags:
@@ -431,7 +445,7 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${Environment}/database/credentials'
+      Name: !Sub '${Environment}/database/credential'
       Description: 'Database credentials'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -448,7 +462,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-database'
+      DBInstanceIdentifier: !Sub '${Environment}-database-latest'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.42'  # Supported — up to at least 8.0.42 :contentReference[oaicite:0]{index=0}
@@ -477,14 +491,14 @@ Resources:
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/cloudtrail/${Environment}'
+      LogGroupName: !Sub '/aws/cloudtrails/${Environment}'
       RetentionInDays: 90
       KmsKeyId: !GetAtt KMSKey.Arn
 
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}-latest'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -551,7 +565,7 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: CloudTrailS3BucketPolicy
     Properties:
-      TrailName: !Sub '${Environment}-cloudtrail'
+      TrailName: !Sub '${Environment}-cloudtrail-latest'
       S3BucketName: !Ref CloudTrailS3Bucket
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
@@ -607,7 +621,7 @@ Resources:
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${Environment}-config-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub '${Environment}-config-${AWS::AccountId}-${AWS::Region}-latest'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -625,7 +639,7 @@ Resources:
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
-      Name: !Sub '${Environment}-config-recorder'
+      Name: !Sub '${Environment}-config-recorder-latest'
       RoleARN: !GetAtt ConfigServiceRole.Arn
       RecordingGroup:
         AllSupported: true
@@ -634,7 +648,7 @@ Resources:
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
     Properties:
-      Name: !Sub '${Environment}-config-delivery-channel'
+      Name: !Sub '${Environment}-config-delivery-channel-latest'
       S3BucketName: !Ref ConfigS3Bucket
 
   # ================================
@@ -643,7 +657,7 @@ Resources:
   SecurityAlertsTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub '${Environment}-security-alerts'
+      TopicName: !Sub '${Environment}-security-alert'
       KmsMasterKeyId: !Ref KMSKey
       Tags:
         - Key: Environment
@@ -659,7 +673,7 @@ Resources:
   UnauthorizedAccessAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-unauthorized-access-attempts'
+      AlarmName: !Sub '${Environment}-unauthorized-access-attempt'
       AlarmDescription: 'Alarm for unauthorized access attempts'
       MetricName: ErrorCount
       Namespace: CloudTrailMetrics
@@ -674,7 +688,7 @@ Resources:
   RootAccountUsageAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub '${Environment}-root-account-usage'
+      AlarmName: !Sub '${Environment}-root-account-usages'
       AlarmDescription: 'Alarm for root account usage'
       MetricName: RootAccountUsageCount
       Namespace: CloudTrailMetrics
