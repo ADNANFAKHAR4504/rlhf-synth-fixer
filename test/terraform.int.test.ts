@@ -8,7 +8,7 @@ import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
 import { S3Client } from "@aws-sdk/client-s3";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
 
-const region = process.env.AWS_REGION || process.env.TF_VAR_aws_region || "us-west-2";
+const region = "us-west-2";
 const projectName = process.env.TF_VAR_project_name || "secure-web-app";
 
 describe("Terraform E2E Integration: AWS Resources", () => {
