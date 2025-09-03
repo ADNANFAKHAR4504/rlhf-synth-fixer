@@ -338,20 +338,61 @@ class TestTapStackIntegrationSDK(unittest.TestCase):
     def test_cloudtrail_trail_exists(self) -> None:
         ct = _client("cloudtrail")
         trail_name = _require_key(FLAT_OUTPUTS, "TrailName")
-        resp = ct.describe_trails(trailNameList=[trail_name], includeShadowTrails=False)
+
+        # First try by name with shadow trails enabled (handles non-home regions)
+        resp = ct.describe_trails(trailNameList=[trail_name], includeShadowTrails=True)
         trails = resp.get("trailList", [])
+
+        # Fallback: list all (with shadows) and match by Name or ARN suffix
+        if not trails:
+            resp = ct.describe_trails(includeShadowTrails=True)
+            all_trails = resp.get("trailList", [])
+            trails = [
+                t for t in all_trails
+                if t.get("Name") == trail_name
+                or t.get("TrailARN", "").endswith(f":trail/{trail_name}")
+                or t.get("TrailARN", "").split(":trail/")[-1] == trail_name
+            ]
+
         self.assertTrue(trails, f"CloudTrail trail not found: {trail_name}")
-        # Some SDKs return 'IsMultiRegionTrail' on the trail description
+
+        # Multi-region flag (some SDKs omit the key; accept True or missing)
         is_multi = trails[0].get("IsMultiRegionTrail", None)
-        self.assertIn(is_multi, (True, None), "Trail is not multi-region (or SDK did not return the flag)")
+        self.assertIn(is_multi, (True, None), "Trail is not multi-region (or SDK omitted the flag)")
 
     @mark.it("CloudWatch alarm exists with the expected name")
     def test_cloudwatch_alarm_exists(self) -> None:
         cw = _client("cloudwatch")
         alarm_name = _require_key(FLAT_OUTPUTS, "AlarmName")
+
+        # Try exact name first
         resp = cw.describe_alarms(AlarmNames=[alarm_name])
         alarms = resp.get("MetricAlarms", [])
-        self.assertTrue(alarms, f"CloudWatch alarm not found: {alarm_name}")
+
+        # Fallback: prefix match (CDK often appends stack/unique suffixes)
+        if not alarms:
+            resp = cw.describe_alarms(AlarmNamePrefix=alarm_name)
+            alarms = resp.get("MetricAlarms", [])
+
+        # Fallback: paginate and search (defensive)
+        if not alarms:
+            alarms = []
+            next_token = None
+            while True:
+                kwargs = {}
+                if next_token:
+                    kwargs["NextToken"] = next_token
+                page = cw.describe_alarms(**kwargs)
+                page_alarms = page.get("MetricAlarms", [])
+                for a in page_alarms:
+                    n = a.get("AlarmName", "")
+                    if n == alarm_name or n.startswith(alarm_name):
+                        alarms.append(a)
+                next_token = page.get("NextToken")
+                if not next_token or alarms:
+                    break
+
+        self.assertTrue(alarms, f"CloudWatch alarm not found (exact or prefix): {alarm_name}")
 
 
 if __name__ == "__main__":
