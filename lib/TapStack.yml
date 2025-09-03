@@ -189,20 +189,20 @@ Parameters:
 
   EnableGreenFleet:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues: ['true', 'false']
     Description: 'Enable creation of green ASG for blue/green with weighted ALB forwarding'
 
   BlueTrafficWeight:
     Type: Number
-    Default: 100
+    Default: 90
     MinValue: 0
     MaxValue: 100
     Description: 'Weight percentage for blue target group'
 
   GreenTrafficWeight:
     Type: Number
-    Default: 0
+    Default: 10
     MinValue: 0
     MaxValue: 100
     Description: 'Weight percentage for green target group'
@@ -1798,6 +1798,8 @@ Resources:
       DeploymentStyle:
         DeploymentType: BLUE_GREEN
         DeploymentOption: WITH_TRAFFIC_CONTROL
+      AutoScalingGroups:
+        - !Ref WebServerASG
       BlueGreenDeploymentConfiguration:
         TerminateBlueInstancesOnDeploymentSuccess:
           Action: KEEP_ALIVE
@@ -1814,18 +1816,9 @@ Resources:
           - DEPLOYMENT_STOP_ON_ALARM
           - DEPLOYMENT_STOP_ON_REQUEST
       LoadBalancerInfo:
-        TargetGroupPairInfoList:
-          - TargetGroups:
-              - Name: !Ref ALBTargetGroupBlue
-              - Name: !Ref ALBTargetGroupGreen
-            ProdTrafficRoute:
-              ListenerArns:
-                - !If [CreateALB, !Ref ALBListener, !Ref 'AWS::NoValue']
-                - !If [
-                    CreateALBAndHasSSL,
-                    !Ref ALBHTTPSListener,
-                    !Ref 'AWS::NoValue',
-                  ]
+        TargetGroupInfoList:
+          - Name: !Sub '${Environment}-tg-blue'
+          - Name: !Sub '${Environment}-tg-green'
 
   # Lambda Function
   ExampleLambdaFunction:
