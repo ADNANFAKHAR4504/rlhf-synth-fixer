@@ -65,11 +65,10 @@ describe('Secure API Integration Tests', () => {
 
     // Use AWS SDK to check if the Load Balancer exists
     try {
-      // Per user request, we are looking for the specific load balancer name.
-      // We extract the name 'TapSta-LoadB-3y0iG876qKhU' from the full DNS string.
-      const firstHyphenIndex = loadBalancerDns.indexOf('-');
-      const lastHyphenIndex = loadBalancerDns.lastIndexOf('-');
-      const loadBalancerName = loadBalancerDns.substring(firstHyphenIndex + 1, lastHyphenIndex);
+      // The DescribeLoadBalancersCommand expects a short name. We extract it
+      // by splitting the DNS and re-joining the middle parts.
+      const parts = loadBalancerDns.split('.')[0].split('-');
+      const loadBalancerName = parts.slice(1, -1).join('-');
 
       const describeElbCommand = new DescribeLoadBalancersCommand({
         Names: [loadBalancerName],
@@ -105,7 +104,7 @@ describe('Secure API Integration Tests', () => {
       if (axiosError.response && axiosError.response.status === 502) {
         console.error("The API Gateway received an invalid response from the backend Lambda function.");
         console.error("This often indicates a Lambda configuration or runtime error.");
-        console.error(`API call failed with 502 Bad Gateway. Details'}`);
+        console.error(`API call failed with 502 Bad Gateway. Details`);
       }
 
       // Provide detailed logging for other API errors
