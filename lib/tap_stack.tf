@@ -108,7 +108,6 @@ resource "aws_subnet" "private" {
 resource "aws_db_instance" "main" {
   identifier              = "${var.project_name}-database"
   engine                  = "mysql"
-  engine_version          = "8.0.34"
   instance_class          = "db.t3.micro"
   allocated_storage       = 20
   max_allocated_storage   = 100
