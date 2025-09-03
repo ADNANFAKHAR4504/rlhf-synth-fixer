@@ -1,6 +1,7 @@
 # Secure Cloud Infrastructure - Complete Terraform Configuration
 # Project: Secure Data Pipeline with Enterprise Security Controls
 
+
 terraform {
   required_version = ">= 1.0"
   required_providers {
