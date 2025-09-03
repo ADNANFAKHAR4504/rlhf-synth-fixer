@@ -115,6 +115,7 @@ resource "aws_db_instance" "main" {
   tags                    = local.common_tags
 }
 
+
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet-group"
   subnet_ids = aws_subnet.private[*].id
