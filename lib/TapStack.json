@@ -678,28 +678,6 @@
                 }
             }
         },
-        "PublicSubnet1Id": {
-            "Description": "ID of the first public subnet",
-            "Value": {
-                "Ref": "PublicSubnet1"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-PublicSubnet1Id"
-                }
-            }
-        },
-        "PublicSubnet2Id": {
-            "Description": "ID of the second public subnet",
-            "Value": {
-                "Ref": "PublicSubnet2"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${EnvironmentName}-PublicSubnet2Id"
-                }
-            }
-        },
         "PrivateSubnet1Id": {
             "Description": "ID of the first private subnet",
             "Value": {
@@ -707,7 +685,7 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet1Id"
+                    "Fn::Sub": "${EnvironmentName}-${AWS::StackName}-PrivateSubnet1Id"
                 }
             }
         },
@@ -718,7 +696,29 @@
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet2Id"
+                    "Fn::Sub": "${EnvironmentName}-${AWS::StackName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "ID of the first public subnet",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-${AWS::StackName}-PublicSubnet1Id"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "ID of the second public subnet",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-${AWS::StackName}-PublicSubnet2Id"
                 }
             }
         },

@@ -380,29 +380,29 @@ Outputs:
     Export:
       Name: !Sub "${EnvironmentName}-VPCId"
 
-  PublicSubnet1Id:
-    Description: ID of the first public subnet
-    Value: !Ref PublicSubnet1
-    Export:
-      Name: !Sub "${EnvironmentName}-PublicSubnet1Id"
-
-  PublicSubnet2Id:
-    Description: ID of the second public subnet
-    Value: !Ref PublicSubnet2
-    Export:
-      Name: !Sub "${EnvironmentName}-PublicSubnet2Id"
-
   PrivateSubnet1Id:
     Description: ID of the first private subnet
     Value: !Ref PrivateSubnet1
     Export:
-      Name: !Sub "${EnvironmentName}-PrivateSubnet1Id"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-PrivateSubnet1Id"
 
   PrivateSubnet2Id:
     Description: ID of the second private subnet
     Value: !Ref PrivateSubnet2
     Export:
-      Name: !Sub "${EnvironmentName}-PrivateSubnet2Id"
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-PrivateSubnet2Id"
+
+  PublicSubnet1Id:
+    Description: ID of the first public subnet
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-PublicSubnet1Id"
+
+  PublicSubnet2Id:
+    Description: ID of the second public subnet
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${EnvironmentName}-${AWS::StackName}-PublicSubnet2Id"
 
   InternetGatewayId:
     Description: Internet Gateway ID
