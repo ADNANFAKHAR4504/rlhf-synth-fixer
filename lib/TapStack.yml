@@ -467,7 +467,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-database-latest'
+      DBInstanceIdentifier: !Sub '${Environment}-database-lat'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.42'  # Supported — up to at least 8.0.42 :contentReference[oaicite:0]{index=0}
