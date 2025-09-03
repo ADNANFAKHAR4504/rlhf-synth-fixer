@@ -1,5 +1,4 @@
 import fs from 'fs';
-import path from 'path';
 import axios, { AxiosError } from 'axios';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
@@ -21,10 +20,16 @@ describe('Secure API Integration Tests', () => {
 
   // Test to verify the API endpoint is reachable and returns the correct response
   test('should successfully call the API Gateway endpoint and retrieve the secret', async () => {
-    let response;
     try {
       // Make a GET request to the deployed API endpoint
-      response = await axios.get(apiUrl, { timeout: 10000 });
+      const response = await axios.get(apiUrl, { timeout: 10000 });
+
+      // Assert that the HTTP status code is 200 (OK)
+      expect(response.status).toBe(200);
+
+      // Assert that the response body contains the expected success message
+      // This verifies that the Lambda function executed successfully
+      expect(response.data).toBe('Hello, secure world! We retrieved the secret.');
     } catch (error) {
       const axiosError = error as AxiosError;
       // Provide detailed logging for debugging API errors
@@ -32,15 +37,9 @@ describe('Secure API Integration Tests', () => {
         console.error(`Received status code: ${axiosError.response.status}`);
         console.error('Response data:', axiosError.response.data);
       }
-      // If the request fails, throw a more descriptive error
-      throw new Error(`Failed to call API Gateway endpoint at ${apiUrl}. Error: ${axiosError.message}`);
+      // Log the error and explicitly fail the test
+      console.error(`API call failed with error: ${axiosError.message}`);
+      expect(true).toBe(false);
     }
-
-    // Assert that the HTTP status code is 200 (OK)
-    expect(response.status).toBe(200);
-
-    // Assert that the response body contains the expected success message
-    // This verifies that the Lambda function executed successfully
-    expect(response.data).toBe('Hello, secure world! We retrieved the secret.');
   });
 });
