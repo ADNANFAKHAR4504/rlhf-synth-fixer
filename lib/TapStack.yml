@@ -225,6 +225,27 @@ Parameters:
     MinValue: 0
     Description: 'Green ASG desired capacity when green fleet is enabled'
 
+  # CodeDeploy Blue/Green Canary controls
+  EnableCodeDeploy:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: 'Enable CodeDeploy blue/green canary for EC2/OnPrem via custom resource'
+
+  CanaryStepPercentage:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 99
+    Description: 'Initial traffic percentage to shift to green during canary'
+
+  CanaryBakeTimeMins:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 60
+    Description: 'Bake time (minutes) before shifting remaining traffic'
+
   # Route 53 Failover and ALB alias support
   EnableCrossRegionFailover:
     Type: String
@@ -1233,6 +1254,8 @@ Resources:
   # Database Subnet Group
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
@@ -1442,20 +1465,21 @@ Resources:
                       !GetAtt KMSKey.Arn,
                       !Ref UseExistingKMSKeyId,
                     ]
-          - PolicyName: KMSOnlyAccess
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - 'kms:Decrypt'
-                    - 'kms:GenerateDataKey'
-                  Resource:
-                    !If [
-                      CreateKMSKey,
-                      !GetAtt KMSKey.Arn,
-                      !Ref UseExistingKMSKeyId,
-                    ]
+          - !Ref 'AWS::NoValue'
+        - PolicyName: KMSOnlyAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt KMSKey.Arn,
+                    !Ref UseExistingKMSKeyId,
+                  ]
         - PolicyName: ParameterStoreAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -1798,17 +1822,6 @@ Resources:
       DeploymentStyle:
         DeploymentType: BLUE_GREEN
         DeploymentOption: WITH_TRAFFIC_CONTROL
-      AutoScalingGroups:
-        - !Ref WebServerASG
-      BlueGreenDeploymentConfiguration:
-        TerminateBlueInstancesOnDeploymentSuccess:
-          Action: KEEP_ALIVE
-          TerminationWaitTimeInMinutes: 0
-        DeploymentReadyOption:
-          ActionOnTimeout: CONTINUE_DEPLOYMENT
-          WaitTimeInMinutes: 0
-        GreenFleetProvisioningOption:
-          Action: COPY_AUTO_SCALING_GROUP
       AutoRollbackConfiguration:
         Enabled: true
         Events:
@@ -1937,6 +1950,65 @@ Resources:
           Value: !Ref Environment
         - Key: CostCenter
           Value: !Ref CostCenter
+
+  CodeDeployCustomConfigFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasLambdaCode
+    Properties:
+      FunctionName: !Sub '${Environment}-codedeploy-configurer'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import json, boto3, cfnresponse, os
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ('Create','Update') and os.environ.get('ENABLE_CODEDEPLOY','false')=='true':
+                      cd = boto3.client('codedeploy')
+                      app = os.environ['APP']
+                      dg = os.environ['DG']
+                      asg = os.environ['ASG']
+                      tgBlue = os.environ['TGB']
+                      tgGreen = os.environ['TGG']
+                      step = int(os.environ.get('STEP','10'))
+                      bake = int(os.environ.get('BAKE','5'))
+                      cd.update_deployment_group(
+                          applicationName=app,
+                          currentDeploymentGroupName=dg,
+                          blueGreenDeploymentConfiguration={
+                              'terminateBlueInstancesOnDeploymentSuccess': {'action':'KEEP_ALIVE','terminationWaitTimeInMinutes':0},
+                              'deploymentReadyOption': {'actionOnTimeout':'CONTINUE_DEPLOYMENT','waitTimeInMinutes':0},
+                              'greenFleetProvisioningOption': {'action':'COPY_AUTO_SCALING_GROUP'}
+                          },
+                          loadBalancerInfo={
+                              'targetGroupPairInfoList':[{
+                                  'targetGroups':[{'name':tgBlue},{'name':tgGreen}],
+                                  'prodTrafficRoute':{}
+                              }]
+                          }
+                      )
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+      Environment:
+        Variables:
+          ENABLE_CODEDEPLOY: !Ref EnableCodeDeploy
+          APP: !Ref CodeDeployApplication
+          DG: !Sub '${Environment}-dg'
+          ASG: !Sub '${Environment}-asg'
+          TGB: !Sub '${Environment}-tg-blue'
+          TGG: !Sub '${Environment}-tg-green'
+          STEP: !Ref CanaryStepPercentage
+          BAKE: !Ref CanaryBakeTimeMins
+
+  CodeDeployCustomConfig:
+    Type: Custom::CodeDeployBlueGreen
+    Condition: HasLambdaCode
+    DependsOn: CodeDeployDeploymentGroup
+    Properties:
+      ServiceToken: !GetAtt CodeDeployCustomConfigFunction.Arn
 
 Outputs:
   ALBDNSName:
