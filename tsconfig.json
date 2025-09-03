@@ -25,5 +25,5 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree"]
+  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "bin"]
 }

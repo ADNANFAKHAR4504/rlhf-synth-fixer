@@ -165,12 +165,21 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     pulumi login "$PULUMI_BACKEND_URL"
     echo "Installing dependencies..."
     npm install
-    echo "Checking if TypeScript compilation is needed..."
-    if [ ! -f "bin/tap.js" ] || [ "bin/tap.ts" -nt "bin/tap.js" ]; then
-      echo "Building TypeScript project..."
-      npm run build || echo "⚠️ Build failed, but continuing with existing files..."
+    echo "Building TypeScript project..."
+    npm run build
+    echo "Verifying build output..."
+    if [ ! -f "bin/tap.js" ]; then
+      echo "❌ Build failed: bin/tap.js not found"
+      echo "Checking for source files..."
+      if [ -f "bin/tap.ts" ]; then
+        echo "Found source file, attempting manual compilation..."
+        npx tsc bin/tap.ts --outDir bin --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck || echo "⚠️ Manual compilation failed"
+      else
+        echo "❌ No TypeScript source file found. Deployment cannot continue."
+        exit 1
+      fi
     else
-      echo "✅ TypeScript files are up to date, skipping build..."
+      echo "✅ TypeScript build successful"
     fi
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
