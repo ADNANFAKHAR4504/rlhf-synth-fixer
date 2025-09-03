@@ -523,9 +523,9 @@ export class SecureInfrastructureStack extends cdk.Stack {
           sourceIdentifier: 'ENCRYPTED_VOLUMES',
         },
         {
-          ruleName: 's3-bucket-public-access-prohibited',
+          ruleName: 's3-bucket-level-public-access-prohibited',
           source: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
+          sourceIdentifier: 'S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED',
         },
         {
           ruleName: 's3-bucket-ssl-requests-only',
@@ -597,9 +597,9 @@ export class SecureInfrastructureStack extends cdk.Stack {
           sourceIdentifier: 'ENCRYPTED_VOLUMES',
         },
         {
-          ruleName: `stack-s3-bucket-public-access-prohibited-${environmentSuffix}`,
+          ruleName: `stack-s3-bucket-level-public-access-prohibited-${environmentSuffix}`,
           source: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED',
+          sourceIdentifier: 'S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED',
         },
         {
           ruleName: `stack-s3-bucket-ssl-requests-only-${environmentSuffix}`,

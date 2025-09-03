@@ -571,10 +571,10 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
 
       // Check for S3 bucket public access rule
       template.hasResourceProperties('AWS::Config::ConfigRule', {
-        ConfigRuleName: `stack-s3-bucket-public-access-prohibited-${testEnvSuffix}`,
+        ConfigRuleName: `stack-s3-bucket-level-public-access-prohibited-${testEnvSuffix}`,
         Source: {
           Owner: 'AWS',
-          SourceIdentifier: 'S3_BUCKET_PUBLIC_ACCESS_PROHIBITED'
+          SourceIdentifier: 'S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED'
         }
       });
 
