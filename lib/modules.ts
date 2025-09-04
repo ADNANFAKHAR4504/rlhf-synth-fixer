@@ -263,10 +263,9 @@ export class SecurityModule extends Construct {
             Principal: {
               AWS: 'arn:aws:iam::127311923021:root',
             },
-            Action: 's3:GetBucketAcl',
+            Action: ['s3:GetBucketAcl', 's3:ListBucket'], // ✅ Added ListBucket
             Resource: this.logBucket.arn,
           },
-          // ✅ Add missing GetBucketLocation permission
           {
             Sid: 'AllowALBGetBucketLocation',
             Effect: 'Allow',
@@ -943,6 +942,7 @@ echo "User data script completed successfully"
       minSize: 2,
       maxSize: 10,
       desiredCapacity: 2,
+      waitForCapacityTimeout: '0s', // ✅ Skip waiting for healthy instances
       launchTemplate: {
         id: launchTemplate.id,
         version: '$Latest',
@@ -1034,7 +1034,7 @@ export class DatabaseModule extends Construct {
     // RDS Parameter Group
     const dbParameterGroup = new DbParameterGroup(this, 'db-parameter-group', {
       name: 'tap-db-pg-prod',
-      family: 'postgres14',
+      family: 'postgres17',
       description: 'Parameter group for PostgreSQL 14',
       parameter: [
         {
@@ -1055,6 +1055,7 @@ export class DatabaseModule extends Construct {
     const rdsInstance = new DbInstance(this, 'rds-instance', {
       identifier: 'tap-db-prod',
       engine: 'postgres',
+      engineVersion: '14.9', // ✅ Specify version to match parameter group
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
       storageType: 'gp3',
@@ -1193,8 +1194,9 @@ export class ComplianceModule extends Construct {
 
     // Use a unique name or import existing role
     const configRole = new IamRole(this, 'config-role', {
-      name: `tap-config-role-prod-${Date.now()}`, // ✅ Make name unique
+      name: `tap-config-role-prod-${Date.now()}`,
       assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17', // ✅ Added version
         Statement: [
           {
             Effect: 'Allow',
@@ -1204,7 +1206,7 @@ export class ComplianceModule extends Construct {
         ],
       }),
       managedPolicyArns: [
-        'arn:aws:iam::aws:policy/service-role/ConfigRole', // ✅ Correct ARN
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole', // ✅ Added "AWS_" prefix
       ],
       tags: {
         Name: 'tap-config-role-prod',
