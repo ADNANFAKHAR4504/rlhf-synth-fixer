@@ -587,6 +587,123 @@ describe('TapStack - Secure Infrastructure Unit Tests', () => {
         }
       });
     });
+
+    // Test createConfig = true scenario
+    describe('with createConfig = true', () => {
+      let configTrueApp: cdk.App;
+      let configTrueStack: TapStack;
+      let configTrueTemplate: Template;
+
+      beforeEach(() => {
+        configTrueApp = new cdk.App({
+          context: {
+            environmentSuffix: testEnvSuffix,
+            createConfig: true
+          }
+        });
+        configTrueStack = new TapStack(configTrueApp, `ConfigTrueTestTapStack${testEnvSuffix}`, {
+          env: {
+            account: '123456789012',
+            region: 'us-west-2'
+          }
+        });
+        configTrueTemplate = Template.fromStack(configTrueStack);
+      });
+
+      test('creates Config bucket when createConfig is true', () => {
+        configTrueTemplate.hasResourceProperties('AWS::S3::Bucket', {
+          BucketName: Match.stringLikeRegexp(`secure-config-${testEnvSuffix}-.*`),
+          BucketEncryption: {
+            ServerSideEncryptionConfiguration: Match.arrayWith([
+              Match.objectLike({
+                ServerSideEncryptionByDefault: {
+                  SSEAlgorithm: 'AES256'
+                }
+              })
+            ])
+          },
+          VersioningConfiguration: {
+            Status: 'Enabled'
+          }
+        });
+      });
+
+      test('creates Config role when createConfig is true', () => {
+        configTrueTemplate.hasResourceProperties('AWS::IAM::Role', {
+          AssumeRolePolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Principal: {
+                  Service: 'config.amazonaws.com'
+                }
+              })
+            ])
+          }
+        });
+      });
+
+      test('creates Config configuration recorder when createConfig is true', () => {
+        configTrueTemplate.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
+          Name: Match.stringLikeRegexp(`secure-infrastructure-recorder-${testEnvSuffix}`),
+          RecordingGroup: {
+            AllSupported: true,
+            IncludeGlobalResourceTypes: true
+          }
+        });
+      });
+
+      test('creates Config delivery channel when createConfig is true', () => {
+        configTrueTemplate.hasResourceProperties('AWS::Config::DeliveryChannel', {
+          Name: Match.stringLikeRegexp(`secure-infrastructure-delivery-channel-${testEnvSuffix}`),
+          ConfigSnapshotDeliveryProperties: {
+            DeliveryFrequency: 'TwentyFour_Hours'
+          }
+        });
+      });
+
+      test('creates Config rules when createConfig is true', () => {
+        // Test that the basic Config rules are created
+        configTrueTemplate.hasResourceProperties('AWS::Config::ConfigRule', {
+          ConfigRuleName: 'encrypted-volumes',
+          Source: {
+            Owner: 'AWS',
+            SourceIdentifier: 'ENCRYPTED_VOLUMES'
+          }
+        });
+
+        configTrueTemplate.hasResourceProperties('AWS::Config::ConfigRule', {
+          ConfigRuleName: 's3-bucket-level-public-access-prohibited',
+          Source: {
+            Owner: 'AWS',
+            SourceIdentifier: 'S3_BUCKET_LEVEL_PUBLIC_ACCESS_PROHIBITED'
+          }
+        });
+
+        configTrueTemplate.hasResourceProperties('AWS::Config::ConfigRule', {
+          ConfigRuleName: 's3-bucket-ssl-requests-only',
+          Source: {
+            Owner: 'AWS',
+            SourceIdentifier: 'S3_BUCKET_SSL_REQUESTS_ONLY'
+          }
+        });
+
+        configTrueTemplate.hasResourceProperties('AWS::Config::ConfigRule', {
+          ConfigRuleName: 'cloudtrail-enabled',
+          Source: {
+            Owner: 'AWS',
+            SourceIdentifier: 'CLOUD_TRAIL_ENABLED'
+          }
+        });
+
+        configTrueTemplate.hasResourceProperties('AWS::Config::ConfigRule', {
+          ConfigRuleName: 'iam-password-policy',
+          Source: {
+            Owner: 'AWS',
+            SourceIdentifier: 'IAM_PASSWORD_POLICY'
+          }
+        });
+      });
+    });
   });
 
   describe('WAF Configuration', () => {
