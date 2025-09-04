@@ -44,6 +44,7 @@ import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-c
 import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 export interface VpcModuleProps {
   kmsKeyId: string;
@@ -87,6 +88,8 @@ export class SecurityModule extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+
     // KMS Key for data encryption
     this.dataKmsKey = new KmsKey(this, 'data-kms-key', {
       description: 'KMS key for ecommerce data encryption',
@@ -98,7 +101,7 @@ export class SecurityModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
+              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`, // Fixed reference
             },
             Action: 'kms:*',
             Resource: '*',
@@ -124,7 +127,7 @@ export class SecurityModule extends Construct {
           {
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
+              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`, // Fixed reference
             },
             Action: 'sts:AssumeRole',
             Condition: {
@@ -155,9 +158,9 @@ export class SecurityModule extends Construct {
 
     // Log bucket for access logs
     this.logBucket = new S3Bucket(this, 'log-bucket', {
-      bucket: 'tap-logs-prod-${random_id.bucket_suffix.hex}',
+      bucket: 'tap-logs-prod-ts',
       tags: {
-        Name: 'tap-logs-prod',
+        Name: 'tap-logs-prod-ts',
       },
     });
 
@@ -763,7 +766,7 @@ EOF
       subnets: props.publicSubnetIds,
       enableDeletionProtection: true,
       accessLogs: {
-        bucket: 'tap-logs-prod-${random_id.bucket_suffix.hex}',
+        bucket: 'tap-logs-prod-ts',
         enabled: true,
         prefix: 'alb-access-logs',
       },
