@@ -1,7 +1,7 @@
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "A complete CloudFormation template for a highly available web application with VPC, subnets, EC2, ELB, RDS, S3, and IAM roles.",
+  "Description": "A complete CloudFormation template for a highly available web application with VPC, subnets, EC2, ELB, RDS, S3, and IAM roles, updated to use modern security best practices.",
   "Parameters": {
     "VpcCIDR": {
       "Description": "CIDR block for the VPC",
@@ -33,14 +33,10 @@
       "Type": "String",
       "Default": "t2.micro"
     },
-    "WebServerAMI": {
-      "Description": "AMI ID for the web servers",
-      "Type": "AWS::EC2::Image::Id",
-      "Default": "ami-0c55b159cbfafe1f0"
-    },
     "KeyName": {
       "Description": "The name of an existing EC2 KeyPair to enable SSH access to the instances",
       "Type": "AWS::EC2::KeyPair::KeyName",
+      "Default": "tap-dev-keypair",
       "ConstraintDescription": "Must be the name of an existing EC2 KeyPair."
     },
     "DBInstanceType": {
@@ -49,18 +45,9 @@
       "Default": "db.t3.micro"
     },
     "DBName": {
-      "Description": "Database name",
+      "Description": "The name of the database to be created.",
       "Type": "String",
       "Default": "webappdb"
-    },
-    "DBUser": {
-      "Description": "Database master username",
-      "Type": "String"
-    },
-    "DBPassword": {
-      "Description": "Database master user password",
-      "Type": "String",
-      "NoEcho": "true"
     }
   },
   "Resources": {
@@ -329,7 +316,6 @@
     "LogBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "AccessControl": "LogDeliveryWrite",
         "Tags": [
           {
             "Key": "Name",
@@ -514,9 +500,7 @@
           "InstanceType": {
             "Ref": "InstanceType"
           },
-          "ImageId": {
-            "Ref": "WebServerAMI"
-          },
+          "ImageId": "ami-00ca32bbc84273381",
           "KeyName": {
             "Ref": "KeyName"
           },
@@ -528,14 +512,6 @@
               ]
             }
           ],
-          "IamInstanceProfile": {
-            "Arn": {
-              "Fn::GetAtt": [
-                "WebServerInstanceProfile",
-                "Arn"
-              ]
-            }
-          },
           "UserData": {
             "Fn::Base64": {
               "Fn::Join": [
@@ -607,6 +583,19 @@
         ]
       }
     },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "DatabaseSecret",
+        "Description": "Secret for the RDS master user and password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\'"
+        }
+      }
+    },
     "RDSDBInstance": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
@@ -614,12 +603,8 @@
         "DBInstanceClass": {
           "Ref": "DBInstanceType"
         },
-        "MasterUsername": {
-          "Ref": "DBUser"
-        },
-        "MasterUserPassword": {
-          "Ref": "DBPassword"
-        },
+        "MasterUsername": "{{resolve:secretsmanager:DatabaseSecret:SecretString:username}}",
+        "MasterUserPassword": "{{resolve:secretsmanager:DatabaseSecret:SecretString:password}}",
         "DBName": {
           "Ref": "DBName"
         },
@@ -684,8 +669,24 @@
           "DNSName"
         ]
       }
+    },
+    "DBEndpoint": {
+      "Description": "The endpoint of the RDS instance",
+      "Value": {
+        "Fn::GetAtt": [
+          "RDSDBInstance",
+          "Endpoint.Address"
+        ]
+      }
+    },
+    "DatabaseSecretARN": {
+      "Description": "The ARN of the Secrets Manager secret for the database credentials",
+      "Value": {
+        "Ref": "DatabaseSecret"
+      }
     }
   }
 }
+
 
 ```
