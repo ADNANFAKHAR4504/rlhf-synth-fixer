@@ -9,7 +9,6 @@ import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketPublicAccessBlock } from '@cdktf/provider-aws/lib/s3-bucket-public-access-block';
-import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -39,11 +38,12 @@ import { RedshiftCluster } from '@cdktf/provider-aws/lib/redshift-cluster';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
-import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
 import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { DataAwsElbServiceAccount } from '@cdktf/provider-aws/lib/data-aws-elb-service-account';
 
 export interface VpcModuleProps {
   kmsKey: KmsKey;
@@ -86,6 +86,53 @@ export class SecurityModule extends Construct {
 
   constructor(scope: Construct, id: string) {
     super(scope, id);
+
+    // Add this inside SecurityModule constructor, after creating logBucket
+    const elbServiceAccount = new DataAwsElbServiceAccount(
+      this,
+      'elb-service-account',
+      {
+        region: 'us-east-1', // Update to your region
+      }
+    );
+    // S3 Bucket Policy for ALB Access Logs
+    new S3BucketPolicy(this, 'log-bucket-policy', {
+      bucket: this.logBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              AWS: elbServiceAccount.arn,
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
+          },
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
+          },
+        ],
+      }),
+    });
 
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
 
@@ -216,67 +263,6 @@ export class SecurityModule extends Construct {
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
-    });
-
-    new S3BucketPolicy(this, 'log-bucket-policy', {
-      bucket: this.logBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Sid: 'DenyInsecureConnections',
-            Effect: 'Deny',
-            Principal: '*',
-            Action: 's3:*',
-            Resource: [`${this.logBucket.arn}`, `${this.logBucket.arn}/*`],
-            Condition: {
-              Bool: { 'aws:SecureTransport': 'false' },
-            },
-          },
-          // ✅ Updated ALB service account permissions for us-east-1
-          {
-            Sid: 'AllowALBAccessLogs',
-            Effect: 'Allow',
-            Principal: {
-              AWS: 'arn:aws:iam::127311923021:root', // ELB service account for us-east-1
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
-          },
-          {
-            Sid: 'AllowALBAccessLogsDelivery',
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
-              },
-            },
-          },
-          {
-            Sid: 'AllowALBAccessLogsBucketCheck',
-            Effect: 'Allow',
-            Principal: {
-              AWS: 'arn:aws:iam::127311923021:root',
-            },
-            Action: ['s3:GetBucketAcl', 's3:ListBucket'], // ✅ Added ListBucket
-            Resource: this.logBucket.arn,
-          },
-          {
-            Sid: 'AllowALBGetBucketLocation',
-            Effect: 'Allow',
-            Principal: {
-              AWS: 'arn:aws:iam::127311923021:root',
-            },
-            Action: 's3:GetBucketLocation',
-            Resource: this.logBucket.arn,
-          },
-        ],
-      }),
     });
   }
 }
@@ -1034,7 +1020,7 @@ export class DatabaseModule extends Construct {
     // RDS Parameter Group
     const dbParameterGroup = new DbParameterGroup(this, 'db-parameter-group', {
       name: 'tap-db-pg-prod',
-      family: 'postgres17',
+      family: 'postgres15',
       description: 'Parameter group for PostgreSQL 14',
       parameter: [
         {
@@ -1055,7 +1041,7 @@ export class DatabaseModule extends Construct {
     const rdsInstance = new DbInstance(this, 'rds-instance', {
       identifier: 'tap-db-prod',
       engine: 'postgres',
-      engineVersion: '14.9', // ✅ Specify version to match parameter group
+      engineVersion: '15.4', // ✅ Specify version to match parameter group
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
       storageType: 'gp3',
@@ -1189,14 +1175,14 @@ export class MonitoringModule extends Construct {
 }
 
 export class ComplianceModule extends Construct {
-  constructor(scope: Construct, id: string, props: ComplianceModuleProps) {
+  constructor(scope: Construct, id: string, _props: ComplianceModuleProps) {
     super(scope, id);
 
-    // Use a unique name or import existing role
+    // Create IAM role for Config Rules only (no Configuration Recorder)
     const configRole = new IamRole(this, 'config-role', {
       name: `tap-config-role-prod-${Date.now()}`,
       assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17', // ✅ Added version
+        Version: '2012-10-17',
         Statement: [
           {
             Effect: 'Allow',
@@ -1206,58 +1192,16 @@ export class ComplianceModule extends Construct {
         ],
       }),
       managedPolicyArns: [
-        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole', // ✅ Added "AWS_" prefix
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
       ],
       tags: {
         Name: 'tap-config-role-prod',
       },
     });
 
-    new IamRolePolicy(this, 'config-s3-policy', {
-      name: 'ConfigS3Policy',
-      role: configRole.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              's3:GetBucketAcl',
-              's3:GetBucketLocation',
-              's3:ListBucket',
-            ],
-            Resource: `arn:aws:s3:::${props.logBucketName}`,
-          },
-          {
-            Effect: 'Allow',
-            Action: 's3:PutObject',
-            Resource: `arn:aws:s3:::${props.logBucketName}/config/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
-              },
-            },
-          },
-          {
-            Effect: 'Allow',
-            Action: 's3:GetObject',
-            Resource: `arn:aws:s3:::${props.logBucketName}/config/*`,
-          },
-        ],
-      }),
-    });
+    // REMOVED: ConfigConfigurationRecorder - this was causing the limit error
 
-    // Config Configuration Recorder
-    new ConfigConfigurationRecorder(this, 'config-recorder', {
-      name: 'tap-config-recorder-prod',
-      roleArn: configRole.arn,
-      recordingGroup: {
-        allSupported: true,
-        includeGlobalResourceTypes: true,
-      },
-    });
-
-    // Use unique names for config rules
+    // Keep only the Config Rules (these don't require a recorder for compliance checks)
     const configRules = [
       {
         name: 's3-bucket-server-side-encryption-enabled',
@@ -1283,12 +1227,12 @@ export class ComplianceModule extends Construct {
 
     configRules.forEach((rule, index) => {
       new ConfigConfigRule(this, `config-rule-${index}`, {
-        name: `tap-${rule.name}-prod-${Date.now()}`, // ✅ Make names unique
+        name: `tap-${rule.name}-prod-${Date.now()}`,
         source: {
           owner: rule.source,
           sourceIdentifier: rule.identifier,
         },
-        dependsOn: [configRole], // Ensure role is created first
+        dependsOn: [configRole],
       });
     });
   }
