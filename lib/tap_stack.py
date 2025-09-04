@@ -265,3 +265,9 @@ class TapStack(Stack):
             value=self.upload_lambda.function_name,
             description="Lambda function name"
         )
+        
+        CfnOutput(
+            self, "SecretsArn",
+            value=self.secrets.secret_arn,
+            description="Secrets Manager ARN for configuration"
+        )
