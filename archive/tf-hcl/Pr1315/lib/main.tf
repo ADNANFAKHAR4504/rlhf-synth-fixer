@@ -22,8 +22,8 @@ variable "environment" {
 variable "trusted_account_ids" {
   description = "List of AWS account IDs that can assume roles"
   type        = list(string)
-  default     = []  # Will use current account if empty
-  
+  default     = [] # Will use current account if empty
+
   validation {
     condition     = alltrue([for id in var.trusted_account_ids : can(regex("^[0-9]{12}$", id))])
     error_message = "All account IDs must be 12-digit numbers."
@@ -46,7 +46,7 @@ variable "notification_email" {
   description = "Email address for IAM change notifications"
   type        = string
   default     = "devops@example.com"
-  
+
   validation {
     condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.notification_email))
     error_message = "Must be a valid email address format."
@@ -68,8 +68,8 @@ variable "cloudtrail_enable_data_events" {
 variable "cloudtrail_retention_days" {
   description = "Number of days to retain CloudWatch logs for CloudTrail"
   type        = number
-  default     = 30  # Reduced from 90 days for cost optimization
-  
+  default     = 30 # Reduced from 90 days for cost optimization
+
   validation {
     condition     = var.cloudtrail_retention_days >= 1 && var.cloudtrail_retention_days <= 3653
     error_message = "Retention days must be between 1 and 3653 (10 years)."
@@ -104,7 +104,7 @@ variable "restricted_ip_ranges" {
   description = "List of IP CIDR ranges allowed to assume roles (empty for no restrictions)"
   type        = list(string)
   default     = []
-  
+
   validation {
     condition     = alltrue([for ip in var.restricted_ip_ranges : can(cidrhost(ip, 0))])
     error_message = "All values must be valid CIDR notation (e.g., 10.0.0.0/16)."
@@ -124,14 +124,14 @@ variable "tags" {
 locals {
   account_id = data.aws_caller_identity.current.account_id
   region     = data.aws_region.current.name
-  
+
   # Use current account if trusted_account_ids is empty
   trusted_accounts = length(var.trusted_account_ids) > 0 ? var.trusted_account_ids : [local.account_id]
-  
+
   # Create unique bucket names by appending random suffix to defaults
   log_bucket_name = "${var.log_bucket_name}-${random_id.bucket_suffix.hex}"
   app_bucket_name = "${var.app_s3_bucket_name}-${random_id.bucket_suffix.hex}"
-  
+
   common_tags = merge(var.tags, {
     Environment = var.environment
     ManagedBy   = "Terraform"
@@ -754,7 +754,7 @@ resource "aws_cloudtrail" "security_trail" {
     dynamic "data_resource" {
       for_each = var.cloudtrail_enable_data_events ? [1] : []
       content {
-        type   = "AWS::S3::Object"
+        type = "AWS::S3::Object"
         values = [
           "${aws_s3_bucket.cloudtrail_logs.arn}/*"
         ]
@@ -769,16 +769,16 @@ resource "aws_cloudtrail" "security_trail" {
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true
-  
+
   # Enable CloudTrail Insights for unusual activity detection
   insight_selector {
     insight_type = "ApiCallRateInsight"
   }
-  
+
   insight_selector {
     insight_type = "ApiErrorRateInsight"
   }
-  
+
   # Enable CloudTrail Insights for cost optimization
   insight_selector {
     insight_type = "ApiCallVolumeInsight"
@@ -798,7 +798,7 @@ resource "aws_cloudtrail" "security_trail" {
 # CloudWatch Alarm for CloudTrail Insights API Call Volume
 resource "aws_cloudwatch_metric_alarm" "cloudtrail_insights_volume" {
   count = var.enable_cloudtrail_insights_monitoring ? 1 : 0
-  
+
   alarm_name          = "${var.environment}-cloudtrail-insights-volume"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
@@ -806,13 +806,13 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_insights_volume" {
   namespace           = "AWS/CloudTrail"
   period              = 300
   statistic           = "Sum"
-  threshold           = 1000  # Alert if more than 1000 insight records in 5 minutes
+  threshold           = 1000 # Alert if more than 1000 insight records in 5 minutes
   alarm_description   = "CloudTrail Insights generating high volume of records"
-  
+
   dimensions = {
     TrailName = aws_cloudtrail.security_trail.name
   }
-  
+
   tags = merge(local.common_tags, {
     Purpose = "CostMonitoring"
   })
@@ -821,21 +821,21 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_insights_volume" {
 # CloudWatch Alarm for CloudTrail Insights Cost
 resource "aws_cloudwatch_metric_alarm" "cloudtrail_insights_cost" {
   count = var.enable_cloudtrail_insights_monitoring ? 1 : 0
-  
+
   alarm_name          = "${var.environment}-cloudtrail-insights-cost"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
   metric_name         = "EstimatedCost"
   namespace           = "AWS/CloudTrail"
-  period              = 86400  # Daily cost monitoring
+  period              = 86400 # Daily cost monitoring
   statistic           = "Maximum"
-  threshold           = 50     # Alert if daily cost exceeds $50
+  threshold           = 50 # Alert if daily cost exceeds $50
   alarm_description   = "CloudTrail Insights daily cost threshold exceeded"
-  
+
   dimensions = {
     TrailName = aws_cloudtrail.security_trail.name
   }
-  
+
   tags = merge(local.common_tags, {
     Purpose = "CostMonitoring"
   })
@@ -848,9 +848,9 @@ resource "aws_cloudwatch_metric_alarm" "cloudtrail_insights_cost" {
 # GuardDuty Detector
 resource "aws_guardduty_detector" "threat_detector" {
   count = var.enable_guardduty ? 1 : 0
-  
+
   enable = true
-  
+
   tags = merge(local.common_tags, {
     Purpose = "ThreatDetection"
   })
@@ -859,7 +859,7 @@ resource "aws_guardduty_detector" "threat_detector" {
 # GuardDuty S3 Protection Feature
 resource "aws_guardduty_detector_feature" "s3_protection" {
   count = var.enable_guardduty ? 1 : 0
-  
+
   detector_id = aws_guardduty_detector.threat_detector[0].id
   name        = "S3_DATA_EVENTS"
   status      = "ENABLED"
@@ -868,7 +868,7 @@ resource "aws_guardduty_detector_feature" "s3_protection" {
 # GuardDuty Malware Protection Feature
 resource "aws_guardduty_detector_feature" "malware_protection" {
   count = var.enable_guardduty ? 1 : 0
-  
+
   detector_id = aws_guardduty_detector.threat_detector[0].id
   name        = "MALWARE_PROTECTION"
   status      = "ENABLED"
@@ -877,7 +877,7 @@ resource "aws_guardduty_detector_feature" "malware_protection" {
 # GuardDuty EKS Protection Feature
 resource "aws_guardduty_detector_feature" "eks_protection" {
   count = var.enable_guardduty ? 1 : 0
-  
+
   detector_id = aws_guardduty_detector.threat_detector[0].id
   name        = "EKS_AUDIT_LOGS"
   status      = "ENABLED"
@@ -890,7 +890,7 @@ resource "aws_guardduty_detector_feature" "eks_protection" {
 # AWS Config Configuration Recorder
 resource "aws_config_configuration_recorder" "config_recorder" {
   count = var.enable_aws_config ? 1 : 0
-  
+
   name     = "${var.environment}-config-recorder"
   role_arn = aws_iam_role.config_role[0].arn
 
@@ -902,18 +902,18 @@ resource "aws_config_configuration_recorder" "config_recorder" {
 # AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "config_delivery" {
   count = var.enable_aws_config ? 1 : 0
-  
+
   name           = "${var.environment}-config-delivery"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs.bucket
   s3_key_prefix  = "config"
-  
+
   depends_on = [aws_config_configuration_recorder.config_recorder]
 }
 
 # AWS Config IAM Role
 resource "aws_iam_role" "config_role" {
   count = var.enable_aws_config ? 1 : 0
-  
+
   name = "${var.environment}-config-role"
 
   assume_role_policy = jsonencode({
@@ -936,8 +936,8 @@ resource "aws_iam_role" "config_role" {
 
 # AWS Config IAM Policy
 resource "aws_iam_role_policy_attachment" "config_policy" {
-  count = var.enable_aws_config ? 1 : 0  # Fixed: Use enable_aws_config instead of environment check
-  
+  count = var.enable_aws_config ? 1 : 0 # Fixed: Use enable_aws_config instead of environment check
+
   role       = aws_iam_role.config_role[0].name
   policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
 }

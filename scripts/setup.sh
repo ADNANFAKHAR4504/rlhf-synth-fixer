@@ -11,9 +11,11 @@ TERRAFORM_VERSION=${TERRAFORM_VERSION:-1.12.2}
 PULUMI_VERSION=${PULUMI_VERSION:-3.109.0}
 PYTHON_VERSION=${PYTHON_VERSION:-3.12.11}
 PIPENV_VERSION=${PIPENV_VERSION:-2025.0.4}
+JAVA_VERSION=${JAVA_VERSION:-17}
 DOWNLOAD_ARTIFACTS=${DOWNLOAD_ARTIFACTS:-false}
 UPLOAD_ARTIFACTS=${UPLOAD_ARTIFACTS:-false}
 PLATFORM=${PLATFORM:-""}
+LANGUAGE=${LANGUAGE:-""}
 
 echo "Environment setup configuration:"
 echo "  Node.js version: $NODE_VERSION"
@@ -21,7 +23,9 @@ echo "  Terraform version: $TERRAFORM_VERSION"
 echo "  Pulumi version: $PULUMI_VERSION"
 echo "  Python version: $PYTHON_VERSION" 
 echo "  Pipenv version: $PIPENV_VERSION"
+echo "  Java version: $JAVA_VERSION"
 echo "  Platform: $PLATFORM"
+echo "  Language: $LANGUAGE"
 echo "  Download artifacts: $DOWNLOAD_ARTIFACTS"
 echo "  Upload artifacts: $UPLOAD_ARTIFACTS"
 
@@ -86,6 +90,48 @@ if [ "$PLATFORM" = "pulumi" ] || [ "$PLATFORM" = "" ]; then
   fi
 fi
 
+# Setup Go for CDKTF Go projects
+if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "go" ]; then
+  echo "📦 Verifying Go toolchain for CDKTF Go..."
+  if command -v go >/dev/null 2>&1; then
+    echo "Go: $(go version)"
+  else
+    echo "❌ Go not found in PATH (should be installed by setup-environment action)"
+    exit 1
+  fi
+
+  # Enforce single-module layout
+  if [ -f "lib/go.mod" ] || [ -f "lib/go.sum" ]; then
+    echo "⚠️ Found lib/go.mod or lib/go.sum. Removing to avoid multi-module conflicts."
+    rm -f lib/go.mod lib/go.sum || true
+  fi
+fi 
+
+# Check metadata to see if Java is needed
+if [ -f "metadata.json" ]; then
+  LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+  if [ "$LANGUAGE" = "java" ] || [ "$PLATFORM" = "pulumi" ] || [ "$PLATFORM" = "" ]; then
+    echo "📦 Setting up Java $JAVA_VERSION..."
+    if command -v java >/dev/null 2>&1; then
+      CURRENT_JAVA=$(java -version 2>&1 | head -n 1)
+      echo "Current Java version: $CURRENT_JAVA"
+    else
+      echo "❌ Java not found in PATH"
+      if [ "$LANGUAGE" = "java" ]; then
+        exit 1
+      fi
+    fi
+    
+    echo "📦 Setting up Gradle..."
+    if command -v gradle >/dev/null 2>&1; then
+      CURRENT_GRADLE=$(gradle --version 2>/dev/null | grep "Gradle" | head -n 1)
+      echo "Current Gradle version: $CURRENT_GRADLE"
+    else
+      echo "ℹ️ Gradle not found in PATH, using Gradle wrapper"
+    fi
+  fi
+fi
+
 # Configure AWS if credentials are available
 if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
   echo "🔧 AWS credentials found, configuring AWS..."
@@ -125,6 +171,8 @@ echo "=== Environment Verification ==="
 echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
 echo "Python: $(python --version 2>/dev/null || echo 'Not installed')"
 echo "Pipenv: $(pipenv --version 2>/dev/null || echo 'Not installed')"
+echo "Java: $(java -version 2>&1 | head -n 1 2>/dev/null || echo 'Not installed')"
+echo "Gradle: $(gradle --version 2>/dev/null | grep "Gradle" | head -n 1 || echo 'Not installed')"
 echo "Terraform: $(terraform version -json 2>/dev/null | jq -r '.terraform_version' || echo 'Not installed')"
 echo "Terraform location: $(which terraform 2>/dev/null || echo 'Not found in PATH')"
 echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"

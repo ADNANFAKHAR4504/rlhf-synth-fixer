@@ -4,7 +4,7 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 
   name                    = "${local.project_prefix}-${each.key}-db-credentials"
   description             = "Database credentials for ${each.key} environment"
-  recovery_window_in_days = 0  # Immediate deletion for dev/test environments
+  recovery_window_in_days = 0 # Immediate deletion for dev/test environments
 
   tags = merge(local.env_tags[each.key], {
     Name = "${local.project_prefix}-${each.key}-db-credentials"

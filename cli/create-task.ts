@@ -70,6 +70,8 @@ function getLanguageChoices(platform: string) {
       { name: 'TypeScript', value: 'ts' },
       { name: 'JavaScript', value: 'js' },
       { name: 'Python', value: 'py' },
+      { name: 'Java', value: 'java' },
+      { name: 'Go', value: 'go' },
     ];
   }
 
@@ -77,13 +79,18 @@ function getLanguageChoices(platform: string) {
     return [
       { name: 'TypeScript', value: 'ts' },
       { name: 'Python', value: 'py' },
+      { name: 'Go', value: 'go' },
+      { name: 'Java', value: 'java' },
     ];
   }
 
   if (platform === 'pulumi') {
     return [
       { name: 'TypeScript', value: 'ts' },
+      { name: 'JavaScript', value: 'js' },
       { name: 'Python', value: 'py' },
+      { name: 'Java', value: 'java' },
+      { name: 'Go', value: 'go' },
     ];
   }
   if (platform === 'tf') {

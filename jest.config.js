@@ -3,14 +3,9 @@ module.exports = {
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs'],
   preset: 'ts-jest/presets/default-esm',
-  globals: {
-    'ts-jest': {
-      useESM: true,
-    },
-  },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', { useESM: true }],
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
@@ -28,10 +23,10 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 30,
-      functions: 70,
-      lines: 70,
-      statements: 70,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
     },
   },
   testTimeout: 30000,

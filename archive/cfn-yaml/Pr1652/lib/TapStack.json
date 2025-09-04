@@ -1,0 +1,1708 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Highly secure cloud infrastructure (VPC, EC2, RDS, S3) with encryption, least privilege IAM, and conditional resource creation.",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Networking Configuration"
+                    },
+                    "Parameters": [
+                        "UseExistingVPC",
+                        "ExistingVPCId",
+                        "VPCCIDR"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Compute Configuration"
+                    },
+                    "Parameters": [
+                        "InstanceType",
+                        "SSHLocation"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "CreateDatabase",
+                        "DBInstanceClass",
+                        "DBUsername",
+                        "DBPassword"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Advanced / Existing Resources"
+                    },
+                    "Parameters": [
+                        "UseExistingKMSKey",
+                        "ExistingKMSKeyARN",
+                        "UseExistingEC2Role",
+                        "ExistingEC2RoleName",
+                        "CreateNATGateway",
+                        "CreateS3Bucket",
+                        "CreateEC2Instance"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "UseExistingVPC": {
+                    "default": "Use Existing VPC?"
+                },
+                "ExistingVPCId": {
+                    "default": "Existing VPC ID"
+                },
+                "VPCCIDR": {
+                    "default": "VPC CIDR (if creating new)"
+                },
+                "InstanceType": {
+                    "default": "EC2 Instance Type"
+                },
+                "SSHLocation": {
+                    "default": "SSH Access CIDR"
+                },
+                "DBInstanceClass": {
+                    "default": "RDS Instance Class"
+                },
+                "CreateDatabase": {
+                    "default": "Create Database?"
+                },
+                "DBUsername": {
+                    "default": "Database Admin Username"
+                },
+                "DBPassword": {
+                    "default": "Database Admin Password"
+                },
+                "UseExistingKMSKey": {
+                    "default": "Use Existing KMS Key?"
+                },
+                "ExistingKMSKeyARN": {
+                    "default": "Existing KMS Key ARN"
+                },
+                "UseExistingEC2Role": {
+                    "default": "Use Existing EC2 Role?"
+                },
+                "ExistingEC2RoleName": {
+                    "default": "Existing EC2 Role Name"
+                },
+                "CreateNATGateway": {
+                    "default": "Create NAT Gateway?"
+                },
+                "CreateS3Bucket": {
+                    "default": "Create S3 Bucket?"
+                },
+                "CreateEC2Instance": {
+                    "default": "Create EC2 Instance?"
+                }
+            }
+        },
+        "cfn-lint": {
+            "config": {
+                "ignore_checks": [
+                    "W1030",
+                    "W1011"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "UseExistingVPC": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to use an existing VPC. Select \"no\" to create a new one."
+        },
+        "ExistingVPCId": {
+            "Type": "String",
+            "Description": "Mandatory if UseExistingVPC is \"yes\". The ID of the existing VPC.",
+            "Default": ""
+        },
+        "VPCCIDR": {
+            "Type": "String",
+            "Description": "Mandatory if UseExistingVPC is \"no\". The CIDR block for the new VPC (e.g., 10.0.0.0/16).",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$",
+            "ConstraintDescription": "Must be a valid IPv4 CIDR block (e.g., 10.0.0.0/16)."
+        },
+        "InstanceType": {
+            "Type": "String",
+            "Default": "t3.micro",
+            "AllowedValues": [
+                "t3.micro",
+                "t3.small",
+                "t3.medium",
+                "m5.large"
+            ],
+            "Description": "EC2 instance type."
+        },
+        "SSHLocation": {
+            "Type": "String",
+            "Description": "The CIDR IP range that is permitted to SSH into the EC2 instances.",
+            "MinLength": 9,
+            "MaxLength": 18,
+            "Default": "0.0.0.0/0",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$",
+            "ConstraintDescription": "Must be a valid IP CIDR range of the form x.x.x.x/x."
+        },
+        "DBInstanceClass": {
+            "Type": "String",
+            "Default": "db.t3.micro",
+            "AllowedValues": [
+                "db.t3.micro",
+                "db.t3.small",
+                "db.m5.large"
+            ],
+            "Description": "The database instance type."
+        },
+        "DBUsername": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "Description": "Database administrator username.",
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+            "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters."
+        },
+        "DBPassword": {
+            "Type": "String",
+            "NoEcho": true,
+            "Default": "dummyPassword123!",
+            "Description": "Database administrator password (required only if CreateDatabase is \"yes\").",
+            "MinLength": 8,
+            "MaxLength": 41,
+            "AllowedPattern": "[a-zA-Z0-9!#$%&*+-/=?^_`{|}~@]+",
+            "ConstraintDescription": "Must be 8-41 characters long and contain only alphanumeric characters or the following symbols: !#$%&*+-/=?^_`{|}~@"
+        },
+        "UseExistingKMSKey": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to use an existing KMS Key for encryption. Select \"no\" to create a new one."
+        },
+        "ExistingKMSKeyARN": {
+            "Type": "String",
+            "Description": "Mandatory if UseExistingKMSKey is \"yes\". The ARN of the existing KMS Key.",
+            "Default": "",
+            "AllowedPattern": "^arn:aws:kms:us-west-2:\\d{12}:key/[a-fA-F0-9-]{36}$|^$",
+            "ConstraintDescription": "Must be a valid KMS Key ARN for the us-west-2 region."
+        },
+        "UseExistingEC2Role": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to use an existing IAM Role for EC2. Select \"no\" to create a new one."
+        },
+        "ExistingEC2RoleName": {
+            "Type": "String",
+            "Description": "Mandatory if UseExistingEC2Role is \"yes\". The name of the existing IAM Role.",
+            "Default": ""
+        },
+        "CreateDatabase": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to create a new RDS database. Select \"no\" to skip database creation."
+        },
+        "CreateNATGateway": {
+            "Type": "String",
+            "Default": "no",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to create a NAT Gateway (may hit service limits). Select \"no\" to use Internet Gateway only."
+        },
+        "CreateS3Bucket": {
+            "Type": "String",
+            "Default": "yes",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to create a new S3 bucket for application logs. Select \"no\" to skip bucket creation."
+        },
+        "CreateEC2Instance": {
+            "Type": "String",
+            "Default": "yes",
+            "AllowedValues": [
+                "yes",
+                "no"
+            ],
+            "Description": "Select \"yes\" to create an EC2 instance. Select \"no\" to skip instance creation."
+        }
+    },
+    "Mappings": {
+        "RegionMap": {
+            "us-west-2": {
+                "AMI": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}"
+            },
+            "us-east-1": {
+                "AMI": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2:1}}"
+            }
+        }
+    },
+    "Conditions": {
+        "CreateNewVPC": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingVPC"
+                },
+                "no"
+            ]
+        },
+        "CreateNewKMSKey": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingKMSKey"
+                },
+                "no"
+            ]
+        },
+        "CreateNewEC2Role": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseExistingEC2Role"
+                },
+                "no"
+            ]
+        },
+        "CreateNewDatabase": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateDatabase"
+                },
+                "yes"
+            ]
+        },
+        "CreateNATGateway": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateNATGateway"
+                },
+                "yes"
+            ]
+        },
+        "CreateNewS3Bucket": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateS3Bucket"
+                },
+                "yes"
+            ]
+        },
+        "CreateNewEC2Instance": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateEC2Instance"
+                },
+                "yes"
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VPCCIDR"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-igw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VPCGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VPCCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VPCCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VPCCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        3,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VPCCIDR"
+                                },
+                                6,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "NatGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "Condition": "CreateNATGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-eip"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "NatGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Condition": "CreateNATGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Fn::If": [
+                        "CreateNewVPC",
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-nat-gw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "CreateNewVPC",
+            "DependsOn": "VPCGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-private-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute": {
+            "Type": "AWS::EC2::Route",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Fn::If": [
+                        "CreateNATGateway",
+                        {
+                            "Ref": "AWS::NoValue"
+                        },
+                        {
+                            "Ref": "InternetGateway"
+                        }
+                    ]
+                },
+                "NatGatewayId": {
+                    "Fn::If": [
+                        "CreateNATGateway",
+                        {
+                            "Ref": "NatGateway"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "WebServerSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable HTTP, HTTPS, and restricted SSH access.",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateNewVPC",
+                        {
+                            "Ref": "VPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "SSHLocation"
+                        },
+                        "Description": "Allow SSH from a specific IP range"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow outbound HTTPS for updates and API calls"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow outbound HTTP as fallback"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-webserver-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Enable MySQL access exclusively from web servers.",
+                "VpcId": {
+                    "Fn::If": [
+                        "CreateNewVPC",
+                        {
+                            "Ref": "VPC"
+                        },
+                        {
+                            "Ref": "ExistingVPCId"
+                        }
+                    ]
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Fn::GetAtt": [
+                                "WebServerSecurityGroup",
+                                "GroupId"
+                            ]
+                        },
+                        "Description": "Allow MySQL from web servers"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-database-sg"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "KMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Condition": "CreateNewKMSKey",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "Description": "KMS key for encrypting RDS instances and EBS volumes.",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow access for Key Administrators",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "kms:Create*",
+                                "kms:Describe*",
+                                "kms:Enable*",
+                                "kms:List*",
+                                "kms:Put*",
+                                "kms:Update*",
+                                "kms:Revoke*",
+                                "kms:Disable*",
+                                "kms:Get*",
+                                "kms:Delete*",
+                                "kms:TagResource",
+                                "kms:UntagResource",
+                                "kms:ScheduleKeyDeletion",
+                                "kms:CancelKeyDeletion"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow use of the key for EC2 and RDS services",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com",
+                                    "rds.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-encryption-key"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "KMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Condition": "CreateNewKMSKey",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${AWS::StackName}-key"
+                },
+                "TargetKeyId": {
+                    "Ref": "KMSKey"
+                }
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "CreateNewEC2Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${AWS::StackName}-EC2-Policy"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${AWS::StackName}*:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-ec2-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Condition": "CreateNewEC2Role",
+            "Properties": {
+                "Path": "/",
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "EC2S3Policy": {
+            "Type": "AWS::IAM::Policy",
+            "Condition": "CreateNewS3Bucket",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${AWS::StackName}-EC2-S3-Policy"
+                },
+                "Roles": [
+                    {
+                        "Fn::If": [
+                            "CreateNewEC2Role",
+                            {
+                                "Ref": "EC2Role"
+                            },
+                            {
+                                "Ref": "ExistingEC2RoleName"
+                            }
+                        ]
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:PutObject"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${ApplicationLogsBucket}/*"
+                            },
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ApplicationLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Condition": "CreateNewS3Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "app-logs-${AWS::AccountId}-${AWS::Region}-tapstack"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Fn::Sub": "app-logs-${AWS::AccountId}-${AWS::Region}-tapstack"
+                    },
+                    "LogFilePrefix": "s3-access-logs/"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 365,
+                            "NoncurrentVersionExpirationInDays": 30
+                        },
+                        {
+                            "Id": "DeleteOldAccessLogs",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 30,
+                            "Prefix": "s3-access-logs/"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-app-logs-bucket"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-flow-logs-policy"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-flow-logs-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogs": {
+            "Type": "AWS::Logs::LogGroup",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/flowlogs/${AWS::StackName}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-flow-logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogsDelivery": {
+            "Type": "AWS::EC2::FlowLog",
+            "Condition": "CreateNewVPC",
+            "Properties": {
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
+                "LogDestination": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogs",
+                        "Arn"
+                    ]
+                },
+                "LogDestinationType": "cloud-watch-logs",
+                "ResourceId": {
+                    "Ref": "VPC"
+                },
+                "ResourceType": "VPC",
+                "TrafficType": "ALL",
+                "LogFormat": "${version} ${account-id} ${interface-id} ${srcaddr} ${dstaddr} ${srcport} ${dstport} ${protocol} ${packets} ${bytes} ${start} ${end} ${action} ${log-status}",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-vpc-flow-logs-delivery"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Condition": "CreateNewDatabase",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for private RDS instance",
+                "SubnetIds": [
+                    {
+                        "Fn::If": [
+                            "CreateNewVPC",
+                            {
+                                "Ref": "PrivateSubnet1"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "CreateNewVPC",
+                            {
+                                "Ref": "PrivateSubnet2"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-subnet-group"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "DBParameterGroup": {
+            "Type": "AWS::RDS::DBParameterGroup",
+            "Condition": "CreateNewDatabase",
+            "Properties": {
+                "Description": "Custom parameter group for secure MySQL configuration",
+                "Family": "mysql8.0",
+                "Parameters": {
+                    "character_set_server": "utf8mb4",
+                    "collation_server": "utf8mb4_unicode_ci",
+                    "require_secure_transport": "ON"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-db-params"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "Database": {
+            "Type": "AWS::RDS::DBInstance",
+            "Condition": "CreateNewDatabase",
+            "DeletionPolicy": "Snapshot",
+            "UpdateReplacePolicy": "Snapshot",
+            "Properties": {
+                "AllocatedStorage": 20,
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${AWS::StackName}-db"
+                },
+                "DBName": "applicationdb",
+                "DBParameterGroupName": {
+                    "Ref": "DBParameterGroup"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "MasterUsername": {
+                    "Ref": "DBUsername"
+                },
+                "MasterUserPassword": {
+                    "Ref": "DBPassword"
+                },
+                "BackupRetentionPeriod": 7,
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Fn::If": [
+                        "CreateNewKMSKey",
+                        {
+                            "Ref": "KMSKey"
+                        },
+                        {
+                            "Ref": "ExistingKMSKeyARN"
+                        }
+                    ]
+                },
+                "MultiAZ": false,
+                "PreferredBackupWindow": "02:00-03:00",
+                "PreferredMaintenanceWindow": "sun:03:00-sun:04:00",
+                "PubliclyAccessible": false,
+                "DeletionProtection": true,
+                "VPCSecurityGroups": [
+                    {
+                        "Fn::GetAtt": [
+                            "DatabaseSecurityGroup",
+                            "GroupId"
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-rds"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Condition": "CreateNewEC2Instance",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${AWS::StackName}-lt"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": {
+                        "Fn::FindInMap": [
+                            "RegionMap",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "AMI"
+                        ]
+                    },
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "IamInstanceProfile": {
+                        "Fn::If": [
+                            "CreateNewEC2Role",
+                            {
+                                "Arn": {
+                                    "Fn::GetAtt": [
+                                        "EC2InstanceProfile",
+                                        "Arn"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": {
+                                    "Ref": "ExistingEC2RoleName"
+                                }
+                            }
+                        ]
+                    },
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeSize": 20,
+                                "VolumeType": "gp3",
+                                "Encrypted": true,
+                                "KmsKeyId": {
+                                    "Fn::If": [
+                                        "CreateNewKMSKey",
+                                        {
+                                            "Ref": "KMSKey"
+                                        },
+                                        {
+                                            "Ref": "ExistingKMSKeyARN"
+                                        }
+                                    ]
+                                },
+                                "DeleteOnTermination": true
+                            }
+                        }
+                    ],
+                    "Monitoring": {
+                        "Enabled": true
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "WebServerSecurityGroup"
+                        }
+                    ],
+                    "MetadataOptions": {
+                        "HttpEndpoint": "enabled",
+                        "HttpTokens": "required",
+                        "HttpPutResponseHopLimit": 2
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${AWS::StackName}-web-server"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": "Production"
+                                }
+                            ]
+                        },
+                        {
+                            "ResourceType": "volume",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${AWS::StackName}-web-server-root-volume"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": "Production"
+                                }
+                            ]
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent httpd mysql\nsystemctl enable httpd\nsystemctl start httpd\necho \"<h1>Hello from Secure Infrastructure</h1>\" > /var/www/html/index.html\n"
+                    }
+                }
+            }
+        },
+        "WebInstance": {
+            "Type": "AWS::EC2::Instance",
+            "Condition": "CreateNewEC2Instance",
+            "Properties": {
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "SubnetId": {
+                    "Fn::If": [
+                        "CreateNewVPC",
+                        {
+                            "Ref": "PublicSubnet1"
+                        },
+                        {
+                            "Ref": "AWS::NoValue"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${AWS::StackName}-web-instance"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "The ID of the VPC used for the deployment.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewVPC",
+                    {
+                        "Ref": "VPC"
+                    },
+                    {
+                        "Ref": "ExistingVPCId"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
+                }
+            }
+        },
+        "PublicSubnets": {
+            "Description": "Comma-separated list of Public Subnet IDs.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewVPC",
+                    {
+                        "Fn::Join": [
+                            ",",
+                            [
+                                {
+                                    "Ref": "PublicSubnet1"
+                                },
+                                {
+                                    "Ref": "PublicSubnet2"
+                                }
+                            ]
+                        ]
+                    },
+                    "UseExistingVPC-NoNewSubnets"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PublicSubnets"
+                }
+            }
+        },
+        "PrivateSubnets": {
+            "Description": "Comma-separated list of Private Subnet IDs.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewVPC",
+                    {
+                        "Fn::Join": [
+                            ",",
+                            [
+                                {
+                                    "Ref": "PrivateSubnet1"
+                                },
+                                {
+                                    "Ref": "PrivateSubnet2"
+                                }
+                            ]
+                        ]
+                    },
+                    "UseExistingVPC-NoNewSubnets"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnets"
+                }
+            }
+        },
+        "WebServerSecurityGroupId": {
+            "Description": "The Security Group ID for the Web Servers.",
+            "Value": {
+                "Ref": "WebServerSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebServerSGId"
+                }
+            }
+        },
+        "DatabaseSecurityGroupId": {
+            "Description": "The Security Group ID for the Database.",
+            "Value": {
+                "Ref": "DatabaseSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseSGId"
+                }
+            }
+        },
+        "DatabaseEndpoint": {
+            "Description": "The connection endpoint for the database.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewDatabase",
+                    {
+                        "Fn::GetAtt": [
+                            "Database",
+                            "Endpoint.Address"
+                        ]
+                    },
+                    "No database created"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DatabaseEndpoint"
+                }
+            }
+        },
+        "ApplicationLogsBucketName": {
+            "Description": "The name of the S3 bucket for application logs.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewS3Bucket",
+                    {
+                        "Ref": "ApplicationLogsBucket"
+                    },
+                    "No bucket created"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApplicationLogsBucket"
+                }
+            }
+        },
+        "KMSKeyArn": {
+            "Description": "The ARN of the KMS Key used for encryption.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewKMSKey",
+                    {
+                        "Ref": "KMSKey"
+                    },
+                    {
+                        "Ref": "ExistingKMSKeyARN"
+                    }
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+                }
+            }
+        },
+        "WebInstanceId": {
+            "Description": "The ID of the launched EC2 Web Instance.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewEC2Instance",
+                    {
+                        "Ref": "WebInstance"
+                    },
+                    "No instance created"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebInstanceId"
+                }
+            }
+        },
+        "VPCFlowLogsLogGroupName": {
+            "Description": "The name of the VPC Flow Logs CloudWatch Log Group.",
+            "Value": {
+                "Fn::If": [
+                    "CreateNewVPC",
+                    {
+                        "Ref": "VPCFlowLogs"
+                    },
+                    "No VPC created"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCFlowLogsLogGroup"
+                }
+            }
+        }
+    }
+}

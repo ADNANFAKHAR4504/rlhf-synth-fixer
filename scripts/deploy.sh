@@ -41,7 +41,6 @@ if [ -n "$PULUMI_BACKEND_URL" ]; then
   echo "  Pulumi organization: $PULUMI_ORG"
 fi
 
-# Bootstrap using the dedicated script
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
@@ -50,15 +49,43 @@ echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
   npm run cdk:deploy
+
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
+
+    if [ -f "terraform.tfstate" ]; then
+      echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
+      rm -f terraform.tfstate
+    fi
+
+    if [ -d "cdktf.out" ]; then
+      echo "🗑️ Removing cdktf.out for clean CI run..."
+      rm -rf cdktf.out
+    fi
+
+    if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
+      echo "Running cdktf get to generate .gen..."
+      npm run cdktf:get || npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+    # Go modules are prepared during build; avoid cache-clearing and extra tidying here
+  fi
   npm run cdktf:deploy
+
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
   npm run cfn:deploy-yaml
+
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
   npm run cfn:deploy-json
+
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
   
@@ -67,25 +94,52 @@ elif [ "$PLATFORM" = "tf" ]; then
     exit 1
   fi
   
-  # Set up PR-specific state management
   STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
   echo "Using state key: $STATE_KEY"
   
-  # Change to lib directory where Terraform files are located
   cd lib
   
+
+  # Always remove any stale Terraform plan to avoid cross-run reuse
+  rm -f tfplan
+  
   # Check if plan file exists
+
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
-    npm run tf:deploy
+    # Try to deploy with the plan file
+    if ! npm run tf:deploy; then
+      echo "⚠️ Deployment with plan file failed, checking for state lock issues..."
+      
+      # Extract lock ID from error output if present
+      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
+      
+      if [ -n "$LOCK_ID" ]; then
+        echo "🔓 Detected stuck lock ID: $LOCK_ID. Attempting to force unlock..."
+        terraform force-unlock -force "$LOCK_ID" || echo "Force unlock failed"
+        echo "🔄 Retrying deployment after unlock..."
+        npm run tf:deploy || echo "Deployment still failed after unlock attempt"
+      else
+        echo "❌ Deployment failed but no lock ID detected. Manual intervention may be required."
+      fi
+    fi
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-    # Create a new plan and deploy
     terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
-    terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan || terraform apply -auto-approve -lock=true -lock-timeout=300s || echo "Deployment failed"
+    
+    # Try direct apply with lock timeout, and handle lock issues
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan; then
+      echo "⚠️ Direct apply with plan failed, trying without plan..."
+      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s; then
+        echo "❌ All deployment attempts failed. Check for state lock issues."
+        # List any potential locks
+        terraform show -json 2>&1 | grep -i lock || echo "No lock information available"
+      fi
+    fi
   fi
   
   cd ..
+
 elif [ "$PLATFORM" = "pulumi" ]; then
   echo "✅ Pulumi project detected, running Pulumi deploy..."
   
@@ -96,13 +150,27 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   
   echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
   echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
-  export PYTHONPATH=.:bin
-  pipenv run pulumi-create-stack
-  echo "Deploying infrastructure ..."
-  pipenv run pulumi-deploy
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Go Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+    cd lib
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    echo "Deploying infrastructure ..."
+    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    cd ..
+  else
+    echo "🔧 Python Pulumi project detected"
+    export PYTHONPATH=.:bin
+    pipenv run pulumi-create-stack
+    echo "Deploying infrastructure ..."
+    pipenv run pulumi-deploy
+  fi
+
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python, pulumi+java"
   exit 1
 fi
 
@@ -111,4 +179,3 @@ echo "✅ Deploy completed successfully"
 # Get outputs using the dedicated script
 echo "📊 Collecting deployment outputs..."
 ./scripts/get-outputs.sh
-

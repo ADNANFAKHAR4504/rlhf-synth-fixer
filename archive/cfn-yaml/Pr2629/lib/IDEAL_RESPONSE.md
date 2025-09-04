@@ -1,0 +1,604 @@
+A secure, from-scratch baseline that stands up:
+
+VPC & Subnets: One VPC with two public subnets and two private tiers (app/db) across two AZs discovered via Fn::GetAZs. Public route table with default route to IGW.
+
+IPSec VPN for management: Virtual Private Gateway (VGW) attached to the VPC, Customer Gateway (CGW) (param: public IP + BGP ASN), VPN Connection (static routes), and a VPN Connection Route for the OnPremCidr.
+
+Strict SSH posture: A management security group that allows SSH (22) only from OnPremCidr. The app security group does not allow SSH.
+
+CloudTrail (toggle): When enabled, creates a multi-region trail that writes to an S3 log bucket protected by SSE-KMS (CMK with rotation), denies insecure transport, and (optionally) denies access outside your AWS Organization if OrganizationId is set. The trail also ships to CloudWatch Logs via a dedicated IAM role with only the necessary logs:* permissions.
+
+ALB + WAF: An internet-facing Application Load Balancer in the public subnets with a port 80 listener that redirects all traffic to HTTPS (301). A WAFv2 WebACL (REGIONAL) is attached with AWS Managed Common, IP Reputation, and SQLi rule groups. (HTTPS listener and ACM certificate are intentionally out of scope.)
+
+Optional Shield Advanced: If toggled on, attaches AWS Shield Advanced protection to the ALB.
+
+Cross-account read-only role (MFA-gated): An optional IAM role that an external account can assume only with MFA; scoped to read-only describe/list/get permissions across EC2/ELB/S3/CloudTrail/IAM/CloudWatch Logs.
+
+Multi-account awareness: Optional Organizations guard for the S3 log bucket using aws:PrincipalOrgID.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  TapStack - Secure baseline: VPC, ALB with HTTP->HTTPS redirect + WAF, optional
+  org-guarded CloudTrail with SSE-KMS, MFA-gated cross-account role, and IPSec VPN
+  for management access. NOTE: No SSL certificate or RDS resources are created.
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR block for the new VPC
+  OnPremCidr:
+    Type: String
+    Default: 192.168.0.0/16
+    Description: On-premises CIDR reachable via IPSec VPN. Only this CIDR is allowed to SSH to management SG.
+  CustomerGatewayIp:
+    Type: String
+    Default: 203.0.113.1
+    Description: Public, static IP of your on-premises Customer Gateway device (example IP shown).
+  CustomerGatewayBgpAsn:
+    Type: Number
+    Default: 65000
+    Description: BGP ASN for your Customer Gateway.
+  OrganizationId:
+    Type: String
+    Default: ""
+    Description: AWS Organizations ID (e.g., o-abc123). If set, S3 bucket denies access outside this Org.
+  ExternalAccountId:
+    Type: String
+    Default: ""
+    Description: External AWS Account ID allowed to assume the cross-account role (MFA required).
+  EnableShieldAdvanced:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: Set to 'true' to create Shield Advanced protections (requires paid subscription).
+  EnableCloudTrail:
+    Type: String
+    AllowedValues: ["true", "false"]
+    Default: "false"
+    Description: Set to 'true' to create CloudTrail (+ KMS, S3 log bucket, CloudWatch Logs integration).
+
+Conditions:
+  UseOrganizationGuard: !Not [!Equals [!Ref OrganizationId, ""]]
+  CreateShield: !Equals [!Ref EnableShieldAdvanced, "true"]
+  AllowCrossAccountRole: !Not [!Equals [!Ref ExternalAccountId, ""]]
+  CreateTrail: !Equals [!Ref EnableCloudTrail, "true"]
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vpc"
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-igw"
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/20
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-a"
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.16.0/20
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-b"
+
+  PrivateAppSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.32.0/20
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-app-a"
+
+  PrivateAppSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.48.0/20
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-app-b"
+
+  PrivateDbSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.64.0/20
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-db-a"
+
+  PrivateDbSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.80.0/20
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-db-b"
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-public-rt"
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  ManagementSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Restrict SSH to on-prem via IPSec VPN only
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref OnPremCidr
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-mgmt-sg"
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: App SG - no SSH allowed
+      SecurityGroupIngress: []
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-app-sg"
+
+  VirtualPrivateGateway:
+    Type: AWS::EC2::VPNGateway
+    Properties:
+      Type: ipsec.1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vgw"
+
+  VPCVGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      VpnGatewayId: !Ref VirtualPrivateGateway
+
+  CustomerGateway:
+    Type: AWS::EC2::CustomerGateway
+    Properties:
+      Type: ipsec.1
+      BgpAsn: !Ref CustomerGatewayBgpAsn
+      IpAddress: !Ref CustomerGatewayIp
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-cgw"
+
+  VPNConnection:
+    Type: AWS::EC2::VPNConnection
+    Properties:
+      Type: ipsec.1
+      StaticRoutesOnly: true
+      CustomerGatewayId: !Ref CustomerGateway
+      VpnGatewayId: !Ref VirtualPrivateGateway
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vpn"
+
+  VPNRouteToOnPremA:
+    Type: AWS::EC2::VPNConnectionRoute
+    Properties:
+      DestinationCidrBlock: !Ref OnPremCidr
+      VpnConnectionId: !Ref VPNConnection
+
+  # ---------------------------
+  # Optional CloudTrail + KMS/S3/CWL (CreateTrail)
+  # ---------------------------
+
+  KmsKeyS3CloudTrail:
+    Condition: CreateTrail
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS CMK for S3 (incl. CloudTrail logs) SSE-KMS
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccountFullAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action: "kms:*"
+            Resource: "*"
+          - Sid: AllowCloudTrailUseOfTheKey
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:Encrypt
+            Resource: "*"
+            Condition:
+              StringLike:
+                kms:EncryptionContext:aws:cloudtrail:arn: !Sub "arn:aws:cloudtrail:*:${AWS::AccountId}:trail/*"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-s3-ct-kms"
+
+  KmsAliasS3CloudTrail:
+    Condition: CreateTrail
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${AWS::StackName}-s3-cloudtrail"
+      TargetKeyId: !Ref KmsKeyS3CloudTrail
+
+  TrailBucket:
+    Condition: CreateTrail
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref KmsKeyS3CloudTrail
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-trail-bucket"
+
+  TrailBucketPolicy:
+    Condition: CreateTrail
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref TrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !Sub "arn:aws:s3:::${TrailBucket}"
+              - !Sub "arn:aws:s3:::${TrailBucket}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+          - !If
+            - UseOrganizationGuard
+            - Sid: DenyOutsideOrg
+              Effect: Deny
+              Principal: "*"
+              Action: "s3:*"
+              Resource:
+                - !Sub "arn:aws:s3:::${TrailBucket}"
+                - !Sub "arn:aws:s3:::${TrailBucket}/*"
+              Condition:
+                StringNotEquals:
+                  aws:PrincipalOrgID: !Ref OrganizationId
+            - !Ref "AWS::NoValue"
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${TrailBucket}"
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${TrailBucket}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  CloudTrailLogsGroup:
+    Condition: CreateTrail
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 3653
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-ct-logs"
+
+  CloudTrailCWLRole:
+    Condition: CreateTrail
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailToCWL
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # FIX: allow create log group & describes on *
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Resource: "*"
+              # Allow stream/events on the target log group streams
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${CloudTrailLogsGroup.Arn}:log-stream:*"
+
+  Trail:
+    Condition: CreateTrail
+    Type: AWS::CloudTrail::Trail
+    DependsOn: TrailBucketPolicy
+    Properties:
+      S3BucketName: !Ref TrailBucket
+      IsLogging: true
+      IsMultiRegionTrail: true
+      IncludeGlobalServiceEvents: true
+      EnableLogFileValidation: true
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogsGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt CloudTrailCWLRole.Arn
+      KMSKeyId: !Ref KmsKeyS3CloudTrail
+      EventSelectors:
+        - ReadWriteType: All
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-trail"
+
+  # ---------------------------
+  # ALB + WAF
+  # ---------------------------
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "ALB SG: allow 80 for redirect only"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-alb-sg"
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${AWS::StackName}-alb"
+      Scheme: internet-facing
+      Subnets: [!Ref PublicSubnetA, !Ref PublicSubnetB]
+      SecurityGroups: [!Ref ALBSecurityGroup]
+      Type: application
+      IpAddressType: ipv4
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: "true"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-alb"
+
+  ALBHttpListenerRedirectToHttps:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !GetAtt ALB.LoadBalancerArn
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: '443'
+            StatusCode: HTTP_301
+
+  WAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "${AWS::StackName}-webacl"
+      Scope: REGIONAL
+      DefaultAction: { Allow: {} }
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub "${AWS::StackName}-waf"
+        SampledRequestsEnabled: true
+      Rules:
+        - Name: AWSManagedCommonRules
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction: { None: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedCommonRules
+        - Name: AWSManagedAmazonIpReputationList
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          OverrideAction: { None: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedAmazonIpReputationList
+        - Name: AWSManagedSQLi
+          Priority: 3
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          OverrideAction: { None: {} }
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedSQLi
+
+  WAFWebACLAssociationALB:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !GetAtt ALB.LoadBalancerArn
+      WebACLArn: !GetAtt WAFWebACL.Arn
+
+  ShieldProtectionALB:
+    Condition: CreateShield
+    Type: AWS::Shield::Protection
+    Properties:
+      Name: !Sub "${AWS::StackName}-alb-protection"
+      ResourceArn: !GetAtt ALB.LoadBalancerArn
+
+  # ---------------------------
+  # Cross-account read-only role with MFA (optional)
+  # ---------------------------
+
+  CrossAccountAuditRole:
+    Condition: AllowCrossAccountRole
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-cross-acct-audit"
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowExternalAccountWithMFA
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${ExternalAccountId}:root"
+            Action: sts:AssumeRole
+            Condition:
+              Bool:
+                aws:MultiFactorAuthPresent: "true"
+      Policies:
+        - PolicyName: LimitedReadOnlyAudit
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - elasticloadbalancing:Describe*
+                  - s3:Get*
+                  - s3:List*
+                  - cloudtrail:DescribeTrails
+                  - cloudtrail:GetTrailStatus
+                  - cloudtrail:ListTrails
+                  - cloudtrail:LookupEvents
+                  - iam:Get*
+                  - iam:List*
+                  - logs:Describe*
+                  - logs:Get*
+                Resource: "*"
+      Tags:
+        - Key: Purpose
+          Value: CrossAccountAuditWithMFA
+
+Outputs:
+  VpcId:
+    Value: !Ref VPC
+  PublicSubnets:
+    Value: !Join [",", [!Ref PublicSubnetA, !Ref PublicSubnetB]]
+  AppSubnets:
+    Value: !Join [",", [!Ref PrivateAppSubnetA, !Ref PrivateAppSubnetB]]
+  DbSubnets:
+    Value: !Join [",", [!Ref PrivateDbSubnetA, !Ref PrivateDbSubnetB]]
+  TrailBucketName:
+    Condition: CreateTrail
+    Value: !Ref TrailBucket
+  CloudTrailName:
+    Condition: CreateTrail
+    Value: !Ref Trail
+  CloudTrailArn:
+    Condition: CreateTrail
+    Value: !Sub "arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${Trail}"
+  CrossAccountRoleArn:
+    Condition: AllowCrossAccountRole
+    Value: !GetAtt CrossAccountAuditRole.Arn
+  ALBArn:
+    Value: !GetAtt ALB.LoadBalancerArn
+  ALBRedirectListenerArn:
+    Value: !GetAtt ALBHttpListenerRedirectToHttps.ListenerArn
+  WAFArn:
+    Value: !GetAtt WAFWebACL.Arn
+```

@@ -6,7 +6,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  tags = merge(var.common_tags, { Name = "${var.project}-vpc" })
+  tags                 = merge(var.common_tags, { Name = "${var.project}-vpc" })
 }
 
 resource "aws_internet_gateway" "main" {
@@ -19,19 +19,19 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidr
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
-  tags = merge(var.common_tags, { Name = "${var.project}-public-subnet", Type = "Public" })
+  tags                    = merge(var.common_tags, { Name = "${var.project}-public-subnet", Type = "Public" })
 }
 
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidr
   availability_zone = data.aws_availability_zones.available.names[1]
-  tags = merge(var.common_tags, { Name = "${var.project}-private-subnet", Type = "Private" })
+  tags              = merge(var.common_tags, { Name = "${var.project}-private-subnet", Type = "Private" })
 }
 
 resource "aws_eip" "nat" {
-  domain = "vpc"
-  tags   = merge(var.common_tags, { Name = "${var.project}-nat-eip" })
+  domain     = "vpc"
+  tags       = merge(var.common_tags, { Name = "${var.project}-nat-eip" })
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -61,7 +61,7 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.main.id
   }
 
- tags = merge(var.common_tags, { Name = "${var.project}-private-rt" })
+  tags = merge(var.common_tags, { Name = "${var.project}-private-rt" })
 
 }
 

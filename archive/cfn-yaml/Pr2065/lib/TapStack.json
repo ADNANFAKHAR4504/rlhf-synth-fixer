@@ -1,0 +1,786 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Serverless Task Management Application - Complete Infrastructure",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    }
+  },
+  "Resources": {
+    "TasksTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TasksTable-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "taskId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "status",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "createdAt",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "taskId",
+            "KeyType": "HASH"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "UserStatusIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "status",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          },
+          {
+            "IndexName": "UserCreatedAtIndex",
+            "KeySchema": [
+              {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "createdAt",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS"
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Database"
+          }
+        ]
+      }
+    },
+    "TaskAttachmentsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "task-attachments-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteIncompleteMultipartUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 1
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Storage"
+          }
+        ]
+      }
+    },
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "TaskMgmtLambdaRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "DynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "TasksTable",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${TasksTable.Arn}/index/*"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "S3Access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${TaskAttachmentsBucket.Arn}/*"
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "TaskAttachmentsBucket",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Security"
+          }
+        ]
+      }
+    },
+    "TaskManagementFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "TaskManagement-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 30,
+        "MemorySize": 512,
+        "Environment": {
+          "Variables": {
+            "TASKS_TABLE_NAME": {
+              "Ref": "TasksTable"
+            },
+            "ATTACHMENTS_BUCKET_NAME": {
+              "Ref": "TaskAttachmentsBucket"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk');\nconst crypto = require('crypto');\n\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\nconst s3 = new AWS.S3();\n\nconst TASKS_TABLE = process.env.TASKS_TABLE_NAME;\nconst ATTACHMENTS_BUCKET = process.env.ATTACHMENTS_BUCKET_NAME;\n\n// UUID v4 implementation using crypto\nfunction uuidv4() {\n    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {\n        const r = crypto.randomBytes(1)[0] % 16 | 0;\n        const v = c === 'x' ? r : (r & 0x3 | 0x8);\n        return v.toString(16);\n    });\n}\n\nexports.handler = async (event, context) => {\n    console.log('Event:', JSON.stringify(event, null, 2));\n    \n    try {\n        // Handle different event formats (API Gateway vs Function URL)\n        const httpMethod = event.httpMethod || \n                          event.requestContext?.http?.method || \n                          event.requestContext?.httpMethod;\n        \n        const pathParameters = event.pathParameters || {};\n        \n        // Safely parse body\n        let body = {};\n        if (event.body) {\n            try {\n                body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;\n            } catch (parseError) {\n                console.error('Body parse error:', parseError);\n                return createResponse(400, { error: 'Invalid JSON in request body' });\n            }\n        }\n        \n        const queryStringParameters = event.queryStringParameters || {};\n        \n        console.log('Parsed request:', { httpMethod, pathParameters, body, queryStringParameters });\n        \n        let result;\n        switch (httpMethod) {\n            case 'POST':\n                result = await createTask(body);\n                break;\n            case 'GET':\n                if (pathParameters.taskId) {\n                    result = await getTask(pathParameters.taskId);\n                } else {\n                    result = await listTasks(queryStringParameters);\n                }\n                break;\n            case 'PUT':\n                if (!pathParameters.taskId) {\n                    throw new Error('taskId is required for update operations');\n                }\n                result = await updateTask(pathParameters.taskId, body);\n                break;\n            case 'DELETE':\n                if (!pathParameters.taskId) {\n                    throw new Error('taskId is required for delete operations');\n                }\n                result = await deleteTask(pathParameters.taskId);\n                break;\n            case 'OPTIONS':\n                // Handle CORS preflight\n                return createResponse(200, {});\n            default:\n                throw new Error(`Unsupported method: ${httpMethod}`);\n        }\n        \n        return createResponse(200, result);\n        \n    } catch (error) {\n        console.error('Handler error:', error);\n        return createResponse(500, { error: error.message });\n    }\n};\n\nfunction createResponse(statusCode, body) {\n    return {\n        statusCode,\n        headers: {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*',\n            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',\n            'Access-Control-Allow-Headers': 'Content-Type, Authorization'\n        },\n        body: JSON.stringify(body)\n    };\n}\n\nasync function createTask(taskData) {\n    // Validate required fields\n    if (!taskData.userId) {\n        throw new Error('userId is required');\n    }\n    if (!taskData.title) {\n        throw new Error('title is required');\n    }\n    \n    const taskId = uuidv4();\n    const now = new Date().toISOString();\n    \n    const task = {\n        taskId,\n        userId: taskData.userId,\n        title: taskData.title,\n        description: taskData.description || '',\n        status: taskData.status || 'pending',\n        priority: taskData.priority || 'medium',\n        dueDate: taskData.dueDate || null,\n        createdAt: now,\n        updatedAt: now\n    };\n    \n    console.log('Creating task:', task);\n    \n    try {\n        await dynamodb.put({\n            TableName: TASKS_TABLE,\n            Item: task\n        }).promise();\n        \n        console.log('Task created successfully');\n        return task;\n    } catch (dbError) {\n        console.error('DynamoDB error:', dbError);\n        throw new Error(`Failed to create task: ${dbError.message}`);\n    }\n}\n\nasync function getTask(taskId) {\n    if (!taskId) {\n        throw new Error('taskId is required');\n    }\n    \n    try {\n        const result = await dynamodb.get({\n            TableName: TASKS_TABLE,\n            Key: { taskId }\n        }).promise();\n        \n        if (!result.Item) {\n            throw new Error('Task not found');\n        }\n        \n        return result.Item;\n    } catch (dbError) {\n        console.error('DynamoDB error:', dbError);\n        if (dbError.message === 'Task not found') {\n            throw dbError;\n        }\n        throw new Error(`Failed to get task: ${dbError.message}`);\n    }\n}\n\nasync function listTasks(queryParams) {\n    const { userId, status, limit = '20' } = queryParams;\n    \n    if (!userId) {\n        throw new Error('userId is required');\n    }\n    \n    const parsedLimit = parseInt(limit);\n    if (isNaN(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {\n        throw new Error('limit must be a number between 1 and 100');\n    }\n    \n    try {\n        const params = {\n            TableName: TASKS_TABLE,\n            IndexName: status ? 'UserStatusIndex' : 'UserCreatedAtIndex',\n            KeyConditionExpression: status \n                ? 'userId = :userId AND #status = :status'\n                : 'userId = :userId',\n            ExpressionAttributeValues: {\n                ':userId': userId\n            },\n            Limit: parsedLimit,\n            ScanIndexForward: false\n        };\n        \n        if (status) {\n            params.ExpressionAttributeValues[':status'] = status;\n            params.ExpressionAttributeNames = { '#status': 'status' };\n        }\n        \n        console.log('Query params:', params);\n        \n        const result = await dynamodb.query(params).promise();\n        \n        return {\n            tasks: result.Items || [],\n            count: result.Count || 0,\n            lastEvaluatedKey: result.LastEvaluatedKey\n        };\n    } catch (dbError) {\n        console.error('DynamoDB error:', dbError);\n        throw new Error(`Failed to list tasks: ${dbError.message}`);\n    }\n}\n\nasync function updateTask(taskId, updateData) {\n    if (!taskId) {\n        throw new Error('taskId is required');\n    }\n    \n    if (!updateData || Object.keys(updateData).length === 0) {\n        throw new Error('Update data is required');\n    }\n    \n    const now = new Date().toISOString();\n    \n    const updateExpression = [];\n    const expressionAttributeNames = {};\n    const expressionAttributeValues = {};\n    \n    // Filter out fields that shouldn't be updated\n    const allowedFields = ['title', 'description', 'status', 'priority', 'dueDate'];\n    const fieldsToUpdate = Object.keys(updateData).filter(key => allowedFields.includes(key));\n    \n    if (fieldsToUpdate.length === 0) {\n        throw new Error('No valid fields to update');\n    }\n    \n    fieldsToUpdate.forEach(key => {\n        updateExpression.push(`#${key} = :${key}`);\n        expressionAttributeNames[`#${key}`] = key;\n        expressionAttributeValues[`:${key}`] = updateData[key];\n    });\n    \n    updateExpression.push('#updatedAt = :updatedAt');\n    expressionAttributeNames['#updatedAt'] = 'updatedAt';\n    expressionAttributeValues[':updatedAt'] = now;\n    \n    try {\n        const result = await dynamodb.update({\n            TableName: TASKS_TABLE,\n            Key: { taskId },\n            UpdateExpression: `SET ${updateExpression.join(', ')}`,\n            ExpressionAttributeNames: expressionAttributeNames,\n            ExpressionAttributeValues: expressionAttributeValues,\n            ReturnValues: 'ALL_NEW',\n            ConditionExpression: 'attribute_exists(taskId)'\n        }).promise();\n        \n        return result.Attributes;\n    } catch (dbError) {\n        console.error('DynamoDB error:', dbError);\n        if (dbError.code === 'ConditionalCheckFailedException') {\n            throw new Error('Task not found');\n        }\n        throw new Error(`Failed to update task: ${dbError.message}`);\n    }\n}\n\nasync function deleteTask(taskId) {\n    if (!taskId) {\n        throw new Error('taskId is required');\n    }\n    \n    try {\n        await dynamodb.delete({\n            TableName: TASKS_TABLE,\n            Key: { taskId },\n            ConditionExpression: 'attribute_exists(taskId)'\n        }).promise();\n        \n        return { message: 'Task deleted successfully' };\n    } catch (dbError) {\n        console.error('DynamoDB error:', dbError);\n        if (dbError.code === 'ConditionalCheckFailedException') {\n            throw new Error('Task not found');\n        }\n        throw new Error(`Failed to delete task: ${dbError.message}`);\n    }\n}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Compute"
+          }
+        ]
+      }
+    },
+    "TaskStreamingFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "TaskStreaming-${EnvironmentSuffix}"
+        },
+        "Runtime": "nodejs20.x",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Timeout": 300,
+        "MemorySize": 1024,
+        "Environment": {
+          "Variables": {
+            "TASKS_TABLE_NAME": {
+              "Ref": "TasksTable"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk');\n\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\nconst TASKS_TABLE = process.env.TASKS_TABLE_NAME;\n\nexports.handler = async (event, context, responseStream) => {\n    console.log('Streaming event:', JSON.stringify(event, null, 2));\n    \n    const queryParams = event.queryStringParameters || {};\n    const { userId, batchSize = '100' } = queryParams;\n    \n    if (!userId) {\n        const errorResponse = {\n            statusCode: 400,\n            body: JSON.stringify({ error: 'userId is required' })\n        };\n        responseStream.write(JSON.stringify(errorResponse));\n        responseStream.end();\n        return;\n    }\n    \n    try {\n        await streamTasks(userId, parseInt(batchSize), responseStream);\n    } catch (error) {\n        console.error('Streaming error:', error);\n        const errorResponse = {\n            statusCode: 500,\n            body: JSON.stringify({ error: error.message })\n        };\n        responseStream.write(JSON.stringify(errorResponse));\n    } finally {\n        responseStream.end();\n    }\n};\n\nasync function streamTasks(userId, batchSize, responseStream) {\n    let lastEvaluatedKey = null;\n    let isFirstBatch = true;\n    \n    responseStream.write('{\"tasks\":[');\n    \n    do {\n        const params = {\n            TableName: TASKS_TABLE,\n            IndexName: 'UserCreatedAtIndex',\n            KeyConditionExpression: 'userId = :userId',\n            ExpressionAttributeValues: {\n                ':userId': userId\n            },\n            Limit: batchSize,\n            ScanIndexForward: false\n        };\n        \n        if (lastEvaluatedKey) {\n            params.ExclusiveStartKey = lastEvaluatedKey;\n        }\n        \n        const result = await dynamodb.query(params).promise();\n        \n        for (let i = 0; i < result.Items.length; i++) {\n            if (!isFirstBatch || i > 0) {\n                responseStream.write(',');\n            }\n            responseStream.write(JSON.stringify(result.Items[i]));\n            isFirstBatch = false;\n        }\n        \n        lastEvaluatedKey = result.LastEvaluatedKey;\n        \n    } while (lastEvaluatedKey);\n    \n    responseStream.write(']}');\n}\n"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Compute"
+          }
+        ]
+      }
+    },
+    "TaskManagementFunctionUrl": {
+      "Type": "AWS::Lambda::Url",
+      "Properties": {
+        "TargetFunctionArn": {
+          "Fn::GetAtt": [
+            "TaskManagementFunction",
+            "Arn"
+          ]
+        },
+        "AuthType": "NONE",
+        "InvokeMode": "BUFFERED",
+        "Cors": {
+          "AllowCredentials": false,
+          "AllowMethods": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "AllowOrigins": [
+            "*"
+          ],
+          "AllowHeaders": [
+            "Content-Type",
+            "Authorization"
+          ],
+          "MaxAge": 300
+        }
+      }
+    },
+    "TaskStreamingFunctionUrl": {
+      "Type": "AWS::Lambda::Url",
+      "Properties": {
+        "TargetFunctionArn": {
+          "Fn::GetAtt": [
+            "TaskStreamingFunction",
+            "Arn"
+          ]
+        },
+        "AuthType": "NONE",
+        "InvokeMode": "RESPONSE_STREAM",
+        "Cors": {
+          "AllowCredentials": false,
+          "AllowMethods": [
+            "GET"
+          ],
+          "AllowOrigins": [
+            "*"
+          ],
+          "AllowHeaders": [
+            "Content-Type"
+          ],
+          "MaxAge": 300
+        }
+      }
+    },
+    "TaskManagementFunctionUrlPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TaskManagementFunction"
+        },
+        "Action": "lambda:InvokeFunctionUrl",
+        "Principal": "*",
+        "FunctionUrlAuthType": "NONE"
+      }
+    },
+    "TaskStreamingFunctionUrlPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TaskStreamingFunction"
+        },
+        "Action": "lambda:InvokeFunctionUrl",
+        "Principal": "*",
+        "FunctionUrlAuthType": "NONE"
+      }
+    },
+    "TaskManagementApi": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "TaskManagementApi-${EnvironmentSuffix}"
+        },
+        "ProtocolType": "HTTP",
+        "Description": "Task Management API Gateway",
+        "CorsConfiguration": {
+          "AllowCredentials": false,
+          "AllowMethods": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE",
+            "OPTIONS"
+          ],
+          "AllowOrigins": [
+            "*"
+          ],
+          "AllowHeaders": [
+            "Content-Type",
+            "Authorization"
+          ],
+          "MaxAge": 300
+        },
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Application": "TaskManagement",
+          "Component": "API"
+        }
+      }
+    },
+    "TaskManagementIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "TaskManagementApi"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaskManagementFunction.Arn}/invocations"
+        },
+        "PayloadFormatVersion": "2.0",
+        "TimeoutInMillis": 30000
+      }
+    },
+    "TasksRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "TaskManagementApi"
+        },
+        "RouteKey": "ANY /tasks",
+        "Target": {
+          "Fn::Sub": "integrations/${TaskManagementIntegration}"
+        }
+      }
+    },
+    "TaskByIdRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "TaskManagementApi"
+        },
+        "RouteKey": "ANY /tasks/{taskId}",
+        "Target": {
+          "Fn::Sub": "integrations/${TaskManagementIntegration}"
+        }
+      }
+    },
+    "TaskManagementStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "TaskManagementApi"
+        },
+        "StageName": {
+          "Ref": "EnvironmentSuffix"
+        },
+        "Description": {
+          "Fn::Sub": "Task Management API Stage - ${EnvironmentSuffix}"
+        },
+        "AutoDeploy": true,
+        "AccessLogSettings": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "ApiGatewayLogGroup",
+              "Arn"
+            ]
+          },
+          "Format": "{\"requestId\":\"$context.requestId\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"path\":\"$context.path\",\"status\":\"$context.status\",\"error.message\":\"$context.error.message\"}"
+        },
+        "Tags": {
+          "Environment": {
+            "Ref": "EnvironmentSuffix"
+          },
+          "Application": "TaskManagement",
+          "Component": "API"
+        }
+      }
+    },
+    "ApiGatewayInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "TaskManagementFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TaskManagementApi}/*/*/*"
+        }
+      }
+    },
+    "TaskManagementLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/TaskManagement-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 14,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Logging"
+          }
+        ]
+      }
+    },
+    "TaskStreamingLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/TaskStreaming-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 14,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Logging"
+          }
+        ]
+      }
+    },
+    "ApiGatewayLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/apigateway/TaskManagementApi-${EnvironmentSuffix}"
+        },
+        "RetentionInDays": 14,
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Logging"
+          }
+        ]
+      }
+    },
+    "TaskManagementErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "TaskManagement-Errors-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Task Management Lambda Function Errors",
+        "MetricName": "Errors",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TaskManagementFunction"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Monitoring"
+          }
+        ]
+      }
+    },
+    "TaskManagementDurationAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "TaskManagement-Duration-${EnvironmentSuffix}"
+        },
+        "AlarmDescription": "Task Management Lambda Function High Duration",
+        "MetricName": "Duration",
+        "Namespace": "AWS/Lambda",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 25000,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "TaskManagementFunction"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Application",
+            "Value": "TaskManagement"
+          },
+          {
+            "Key": "Component",
+            "Value": "Monitoring"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ApiGatewayUrl": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${TaskManagementApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiUrl"
+        }
+      }
+    },
+    "TaskManagementFunctionUrl": {
+      "Description": "Lambda Function URL for Task Management",
+      "Value": {
+        "Fn::GetAtt": [
+          "TaskManagementFunctionUrl",
+          "FunctionUrl"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TaskFunctionUrl"
+        }
+      }
+    },
+    "TaskStreamingFunctionUrl": {
+      "Description": "Lambda Function URL for Task Streaming",
+      "Value": {
+        "Fn::GetAtt": [
+          "TaskStreamingFunctionUrl",
+          "FunctionUrl"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StreamingFunctionUrl"
+        }
+      }
+    },
+    "TasksTableName": {
+      "Description": "DynamoDB Tasks table name",
+      "Value": {
+        "Ref": "TasksTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TasksTableName"
+        }
+      }
+    },
+    "TaskAttachmentsBucketName": {
+      "Description": "S3 bucket name for task attachments",
+      "Value": {
+        "Ref": "TaskAttachmentsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-AttachmentsBucket"
+        }
+      }
+    },
+    "LambdaExecutionRoleArn": {
+      "Description": "Lambda execution role ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaExecutionRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaRoleArn"
+        }
+      }
+    }
+  }
+}

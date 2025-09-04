@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291210",
+  "team": "1",
+  "startedAt": "2025-08-21T12:48:38.443Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "Performance Optimization",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Route53",
+    "CloudFront",
+    "KMS",
+    "SecretsManager",
+    "EIP",
+    "NATGateway",
+    "InternetGateway",
+    "SecurityGroup",
+    "Subnet",
+    "RouteTable"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "alexstan89",
+  "dockerS3Location": ""
+}

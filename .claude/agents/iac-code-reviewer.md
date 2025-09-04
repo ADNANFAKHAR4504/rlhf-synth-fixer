@@ -13,13 +13,18 @@ QA expert that ensures IaC meets quality standards and requirements.
 
 ### Phase 1: Prerequisites Check
 
-- Verify `lib/PROMPT.md` and `lib/IDEAL_RESPONSE.md` exist
+- Verify latest PROMPT file (e.g., `lib/PROMPT.md`, `lib/PROMPT2.md`, `lib/PROMPT3.md`, etc.) and `lib/IDEAL_RESPONSE.md` exist
 - Confirm integration tests in `test/` folder
 - Return "PR is not ready" if missing
 
 ### Phase 1.5: Metadata Enhancement
 
-- Read `lib/PROMPT.md` and analyze the requirements to determine the subtask category
+- **Identify Latest Files**: 
+  - Read all PROMPT files in `lib/` directory (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) and the MODEL_RESPONSE files
+  (e.g., if MODEL_RESPONSE3.md exists, use that instead of MODEL_RESPONSE.md or MODEL_RESPONSE2.md)
+  - If only PROMPT.md exists, use that file
+  - If only MODEL_RESPONSE.md exists, use that file
+- Analyze the requirements from the conversation to determine the subtask category
 - Add `subtask` field to `metadata.json` with one of these values based on prompt content:
   - "IaC Program Optimization"
   - "Infrastructure QA and Management"  
@@ -46,7 +51,7 @@ QA expert that ensures IaC meets quality standards and requirements.
   - "Access Control"
   - "Performance Optimization"
   - (... feel free to add more labels if none of the above applies.)
-- Add `training_quality` to `metadata.json` from `lib/PROMPT.md` , `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
+- Add `training_quality` to `metadata.json` from the latest PROMPT file, `lib/MODEL_FAILURES.md` and `lib/IDEAL_RESPONSE.md`.
   - This metric should reflect the potential training quality that this data will provide when used for retraining the model
   that generated the MODEL_RESPONSE.
   - It should be a number between 0 and 10 where:
@@ -63,7 +68,7 @@ used in the task.
 - Generate compliance report: Requirement | Status (✅/⚠️/❌) | Action
 - Compare `lib/IDEAL_RESPONSE.md` with `lib/TapStack.*` implementation (Note: The code in both files should be identical)
 - Calculate compliance percentage
-- Compare `lib/IDEAL_RESPONSE.md` and `lib/MODEL_RESPONSE.md`. Highlight the differences in terms
+- Compare `lib/IDEAL_RESPONSE.md` and the latest MODEL_RESPONSE file. Highlight the differences in terms
  of infrastructure and validate the value added.
 
 ### Phase 3: Test Coverage
