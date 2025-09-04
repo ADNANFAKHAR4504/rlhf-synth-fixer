@@ -113,15 +113,7 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# Existing S3 Bucket (if migrating from existing infrastructure)
-data "aws_s3_bucket" "main" {
-  bucket = "${var.project_name}-bucket-${var.environment}"
-}
-
-# Existing DB Subnet Group (if migrating from existing infrastructure)
-data "aws_db_subnet_group" "main" {
-  name = "${var.project_name}-db-subnet-group"
-}
+# Note: This stack provisions its own S3 bucket and DB subnet group
 
 ########################################
 # VPC and Networking
