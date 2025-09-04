@@ -208,10 +208,10 @@ def handler(event, context):
     // Ensure Auto Scaling service-linked role exists
     const autoScalingServiceLinkedRole = new iam.CfnServiceLinkedRole(
       this,
-      'AutoScalingServiceLinkedRole',
+      'AutoScalingServiceLinkedRole-test-1',
       {
-        awsServiceName: 'autoscaling.amazonaws.com',
-        description: 'Service-linked role for Auto Scaling to access other AWS services',
+      awsServiceName: 'autoscaling.amazonaws.com',
+      description: 'Service-linked role for Auto Scaling to access other AWS services',
       }
     );
 
