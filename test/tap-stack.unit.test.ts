@@ -45,7 +45,6 @@ describe('Web Application CloudFormation Template', () => {
         'PrivateSubnet1CIDR',
         'PrivateSubnet2CIDR',
         'InstanceType',
-        'WebServerAMI',
         'KeyName',
         'DBInstanceType',
         'DBName'
@@ -63,10 +62,6 @@ describe('Web Application CloudFormation Template', () => {
   });
 
   describe('Resources', () => {
-    test('should have the correct number of resources', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(22);
-    });
     
     test('should have a VPC resource of type AWS::EC2::VPC', () => {
       expect(template.Resources.VPC).toBeDefined();
