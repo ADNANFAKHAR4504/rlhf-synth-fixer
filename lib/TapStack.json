@@ -1,0 +1,328 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure serverless infrastructure with Lambda, S3, and API Gateway",
+    "Parameters": {
+        "EnvironmentName": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment name suffix for resource naming",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "ConstraintDescription": "Must be dev, staging, or prod"
+        },
+        "BucketName": {
+            "Type": "String",
+            "Default": "my-app-data-bucket",
+            "Description": "Name for the S3 bucket (must be globally unique)"
+        }
+    },
+    "Resources": {
+        "AppDataBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Ref": "BucketName"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "AES256"
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                }
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3ReadOnlyAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${AppDataBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ProcessDataLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "process-data-${EnvironmentName}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\ndef lambda_handler(event, context):\n    print(\"Received event: \" + json.dumps(event, indent=2))\n    return {\n        'statusCode': 200,\n        'body': json.dumps('Data processed successfully!')\n    }\n"
+                },
+                "MemorySize": 128,
+                "Timeout": 30,
+                "Environment": {
+                    "Variables": {
+                        "BUCKET_NAME": {
+                            "Ref": "AppDataBucket"
+                        }
+                    }
+                }
+            }
+        },
+        "S3BucketEventPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "ProcessDataLambda",
+                        "Arn"
+                    ]
+                },
+                "Principal": "s3.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "AppDataBucket",
+                        "Arn"
+                    ]
+                },
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                }
+            }
+        },
+        "ApiGatewayRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "data-api-${EnvironmentName}"
+                },
+                "Description": "API Gateway for processing data",
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                }
+            }
+        },
+        "ApiGatewayResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayRestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "process"
+            }
+        },
+        "ApiGatewayMethod": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiGatewayResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessDataLambda.Arn}/invocations"
+                    },
+                    "IntegrationResponses": [
+                        {
+                            "StatusCode": 200
+                        }
+                    ],
+                    "PassthroughBehavior": "WHEN_NO_MATCH"
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": 200,
+                        "ResponseModels": {
+                            "application/json": "Empty"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentName"
+                }
+            },
+            "DependsOn": [
+                "ApiGatewayMethod"
+            ]
+        },
+        "ApiGatewayLambdaPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Fn::GetAtt": [
+                        "ProcessDataLambda",
+                        "Arn"
+                    ]
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/process"
+                }
+            }
+        },
+        "ApiGatewayUsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "Properties": {
+                "UsagePlanName": {
+                    "Fn::Sub": "data-api-usage-plan-${EnvironmentName}"
+                },
+                "Description": "Usage plan with throttling and quotas",
+                "Throttle": {
+                    "BurstLimit": 10,
+                    "RateLimit": 5
+                },
+                "Quota": {
+                    "Limit": 10000,
+                    "Period": "MONTH"
+                },
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "ApiGatewayRestApi"
+                        },
+                        "Stage": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayApiKey": {
+            "Type": "AWS::ApiGateway::ApiKey",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "data-api-key-${EnvironmentName}"
+                },
+                "Description": "API key for data processing API",
+                "Enabled": true
+            }
+        },
+        "ApiGatewayUsagePlanKey": {
+            "Type": "AWS::ApiGateway::UsagePlanKey",
+            "Properties": {
+                "KeyId": {
+                    "Ref": "ApiGatewayApiKey"
+                },
+                "KeyType": "API_KEY",
+                "UsagePlanId": {
+                    "Ref": "ApiGatewayUsagePlan"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "S3BucketName": {
+            "Description": "Name of the S3 bucket",
+            "Value": {
+                "Ref": "AppDataBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3BucketName"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Name of the Lambda function",
+            "Value": {
+                "Ref": "ProcessDataLambda"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+                }
+            }
+        },
+        "ApiGatewayUrl": {
+            "Description": "API Gateway endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/process"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiGatewayUrl"
+                }
+            }
+        },
+        "ApiKey": {
+            "Description": "API Key for accessing the API",
+            "Value": {
+                "Ref": "ApiGatewayApiKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiKey"
+                }
+            }
+        }
+    }
+}
