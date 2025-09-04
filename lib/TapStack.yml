@@ -131,7 +131,7 @@ Resources:
           Value: Production
 
   ########################################
-  # S3 Bucket for Static Assets
+  # S3 Buckets
   ########################################
 
   StaticAssetsBucket:
@@ -143,6 +143,21 @@ Resources:
               SSEAlgorithm: AES256
       VersioningConfiguration:
         Status: Enabled
+      Tags:
+        - Key: Environment
+          Value: Production
+
+  CloudFrontLogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       Tags:
         - Key: Environment
           Value: Production
@@ -173,7 +188,8 @@ Resources:
               SslSupportMethod: sni-only
             - CloudFrontDefaultCertificate: true
         Logging:
-          Bucket: !Sub "${StaticAssetsBucket}.s3.amazonaws.com"
+          Bucket: !GetAtt CloudFrontLogBucket.DomainName
+          Prefix: cloudfront-logs/
         HttpVersion: http2
         PriceClass: PriceClass_100
         Comment: CloudFront for Web Application

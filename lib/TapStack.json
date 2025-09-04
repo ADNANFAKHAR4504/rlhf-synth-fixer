@@ -259,6 +259,30 @@
                 ]
             }
         },
+        "CloudFrontLogBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerEnforced"
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": "Production"
+                    }
+                ]
+            }
+        },
         "CloudFrontDistribution": {
             "Type": "AWS::CloudFront::Distribution",
             "Properties": {
@@ -302,8 +326,12 @@
                     },
                     "Logging": {
                         "Bucket": {
-                            "Fn::Sub": "${StaticAssetsBucket}.s3.amazonaws.com"
-                        }
+                            "Fn::GetAtt": [
+                                "CloudFrontLogBucket",
+                                "DomainName"
+                            ]
+                        },
+                        "Prefix": "cloudfront-logs/"
                     },
                     "HttpVersion": "http2",
                     "PriceClass": "PriceClass_100",
