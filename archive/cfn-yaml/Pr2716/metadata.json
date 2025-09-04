@@ -1,0 +1,15 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350051",
+  "team": "3",
+  "startedAt": "2025-09-04T08:16:19.874Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chtarun32",
+  "dockerS3Location": ""
+}
