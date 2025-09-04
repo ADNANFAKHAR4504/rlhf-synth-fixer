@@ -1,7 +1,7 @@
-import fs from 'fs';
-import { DynamoDBClient, DescribeTableCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
-import { LambdaClient, InvokeCommand, GetFunctionCommand } from '@aws-sdk/client-lambda';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import { DescribeTableCommand, DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { GetFunctionCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
@@ -31,13 +31,13 @@ test('DynamoDB table exists and has correct configuration', async () => {
   });
 
   const response = await dynamodbClient.send(command);
-  
+
   expect(response.Table).toBeDefined();
   expect(response.Table?.TableName).toBe(dynamoTableName);
   expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
   expect(response.Table?.StreamSpecification?.StreamEnabled).toBe(true);
   expect(response.Table?.StreamSpecification?.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
-  
+
   // Check key schema
   const keySchema = response.Table?.KeySchema;
   expect(keySchema).toHaveLength(2);
@@ -70,7 +70,7 @@ test('API Lambda function exists and has correct configuration', async () => {
   });
 
   const response = await lambdaClient.send(command);
-  
+
   expect(response.Configuration).toBeDefined();
   expect(response.Configuration?.FunctionName).toBe(apiLambdaFunctionName);
   expect(response.Configuration?.Runtime).toBe('nodejs18.x');
@@ -78,7 +78,7 @@ test('API Lambda function exists and has correct configuration', async () => {
   expect(response.Configuration?.MemorySize).toBe(128);
   expect(response.Configuration?.Timeout).toBe(10);
   expect(response.Configuration?.TracingConfig?.Mode).toBe('Active');
-  
+
   // Check environment variables
   const env = response.Configuration?.Environment?.Variables;
   expect(env?.TABLE_NAME).toBe(dynamoTableName);
@@ -91,7 +91,7 @@ test('Stream Processor Lambda function exists and has correct configuration', as
   });
 
   const response = await lambdaClient.send(command);
-  
+
   expect(response.Configuration).toBeDefined();
   expect(response.Configuration?.FunctionName).toBe(streamProcessorFunctionName);
   expect(response.Configuration?.Runtime).toBe('nodejs18.x');
@@ -114,10 +114,10 @@ test('API Lambda function can be invoked directly', async () => {
   });
 
   const response = await lambdaClient.send(command);
-  
+
   expect(response.StatusCode).toBe(200);
   expect(response.Payload).toBeDefined();
-  
+
   if (response.Payload) {
     const result = JSON.parse(Buffer.from(response.Payload).toString());
     expect(result.statusCode).toBe(200);
@@ -127,10 +127,10 @@ test('API Lambda function can be invoked directly', async () => {
 
 test('API Gateway endpoint is accessible', async () => {
   const response = await fetch(`${apiGatewayUrl}items`);
-  
+
   expect(response).toBeDefined();
   expect(response.status).toBe(200);
-  
+
   const data = await response.json();
   expect(Array.isArray(data)).toBe(true);
 });
@@ -160,7 +160,7 @@ test('CRUD operations through API Gateway', async () => {
   const readResponse = await fetch(
     `${apiGatewayUrl}items/${createdItem.id}/${createdItem.createdAt}`
   );
-  
+
   expect(readResponse.status).toBe(200);
   const readItem = await readResponse.json() as any;
   expect(readItem.id).toBe(createdItem.id);
@@ -205,7 +205,7 @@ test('CORS headers are present', async () => {
     method: 'OPTIONS',
   });
 
-  expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*'); // Currently deployed with wildcard
+  expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://localhost:3000');
   expect(response.headers.get('Access-Control-Allow-Methods')).toContain('GET');
   expect(response.headers.get('Access-Control-Allow-Methods')).toContain('POST');
   expect(response.headers.get('Access-Control-Allow-Methods')).toContain('PUT');
@@ -227,7 +227,7 @@ test('CloudWatch alarms exist and are configured', async () => {
 
     const response = await cloudwatchClient.send(command);
     expect(response.MetricAlarms).toHaveLength(1);
-    
+
     const alarm = response.MetricAlarms?.[0];
     expect(alarm?.AlarmName).toBe(alarmName);
     expect(alarm?.StateValue).toBeDefined();
@@ -271,9 +271,9 @@ test('handles non-existent item retrieval', async () => {
 
 test('API response time is acceptable', async () => {
   const startTime = Date.now();
-  
+
   const response = await fetch(`${apiGatewayUrl}items`);
-  
+
   const endTime = Date.now();
   const responseTime = endTime - startTime;
 
@@ -287,7 +287,7 @@ test('can handle multiple concurrent requests', async () => {
   );
 
   const responses = await Promise.all(promises);
-  
+
   responses.forEach((response) => {
     expect(response.status).toBe(200);
   });
