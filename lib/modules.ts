@@ -513,7 +513,7 @@ export class StorageModule extends Construct {
 
     // Application S3 bucket with security best practices
     this.appBucket = new S3Bucket(this, 'app-bucket', {
-      bucket: `${config.companyName}-${config.environment}-app-${Date.now()}`,
+      bucket: `${config.companyName}-${config.environment}-app`,
       tags: {
         Name: `${config.companyName}-${config.environment}-app-bucket`,
         Environment: config.environment,
@@ -579,7 +579,7 @@ export class StorageModule extends Construct {
 
     // Logs bucket for CloudTrail
     this.logsBucket = new S3Bucket(this, 'logs-bucket', {
-      bucket: `${config.companyName}-${config.environment}-logs-${Date.now()}`,
+      bucket: `${config.companyName}-${config.environment}-logs`,
       tags: {
         Name: `${config.companyName}-${config.environment}-logs-bucket`,
         Environment: config.environment,
@@ -632,7 +632,7 @@ export class LambdaModule extends Construct {
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
       functionName: `${config.companyName}-${config.environment}-processor`,
       s3Bucket: 'lambda-ts-1234',
-      s3Key: 'lambda/lambda-function.zip',
+      s3Key: 'lambda.zip',
       handler: 'index.handler',
       runtime: 'nodejs18.x',
       role: lambdaRole.arn,
@@ -816,7 +816,13 @@ export class MonitoringModule extends Construct {
             Principal: {
               Service: 'cloudtrail.amazonaws.com',
             },
-            Action: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
+            Action: [
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:Encrypt',
+              'kms:ReEncrypt*',
+              'kms:Decrypt',
+            ],
             Resource: '*',
             Condition: {
               StringEquals: {
@@ -825,10 +831,19 @@ export class MonitoringModule extends Construct {
             },
           },
           {
+            Sid: 'EnableCloudTrailAccess',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['kms:DescribeKey'],
+            Resource: '*',
+          },
+          {
             Sid: 'EnableIAMUserPermissions',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::*:root',
+              AWS: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '123456789012'}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
