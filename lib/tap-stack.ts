@@ -69,7 +69,7 @@ export class TapStack extends TerraformStack {
 
     // VPC Module - Creates VPC, subnets, security groups, and networking components
     const vpcModule = new VpcModule(this, 'vpc', {
-      kmsKeyId: securityModule.dataKmsKey.keyId,
+      kmsKey: securityModule.dataKmsKey, // ✅ pass full key object
     });
 
     // Compute Module - Creates ALB, ASG, Launch Template, and EC2 instances
@@ -79,7 +79,7 @@ export class TapStack extends TerraformStack {
       privateSubnetIds: vpcModule.privateSubnetIds,
       albSecurityGroupId: vpcModule.albSecurityGroupId,
       appSecurityGroupId: vpcModule.appSecurityGroupId,
-      kmsKeyId: securityModule.dataKmsKey.keyId,
+      kmsKey: securityModule.dataKmsKey, // ✅ pass full key object
       adminRoleArn: securityModule.adminRole.arn,
     });
 
@@ -89,7 +89,7 @@ export class TapStack extends TerraformStack {
       privateSubnetIds: vpcModule.privateSubnetIds,
       dbSecurityGroupId: vpcModule.dbSecurityGroupId,
       redshiftSecurityGroupId: vpcModule.redshiftSecurityGroupId,
-      kmsKeyId: securityModule.dataKmsKey.keyId,
+      kmsKey: securityModule.dataKmsKey, // ✅ pass full key object
       logBucketId: securityModule.logBucket.id,
     });
 
@@ -97,13 +97,13 @@ export class TapStack extends TerraformStack {
     new MonitoringModule(this, 'monitoring', {
       albArn: computeModule.albArn,
       asgName: computeModule.asgName,
-      kmsKeyId: securityModule.dataKmsKey.keyId,
+      kmsKey: securityModule.dataKmsKey, // ✅ pass full key object
     });
 
     // Compliance Module - Creates AWS Config resources
     new ComplianceModule(this, 'compliance', {
       logBucketName: securityModule.logBucket.bucket,
-      kmsKeyId: securityModule.dataKmsKey.keyId,
+      kmsKey: securityModule.dataKmsKey, // ✅ pass full key object
     });
 
     // Terraform Outputs for reference

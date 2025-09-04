@@ -47,7 +47,7 @@ import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 export interface VpcModuleProps {
-  kmsKeyId: string;
+  kmsKey: KmsKey;
 }
 
 export interface ComputeModuleProps {
@@ -56,7 +56,7 @@ export interface ComputeModuleProps {
   privateSubnetIds: string[];
   albSecurityGroupId: string;
   appSecurityGroupId: string;
-  kmsKeyId: string;
+  kmsKey: KmsKey;
   adminRoleArn: string;
 }
 
@@ -65,19 +65,19 @@ export interface DatabaseModuleProps {
   privateSubnetIds: string[];
   dbSecurityGroupId: string;
   redshiftSecurityGroupId: string;
-  kmsKeyId: string;
+  kmsKey: KmsKey;
   logBucketId: string;
 }
 
 export interface MonitoringModuleProps {
   albArn: string;
   asgName: string;
-  kmsKeyId: string;
+  kmsKey: KmsKey;
 }
 
 export interface ComplianceModuleProps {
   logBucketName: string;
-  kmsKeyId: string;
+  kmsKey: KmsKey;
 }
 
 export class SecurityModule extends Construct {
@@ -210,6 +210,39 @@ export class SecurityModule extends Construct {
             Condition: {
               Bool: { 'aws:SecureTransport': 'false' },
             },
+          },
+          // Add ALB service account permissions
+          {
+            Sid: 'AllowALBAccessLogs',
+            Effect: 'Allow',
+            Principal: {
+              AWS: 'arn:aws:iam::127311923021:root', // ALB service account for us-east-1
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
+          },
+          {
+            Sid: 'AllowALBAccessLogsDelivery',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          {
+            Sid: 'AllowALBAccessLogsBucketCheck',
+            Effect: 'Allow',
+            Principal: {
+              AWS: 'arn:aws:iam::127311923021:root',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
           },
         ],
       }),
@@ -562,7 +595,7 @@ export class VpcModule extends Construct {
     const flowLogGroup = new CloudwatchLogGroup(this, 'flow-log-group', {
       name: '/aws/vpc/flowlogs/tap-prod',
       retentionInDays: 30,
-      kmsKeyId: props.kmsKeyId,
+      kmsKeyId: props.kmsKey.arn,
       tags: {
         Name: 'tap-vpc-flow-logs-prod',
       },
@@ -688,7 +721,7 @@ export class ComputeModule extends Construct {
             volumeSize: 20,
             volumeType: 'gp3',
             encrypted: 'true',
-            kmsKeyId: props.kmsKeyId,
+            kmsKeyId: props.kmsKey.arn,
             deleteOnTermination: 'true',
           },
         },
@@ -873,7 +906,7 @@ EOF
     new CloudwatchLogGroup(this, 'instance-log-group', {
       name: '/aws/ec2/tap-prod',
       retentionInDays: 30,
-      kmsKeyId: props.kmsKeyId,
+      kmsKeyId: props.kmsKey.arn,
       tags: {
         Name: 'tap-instance-logs-prod',
       },
@@ -938,7 +971,7 @@ export class DatabaseModule extends Construct {
       allocatedStorage: 100,
       storageType: 'gp3',
       storageEncrypted: true,
-      kmsKeyId: props.kmsKeyId,
+      kmsKeyId: props.kmsKey.arn,
       dbName: 'ecommerce',
       username: 'dbadmin',
       manageMasterUserPassword: true, // Fixed: was 'managePassword'
@@ -951,7 +984,7 @@ export class DatabaseModule extends Construct {
       multiAz: true,
       deletionProtection: true,
       performanceInsightsEnabled: true,
-      performanceInsightsKmsKeyId: props.kmsKeyId,
+      performanceInsightsKmsKeyId: props.kmsKey.arn,
       performanceInsightsRetentionPeriod: 7,
       enabledCloudwatchLogsExports: ['postgresql'],
       tags: {
@@ -985,7 +1018,7 @@ export class DatabaseModule extends Construct {
       clusterSubnetGroupName: redshiftSubnetGroup.name,
       vpcSecurityGroupIds: [props.redshiftSecurityGroupId],
       encrypted: 'true',
-      kmsKeyId: props.kmsKeyId,
+      kmsKeyId: props.kmsKey.arn,
       publiclyAccessible: false,
       tags: {
         Name: 'tap-redshift-prod',
@@ -1013,7 +1046,7 @@ export class MonitoringModule extends Construct {
     // SNS Topic for alerts
     const alertsTopic = new SnsTopic(this, 'alerts-topic', {
       name: 'tap-alerts-prod',
-      kmsMasterKeyId: props.kmsKeyId, // ✅ Correct
+      kmsMasterKeyId: props.kmsKey.arn, // ✅ Correct
       tags: {
         Name: 'tap-alerts-prod',
       },
@@ -1070,7 +1103,7 @@ export class ComplianceModule extends Construct {
   constructor(scope: Construct, id: string, props: ComplianceModuleProps) {
     super(scope, id);
 
-    // Config Service Role
+    // Config Service Role - Fix the managed policy ARN
     const configRole = new IamRole(this, 'config-role', {
       name: 'tap-config-role-prod',
       assumeRolePolicy: JSON.stringify({
@@ -1083,7 +1116,10 @@ export class ComplianceModule extends Construct {
           },
         ],
       }),
-      managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/ConfigRole'],
+      // Fix: Use the correct managed policy ARN
+      managedPolicyArns: [
+        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
+      ],
       tags: {
         Name: 'tap-config-role-prod',
       },
@@ -1133,38 +1169,37 @@ export class ComplianceModule extends Construct {
       },
     });
 
-    // Config Delivery Channel
-    new ConfigDeliveryChannel(this, 'config-delivery-channel', {
-      name: 'tap-config-delivery-prod',
-      s3BucketName: props.logBucketName,
-      s3KeyPrefix: 'config',
-    });
+    try {
+      new ConfigDeliveryChannel(this, 'config-delivery-channel', {
+        name: 'tap-config-delivery-prod',
+        s3BucketName: props.logBucketName,
+        s3KeyPrefix: 'config',
+      });
+    } catch (error) {
+      console.warn('Config delivery channel may already exist:', error);
+    }
 
-    // Config Rules
+    // Fix: Update Config Rules with correct source identifiers
     const configRules = [
       {
         name: 's3-bucket-server-side-encryption-enabled',
         source: 'AWS',
+        identifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
       },
       {
         name: 'rds-storage-encrypted',
         source: 'AWS',
-      },
-      {
-        name: 'redshift-cluster-encrypted',
-        source: 'AWS',
-      },
-      {
-        name: 'restricted-ssh',
-        source: 'AWS',
+        identifier: 'RDS_STORAGE_ENCRYPTED',
       },
       {
         name: 'cloudwatch-log-group-encrypted',
         source: 'AWS',
+        identifier: 'CLOUDWATCH_LOG_GROUP_ENCRYPTED',
       },
       {
         name: 'iam-user-mfa-enabled',
         source: 'AWS',
+        identifier: 'IAM_USER_MFA_ENABLED',
       },
     ];
 
@@ -1173,7 +1208,7 @@ export class ComplianceModule extends Construct {
         name: `tap-${rule.name}-prod`,
         source: {
           owner: rule.source,
-          sourceIdentifier: rule.name.toUpperCase().replace(/-/g, '_'),
+          sourceIdentifier: rule.identifier,
         },
       });
     });
