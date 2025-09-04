@@ -67,12 +67,11 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   cd lib
   
-  # Set up backend configuration with PR-specific settings (no DynamoDB; use lockfile)
+  # Set up backend configuration with PR-specific settings
   export TF_INIT_OPTS="-backend-config=bucket=${TERRAFORM_STATE_BUCKET} \
       -backend-config=key=$STATE_KEY \
       -backend-config=region=${TERRAFORM_STATE_BUCKET_REGION} \
-      -backend-config=encrypt=true \
-      -backend-config=use_lockfile=true"
+      -backend-config=encrypt=true"
   
   # Initialize Terraform (no fallback init without backend)
   echo "Initializing Terraform with PR-specific backend..."

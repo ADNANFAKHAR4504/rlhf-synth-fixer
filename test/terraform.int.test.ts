@@ -59,7 +59,7 @@ describe('Terraform AWS Security Stack Integration Tests', () => {
   describe('Terraform Initialization and Validation', () => {
     
     test('terraform init succeeds', () => {
-      const output = runTerraform('terraform init -no-color');
+      const output = runTerraform('terraform init -backend=false -no-color');
       expect(output).toContain('Terraform has been successfully initialized');
     }, TIMEOUT);
 
@@ -193,11 +193,11 @@ describe('Terraform AWS Security Stack Integration Tests', () => {
     test('GuardDuty has comprehensive data sources enabled', () => {
       const stackContent = fs.readFileSync(path.join(TERRAFORM_DIR, 'tap_stack.tf'), 'utf8');
       
-      // Should enable S3 logs, Kubernetes audit logs, and malware protection
-      expect(stackContent).toContain('datasources {');
-      expect(stackContent).toContain('s3_logs {');
-      expect(stackContent).toContain('kubernetes {');
-      expect(stackContent).toContain('malware_protection {');
+      // Should enable S3 logs, Kubernetes audit logs, and malware protection using detector features
+      expect(stackContent).toContain('aws_guardduty_detector_feature');
+      expect(stackContent).toContain('S3_DATA_EVENTS');
+      expect(stackContent).toContain('EKS_AUDIT_LOGS');
+      expect(stackContent).toContain('EBS_MALWARE_PROTECTION');
     }, TIMEOUT);
 
   });

@@ -7,7 +7,14 @@ terraform {
     }
   }
 
-  backend "local" {}
+  backend "s3" {
+    # These values can be overridden via -backend-config flags
+    # bucket  = "your-terraform-state-bucket"
+    # key     = "tap/dev/terraform.tfstate"
+    # region  = "us-east-1"
+    # encrypt = true
+    # dynamodb_table = "terraform-state-lock"
+  }
 }
 
 # Local variables for configuration
