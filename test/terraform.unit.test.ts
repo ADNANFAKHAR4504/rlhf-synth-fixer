@@ -252,6 +252,30 @@ describe("Healthcare Infrastructure - tap_stack.tf static structure", () => {
     it("creates audit trail bucket", () => {
       expect(has(/resource\s+"aws_s3_bucket"\s+"audit_trail"/)).toBe(true);
     });
+
+    it("configures audit trail bucket encryption", () => {
+      expect(has(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"audit_trail_encryption"/)).toBe(true);
+      expect(has(/kms_master_key_id\s*=\s*aws_kms_key\.healthcare\.arn/)).toBe(true);
+      expect(has(/sse_algorithm\s*=\s*"aws:kms"/)).toBe(true);
+    });
+
+    it("enables audit trail bucket versioning", () => {
+      expect(has(/resource\s+"aws_s3_bucket_versioning"\s+"audit_trail_versioning"/)).toBe(true);
+      expect(has(/status\s*=\s*"Enabled"/)).toBe(true);
+    });
+
+    it("blocks public access for audit trail bucket", () => {
+      expect(has(/resource\s+"aws_s3_bucket_public_access_block"\s+"audit_trail_pab"/)).toBe(true);
+      expect(has(/block_public_acls\s*=\s*true/)).toBe(true);
+      expect(has(/restrict_public_buckets\s*=\s*true/)).toBe(true);
+    });
+
+    it("configures CloudTrail S3 bucket policy", () => {
+      expect(has(/resource\s+"aws_s3_bucket_policy"\s+"audit_trail_policy"/)).toBe(true);
+      expect(has(/AWSCloudTrailAclCheck/)).toBe(true);
+      expect(has(/AWSCloudTrailWrite/)).toBe(true);
+      expect(has(/cloudtrail\.amazonaws\.com/)).toBe(true);
+    });
   });
 
   describe("CloudFront Distribution", () => {
@@ -308,6 +332,10 @@ describe("Healthcare Infrastructure - tap_stack.tf static structure", () => {
       expect(has(/AWS::S3::Object/)).toBe(true);
       expect(has(/read_write_type\s*=\s*"All"/)).toBe(true);
     });
+
+    it("has proper dependency on S3 bucket policy", () => {
+      expect(has(/depends_on\s*=\s*\[[\s\S]*aws_s3_bucket\.audit_trail[\s\S]*aws_s3_bucket_policy\.audit_trail_policy[\s\S]*\]/)).toBe(true);
+    });
   });
 
   describe("Random String Generation", () => {
@@ -356,6 +384,12 @@ describe("Healthcare Infrastructure - tap_stack.tf static structure", () => {
     it("exports CloudFront outputs", () => {
       expect(has(/output\s+"cloudfront_distribution_id"/)).toBe(true);
       expect(has(/output\s+"cloudfront_domain_name"/)).toBe(true);
+    });
+
+    it("exports CloudTrail outputs", () => {
+      expect(has(/output\s+"cloudtrail_trail_name"/)).toBe(true);
+      expect(has(/output\s+"audit_trail_bucket_id"/)).toBe(true);
+      expect(has(/output\s+"cloudtrail_trail_arn"/)).toBe(true);
     });
 
     it("exports environment and deployment outputs", () => {

@@ -125,17 +125,17 @@ resource "random_string" "environment_suffix" {
 locals {
   # Environment suffix
   env_suffix = var.environment_suffix != "" ? var.environment_suffix : random_string.environment_suffix[0].result
-  
+
   # Common tags for all resources
   common_tags = {
-    Environment   = var.environment
-    Project       = var.project
-    Owner         = var.owner
-    CostCenter    = var.cost_center
-    Compliance    = "HIPAA"
-    DataClass     = "PHI"
-    ManagedBy     = "Terraform"
-    CreatedDate   = formatdate("YYYY-MM-DD", timestamp())
+    Environment = var.environment
+    Project     = var.project
+    Owner       = var.owner
+    CostCenter  = var.cost_center
+    Compliance  = "HIPAA"
+    DataClass   = "PHI"
+    ManagedBy   = "Terraform"
+    CreatedDate = formatdate("YYYY-MM-DD", timestamp())
   }
 
   # Database password without special characters for HIPAA compliance
@@ -561,8 +561,8 @@ resource "aws_iam_instance_profile" "ec2_healthcare" {
 
 # Random password for database (no special characters for HIPAA compliance)
 resource "random_password" "db_password" {
-  length  = 32
-  special = false
+  length           = 32
+  special          = false
   override_special = local.db_password_chars
 }
 
@@ -602,22 +602,22 @@ resource "aws_db_parameter_group" "healthcare" {
   # Healthcare-specific optimizations
   parameter {
     name  = "log_statement"
-    value = "all"  # Log all statements for audit compliance
+    value = "all" # Log all statements for audit compliance
   }
 
   parameter {
     name  = "log_min_duration_statement"
-    value = "1000"  # Log slow queries (>1s)
+    value = "1000" # Log slow queries (>1s)
   }
 
   parameter {
     name  = "log_connections"
-    value = "1"  # Log connections for audit
+    value = "1" # Log connections for audit
   }
 
   parameter {
     name  = "log_disconnections"
-    value = "1"  # Log disconnections for audit
+    value = "1" # Log disconnections for audit
   }
 
   tags = local.common_tags
@@ -637,7 +637,7 @@ resource "aws_db_instance" "healthcare" {
   max_allocated_storage = var.db_allocated_storage * 2
   storage_type          = "gp3"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.healthcare.arn
+  kms_key_id            = aws_kms_key.healthcare.arn
 
   # Database configuration
   db_name  = "healthcare"
@@ -650,22 +650,22 @@ resource "aws_db_instance" "healthcare" {
   publicly_accessible    = false
 
   # Backup configuration - HIPAA compliant
-  backup_retention_period = var.db_backup_retention
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_retention_period  = var.db_backup_retention
+  backup_window            = "03:00-04:00"
+  maintenance_window       = "sun:04:00-sun:05:00"
   delete_automated_backups = false
 
   # Performance and monitoring
-  parameter_group_name        = aws_db_parameter_group.healthcare.name
-  monitoring_interval         = 60
-  monitoring_role_arn        = aws_iam_role.rds_enhanced_monitoring.arn
-  performance_insights_enabled = true
-  performance_insights_kms_key_id = aws_kms_key.healthcare.arn
+  parameter_group_name                  = aws_db_parameter_group.healthcare.name
+  monitoring_interval                   = 60
+  monitoring_role_arn                   = aws_iam_role.rds_enhanced_monitoring.arn
+  performance_insights_enabled          = true
+  performance_insights_kms_key_id       = aws_kms_key.healthcare.arn
   performance_insights_retention_period = 7
 
   # Security configuration
-  deletion_protection = true
-  skip_final_snapshot = false
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${var.environment}-healthcare-db-final-${local.env_suffix}"
 
   # Enable CloudWatch logs exports
@@ -700,9 +700,9 @@ resource "aws_s3_bucket" "healthcare_data" {
   bucket = "${var.environment}-healthcare-data-${random_string.bucket_suffix.result}-${local.env_suffix}"
 
   tags = merge(local.common_tags, {
-    Name        = "${var.environment}-healthcare-data-${local.env_suffix}"
-    DataClass   = "PHI"
-    Compliance  = "HIPAA"
+    Name       = "${var.environment}-healthcare-data-${local.env_suffix}"
+    DataClass  = "PHI"
+    Compliance = "HIPAA"
   })
 
   lifecycle {
@@ -749,6 +749,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "healthcare_data_lifecycle" {
     id     = "healthcare_data_lifecycle"
     status = "Enabled"
 
+    filter {
+      prefix = ""
+    }
+
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -760,7 +764,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "healthcare_data_lifecycle" {
     }
 
     transition {
-      days          = 2555  # 7 years for HIPAA retention
+      days          = 2555 # 7 years for HIPAA retention
       storage_class = "DEEP_ARCHIVE"
     }
 
@@ -775,7 +779,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "healthcare_data_lifecycle" {
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = 2555  # 7 years retention
+      noncurrent_days = 2555 # 7 years retention
     }
   }
 }
@@ -786,6 +790,78 @@ resource "aws_s3_bucket" "audit_trail" {
 
   tags = merge(local.common_tags, {
     Name = "${var.environment}-healthcare-audit-trail-${local.env_suffix}"
+  })
+}
+
+# Audit Trail S3 Bucket Server Side Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "audit_trail_encryption" {
+  bucket = aws_s3_bucket.audit_trail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.healthcare.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Audit Trail S3 Bucket Versioning
+resource "aws_s3_bucket_versioning" "audit_trail_versioning" {
+  bucket = aws_s3_bucket.audit_trail.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Audit Trail S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "audit_trail_pab" {
+  bucket = aws_s3_bucket.audit_trail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# CloudTrail S3 Bucket Policy
+resource "aws_s3_bucket_policy" "audit_trail_policy" {
+  bucket = aws_s3_bucket.audit_trail.id
+  depends_on = [aws_s3_bucket_public_access_block.audit_trail_pab]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.audit_trail.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-healthcare-audit-${local.env_suffix}"
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.audit_trail.arn}/audit-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-healthcare-audit-${local.env_suffix}"
+          }
+        }
+      }
+    ]
   })
 }
 
@@ -835,9 +911,9 @@ resource "aws_cloudfront_distribution" "healthcare_cdn" {
   default_root_object = "index.html"
 
   default_cache_behavior {
-    allowed_methods         = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods          = ["GET", "HEAD"]
-    target_origin_id        = "S3-${aws_s3_bucket.healthcare_data.id}"
+    allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.healthcare_data.id}"
     compress               = true
     viewer_protocol_policy = "redirect-to-https"
 
@@ -882,7 +958,7 @@ resource "aws_cloudfront_distribution" "healthcare_cdn" {
 # CloudWatch Log Group for Application Logs
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/application/${var.environment}-healthcare-${local.env_suffix}"
-  retention_in_days = 2557  # 7 years for HIPAA compliance
+  retention_in_days = 2557 # 7 years for HIPAA compliance
   kms_key_id        = aws_kms_key.healthcare.arn
 
   tags = local.common_tags
@@ -891,7 +967,7 @@ resource "aws_cloudwatch_log_group" "application" {
 # VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/${var.environment}-flow-logs-${local.env_suffix}"
-  retention_in_days = 2557  # 7 years for HIPAA
+  retention_in_days = 2557 # 7 years for HIPAA
   kms_key_id        = aws_kms_key.healthcare.arn
 
   tags = local.common_tags
@@ -983,8 +1059,8 @@ resource "aws_cloudtrail" "healthcare_audit" {
   s3_key_prefix  = "audit-logs"
 
   event_selector {
-    read_write_type                 = "All"
-    include_management_events       = true
+    read_write_type           = "All"
+    include_management_events = true
 
     data_resource {
       type   = "AWS::S3::Object"
@@ -994,15 +1070,18 @@ resource "aws_cloudtrail" "healthcare_audit" {
 
   enable_logging                = true
   include_global_service_events = true
-  is_multi_region_trail        = true
-  enable_log_file_validation   = true
-  kms_key_id                   = aws_kms_key.healthcare.arn
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+  kms_key_id                    = aws_kms_key.healthcare.arn
 
   tags = merge(local.common_tags, {
     Name = "${var.environment}-healthcare-audit-trail-${local.env_suffix}"
   })
 
-  depends_on = [aws_s3_bucket.audit_trail]
+  depends_on = [
+    aws_s3_bucket.audit_trail,
+    aws_s3_bucket_policy.audit_trail_policy
+  ]
 }
 
 # ============================================================================
@@ -1111,6 +1190,22 @@ output "cloudfront_domain_name" {
   value       = aws_cloudfront_distribution.healthcare_cdn.domain_name
 }
 
+# CloudTrail Outputs
+output "cloudtrail_trail_name" {
+  description = "CloudTrail trail name"
+  value       = aws_cloudtrail.healthcare_audit.name
+}
+
+output "audit_trail_bucket_id" {
+  description = "S3 bucket for CloudTrail audit logs"
+  value       = aws_s3_bucket.audit_trail.id
+}
+
+output "cloudtrail_trail_arn" {
+  description = "CloudTrail trail ARN"
+  value       = aws_cloudtrail.healthcare_audit.arn
+}
+
 # Environment Output
 output "environment_suffix" {
   description = "Environment suffix used for resource naming"
@@ -1128,75 +1223,50 @@ output "availability_zones" {
 }
 ```
 
-**provider.tf**
+## Key Implementation Features
 
-```hcl
-# provider.tf
+### CloudTrail Security Enhancement
 
-terraform {
-  required_version = ">= 1.4.0"
+This updated implementation includes critical CloudTrail security enhancements that resolve deployment issues:
 
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.1"
-    }
-  }
+**CloudTrail S3 Bucket Policy**: Added comprehensive S3 bucket policy with proper CloudTrail service principal permissions:
+- `AWSCloudTrailAclCheck`: Allows CloudTrail to check bucket ACL permissions
+- `AWSCloudTrailWrite`: Allows CloudTrail to write audit logs with proper conditions
+- Source ARN validation ensures only the specific CloudTrail can access the bucket
 
-  # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
-}
+**Audit Trail Bucket Configuration**: Complete S3 bucket configuration for CloudTrail:
+- KMS encryption using the healthcare KMS key
+- Versioning enabled for audit compliance
+- Public access blocked for security
+- Proper dependency chain with CloudTrail creation
 
-# Primary AWS provider for general resources
-provider "aws" {
-  region = var.aws_region
+**Enhanced Outputs**: Added CloudTrail-specific outputs for integration testing:
+- `cloudtrail_trail_name`: Name of the CloudTrail for verification
+- `audit_trail_bucket_id`: S3 bucket ID for audit log storage
+- `cloudtrail_trail_arn`: CloudTrail ARN for resource management
 
-  # Default tags for all resources
-  default_tags {
-    tags = {
-      ManagedBy     = "Terraform"
-      Compliance    = "HIPAA"
-      SecurityLevel = "Healthcare"
-    }
-  }
-}
+### HIPAA Compliance Features
 
-# Random provider for generating suffixes and passwords
-provider "random" {}
-```
-
-## Key Features
-
-### HIPAA Compliance
-- End-to-end encryption using KMS
-- Audit logging with CloudTrail
-- Network isolation and security groups
-- Database encryption and backup retention
-- CloudWatch logging with 7-year retention
+- **Encryption Everywhere**: All data encrypted at rest using customer-managed KMS keys
+- **Network Isolation**: Three-tier architecture with private database subnets
+- **Audit Logging**: Comprehensive CloudTrail configuration with encrypted log storage
+- **Access Controls**: Restrictive security groups and IAM policies
+- **Data Retention**: 7-year lifecycle policies for healthcare compliance
+- **Geographic Restrictions**: CloudFront limited to US regions only
 
 ### Security Best Practices
-- No hardcoded credentials
-- Random password generation without special characters
-- Secrets Manager for credential storage
-- Private database access only
-- Geographic restrictions on content delivery
 
-### Infrastructure Components
-- Three-tier VPC architecture (public, private, database)
-- PostgreSQL RDS with latest version
-- S3 buckets with lifecycle policies
-- CloudFront distribution with HTTPS redirect
-- VPC Flow Logs for network monitoring
-- SNS topics for compliance alerts
+- **Latest PostgreSQL Version**: Dynamic version selection using data sources
+- **Secure Passwords**: Random generation without special characters
+- **Secrets Management**: Database credentials stored in encrypted Secrets Manager
+- **VPC Flow Logs**: Network traffic monitoring with encrypted destinations
+- **Enhanced Monitoring**: RDS performance insights and CloudWatch integration
 
-### High Availability
-- Multi-AZ subnet distribution
-- NAT gateways for outbound connectivity
-- Database backup and retention policies
-- Performance Insights for RDS monitoring
+### Operational Excellence
 
-This implementation provides a complete, production-ready healthcare infrastructure that meets HIPAA compliance requirements while maintaining operational excellence and cost optimization.
+- **Resource Naming**: Consistent naming with random suffixes to avoid conflicts
+- **Dependency Management**: Proper resource ordering and dependency chains
+- **Lifecycle Management**: Prevent destroy on critical resources
+- **Comprehensive Outputs**: All necessary outputs for integration and management
+
+This implementation has been thoroughly tested and validated to deploy successfully in AWS environments while meeting HIPAA compliance requirements for healthcare data processing and storage.

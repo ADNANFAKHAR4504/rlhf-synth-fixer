@@ -784,6 +784,78 @@ resource "aws_s3_bucket" "audit_trail" {
   })
 }
 
+# Audit Trail S3 Bucket Server Side Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "audit_trail_encryption" {
+  bucket = aws_s3_bucket.audit_trail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.healthcare.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Audit Trail S3 Bucket Versioning
+resource "aws_s3_bucket_versioning" "audit_trail_versioning" {
+  bucket = aws_s3_bucket.audit_trail.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Audit Trail S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "audit_trail_pab" {
+  bucket = aws_s3_bucket.audit_trail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# CloudTrail S3 Bucket Policy
+resource "aws_s3_bucket_policy" "audit_trail_policy" {
+  bucket = aws_s3_bucket.audit_trail.id
+  depends_on = [aws_s3_bucket_public_access_block.audit_trail_pab]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.audit_trail.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-healthcare-audit-${local.env_suffix}"
+          }
+        }
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.audit_trail.arn}/audit-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-healthcare-audit-${local.env_suffix}"
+          }
+        }
+      }
+    ]
+  })
+}
+
 # ============================================================================
 # CLOUDFRONT DISTRIBUTION
 # ============================================================================
@@ -997,7 +1069,10 @@ resource "aws_cloudtrail" "healthcare_audit" {
     Name = "${var.environment}-healthcare-audit-trail-${local.env_suffix}"
   })
 
-  depends_on = [aws_s3_bucket.audit_trail]
+  depends_on = [
+    aws_s3_bucket.audit_trail,
+    aws_s3_bucket_policy.audit_trail_policy
+  ]
 }
 
 # ============================================================================
@@ -1104,6 +1179,22 @@ output "cloudfront_distribution_id" {
 output "cloudfront_domain_name" {
   description = "CloudFront distribution domain name"
   value       = aws_cloudfront_distribution.healthcare_cdn.domain_name
+}
+
+# CloudTrail Outputs
+output "cloudtrail_trail_name" {
+  description = "CloudTrail trail name"
+  value       = aws_cloudtrail.healthcare_audit.name
+}
+
+output "audit_trail_bucket_id" {
+  description = "S3 bucket for CloudTrail audit logs"
+  value       = aws_s3_bucket.audit_trail.id
+}
+
+output "cloudtrail_trail_arn" {
+  description = "CloudTrail trail ARN"
+  value       = aws_cloudtrail.healthcare_audit.arn
 }
 
 # Environment Output

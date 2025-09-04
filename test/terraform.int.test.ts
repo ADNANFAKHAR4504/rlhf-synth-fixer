@@ -28,6 +28,10 @@ import {
   SecretsManagerClient,
   DescribeSecretCommand
 } from "@aws-sdk/client-secrets-manager";
+import {
+  CloudTrailClient,
+  DescribeTrailsCommand
+} from "@aws-sdk/client-cloudtrail";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -41,6 +45,7 @@ const ec2Client = new EC2Client({ region: process.env.AWS_DEFAULT_REGION || "us-
 const kmsClient = new KMSClient({ region: process.env.AWS_DEFAULT_REGION || "us-east-1" });
 const cloudfrontClient = new CloudFrontClient({ region: process.env.AWS_DEFAULT_REGION || "us-east-1" });
 const secretsClient = new SecretsManagerClient({ region: process.env.AWS_DEFAULT_REGION || "us-east-1" });
+const cloudtrailClient = new CloudTrailClient({ region: process.env.AWS_DEFAULT_REGION || "us-east-1" });
 
 // Helper to parse JSON arrays from CI/CD outputs
 const parseIfJsonArray = (val: any): any => {
@@ -368,6 +373,61 @@ describe("Healthcare Infrastructure - Integration Tests", () => {
         // Long-term retention should be handled via automated snapshots
         expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
       }
+    });
+  });
+
+  describe("Audit and Compliance", () => {
+    it("should validate CloudTrail audit logging configuration", async () => {
+      if (!outputs.cloudtrail_trail_name) {
+        console.warn("CloudTrail trail name not found in outputs, skipping CloudTrail tests");
+        return;
+      }
+
+      // Get CloudTrail details
+      const cloudtrailResponse = await cloudtrailClient.send(
+        new DescribeTrailsCommand({
+          trailNameList: [outputs.cloudtrail_trail_name]
+        })
+      );
+      
+      expect(cloudtrailResponse.trailList).toHaveLength(1);
+      const trail = cloudtrailResponse.trailList![0];
+      
+      // Verify HIPAA compliance requirements
+      expect(trail.IsLogging).toBe(true);
+      expect(trail.IsMultiRegionTrail).toBe(true);
+      expect(trail.LogFileValidationEnabled).toBe(true);
+      expect(trail.KMSKeyId).toBeTruthy(); // Should be encrypted
+      
+      // Verify S3 bucket configuration
+      expect(trail.S3BucketName).toBeTruthy();
+      expect(trail.S3KeyPrefix).toBe("audit-logs");
+    });
+
+    it("should validate audit trail S3 bucket exists and is encrypted", async () => {
+      if (!outputs.audit_trail_bucket_id) {
+        console.warn("Audit trail bucket ID not found in outputs, skipping audit bucket tests");
+        return;
+      }
+
+      // Verify bucket exists
+      await s3Client.send(new HeadBucketCommand({ Bucket: outputs.audit_trail_bucket_id }));
+
+      // Check encryption configuration
+      const encryptionResponse = await s3Client.send(
+        new GetBucketEncryptionCommand({ Bucket: outputs.audit_trail_bucket_id })
+      );
+      
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeTruthy();
+      expect(encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0]
+        .ApplyServerSideEncryptionByDefault!.SSEAlgorithm).toBe("aws:kms");
+
+      // Check versioning is enabled for audit compliance
+      const versioningResponse = await s3Client.send(
+        new GetBucketVersioningCommand({ Bucket: outputs.audit_trail_bucket_id })
+      );
+      
+      expect(versioningResponse.Status).toBe("Enabled");
     });
   });
 });
