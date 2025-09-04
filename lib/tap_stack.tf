@@ -462,14 +462,14 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier             = "${var.project_name}-database-${terraform.workspace}"
-  engine                 = "mysql"
-  engine_version         = "8.0"
-  instance_class         = terraform.workspace == "production" ? "db.t3.small" : "db.t3.micro"
-  allocated_storage      = 20
-  max_allocated_storage  = 100
-  storage_type           = "gp2"
-  storage_encrypted      = true
+  identifier            = "${var.project_name}-database-${terraform.workspace}"
+  engine                = "mysql"
+  engine_version        = "8.0"
+  instance_class        = terraform.workspace == "production" ? "db.t3.small" : "db.t3.micro"
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_type          = "gp2"
+  storage_encrypted     = true
 
   db_name  = "appdb"
   username = var.db_username
@@ -480,8 +480,8 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = terraform.workspace == "production" ? 7 : 1
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = terraform.workspace != "production"
   deletion_protection = terraform.workspace == "production"
@@ -564,12 +564,12 @@ resource "aws_iam_role_policy_attachment" "lambda_shutdown" {
 }
 
 resource "aws_lambda_function" "ec2_shutdown" {
-  filename         = "lambda_shutdown.zip"
-  function_name    = "${var.project_name}-ec2-shutdown-${terraform.workspace}"
-  role            = aws_iam_role.lambda_shutdown_role.arn
-  handler         = "lambda_function.lambda_handler"
-  runtime         = "python3.9"
-  timeout         = 60
+  filename      = "lambda_shutdown.zip"
+  function_name = "${var.project_name}-ec2-shutdown-${terraform.workspace}"
+  role          = aws_iam_role.lambda_shutdown_role.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 60
 
   source_code_hash = data.archive_file.lambda_shutdown.output_base64sha256
 
@@ -657,7 +657,7 @@ data "archive_file" "lambda_shutdown" {
   type        = "zip"
   source_file = local_file.lambda_shutdown_code.filename
   output_path = "lambda_shutdown.zip"
-  
+
   depends_on = [local_file.lambda_shutdown_code]
 }
 

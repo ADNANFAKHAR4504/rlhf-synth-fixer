@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.0"
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -9,14 +9,14 @@ terraform {
   }
 
   backend "s3" {
-    bucket               = "your-terraform-state-bucket"  # Replace with your actual bucket name
+    bucket               = "your-terraform-state-bucket" # Replace with your actual bucket name
     key                  = "tap-stack/terraform.tfstate"
     region               = "us-east-1"
     workspace_key_prefix = "workspaces"
-    
+
     # State locking
     dynamodb_table = "terraform-state-lock"
-    
+
     # Encryption
     encrypt = true
   }
@@ -50,8 +50,8 @@ variable "project_name" {
 variable "allowed_ssh_cidr" {
   description = "CIDR block allowed for SSH access"
   type        = string
-  default     = "203.0.113.0/32"  # Replace with your office IP
-  
+  default     = "203.0.113.0/32" # Replace with your office IP
+
   validation {
     condition     = can(cidrhost(var.allowed_ssh_cidr, 0))
     error_message = "The allowed_ssh_cidr must be a valid CIDR block."
@@ -62,7 +62,7 @@ variable "sns_https_endpoint" {
   description = "HTTPS endpoint for SNS notifications"
   type        = string
   default     = "https://example.com/alerts"
-  
+
   validation {
     condition     = startswith(var.sns_https_endpoint, "https://")
     error_message = "SNS endpoint must use HTTPS."
@@ -85,14 +85,14 @@ variable "db_username" {
 variable "db_password" {
   description = "Database master password"
   type        = string
-  default     = "changeme123!"  # Use AWS Secrets Manager in production
+  default     = "changeme123!" # Use AWS Secrets Manager in production
   sensitive   = true
 }
 
 # Local values
 locals {
   availability_zones = ["${var.aws_region}a", "${var.aws_region}b"]
-  
+
   common_tags = {
     Project     = var.project_name
     Environment = terraform.workspace
