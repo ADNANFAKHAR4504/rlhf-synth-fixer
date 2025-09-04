@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -174,27 +173,65 @@ export class SecureInfrastructureStack extends cdk.Stack {
 import boto3
 import json
 import time
+import urllib3
+
+def send_response(event, context, response_status, response_data=None, physical_resource_id=None, no_echo=False, reason=None):
+    response_url = event['ResponseURL']
+    
+    response_body = {
+        'Status': response_status,
+        'Reason': reason or 'See CloudWatch Log Stream: {}'.format(context.log_stream_name),
+        'PhysicalResourceId': physical_resource_id or context.log_stream_name,
+        'StackId': event['StackId'],
+        'RequestId': event['RequestId'],
+        'LogicalResourceId': event['LogicalResourceId'],
+        'NoEcho': no_echo,
+        'Data': response_data or {}
+    }
+
+    json_response_body = json.dumps(response_body)
+
+    headers = {
+        'content-type': '',
+        'content-length': str(len(json_response_body))
+    }
+
+    http = urllib3.PoolManager()
+    try:
+        response = http.request('PUT', response_url, body=json_response_body, headers=headers)
+        print("Status code:", response.status)
+    except Exception as e:
+        print("send_response failed executing http.request(...):", e)
 
 def handler(event, context):
-    if event['RequestType'] == 'Delete':
-        return {'Status': 'SUCCESS', 'PhysicalResourceId': 'kms-key-waiter'}
-    
-    kms = boto3.client('kms')
-    key_id = event['ResourceProperties']['KeyId']
-    
-    # Wait for key to be available
-    max_attempts = 30
-    for attempt in range(max_attempts):
-        try:
-            response = kms.describe_key(KeyId=key_id)
-            if response['KeyMetadata']['KeyState'] == 'Enabled':
-                return {'Status': 'SUCCESS', 'PhysicalResourceId': 'kms-key-waiter'}
-        except Exception as e:
-            print(f"Attempt {attempt + 1}: {str(e)}")
+    try:
+        print('Received event:', json.dumps(event))
         
-        time.sleep(10)
+        if event['RequestType'] == 'Delete':
+            send_response(event, context, 'SUCCESS', physical_resource_id='kms-key-waiter')
+            return
+        
+        kms = boto3.client('kms')
+        key_id = event['ResourceProperties']['KeyId']
+        
+        # Wait for key to be available
+        max_attempts = 30
+        for attempt in range(max_attempts):
+            try:
+                response = kms.describe_key(KeyId=key_id)
+                if response['KeyMetadata']['KeyState'] == 'Enabled':
+                    send_response(event, context, 'SUCCESS', physical_resource_id='kms-key-waiter')
+                    return
+            except Exception as e:
+                print(f"Attempt {attempt + 1}: {str(e)}")
+            
+            time.sleep(10)
+        
+        send_response(event, context, 'FAILED', reason='KMS key did not become available within timeout')
     
-    raise Exception('KMS key did not become available within timeout')
+    except Exception as e:
+        print('Error:', str(e))
+        send_response(event, context, 'FAILED', reason=str(e))
         `),
         timeout: cdk.Duration.minutes(10),
       }).functionArn,
@@ -844,15 +881,24 @@ def handler(event, context):
     // 10. APPLICATION LOAD BALANCER WITH HTTPS
     // =============================================================================
 
-    // SSL Certificate (you'll need to validate this manually or use DNS validation)
+    // SSL Certificate - OPTIONAL: Enable this when you have a real domain
+    // For testing/development, you can deploy without SSL and use HTTP only
+    // To enable SSL: 
+    // 1. Replace 'yourdomain.com' with your actual domain
+    // 2. Ensure you have a Route53 hosted zone for DNS validation
+    // 3. Uncomment the certificate code and HTTPS listener below
+
+    // Uncomment the following lines when you're ready to use SSL:
+    /*
     const certificate = new certificatemanager.Certificate(
       this,
       'SSLCertificate',
       {
-        domainName: '*.yourdomain.com', // Replace with your domain
-        validation: certificatemanager.CertificateValidation.fromEmail(),
+        domainName: '*.yourdomain.com', // Replace with your actual domain
+        validation: certificatemanager.CertificateValidation.fromDns(),
       }
     );
+    */
 
     const alb = new elbv2.ApplicationLoadBalancer(this, 'SecureALB', {
       vpc,
@@ -899,24 +945,28 @@ def handler(event, context):
       }
     );
 
-    // HTTPS Listener with SSL Certificate
+    // HTTPS Listener with SSL Certificate - UNCOMMENT when you enable the certificate above
+    /*
     alb.addListener('HTTPSListener', {
       port: 443,
       protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [certificate],
+      certificates: [certificate], // Requires certificate to be uncommented above
       sslPolicy: elbv2.SslPolicy.TLS13_RES,
       defaultTargetGroups: [targetGroup],
     });
+    */
 
-    // HTTP Listener - Redirect to HTTPS
+    // HTTP Listener - For now, serves traffic directly (change to redirect when HTTPS is enabled)
     alb.addListener('HTTPListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.redirect({
-        protocol: 'HTTPS',
-        port: '443',
-        permanent: true,
-      }),
+      defaultTargetGroups: [targetGroup], // Serves traffic directly without SSL
+      // When you enable HTTPS, change the above to a redirect:
+      // defaultAction: elbv2.ListenerAction.redirect({
+      //   protocol: 'HTTPS',
+      //   port: '443',
+      //   permanent: true,
+      // }),
     });
 
     // Allow ALB to communicate with EC2 instances
