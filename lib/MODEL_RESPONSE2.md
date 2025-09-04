@@ -1,4 +1,4 @@
-I'll create a comprehensive serverless application using AWS CDK in TypeScript that meets all your requirements. Here's the complete solution:
+You're right! The `tags` property doesn't exist directly on those resource props. In AWS CDK, tags are applied using the `Tags.of()` method after resource creation. Here's the corrected TypeScript file:
 
 ```typescript
 import * as cdk from 'aws-cdk-lib';
@@ -64,11 +64,11 @@ export class ServerlessAppStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       pointInTimeRecovery: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      tags: {
-        Environment: 'Production',
-        Application: 'ServerlessApp',
-      },
     });
+
+    // Apply tags to DynamoDB table
+    cdk.Tags.of(dynamoTable).add('Environment', 'Production');
+    cdk.Tags.of(dynamoTable).add('Application', 'ServerlessApp');
 
     // Create IAM role for Lambda functions
     const lambdaRole = new iam.Role(this, 'ServerlessAppLambdaRole', {
@@ -115,11 +115,11 @@ export class ServerlessAppStack extends cdk.Stack {
           ],
         }),
       },
-      tags: {
-        Environment: 'Production',
-        Application: 'ServerlessApp',
-      },
     });
+
+    // Apply tags to IAM role
+    cdk.Tags.of(lambdaRole).add('Environment', 'Production');
+    cdk.Tags.of(lambdaRole).add('Application', 'ServerlessApp');
 
     // Create Lambda function for handling API requests
     const apiHandlerFunction = new lambda.Function(
@@ -278,12 +278,12 @@ export class ServerlessAppStack extends cdk.Stack {
         retryAttempts: 2,
         reservedConcurrentExecutions: 100, // Cost control
         logRetention: logs.RetentionDays.ONE_WEEK,
-        tags: {
-          Environment: 'Production',
-          Application: 'ServerlessApp',
-        },
       }
     );
+
+    // Apply tags to API handler function
+    cdk.Tags.of(apiHandlerFunction).add('Environment', 'Production');
+    cdk.Tags.of(apiHandlerFunction).add('Application', 'ServerlessApp');
 
     // Create Lambda function for background processing
     const backgroundProcessorFunction = new lambda.Function(
@@ -356,11 +356,14 @@ export class ServerlessAppStack extends cdk.Stack {
         retryAttempts: 2,
         reservedConcurrentExecutions: 50, // Cost control
         logRetention: logs.RetentionDays.ONE_WEEK,
-        tags: {
-          Environment: 'Production',
-          Application: 'ServerlessApp',
-        },
       }
+    );
+
+    // Apply tags to background processor function
+    cdk.Tags.of(backgroundProcessorFunction).add('Environment', 'Production');
+    cdk.Tags.of(backgroundProcessorFunction).add(
+      'Application',
+      'ServerlessApp'
     );
 
     // Create API Gateway with IP restrictions
@@ -445,6 +448,11 @@ export class ServerlessAppStack extends cdk.Stack {
         alarmDescription: 'Lambda function duration is too high',
       });
 
+    // Apply tags to all resources in the stack
+    cdk.Tags.of(this).add('Environment', 'Production');
+    cdk.Tags.of(this).add('Application', 'ServerlessApp');
+    cdk.Tags.of(this).add('CostCenter', 'Engineering');
+
     // Output important information
     new cdk.CfnOutput(this, 'ApiGatewayUrl', {
       value: api.url,
@@ -475,83 +483,26 @@ new ServerlessAppStack(app, 'ServerlessAppStack', {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-east-1',
   },
-  tags: {
-    Environment: 'Production',
-    Application: 'ServerlessApp',
-    CostCenter: 'Engineering',
-  },
 });
 ```
 
-## Key Features Implemented
+## Key Changes Made
 
-### 1. **Lambda Functions**
+1. **Removed inline `tags` properties** from:
+   - DynamoDB Table props
+   - IAM Role props
+   - Lambda Function props
 
-- **Region**: Deployed in `us-east-1`
-- **Timeout**: 60 seconds maximum
-- **Naming**: Prefixed with `ServerlessApp-`
-- **Versioning**: Enabled automatically by CDK
-- **Error Handling**: Comprehensive try-catch blocks with S3 logging
-- **Retries**: Configured with `retryAttempts: 2`
+2. **Added `cdk.Tags.of()` calls** after resource creation:
+   - `cdk.Tags.of(dynamoTable).add('Environment', 'Production')`
+   - `cdk.Tags.of(lambdaRole).add('Environment', 'Production')`
+   - `cdk.Tags.of(apiHandlerFunction).add('Environment', 'Production')`
+   - `cdk.Tags.of(backgroundProcessorFunction).add('Environment', 'Production')`
 
-### 2. **API Gateway**
+3. **Added stack-level tags** using `cdk.Tags.of(this)` which applies to all resources in the stack
 
-- **IP Restrictions**: Resource policy limiting access to trusted IP ranges
-- **Throttling**: Rate limiting for cost control
-- **CORS**: Enabled for cross-origin requests
-- **Logging**: Full request/response logging enabled
+4. **Moved stack-level tags** from the app instantiation to within the stack constructor
 
-### 3. **Security & IAM**
+This approach is the correct way to apply tags in AWS CDK v2. The `cdk.Tags.of()` method is the recommended approach for adding tags to resources and can be applied at the stack level to tag all resources automatically.
 
-- **Least Privilege**: Lambda role with minimal required permissions
-- **Environment Tagging**: All roles tagged with `Environment: Production`
-- **Encryption**: KMS encryption for Lambda environment variables
-- **S3 Security**: Block public access, encryption enabled
-
-### 4. **DynamoDB**
-
-- **Billing**: Pay-per-request for cost effectiveness
-- **Encryption**: AWS managed encryption
-- **Backup**: Point-in-time recovery enabled
-- **Access**: Secure Lambda integration
-
-### 5. **S3 Logging**
-
-- **Versioning**: Enabled on bucket
-- **Lifecycle**: Automatic cleanup of old logs
-- **Security**: Proper bucket policies and encryption
-- **Organization**: Structured logging by date and function
-
-### 6. **Cost Optimization**
-
-- **DynamoDB**: Pay-per-request billing
-- **Lambda**: Reserved concurrency limits
-- **S3**: Lifecycle policies for log cleanup
-- **CloudWatch**: Short log retention periods
-
-### 7. **Monitoring & Reliability**
-
-- **CloudWatch Alarms**: Error rate and duration monitoring
-- **Structured Logging**: JSON logs to S3
-- **Health Checks**: `/health` endpoint
-- **Auto-cleanup**: All resources deleted with stack
-
-## Deployment Instructions
-
-1. **Prerequisites**:
-
-   ```bash
-   npm install -g aws-cdk
-   npm install aws-cdk-lib constructs
-   ```
-
-2. **Deploy**:
-
-   ```bash
-   cdk bootstrap
-   cdk deploy
-   ```
-
-3. **Update IP Ranges**: Modify the `trustedIpRanges` array with your actual IP ranges before deployment.
-
-This solution provides a production-ready, secure, and cost-effective serverless application that meets all specified requirements while following AWS best practices.
+The code should now compile without TypeScript errors and deploy successfully!
