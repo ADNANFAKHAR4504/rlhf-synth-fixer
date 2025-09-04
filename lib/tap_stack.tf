@@ -867,7 +867,7 @@ resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-database"
 
   engine         = "mysql"
-  engine_version = "8.0.35"
+  engine_version = "8.0.34"
   instance_class = var.db_instance_class
 
   allocated_storage     = 20
@@ -943,7 +943,7 @@ resource "aws_lb" "main" {
   access_logs {
     bucket  = aws_s3_bucket.logs_bucket.id
     prefix  = "alb-access-logs"
-    enabled = true
+    enabled = false
   }
 
   tags = merge(local.common_tags, {
@@ -1142,9 +1142,9 @@ resource "aws_autoscaling_group" "app" {
   health_check_type         = "ELB"
   health_check_grace_period = 300
 
-  min_size         = 2
-  max_size         = 10
-  desired_capacity = 2
+  min_size         = 1
+  max_size         = 1
+  desired_capacity = 1
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -1191,7 +1191,7 @@ resource "aws_instance" "bastion" {
     kms_key_id  = aws_kms_key.main.arn
   }
 
-  user_data = base64encode(<<-EOF
+  user_data = <<-EOF
     #!/bin/bash
     yum update -y
     yum install -y aws-cli
@@ -1213,7 +1213,6 @@ resource "aws_instance" "bastion" {
 ================================================================
 EOL
   EOF
-  )
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-bastion"

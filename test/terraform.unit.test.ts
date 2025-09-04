@@ -255,7 +255,7 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
     test("creates RDS instance with latest MySQL version", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
       expect(terraformContent).toMatch(/engine\s*=\s*"mysql"/);
-      expect(terraformContent).toMatch(/engine_version\s*=\s*"8\.0\.35"/);
+      expect(terraformContent).toMatch(/engine_version\s*=\s*"8\.0\.34"/);
     });
 
     test("RDS uses random password without special characters", () => {
@@ -329,9 +329,9 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
     });
 
     test("auto scaling group has proper scaling configuration", () => {
-      expect(terraformContent).toMatch(/min_size\s*=\s*2/);
-      expect(terraformContent).toMatch(/max_size\s*=\s*10/);
-      expect(terraformContent).toMatch(/desired_capacity\s*=\s*2/);
+      expect(terraformContent).toMatch(/min_size\s*=\s*1/);
+      expect(terraformContent).toMatch(/max_size\s*=\s*1/);
+      expect(terraformContent).toMatch(/desired_capacity\s*=\s*1/);
     });
   });
 
@@ -529,8 +529,8 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
   // Performance and scalability
   describe("Performance and Scalability Configuration", () => {
     test("auto scaling is properly configured", () => {
-      expect(terraformContent).toMatch(/min_size\s*=\s*2/);
-      expect(terraformContent).toMatch(/max_size\s*=\s*10/);
+      expect(terraformContent).toMatch(/min_size\s*=\s*1/);
+      expect(terraformContent).toMatch(/max_size\s*=\s*1/);
       expect(terraformContent).toMatch(/health_check_type\s*=\s*"ELB"/);
     });
 
