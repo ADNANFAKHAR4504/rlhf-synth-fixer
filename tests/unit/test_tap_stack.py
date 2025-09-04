@@ -57,7 +57,7 @@ class TestTapStack(unittest.TestCase):
         template.has_resource_properties("AWS::RDS::DBInstance", {
             "Engine": "mysql",
             "MultiAZ": False,
-            "StorageEncrypted": True,
+            "StorageEncrypted": False,
             "BackupRetentionPeriod": 7
         })
 

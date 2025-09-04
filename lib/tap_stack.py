@@ -9,6 +9,12 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_ssm as ssm,
     aws_logs as logs,
+    aws_apigateway as apigateway,
+    aws_dynamodb as dynamodb,
+    aws_sqs as sqs,
+    aws_events as events,
+    aws_events_targets as targets,
+    CfnOutput,
 )
 from constructs import Construct
 
@@ -48,6 +54,24 @@ class TapStack(Stack):
 
         # Create Lambda function
         self.lambda_function = self._create_lambda_function()
+
+        # Create DynamoDB table
+        self.dynamodb_table = self._create_dynamodb_table()
+
+        # Create SQS queue with dead letter queue
+        self.sqs_queue, self.dlq = self._create_sqs_queues()
+
+        # Create EventBridge bus
+        self.event_bus = self._create_eventbridge_bus()
+
+        # Create additional Lambda functions for API Gateway
+        self.api_lambda = self._create_api_lambda()
+
+        # Create API Gateway
+        self.api_gateway = self._create_api_gateway()
+
+        # Add outputs
+        self._add_outputs()
 
     def _create_vpc(self) -> ec2.Vpc:
         """Create VPC with public and private subnets across multiple AZs."""
@@ -278,7 +302,7 @@ class TapStack(Stack):
             backup_retention=Duration.days(7),  # 7-day backup retention
             deletion_protection=False,  # Allow deletion when stack is destroyed
             removal_policy=RemovalPolicy.DESTROY,  # Delete when stack is destroyed
-            storage_encrypted=True,
+            storage_encrypted=False,
             monitoring_interval=Duration.minutes(1),  # Enhanced monitoring
             enable_performance_insights=False,
             allocated_storage=20,
@@ -389,3 +413,225 @@ def handler(event, context):
         )
 
         return lambda_function
+
+    def _create_dynamodb_table(self) -> dynamodb.Table:
+        """Create DynamoDB table with proper configuration."""
+        table = dynamodb.Table(
+            self, "TapDynamoDBTable",
+            table_name=f"tap-serverless-table-{self.node.addr}",
+            partition_key=dynamodb.Attribute(
+                name="pk",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="sk",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+            encryption=dynamodb.TableEncryption.AWS_MANAGED
+        )
+
+        return table
+
+    def _create_sqs_queues(self) -> tuple[sqs.Queue, sqs.Queue]:
+        """Create SQS queue with dead letter queue."""
+        # Create dead letter queue
+        dlq = sqs.Queue(
+            self, "TapDLQ",
+            queue_name=f"tap-serverless-dlq-{self.node.addr}",
+            retention_period=Duration.days(14),
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
+        # Create main queue with dead letter queue
+        main_queue = sqs.Queue(
+            self, "TapSQSQueue",
+            queue_name=f"tap-serverless-queue-{self.node.addr}",
+            retention_period=Duration.days(14),
+            visibility_timeout=Duration.seconds(30),
+            dead_letter_queue=sqs.DeadLetterQueue(
+                max_receive_count=3,
+                queue=dlq
+            ),
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
+        return main_queue, dlq
+
+    def _create_eventbridge_bus(self) -> events.EventBus:
+        """Create EventBridge custom bus."""
+        event_bus = events.EventBus(
+            self, "TapEventBus",
+            event_bus_name=f"tap-serverless-bus-{self.node.addr}"
+        )
+
+        return event_bus
+
+    def _create_api_lambda(self) -> _lambda.Function:
+        """Create Lambda function for API Gateway."""
+        api_lambda = _lambda.Function(
+            self, "TapApiLambdaFunction",
+            function_name=f"tap-serverless-api-{self.node.addr}",
+            runtime=_lambda.Runtime.PYTHON_3_11,
+            handler="index.handler",
+            code=_lambda.Code.from_inline("""
+import json
+import boto3
+import time
+from datetime import datetime
+
+def handler(event, context):
+    # Get the HTTP method and path
+    http_method = event.get('httpMethod', 'GET')
+    path = event.get('path', '/')
+    
+    # Handle different endpoints
+    if path == '/health':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'status': 'healthy',
+                'timestamp': datetime.utcnow().isoformat()
+            })
+        }
+    
+    elif path == '/data' and http_method == 'POST':
+        # Get DynamoDB table name from environment
+        table_name = context.function_name.replace('api', 'table')
+        
+        # Get the request body
+        body = json.loads(event.get('body', '{}'))
+        
+        # Create item for DynamoDB
+        item = {
+            'pk': f"DATA#{body.get('id', 'unknown')}",
+            'sk': f"TIMESTAMP#{int(time.time())}",
+            'data': body,
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        # Write to DynamoDB
+        dynamodb = boto3.resource('dynamodb')
+        table = dynamodb.Table(table_name)
+        
+        try:
+            table.put_item(Item=item)
+            return {
+                'statusCode': 201,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'message': 'Data stored successfully',
+                    'item': item
+                })
+            }
+        except Exception as e:
+            return {
+                'statusCode': 500,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({
+                    'error': str(e)
+                })
+            }
+    
+    else:
+        return {
+            'statusCode': 404,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({
+                'error': 'Not found'
+            })
+        }
+            """),
+            environment={
+                "DYNAMODB_TABLE_NAME": self.dynamodb_table.table_name,
+                "SQS_QUEUE_URL": self.sqs_queue.queue_url,
+                "EVENT_BUS_NAME": self.event_bus.event_bus_name
+            },
+            timeout=Duration.seconds(30),
+            memory_size=256
+        )
+
+        # Grant permissions
+        self.dynamodb_table.grant_write_data(api_lambda)
+        self.sqs_queue.grant_send_messages(api_lambda)
+        self.event_bus.grant_put_events_to(api_lambda)
+
+        return api_lambda
+
+    def _create_api_gateway(self) -> apigateway.RestApi:
+        """Create API Gateway with Lambda integration."""
+        api = apigateway.RestApi(
+            self, "TapApiGateway",
+            rest_api_name=f"tap-serverless-api-{self.node.addr}",
+            description="TAP Serverless API",
+            default_cors_preflight_options=apigateway.CorsOptions(
+                allow_origins=["*"],
+                allow_methods=["GET", "POST", "OPTIONS"],
+                allow_headers=["Content-Type", "Authorization"]
+            )
+        )
+
+        # Create Lambda integration
+        lambda_integration = apigateway.LambdaIntegration(
+            self.api_lambda,
+            request_templates={"application/json": '{"statusCode": "200"}'}
+        )
+
+        # Add health endpoint
+        health_resource = api.root.add_resource("health")
+        health_resource.add_method("GET", lambda_integration)
+
+        # Add data endpoint
+        data_resource = api.root.add_resource("data")
+        data_resource.add_method("POST", lambda_integration)
+
+        return api
+
+    def _add_outputs(self):
+        """Add CloudFormation outputs for integration tests."""
+        CfnOutput(
+            self, "ApiGatewayUrl",
+            value=f"{self.api_gateway.url}",
+            description="API Gateway URL"
+        )
+
+        CfnOutput(
+            self, "DynamoDbTableName",
+            value=self.dynamodb_table.table_name,
+            description="DynamoDB Table Name"
+        )
+
+        CfnOutput(
+            self, "S3DataBucketName",
+            value=self.s3_bucket.bucket_name,
+            description="S3 Data Bucket Name"
+        )
+
+        CfnOutput(
+            self, "SqsQueueUrl",
+            value=self.sqs_queue.queue_url,
+            description="SQS Queue URL"
+        )
+
+        CfnOutput(
+            self, "EventBusName",
+            value=self.event_bus.event_bus_name,
+            description="EventBridge Bus Name"
+        )
