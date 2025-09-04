@@ -257,7 +257,7 @@ describe("AWS Region Migration Infrastructure Tests", () => {
         return;
       }
 
-      const s3 = new AWS.S3();
+    const s3 = new AWS.S3();
       const bucketName = outputs?.s3_bucket_name;
       expect(bucketName).toBeDefined();
 
@@ -271,14 +271,16 @@ describe("AWS Region Migration Infrastructure Tests", () => {
 
       // Check bucket encryption
       const encryption = await s3.getBucketEncryption({ Bucket: bucketName }).promise();
-      expect(encryption.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe("AES256");
+      const sseAlg = encryption.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
+      expect(sseAlg).toBe("AES256");
 
       // Check public access block
       const publicAccessBlock = await s3.getPublicAccessBlock({ Bucket: bucketName }).promise();
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.IgnorePublicAcls).toBe(true);
-      expect(publicAccessBlock.PublicAccessBlockConfiguration.RestrictPublicBuckets).toBe(true);
+      const pab = publicAccessBlock.PublicAccessBlockConfiguration;
+      expect(pab?.BlockPublicAcls).toBe(true);
+      expect(pab?.BlockPublicPolicy).toBe(true);
+      expect(pab?.IgnorePublicAcls).toBe(true);
+      expect(pab?.RestrictPublicBuckets).toBe(true);
     });
 
     it("should have test file in S3 bucket", async () => {
@@ -288,14 +290,14 @@ describe("AWS Region Migration Infrastructure Tests", () => {
       }
 
       const s3 = new AWS.S3();
-      const bucketName = outputs?.s3_bucket_name;
-      expect(bucketName).toBeDefined();
+    const bucketName = outputs?.s3_bucket_name;
+    expect(bucketName).toBeDefined();
 
-      const objects = await s3.listObjectsV2({ Bucket: bucketName }).promise();
-      expect(objects.Contents).toBeDefined();
-      expect(objects.Contents.length).toBeGreaterThan(0);
+    const objects = await s3.listObjectsV2({ Bucket: bucketName }).promise();
+      const contents = objects.Contents ?? [];
+      expect(contents.length).toBeGreaterThan(0);
 
-      const testFile = objects.Contents.find(obj => obj.Key === "test.txt");
+      const testFile = contents.find(obj => obj.Key === "test.txt");
       expect(testFile).toBeDefined();
       expect(testFile!.Size).toBeGreaterThan(0);
     });
@@ -337,12 +339,12 @@ describe("AWS Region Migration Infrastructure Tests", () => {
         return;
       }
 
-      const availabilityZones = outputs?.availability_zones;
+      const availabilityZones: string[] = outputs?.availability_zones;
       expect(availabilityZones).toBeDefined();
       expect(availabilityZones.length).toBeGreaterThanOrEqual(2);
 
       // Verify all AZs are in us-west-2
-      availabilityZones.forEach(az => {
+      availabilityZones.forEach((az: string) => {
         expect(az).toMatch(/^us-west-2[a-z]$/);
       });
     });
@@ -365,13 +367,13 @@ describe("AWS Region Migration Infrastructure Tests", () => {
 
       // Check public route table has internet gateway route
       const publicRouteTable = routeTables.RouteTables!.find(rt => 
-        rt.Routes.some(route => route.GatewayId && route.DestinationCidrBlock === "0.0.0.0/0")
+        (rt.Routes || []).some(route => route.GatewayId && route.DestinationCidrBlock === "0.0.0.0/0")
       );
       expect(publicRouteTable).toBeDefined();
 
       // Check private route table has NAT gateway route
       const privateRouteTable = routeTables.RouteTables!.find(rt => 
-        rt.Routes.some(route => route.NatGatewayId && route.DestinationCidrBlock === "0.0.0.0/0")
+        (rt.Routes || []).some(route => route.NatGatewayId && route.DestinationCidrBlock === "0.0.0.0/0")
       );
       expect(privateRouteTable).toBeDefined();
     });
