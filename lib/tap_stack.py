@@ -152,6 +152,12 @@ s3_logging_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}-logs
     tags=common_tags
 )
 
+# Enable ACL on logging bucket for CloudFront access
+s3_logging_bucket_acl = aws.s3.BucketAclV2(f"{company_name}-{app_name}-{environment}-logs-acl",
+    bucket=s3_logging_bucket.id,
+    acl="log-delivery-write"
+)
+
 s3_bucket_logging = aws.s3.BucketLoggingV2(
     f"{company_name}-{app_name}-{environment}-logging",
     bucket=s3_bucket.id,
