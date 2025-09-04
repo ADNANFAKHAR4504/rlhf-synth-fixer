@@ -14,13 +14,14 @@ let outputs: any = {};
 try {
   outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 } catch (error) {
-  console.error('cfn-outputs/flat-outputs.json not found, using fallback values');
+  console.warn('cfn-outputs/flat-outputs.json not found, using fallback values');
 }
 
-const API_BASE_URL = outputs[`ServerlessApp-ApiGatewayUrl-${environmentSuffix}`]?.replace(/\/$/, '');
-const DYNAMODB_TABLE_NAME = outputs[`ServerlessApp-DynamoDBTableName-${environmentSuffix}`];
-const KMS_KEY_ID = outputs[`ServerlessApp-KMSKeyId-${environmentSuffix}`];
-const S3_BUCKET_NAME = outputs[`ServerlessApp-S3BucketName-${environmentSuffix}`];
+
+const API_BASE_URL = outputs["ApiGatewayUrl"];
+const DYNAMODB_TABLE_NAME = outputs["DynamoDBTableName"];
+const KMS_KEY_ID = outputs["KMSKeyId"];
+const S3_BUCKET_NAME = outputs["S3BucketName"];
 
 // Initialize AWS clients
 const region = process.env.AWS_REGION || 'us-east-1';
