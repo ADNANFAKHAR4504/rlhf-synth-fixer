@@ -22,6 +22,13 @@ terraform {
       version = "~> 2.0"
     }
   }
+  # S3 Backend Configuration
+  # Configure with environment-specific values:
+  # terraform init -backend-config="bucket=your-terraform-state-bucket" \
+  #                -backend-config="key=secure-data-pipeline/terraform.tfstate" \
+  #                -backend-config="region=us-east-1" \
+  #                -backend-config="encrypt=true" \
+  #                -backend-config="dynamodb_table=terraform-state-lock"
   backend "s3" {}
 }
 
@@ -129,6 +136,30 @@ variable "sns_email" {
   description = "Email address for SNS notifications"
   type        = string
   default     = "admin@example.com"
+}
+
+variable "health_check_domain" {
+  description = "Domain name for Route 53 health check"
+  type        = string
+  default     = "example.com"
+}
+
+variable "health_check_path" {
+  description = "Path for Route 53 health check"
+  type        = string
+  default     = "/health"
+}
+
+variable "health_check_port" {
+  description = "Port for Route 53 health check"
+  type        = number
+  default     = 443
+}
+
+variable "health_check_protocol" {
+  description = "Protocol for Route 53 health check (HTTP, HTTPS, TCP)"
+  type        = string
+  default     = "HTTPS"
 }
 
 variable "enable_config_recorder" {
@@ -1168,10 +1199,10 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
 
 # Route 53 Health Check (optional)
 resource "aws_route53_health_check" "main" {
-  fqdn              = "example.com"
-  port              = 443
-  type              = "HTTPS"
-  resource_path     = "/health"
+  fqdn              = var.health_check_domain
+  port              = var.health_check_port
+  type              = var.health_check_protocol
+  resource_path     = var.health_check_path
   failure_threshold = "3"
   request_interval  = "30"
 
