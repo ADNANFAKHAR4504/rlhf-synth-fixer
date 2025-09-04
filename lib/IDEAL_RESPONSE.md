@@ -10,7 +10,7 @@ This document contains the complete AWS Enterprise Security Framework implementa
 4. **Fixed Config service linked role conflict** - Uses data source for existing role
 5. **Fixed Config recorder/delivery channel limits** - Disabled resources due to AWS limits  
 6. **Fixed CloudTrail trail limit** - Disabled resource due to trail limit exceeded
-7. **Fixed WAF logging ARN format** - Added required `:*` suffix to CloudWatch log group ARN for WAF v2
+7. **Fixed WAF logging ARN format** - Changed CloudWatch log group name to required `aws-waf-logs-` prefix and corrected ARN format
 8. **Added DeleteMarkerReplication to S3 replication** - Required for current schema version
 
 ## Complete Terraform Configuration
@@ -1141,7 +1141,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "security_waf_logging" {
   count = var.enable_waf ? 1 : 0
 
   resource_arn            = aws_wafv2_web_acl.main[0].arn
-  log_destination_configs = ["${aws_cloudwatch_log_group.waf[0].arn}:*"]
+  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
 
   redacted_fields {
     single_header {
@@ -1159,7 +1159,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "security_waf_logging" {
 resource "aws_cloudwatch_log_group" "waf" {
   count = var.enable_waf ? 1 : 0
 
-  name              = "/aws/wafv2/${local.name_prefix}-security-waf-${random_id.suffix.hex}"
+  name              = "aws-waf-logs-${local.name_prefix}-security-waf-${random_id.suffix.hex}"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.security_master_key.arn
 

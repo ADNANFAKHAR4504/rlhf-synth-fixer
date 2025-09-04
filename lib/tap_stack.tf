@@ -1288,7 +1288,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "main" {
   count = var.enable_waf ? 1 : 0
 
   resource_arn            = aws_wafv2_web_acl.main[0].arn
-  log_destination_configs = ["${aws_cloudwatch_log_group.waf[0].arn}:*"]
+  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
 
   redacted_fields {
     single_header {
@@ -1306,7 +1306,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "main" {
 resource "aws_cloudwatch_log_group" "waf" {
   count = var.enable_waf ? 1 : 0
 
-  name              = "/aws/wafv2/${local.name_prefix}-security-waf-${random_id.suffix.hex}"
+  name              = "aws-waf-logs-${local.name_prefix}-security-waf-${random_id.suffix.hex}"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.security_master_key.arn
 

@@ -100,12 +100,12 @@ const clients = {
 // Test timeout for integration tests
 const INTEGRATION_TIMEOUT = 30000;
 
-// Helper function to read outputs.json if it exists
+// Helper function to read cfn-outputs/flat-outputs.json if it exists
 function getOutputs(): any {
-  const outputsPath = path.join(__dirname, "../outputs.json");
+  const outputsPath = path.join(__dirname, "../cfn-outputs/flat-outputs.json");
   
   if (!fs.existsSync(outputsPath)) {
-    console.warn("outputs.json not found. Some tests may be skipped.");
+    console.warn("cfn-outputs/flat-outputs.json not found. Some tests may be skipped.");
     return {};
   }
   
@@ -113,7 +113,7 @@ function getOutputs(): any {
     const outputsContent = fs.readFileSync(outputsPath, "utf8");
     return JSON.parse(outputsContent);
   } catch (error) {
-    console.warn("Failed to parse outputs.json:", error);
+    console.warn("Failed to parse cfn-outputs/flat-outputs.json:", error);
     return {};
   }
 }
