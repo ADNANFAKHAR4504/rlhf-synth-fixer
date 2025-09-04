@@ -1,12 +1,9 @@
 import boto3
 import pytest
-from moto import mock_dynamodb, mock_s3, mock_lambda, mock_apigateway
+from moto import mock_aws
 
 
-@mock_dynamodb
-@mock_s3
-@mock_lambda
-@mock_apigateway
+@mock_aws
 def test_stack_integration():
     """Integration test for the complete stack"""
     # This is a placeholder for integration tests
