@@ -23,6 +23,12 @@ Parameters:
     Description: 'CIDR block allowed for management access'
     AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
 
+  UniqueId:
+    Type: String
+    Default: '001'
+    Description: 'Unique identifier for resource naming to avoid conflicts'
+    AllowedPattern: '^[a-z0-9]{1,8}$'
+
 Mappings:
   NetworkConfig:
     us-west-2:
@@ -651,7 +657,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'prod-bucket-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+      BucketName: !Sub 'prod-bucket-${AWS::AccountId}-${AWS::Region}-${UniqueId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -683,7 +689,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'prod-bucket-access-logs-${AWS::AccountId}-${AWS::Region}-${AWS::StackName}'
+      BucketName: !Sub 'prod-access-logs-${AWS::AccountId}-${AWS::Region}-${UniqueId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
