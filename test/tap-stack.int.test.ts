@@ -1,25 +1,4 @@
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeFlowLogsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import { RDSClient, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-  ListBucketsCommand,
-} from '@aws-sdk/client-s3';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
-import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
@@ -31,8 +10,28 @@ import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+  DescribeFlowLogsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { DescribeDBClustersCommand, RDSClient } from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  ListBucketsCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import * as fs from 'fs';
-import * as path from 'path';
 
 // Define stack outputs interface
 interface StackOutputs {
@@ -45,49 +44,24 @@ interface StackOutputs {
 }
 
 // Read stack outputs from flat-outputs file
-const readStackOutputs = (): StackOutputs => {
-  try {
-    const outputPath = path.join(process.cwd(), 'flat-outputs.txt');
-    if (fs.existsSync(outputPath)) {
-      const outputContent = fs.readFileSync(outputPath, 'utf-8');
-      const outputs: Record<string, string> = {};
+const outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
-      outputContent.split('\n').forEach(line => {
-        if (line.includes(' = ')) {
-          const [key, value] = line.split(' = ');
-          const outputKey = key.split('.')[1]; // Remove stack name prefix
-          outputs[outputKey] = value;
-        }
-      });
-
-      return {
-        vpcId: outputs.VpcId || '',
-        loadBalancerDNS: outputs.LoadBalancerDNS || '',
-        cloudFrontDomain: outputs.CloudFrontDomain || '',
-        s3BucketName: outputs.S3BucketName || '',
-        dynamoTableName: outputs.DynamoTableName || '',
-        rdsClusterEndpoint: outputs.RdsClusterEndpoint || '',
-      };
-    }
-  } catch (error) {
-    console.warn('Could not read flat-outputs.txt, using fallback values');
-  }
-
-  // Return fallback values if file doesn't exist
-  return {
-    vpcId: process.env.VPC_ID || '',
-    loadBalancerDNS: process.env.LOAD_BALANCER_DNS || '',
-    cloudFrontDomain: process.env.CLOUDFRONT_DOMAIN || '',
-    s3BucketName: process.env.S3_BUCKET_NAME || '',
-    dynamoTableName: process.env.DYNAMO_TABLE_NAME || '',
-    rdsClusterEndpoint: process.env.RDS_CLUSTER_ENDPOINT || '',
-  };
+const STACK_OUTPUTS: StackOutputs = {
+  vpcId: outputs.VpcId,
+  loadBalancerDNS: outputs.LoadBalancerDNS,
+  cloudFrontDomain: outputs.CloudFrontDomain,
+  s3BucketName: outputs.S3BucketName,
+  dynamoTableName: outputs.DynamoTableName,
+  rdsClusterEndpoint: outputs.RdsClusterEndpoint,
 };
 
-const STACK_OUTPUTS = readStackOutputs();
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2705';
-const region = process.env.AWS_REGION || 'ap-northeast-1';
+// Get AWS region from file
+const region = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
 
 // AWS clients
 const ec2Client = new EC2Client({ region });
@@ -96,7 +70,7 @@ const rdsClient = new RDSClient({ region });
 const s3Client = new S3Client({ region });
 const dynamoClient = new DynamoDBClient({ region });
 const asgClient = new AutoScalingClient({ region });
-const cloudFrontClient = new CloudFrontClient({ region: 'us-east-1' });
+const cloudFrontClient = new CloudFrontClient({ region });
 const logsClient = new CloudWatchLogsClient({ region });
 
 const timeout = 30000;
@@ -105,20 +79,16 @@ const timeout = 30000;
 test(
   'VPC should have correct configuration',
   async () => {
-    try {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [STACK_OUTPUTS.vpcId],
-      });
+    const command = new DescribeVpcsCommand({
+      VpcIds: [STACK_OUTPUTS.vpcId],
+    });
 
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs?.[0];
+    const response = await ec2Client.send(command);
+    const vpc = response.Vpcs?.[0];
 
-      expect(vpc).toBeDefined();
-      expect(vpc!.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpc!.State).toBe('available');
-    } catch (error) {
-      throw error;
-    }
+    expect(vpc).toBeDefined();
+    expect(vpc!.CidrBlock).toBe('10.0.0.0/16');
+    expect(vpc!.State).toBe('available');
   },
   timeout
 );
@@ -127,20 +97,16 @@ test(
 test(
   'should have 6 subnets across 2 AZs',
   async () => {
-    try {
-      const command = new DescribeSubnetsCommand({
-        Filters: [{ Name: 'vpc-id', Values: [STACK_OUTPUTS.vpcId] }],
-      });
+    const command = new DescribeSubnetsCommand({
+      Filters: [{ Name: 'vpc-id', Values: [STACK_OUTPUTS.vpcId] }],
+    });
 
-      const response = await ec2Client.send(command);
-      const subnets = response.Subnets || [];
-      const azs = Array.from(new Set(subnets.map(s => s.AvailabilityZone)));
+    const response = await ec2Client.send(command);
+    const subnets = response.Subnets || [];
+    const azs = Array.from(new Set(subnets.map(s => s.AvailabilityZone)));
 
-      expect(subnets.length).toBe(6);
-      expect(azs.length).toBe(2);
-    } catch (error) {
-      throw error;
-    }
+    expect(subnets.length).toBe(6);
+    expect(azs.length).toBe(2);
   },
   timeout
 );
@@ -149,19 +115,15 @@ test(
 test(
   'should have 2 NAT Gateways for high availability',
   async () => {
-    try {
-      const command = new DescribeNatGatewaysCommand({
-        Filter: [{ Name: 'vpc-id', Values: [STACK_OUTPUTS.vpcId] }],
-      });
+    const command = new DescribeNatGatewaysCommand({
+      Filter: [{ Name: 'vpc-id', Values: [STACK_OUTPUTS.vpcId] }],
+    });
 
-      const response = await ec2Client.send(command);
-      const natGateways = response.NatGateways || [];
+    const response = await ec2Client.send(command);
+    const natGateways = response.NatGateways || [];
 
-      // CDK with dual-stack VPC creates 4 NAT Gateways (2 IPv4 + 2 IPv6)
-      expect(natGateways.length).toBeGreaterThanOrEqual(2);
-    } catch (error) {
-      throw error;
-    }
+    // CDK with dual-stack VPC creates 4 NAT Gateways (2 IPv4 + 2 IPv6)
+    expect(natGateways.length).toBeGreaterThanOrEqual(2);
   },
   timeout
 );
@@ -170,22 +132,18 @@ test(
 test(
   'should have VPC Flow Logs enabled',
   async () => {
-    try {
-      const command = new DescribeFlowLogsCommand({
-        Filter: [
-          { Name: 'resource-type', Values: ['VPC'] },
-          { Name: 'resource-id', Values: [STACK_OUTPUTS.vpcId] },
-        ],
-      });
+    const command = new DescribeFlowLogsCommand({
+      Filter: [
+        { Name: 'resource-type', Values: ['VPC'] },
+        { Name: 'resource-id', Values: [STACK_OUTPUTS.vpcId] },
+      ],
+    });
 
-      const response = await ec2Client.send(command);
-      const flowLog = response.FlowLogs?.[0];
+    const response = await ec2Client.send(command);
+    const flowLog = response.FlowLogs?.[0];
 
-      expect(flowLog).toBeDefined();
-      expect(flowLog!.FlowLogStatus).toBe('ACTIVE');
-    } catch (error) {
-      throw error;
-    }
+    expect(flowLog).toBeDefined();
+    expect(flowLog!.FlowLogStatus).toBe('ACTIVE');
   },
   timeout
 );
@@ -194,30 +152,24 @@ test(
 test(
   'should have internet-facing ALB with target group',
   async () => {
-    try {
-      const albCommand = new DescribeLoadBalancersCommand({});
-      const albResponse = await elbv2Client.send(albCommand);
+    const albCommand = new DescribeLoadBalancersCommand({});
+    const albResponse = await elbv2Client.send(albCommand);
 
-      // Find ALB by DNS name from stack outputs
-      const alb = albResponse.LoadBalancers?.find(
-        lb => lb.DNSName === STACK_OUTPUTS.loadBalancerDNS
-      );
+    // Find ALB by DNS name from stack outputs
+    const alb = albResponse.LoadBalancers?.find(
+      lb => lb.DNSName === STACK_OUTPUTS.loadBalancerDNS
+    );
 
-      // Verify target group exists if ALB exists
-      if (alb) {
-        const tgCommand = new DescribeTargetGroupsCommand({
-          LoadBalancerArn: alb.LoadBalancerArn,
-        });
-        const tgResponse = await elbv2Client.send(tgCommand);
-        expect(tgResponse.TargetGroups).toBeDefined();
-        expect(tgResponse.TargetGroups!.length).toBeGreaterThan(0);
-      }
+    expect(alb).toBeDefined();
+    expect(alb!.Scheme).toBe('internet-facing');
 
-      expect(alb).toBeDefined();
-      expect(alb!.Scheme).toBe('internet-facing');
-    } catch (error) {
-      throw error;
-    }
+    // Verify target group exists
+    const tgCommand = new DescribeTargetGroupsCommand({
+      LoadBalancerArn: alb!.LoadBalancerArn,
+    });
+    const tgResponse = await elbv2Client.send(tgCommand);
+    expect(tgResponse.TargetGroups).toBeDefined();
+    expect(tgResponse.TargetGroups!.length).toBeGreaterThan(0);
   },
   timeout
 );
@@ -226,19 +178,15 @@ test(
 test(
   'should have Aurora PostgreSQL cluster with Multi-AZ',
   async () => {
-    try {
-      const command = new DescribeDBClustersCommand({});
-      const response = await rdsClient.send(command);
+    const command = new DescribeDBClustersCommand({});
+    const response = await rdsClient.send(command);
 
-      const cluster = response.DBClusters?.find(
-        c => c.Endpoint === STACK_OUTPUTS.rdsClusterEndpoint
-      );
+    const cluster = response.DBClusters?.find(
+      c => c.Endpoint === STACK_OUTPUTS.rdsClusterEndpoint
+    );
 
-      expect(cluster).toBeDefined();
-      expect(cluster!.Engine).toBe('aurora-postgresql');
-    } catch (error) {
-      throw error;
-    }
+    expect(cluster).toBeDefined();
+    expect(cluster!.Engine).toBe('aurora-postgresql');
   },
   timeout
 );
@@ -254,27 +202,25 @@ test(
     );
     const bucketName = bucket?.Name;
 
-    try {
-      const versioningCommand = new GetBucketVersioningCommand({
-        Bucket: bucketName,
-      });
-      const encryptionCommand = new GetBucketEncryptionCommand({
-        Bucket: bucketName,
-      });
-      const publicAccessCommand = new GetPublicAccessBlockCommand({
-        Bucket: bucketName,
-      });
+    expect(bucketName).toBeDefined();
 
-      const [versioningResponse] = await Promise.all([
-        s3Client.send(versioningCommand),
-        s3Client.send(encryptionCommand),
-        s3Client.send(publicAccessCommand),
-      ]);
+    const versioningCommand = new GetBucketVersioningCommand({
+      Bucket: bucketName!,
+    });
+    const encryptionCommand = new GetBucketEncryptionCommand({
+      Bucket: bucketName!,
+    });
+    const publicAccessCommand = new GetPublicAccessBlockCommand({
+      Bucket: bucketName!,
+    });
 
-      expect(versioningResponse.Status).toBe('Enabled');
-    } catch (error) {
-      throw error;
-    }
+    const [versioningResponse] = await Promise.all([
+      s3Client.send(versioningCommand),
+      s3Client.send(encryptionCommand),
+      s3Client.send(publicAccessCommand),
+    ]);
+
+    expect(versioningResponse.Status).toBe('Enabled');
   },
   timeout
 );
@@ -283,17 +229,13 @@ test(
 test(
   'should have DynamoDB table with on-demand billing',
   async () => {
-    const tableName = STACK_OUTPUTS.dynamoTableName;
+    const command = new DescribeTableCommand({
+      TableName: STACK_OUTPUTS.dynamoTableName,
+    });
+    const response = await dynamoClient.send(command);
+    const table = response.Table;
 
-    try {
-      const command = new DescribeTableCommand({ TableName: tableName });
-      const response = await dynamoClient.send(command);
-      const table = response.Table;
-
-      expect(table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-    } catch (error) {
-      throw error;
-    }
+    expect(table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
   },
   timeout
 );
@@ -302,20 +244,16 @@ test(
 test(
   'should have Auto Scaling Group with correct capacity',
   async () => {
-    try {
-      const command = new DescribeAutoScalingGroupsCommand({});
-      const response = await asgClient.send(command);
+    const command = new DescribeAutoScalingGroupsCommand({});
+    const response = await asgClient.send(command);
 
-      const asg = response.AutoScalingGroups?.find(g =>
-        g.VPCZoneIdentifier?.includes(STACK_OUTPUTS.vpcId.replace('vpc-', ''))
-      );
+    const asg = response.AutoScalingGroups?.find(g =>
+      g.VPCZoneIdentifier?.includes(STACK_OUTPUTS.vpcId.replace('vpc-', ''))
+    );
 
-      expect(asg).toBeDefined();
-      expect(asg!.MinSize).toBe(2);
-      expect(asg!.MaxSize).toBe(6);
-    } catch (error) {
-      throw error;
-    }
+    expect(asg).toBeDefined();
+    expect(asg!.MinSize).toBe(2);
+    expect(asg!.MaxSize).toBe(6);
   },
   timeout
 );
@@ -324,19 +262,15 @@ test(
 test(
   'should have CloudFront distribution',
   async () => {
-    try {
-      const command = new ListDistributionsCommand({});
-      const response = await cloudFrontClient.send(command);
+    const command = new ListDistributionsCommand({});
+    const response = await cloudFrontClient.send(command);
 
-      const distribution = response.DistributionList?.Items?.find(
-        d => d.DomainName === STACK_OUTPUTS.cloudFrontDomain
-      );
+    const distribution = response.DistributionList?.Items?.find(
+      d => d.DomainName === STACK_OUTPUTS.cloudFrontDomain
+    );
 
-      expect(distribution).toBeDefined();
-      expect(distribution!.Enabled).toBe(true);
-    } catch (error) {
-      throw error;
-    }
+    expect(distribution).toBeDefined();
+    expect(distribution!.Enabled).toBe(true);
   },
   timeout
 );
@@ -345,18 +279,14 @@ test(
 test(
   'should have VPC Flow Logs group',
   async () => {
-    try {
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/vpc/flowlogs/${environmentSuffix}`,
-      });
+    const command = new DescribeLogGroupsCommand({
+      logGroupNamePrefix: `/aws/vpc/flowlogs/${environmentSuffix}`,
+    });
 
-      const response = await logsClient.send(command);
-      const logGroup = response.logGroups?.[0];
+    const response = await logsClient.send(command);
+    const logGroup = response.logGroups?.[0];
 
-      expect(logGroup).toBeDefined();
-    } catch (error) {
-      throw error;
-    }
+    expect(logGroup).toBeDefined();
   },
   timeout
 );
@@ -365,18 +295,14 @@ test(
 test(
   'should have application log group',
   async () => {
-    try {
-      const command = new DescribeLogGroupsCommand({
-        logGroupNamePrefix: `/aws/ec2/tap-application/${environmentSuffix}`,
-      });
+    const command = new DescribeLogGroupsCommand({
+      logGroupNamePrefix: `/aws/ec2/tap-application/${environmentSuffix}`,
+    });
 
-      const response = await logsClient.send(command);
-      const logGroup = response.logGroups?.[0];
+    const response = await logsClient.send(command);
+    const logGroup = response.logGroups?.[0];
 
-      expect(logGroup).toBeDefined();
-    } catch (error) {
-      throw error;
-    }
+    expect(logGroup).toBeDefined();
   },
   timeout
 );
@@ -385,24 +311,20 @@ test(
 test(
   'should have consistent tagging across resources',
   async () => {
-    try {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [STACK_OUTPUTS.vpcId],
-      });
+    const command = new DescribeVpcsCommand({
+      VpcIds: [STACK_OUTPUTS.vpcId],
+    });
 
-      const response = await ec2Client.send(command);
-      const vpc = response.Vpcs?.[0];
+    const response = await ec2Client.send(command);
+    const vpc = response.Vpcs?.[0];
 
-      const envTag = vpc?.Tags?.find(t => t.Key === 'Environment');
-      const deptTag = vpc?.Tags?.find(t => t.Key === 'Department');
-      const projTag = vpc?.Tags?.find(t => t.Key === 'Project');
+    const envTag = vpc?.Tags?.find(t => t.Key === 'Environment');
+    const deptTag = vpc?.Tags?.find(t => t.Key === 'Department');
+    const projTag = vpc?.Tags?.find(t => t.Key === 'Project');
 
-      expect(envTag?.Value).toBe(environmentSuffix);
-      expect(deptTag?.Value).toBe('Engineering');
-      expect(projTag?.Value).toBe('TapApplication');
-    } catch (error) {
-      throw error;
-    }
+    expect(envTag?.Value).toBe(environmentSuffix);
+    expect(deptTag?.Value).toBe('Engineering');
+    expect(projTag?.Value).toBe('TapApplication');
   },
   timeout
 );
