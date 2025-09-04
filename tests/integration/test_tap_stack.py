@@ -123,9 +123,12 @@ class TestTapStackIntegration(unittest.TestCase):
             for func in all_functions:
                 print(f"  - {func['FunctionName']}")
             
+            # Filter for actual TAP Lambda functions (exclude CDK construct functions)
             tap_functions = [
                 func for func in all_functions 
-                if 'tap-serverless' in func['FunctionName']
+                if 'tap-serverless' in func['FunctionName'] and 
+                not 'CustomVpcRestrictDefaultSG' in func['FunctionName'] and
+                not 'CustomS3AutoDelete' in func['FunctionName']
             ]
             
             print(f"Found {len(tap_functions)} TAP Lambda functions")
@@ -296,9 +299,12 @@ class TestTapStackIntegration(unittest.TestCase):
         try:
                 # Get Lambda functions
             functions_response = self.lambda_client.list_functions()
+            # Filter for actual TAP Lambda functions (exclude CDK construct functions)
             tap_functions = [
                 func for func in functions_response['Functions'] 
-                if 'tap-serverless' in func['FunctionName']
+                if 'tap-serverless' in func['FunctionName'] and 
+                not 'CustomVpcRestrictDefaultSG' in func['FunctionName'] and
+                not 'CustomS3AutoDelete' in func['FunctionName']
             ]
             
             # Skip test if no TAP functions found
