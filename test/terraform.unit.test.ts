@@ -227,60 +227,60 @@ describe('Terraform Infrastructure Files', () => {
     });
 
     test('creates web and backend EC2 instances', () => {
-      expect(stackContent).toMatch(/resource\s+'aws_instance'\s+'web'/);
-      expect(stackContent).toMatch(/resource\s+'aws_instance'\s+'backend'/);
+      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"web"/);
+      expect(stackContent).toMatch(/resource\s+"aws_instance"\s+"backend"/);
       expect(stackContent).toMatch(
-        /count\s*=\s*terraform\.workspace\s*==\s*'production'\s*\?\s*2\s*:\s*1/
+        /count\s*=\s*terraform\.workspace\s*==\s*"production"\s*\?\s*2\s*:\s*1/
       );
       expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.public/);
       expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.private/);
     });
 
     test('creates RDS instance with proper configuration', () => {
-      expect(stackContent).toMatch(/resource\s+'aws_db_instance'\s+'main'/);
-      expect(stackContent).toMatch(/resource\s+'aws_db_subnet_group'\s+'main'/);
+      expect(stackContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
+      expect(stackContent).toMatch(/resource\s+"aws_db_subnet_group"\s+"main"/);
       expect(stackContent).toMatch(/storage_encrypted\s*=\s*true/);
-      expect(stackContent).toMatch(/engine\s*=\s*'mysql'/);
-      expect(stackContent).toMatch(/engine_version\s*=\s*'8\.0'/);
+      expect(stackContent).toMatch(/engine\s*=\s*"mysql"/);
+      expect(stackContent).toMatch(/engine_version\s*=\s*"8\.0"/);
       expect(stackContent).toMatch(/backup_retention_period/);
       expect(stackContent).toMatch(/deletion_protection/);
     });
 
     test('configures SNS with HTTPS subscription', () => {
-      expect(stackContent).toMatch(/resource\s+'aws_sns_topic'\s+'alerts'/);
+      expect(stackContent).toMatch(/resource\s+"aws_sns_topic"\s+"alerts"/);
       expect(stackContent).toMatch(
-        /resource\s+'aws_sns_topic_subscription'\s+'alerts_https'/
+        /resource\s+"aws_sns_topic_subscription"\s+"alerts_https"/
       );
-      expect(stackContent).toMatch(/protocol\s*=\s*'https'/);
+      expect(stackContent).toMatch(/protocol\s*=\s*"https"/);
       expect(stackContent).toMatch(/endpoint\s*=\s*var\.sns_https_endpoint/);
     });
 
     test('creates Lambda function for EC2 shutdown', () => {
       expect(stackContent).toMatch(
-        /resource\s+'aws_lambda_function'\s+'ec2_shutdown'/
+        /resource\s+"aws_lambda_function"\s+"ec2_shutdown"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'aws_iam_role'\s+'lambda_shutdown_role'/
+        /resource\s+"aws_iam_role"\s+"lambda_shutdown_role"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'aws_iam_policy'\s+'lambda_shutdown_policy'/
+        /resource\s+"aws_iam_policy"\s+"lambda_shutdown_policy"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'local_file'\s+'lambda_shutdown_code'/
+        /resource\s+"local_file"\s+"lambda_shutdown_code"/
       );
-      expect(stackContent).toMatch(/runtime\s*=\s*'python3\.9'/);
+      expect(stackContent).toMatch(/runtime\s*=\s*"python3\.9"/);
       expect(stackContent).toMatch(/timeout\s*=\s*60/);
     });
 
     test('configures EventBridge schedule for Lambda', () => {
       expect(stackContent).toMatch(
-        /resource\s+'aws_cloudwatch_event_rule'\s+'lambda_shutdown_schedule'/
+        /resource\s+"aws_cloudwatch_event_rule"\s+"lambda_shutdown_schedule"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'aws_cloudwatch_event_target'\s+'lambda_shutdown_target'/
+        /resource\s+"aws_cloudwatch_event_target"\s+"lambda_shutdown_target"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'aws_lambda_permission'\s+'allow_eventbridge'/
+        /resource\s+"aws_lambda_permission"\s+"allow_eventbridge"/
       );
       expect(stackContent).toMatch(
         /schedule_expression\s*=\s*var\.lambda_shutdown_schedule/
@@ -288,18 +288,18 @@ describe('Terraform Infrastructure Files', () => {
     });
 
     test('creates CloudWatch log groups and alarms', () => {
-      expect(stackContent).toMatch(/resource\s+'aws_cloudwatch_log_group'/);
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"/);
       expect(stackContent).toMatch(
-        /resource\s+'aws_cloudwatch_metric_alarm'\s+'ec2_cpu_high'/
+        /resource\s+"aws_cloudwatch_metric_alarm"\s+"ec2_cpu_high"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'aws_cloudwatch_metric_alarm'\s+'ec2_status_check'/
+        /resource\s+"aws_cloudwatch_metric_alarm"\s+"ec2_status_check"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'aws_cloudwatch_metric_alarm'\s+'rds_cpu_high'/
+        /resource\s+"aws_cloudwatch_metric_alarm"\s+"rds_cpu_high"/
       );
       expect(stackContent).toMatch(
-        /resource\s+'aws_cloudwatch_metric_alarm'\s+'rds_free_storage'/
+        /resource\s+"aws_cloudwatch_metric_alarm"\s+"rds_free_storage"/
       );
       expect(stackContent).toMatch(/CPUUtilization/);
       expect(stackContent).toMatch(/StatusCheckFailed/);
