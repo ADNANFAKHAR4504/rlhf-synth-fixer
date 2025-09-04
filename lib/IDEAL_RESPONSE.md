@@ -1,58 +1,15 @@
-### Reasoning Trace
----
-
-The user wants a complete CDK setup with Python that includes:
-
-1. A Lambda function
-2. API Gateway REST API that triggers the Lambda
-3. S3 bucket with versioning enabled
-4. Lambda function can write to S3 bucket
-5. Everything in us-west-2 region
-6. Proper tagging for cost tracking
-7. Environment variables for Lambda
-8. Logging enabled for both API Gateway and Lambda
-9. IAM role for Lambda with S3 write permissions
-10. AWS best practices for naming and security
-11. CloudFormation intrinsic functions for dynamic values
-12. Single stack in main.py
-
-Let me structure this:
-
-1. Create the CDK app and stack
-2. Create S3 bucket with versioning
-3. Create Lambda function with environment variables
-4. Create IAM role for Lambda with S3 permissions
-5. Create API Gateway REST API
-6. Enable logging for both services
-7. Add proper tags
-8. Use dynamic values where appropriate
-
-I'll need to import the necessary CDK constructs and follow best practices.
-### Answer 
----
-
-I'll help you create a comprehensive CDK setup for your serverless infrastructure. Here's a complete solution that addresses all your requirements:
-
-## Project Structure
-
-```
-your-project/
-├── main.py
-├── lambda/
-│   └── handler.py
-├── requirements.txt
-└── cdk.json
-```
-
-## main.py
-
 ```python
-#!/usr/bin/env python3
-import os
+
+"""tap_stack.py
+This module defines the TapStack class, which serves as the main CDK stack for 
+the TAP (Test Automation Platform) project.
+It creates a serverless infrastructure with Lambda, API Gateway, S3, and IAM resources.
+"""
+
+from typing import Optional
+
+import aws_cdk as cdk
 from aws_cdk import (
-    App,
-    Stack,
-    Environment,
     Duration,
     RemovalPolicy,
     CfnOutput,
@@ -66,25 +23,83 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class ServerlessInfrastructureStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+class TapStackProps(cdk.StackProps):
+    """
+    TapStackProps defines the properties for the TapStack CDK stack.
+
+    Args:
+        environment_suffix (Optional[str]): An optional suffix to identify the 
+        deployment environment (e.g., 'dev', 'prod').
+        **kwargs: Additional keyword arguments passed to the base cdk.StackProps.
+
+    Attributes:
+        environment_suffix (Optional[str]): Stores the environment suffix for the stack.
+    """
+
+    def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.environment_suffix = environment_suffix
+
+
+class TapStack(cdk.Stack):
+    """
+    Represents the main CDK stack for the TAP project with serverless infrastructure.
+
+    This stack creates all AWS resources including Lambda function, API Gateway, 
+    S3 bucket, IAM roles, and CloudWatch logs in a single stack.
+
+    Args:
+      scope (Construct): The parent construct.
+      construct_id (str): The unique identifier for this stack.
+      props (Optional[TapStackProps]): Optional properties for configuring the 
+        stack, including environment suffix.
+      **kwargs: Additional keyword arguments passed to the CDK Stack.
+
+    Attributes:
+      environment_suffix (str): The environment suffix used for resource naming and configuration.
+    """
+
+    def __init__(
+            self,
+            scope: Construct,
+            construct_id: str, 
+            props: Optional[TapStackProps] = None, 
+            **kwargs):
         super().__init__(scope, construct_id, **kwargs)
 
+        # Get environment suffix from props, context, or use 'dev' as default
+        self.environment_suffix = (
+            props.environment_suffix if props else None
+        ) or self.node.try_get_context('environmentSuffix') or 'dev'
+
         # Stack-level tags for cost tracking
-        Tags.of(self).add("Environment", "production")
-        Tags.of(self).add("Project", "serverless-api")
-        Tags.of(self).add("Owner", "your-team")
+        Tags.of(self).add("Environment", self.environment_suffix)
+        Tags.of(self).add("Project", "tap-serverless")
+        Tags.of(self).add("Owner", "devops-team")
         Tags.of(self).add("CostCenter", "engineering")
 
-        # S3 Bucket with versioning enabled
+        # Create all serverless resources in order of dependencies
+        self._create_s3_bucket()
+        self._create_lambda_role()
+        self._create_lambda_function()
+        self._create_api_gateway_account()  # Add this line
+        self._create_api_gateway()
+        self._create_outputs()
+
+    def _create_s3_bucket(self):
+        """Create S3 bucket with versioning and lifecycle rules"""
+        # Use a more unique bucket name to avoid conflicts
+        unique_id = f"{self.account}-{self.region}-{self.environment_suffix.lower()}"
+        
         self.data_bucket = s3.Bucket(
             self, 
-            "DataBucket",
-            bucket_name=f"serverless-data-{self.account}-{self.region}",
+            f"DataBucket{self.environment_suffix}",
+            # Remove explicit bucket name to let CDK generate a unique one
+            # Or use a guaranteed unique name with timestamp
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.RETAIN,  # Best practice for data buckets
+            removal_policy=RemovalPolicy.DESTROY,  # Changed to DESTROY for easier cleanup
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="delete-old-versions",
@@ -95,19 +110,21 @@ class ServerlessInfrastructureStack(Stack):
             ]
         )
 
+    def _create_lambda_role(self):
+        """Create IAM role for Lambda function with S3 write permissions"""
         # CloudWatch Log Group for Lambda function
-        lambda_log_group = logs.LogGroup(
+        self.lambda_log_group = logs.LogGroup(
             self,
-            "LambdaLogGroup",
-            log_group_name=f"/aws/lambda/serverless-api-handler",
+            f"LambdaLogGroup{self.environment_suffix}",
+            log_group_name=f"/aws/lambda/serverless-api-handler-{self.environment_suffix.lower()}",
             retention=logs.RetentionDays.ONE_MONTH,
             removal_policy=RemovalPolicy.DESTROY
         )
 
         # IAM Role for Lambda function
-        lambda_role = iam.Role(
+        self.lambda_role = iam.Role(
             self,
-            "LambdaExecutionRole",
+            f"LambdaExecutionRole{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
@@ -124,7 +141,8 @@ class ServerlessInfrastructureStack(Stack):
                                 "s3:PutObjectAcl",
                                 "s3:GetObject",
                                 "s3:GetObjectVersion",
-                                "s3:DeleteObject"
+                                "s3:DeleteObject",
+                                "s3:ListBucket"
                             ],
                             resources=[
                                 self.data_bucket.bucket_arn,
@@ -137,183 +155,27 @@ class ServerlessInfrastructureStack(Stack):
                                 "logs:CreateLogStream",
                                 "logs:PutLogEvents"
                             ],
-                            resources=[lambda_log_group.log_group_arn]
+                            resources=[f"{self.lambda_log_group.log_group_arn}:*"]
                         )
                     ]
                 )
             }
         )
 
-        # Lambda function
+    def _create_lambda_function(self):
+        """Create Lambda function with environment variables"""
         self.api_handler = lambda_.Function(
             self,
-            "ApiHandler",
-            function_name="serverless-api-handler",
+            f"ApiHandler{self.environment_suffix}",
+            function_name=f"serverless-api-handler-{self.environment_suffix.lower()}",
             runtime=lambda_.Runtime.PYTHON_3_9,
-            handler="handler.lambda_handler",
-            code=lambda_.Code.from_asset("lambda"),
-            role=lambda_role,
-            timeout=Duration.seconds(30),
-            memory_size=256,
-            environment={
-                "BUCKET_NAME": self.data_bucket.bucket_name,
-                "REGION": self.region,
-                "LOG_LEVEL": "INFO",
-                "STAGE": "prod"
-            },
-            log_group=lambda_log_group,
-            description="Lambda function to handle API requests and write to S3"
-        )
-
-        # API Gateway CloudWatch Log Group
-        api_log_group = logs.LogGroup(
-            self,
-            "ApiGatewayLogGroup", 
-            log_group_name=f"/aws/apigateway/serverless-api",
-            retention=logs.RetentionDays.ONE_MONTH,
-            removal_policy=RemovalPolicy.DESTROY
-        )
-
-        # API Gateway REST API
-        self.api = apigateway.RestApi(
-            self,
-            "ServerlessApi",
-            rest_api_name="serverless-data-api",
-            description="REST API for serverless data processing",
-            endpoint_configuration=apigateway.EndpointConfiguration(
-                types=[apigateway.EndpointType.REGIONAL]
-            ),
-            deploy_options=apigateway.StageOptions(
-                stage_name="prod",
-                logging_level=apigateway.MethodLoggingLevel.INFO,
-                data_trace_enabled=True,
-                metrics_enabled=True,
-                access_log_destination=apigateway.LogGroupLogDestination(api_log_group),
-                access_log_format=apigateway.AccessLogFormat.json_with_standard_fields(
-                    caller=True,
-                    http_method=True,
-                    ip=True,
-                    protocol=True,
-                    request_time=True,
-                    resource_path=True,
-                    response_length=True,
-                    status=True,
-                    user=True
-                )
-            ),
-            default_cors_preflight_options=apigateway.CorsOptions(
-                allow_origins=apigateway.Cors.ALL_ORIGINS,
-                allow_methods=apigateway.Cors.ALL_METHODS,
-                allow_headers=["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key"]
-            )
-        )
-
-        # Lambda integration
-        lambda_integration = apigateway.LambdaIntegration(
-            self.api_handler,
-            proxy=True,
-            integration_responses=[
-                apigateway.IntegrationResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": "'*'"
-                    }
-                )
-            ]
-        )
-
-        # API Gateway resources and methods
-        data_resource = self.api.root.add_resource("data")
-        
-        # POST method for creating data
-        data_resource.add_method(
-            "POST",
-            lambda_integration,
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": True
-                    }
-                )
-            ]
-        )
-
-        # GET method for retrieving data
-        data_resource.add_method(
-            "GET",
-            lambda_integration,
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": True
-                    }
-                )
-            ]
-        )
-
-        # Health check endpoint
-        health_resource = self.api.root.add_resource("health")
-        health_resource.add_method("GET", lambda_integration)
-
-        # CloudFormation Outputs with dynamic values
-        CfnOutput(
-            self,
-            "ApiEndpoint",
-            value=self.api.url,
-            description="API Gateway endpoint URL",
-            export_name=f"{self.stack_name}-ApiEndpoint"
-        )
-
-        CfnOutput(
-            self,
-            "BucketName",
-            value=self.data_bucket.bucket_name,
-            description="S3 bucket name for data storage",
-            export_name=f"{self.stack_name}-BucketName"
-        )
-
-        CfnOutput(
-            self,
-            "LambdaFunctionName",
-            value=self.api_handler.function_name,
-            description="Lambda function name",
-            export_name=f"{self.stack_name}-LambdaFunction"
-        )
-
-        CfnOutput(
-            self,
-            "LambdaFunctionArn",
-            value=self.api_handler.function_arn,
-            description="Lambda function ARN",
-            export_name=f"{self.stack_name}-LambdaArn"
-        )
-
-
-# CDK App
-app = App()
-
-# Deploy to us-west-2 region as specified
-ServerlessInfrastructureStack(
-    app, 
-    "ServerlessInfrastructureStack",
-    env=Environment(region="us-west-2"),
-    description="Serverless infrastructure with API Gateway, Lambda, and S3"
-)
-
-app.synth()
-```
-
-## lambda/handler.py
-
-```python
+            handler="index.lambda_handler",
+            code=lambda_.Code.from_inline("""
 import json
 import boto3
 import os
 import logging
 from datetime import datetime
-from typing import Dict, Any
 import uuid
 
 # Configure logging
@@ -326,23 +188,28 @@ bucket_name = os.getenv('BUCKET_NAME')
 region = os.getenv('REGION')
 stage = os.getenv('STAGE', 'dev')
 
-
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    Lambda function handler for API Gateway requests
-    """
+def lambda_handler(event, context):
+    # Define CORS headers at the top to avoid reference errors
+    cors_headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'Content-Type': 'application/json'
+    }
+    
     try:
         logger.info(f"Received event: {json.dumps(event)}")
         
-        http_method = event.get('httpMethod')
-        path = event.get('path')
+        http_method = event.get('httpMethod', 'GET')
+        path = event.get('path', '/')
         
-        # CORS headers
-        cors_headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
-        }
+        # Handle OPTIONS requests for CORS preflight
+        if http_method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': cors_headers,
+                'body': json.dumps({'message': 'CORS preflight'})
+            }
         
         # Health check endpoint
         if path == '/health':
@@ -353,7 +220,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'status': 'healthy',
                     'timestamp': datetime.utcnow().isoformat(),
                     'region': region,
-                    'stage': stage
+                    'stage': stage,
+                    'bucket': bucket_name
                 })
             }
         
@@ -364,13 +232,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             elif http_method == 'GET':
                 return handle_get_data(event, cors_headers)
         
-        # Default response for unhandled paths
+        # Default response
         return {
-            'statusCode': 404,
+            'statusCode': 200,
             'headers': cors_headers,
             'body': json.dumps({
-                'error': 'Not Found',
-                'message': f'Path {path} not found'
+                'message': 'Serverless API is working!',
+                'timestamp': datetime.utcnow().isoformat(),
+                'path': path,
+                'method': http_method
             })
         }
         
@@ -378,21 +248,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         logger.error(f"Error processing request: {str(e)}")
         return {
             'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': 'application/json'
-            },
+            'headers': cors_headers,
             'body': json.dumps({
                 'error': 'Internal Server Error',
                 'message': str(e)
             })
         }
 
-
-def handle_post_data(event: Dict[str, Any], cors_headers: Dict[str, str]) -> Dict[str, Any]:
-    """Handle POST requests to store data in S3"""
+def handle_post_data(event, cors_headers):
     try:
-        # Parse request body
         body = json.loads(event.get('body', '{}'))
         
         # Generate unique file key
@@ -414,12 +278,7 @@ def handle_post_data(event: Dict[str, Any], cors_headers: Dict[str, str]) -> Dic
             Bucket=bucket_name,
             Key=s3_key,
             Body=json.dumps(data_with_metadata, indent=2),
-            ContentType='application/json',
-            Metadata={
-                'source': 'lambda-api',
-                'timestamp': str(int(datetime.utcnow().timestamp())),
-                'stage': stage
-            }
+            ContentType='application/json'
         )
         
         logger.info(f"Successfully stored data in S3: {s3_key}")
@@ -435,22 +294,19 @@ def handle_post_data(event: Dict[str, Any], cors_headers: Dict[str, str]) -> Dic
             })
         }
         
-    except json.JSONDecodeError:
+    except Exception as e:
+        logger.error(f"Error storing data: {str(e)}")
         return {
             'statusCode': 400,
             'headers': cors_headers,
             'body': json.dumps({
                 'error': 'Bad Request',
-                'message': 'Invalid JSON in request body'
+                'message': str(e)
             })
         }
 
-
-def handle_get_data(event: Dict[str, Any], cors_headers: Dict[str, str]) -> Dict[str, Any]:
-    """Handle GET requests to retrieve data from S3"""
+def handle_get_data(event, cors_headers):
     try:
-        query_params = event.get('queryStringParameters') or {}
-        
         # List recent objects
         response = s3_client.list_objects_v2(
             Bucket=bucket_name,
@@ -488,116 +344,151 @@ def handle_get_data(event: Dict[str, Any], cors_headers: Dict[str, str]) -> Dict
                 'message': 'Failed to retrieve data'
             })
         }
+            """),
+        role=self.lambda_role,
+        timeout=Duration.seconds(30),
+        memory_size=256,
+        environment={
+            "BUCKET_NAME": self.data_bucket.bucket_name,
+            "REGION": self.region,
+            "LOG_LEVEL": "INFO",
+            "STAGE": self.environment_suffix.lower()
+        },
+        log_group=self.lambda_log_group,
+        description=f"Lambda function to handle API requests and write to S3 - {self.environment_suffix}"
+    )
+
+    def _create_api_gateway(self):
+        """Create API Gateway REST API with logging enabled"""
+        # API Gateway CloudWatch Log Group
+        self.api_log_group = logs.LogGroup(
+            self,
+            f"ApiGatewayLogGroup{self.environment_suffix}", 
+            log_group_name=f"/aws/apigateway/serverless-api-{self.environment_suffix.lower()}",
+            retention=logs.RetentionDays.ONE_MONTH,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
+        # API Gateway REST API
+        self.api = apigateway.RestApi(
+            self,
+            f"ServerlessApi{self.environment_suffix}",
+            rest_api_name=f"serverless-data-api-{self.environment_suffix.lower()}",
+            description=f"REST API for serverless data processing - {self.environment_suffix}",
+            endpoint_configuration=apigateway.EndpointConfiguration(
+                types=[apigateway.EndpointType.REGIONAL]
+            ),
+            deploy_options=apigateway.StageOptions(
+                stage_name=self.environment_suffix.lower(),
+                logging_level=apigateway.MethodLoggingLevel.INFO,
+                data_trace_enabled=True,
+                metrics_enabled=True,
+                access_log_destination=apigateway.LogGroupLogDestination(self.api_log_group),
+                access_log_format=apigateway.AccessLogFormat.json_with_standard_fields(
+                    caller=True,
+                    http_method=True,
+                    ip=True,
+                    protocol=True,
+                    request_time=True,
+                    resource_path=True,
+                    response_length=True,
+                    status=True,
+                    user=True
+                )
+            ),
+            # CORS is handled automatically - this creates OPTIONS methods for all resources
+            default_cors_preflight_options=apigateway.CorsOptions(
+                allow_origins=apigateway.Cors.ALL_ORIGINS,
+                allow_methods=apigateway.Cors.ALL_METHODS,
+                allow_headers=["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key"]
+            )
+        )
+
+        # Simple Lambda integration (proxy mode handles all responses)
+        lambda_integration = apigateway.LambdaIntegration(
+            self.api_handler,
+            proxy=True  # This handles all status codes automatically
+        )
+
+        # API Gateway resources and methods
+        data_resource = self.api.root.add_resource("data")
+        
+        # Remove manual OPTIONS methods - they're created automatically by default_cors_preflight_options
+        # data_resource.add_method("OPTIONS", lambda_integration)  # ❌ Remove this line
+        
+        # POST method for creating data
+        data_resource.add_method("POST", lambda_integration)
+
+        # GET method for retrieving data
+        data_resource.add_method("GET", lambda_integration)
+
+        # Health check endpoint
+        health_resource = self.api.root.add_resource("health")
+        health_resource.add_method("GET", lambda_integration)
+        # health_resource.add_method("OPTIONS", lambda_integration)  # ❌ Remove this line too
+
+    def _create_api_gateway_account(self):
+        """Create API Gateway account configuration for CloudWatch logging"""
+        # Create CloudWatch role for API Gateway
+        api_gateway_cloudwatch_role = iam.Role(
+            self,
+            f"ApiGatewayCloudWatchRole{self.environment_suffix}",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                )
+            ]
+        )
+
+        # API Gateway account configuration
+        apigateway.CfnAccount(
+            self,
+            f"ApiGatewayAccount{self.environment_suffix}",
+            cloud_watch_role_arn=api_gateway_cloudwatch_role.role_arn
+        )
+
+    def _create_outputs(self):
+        """Create CloudFormation outputs with dynamic values"""
+        CfnOutput(
+            self,
+            "ApiEndpoint",
+            value=self.api.url,
+            description="API Gateway endpoint URL",
+            export_name=f"TapStack-{self.environment_suffix}-ApiEndpoint"
+        )
+
+        CfnOutput(
+            self,
+            "BucketName",
+            value=self.data_bucket.bucket_name,
+            description="S3 bucket name for data storage",
+            export_name=f"TapStack-{self.environment_suffix}-BucketName"
+        )
+
+        CfnOutput(
+            self,
+            "LambdaFunctionName",
+            value=self.api_handler.function_name,
+            description="Lambda function name",
+            export_name=f"TapStack-{self.environment_suffix}-LambdaFunction"
+        )
+
+        CfnOutput(
+            self,
+            "LambdaFunctionArn",
+            value=self.api_handler.function_arn,
+            description="Lambda function ARN",
+            export_name=f"TapStack-{self.environment_suffix}-LambdaArn"
+        )
+
+        CfnOutput(
+            self,
+            "EnvironmentSuffix",
+            value=self.environment_suffix,
+            description="Environment suffix used for resource naming",
+            export_name=f"TapStack-{self.environment_suffix}-EnvironmentSuffix"
+        )
+
+
 ```
-
-## requirements.txt
-
-```txt
-aws-cdk-lib>=2.0.0
-constructs>=10.0.0
-boto3>=1.26.0
-```
-
-## cdk.json
-
-```json
-{
-  "app": "python main.py",
-  "watch": {
-    "include": [
-      "**"
-    ],
-    "exclude": [
-      "README.md",
-      "cdk*.json",
-      "requirements*.txt",
-      "source.bat",
-      "**/__pycache__",
-      "**/.venv/**"
-    ]
-  },
-  "context": {
-    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
-    "@aws-cdk/core:checkSecretUsage": true,
-    "@aws-cdk/core:target": "aws-cdk-lib",
-    "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": true,
-    "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": true,
-    "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": true,
-    "@aws-cdk/aws-iam:minimizePolicies": true,
-    "@aws-cdk/core:validateSnapshotRemovalPolicy": true,
-    "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": true,
-    "@aws-cdk/aws-s3:createDefaultLoggingPolicy": true,
-    "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": true,
-    "@aws-cdk/aws-apigateway:disableCloudWatchRole": false,
-    "@aws-cdk/core:enablePartitionLiterals": true,
-    "@aws-cdk/aws-events:eventsTargetQueueSameAccount": true,
-    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
-    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
-    "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": true,
-    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
-    "@aws-cdk/aws-route53-patters:useCertificate": true,
-    "@aws-cdk/customresources:installLatestAwsSdkDefault": false,
-    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
-    "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": true,
-    "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": true,
-    "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": true,
-    "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": true,
-    "@aws-cdk/aws-redshift:columnId": true,
-    "@aws-cdk/aws-stepfunctions-tasks:enableLogging": true,
-    "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk/aws-apigateway:requestValidatorUniqueId": true,
-    "@aws-cdk/aws-kms:aliasNameRef": true,
-    "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": true,
-    "@aws-cdk/core:includePrefixInUniqueNameGeneration": true,
-    "@aws-cdk/aws-efs:denyAnonymousAccess": true,
-    "@aws-cdk/aws-opensearchservice:enableLogging": true,
-    "@aws-cdk/aws-lambda:useLatestRuntimeVersion": true,
-    "@aws-cdk/aws-efs:mountTargetOrderInsensitiveLogicalId": true,
-    "@aws-cdk/aws-rds:auroraClusterChangeScopeOfInstanceParameterGroupWithEachParameters": true,
-    "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": true,
-    "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": true,
-    "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForSourceAction": true
-  }
-}
-```
-
-## Deployment Instructions
-
-1. **Install dependencies:**
-```bash
-pip install -r requirements.txt
-```
-
-2. **Bootstrap CDK (if not done before):**
-```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/us-west-2
-```
-
-3. **Deploy the stack:**
-```bash
-cdk deploy
-```
-
-## Key Features Implemented
-
-✅ **Serverless Architecture**: Lambda + API Gateway + S3
-✅ **Regional Deployment**: Everything deployed to us-west-2
-✅ **S3 Versioning**: Enabled with lifecycle rules for old versions
-✅ **Comprehensive Logging**: CloudWatch logs for both API Gateway and Lambda
-✅ **Cost Tracking Tags**: Applied at stack level
-✅ **Security Best Practices**: 
-- IAM roles with least privilege
-- S3 bucket with encryption and blocked public access
-- CORS configuration
-✅ **Environment Variables**: Configurable Lambda runtime
-✅ **Dynamic Values**: Using CloudFormation intrinsic functions
-✅ **Monitoring**: API Gateway metrics and access logs enabled
-✅ **Error Handling**: Comprehensive error handling in Lambda
-
-## API Endpoints
-
-- **POST /data**: Store data in S3
-- **GET /data**: List recent objects in S3  
-- **GET /health**: Health check endpoint
-
-The infrastructure follows AWS best practices and is production-ready!

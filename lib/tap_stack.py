@@ -80,19 +80,24 @@ class TapStack(cdk.Stack):
         self._create_s3_bucket()
         self._create_lambda_role()
         self._create_lambda_function()
+        self._create_api_gateway_account()  # Add this line
         self._create_api_gateway()
         self._create_outputs()
 
     def _create_s3_bucket(self):
         """Create S3 bucket with versioning and lifecycle rules"""
+        # Use a more unique bucket name to avoid conflicts
+        unique_id = f"{self.account}-{self.region}-{self.environment_suffix.lower()}"
+        
         self.data_bucket = s3.Bucket(
             self, 
             f"DataBucket{self.environment_suffix}",
-            bucket_name=f"serverless-data-{self.account}-{self.region}-{self.environment_suffix.lower()}",
+            # Remove explicit bucket name to let CDK generate a unique one
+            # Or use a guaranteed unique name with timestamp
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.RETAIN,  # Best practice for data buckets
+            removal_policy=RemovalPolicy.DESTROY,  # Changed to DESTROY for easier cleanup
             lifecycle_rules=[
                 s3.LifecycleRule(
                     id="delete-old-versions",
@@ -182,19 +187,27 @@ region = os.getenv('REGION')
 stage = os.getenv('STAGE', 'dev')
 
 def lambda_handler(event, context):
+    # Define CORS headers at the top to avoid reference errors
+    cors_headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'Content-Type': 'application/json'
+    }
+    
     try:
         logger.info(f"Received event: {json.dumps(event)}")
         
         http_method = event.get('httpMethod', 'GET')
         path = event.get('path', '/')
         
-        # CORS headers
-        cors_headers = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-            'Content-Type': 'application/json'
-        }
+        # Handle OPTIONS requests for CORS preflight
+        if http_method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': cors_headers,
+                'body': json.dumps({'message': 'CORS preflight'})
+            }
         
         # Health check endpoint
         if path == '/health':
@@ -330,18 +343,18 @@ def handle_get_data(event, cors_headers):
             })
         }
             """),
-            role=self.lambda_role,
-            timeout=Duration.seconds(30),
-            memory_size=256,
-            environment={
-                "BUCKET_NAME": self.data_bucket.bucket_name,
-                "REGION": self.region,
-                "LOG_LEVEL": "INFO",
-                "STAGE": self.environment_suffix.lower()
-            },
-            log_group=self.lambda_log_group,
-            description=f"Lambda function to handle API requests and write to S3 - {self.environment_suffix}"
-        )
+        role=self.lambda_role,
+        timeout=Duration.seconds(30),
+        memory_size=256,
+        environment={
+            "BUCKET_NAME": self.data_bucket.bucket_name,
+            "REGION": self.region,
+            "LOG_LEVEL": "INFO",
+            "STAGE": self.environment_suffix.lower()
+        },
+        log_group=self.lambda_log_group,
+        description=f"Lambda function to handle API requests and write to S3 - {self.environment_suffix}"
+    )
 
     def _create_api_gateway(self):
         """Create API Gateway REST API with logging enabled"""
@@ -381,6 +394,7 @@ def handle_get_data(event, cors_headers):
                     user=True
                 )
             ),
+            # CORS is handled automatically - this creates OPTIONS methods for all resources
             default_cors_preflight_options=apigateway.CorsOptions(
                 allow_origins=apigateway.Cors.ALL_ORIGINS,
                 allow_methods=apigateway.Cors.ALL_METHODS,
@@ -388,54 +402,49 @@ def handle_get_data(event, cors_headers):
             )
         )
 
-        # Lambda integration
+        # Simple Lambda integration (proxy mode handles all responses)
         lambda_integration = apigateway.LambdaIntegration(
             self.api_handler,
-            proxy=True,
-            integration_responses=[
-                apigateway.IntegrationResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": "'*'"
-                    }
-                )
-            ]
+            proxy=True  # This handles all status codes automatically
         )
 
         # API Gateway resources and methods
         data_resource = self.api.root.add_resource("data")
         
+        # Remove manual OPTIONS methods - they're created automatically by default_cors_preflight_options
+        # data_resource.add_method("OPTIONS", lambda_integration)  # ❌ Remove this line
+        
         # POST method for creating data
-        data_resource.add_method(
-            "POST",
-            lambda_integration,
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": True
-                    }
-                )
-            ]
-        )
+        data_resource.add_method("POST", lambda_integration)
 
         # GET method for retrieving data
-        data_resource.add_method(
-            "GET",
-            lambda_integration,
-            method_responses=[
-                apigateway.MethodResponse(
-                    status_code="200",
-                    response_parameters={
-                        "method.response.header.Access-Control-Allow-Origin": True
-                    }
-                )
-            ]
-        )
+        data_resource.add_method("GET", lambda_integration)
 
         # Health check endpoint
         health_resource = self.api.root.add_resource("health")
         health_resource.add_method("GET", lambda_integration)
+        # health_resource.add_method("OPTIONS", lambda_integration)  # ❌ Remove this line too
+
+    def _create_api_gateway_account(self):
+        """Create API Gateway account configuration for CloudWatch logging"""
+        # Create CloudWatch role for API Gateway
+        api_gateway_cloudwatch_role = iam.Role(
+            self,
+            f"ApiGatewayCloudWatchRole{self.environment_suffix}",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+                )
+            ]
+        )
+
+        # API Gateway account configuration
+        apigateway.CfnAccount(
+            self,
+            f"ApiGatewayAccount{self.environment_suffix}",
+            cloud_watch_role_arn=api_gateway_cloudwatch_role.role_arn
+        )
 
     def _create_outputs(self):
         """Create CloudFormation outputs with dynamic values"""
