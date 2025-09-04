@@ -87,6 +87,15 @@
             ],
             "Description": "Retention period (days) for CloudWatch Logs groups (must use supported values)"
         },
+        "EnableCloudTrail": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Set to \"true\" to create CloudTrail resources. Default \"false\" avoids regional trail limits."
+        },
         "NumberOfAZs": {
             "Type": "Number",
             "Default": 1,
@@ -109,6 +118,14 @@
                         1
                     ]
                 }
+            ]
+        },
+        "CreateCloudTrail": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableCloudTrail"
+                },
+                "true"
             ]
         }
     },
@@ -197,6 +214,7 @@
             }
         },
         "CloudTrailEncryptionKey": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::KMS::Key",
             "Properties": {
                 "Description": {
@@ -269,6 +287,7 @@
             }
         },
         "CloudTrailEncryptionKeyAlias": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
@@ -967,6 +986,7 @@
             }
         },
         "CloudTrailRole": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
@@ -1457,6 +1477,7 @@
             }
         },
         "CloudTrailS3Bucket": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
@@ -1532,6 +1553,7 @@
             }
         },
         "CloudTrailS3BucketPolicy": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::S3::BucketPolicy",
             "Properties": {
                 "Bucket": {
@@ -1585,6 +1607,7 @@
             }
         },
         "CloudTrailLogsGroup": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -2301,6 +2324,7 @@
             }
         },
         "CloudTrailTrail": {
+            "Condition": "CreateCloudTrail",
             "Type": "AWS::CloudTrail::Trail",
             "Properties": {
                 "TrailName": {
@@ -2621,7 +2645,13 @@
         "CloudTrailTrailName": {
             "Description": "Name of the CloudTrail trail",
             "Value": {
-                "Ref": "CloudTrailTrail"
+                "Fn::If": [
+                    "CreateCloudTrail",
+                    {
+                        "Ref": "CloudTrailTrail"
+                    },
+                    ""
+                ]
             },
             "Export": {
                 "Name": {

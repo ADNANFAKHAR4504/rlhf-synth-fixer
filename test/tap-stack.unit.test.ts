@@ -39,7 +39,8 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
         'TrustedIpRange',
         'ComplianceRetentionDays',
         'CloudWatchRetentionInDays',
-        'NumberOfAZs'
+        'NumberOfAZs',
+        'EnableCloudTrail'
       ];
 
       expectedParams.forEach(paramName => {
@@ -511,7 +512,7 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
 
     test('should have expected number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(7); // + CloudWatchRetentionInDays + NumberOfAZs
+      expect(parameterCount).toBe(8); // + CloudWatchRetentionInDays + NumberOfAZs + EnableCloudTrail
     });
   });
 

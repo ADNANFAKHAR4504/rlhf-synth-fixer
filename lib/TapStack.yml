@@ -85,6 +85,14 @@ Parameters:
       - 3653
     Description: Retention period (days) for CloudWatch Logs groups (must use supported values)
 
+  EnableCloudTrail:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Set to "true" to create CloudTrail resources. Default "false" avoids regional trail limits.
+
   NumberOfAZs:
     Type: Number
     Default: 1
@@ -96,6 +104,7 @@ Parameters:
 
 Conditions:
   CreateAz2: !Not [!Equals [!Ref NumberOfAZs, 1]]
+  CreateCloudTrail: !Equals [!Ref EnableCloudTrail, "true"]
 
 Resources:
   # ================================
@@ -151,6 +160,7 @@ Resources:
 
   # Customer-managed KMS key for CloudTrail encryption
   CloudTrailEncryptionKey:
+    Condition: CreateCloudTrail
     Type: AWS::KMS::Key
     Properties:
       Description: !Sub "Customer-managed KMS key for CloudTrail encryption - ${ProjectName}-${Environment}"
@@ -188,6 +198,7 @@ Resources:
           Value: CloudFormation
 
   CloudTrailEncryptionKeyAlias:
+    Condition: CreateCloudTrail
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub "alias/${ProjectName}-cloudtrail-encryption-${Environment}"
@@ -586,6 +597,7 @@ Resources:
 
   # CloudTrail service role
   CloudTrailRole:
+    Condition: CreateCloudTrail
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${ProjectName}-cloudtrail-role-${Environment}"
@@ -853,6 +865,7 @@ Resources:
 
   # S3 bucket for CloudTrail logs
   CloudTrailS3Bucket:
+    Condition: CreateCloudTrail
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${ProjectName}-cloudtrail-${Environment}-${AWS::AccountId}"
@@ -890,6 +903,7 @@ Resources:
 
   # CloudTrail bucket policy
   CloudTrailS3BucketPolicy:
+    Condition: CreateCloudTrail
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref CloudTrailS3Bucket
@@ -921,6 +935,7 @@ Resources:
   # ================================
 
   CloudTrailLogsGroup:
+    Condition: CreateCloudTrail
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/cloudtrail/${ProjectName}-${Environment}"
@@ -1282,6 +1297,7 @@ Resources:
 
   # CloudTrail Trail for API activity logging
   CloudTrailTrail:
+    Condition: CreateCloudTrail
     Type: AWS::CloudTrail::Trail
     Properties:
       TrailName: !Sub "${ProjectName}-cloudtrail-${Environment}"
@@ -1480,7 +1496,7 @@ Outputs:
 
   CloudTrailTrailName:
     Description: "Name of the CloudTrail trail"
-    Value: !Ref CloudTrailTrail
+    Value: !If [CreateCloudTrail, !Ref CloudTrailTrail, ""]
     Export:
       Name: !Sub "${ProjectName}-cloudtrail-name-${Environment}"
 
