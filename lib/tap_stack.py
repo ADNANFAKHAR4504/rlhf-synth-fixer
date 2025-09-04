@@ -49,8 +49,7 @@ class TapStack(TerraformStack):
             bucket=state_bucket,
             key=f"cdktf/{environment_suffix}/terraform.tfstate",
             region=state_bucket_region,
-            encrypt=True,
-            dynamodb_table=f"terraform-state-lock-{environment_suffix}"
+            encrypt=True
         )
 
         # Merge required tags with default tags
