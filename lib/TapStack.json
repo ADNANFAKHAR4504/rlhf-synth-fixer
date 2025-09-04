@@ -283,6 +283,30 @@
                 ]
             }
         },
+        "CloudFrontLogBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "CloudFrontLogBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowCloudFrontLogs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudfront.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${CloudFrontLogBucket.Arn}/*"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "CloudFrontDistribution": {
             "Type": "AWS::CloudFront::Distribution",
             "Properties": {
