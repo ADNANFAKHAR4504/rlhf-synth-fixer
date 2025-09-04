@@ -239,11 +239,9 @@ Resources:
           CidrIp: 0.0.0.0/0
           Description: HTTPS from internet
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 32768
-          ToPort: 65535
+        - IpProtocol: -1
           CidrIp: 0.0.0.0/0
-          Description: Ephemeral ports
+          Description: All outbound
       Tags:
         - Key: Name
           Value: TapStack-ALB-SG
@@ -277,6 +275,9 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'tapstack-alb-logs-${AWS::AccountId}-${AWS::Region}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -297,26 +298,29 @@ Resources:
     Properties:
       Bucket: !Ref ALBLogsBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AWSLogDeliveryWrite
             Effect: Allow
             Principal:
-              AWS: !Sub 
+              AWS: !Sub
                 - 'arn:aws:iam::${ALBLogAccount}:root'
                 - ALBLogAccount: !FindInMap [RegionMap, !Ref 'AWS::Region', ALBLogDeliveryAccount]
             Action: s3:PutObject
-            Resource: !Sub '${ALBLogsBucket}/alb/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub
+              - '${BucketArn}/alb/AWSLogs/${AWS::AccountId}/*'
+              - { BucketArn: !GetAtt ALBLogsBucket.Arn }
             Condition:
               StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
+                s3:x-amz-acl: bucket-owner-full-control
           - Sid: AWSLogDeliveryAclCheck
             Effect: Allow
             Principal:
-              AWS: !Sub 
+              AWS: !Sub
                 - 'arn:aws:iam::${ALBLogAccount}:root'
                 - ALBLogAccount: !FindInMap [RegionMap, !Ref 'AWS::Region', ALBLogDeliveryAccount]
             Action: s3:GetBucketAcl
-            Resource: !Ref ALBLogsBucket
+            Resource: !GetAtt ALBLogsBucket.Arn
 
   # IAM Role and Instance Profile
   InstanceRole:
@@ -343,7 +347,9 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ALBLogsBucket.Arn}/alb/*'
+                Resource: !Sub
+                  - '${BucketArn}/alb/*'
+                  - { BucketArn: !GetAtt ALBLogsBucket.Arn }
       Tags:
         - Key: Name
           Value: TapStack-InstanceRole
@@ -363,21 +369,23 @@ Resources:
     Properties:
       LaunchTemplateName: TapStack-LaunchTemplate
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         IamInstanceProfile:
           Arn: !GetAtt InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref AppSecurityGroup
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
+            set -euxo pipefail
             yum update -y
             yum install -y httpd
-            systemctl start httpd
-            systemctl enable httpd
-            
-            # Create index page
+            systemctl enable --now httpd
+
             cat > /var/www/html/index.html << 'EOF'
             <!DOCTYPE html>
             <html>
@@ -392,13 +400,9 @@ Resources:
             </body>
             </html>
             EOF
-            
-            # Create health endpoint
-            cat > /var/www/html/health << 'EOF'
-            OK
-            EOF
-            
-            # Restart httpd to ensure everything is loaded
+
+            echo "OK" > /var/www/html/health
+            chown apache:apache /var/www/html/index.html /var/www/html/health
             systemctl restart httpd
         TagSpecifications:
           - ResourceType: instance
@@ -412,7 +416,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: TapStack-ALB
+      Name: !Sub 'TapStack-ALB-${AWS::StackName}'
       Scheme: internet-facing
       Type: application
       Subnets:
@@ -437,7 +441,6 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: TapStack-TG
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -469,7 +472,6 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: TapStack-ASG
       VPCZoneIdentifier:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
