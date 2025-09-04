@@ -164,83 +164,8 @@ export class SecureInfrastructureStack extends cdk.Stack {
       targetKey: kmsKey,
     });
 
-    // Custom resource to wait for KMS key to be available
-    const kmsKeyWaiter = new cdk.CustomResource(this, 'KMSKeyWaiter', {
-      serviceToken: new lambda.Function(this, 'KMSKeyWaiterFunction', {
-        runtime: lambda.Runtime.PYTHON_3_9,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline(`
-import boto3
-import json
-import time
-import urllib3
-
-def send_response(event, context, response_status, response_data=None, physical_resource_id=None, no_echo=False, reason=None):
-    response_url = event['ResponseURL']
-    
-    response_body = {
-        'Status': response_status,
-        'Reason': reason or 'See CloudWatch Log Stream: {}'.format(context.log_stream_name),
-        'PhysicalResourceId': physical_resource_id or context.log_stream_name,
-        'StackId': event['StackId'],
-        'RequestId': event['RequestId'],
-        'LogicalResourceId': event['LogicalResourceId'],
-        'NoEcho': no_echo,
-        'Data': response_data or {}
-    }
-
-    json_response_body = json.dumps(response_body)
-
-    headers = {
-        'content-type': '',
-        'content-length': str(len(json_response_body))
-    }
-
-    http = urllib3.PoolManager()
-    try:
-        response = http.request('PUT', response_url, body=json_response_body, headers=headers)
-        print("Status code:", response.status)
-    except Exception as e:
-        print("send_response failed executing http.request(...):", e)
-
-def handler(event, context):
-    try:
-        print('Received event:', json.dumps(event))
-        
-        if event['RequestType'] == 'Delete':
-            send_response(event, context, 'SUCCESS', physical_resource_id='kms-key-waiter')
-            return
-        
-        kms = boto3.client('kms')
-        key_id = event['ResourceProperties']['KeyId']
-        
-        # Wait for key to be available
-        max_attempts = 30
-        for attempt in range(max_attempts):
-            try:
-                response = kms.describe_key(KeyId=key_id)
-                if response['KeyMetadata']['KeyState'] == 'Enabled':
-                    send_response(event, context, 'SUCCESS', physical_resource_id='kms-key-waiter')
-                    return
-            except Exception as e:
-                print(f"Attempt {attempt + 1}: {str(e)}")
-            
-            time.sleep(10)
-        
-        send_response(event, context, 'FAILED', reason='KMS key did not become available within timeout')
-    
-    except Exception as e:
-        print('Error:', str(e))
-        send_response(event, context, 'FAILED', reason=str(e))
-        `),
-        timeout: cdk.Duration.minutes(10),
-      }).functionArn,
-      properties: {
-        KeyId: kmsKey.keyId,
-      },
-    });
-
-    kmsKeyWaiter.node.addDependency(kmsKey);
+    // Note: Removed KMS waiter as KMS keys are typically available immediately
+    // CloudFormation dependencies should be sufficient for proper ordering
 
     // =============================================================================
     // 2. VPC AND NETWORKING
@@ -1249,7 +1174,6 @@ def handler(event, context):
 
     // Ensure the launch template depends on the KMS key being ready
     launchTemplate.node.addDependency(kmsKey);
-    launchTemplate.node.addDependency(kmsKeyWaiter);
 
     // Auto Scaling Group
     const autoScalingGroup = new autoscaling.AutoScalingGroup(
@@ -1274,9 +1198,8 @@ def handler(event, context):
       }
     );
 
-    // Ensure ASG depends on KMS key, launch template, and waiter being ready
+    // Ensure ASG depends on KMS key and launch template being ready
     autoScalingGroup.node.addDependency(kmsKey);
-    autoScalingGroup.node.addDependency(kmsKeyWaiter);
     autoScalingGroup.node.addDependency(launchTemplate);
 
     // Register ASG with target group
