@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "410002",
+  "team": "4",
+  "startedAt": "2025-08-27T09:01:34.487Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "IAM",
+    "SQS",
+    "SNS",
+    "WAF",
+    "X-Ray",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: go
+description: Secure AWS infrastructure for web application with comprehensive security features
+main: lib

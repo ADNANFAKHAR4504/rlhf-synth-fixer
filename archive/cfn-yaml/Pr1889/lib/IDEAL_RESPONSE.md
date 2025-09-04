@@ -1,0 +1,379 @@
+```yaml
+
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  DBUsername:
+    Type: String
+    Default: admin
+  TimestampSuffix:
+    Type: String
+    Description: Unique timestamp for resource names
+    Default: 'manual-20250822'
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: !Sub 'vpc-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'igw-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-1-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-subnet-2-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-1-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-subnet-2-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'public-rt-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-1-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'private-rt-2-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  NatEIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'eip-nat-1-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  NatEIP2:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'eip-nat-2-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    DependsOn: AttachGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-1-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    DependsOn: AttachGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP2.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'nat-2-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from anywhere
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      GroupName: !Sub 'alb-sg-${TimestampSuffix}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'alb-sg-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from ALB only, egress to anywhere
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      GroupName: !Sub 'ec2-sg-${TimestampSuffix}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'ec2-sg-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow DB port from EC2 only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      GroupName: !Sub 'rds-sg-${TimestampSuffix}'
+      Tags:
+        - Key: Name
+          Value: !Sub 'rds-sg-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub 'alb-${TimestampSuffix}'
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      Tags:
+        - Key: Name
+          Value: !Sub 'alb-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub 'tg-${TimestampSuffix}'
+      VpcId: !Ref VPC
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: 80
+      HealthCheckPath: /
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Name
+          Value: !Sub 'tg-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub 'launch-template-${TimestampSuffix}'
+      LaunchTemplateData:
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        InstanceType: t3.micro
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
+        UserData: !Base64 |
+          #!/bin/bash
+          yum install -y python3
+          nohup python3 -m http.server 80 &
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: Name
+                Value: !Sub 'ec2-instance-${TimestampSuffix}'
+              - Key: Environment
+                Value: Production
+
+  #Triggers
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub 'asg-${TimestampSuffix}'
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'asg-instance-${TimestampSuffix}'
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: Production
+          PropagateAtLaunch: true
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'db-subnet-group-${TimestampSuffix}'
+      DBSubnetGroupDescription: DB subnet group
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-subnet-group-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'db-${TimestampSuffix}'
+      AllocatedStorage: 20
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: '{{resolve:secretsmanager:secret-291545-safe:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: true
+      # StorageEncrypted: true   # <-- Removed KMS encryption requirement
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-${TimestampSuffix}'
+        - Key: Environment
+          Value: Production
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+Outputs:
+  ALBDNSName:
+    Value: !GetAtt ALB.DNSName
+    Export:
+      Name: !Sub 'alb-dns-${TimestampSuffix}'
+  VPCId:
+    Value: !Ref VPC
+    Export:
+      Name: !Sub 'vpc-id-${TimestampSuffix}'
+  PublicSubnet1Id:
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub 'public-subnet-1-id-${TimestampSuffix}'
+  PublicSubnet2Id:
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub 'public-subnet-2-id-${TimestampSuffix}'
+  PrivateSubnet1Id:
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub 'private-subnet-1-id-${TimestampSuffix}'
+  PrivateSubnet2Id:
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub 'private-subnet-2-id-${TimestampSuffix}'
+  RDSEndpoint:
+    Value: !GetAtt MyDB.Endpoint.Address
+    Export:
+      Name: !Sub 'rds-endpoint-${TimestampSuffix}'
