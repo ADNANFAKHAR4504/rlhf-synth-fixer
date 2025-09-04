@@ -304,9 +304,6 @@ jobs:
           language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Run unit tests
-        env:
-          PLATFORM: ${{ needs.detect-metadata.outputs.platform }}
-          LANGUAGE: ${{ needs.detect-metadata.outputs.language }}
         run: ./scripts/unit-tests.sh
 
       - name: Prepare coverage reports for Java projects
