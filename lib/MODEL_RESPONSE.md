@@ -56,7 +56,7 @@ The configuration creates:
 1. VPC with CIDR 10.0.0.0/16
 2. Two public subnets (10.0.0.0/24 and 10.0.1.0/24) in separate AZs
 3. Internet Gateway attached to VPC
-4. Public route table routing 0.0.0.0/0 to IGW
+4. Public routes table routing 0.0.0.0/0 to IGW
 5. Subnet associations for public routing
 
 All resources tagged appropriately. Validates with Terraform 1.5+ and AWS provider 5.x.
