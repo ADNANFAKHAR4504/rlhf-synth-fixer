@@ -123,7 +123,7 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Database password"
+  description = "Database password (only alphanumeric characters allowed)"
   type        = string
   sensitive   = true
   default     = null
@@ -180,7 +180,10 @@ resource "random_string" "suffix" {
 
 resource "random_password" "db_password" {
   length  = 32
-  special = true
+  special = false
+  upper   = true
+  lower   = true
+  numeric = true
 }
 
 # VPC Configuration
