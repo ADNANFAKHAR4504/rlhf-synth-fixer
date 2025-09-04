@@ -7,6 +7,11 @@ Parameters:
     Default: 'prod'
     AllowedValues: ['dev', 'test', 'prod']
     Description: 'Environment designation for resource tagging and configuration'
+    
+  CloudTrailLogGroup:
+    Type: String
+    Default: '/aws/cloudtrail/production-trail-4829b638'
+    Description: 'Cloudtrail name for the account'
 
   AdminEmail:
     Type: String
@@ -433,7 +438,7 @@ Resources:
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${Environment}-db-subnet-group-latest'
+      DBSubnetGroupName: !Sub '${Environment}-db-subnet-group-lat'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds: [!Ref DatabaseSubnet, !Ref PrivateSubnet]
       Tags:
@@ -445,7 +450,7 @@ Resources:
   DatabaseSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub '${Environment}/database/credential'
+      Name: !Sub '${Environment}/database/credentials-testing'
       Description: 'Database credentials'
       GenerateSecretString:
         SecretStringTemplate: '{"username": "admin"}'
@@ -462,7 +467,7 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${Environment}-database-latest'
+      DBInstanceIdentifier: !Sub '${Environment}-database-lat'
       DBInstanceClass: db.t3.micro
       Engine: mysql
       EngineVersion: '8.0.42'  # Supported — up to at least 8.0.42 :contentReference[oaicite:0]{index=0}
@@ -478,7 +483,7 @@ Resources:
       MultiAZ: false
       PubliclyAccessible: false
       DeletionProtection: true
-      EnableCloudwatchLogsExports: [error, general, slow-query]
+      EnableCloudwatchLogsExports: [error]
       Tags:
         - Key: Name
           Value: !Sub '${Environment}-database'
@@ -488,102 +493,102 @@ Resources:
   # ================================
   # CloudTrail & Logging
   # ================================
-  CloudTrailLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/cloudtrails/${Environment}'
-      RetentionInDays: 90
-      KmsKeyId: !GetAtt KMSKey.Arn
+   # CloudTrailLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub '/aws/cloudtrails/${Environment}'
+  #     RetentionInDays: 90
+  #     KmsKeyId: !GetAtt KMSKey.Arn
 
-  CloudTrailS3Bucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}-latest'
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref KMSKey
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldLogs
-            Status: Enabled
-            ExpirationInDays: 2555
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+  # CloudTrailS3Bucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}-latest'
+  #     BucketEncryption:
+  #       ServerSideEncryptionConfiguration:
+  #         - ServerSideEncryptionByDefault:
+  #             SSEAlgorithm: aws:kms
+  #             KMSMasterKeyID: !Ref KMSKey
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: true
+  #       BlockPublicPolicy: true
+  #       IgnorePublicAcls: true
+  #       RestrictPublicBuckets: true
+  #     VersioningConfiguration:
+  #       Status: Enabled
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldLogs
+  #           Status: Enabled
+  #           ExpirationInDays: 2555
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
 
-  CloudTrailS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CloudTrailS3Bucket
-      PolicyDocument:
-        Statement:
-          - Sid: AWSCloudTrailAclCheck
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt CloudTrailS3Bucket.Arn
-          - Sid: AWSCloudTrailWrite
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
-            Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
+  # CloudTrailS3BucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref CloudTrailS3Bucket
+  #     PolicyDocument:
+  #       Statement:
+  #         - Sid: AWSCloudTrailAclCheck
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: s3:GetBucketAcl
+  #           Resource: !GetAtt CloudTrailS3Bucket.Arn
+  #         - Sid: AWSCloudTrailWrite
+  #           Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: s3:PutObject
+  #           Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
+  #           Condition:
+  #             StringEquals:
+  #               's3:x-amz-acl': bucket-owner-full-control
 
-  CloudTrailRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: CloudTrailLogsPolicy
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !GetAtt CloudTrailLogGroup.Arn
+  # CloudTrailRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service: cloudtrail.amazonaws.com
+  #           Action: sts:AssumeRole
+  #     Policies:
+  #       - PolicyName: CloudTrailLogsPolicy
+  #         PolicyDocument:
+  #           Statement:
+  #             - Effect: Allow
+  #               Action:
+  #                 - logs:CreateLogStream
+  #                 - logs:PutLogEvents
+  #               Resource: !GetAtt CloudTrailLogGroup.Arn
 
-  CloudTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailS3BucketPolicy
-    Properties:
-      TrailName: !Sub '${Environment}-cloudtrail-latest'
-      S3BucketName: !Ref CloudTrailS3Bucket
-      IncludeGlobalServiceEvents: true
-      IsMultiRegionTrail: true
-      EnableLogFileValidation: true
-      IsLogging: true  # Required property :contentReference[oaicite:1]{index=1}
-      KMSKeyId: !Ref KMSKey
-      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
-      CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
-      EventSelectors:
-        - ReadWriteType: All
-          IncludeManagementEvents: true
-          DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - !Sub '${CloudTrailS3Bucket}/*'
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+  # CloudTrail:
+  #   Type: AWS::CloudTrail::Trail
+  #   DependsOn: CloudTrailS3BucketPolicy
+  #   Properties:
+  #     TrailName: !Sub '${Environment}-cloudtrail-latest'
+  #     S3BucketName: !Ref CloudTrailS3Bucket
+  #     IncludeGlobalServiceEvents: true
+  #     IsMultiRegionTrail: true
+  #     EnableLogFileValidation: true
+  #     IsLogging: true  # Required property :contentReference[oaicite:1]{index=1}
+  #     KMSKeyId: !Ref KMSKey
+  #     CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
+  #     CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
+  #     EventSelectors:
+  #       - ReadWriteType: All
+  #         IncludeManagementEvents: true
+  #         DataResources:
+  #           - Type: AWS::S3::Object
+  #             Values:
+  #               - !Sub '${CloudTrailS3Bucket}/*'
+  #     Tags:
+  #       - Key: Environment
+  #         Value: !Ref Environment
 
   # ================================
   # AWS Config
@@ -598,7 +603,7 @@ Resources:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
       Policies:
         - PolicyName: ConfigS3Policy
           PolicyDocument:
@@ -636,20 +641,20 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${Environment}-config-recorder-latest'
-      RoleARN: !GetAtt ConfigServiceRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
+  # ConfigRecorder:
+  #   Type: AWS::Config::ConfigurationRecorder
+  #   Properties:
+  #     Name: !Sub '${Environment}-config-recorder-latest'
+  #     RoleARN: !GetAtt ConfigServiceRole.Arn
+  #     RecordingGroup:
+  #       AllSupported: true
+  #       IncludeGlobalResourceTypes: true
 
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${Environment}-config-delivery-channel-latest'
-      S3BucketName: !Ref ConfigS3Bucket
+  #ConfigDeliveryChannel:
+  #  Type: AWS::Config::DeliveryChannel
+  #  Properties:
+  #    Name: !Sub '${Environment}-config-delivery-channel-latest'
+  #    S3BucketName: !Ref ConfigS3Bucket
 
   # ================================
   # Monitoring & Alerts
