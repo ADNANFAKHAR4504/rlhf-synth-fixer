@@ -499,7 +499,7 @@
           "InstanceType": {
             "Ref": "InstanceType"
           },
-          "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-2/amzn2-ami-hvm-x86_64-gp2}}",
+          "ImageId": "ami-00ca32bbc84273381",
           "KeyName": {
             "Ref": "KeyName"
           },
