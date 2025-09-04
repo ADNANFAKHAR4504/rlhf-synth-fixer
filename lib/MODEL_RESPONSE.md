@@ -75,7 +75,7 @@ provider "aws" {
 ## tap_stack.tf
 
 ```hcl
-# Data source to get current AWS account ID and region
+# Data source to get current AWS account ID and regions
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
@@ -94,7 +94,7 @@ data "aws_vpc" "existing" {
   # This will fail if VPC doesn't exist, handled by try() in vpc_flow_logs
 }
 
-# Minimal VPCs for regions where existing VPCs are not found
+# Minimal VPCs for regions where existing VPCs are not found.
 resource "aws_vpc" "fallback" {
   for_each = toset(local.regions)
   
