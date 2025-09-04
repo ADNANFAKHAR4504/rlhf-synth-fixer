@@ -52,4 +52,4 @@ Follow naming convention: <project-name>-<resource-type>-<unique-id>.
 Output the Load Balancer’s DNS name and the S3 bucket’s name.
 
 output_format:
-Provide only a single valid CloudFormation JSON template with all required resources, parameters, outputs, and intrinsic functions. Do not include explanation, commentary, or Markdown formatting—only the JSON template.
+Provide only a single valid CloudFormation JSON template with all required resources, parameters, outputs, and intrinsic functions. Do not include explanation, commentary, or Markdown formatting - only the JSON template.
