@@ -1,5 +1,7 @@
 import { test, expect } from "@jest/globals";
 import { execSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
 
 test("Terraform integration test", () => {
   // Initialize Terraform
@@ -10,13 +12,18 @@ test("Terraform integration test", () => {
   expect(validateOutput).toMatch(/Success.*configuration is valid/i);
   
   // Check that terraform fmt doesn't find any formatting issues
-  const fmtOutput = execSync("terraform fmt -check", { cwd: "lib" }).toString();
-  expect(fmtOutput).toBe(""); // Empty output means no formatting issues
+  try {
+    const fmtOutput = execSync("terraform fmt -check", { cwd: "lib" }).toString();
+    expect(fmtOutput).toBe(""); // Empty output means no formatting issues
+  } catch (error) {
+    // If terraform fmt -check finds issues, it exits with code 3
+    // We can run terraform fmt to see what would be changed
+    const fmtDiff = execSync("terraform fmt -check -diff", { cwd: "lib", encoding: "utf8" });
+    throw new Error(`Terraform formatting issues found:\n${fmtDiff}`);
+  }
   
   // Verify the configuration files exist and contain expected resources
-  const fs = require("fs");
-  const path = require("path");
-  const configContent = fs.readFileSync(path.join(__dirname, "../lib/provider.tf"), "utf8");
+  const configContent = fs.readFileSync(path.join(process.cwd(), "lib/provider.tf"), "utf8");
   
   expect(configContent).toContain('resource "aws_vpc" "main"');
   expect(configContent).toContain('resource "aws_subnet" "public"');
