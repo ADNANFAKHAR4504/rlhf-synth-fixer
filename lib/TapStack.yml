@@ -10,17 +10,17 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     ConstraintDescription: Must be dev, staging, or prod
 
-  BucketName:
-    Type: String
-    Default: my-app-data-bucket
-    Description: Name for the S3 bucket (must be globally unique)
+  # BucketName:
+  #   Type: String
+  #   Default: my-app-data-bucket
+  #   Description: Name for the S3 bucket (must be globally unique)
 
 Resources:
   # S3 Bucket with encryption
   AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Ref BucketName
+      # BucketName: !Ref BucketName
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

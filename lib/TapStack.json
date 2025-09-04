@@ -12,20 +12,12 @@
                 "prod"
             ],
             "ConstraintDescription": "Must be dev, staging, or prod"
-        },
-        "BucketName": {
-            "Type": "String",
-            "Default": "my-app-data-bucket",
-            "Description": "Name for the S3 bucket (must be globally unique)"
         }
     },
     "Resources": {
         "AppDataBucket": {
             "Type": "AWS::S3::Bucket",
             "Properties": {
-                "BucketName": {
-                    "Ref": "BucketName"
-                },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
                         {
