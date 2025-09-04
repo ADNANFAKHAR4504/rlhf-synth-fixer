@@ -81,6 +81,7 @@ export class TapStack extends TerraformStack {
       appSecurityGroupId: vpcModule.appSecurityGroupId,
       kmsKey: securityModule.dataKmsKey, // ✅ pass full key object
       adminRoleArn: securityModule.adminRole.arn,
+      logBucketName: securityModule.logBucket.bucket,
     });
 
     // Database Module - Creates RDS and Redshift instances

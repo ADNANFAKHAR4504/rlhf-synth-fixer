@@ -57,6 +57,7 @@ export interface ComputeModuleProps {
   appSecurityGroupId: string;
   kmsKey: KmsKey;
   adminRoleArn: string;
+  logBucketName: string; // Add this line
 }
 
 export interface DatabaseModuleProps {
@@ -227,6 +228,8 @@ export class SecurityModule extends Construct {
       }
     );
 
+    // In SecurityModule class, update the S3 bucket policy:
+
     // S3 Bucket Policy for ALB Access Logs
     new S3BucketPolicy(this, 'log-bucket-policy', {
       bucket: this.logBucket.id,
@@ -234,12 +237,31 @@ export class SecurityModule extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
+            Sid: 'AllowELBAccessLogs',
             Effect: 'Allow',
             Principal: {
               AWS: elbServiceAccount.arn,
             },
             Action: 's3:PutObject',
             Resource: `${this.logBucket.arn}/alb-access-logs/*`,
+          },
+          {
+            Sid: 'AllowELBAccessLogDelivery',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'logdelivery.elb.amazonaws.com', // Updated service
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
+          },
+          {
+            Sid: 'AllowELBGetBucketAcl',
+            Effect: 'Allow',
+            Principal: {
+              AWS: elbServiceAccount.arn,
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
           },
           {
             Effect: 'Allow',
@@ -874,7 +896,7 @@ echo "User data script completed successfully"
       subnets: props.publicSubnetIds,
       enableDeletionProtection: true,
       accessLogs: {
-        bucket: 'tap-logs-prod-ts',
+        bucket: props.logBucketName, // Use props instead of hardcoded value
         enabled: true,
         prefix: 'alb-access-logs',
       },
@@ -1042,7 +1064,6 @@ export class DatabaseModule extends Construct {
     const rdsInstance = new DbInstance(this, 'rds-instance', {
       identifier: 'tap-db-prod',
       engine: 'postgres',
-      engineVersion: '15.4', // ✅ Specify version to match parameter group
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
       storageType: 'gp3',
