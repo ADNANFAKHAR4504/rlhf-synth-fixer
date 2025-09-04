@@ -376,4 +376,3 @@ Each template contains a complete project structure that gets copied when creati
     - Omit code to initialize AWS Providers or backends.
     - Generate only the code for this stack, do not include main entrypoint code.
   ```
-# Updated Thu Sep  4 13:41:18 IST 2025
