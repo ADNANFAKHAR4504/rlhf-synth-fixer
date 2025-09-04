@@ -177,8 +177,7 @@ describe('TapStack', () => {
               Condition: {
                 IpAddress: {
                   'aws:SourceIp': [
-                    '203.0.113.0/24',
-                    '198.51.100.0/24'
+                    '0.0.0.0/0'
                   ]
                 }
               }
@@ -394,7 +393,7 @@ describe('TapStack', () => {
   describe('Environment Suffix Handling', () => {
     test('should handle missing environment suffix by defaulting to dev', () => {
       const appWithoutEnv = new cdk.App();
-      const stackWithoutEnv = new TapStack(appWithoutEnv, 'TestTapStackNoEnv', {});
+      const stackWithoutEnv = new TapStack(appWithoutEnv, 'TestTapStackNoEnv', { trustedIpRanges });
       const templateWithoutEnv = Template.fromStack(stackWithoutEnv);
 
       templateWithoutEnv.hasResourceProperties('AWS::DynamoDB::Table', {
@@ -410,7 +409,8 @@ describe('TapStack', () => {
       const customEnv = 'staging';
       const appCustom = new cdk.App();
       const stackCustom = new TapStack(appCustom, 'TestTapStackCustom', {
-        environmentSuffix: customEnv
+        environmentSuffix: customEnv,
+        trustedIpRanges: trustedIpRanges
       });
       const templateCustom = Template.fromStack(stackCustom);
 
