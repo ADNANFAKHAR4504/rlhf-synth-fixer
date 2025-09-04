@@ -286,40 +286,10 @@ yum install -y httpd php php-mysqlnd
 systemctl start httpd
 systemctl enable httpd
 
-# Create simple PHP application
-cat > /var/www/html/index.php << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Web Application</title>
-</head>
-<body>
-    <h1>Welcome to the Web Application</h1>
-    <p>This is a sample web application deployed with Pulumi.</p>
-    <p>Database Host: {args[0]}</p>
-    <p>Database Name: {args[1]}</p>
-    <p>Instance ID: <?php echo gethostname(); ?></p>
-</body>
-</html>
-EOF
-
-# Configure PHP to connect to RDS
-cat > /var/www/html/db-test.php << 'EOF'
-<?php
-$servername = "{args[0]}";
-$username = "admin";
-$password = "changeme123!";
-$dbname = "{args[1]}";
-
-try {{
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    echo "Connected successfully to database";
-}} catch(PDOException $e) {{
-    echo "Connection failed: " . $e->getMessage();
-}}
-?>
-EOF
+# Create simple web page
+echo "<h1>Welcome to Web Application</h1>" > /var/www/html/index.html
+echo "<p>Database Host: {args[0]}</p>" >> /var/www/html/index.html
+echo "<p>Database Name: {args[1]}</p>" >> /var/www/html/index.html
 
 chown -R apache:apache /var/www/html
 """
