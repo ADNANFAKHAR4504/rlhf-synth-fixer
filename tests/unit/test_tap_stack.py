@@ -29,12 +29,12 @@ def test_rds_instance_created():
     stack = TapStack(app, "tap-stack")
     template = assertions.Template.from_stack(stack)
 
-    # Test RDS instance creation
-    template.has_resource_properties("AWS::RDS::DBInstance", {
-        "Engine": "mysql",
-        "MultiAZ": True,
-        "StorageEncrypted": True
-    })
+            # Test RDS instance creation
+        template.has_resource_properties("AWS::RDS::DBInstance", {
+            "Engine": "postgres",
+            "MultiAZ": True,
+            "StorageEncrypted": True
+        })
 
 
 def test_alb_created():
