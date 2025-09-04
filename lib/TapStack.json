@@ -1,11 +1,66 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
     "Description": "Secure multi-region infrastructure with production-ready security controls and Customer Managed KMS Keys",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentName",
+                        "ProjectName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network CIDR"
+                    },
+                    "Parameters": [
+                        "VPCCidrUSEast1",
+                        "VPCCidrEUCentral1"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Instance Types"
+                    },
+                    "Parameters": [
+                        "RDSInstanceType",
+                        "EC2InstanceType"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "KMS Key Configuration"
+                    },
+                    "Parameters": [
+                        "EnableKeyRotation"
+                    ]
+                }
+            ]
+        }
+    },
     "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "multi-region-secure-app",
+            "Description": "Name of the project for resource naming and tagging",
+            "AllowedPattern": "^[a-z0-9-]+$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
         "EnvironmentName": {
             "Type": "String",
-            "Default": "Production",
-            "Description": "Environment name for resource tagging"
+            "Default": "prod",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Environment name for resource tagging",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
         },
         "VPCCidrUSEast1": {
             "Type": "String",
@@ -70,7 +125,7 @@
             "Type": "AWS::KMS::Key",
             "Properties": {
                 "Description": {
-                    "Fn::Sub": "Customer Managed KMS Key for ${EnvironmentName} Infrastructure - ${AWS::Region}"
+                    "Fn::Sub": "Customer Managed KMS Key for ${ProjectName} Infrastructure - ${AWS::Region}"
                 },
                 "KeyUsage": "ENCRYPT_DECRYPT",
                 "KeySpec": "SYMMETRIC_DEFAULT",
@@ -105,6 +160,24 @@
                                 "kms:Encrypt",
                                 "kms:GenerateDataKey*",
                                 "kms:ReEncrypt*"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudTrail Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:DescribeKey",
+                                "kms:Encrypt",
+                                "kms:GenerateDataKey*",
+                                "kms:ReEncrypt*",
+                                "kms:CreateGrant",
+                                "kms:ListGrants",
+                                "kms:RevokeGrant"
                             ],
                             "Resource": "*"
                         },
@@ -226,7 +299,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -291,7 +366,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -324,7 +401,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -388,7 +467,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -441,7 +522,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -493,7 +576,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -545,7 +630,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -580,7 +667,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -615,7 +704,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -657,7 +748,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -699,7 +792,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -735,7 +830,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -806,7 +903,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -865,7 +964,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -962,7 +1063,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1012,7 +1115,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1040,8 +1145,8 @@
                 "SecurityGroupIngress": [
                     {
                         "IpProtocol": "tcp",
-                        "FromPort": 8080,
-                        "ToPort": 8080,
+                        "FromPort": 80,
+                        "ToPort": 80,
                         "SourceSecurityGroupId": {
                             "Ref": "WebServerSecurityGroup"
                         }
@@ -1076,7 +1181,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1125,7 +1232,7 @@
                                         "s3:PutObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${ApplicationBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::prod-application-${AWS::Region}-${AWS::AccountId}/*"
                                     }
                                 }
                             ]
@@ -1165,7 +1272,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1243,7 +1352,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1328,7 +1439,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1355,7 +1468,7 @@
                         {
                             "Effect": "Allow",
                             "Principal": {
-                                "Service": "rds.amazonaws.com"
+                                "Service": "monitoring.rds.amazonaws.com"
                             },
                             "Action": "sts:AssumeRole"
                         }
@@ -1373,7 +1486,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1417,11 +1532,18 @@
                                     "Action": [
                                         "logs:CreateLogGroup",
                                         "logs:CreateLogStream",
-                                        "logs:PutLogEvents"
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogStreams",
+                                        "logs:DescribeLogGroups"
                                     ],
-                                    "Resource": {
-                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*"
-                                    }
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "${CloudTrailLogGroup.Arn}"
+                                        },
+                                        {
+                                            "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
+                                        }
+                                    ]
                                 }
                             ]
                         }
@@ -1460,7 +1582,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1520,7 +1644,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1556,6 +1682,13 @@
                         }
                     ]
                 },
+                "OwnershipControls": {
+                    "Rules": [
+                        {
+                            "ObjectOwnership": "BucketOwnerPreferred"
+                        }
+                    ]
+                },
                 "VersioningConfiguration": {
                     "Status": "Enabled"
                 },
@@ -1580,7 +1713,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1640,7 +1775,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1686,7 +1823,7 @@
                             },
                             "Action": "s3:PutObject",
                             "Resource": {
-                                "Fn::Sub": "${LoggingBucket}/AWSLogs/${AWS::AccountId}/*"
+                                "Fn::Sub": "arn:aws:s3:::${LoggingBucket}/*"
                             },
                             "Condition": {
                                 "StringEquals": {
@@ -1725,7 +1862,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1773,7 +1912,7 @@
                 "BackupRetentionPeriod": 7,
                 "PreferredBackupWindow": "03:00-04:00",
                 "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-                "DeletionProtection": true,
+                "DeletionProtection": false,
                 "MonitoringInterval": 60,
                 "MonitoringRoleArn": {
                     "Fn::GetAtt": [
@@ -1796,7 +1935,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1838,7 +1979,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1917,7 +2060,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1934,6 +2079,7 @@
         },
         "ECSService": {
             "Type": "AWS::ECS::Service",
+            "DependsOn": "ALBListener",
             "Properties": {
                 "ServiceName": {
                     "Fn::Sub": "prod-service-${AWS::Region}"
@@ -1964,6 +2110,15 @@
                         "AssignPublicIp": "DISABLED"
                     }
                 },
+                "LoadBalancers": [
+                    {
+                        "ContainerName": "web-container",
+                        "ContainerPort": 80,
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
                 "Tags": [
                     {
                         "Key": "Name",
@@ -1979,7 +2134,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -1996,6 +2153,7 @@
         },
         "ECSAutoScalingTarget": {
             "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
+            "DependsOn": "ALBListener",
             "Properties": {
                 "MaxCapacity": 10,
                 "MinCapacity": 2,
@@ -2088,7 +2246,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2136,7 +2296,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2209,7 +2371,9 @@
                         }
                     }
                 ],
-                "UserData": "yum update -y yum install -y amazon-cloudwatch-agent /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default",
+                "UserData": {
+                    "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c default\n"
+                },
                 "Tags": [
                     {
                         "Key": "Name",
@@ -2225,7 +2389,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2268,7 +2434,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2311,7 +2479,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2328,7 +2498,9 @@
         },
         "CloudTrail": {
             "Type": "AWS::CloudTrail::Trail",
-            "DependsOn": "CloudTrailBucketPolicy",
+            "DependsOn": [
+                "CloudTrailBucketPolicy"
+            ],
             "Properties": {
                 "TrailName": {
                     "Fn::Sub": "prod-trail-${AWS::Region}"
@@ -2350,7 +2522,10 @@
                 "IsMultiRegionTrail": false,
                 "EnableLogFileValidation": true,
                 "CloudWatchLogsLogGroupArn": {
-                    "Fn::Sub": "${CloudTrailLogGroup.Arn}:*"
+                    "Fn::GetAtt": [
+                        "CloudTrailLogGroup",
+                        "Arn"
+                    ]
                 },
                 "CloudWatchLogsRoleArn": {
                     "Fn::GetAtt": [
@@ -2367,10 +2542,10 @@
                                 "Type": "AWS::S3::Object",
                                 "Values": [
                                     {
-                                        "Fn::Sub": "${ApplicationBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${ApplicationBucket}/*"
                                     },
                                     {
-                                        "Fn::Sub": "${BackupBucket}/*"
+                                        "Fn::Sub": "arn:aws:s3:::${BackupBucket}/*"
                                     }
                                 ]
                             }
@@ -2392,7 +2567,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2438,7 +2615,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2484,7 +2663,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2530,7 +2711,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2582,7 +2765,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
@@ -2634,7 +2819,9 @@
                     },
                     {
                         "Key": "Project",
-                        "Value": "IaC-AWS-Nova-Model"
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
                     },
                     {
                         "Key": "ManagedBy",
