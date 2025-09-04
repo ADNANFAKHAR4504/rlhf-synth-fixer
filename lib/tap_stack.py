@@ -231,16 +231,16 @@ class TapStack(Stack):
 
     def _configure_security_group_rules(self):
         """Configure security group rules after all security groups are created."""
-        # Allow Lambda to connect to RDS
+        # Allow Lambda to connect to RDS using CIDR block instead of security group reference
         self.lambda_security_group.add_egress_rule(
-            peer=ec2.Peer.security_group_id(self.rds_security_group.security_group_id),
+            peer=ec2.Peer.ipv4("10.0.0.0/16"),
             connection=ec2.Port.tcp(3306),
             description="Allow MySQL connection to RDS"
         )
 
-        # Allow RDS to accept connections from Lambda
+        # Allow RDS to accept connections from Lambda using CIDR block
         self.rds_security_group.add_ingress_rule(
-            peer=ec2.Peer.security_group_id(self.lambda_security_group.security_group_id),
+            peer=ec2.Peer.ipv4("10.0.0.0/16"),
             connection=ec2.Port.tcp(3306),
             description="Allow Lambda to connect to MySQL"
         )
@@ -386,8 +386,7 @@ def handler(event, context):
             memory_size=256,
             environment={
                 "REGION": self.region
-            },
-            log_retention=logs.RetentionDays.ONE_WEEK
+            }
         )
 
         return lambda_function
