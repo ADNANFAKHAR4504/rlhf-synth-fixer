@@ -56,7 +56,7 @@ class TestTapStack(unittest.TestCase):
         # Check that RDS instance is created
         template.has_resource_properties("AWS::RDS::DBInstance", {
             "Engine": "mysql",
-            "MultiAZ": True,
+            "MultiAZ": False,
             "StorageEncrypted": True,
             "BackupRetentionPeriod": 7
         })

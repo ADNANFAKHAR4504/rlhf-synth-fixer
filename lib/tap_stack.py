@@ -263,8 +263,8 @@ class TapStack(Stack):
                 version=rds.MysqlEngineVersion.VER_8_0_37
             ),
             instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.BURSTABLE3,
-                ec2.InstanceSize.MICRO  # Use t3.micro for cost optimization
+                ec2.InstanceClass.BURSTABLE2,
+                ec2.InstanceSize.MICRO  # Use t2.micro for cost optimization
             ),
             vpc=self.vpc,
             subnet_group=subnet_group,
@@ -274,7 +274,7 @@ class TapStack(Stack):
                 username=self.db_username,
                 secret_name="tap/rds/credentials"
             ),
-            multi_az=True,  # Enable Multi-AZ for high availability
+            multi_az=False,  # Disable Multi-AZ to reduce resource usage
             backup_retention=Duration.days(7),  # 7-day backup retention
             deletion_protection=False,  # Allow deletion when stack is destroyed
             removal_policy=RemovalPolicy.DESTROY,  # Delete when stack is destroyed
