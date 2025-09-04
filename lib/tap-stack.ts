@@ -132,6 +132,30 @@ export class SecureInfrastructureStack extends cdk.Stack {
             ],
             resources: ['*'],
           }),
+          new iam.PolicyStatement({
+            sid: 'Allow EC2 Auto Scaling to use the key',
+            effect: iam.Effect.ALLOW,
+            principals: [
+              new iam.ServicePrincipal('autoscaling.amazonaws.com'),
+              new iam.ArnPrincipal(`arn:aws:iam::${this.account}:root`),
+            ],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+              'kms:ListGrants',
+              'kms:RevokeGrant',
+            ],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
+              },
+            },
+          }),
         ],
       }),
     });
@@ -140,6 +164,56 @@ export class SecureInfrastructureStack extends cdk.Stack {
       aliasName: `alias/secure-infrastructure-key-${environmentSuffix}`,
       targetKey: kmsKey,
     });
+
+    // Custom resource to wait for KMS key to be available
+    const kmsKeyWaiter = new cdk.CustomResource(this, 'KMSKeyWaiter', {
+      serviceToken: new lambda.Function(this, 'KMSKeyWaiterFunction', {
+        runtime: lambda.Runtime.PYTHON_3_9,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
+import boto3
+import json
+import time
+
+def handler(event, context):
+    if event['RequestType'] == 'Delete':
+        return {'Status': 'SUCCESS', 'PhysicalResourceId': 'kms-key-waiter'}
+    
+    kms = boto3.client('kms')
+    key_id = event['ResourceProperties']['KeyId']
+    
+    # Wait for key to be available
+    max_attempts = 30
+    for attempt in range(max_attempts):
+        try:
+            response = kms.describe_key(KeyId=key_id)
+            if response['KeyMetadata']['KeyState'] == 'Enabled':
+                return {'Status': 'SUCCESS', 'PhysicalResourceId': 'kms-key-waiter'}
+        except Exception as e:
+            print(f"Attempt {attempt + 1}: {str(e)}")
+        
+        time.sleep(10)
+    
+    raise Exception('KMS key did not become available within timeout')
+        `),
+        timeout: cdk.Duration.minutes(10),
+      }).functionArn,
+      properties: {
+        KeyId: kmsKey.keyId,
+      },
+    });
+
+    kmsKeyWaiter.node.addDependency(kmsKey);
+
+    // Ensure Auto Scaling service-linked role exists
+    const autoScalingServiceLinkedRole = new iam.CfnServiceLinkedRole(
+      this,
+      'AutoScalingServiceLinkedRole',
+      {
+        awsServiceName: 'autoscaling.amazonaws.com',
+        description: 'Service-linked role for Auto Scaling to access other AWS services',
+      }
+    );
 
     // =============================================================================
     // 2. VPC AND NETWORKING
@@ -397,8 +471,15 @@ export class SecureInfrastructureStack extends cdk.Stack {
                 'kms:GenerateDataKey*',
                 'kms:DescribeKey',
                 'kms:CreateGrant',
+                'kms:ListGrants',
+                'kms:RevokeGrant',
               ],
               resources: [kmsKey.keyArn],
+              conditions: {
+                StringEquals: {
+                  'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
+                },
+              },
             }),
           ],
         }),
@@ -1131,6 +1212,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
 
     // Ensure the launch template depends on the KMS key being ready
     launchTemplate.node.addDependency(kmsKey);
+    launchTemplate.node.addDependency(kmsKeyWaiter);
 
     // Auto Scaling Group
     const autoScalingGroup = new autoscaling.AutoScalingGroup(
@@ -1139,7 +1221,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
       {
         vpc,
         launchTemplate: launchTemplate,
-        minCapacity: 1,
+        minCapacity: 0,
         maxCapacity: 3,
         desiredCapacity: 2,
         vpcSubnets: {
@@ -1150,14 +1232,16 @@ export class SecureInfrastructureStack extends cdk.Stack {
         }),
         updatePolicy: autoscaling.UpdatePolicy.rollingUpdate({
           maxBatchSize: 1,
-          minInstancesInService: 1,
+          minInstancesInService: 0,
         }),
       }
     );
 
-    // Ensure ASG depends on both KMS key and launch template being ready
+    // Ensure ASG depends on KMS key, launch template, waiter, and service-linked role being ready
     autoScalingGroup.node.addDependency(kmsKey);
+    autoScalingGroup.node.addDependency(kmsKeyWaiter);
     autoScalingGroup.node.addDependency(launchTemplate);
+    autoScalingGroup.node.addDependency(autoScalingServiceLinkedRole);
 
     // Register ASG with target group
     autoScalingGroup.attachToApplicationTargetGroup(targetGroup);
