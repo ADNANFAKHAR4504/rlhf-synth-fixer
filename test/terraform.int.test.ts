@@ -11,9 +11,6 @@ const isValidSGId = (v: string) => v.startsWith("sg-");
 const isValidIGWId = (v: string) => v.startsWith("igw-");
 const isValidNatId = (v: string) => v.startsWith("nat-");
 const isValidRouteTableId = (v: string) => v.startsWith("rtb-");
-const isValidEipAlloc = (v: string) => v.startsWith("eipalloc-");
-const isValidIpAddress = (v: string) =>
-  /^([0-9]{1,3}\.){3}[0-9]{1,3}$/.test(v.trim()); // basic IPv4 check
 
 const parseIfArray = (value: any) => {
   if (typeof value === "string") {
@@ -29,14 +26,13 @@ const parseIfArray = (value: any) => {
 
 function skipIfMissing(key: string, obj: any) {
   if (!(key in obj)) {
-    // eslint-disable-next-line no-console
     console.warn(`Skipping tests for missing output: ${key}`);
     return true;
   }
   return false;
 }
 
-describe("Terraform flat outputs - integration validation", () => {
+describe("Terraform tap-stack flat outputs - integration validation", () => {
   let outputs: Record<string, any>;
 
   beforeAll(() => {
@@ -48,207 +44,153 @@ describe("Terraform flat outputs - integration validation", () => {
     }
   });
 
-  it("has all expected keys from flat outputs", () => {
+  it("has sufficient keys in outputs", () => {
     expect(Object.keys(outputs).length).toBeGreaterThan(30);
   });
 
-  // Validate presence and correctness of basic string keys
-  it("validates basic string outputs", () => {
-    const requiredStrKeys = [
-      "api_gateway_rest_api_id",
-      "api_gateway_rest_api",
-      "api_gateway_rest_api_arn",
-      "api_gateway_method_http_method",
-      "api_gateway_stage",
-      "bucket_suffix",
-      "cloudtrail_name",
+  // Validate basic raw string keys presence
+  it("validates key strings presence", () => {
+    const keysToCheck = [
+      "aws_account_id",
+      "environment",
       "primary_region",
       "secondary_region",
-      "primary_naming_prefix",
-      "secondary_naming_prefix",
-      "common_tags",
-      "lambda_runtime",
+      "primary_name_prefix",
+      "secondary_name_prefix",
+      "primary_lambda_function_name",
+      "secondary_lambda_function_name",
+      "primary_rds_db_name",
+      "secondary_rds_db_name",
+      "primary_alb_dns_name",
+      "secondary_alb_dns_name",
     ];
-
-    for (const key of requiredStrKeys) {
+    for (const key of keysToCheck) {
       if (skipIfMissing(key, outputs)) continue;
       expect(isNonEmptyString(outputs[key])).toBe(true);
     }
   });
 
   // Validate ARNs
-  it("validates ARN formatted outputs", () => {
-    const arnKeys = Object.keys(outputs).filter((k) => k.endsWith("_arn"));
+  it("validates ARN outputs", () => {
+    const arnKeys = Object.keys(outputs).filter(k => k.endsWith("_arn"));
     for (const key of arnKeys) {
       if (skipIfMissing(key, outputs)) continue;
       expect(isValidArn(outputs[key])).toBe(true);
     }
   });
 
-  // Validate IDs & resource IDs with specific prefixes
-  it("validates resource IDs and identifiers", () => {
-    // VPC
-    if (!skipIfMissing("primary_vpc_id", outputs))
-      expect(isValidVpcId(outputs["primary_vpc_id"])).toBe(true);
+  // Validate VPC IDs and Route Tables and subnets by prefix check
+  it("validates VPC and route table IDs", () => {
+    for (const region of ["primary", "secondary"]) {
+      if (!skipIfMissing(`${region}_vpc_id`, outputs))
+        expect(isValidVpcId(outputs[`${region}_vpc_id`])).toBe(true);
+      if (!skipIfMissing(`${region}_public_route_table_id`, outputs))
+        expect(isValidRouteTableId(outputs[`${region}_public_route_table_id`])).toBe(true);
+      if (!skipIfMissing(`${region}_private_route_table_id`, outputs))
+        expect(isValidRouteTableId(outputs[`${region}_private_route_table_id`])).toBe(true);
+    }
+  });
 
-    if (!skipIfMissing("secondary_vpc_id", outputs))
-      expect(isValidVpcId(outputs["secondary_vpc_id"])).toBe(true);
-
-    // Subnets - some are arrays!
+  it("validates subnet IDs arrays", () => {
     const subnetKeys = [
-      "primary_private_subnet_ids",
       "primary_public_subnet_ids",
-      "secondary_private_subnet_ids",
+      "primary_private_subnet_ids",
       "secondary_public_subnet_ids",
+      "secondary_private_subnet_ids",
     ];
-
     for (const key of subnetKeys) {
       if (skipIfMissing(key, outputs)) continue;
       expect(Array.isArray(outputs[key])).toBe(true);
-      outputs[key].forEach((id: string) => expect(isValidSubnetId(id)).toBe(true));
+      for (const val of outputs[key]) {
+        expect(isValidSubnetId(val)).toBe(true);
+      }
     }
+  });
 
-    // Security groups
+  it("validates security group IDs", () => {
     const sgKeys = [
-      "primary_ec2_security_group_id",
-      "secondary_ec2_security_group_id",
-      "primary_rds_security_group_id",
-      "secondary_rds_security_group_id",
+      "primary_ec2_sg_id", "primary_rds_sg_id", "primary_alb_sg_id",
+      "secondary_ec2_sg_id", "secondary_rds_sg_id", "secondary_alb_sg_id",
     ];
     for (const key of sgKeys) {
       if (skipIfMissing(key, outputs)) continue;
       expect(isValidSGId(outputs[key])).toBe(true);
     }
+  });
 
-    // IGWs
-    const igwKeys = ["primary_internet_gateway_id", "secondary_internet_gateway_id"];
+  it("validates internet gateway and NAT gateway IDs", () => {
+    const igwKeys = ["primary_igw_id", "secondary_igw_id"];
+    const natKeys = ["primary_nat_gateway_id", "secondary_nat_gateway_id"];
     for (const key of igwKeys) {
       if (skipIfMissing(key, outputs)) continue;
       expect(isValidIGWId(outputs[key])).toBe(true);
     }
-
-    // NAT Gateways IDs (arrays)
-    const ngwKeys = ["primary_nat_gateway_ids", "secondary_nat_gateway_ids"];
-    for (const key of ngwKeys) {
+    for (const key of natKeys) {
       if (skipIfMissing(key, outputs)) continue;
-      expect(Array.isArray(outputs[key])).toBe(true);
-      outputs[key].forEach((id: string) => expect(isValidNatId(id)).toBe(true));
-    }
-
-    // NAT EIP allocations (arrays)
-    const eipKeys = ["primary_nat_eip_ids", "secondary_nat_eip_ids"];
-    for (const key of eipKeys) {
-      if (skipIfMissing(key, outputs)) continue;
-      expect(Array.isArray(outputs[key])).toBe(true);
-      outputs[key].forEach((id: string) => expect(isValidEipAlloc(id)).toBe(true));
-    }
-
-    // Route Tables
-    const rtKeys = ["primary_public_route_table_id", "secondary_public_route_table_id"];
-    for (const key of rtKeys) {
-      if (skipIfMissing(key, outputs)) continue;
-      expect(isValidRouteTableId(outputs[key])).toBe(true);
+      expect(isValidNatId(outputs[key])).toBe(true);
     }
   });
 
-  // Validate CIDRs - basic string and array format
-  it("validates CIDRs", () => {
-    const cidrKeys = [
-      "primary_vpc_cidr",
-      "secondary_vpc_cidr",
-      "primary_private_subnet_cidrs",
-      "primary_public_subnet_cidrs",
-      "secondary_private_subnet_cidrs",
-      "secondary_public_subnet_cidrs",
-    ];
+  it("validates RDS CPU alarm names arrays and strings", () => {
+    if (!skipIfMissing("primary_ec2_cpu_alarm_names", outputs)) {
+      expect(Array.isArray(outputs.primary_ec2_cpu_alarm_names)).toBe(true);
+      for (const n of outputs.primary_ec2_cpu_alarm_names) {
+        expect(n).toMatch(/^tap-prod-primary-ec2-\d+-cpu-alarm$/);
+      }
+    }
+    if (!skipIfMissing("secondary_ec2_cpu_alarm_names", outputs)) {
+      expect(Array.isArray(outputs.secondary_ec2_cpu_alarm_names)).toBe(true);
+      for (const n of outputs.secondary_ec2_cpu_alarm_names) {
+        expect(n).toMatch(/^tap-prod-secondary-ec2-\d+-cpu-alarm$/);
+      }
+    }
+    if (!skipIfMissing("primary_rds_cpu_alarm_name", outputs)) {
+      expect(typeof outputs.primary_rds_cpu_alarm_name).toBe("string");
+      expect(outputs.primary_rds_cpu_alarm_name).toMatch(/^tap-prod-primary-rds-cpu-alarm$/);
+    }
+    if (!skipIfMissing("secondary_rds_cpu_alarm_name", outputs)) {
+      expect(typeof outputs.secondary_rds_cpu_alarm_name).toBe("string");
+      expect(outputs.secondary_rds_cpu_alarm_name).toMatch(/^tap-prod-secondary-rds-cpu-alarm$/);
+    }
+  });
 
-    for (const key of cidrKeys) {
+  it("validates availability zones JSON arrays and format", () => {
+    for (const key of ["primary_availability_zones", "secondary_availability_zones"]) {
       if (skipIfMissing(key, outputs)) continue;
-      const value = outputs[key];
-      if (Array.isArray(value)) {
-        value.forEach((c) => expect(typeof c).toBe("string"));
-      } else {
-        expect(typeof value).toBe("string");
+      expect(Array.isArray(outputs[key])).toBe(true);
+      for (const az of outputs[key]) {
+        expect(az).toMatch(/^us-(east|west)-\d[a-z]?$/);
       }
     }
   });
 
-  // Validate IP addresses for EC2 private IPs and NAT EIP public IPs
-  it("validates IP addresses", () => {
-    const ipv4Keys = ["primary_ec2_private_ip", "secondary_ec2_private_ip"];
-    for (const key of ipv4Keys) {
-      if (skipIfMissing(key, outputs)) continue;
-      expect(isValidIpAddress(outputs[key])).toBe(true);
-    }
-
-    const natEipIpKeys = ["primary_nat_eip_public_ips", "secondary_nat_eip_public_ips"];
-    for (const key of natEipIpKeys) {
-      if (skipIfMissing(key, outputs)) continue;
-      expect(Array.isArray(outputs[key])).toBe(true);
-      for (const ip of outputs[key]) expect(isValidIpAddress(ip)).toBe(true);
+  it("validates S3 bucket IDs and ARNs", () => {
+    for (const region of ["primary", "secondary"]) {
+      const bucketIdKey = `${region}_s3_bucket_id`;
+      const bucketArnKey = `${region}_s3_bucket_arn`;
+      if (!skipIfMissing(bucketIdKey, outputs)) {
+        expect(outputs[bucketIdKey]).toMatch(new RegExp(`^tap-prod-${region}-static-content`));
+      }
+      if (!skipIfMissing(bucketArnKey, outputs)) {
+        expect(isValidArn(outputs[bucketArnKey])).toBe(true);
+      }
     }
   });
 
-  // Validate numeric info in string form - ports and counts
-  it("validates numeric output values", () => {
-    const numericKeys = ["primary_rds_port", "secondary_rds_port"];
-    for (const key of numericKeys) {
+  it("validates Lambda function names follow naming convention", () => {
+    for (const region of ["primary", "secondary"]) {
+      const key = `${region}_lambda_function_name`;
       if (skipIfMissing(key, outputs)) continue;
-      expect(!isNaN(Number(outputs[key]))).toBe(true);
+      expect(outputs[key]).toBe(`tap-prod-${region}-rds-backup`);
     }
   });
 
-  // Validate regions and naming prefixes are consistent strings
-  it("validates region and naming prefix outputs", () => {
-    if (!skipIfMissing("primary_region", outputs))
-      expect(outputs["primary_region"]).toMatch(/^us-[a-z0-9-]+$/);
-
-    if (!skipIfMissing("secondary_region", outputs))
-      expect(outputs["secondary_region"]).toMatch(/^us-[a-z0-9-]+$/);
-
-    if (!skipIfMissing("primary_naming_prefix", outputs))
-      expect(outputs["primary_naming_prefix"]).toContain(outputs["primary_region"]);
-
-    if (!skipIfMissing("secondary_naming_prefix", outputs))
-      expect(outputs["secondary_naming_prefix"]).toContain(outputs["secondary_region"]);
-  });
-
-  // Validate common tags - parse JSON string and verify keys
-  it("validates parsed common tags", () => {
-    if (skipIfMissing("common_tags", outputs)) return;
-    const tags = JSON.parse(outputs["common_tags"]);
-    expect(tags.Environment).toBe("Production");
-    expect(tags.departmental).toBe("businessunit");
-    expect(tags.ownership).toBe("self");
-  });
-
-  // Validate Lambda runtime versions are python3.9
-  it("validates lambda runtimes", () => {
-    if (!skipIfMissing("primary_lambda_runtime", outputs))
-      expect(outputs["primary_lambda_runtime"]).toBe("python3.9");
-
-    if (!skipIfMissing("secondary_lambda_runtime", outputs))
-      expect(outputs["secondary_lambda_runtime"]).toBe("python3.9");
-  });
-
-  // Validate API Gateway HTTP method is GET
-  it("validates API Gateway HTTP method", () => {
-    if (skipIfMissing("api_gateway_method_http_method", outputs)) return;
-    expect(outputs["api_gateway_method_http_method"]).toBe("GET");
-  });
-
-  // Validate API Gateway URLs are valid URLs (basic check)
-  it("validates API Gateway URLs", () => {
-    const urlKeys = [
-      "api_gateway_stage", 
-      "api_gateway_invoke_url",
-      "api_gateway_deployment_invoke_url",
-      "api_gateway_stage_invoke_url",
-    ];
-    for (const key of urlKeys) {
-      if (skipIfMissing(key, outputs)) continue;
-      expect(typeof outputs[key]).toBe("string");
-      expect(outputs[key]).toMatch(/^https:\/\//);
+  it("validates RDS database names", () => {
+    if (!skipIfMissing("primary_rds_db_name", outputs)) {
+      expect(outputs.primary_rds_db_name).toBe("primarydb");
+    }
+    if (!skipIfMissing("secondary_rds_db_name", outputs)) {
+      expect(outputs.secondary_rds_db_name).toBe("secondarydb");
     }
   });
 });
