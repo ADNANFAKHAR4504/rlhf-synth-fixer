@@ -38,7 +38,7 @@ export class SecureInfrastructureStack extends cdk.Stack {
       enableKeyRotation: true,
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
       policy: new iam.PolicyDocument({
         statements: [
           new iam.PolicyStatement({
@@ -85,8 +85,15 @@ export class SecureInfrastructureStack extends cdk.Stack {
               'kms:GenerateDataKey*',
               'kms:DescribeKey',
               'kms:CreateGrant',
+              'kms:ListGrants',
+              'kms:RevokeGrant',
             ],
             resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
+              },
+            },
           }),
           new iam.PolicyStatement({
             sid: 'Allow Auto Scaling Service',
@@ -99,6 +106,29 @@ export class SecureInfrastructureStack extends cdk.Stack {
               'kms:GenerateDataKey*',
               'kms:DescribeKey',
               'kms:CreateGrant',
+              'kms:ListGrants',
+              'kms:RevokeGrant',
+            ],
+            resources: ['*'],
+            conditions: {
+              StringEquals: {
+                'kms:ViaService': `ec2.${this.region}.amazonaws.com`,
+              },
+            },
+          }),
+          new iam.PolicyStatement({
+            sid: 'Allow EBS Service',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('ebs.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:CreateGrant',
+              'kms:ListGrants',
+              'kms:RevokeGrant',
             ],
             resources: ['*'],
           }),
@@ -1099,6 +1129,9 @@ export class SecureInfrastructureStack extends cdk.Stack {
       }
     );
 
+    // Ensure the launch template depends on the KMS key being ready
+    launchTemplate.node.addDependency(kmsKey);
+
     // Auto Scaling Group
     const autoScalingGroup = new autoscaling.AutoScalingGroup(
       this,
@@ -1121,6 +1154,10 @@ export class SecureInfrastructureStack extends cdk.Stack {
         }),
       }
     );
+
+    // Ensure ASG depends on both KMS key and launch template being ready
+    autoScalingGroup.node.addDependency(kmsKey);
+    autoScalingGroup.node.addDependency(launchTemplate);
 
     // Register ASG with target group
     autoScalingGroup.attachToApplicationTargetGroup(targetGroup);

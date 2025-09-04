@@ -1,6 +1,21 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
+import { APIGatewayClient } from '@aws-sdk/client-api-gateway';
+import { CloudTrailClient } from '@aws-sdk/client-cloudtrail';
+import {
+  EC2Client
+} from '@aws-sdk/client-ec2';
+import {
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  KMSClient
+} from '@aws-sdk/client-kms';
+import {
+  S3Client
+} from '@aws-sdk/client-s3';
+import { SNSClient } from '@aws-sdk/client-sns';
+import { WAFV2Client } from '@aws-sdk/client-wafv2';
 import fs from 'fs';
-import * as AWS from 'aws-sdk';
 
 // Read deployment outputs
 const outputs = JSON.parse(
@@ -8,17 +23,17 @@ const outputs = JSON.parse(
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environmentSuffix: string = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // AWS SDK clients
-const ec2 = new AWS.EC2({ region: 'us-west-2' });
-const s3 = new AWS.S3({ region: 'us-west-2' });
-const wafv2 = new AWS.WAFV2({ region: 'us-west-2' });
-const cloudtrail = new AWS.CloudTrail({ region: 'us-west-2' });
-const sns = new AWS.SNS({ region: 'us-west-2' });
-const kms = new AWS.KMS({ region: 'us-west-2' });
-const elbv2 = new AWS.ELBv2({ region: 'us-west-2' });
-const apigateway = new AWS.APIGateway({ region: 'us-west-2' });
+const ec2 = new EC2Client({ region: 'us-west-2' });
+const s3 = new S3Client({ region: 'us-west-2' });
+const wafv2 = new WAFV2Client({ region: 'us-west-2' });
+const cloudtrail = new CloudTrailClient({ region: 'us-west-2' });
+const sns = new SNSClient({ region: 'us-west-2' });
+const kms = new KMSClient({ region: 'us-west-2' });
+const elbv2 = new ElasticLoadBalancingV2Client({ region: 'us-west-2' });
+const apigateway = new APIGatewayClient({ region: 'us-west-2' });
 
 describe('Secure Infrastructure Integration Tests', () => {
   describe('VPC and Networking', () => {
@@ -59,7 +74,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(subnets.Subnets).toBeDefined();
       const subnetList = subnets.Subnets!;
       expect(subnetList.length).toBeGreaterThanOrEqual(6);
-      
+
       const azs = new Set(subnetList.map(subnet => subnet.AvailabilityZone));
       expect(azs.size).toBeGreaterThanOrEqual(2);
     });
@@ -131,7 +146,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(flowLogs.FlowLogs).toBeDefined();
       const logs = flowLogs.FlowLogs!;
       expect(logs.length).toBeGreaterThanOrEqual(1);
-      
+
       const activeFlowLog = logs.find(log => log.FlowLogStatus === 'ACTIVE');
       expect(activeFlowLog).toBeDefined();
       if (activeFlowLog) {
@@ -152,7 +167,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const bucketLocation = await s3.getBucketLocation({
         Bucket: outputs.CloudTrailBucketName
       }).promise();
-      
+
       expect(bucketLocation).toBeDefined();
 
       // Check encryption
@@ -164,7 +179,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       const encryptionConfig = encryption.ServerSideEncryptionConfiguration!;
       expect(encryptionConfig.Rules).toBeDefined();
       expect(encryptionConfig.Rules).toHaveLength(1);
-      
+
       const encryptionRule = encryptionConfig.Rules![0];
       expect(encryptionRule.ApplyServerSideEncryptionByDefault).toBeDefined();
       const encryptionSettings = encryptionRule.ApplyServerSideEncryptionByDefault!;
@@ -215,7 +230,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(lifecycle.Rules).toBeDefined();
       const rules = lifecycle.Rules!;
       expect(rules.length).toBeGreaterThan(0);
-      
+
       const lifecycleRule = rules[0];
       expect(lifecycleRule.Status).toBe('Enabled');
       expect(lifecycleRule.Transitions).toBeDefined();
@@ -279,9 +294,9 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(acl.Rules).toBeDefined();
       const aclRules = acl.Rules!;
       expect(aclRules.length).toBeGreaterThan(0);
-      
+
       // Check for managed rule groups
-      const managedRules = aclRules.filter(rule => 
+      const managedRules = aclRules.filter(rule =>
         rule.Statement && rule.Statement.ManagedRuleGroupStatement
       );
       expect(managedRules.length).toBeGreaterThan(0);
@@ -328,7 +343,7 @@ describe('Secure Infrastructure Integration Tests', () => {
 
       if (loadBalancers.LoadBalancers && loadBalancers.LoadBalancers.length > 0) {
         const albArn = loadBalancers.LoadBalancers[0].LoadBalancerArn;
-        
+
         const listeners = await elbv2.describeListeners({
           LoadBalancerArn: albArn
         }).promise();
@@ -356,7 +371,7 @@ describe('Secure Infrastructure Integration Tests', () => {
 
       if (loadBalancers.LoadBalancers && loadBalancers.LoadBalancers.length > 0) {
         const albArn = loadBalancers.LoadBalancers[0].LoadBalancerArn;
-        
+
         const listeners = await elbv2.describeListeners({
           LoadBalancerArn: albArn
         }).promise();
@@ -365,7 +380,7 @@ describe('Secure Infrastructure Integration Tests', () => {
         const listenerList = listeners.Listeners!;
         const httpListener = listenerList.find(l => l.Port === 80);
         expect(httpListener).toBeDefined();
-        
+
         if (httpListener && httpListener.DefaultActions) {
           const redirectAction = httpListener.DefaultActions.find(a => a.Type === 'redirect');
           expect(redirectAction).toBeDefined();
@@ -391,9 +406,9 @@ describe('Secure Infrastructure Integration Tests', () => {
         console.log('Could not extract API ID from URL');
         return;
       }
-      
+
       const apiId = urlMatch[1];
-      
+
       const api = await apigateway.getRestApi({
         restApiId: apiId
       }).promise().catch(() => null);
@@ -418,9 +433,9 @@ describe('Secure Infrastructure Integration Tests', () => {
         console.log('Could not extract API ID from URL');
         return;
       }
-      
+
       const apiId = urlMatch[1];
-      
+
       const stage = await apigateway.getStage({
         restApiId: apiId,
         stageName: 'prod'
@@ -429,7 +444,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       if (stage) {
         expect(stage.tracingEnabled).toBe(true);
         expect(stage.methodSettings).toBeDefined();
-        
+
         // Check if any method has logging enabled
         const loggingEnabled = Object.values(stage.methodSettings || {}).some(
           (settings: any) => settings.loggingLevel && settings.loggingLevel !== 'OFF'
@@ -453,7 +468,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       expect(topicAttributes.Attributes).toBeDefined();
       const attributes = topicAttributes.Attributes!;
       expect(attributes.DisplayName).toBe('Security Alerts');
-      
+
       // Check if KMS encryption is enabled
       if (attributes.KmsMasterKeyId) {
         expect(attributes.KmsMasterKeyId).toBeTruthy();
@@ -464,8 +479,8 @@ describe('Secure Infrastructure Integration Tests', () => {
   describe('CloudTrail Configuration', () => {
     test('CloudTrail is logging events', async () => {
       const trails = await cloudtrail.describeTrails({}).promise();
-      
-      const secureTrail = trails.trailList ? trails.trailList.find(trail => 
+
+      const secureTrail = trails.trailList ? trails.trailList.find(trail =>
         trail.Name && trail.Name.includes('secure-infrastructure-audit-trail')
       ) : undefined;
 
@@ -488,8 +503,8 @@ describe('Secure Infrastructure Integration Tests', () => {
 
     test('CloudTrail has event selectors configured', async () => {
       const trails = await cloudtrail.describeTrails({}).promise();
-      
-      const secureTrail = trails.trailList ? trails.trailList.find(trail => 
+
+      const secureTrail = trails.trailList ? trails.trailList.find(trail =>
         trail.Name && trail.Name.includes('secure-infrastructure-audit-trail')
       ) : undefined;
 
@@ -503,7 +518,7 @@ describe('Secure Infrastructure Integration Tests', () => {
           expect(eventSelectors.EventSelectors).toBeDefined();
           const selectors = eventSelectors.EventSelectors!;
           expect(selectors.length).toBeGreaterThan(0);
-          
+
           const managementEvents = selectors[0];
           expect(managementEvents.ReadWriteType).toBe('All');
           expect(managementEvents.IncludeManagementEvents).toBe(true);
@@ -562,30 +577,30 @@ describe('Secure Infrastructure Integration Tests', () => {
   describe('End-to-End Connectivity', () => {
     test('Infrastructure components are properly connected', async () => {
       // This test validates that all components can theoretically work together
-      
+
       // Check VPC exists
       expect(outputs.VPCId).toBeDefined();
-      
+
       // Check ALB exists and has DNS
       expect(outputs.ALBDNSName).toBeDefined();
       expect(outputs.ALBDNSName).toMatch(/\.elb\.amazonaws\.com$/);
-      
+
       // Check API Gateway URL is valid
       expect(outputs.APIGatewayURL).toBeDefined();
       expect(outputs.APIGatewayURL).toMatch(/^https:\/\/.*\.execute-api\..*\.amazonaws\.com/);
-      
+
       // Check CloudTrail bucket exists
       expect(outputs.CloudTrailBucketName).toBeDefined();
       expect(outputs.CloudTrailBucketName).toMatch(/secure-cloudtrail-logs/);
-      
+
       // Check SNS topic ARN is valid
       expect(outputs.SecurityAlertsTopicArn).toBeDefined();
       expect(outputs.SecurityAlertsTopicArn).toMatch(/^arn:aws:sns:/);
-      
+
       // Check KMS key ID is valid UUID format
       expect(outputs.KMSKeyId).toBeDefined();
       expect(outputs.KMSKeyId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-      
+
       // Check WAF Web ACL ARN is valid
       expect(outputs.WebACLArn).toBeDefined();
       expect(outputs.WebACLArn).toMatch(/^arn:aws:wafv2:/);
