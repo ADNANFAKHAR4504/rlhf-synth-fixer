@@ -1,0 +1,46 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "292074",
+  "team": "4",
+  "startedAt": "2025-08-22T07:55:33.961Z",
+  "author": "voidha1rsh",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "Monitoring Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::InternetGateway",
+    "AWS::EC2::VPCGatewayAttachment",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::Route",
+    "AWS::EC2::SubnetRouteTableAssociation",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::FlowLog",
+    "AWS::IAM::Role",
+    "AWS::Logs::LogGroup",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::SecurityHub::Hub",
+    "AWS::CloudTrail::Trail",
+    "AWS::Config::DeliveryChannel",
+    "AWS::Config::ConfigurationRecorder",
+    "AWS::Config::ConfigRule"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

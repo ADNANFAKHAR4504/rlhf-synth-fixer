@@ -1,0 +1,42 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349976",
+  "team": "3",
+  "startedAt": "2025-08-29T09:17:49.859Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudFront",
+    "RDS",
+    "ELB",
+    "Certificate Manager",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
+}

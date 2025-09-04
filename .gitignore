@@ -92,6 +92,9 @@ cdktf.log
 bin/.terraform.lock.hcl
 .genpackage-lock.json
 .gen/providers/*
+src/main/java/imports/
+src/main/resources/imports/
+src/main/resources/
 
 __pycache__/
 .pulumi/
@@ -133,3 +136,10 @@ replay_pid*
 # Java test reports
 build/reports/
 build/test-results/
+
+# Turing IaC Review App
+turing-iac-review-app/turing-iac-tasks-processor*
+turing-iac-review-app/tasks.json
+turing-iac-review-app/aws-nuke-config-runtime.yaml
+turing-iac-review-app/task_reports.csv
+turing-iac-review-app/aws-nuke-report-batch*

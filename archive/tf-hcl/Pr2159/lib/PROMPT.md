@@ -1,0 +1,8 @@
+Create resources in two different regions us-east-1 and us-west-2, So create proper VPC in each region and set specific CIDR for the VPC. VPCs with CIDR blocks: 10.0.0.0/16 for the primary and 10.1.0.0/16 for the secondary region. Make us-east-1 primary and us-west-2 as secondary.VPCs should have  private and  public subnets in each VPC for each region. Configure other required resources as well network configuration as required. Utilize Elastic IPs for NAT gateways within each region. Also can you enable  the VPC peering must be enabled among the VPCs.
+Create 3 EC2 instances usign amazon linux 2 latest AMI in each region running behind auto scaling group and elastic load balancer.
+can you Also create S3 bucket in each region with versioning enabled and the content of these buckets distirbuted using Cloud front. Deploy an RDS PostgreSQL database in the primary region with a read replica in the secondary region; ensure database placement in a private subnet. Use master random username in plain text with 8 characters and master random pasword including special characters keep length 16.
+Utilize IAM roles for EC2 instances to adhere to the principle of least privilege.Assign 'Environment: Production' tag to all resources.Set up Route 53 DNS with region failover capability. 
+Implement CloudWatch logging for monitoring activities across all services deployed in this stack.Create AWS managed KMS key and use that to encrypt S3 storage.
+Use provider block with each resource to avoid conflicts as below
+provider = aws.us_east_1 for primary region
+provider = aws.us_west_2 for secondary region

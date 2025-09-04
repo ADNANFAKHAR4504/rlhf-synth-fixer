@@ -1,0 +1,51 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291865",
+  "team": "1",
+  "startedAt": "2025-08-22T09:01:30.709Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Security and Compliance Implementation",
+    "General Infrastructure Tooling QA",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::SecretsManager::Secret",
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::EC2::VPC",
+    "AWS::EC2::Subnet",
+    "AWS::EC2::RouteTable",
+    "AWS::EC2::SecurityGroup",
+    "AWS::EC2::Instance",
+    "AWS::S3::Bucket",
+    "AWS::S3::BucketPolicy",
+    "AWS::IAM::Role",
+    "AWS::IAM::InstanceProfile",
+    "AWS::RDS::DBSubnetGroup",
+    "AWS::RDS::DBInstance",
+    "AWS::Lambda::Function",
+    "AWS::Logs::LogGroup",
+    "AWS::CloudTrail::Trail",
+    "AWS::SNS::Topic",
+    "AWS::Logs::MetricFilter",
+    "AWS::CloudWatch::Alarm",
+    "AWS::Config::ConfigurationRecorder",
+    "AWS::Config::DeliveryChannel",
+    "AWS::Config::ConfigRule"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr457",
+  "team": "synth",
+  "startedAt": "2025-08-25T22:57:52+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "Amazon VPC",
+    "Amazon EC2",
+    "AWS IAM",
+    "Amazon CloudFormation",
+    "AWS Systems Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

@@ -118,6 +118,82 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
+  infracost:
+    name: Infracost (Terraform Cost Estimation)
+    needs: [detect-metadata, build, synth]
+    runs-on: ubuntu-24.04
+    # if: >
+    #   ${{
+    #   github.event_name == 'pull_request' &&
+    #   github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') &&
+    #   needs.detect-metadata.outputs.platform == 'tf'}}
+    if: false
+    environment: dev
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for Terraform files
+        id: tf-check
+        run: |
+          if ! find lib -maxdepth 1 -name "*.tf" | grep -q .; then
+            echo "No Terraform files found in lib/. Skipping Infracost job."
+            echo "skip_infracost=true" >> $GITHUB_ENV
+            exit 0
+          fi
+
+      - name: Setup Terraform
+        if: env.skip_infracost != 'true'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Setup Infracost
+        if: env.skip_infracost != 'true'
+        uses: infracost/actions/setup@v3
+
+      - name: Setup Environment (variables)
+        if: env.skip_infracost != 'true'
+        run: |
+          echo "TERRAFORM_STATE_BUCKET=${{ env.TERRAFORM_STATE_BUCKET }}" >> $GITHUB_ENV
+          echo "TERRAFORM_STATE_BUCKET_REGION=${{ env.TERRAFORM_STATE_BUCKET_REGION }}" >> $GITHUB_ENV
+          echo "ENVIRONMENT_SUFFIX=${{ env.ENVIRONMENT_SUFFIX }}" >> $GITHUB_ENV
+
+      - name: Terraform Init
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform init
+
+      - name: Terraform Plan
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform plan -out=tfplan
+
+      - name: Convert plan to JSON
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: terraform show -json tfplan > plan.json
+
+      - name: Run Infracost breakdown
+        if: env.skip_infracost != 'true'
+        working-directory: lib
+        run: infracost breakdown --path=plan.json --format=json --out-file=../infracost.json
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Post Infracost comment
+        if: env.skip_infracost != 'true'
+        run: |
+          infracost comment github --path=../infracost.json \
+                                 --pull-request=${{ github.event.pull_request.number }} \
+                                 --repo=${{ github.repository }} \
+                                 --github-token=${{ secrets.GITHUB_TOKEN }} \
+                                 --behavior=update
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
@@ -380,46 +456,46 @@ jobs:
             exit 1
           fi
 
-      - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@beta
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          timeout_minutes: '60'
-          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
-          trigger_phrase: ''
-          custom_instructions: |
-            CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
-            1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
-            2. Read the PROMPT files
-            3. Assess whether the content looks human-generated or AI-generated
-            4. Look for signs of AI generation such as:
-               - Emojis or special symbols (icons) used for formatting
-               - Table structures
-               - Overly formal or template-like language
-               - Perfect formatting that suggests AI assistance
-               - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
-            6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
+  #     - name: Run Claude PR Review Action
+  #       uses: anthropics/claude-code-action@v1
+  #       with:
+  #         anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+  #         github_token: ${{ secrets.GITHUB_TOKEN }}
+  #         trigger_phrase: ''
+  #         prompt: |
+  #           CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
+  #           1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
+  #           2. Read the PROMPT files
+  #           3. Assess whether the content looks human-generated or AI-generated
+  #           4. Look for signs of AI generation such as:
+  #              - Emojis or special symbols (icons) used for formatting
+  #              - Table structures
+  #              - Overly formal or template-like language
+  #              - Perfect formatting that suggests AI assistance
+  #              - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
+  #           5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
+  #           6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
 
-            CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
-            1. Read lib/IDEAL_RESPONSE.md if it exists
-            2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
-            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
-            4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
-            5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
-            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, immediately FAIL the check by exiting with an error and fail the pipeline.
+  #           CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
+  #           1. Read lib/IDEAL_RESPONSE.md if it exists
+  #           2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
+  #           3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
+  #           4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
+  #           5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
+  #           6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, immediately FAIL the check by exiting with an error and fail the pipeline.
 
-            Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
-            Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the 
-            metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
-            - subtask
-            - subject_labels
-            - training_quality
-            - aws_services
-            then immediately FAIL the check by exiting with an error and fail the pipeline.
+  #           Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
+  #           Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
+  #           metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
+  #           - subtask
+  #           - subject_labels
+  #           - training_quality
+  #           - aws_services
+  #           then immediately FAIL the check by exiting with an error and fail the pipeline.
 
-            This validation is mandatory and must be completed before any other review activities.
+  #           This validation is mandatory and must be completed before any other review activities.
+  #         claude_args: |
+  #           --allowedTools Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite
 
       - name: Upload updated metadata.json
         uses: actions/upload-artifact@v4
@@ -431,7 +507,7 @@ jobs:
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live, claude-code-action]
+    needs: [detect-metadata, integration-tests-live]
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     environment: stage
 
@@ -467,7 +543,7 @@ jobs:
   archive-folders:
     name: Archive Folders and Reset Repository
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, cleanup, claude-code-action]
+    needs: [detect-metadata, cleanup]
     environment: release
     if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') }}
     permissions:
