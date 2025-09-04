@@ -398,6 +398,10 @@ Resources:
 # Outputs
 ########################################
 
+########################################
+# Outputs
+########################################
+
 Outputs:
   VPCId:
     Description: VPC ID
@@ -405,11 +409,71 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-VPCId"
 
+  VpcCidr:
+    Description: CIDR block of the VPC
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub "${AWS::StackName}-VpcCidr"
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-InternetGateway"
+
+  PublicSubnet1Id:
+    Description: ID of Public Subnet 1
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet1"
+
+  PublicSubnet2Id:
+    Description: ID of Public Subnet 2
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PublicSubnet2"
+
+  PrivateSubnet1Id:
+    Description: ID of Private Subnet 1
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet1"
+
+  PrivateSubnet2Id:
+    Description: ID of Private Subnet 2
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub "${AWS::StackName}-PrivateSubnet2"
+
+  NatGatewayId:
+    Description: NAT Gateway ID
+    Value: !Ref NatGateway
+    Export:
+      Name: !Sub "${AWS::StackName}-NatGateway"
+
   StaticAssetsBucketName:
     Description: Name of the S3 bucket storing static assets
     Value: !Ref StaticAssetsBucket
     Export:
       Name: !Sub "${AWS::StackName}-StaticAssetsBucket"
+
+  StaticAssetsBucketArn:
+    Description: ARN of the static assets S3 bucket
+    Value: !GetAtt StaticAssetsBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StaticAssetsBucketArn"
+
+  CloudFrontLogBucketName:
+    Description: Name of the CloudFront log bucket
+    Value: !Ref CloudFrontLogBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudFrontLogBucket"
+
+  CloudFrontLogBucketArn:
+    Description: ARN of the CloudFront log bucket
+    Value: !GetAtt CloudFrontLogBucket.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudFrontLogBucketArn"
 
   CloudFrontDomain:
     Description: Domain name of CloudFront distribution
@@ -417,11 +481,53 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-CloudFrontDomain"
 
+  CloudFrontDistributionId:
+    Description: ID of the CloudFront distribution
+    Value: !Ref CloudFrontDistribution
+    Export:
+      Name: !Sub "${AWS::StackName}-CloudFrontDistributionId"
+
   DynamoDBTableName:
     Description: DynamoDB table name
     Value: !Ref AppDataTable
     Export:
       Name: !Sub "${AWS::StackName}-DynamoDBTable"
+
+  DynamoDBTableArn:
+    Description: ARN of the DynamoDB table
+    Value: !GetAtt AppDataTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-DynamoDBTableArn"
+
+  EC2RoleName:
+    Description: IAM Role name for EC2
+    Value: !Ref EC2Role
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2Role"
+
+  EC2RoleArn:
+    Description: ARN of the IAM Role for EC2
+    Value: !GetAtt EC2Role.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-EC2RoleArn"
+
+  InstanceProfileName:
+    Description: IAM Instance Profile name
+    Value: !Ref InstanceProfile
+    Export:
+      Name: !Sub "${AWS::StackName}-InstanceProfile"
+
+  InstanceSecurityGroupId:
+    Description: Security Group ID for EC2 instances
+    Value: !Ref InstanceSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-InstanceSecurityGroup"
+
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub "${AWS::StackName}-LaunchTemplate"
 
   AutoScalingGroupName:
     Description: Name of the Auto Scaling Group
@@ -429,11 +535,35 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-ASG"
 
-  LoadBalancerDNS:
+  ApplicationLoadBalancerDNS:
     Description: DNS name of the Application Load Balancer
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub "${AWS::StackName}-ALBDNS"
+
+  ApplicationLoadBalancerArn:
+    Description: ARN of the Application Load Balancer
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub "${AWS::StackName}-ALBArn"
+
+  TargetGroupArn:
+    Description: ARN of the Target Group
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-TargetGroupArn"
+
+  ListenerArn:
+    Description: ARN of the ALB Listener
+    Value: !Ref Listener
+    Export:
+      Name: !Sub "${AWS::StackName}-ListenerArn"
+
+  HighCPUAlarmName:
+    Description: CloudWatch alarm name for high CPU
+    Value: !Ref HighCPUAlarm
+    Export:
+      Name: !Sub "${AWS::StackName}-HighCPUAlarm"
 
   DomainRecord:
     Condition: HasDomain
