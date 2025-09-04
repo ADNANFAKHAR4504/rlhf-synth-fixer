@@ -27,11 +27,17 @@ export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
 export PULUMI_ORG=${PULUMI_ORG:-organization}
 export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 
+# Ensure non-interactive Terraform by providing defaults if not set by CI secrets
+export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
+export TF_VAR_db_password=${TF_VAR_db_password:-TempPassword123!}
+
 echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "  Repository: $REPOSITORY"
 echo "  Commit author: $COMMIT_AUTHOR"
 echo "  AWS region: $AWS_REGION"
+echo "Using TF_VAR_db_username: (set)"
+echo "Using TF_VAR_db_password: (set)"
 if [ -n "$TERRAFORM_STATE_BUCKET" ]; then
   echo "  Terraform state bucket: $TERRAFORM_STATE_BUCKET"
   echo "  Terraform state bucket region: $TERRAFORM_STATE_BUCKET_REGION"
