@@ -64,7 +64,7 @@ Missing service-linked roles
 
 7. Resource Dependency Problems
 Missing explicit dependencies
-- Resources failing due to dependency ordering
+- Resources failing due to dependencies ordering
 - Not using depends_on where required
 - Circular dependencies
 
