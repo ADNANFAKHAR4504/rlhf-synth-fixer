@@ -499,7 +499,7 @@ def handler(event, context):
         # Create CloudWatch Log Group for VPC Flow Logs
         log_group = logs.LogGroup(
             self, "VPCFlowLogsGroup",
-            log_group_name="/aws/vpc/flowlogs",
+            log_group_name=f"/aws/vpc/flowlogs-{self.stack_name}",
             retention=logs.RetentionDays.ONE_MONTH,
             removal_policy=RemovalPolicy.DESTROY
         )
