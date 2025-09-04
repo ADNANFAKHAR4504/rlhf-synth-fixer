@@ -170,14 +170,20 @@ describe("Terraform tap-stack static validation", () => {
   });
 
   // === VPC FLOW LOGS ===
-  ["primary","secondary"].forEach(region => {
-    it(`declares VPC Flow Logs (IAM role/policy/log group/flow log) for ${region}`, () => {
-      expect(has(new RegExp(`resource\\s+"aws_iam_role"\\s+"${region}_flow_logs_role"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_iam_role_policy"\\s+"${region}_flow_logs_policy"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_cloudwatch_log_group"\\s+"${region}_vpc_flow_logs"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_flow_log"\\s+"${region}_vpc_flow_logs"`))).toBe(true);
-    });
-  });
+  // Primary = base name; Secondary = prefixed
+it('declares VPC Flow Logs (IAM role/policy/log group/flow log) for primary', () => {
+  expect(has(/resource\s+"aws_iam_role"\s+"flow_logs_role"/)).toBe(true);
+  expect(has(/resource\s+"aws_iam_role_policy"\s+"flow_logs_policy"/)).toBe(true);
+  expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"primary_vpc_flow_logs"/)).toBe(true);
+  expect(has(/resource\s+"aws_flow_log"\s+"primary_vpc_flow_logs"/)).toBe(true);
+});
+
+it('declares VPC Flow Logs (IAM role/policy/log group/flow log) for secondary', () => {
+  expect(has(/resource\s+"aws_iam_role"\s+"secondary_flow_logs_role"/)).toBe(true);
+  expect(has(/resource\s+"aws_iam_role_policy"\s+"secondary_flow_logs_policy"/)).toBe(true);
+  expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"secondary_vpc_flow_logs"/)).toBe(true);
+  expect(has(/resource\s+"aws_flow_log"\s+"secondary_vpc_flow_logs"/)).toBe(true);
+});
 
   // === CLOUDFRONT ===
   it("declares CloudFront distribution with OAI, ALB and S3 origins, and AWS Shield", () => {
