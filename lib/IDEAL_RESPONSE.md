@@ -1,22 +1,56 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure multi-region infrastructure with production-ready security controls and Customer Managed KMS Keys'
 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentName
+          - ProjectName
+      - Label:
+          default: 'Network CIDR'
+        Parameters:
+          - VPCCidrUSEast1
+          - VPCCidrEUCentral1
+      - Label:
+          default: 'Instance Types'
+        Parameters:
+          - RDSInstanceType
+          - EC2InstanceType
+      - Label:
+          default: 'KMS Key Configuration'
+        Parameters:
+          - EnableKeyRotation
+
 Parameters:
+  ProjectName:
+    Type: String
+    Default: 'multi-region-secure-app'
+    Description: 'Name of the project for resource naming and tagging'
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
   EnvironmentName:
     Type: String
-    Default: Production
-    Description: Environment name for resource tagging
-  
+    Default: 'prod'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: 'Environment name for resource tagging'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
   VPCCidrUSEast1:
     Type: String
     Default: '10.0.0.0/16'
     Description: CIDR block for VPC in us-east-1
-  
+
   VPCCidrEUCentral1:
     Type: String
     Default: '10.1.0.0/16'
     Description: CIDR block for VPC in eu-central-1
-  
+
   RDSInstanceType:
     Type: String
     Default: db.m5.large
@@ -24,13 +58,13 @@ Parameters:
       - db.m5.large
       - db.m5.xlarge
     Description: RDS instance type
-  
+
   EC2InstanceType:
     Type: String
     Default: t3.medium
     Description: EC2 instance type
-  
-  KeyRotationEnabled:
+
+  EnableKeyRotation:
     Type: String
     Default: true
     AllowedValues: [true, false]
@@ -55,10 +89,10 @@ Resources:
   InfrastructureKMSKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'Customer Managed KMS Key for ${EnvironmentName} Infrastructure - ${AWS::Region}'
+      Description: !Sub 'Customer Managed KMS Key for ${ProjectName} Infrastructure - ${AWS::Region}'
       KeyUsage: ENCRYPT_DECRYPT
       KeySpec: SYMMETRIC_DEFAULT
-      KeyRotationEnabled: !Ref KeyRotationEnabled
+      EnableKeyRotation: !Ref EnableKeyRotation
       MultiRegion: false
       Origin: AWS_KMS
       KeyPolicy:
@@ -71,7 +105,7 @@ Resources:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          
+
           # CloudFormation service access
           - Sid: Allow CloudFormation Service
             Effect: Allow
@@ -84,7 +118,23 @@ Resources:
               - kms:GenerateDataKey*
               - kms:ReEncrypt*
             Resource: '*'
-          
+
+          # CloudTrail service access
+          - Sid: Allow CloudTrail Service
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - kms:Decrypt
+              - kms:DescribeKey
+              - kms:Encrypt
+              - kms:GenerateDataKey*
+              - kms:ReEncrypt*
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+
           # RDS service access for database encryption
           - Sid: Allow RDS Service
             Effect: Allow
@@ -103,7 +153,7 @@ Resources:
             Condition:
               StringEquals:
                 'kms:ViaService': !Sub 'rds.${AWS::Region}.amazonaws.com'
-          
+
           # S3 service access for bucket encryption
           - Sid: Allow S3 Service
             Effect: Allow
@@ -119,7 +169,7 @@ Resources:
             Condition:
               StringEquals:
                 'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
-          
+
           # EBS service access for volume encryption
           - Sid: Allow EBS Service
             Effect: Allow
@@ -138,7 +188,7 @@ Resources:
             Condition:
               StringEquals:
                 'kms:ViaService': !Sub 'ec2.${AWS::Region}.amazonaws.com'
-          
+
           # CloudWatch Logs service access
           - Sid: Allow CloudWatch Logs Service
             Effect: Allow
@@ -151,7 +201,7 @@ Resources:
               - kms:GenerateDataKey*
               - kms:ReEncrypt*
             Resource: '*'
-          
+
           # Application Auto Scaling service access
           - Sid: Allow Application Auto Scaling Service
             Effect: Allow
@@ -161,14 +211,14 @@ Resources:
               - kms:Decrypt
               - kms:DescribeKey
             Resource: '*'
-      
+
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-infrastructure-kms-key-${AWS::Region}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -189,7 +239,7 @@ Resources:
   VPCProd:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !If 
+      CidrBlock: !If
         - IsUSEast1
         - !Ref VPCCidrUSEast1
         - !Ref VPCCidrEUCentral1
@@ -201,7 +251,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -217,7 +267,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -246,7 +296,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -268,7 +318,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -290,7 +340,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -311,7 +361,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -329,7 +379,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -346,7 +396,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -363,7 +413,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -380,7 +430,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -397,7 +447,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -433,7 +483,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -462,7 +512,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -516,7 +566,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -539,7 +589,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -553,8 +603,8 @@ Resources:
       VpcId: !Ref VPCProd
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref WebServerSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: tcp
@@ -571,7 +621,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -600,7 +650,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${ApplicationBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::prod-application-${AWS::Region}-${AWS::AccountId}/*'
         - PolicyName: KMSAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -617,7 +667,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -656,7 +706,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -700,7 +750,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -715,7 +765,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: rds.amazonaws.com
+              Service: monitoring.rds.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
@@ -723,7 +773,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -750,7 +800,11 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/cloudtrail/*'
+                  - logs:DescribeLogStreams
+                  - logs:DescribeLogGroups
+                Resource:
+                  - !Sub '${CloudTrailLogGroup.Arn}'
+                  - !Sub '${CloudTrailLogGroup.Arn}:*'
         - PolicyName: KMSAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -763,11 +817,12 @@ Resources:
                   - kms:GenerateDataKey*
                   - kms:ReEncrypt*
                 Resource: !GetAtt InfrastructureKMSKey.Arn
+
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -799,7 +854,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -817,6 +872,9 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref InfrastructureKMSKey
             BucketKeyEnabled: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       VersioningConfiguration:
         Status: Enabled
       PublicAccessBlockConfiguration:
@@ -830,7 +888,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -861,7 +919,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -886,21 +944,10 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub '${LoggingBucket}/AWSLogs/${AWS::AccountId}/*'
+            Resource: !Sub 'arn:aws:s3:::${LoggingBucket}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': bucket-owner-full-control
-          - Sid: AWSCloudTrailKMSAccess
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:DescribeKey
-              - kms:Encrypt
-              - kms:GenerateDataKey*
-              - kms:ReEncrypt*
-            Resource: !GetAtt InfrastructureKMSKey.Arn
 
   # RDS Subnet Group
   DBSubnetGroup:
@@ -916,7 +963,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -945,7 +992,7 @@ Resources:
       BackupRetentionPeriod: 7
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
-      DeletionProtection: true
+      DeletionProtection: false
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSRole.Arn
       Tags:
@@ -954,7 +1001,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -974,7 +1021,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1011,7 +1058,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1020,6 +1067,7 @@ Resources:
   # ECS Service
   ECSService:
     Type: AWS::ECS::Service
+    DependsOn: ALBListener
     Properties:
       ServiceName: !Sub 'prod-service-${AWS::Region}'
       Cluster: !Ref ECSCluster
@@ -1034,13 +1082,17 @@ Resources:
             - !Ref PrivateSubnet1
             - !Ref PrivateSubnet2
           AssignPublicIp: DISABLED
+      LoadBalancers:
+        - ContainerName: web-container
+          ContainerPort: 80
+          TargetGroupArn: !Ref ALBTargetGroup
       Tags:
         - Key: Name
           Value: !Sub 'prod-service-${AWS::Region}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1049,6 +1101,7 @@ Resources:
   # Auto Scaling Target
   ECSAutoScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: ALBListener
     Properties:
       MaxCapacity: 10
       MinCapacity: 2
@@ -1104,7 +1157,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1131,7 +1184,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1167,7 +1220,7 @@ Resources:
             KmsKeyId: !Ref InfrastructureKMSKey
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -1178,7 +1231,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1197,7 +1250,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1215,7 +1268,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1224,7 +1277,8 @@ Resources:
   # CloudTrail
   CloudTrail:
     Type: AWS::CloudTrail::Trail
-    DependsOn: CloudTrailBucketPolicy
+    DependsOn:
+      - CloudTrailBucketPolicy
     Properties:
       TrailName: !Sub 'prod-trail-${AWS::Region}'
       S3BucketName: !Ref LoggingBucket
@@ -1234,7 +1288,7 @@ Resources:
       IsLogging: true
       IsMultiRegionTrail: false
       EnableLogFileValidation: true
-      CloudWatchLogsLogGroupArn: !Sub '${CloudTrailLogGroup.Arn}:*'
+      CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       EventSelectors:
         - ReadWriteType: All
@@ -1242,15 +1296,15 @@ Resources:
           DataResources:
             - Type: AWS::S3::Object
               Values:
-                - !Sub '${ApplicationBucket}/*'
-                - !Sub '${BackupBucket}/*'
+                - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
+                - !Sub 'arn:aws:s3:::${BackupBucket}/*'
       Tags:
         - Key: Name
           Value: !Sub 'prod-trail-${AWS::Region}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1276,7 +1330,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1302,7 +1356,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1327,7 +1381,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1355,7 +1409,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1382,7 +1436,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
-          Value: IaC-AWS-Nova-Model
+          Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
         - Key: Region
@@ -1496,3 +1550,4 @@ Outputs:
     Value: !Ref WebServerInstance
     Export:
       Name: !Sub '${AWS::StackName}-EC2-Instance-ID'
+```
