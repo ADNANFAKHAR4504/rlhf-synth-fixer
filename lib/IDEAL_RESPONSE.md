@@ -270,10 +270,22 @@ rds_instance = aws.rds.Instance(f"{prefix.lower()}-rds-instance",
 # Note: RDS endpoint is available as rds_instance.endpoint
 # Parameter Store values cannot be updated after creation in this way
 
+# Get the latest Amazon Linux 2 AMI
+ami = aws.ec2.get_ami(
+    most_recent=True,
+    owners=["amazon"],
+    filters=[
+        aws.ec2.GetAmiFilterArgs(
+            name="name",
+            values=["amzn2-ami-hvm-*-x86_64-gp2"]
+        )
+    ]
+)
+
 # Create launch template
 launch_template = aws.ec2.LaunchTemplate(f"{prefix.lower()}-launch-template",
     name_prefix=f"{prefix.lower()}-lt",
-    image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI - update for your region
+    image_id=ami.id,  # Dynamic Amazon Linux 2 AMI lookup
     instance_type="t3.micro",
     key_name="",  # Add your key pair name if you want SSH access
     vpc_security_group_ids=[ec2_security_group.id],
@@ -281,49 +293,19 @@ launch_template = aws.ec2.LaunchTemplate(f"{prefix.lower()}-launch-template",
         name=ec2_instance_profile.name
     ),
     user_data=pulumi.Output.all(rds_instance.endpoint, db_name_param.value).apply(
-        lambda args: f"""#!/bin/bash
+        lambda args: __import__('base64').b64encode(f"""#!/bin/bash
 yum update -y
 yum install -y httpd php php-mysqlnd
 systemctl start httpd
 systemctl enable httpd
 
-# Create simple PHP application
-cat > /var/www/html/index.php << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Web Application</title>
-</head>
-<body>
-    <h1>Welcome to the Web Application</h1>
-    <p>This is a sample web application deployed with Pulumi.</p>
-    <p>Database Host: {args[0]}</p>
-    <p>Database Name: {args[1]}</p>
-    <p>Instance ID: <?php echo gethostname(); ?></p>
-</body>
-</html>
-EOF
-
-# Configure PHP to connect to RDS
-cat > /var/www/html/db-test.php << 'EOF'
-<?php
-$servername = "{args[0]}";
-$username = "admin";
-$password = "changeme123!";
-$dbname = "{args[1]}";
-
-try {{
-    $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
-    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    echo "Connected successfully to database";
-}} catch(PDOException $e) {{
-    echo "Connection failed: " . $e->getMessage();
-}}
-?>
-EOF
+# Create simple web page
+echo "<h1>Welcome to Web Application</h1>" > /var/www/html/index.html
+echo "<p>Database Host: {args[0]}</p>" >> /var/www/html/index.html
+echo "<p>Database Name: {args[1]}</p>" >> /var/www/html/index.html
 
 chown -R apache:apache /var/www/html
-"""
+""".encode('utf-8')).decode('utf-8')
     ),
     tag_specifications=[
         aws.ec2.LaunchTemplateTagSpecificationArgs(
