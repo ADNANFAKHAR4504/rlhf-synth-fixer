@@ -1609,7 +1609,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main_trail" {
-  provider           = aws.us_east_2
+  provider           = aws.us_west_1
   name               = "${local.primary_name_prefix}-cloudtrail"
   s3_bucket_name     = aws_s3_bucket.cloudtrail_bucket.id
   is_multi_region_trail = true
