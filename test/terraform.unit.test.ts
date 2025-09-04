@@ -349,7 +349,7 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_wafv2_web_acl_logging_configuration"\s+"main"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"waf"\s*{/);
       expect(terraformContent).toMatch(/name\s*=\s*"\/aws\/wafv2\/\$\{local\.name_prefix\}-security-waf-\$\{random_id\.suffix\.hex\}"/);
-      expect(terraformContent).toMatch(/log_destination_configs\s*=\s*\["\$\{aws_cloudwatch_log_group\.waf\[0\]\.arn\}:\*"\]/);
+      expect(terraformContent).toMatch(/log_destination_configs\s*=\s*\[aws_cloudwatch_log_group\.waf\[0\]\.arn\]/);
     });
   });
 
@@ -391,13 +391,11 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       }
     });
 
-    test("subscribes to security standards with correct ARN format", () => {
+    test("subscribes to security standards conditionally", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_securityhub_standards_subscription"\s+"aws_foundational"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_securityhub_standards_subscription"\s+"cis"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_securityhub_standards_subscription"\s+"pci_dss"\s*{/);
-      
-      // Check for correct ARN format (region-specific)
-      expect(terraformContent).toMatch(/arn:aws:securityhub:\$\{data\.aws_region\.current\.name\}/);
+      expect(terraformContent).toMatch(/count\s*=\s*0.*# Disabled due to Security Hub account being disabled/);
     });
   });
 

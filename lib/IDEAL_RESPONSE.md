@@ -6,11 +6,11 @@ This document contains the complete AWS Enterprise Security Framework implementa
 
 1. **Added random suffixes to CloudWatch log groups** - Fixed naming conflicts for VPC flow logs, WAF logs, and CloudTrail logs
 2. **Fixed GuardDuty detector conflict** - Uses data source to check for existing detector
-3. **Fixed Security Hub subscription conflict** - Disabled resource due to existing subscription
+3. **Fixed Security Hub subscription conflict** - Disabled Security Hub account and standards subscriptions due to existing subscription
 4. **Fixed Config service linked role conflict** - Uses data source for existing role
 5. **Fixed Config recorder/delivery channel limits** - Disabled resources due to AWS limits  
 6. **Fixed CloudTrail trail limit** - Disabled resource due to trail limit exceeded
-7. **Fixed WAF logging ARN format** - Added `:*` suffix to CloudWatch log group ARN
+7. **Fixed WAF logging ARN format** - Corrected CloudWatch log group ARN format without `:*` suffix
 8. **Added DeleteMarkerReplication to S3 replication** - Required for current schema version
 
 ## Complete Terraform Configuration
@@ -1141,7 +1141,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "security_waf_logging" {
   count = var.enable_waf ? 1 : 0
 
   resource_arn            = aws_wafv2_web_acl.main[0].arn
-  log_destination_configs = ["${aws_cloudwatch_log_group.waf[0].arn}:*"]
+  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
 
   redacted_fields {
     single_header {
@@ -1232,16 +1232,19 @@ resource "aws_securityhub_account" "main" {
 
 # Enable Security Hub standards with correct ARN format
 resource "aws_securityhub_standards_subscription" "aws_foundational" {
+  count = 0 # Disabled due to Security Hub account being disabled
   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standard/aws-foundational-security-best-practices/v/1.0.0"
   depends_on    = [aws_securityhub_account.main]
 }
 
 resource "aws_securityhub_standards_subscription" "cis" {
-  standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standard/cis-aws-foundations-benchmark/v/1.4.0"
+  count = 0 # Disabled due to Security Hub account being disabled
+  standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standard/cis-aws-foundations-benchmark/v/1.2.0"
   depends_on    = [aws_securityhub_account.main]
 }
 
 resource "aws_securityhub_standards_subscription" "pci_dss" {
+  count = 0 # Disabled due to Security Hub account being disabled
   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standard/pci-dss/v/3.2.1"
   depends_on    = [aws_securityhub_account.main]
 }

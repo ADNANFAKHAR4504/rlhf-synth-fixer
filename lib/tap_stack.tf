@@ -1288,7 +1288,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "main" {
   count = var.enable_waf ? 1 : 0
 
   resource_arn            = aws_wafv2_web_acl.main[0].arn
-  log_destination_configs = ["${aws_cloudwatch_log_group.waf[0].arn}:*"]
+  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
 
   redacted_fields {
     single_header {
@@ -1379,16 +1379,19 @@ resource "aws_securityhub_account" "main" {
 
 # Enable Security Hub standards with correct ARN format
 resource "aws_securityhub_standards_subscription" "aws_foundational" {
+  count         = 0 # Disabled due to Security Hub account being disabled
   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standard/aws-foundational-security-best-practices/v/1.0.0"
   depends_on    = [aws_securityhub_account.main]
 }
 
 resource "aws_securityhub_standards_subscription" "cis" {
+  count         = 0 # Disabled due to Security Hub account being disabled
   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standard/cis-aws-foundations-benchmark/v/1.2.0"
   depends_on    = [aws_securityhub_account.main]
 }
 
 resource "aws_securityhub_standards_subscription" "pci_dss" {
+  count         = 0 # Disabled due to Security Hub account being disabled
   standards_arn = "arn:aws:securityhub:${data.aws_region.current.name}::standard/pci-dss/v/3.2.1"
   depends_on    = [aws_securityhub_account.main]
 }
