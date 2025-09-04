@@ -1,34 +1,41 @@
-import json
-import os
-import unittest
-
-from pytest import mark
-
-# Open file cfn-outputs/flat-outputs.json
-base_dir = os.path.dirname(os.path.abspath(__file__))
-flat_outputs_path = os.path.join(
-    base_dir, '..', '..', 'cfn-outputs', 'flat-outputs.json'
-)
-
-if os.path.exists(flat_outputs_path):
-  with open(flat_outputs_path, 'r', encoding='utf-8') as f:
-    flat_outputs = f.read()
-else:
-  flat_outputs = '{}'
-
-flat_outputs = json.loads(flat_outputs)
+import aws_cdk as cdk
+import pytest
+from lib.tap_stack import TapStack
 
 
-@mark.describe("TapStack")
-class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+@pytest.fixture
+def stack():
+    app = cdk.App()
+    return TapStack(app, "test-stack")
 
-  def setUp(self):
-    """Set up a fresh CDK app for each test"""
 
-  @mark.it("Write Integration Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+def test_stack_synthesis(stack):
+    """Test that the stack can be synthesized without errors"""
+    app = cdk.App()
+    test_stack = TapStack(app, "test-synthesis-stack")
+    
+    # This will raise an exception if synthesis fails
+    template = app.synth().get_stack_by_name("test-synthesis-stack").template
+    
+    assert template is not None
+    assert "Resources" in template
+
+
+def test_stack_has_required_resources(stack):
+    """Test that the stack contains all required resource types"""
+    app = cdk.App()
+    test_stack = TapStack(app, "test-resources-stack")
+    template = app.synth().get_stack_by_name("test-resources-stack").template
+    
+    resource_types = [resource.get("Type") for resource in template["Resources"].values()]
+    
+    required_types = [
+        "AWS::EC2::VPC",
+        "AWS::EC2::SecurityGroup",
+        "AWS::RDS::DBInstance",
+        "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "AWS::Lambda::Function"
+    ]
+    
+    for required_type in required_types:
+        assert required_type in resource_types

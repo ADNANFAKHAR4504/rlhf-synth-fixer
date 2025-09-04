@@ -1,53 +1,60 @@
-# import os
-# import sys
-import unittest
-
 import aws_cdk as cdk
-# import pytest
-# from aws_cdk.assertions import Match, Template
-from aws_cdk.assertions import Template
-from pytest import mark
+import aws_cdk.assertions as assertions
 
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStack
 
 
-@mark.describe("TapStack")
-class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+def test_vpc_created():
+    app = cdk.App()
+    stack = TapStack(app, "tap-stack")
+    template = assertions.Template.from_stack(stack)
 
-  def setUp(self):
-    """Set up a fresh CDK app for each test"""
-    self.app = cdk.App()
-
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
-    # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
-
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
+    # Test VPC creation
+    template.has_resource_properties("AWS::EC2::VPC", {
+        "CidrBlock": "10.0.0.0/16"
     })
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
 
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
+def test_security_groups_created():
+    app = cdk.App()
+    stack = TapStack(app, "tap-stack")
+    template = assertions.Template.from_stack(stack)
+
+    # Test security group creation
+    template.resource_count_is("AWS::EC2::SecurityGroup", 5)
+
+
+def test_rds_instance_created():
+    app = cdk.App()
+    stack = TapStack(app, "tap-stack")
+    template = assertions.Template.from_stack(stack)
+
+    # Test RDS instance creation
+    template.has_resource_properties("AWS::RDS::DBInstance", {
+        "Engine": "mysql",
+        "MultiAZ": True,
+        "StorageEncrypted": True
     })
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+
+def test_alb_created():
+    app = cdk.App()
+    stack = TapStack(app, "tap-stack")
+    template = assertions.Template.from_stack(stack)
+
+    # Test ALB creation
+    template.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
+        "Scheme": "internet-facing",
+        "Type": "application"
+    })
+
+
+def test_lambda_function_created():
+    app = cdk.App()
+    stack = TapStack(app, "tap-stack")
+    template = assertions.Template.from_stack(stack)
+
+    # Test Lambda function creation
+    template.has_resource_properties("AWS::Lambda::Function", {
+        "Runtime": "python3.9"
+    })

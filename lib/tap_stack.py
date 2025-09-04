@@ -376,11 +376,9 @@ class TapStack(Stack):
             )
         )
 
-        # Add targets to target group
-        for server in self.web_servers:
-            target_group.add_target(
-                elbv2.InstanceIdTarget(server.instance_id, 80)
-            )
+        # Add targets to target group using targets property
+        target_group.add_target(elbv2.InstanceTarget(self.web_servers[0]))
+        target_group.add_target(elbv2.InstanceTarget(self.web_servers[1]))
 
         # Create listener
         self.alb.add_listener(
