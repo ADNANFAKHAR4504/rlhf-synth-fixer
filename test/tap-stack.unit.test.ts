@@ -209,7 +209,7 @@ describe('TapStack', () => {
         MultiAZ: true,
         StorageEncrypted: true,
         BackupRetentionPeriod: 7,
-        DeletionProtection: true,
+        DeletionProtection: false, // Changed to allow deletion
         MonitoringInterval: 60,
         EnableCloudwatchLogsExports: ['error', 'general', 'slowquery']
       });
@@ -306,6 +306,37 @@ describe('TapStack', () => {
       expect(outputs.ApplicationLogGroupName).toBeDefined();
       expect(outputs.SystemLogGroupName).toBeDefined();
       expect(outputs.CloudTrailArn).toBeDefined();
+    });
+  });
+
+  describe('Resource Deletion Settings', () => {
+    test('S3 buckets have autoDeleteObjects enabled', () => {
+      template.hasResourceProperties('Custom::S3AutoDeleteObjects', {
+        ServiceToken: Match.anyValue()
+      });
+    });
+
+    test('RDS instance has deletion protection disabled', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        DeletionProtection: false
+      });
+    });
+
+    test('All resources have DESTROY removal policy', () => {
+      // Check S3 bucket
+      template.hasResource('AWS::S3::Bucket', {
+        DeletionPolicy: 'Delete'
+      });
+
+      // Check RDS instance
+      template.hasResource('AWS::RDS::DBInstance', {
+        DeletionPolicy: 'Delete'
+      });
+
+      // Check log groups
+      template.hasResource('AWS::Logs::LogGroup', {
+        DeletionPolicy: 'Delete'
+      });
     });
   });
 

@@ -71,7 +71,8 @@ export class TapStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true, // Automatically delete all objects when bucket is deleted
       lifecycleRules: [
         {
           id: 'delete-incomplete-multipart-uploads',
@@ -204,6 +205,7 @@ yum install -y amazon-cloudwatch-agent
       description: 'Subnet group for production RDS instance',
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // Allow subnet group deletion
     });
 
     // Create security group for RDS
@@ -241,9 +243,9 @@ yum install -y amazon-cloudwatch-agent
       multiAz: true,
       storageEncrypted: true,
       backupRetention: cdk.Duration.days(7),
-      deleteAutomatedBackups: false,
-      deletionProtection: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      deleteAutomatedBackups: true, // Delete backups when instance is deleted
+      deletionProtection: false, // Allow deletion without manual intervention
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
       cloudwatchLogsExports: ['error', 'general', 'slowquery'],
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: false,
@@ -264,14 +266,14 @@ yum install -y amazon-cloudwatch-agent
       {
         logGroupName: `/aws/ec2/${namePrefix}-application-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
     const systemLogGroup = new logs.LogGroup(this, 'ProdSystemLogGroup', {
       logGroupName: `/aws/ec2/${namePrefix}-system-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // Add system log group output
@@ -287,7 +289,8 @@ yum install -y amazon-cloudwatch-agent
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true, // Automatically delete all objects when bucket is deleted
       lifecycleRules: [
         {
           id: 'delete-old-logs',
@@ -306,7 +309,7 @@ yum install -y amazon-cloudwatch-agent
       cloudWatchLogGroup: new logs.LogGroup(this, 'ProdCloudTrailLogGroup', {
         logGroupName: `/aws/cloudtrail/${namePrefix}-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
       }),
     });
 
