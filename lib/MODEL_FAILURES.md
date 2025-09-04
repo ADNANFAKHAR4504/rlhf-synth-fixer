@@ -1,5 +1,3 @@
-# Model Failures and Common Issues - Secure Static Website Hosting
-
 This document outlines potential failures, common mistakes, and troubleshooting strategies for implementing a secure static website hosting solution on AWS using Pulumi Python.
 
 ## Infrastructure Deployment Failures
