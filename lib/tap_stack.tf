@@ -1608,19 +1608,26 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
 }
 
 # CloudTrail
+# ===============================================
+# CLOUDTRAIL - FIXED VERSION
+# ===============================================
+
+# CloudTrail - Fixed event selector
 resource "aws_cloudtrail" "main_trail" {
-  provider           = aws.us_west_1
-  name               = "${local.primary_name_prefix}-cloudtrail"
-  s3_bucket_name     = aws_s3_bucket.cloudtrail_bucket.id
-  is_multi_region_trail = true
+  provider               = aws.us_west_1
+  name                   = "${local.primary_name_prefix}-cloudtrail"
+  s3_bucket_name         = aws_s3_bucket.cloudtrail_bucket.id
+  is_multi_region_trail  = true
+  enable_logging         = true
 
   event_selector {
     read_write_type                 = "All"
     include_management_events       = true
 
+    # Fix: Use correct ARN format for S3 data resources
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+      values = ["arn:aws:s3"]  # This logs data events for all S3 buckets and objects
     }
   }
 
@@ -1630,7 +1637,6 @@ resource "aws_cloudtrail" "main_trail" {
     Name = "${local.primary_name_prefix}-cloudtrail"
   })
 }
-
 # ===============================================
 # VPC FLOW LOGS
 # ===============================================
