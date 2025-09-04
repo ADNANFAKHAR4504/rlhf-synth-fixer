@@ -280,8 +280,7 @@ class TapStack(Stack):
             removal_policy=RemovalPolicy.DESTROY,  # Delete when stack is destroyed
             storage_encrypted=True,
             monitoring_interval=Duration.minutes(1),  # Enhanced monitoring
-            enable_performance_insights=True,
-            performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
+            enable_performance_insights=False,
             allocated_storage=20,
             max_allocated_storage=100,  # Enable storage autoscaling
             storage_type=rds.StorageType.GP2,
