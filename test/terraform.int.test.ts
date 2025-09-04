@@ -191,10 +191,24 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
     }, INTEGRATION_TIMEOUT);
 
     test("public, private, and database subnets exist", async () => {
+      // Helper function to parse subnet IDs that might be strings or arrays
+      const parseSubnetIds = (subnetData: any): string[] => {
+        if (!subnetData) return [];
+        if (Array.isArray(subnetData)) return subnetData;
+        if (typeof subnetData === 'string') {
+          try {
+            return JSON.parse(subnetData);
+          } catch {
+            return [subnetData];
+          }
+        }
+        return [];
+      };
+
       const subnetIds = [
-        ...(outputs.public_subnet_ids || []),
-        ...(outputs.private_subnet_ids || []),
-        ...(outputs.database_subnet_ids || [])
+        ...parseSubnetIds(outputs.public_subnet_ids),
+        ...parseSubnetIds(outputs.private_subnet_ids),
+        ...parseSubnetIds(outputs.database_subnet_ids)
       ];
 
       if (subnetIds.length === 0) {
@@ -294,11 +308,19 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
     }, INTEGRATION_TIMEOUT);
 
     test("security groups follow security best practices", async () => {
+      // Helper function to parse IDs that might be strings or arrays
+      const parseId = (idData: any): string | null => {
+        if (!idData) return null;
+        if (typeof idData === 'string') return idData;
+        if (Array.isArray(idData) && idData.length > 0) return idData[0];
+        return null;
+      };
+
       const securityGroupIds = [
-        outputs.web_security_group_id,
-        outputs.app_security_group_id,
-        outputs.database_security_group_id
-      ].filter(id => id);
+        parseId(outputs.web_security_group_id),
+        parseId(outputs.app_security_group_id),
+        parseId(outputs.database_security_group_id)
+      ].filter((id): id is string => id !== null);
 
       if (securityGroupIds.length === 0) {
         console.warn("No security group IDs available. Skipping security group tests.");
@@ -461,6 +483,7 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
         expect(getResponse.DataSources).toBeDefined();
         
         // Verify S3 and Kubernetes monitoring are enabled
+        // Note: DataSources is deprecated but still functional
         if (getResponse.DataSources?.S3Logs) {
           expect(getResponse.DataSources.S3Logs.Status).toBe("ENABLED");
         }
@@ -748,8 +771,6 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
 
   describe("Resource Tagging and Naming", () => {
     test("resources follow consistent naming and tagging conventions", async () => {
-      const namePrefix = `security-framework-${ENVIRONMENT_SUFFIX}`;
-      
       // This test verifies that deployed resources follow naming conventions
       // We'll check a few key resource types
       
