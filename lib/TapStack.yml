@@ -88,7 +88,7 @@ Resources:
   ProdKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: 'alias/prod-encryption-key'
+      AliasName: !Sub "alias/prod-${EnvironmentSuffix}-security-key"
       TargetKeyId: !Ref ProdKMSKey
 
   # ========================================
@@ -142,7 +142,7 @@ Resources:
       VpcId: !Ref ProdAppVPC
       CidrBlock: !FindInMap [NetworkConfig, !Ref 'AWS::Region', AppPublicSubnet1CIDR]
       AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: false
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: 'prod-subnet-app-public-1'
@@ -733,7 +733,7 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
             Resource:
-              - !Sub '${ProdS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${ProdS3Bucket}/*'
           - Effect: Allow
             Principal: '*'
             Action:
@@ -762,7 +762,7 @@ Resources:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
               - 'kms:DescribeKey'
-            Resource: !GetAtt ProdKMSKey.Arn
+            Resource: !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
 
   ProdVPCEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -863,6 +863,18 @@ Outputs:
     Value: !Ref ProdS3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3Bucket-Name'
+
+  S3BucketArn:
+    Description: 'Production S3 Bucket ARN'
+    Value: !GetAtt ProdS3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Bucket-Arn'
+
+  S3BucketObjectsArn:
+    Description: 'Production S3 Bucket Objects ARN'
+    Value: !Sub '${S3BucketArn}/*'
+    Export:
+      Name: !Sub '${AWS::StackName}-S3Bucket-Objects-Arn'
 
   EC2RoleArn:
     Description: 'EC2 Instance Role ARN'
