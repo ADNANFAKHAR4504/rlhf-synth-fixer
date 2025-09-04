@@ -1278,7 +1278,6 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn:
       - CloudTrailBucketPolicy
-      - CloudTrailLogGroup
     Properties:
       TrailName: !Sub 'prod-trail-${AWS::Region}'
       S3BucketName: !Ref LoggingBucket
