@@ -48,15 +48,6 @@
       "Type": "String",
       "Default": "db.t3.micro"
     },
-    "DBUser": {
-      "Description": "Database master username",
-      "Type": "String"
-    },
-    "DBPassword": {
-      "Description": "Database master password. This is not ideal for production environments. Use AWS Secrets Manager for better security.",
-      "Type": "String",
-      "NoEcho": true
-    },
     "DBName": {
       "Description": "The name of the database to be created.",
       "Type": "String",
@@ -337,6 +328,54 @@
         ]
       }
     },
+    "LogBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LogBucket"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "delivery.logs.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    {
+                      "Fn::GetAtt": [
+                        "LogBucket",
+                        "Arn"
+                      ]
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "LogBucketOwnershipControls": {
+      "Type": "AWS::S3::BucketOwnershipControls",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LogBucket"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerPreferred"
+            }
+          ]
+        }
+      }
+    },
     "EC2SecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -598,6 +637,19 @@
         ]
       }
     },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "DatabaseSecret",
+        "Description": "Secret for the RDS master user and password",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\'"
+        }
+      }
+    },
     "RDSDBInstance": {
       "Type": "AWS::RDS::DBInstance",
       "Properties": {
@@ -606,10 +658,10 @@
           "Ref": "DBInstanceType"
         },
         "MasterUsername": {
-          "Ref": "DBUser"
+          "Fn::Sub": "{{resolve:secretsmanager:{{DatabaseSecret}}:SecretString:username}}"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::Sub": "{{resolve:secretsmanager:{{DatabaseSecret}}:SecretString:password}}"
         },
         "DBName": {
           "Ref": "DBName"
@@ -683,6 +735,12 @@
           "RDSDBInstance",
           "Endpoint.Address"
         ]
+      }
+    },
+    "DatabaseSecretARN": {
+      "Description": "The ARN of the Secrets Manager secret for the database credentials",
+      "Value": {
+        "Ref": "DatabaseSecret"
       }
     }
   }
