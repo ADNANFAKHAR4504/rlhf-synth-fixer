@@ -24,7 +24,6 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-
     const {
       appName,
       environment,

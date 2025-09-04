@@ -43,7 +43,7 @@ const regions = [
 
 // Create stacks for both regions
 regions.forEach(region => {
-  const stackNameRef = `stackName-${region.name}`;
+  const stackNameRef = `${stackName}-${region.name}`;
   new TapStack(app, stackNameRef, {
     stackName: stackNameRef,
     environmentSuffix: environmentSuffix,
