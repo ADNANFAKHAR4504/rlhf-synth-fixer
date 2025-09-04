@@ -6,5 +6,10 @@
   "po_id": "349084",
   "team": "4",
   "startedAt": "2025-08-29T16:13:27.137Z",
-  "author": "jpoola-turing"
+  "author": "jpoola-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
