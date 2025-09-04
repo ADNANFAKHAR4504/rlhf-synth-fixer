@@ -266,7 +266,7 @@ class TapStack(Stack):
         self.database = rds.DatabaseInstance(
             self, "SecureDatabase",
             engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0_34
+                version=rds.MysqlEngineVersion.VER_8_0_37
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
