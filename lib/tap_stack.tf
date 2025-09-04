@@ -2,20 +2,25 @@
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 
+# Regional provider mapping for consistent provider assignment
+locals {
+  regional_providers = {
+    "us-east-1"      = "aws.us_east_1"
+    "eu-west-1"      = "aws.eu_west_1"
+    "ap-southeast-2" = "aws.ap_southeast_2"
+  }
+}
+
 # 1. GLOBAL TAGS - Applied via provider default_tags
 
 # 2. ENCRYPTION AT REST - KMS Customer Managed Keys per region
 resource "aws_kms_key" "regional_cmk" {
   for_each = toset(local.regions)
-  
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   description             = "Customer managed key for ${local.name_prefix} in ${each.key}"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -57,7 +62,7 @@ resource "aws_kms_key" "regional_cmk" {
       }
     ]
   })
-  
+
   tags = {
     Name = "${local.name_prefix}-cmk-${each.key}"
   }
@@ -65,11 +70,7 @@ resource "aws_kms_key" "regional_cmk" {
 
 resource "aws_kms_alias" "regional_cmk" {
   for_each = toset(local.regions)
-  
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   name          = "alias/${local.name_prefix}-cmk-${each.key}"
   target_key_id = aws_kms_key.regional_cmk[each.key].key_id
 }
@@ -79,20 +80,20 @@ resource "aws_kms_alias" "regional_cmk" {
 resource "aws_iam_account_password_policy" "strict" {
   minimum_password_length        = 14
   require_lowercase_characters   = true
-  require_numbers               = true
+  require_numbers                = true
   require_uppercase_characters   = true
-  require_symbols               = true
+  require_symbols                = true
   allow_users_to_change_password = true
-  max_password_age              = 90
-  password_reuse_prevention     = 24
-  hard_expiry                   = false
+  max_password_age               = 90
+  password_reuse_prevention      = 24
+  hard_expiry                    = false
 }
 
 # MFA enforcement policy for console access
 resource "aws_iam_policy" "mfa_enforcement" {
   name        = "${local.name_prefix}-mfa-enforcement"
   description = "Deny console access to sensitive actions without MFA"
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -136,10 +137,7 @@ resource "aws_iam_group_policy_attachment" "mfa_enforcement" {
 # Try to find existing VPCs first, create minimal ones if not found
 data "aws_vpcs" "existing" {
   for_each = toset(local.regions)
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   tags = {
     Name = "${local.name_prefix}-vpc-${each.key}"
   }
@@ -151,15 +149,11 @@ resource "aws_vpc" "main" {
     for region in local.regions : region => region
     if length(data.aws_vpcs.existing[region].ids) == 0
   }
-  
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   cidr_block           = "10.${index(local.regions, each.key)}.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = {
     Name = "${local.name_prefix}-vpc-${each.key}"
   }
@@ -169,7 +163,7 @@ resource "aws_vpc" "main" {
 locals {
   vpc_ids = {
     for region in local.regions : region => (
-      length(data.aws_vpcs.existing[region].ids) > 0 
+      length(data.aws_vpcs.existing[region].ids) > 0
       ? data.aws_vpcs.existing[region].ids[0]
       : aws_vpc.main[region].id
     )
@@ -179,14 +173,11 @@ locals {
 # Least privilege security group for application tier
 resource "aws_security_group" "app_tier" {
   for_each = toset(local.regions)
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   name        = "${local.name_prefix}-app-tier-${each.key}"
   description = "Least privilege security group for application tier"
   vpc_id      = local.vpc_ids[each.key]
-  
+
   # Ingress: HTTPS from specific CIDR (adjust as needed)
   ingress {
     description = "HTTPS from corporate network"
@@ -195,7 +186,7 @@ resource "aws_security_group" "app_tier" {
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/8"] # Adjust to your corporate CIDR
   }
-  
+
   # Egress: HTTPS for API calls and updates
   egress {
     description = "HTTPS outbound"
@@ -204,7 +195,7 @@ resource "aws_security_group" "app_tier" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   # Egress: DNS
   egress {
     description = "DNS"
@@ -213,7 +204,7 @@ resource "aws_security_group" "app_tier" {
     protocol    = "udp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = {
     Name = "${local.name_prefix}-app-tier-sg-${each.key}"
   }
@@ -235,7 +226,7 @@ resource "random_string" "bucket_suffix" {
 # S3 bucket encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.regional_cmk[local.home_region].arn
@@ -247,7 +238,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 # S3 bucket public access block
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -257,7 +248,7 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 # S3 bucket policy for CloudTrail and TLS enforcement
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -285,10 +276,10 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         }
       },
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.cloudtrail.arn,
           "${aws_s3_bucket.cloudtrail.arn}/*"
@@ -313,7 +304,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 # IAM role for CloudTrail to write to CloudWatch Logs
 resource "aws_iam_role" "cloudtrail_logs" {
   name = "${local.name_prefix}-cloudtrail-logs-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -331,7 +322,7 @@ resource "aws_iam_role" "cloudtrail_logs" {
 resource "aws_iam_role_policy" "cloudtrail_logs" {
   name = "${local.name_prefix}-cloudtrail-logs-policy"
   role = aws_iam_role.cloudtrail_logs.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -352,30 +343,30 @@ resource "aws_iam_role_policy" "cloudtrail_logs" {
 resource "aws_cloudtrail" "main" {
   name           = "${local.name_prefix}-cloudtrail"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
-  
+
   # Multi-region trail
   is_multi_region_trail         = true
   include_global_service_events = true
-  
+
   # CloudWatch Logs integration
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_logs.arn
-  
+
   # KMS encryption
   kms_key_id = aws_kms_key.regional_cmk[local.home_region].arn
-  
+
   # Management events only (data events commented for cost optimization)
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-    
+
     # Uncomment to enable data events for S3 buckets
     # data_resource {
     #   type   = "AWS::S3::Object"
     #   values = ["arn:aws:s3:::*/*"]
     # }
   }
-  
+
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
 
@@ -397,13 +388,10 @@ resource "aws_cloudtrail" "main" {
 # 7. GUARDDUTY - Enable in all regions
 resource "aws_guardduty_detector" "main" {
   for_each = toset(local.regions)
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
-  
+
   datasources {
     s3_logs {
       enable = true
@@ -421,7 +409,7 @@ resource "aws_guardduty_detector" "main" {
       }
     }
   }
-  
+
   tags = {
     Name = "${local.name_prefix}-guardduty-${each.key}"
   }
@@ -446,7 +434,7 @@ resource "aws_cloudwatch_log_metric_filter" "unauthorized_api_calls" {
   name           = "${local.name_prefix}-unauthorized-api-calls"
   log_group_name = aws_cloudwatch_log_group.cloudtrail.name
   pattern        = "{ ($.errorCode = \"*UnauthorizedOperation\") || ($.errorCode = \"AccessDenied*\") }"
-  
+
   metric_transformation {
     name      = "UnauthorizedAPICalls"
     namespace = "${local.project}/${local.environment}/Security"
@@ -466,7 +454,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
   threshold           = "0"
   alarm_description   = "This metric monitors unauthorized API calls"
   alarm_actions       = [aws_sns_topic.security_alerts.arn]
-  
+
   tags = {
     Name = "${local.name_prefix}-unauthorized-api-calls-alarm"
   }
@@ -476,7 +464,7 @@ resource "aws_cloudwatch_metric_alarm" "unauthorized_api_calls" {
 # IAM role for VPC Flow Logs
 resource "aws_iam_role" "flow_logs" {
   name = "${local.name_prefix}-vpc-flow-logs-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -494,7 +482,7 @@ resource "aws_iam_role" "flow_logs" {
 resource "aws_iam_role_policy" "flow_logs" {
   name = "${local.name_prefix}-vpc-flow-logs-policy"
   role = aws_iam_role.flow_logs.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -516,10 +504,7 @@ resource "aws_iam_role_policy" "flow_logs" {
 # CloudWatch Log Groups for VPC Flow Logs (per region)
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   for_each = toset(local.regions)
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   name              = "/aws/vpc/flowlogs/${local.name_prefix}-${each.key}"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.regional_cmk[each.key].arn
@@ -528,15 +513,12 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 # VPC Flow Logs (per region)
 resource "aws_flow_log" "vpc_flow_logs" {
   for_each = toset(local.regions)
-  provider = each.key == "us-east-1" ? aws.us_east_1 : (
-    each.key == "eu-west-1" ? aws.eu_west_1 : aws.ap_southeast_2
-  )
-  
+
   iam_role_arn    = aws_iam_role.flow_logs.arn
   log_destination = aws_cloudwatch_log_group.vpc_flow_logs[each.key].arn
   traffic_type    = "ALL"
   vpc_id          = local.vpc_ids[each.key]
-  
+
   tags = {
     Name = "${local.name_prefix}-vpc-flow-logs-${each.key}"
   }

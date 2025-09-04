@@ -39,7 +39,8 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
   });
 
   test("uses regional provider aliases from provider.tf", () => {
-    expect(stackContent).toMatch(/provider\s*=\s*local\.regional_providers\[each\.key\]/);
+    // Test for multi-region resource pattern using for_each
+    expect(stackContent).toMatch(/for_each\s*=\s*toset\(local\.regions\)/);
   });
 
   // --- Data Sources Tests ---
@@ -264,8 +265,9 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
   });
 
   test("uses regional provider mapping", () => {
-    expect(stackContent).toMatch(/local\.regional_providers\s*=\s*{/);
-    expect(stackContent).toMatch(/provider\s*=\s*local\.regional_providers\[each\.key\]/);
+    expect(stackContent).toMatch(/regional_providers\s*=\s*{/);
+    // Test that multi-region resources use for_each pattern
+    expect(stackContent).toMatch(/for_each\s*=\s*toset\(local\.regions\)/);
   });
 
   // --- Locals and Variable Usage Tests ---

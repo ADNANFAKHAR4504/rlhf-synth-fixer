@@ -6,6 +6,8 @@ terraform {
       version = ">= 5.0"
     }
   }
+
+  backend "local" {}
 }
 
 # Local variables for configuration
@@ -15,10 +17,10 @@ locals {
   owner       = "security-team"
   regions     = ["us-east-1", "eu-west-1", "ap-southeast-2"]
   home_region = "us-east-1"
-  
+
   # Common naming pattern
   name_prefix = "${local.project}-${local.environment}"
-  
+
   # Common tags applied to all resources
   common_tags = {
     Project     = local.project
@@ -31,11 +33,11 @@ locals {
 # Default AWS provider (us-east-1)
 provider "aws" {
   region = local.home_region
-  
+
   default_tags {
     tags = local.common_tags
   }
-  
+
   # Uncomment for multi-account setup
   # assume_role {
   #   role_arn = "arn:aws:iam::${var.target_account_id}:role/OrganizationAccountAccessRole"
@@ -46,11 +48,11 @@ provider "aws" {
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
-  
+
   default_tags {
     tags = local.common_tags
   }
-  
+
   # Uncomment for multi-account setup
   # assume_role {
   #   role_arn = "arn:aws:iam::${var.target_account_id}:role/OrganizationAccountAccessRole"
@@ -60,11 +62,11 @@ provider "aws" {
 provider "aws" {
   alias  = "eu_west_1"
   region = "eu-west-1"
-  
+
   default_tags {
     tags = local.common_tags
   }
-  
+
   # Uncomment for multi-account setup
   # assume_role {
   #   role_arn = "arn:aws:iam::${var.target_account_id}:role/OrganizationAccountAccessRole"
@@ -74,11 +76,11 @@ provider "aws" {
 provider "aws" {
   alias  = "ap_southeast_2"
   region = "ap-southeast-2"
-  
+
   default_tags {
     tags = local.common_tags
   }
-  
+
   # Uncomment for multi-account setup
   # assume_role {
   #   role_arn = "arn:aws:iam::${var.target_account_id}:role/OrganizationAccountAccessRole"
