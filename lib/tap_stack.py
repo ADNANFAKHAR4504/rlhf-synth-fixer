@@ -43,20 +43,20 @@ s3_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}",
 )
 
 # Enable versioning on S3 bucket
-s3_bucket_versioning = aws.s3.BucketVersioning(f"{company_name}-{app_name}-{environment}-versioning",
+s3_bucket_versioning = aws.s3.BucketVersioningV2(f"{company_name}-{app_name}-{environment}-versioning",
     bucket=s3_bucket.id,
-    versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+    versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
         status="Enabled"
     )
 )
 
 # Configure S3 bucket encryption with AES-256
-s3_bucket_server_side_encryption_configuration = aws.s3.BucketServerSideEncryptionConfiguration(
+s3_bucket_server_side_encryption_configuration = aws.s3.BucketServerSideEncryptionConfigurationV2(
     f"{company_name}-{app_name}-{environment}-encryption",
     bucket=s3_bucket.id,
     rules=[
-        aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+        aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
                 sse_algorithm="AES256"
             ),
             bucket_key_enabled=True
@@ -112,34 +112,34 @@ s3_bucket_policy = aws.s3.BucketPolicy(
 )
 
 # 3. S3 lifecycle policy for storage class management
-s3_bucket_lifecycle_configuration = aws.s3.BucketLifecycleConfiguration(
+s3_bucket_lifecycle_configuration = aws.s3.BucketLifecycleConfigurationV2(
     f"{company_name}-{app_name}-{environment}-lifecycle",
     bucket=s3_bucket.id,
     rules=[
-        aws.s3.BucketLifecycleConfigurationRuleArgs(
+        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
             id="TransitionToIA",
             status="Enabled",
             transitions=[
-                aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
                     days=30,
                     storage_class="STANDARD_IA"
                 ),
-                aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
                     days=90,
                     storage_class="GLACIER"
                 )
             ]
         ),
-        aws.s3.BucketLifecycleConfigurationRuleArgs(
+        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
             id="DeleteOldVersions",
             status="Enabled",
             noncurrent_version_transitions=[
-                aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
                     noncurrent_days=30,
                     storage_class="STANDARD_IA"
                 )
             ],
-            noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
+            noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
                 noncurrent_days=90
             )
         )
@@ -152,7 +152,7 @@ s3_logging_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}-logs
     tags=common_tags
 )
 
-s3_bucket_logging = aws.s3.BucketLogging(
+s3_bucket_logging = aws.s3.BucketLoggingV2(
     f"{company_name}-{app_name}-{environment}-logging",
     bucket=s3_bucket.id,
     target_bucket=s3_logging_bucket.id,
