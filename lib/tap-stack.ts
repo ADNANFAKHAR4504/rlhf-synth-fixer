@@ -205,16 +205,6 @@ def handler(event, context):
 
     kmsKeyWaiter.node.addDependency(kmsKey);
 
-    // Ensure Auto Scaling service-linked role exists
-    const autoScalingServiceLinkedRole = new iam.CfnServiceLinkedRole(
-      this,
-      'AutoScalingServiceLinkedRole-test-1',
-      {
-      awsServiceName: 'autoscaling.amazonaws.com',
-      description: 'Service-linked role for Auto Scaling to access other AWS services',
-      }
-    );
-
     // =============================================================================
     // 2. VPC AND NETWORKING
     // =============================================================================
@@ -728,10 +718,7 @@ def handler(event, context):
             statements: [
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetObject',
-                  's3:PutObject',
-                ],
+                actions: ['s3:GetObject', 's3:PutObject'],
                 resources: [`${configBucket.bucketArn}/*`],
               }),
             ],
@@ -1237,11 +1224,10 @@ def handler(event, context):
       }
     );
 
-    // Ensure ASG depends on KMS key, launch template, waiter, and service-linked role being ready
+    // Ensure ASG depends on KMS key, launch template, and waiter being ready
     autoScalingGroup.node.addDependency(kmsKey);
     autoScalingGroup.node.addDependency(kmsKeyWaiter);
     autoScalingGroup.node.addDependency(launchTemplate);
-    autoScalingGroup.node.addDependency(autoScalingServiceLinkedRole);
 
     // Register ASG with target group
     autoScalingGroup.attachToApplicationTargetGroup(targetGroup);
