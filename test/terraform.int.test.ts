@@ -23,10 +23,13 @@ test("Terraform integration test", () => {
   }
   
   // Verify the configuration files exist and contain expected resources
-  const configContent = fs.readFileSync(path.join(process.cwd(), "lib/provider.tf"), "utf8");
+  const stackContent = fs.readFileSync(path.join(process.cwd(), "lib/tap_stack.tf"), "utf8");
+  const providerContent = fs.readFileSync(path.join(process.cwd(), "lib/provider.tf"), "utf8");
   
-  expect(configContent).toContain('resource "aws_vpc" "main"');
-  expect(configContent).toContain('resource "aws_subnet" "public"');
-  expect(configContent).toContain('resource "aws_internet_gateway" "gw"');
-  expect(configContent).toContain('resource "aws_route_table" "public"');
+  expect(stackContent).toContain('resource "aws_vpc" "main"');
+  expect(stackContent).toContain('resource "aws_subnet" "public"');
+  expect(stackContent).toContain('resource "aws_internet_gateway" "gw"');
+  expect(stackContent).toContain('resource "aws_route_table" "public"');
+  expect(providerContent).toContain('provider "aws"');
+  expect(providerContent).toContain('terraform {');
 });

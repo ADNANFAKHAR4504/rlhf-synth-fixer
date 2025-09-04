@@ -1,5 +1,3 @@
-**tap_stack.tf:**
-```hcl
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
   tags       = { Name = "main-vpc-${var.environment_suffix}" }
@@ -50,30 +48,3 @@ output "igw_id" {
   description = "ID of the Internet Gateway"
   value       = aws_internet_gateway.gw.id
 }
-```
-
-**provider.tf:**
-```hcl
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-  required_version = ">= 1.5"
-}
-
-provider "aws" {
-  region = var.aws_region
-}
-```
-
-The configuration creates:
-1. VPC with CIDR 10.0.0.0/16
-2. Two public subnets (10.0.0.0/24 and 10.0.1.0/24) in separate AZs
-3. Internet Gateway attached to VPC
-4. Public routes table routing 0.0.0.0/0 to IGW
-5. Subnet associations for public routing
-
-All resources tagged appropriately. Validates with Terraform 1.5+ and AWS provider 5.x.
