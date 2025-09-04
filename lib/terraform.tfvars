@@ -1,5 +1,5 @@
 # Security team email for alerts
-security_team_email = "security-team@company.local"
+security_team_email = "security-team@example.com"
 
 # Corporate network CIDR for security group rules
 corporate_cidr = "10.0.0.0/8"
