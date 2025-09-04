@@ -42,4 +42,4 @@ aws_wafv2_web_acl_association.api_gateway_association: Creating...
 │
 ╵
 Error: Terraform exited with code 1.
-❌ All deployment attempts failed. Check for state lock issues.
+All deployment attempts failed. Check for state lock issues.

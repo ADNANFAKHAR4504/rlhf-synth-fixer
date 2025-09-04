@@ -197,9 +197,9 @@ resource "aws_iam_policy" "lambda_basic_execution" {
 
 These fixes address all the errors mentioned in your deployment log:
 
-- ✅ Fixed S3 lifecycle configuration attribute combination warning
-- ✅ Fixed missing `projection_type` argument in DynamoDB GSI
-- ✅ Fixed invalid resource type for Lambda event invoke configuration
-- ✅ Added proper SNS permissions for Lambda error handling
+- Fixed S3 lifecycle configuration attribute combination warning
+- Fixed missing `projection_type` argument in DynamoDB GSI
+- Fixed invalid resource type for Lambda event invoke configuration
+- Added proper SNS permissions for Lambda error handling
 
 The corrected configuration should now deploy successfully without errors.
