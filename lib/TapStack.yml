@@ -26,7 +26,14 @@ Parameters:
     Description: Email address for CloudWatch alarm notifications
     AllowedPattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
 
- 
+  DbMasterUsername:
+    Type: String
+    Default: tapuser
+    Description: Master username for RDS instance
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
+    MinLength: 1
+    MaxLength: 63
+
   CostCenter:
     Type: String
     Default: Engineering
@@ -648,8 +655,7 @@ Resources:
     Properties:
       LogGroupName: /tapstack/centralized
       RetentionInDays: !FindInMap [EnvironmentMap, !Ref EnvironmentName, LogRetentionDays]
-    # (Tags supported; optional—keeping template concise)
-  
+
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
@@ -830,7 +836,7 @@ Resources:
       DBInstanceIdentifier: !Sub ${ProjectName}-${EnvironmentName}-postgres
       DBInstanceClass: !FindInMap [EnvironmentMap, !Ref EnvironmentName, RdsInstanceClass]
       Engine: postgres
-      # Let AWS choose a supported version to avoid regional version issues
+      MasterUsername: !Ref DbMasterUsername
       ManageMasterUserPassword: true
       AllocatedStorage: !FindInMap [EnvironmentMap, !Ref EnvironmentName, RdsAllocatedStorage]
       StorageEncrypted: true
