@@ -1,4 +1,4 @@
-Create an AWS CloudFormation template in JSON format that provisions a secure serverless infrastructure following best practices. The template must meet the following requirements:
+Create an AWS CloudFormation template in yml format that provisions a secure serverless infrastructure following best practices. The template must meet the following requirements:
 
 1. Infrastructure as Code: Use AWS CloudFormation as the IaC provider.
 

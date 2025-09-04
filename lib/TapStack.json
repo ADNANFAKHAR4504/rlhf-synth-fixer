@@ -131,23 +131,81 @@
                 }
             }
         },
-        "S3BucketNotification": {
-            "Type": "AWS::S3::Bucket",
+        "S3NotificationRole": {
+            "Type": "AWS::IAM::Role",
             "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3NotificationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutBucketNotification",
+                                        "s3:GetBucketNotification"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "AppDataBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "S3NotificationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Runtime": "python3.9",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "S3NotificationRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nimport cfnresponse\n\ndef handler(event, context):\n    try:\n        s3 = boto3.client('s3')\n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            s3.put_bucket_notification_configuration(\n                Bucket=event['ResourceProperties']['BucketName'],\n                NotificationConfiguration={\n                    'LambdaConfigurations': [{\n                        'Id': 'ProcessDataTrigger',\n                        'LambdaFunctionArn': event['ResourceProperties']['LambdaArn'],\n                        'Events': ['s3:ObjectCreated:*']\n                    }]\n                }\n            )\n        elif event['RequestType'] == 'Delete':\n            s3.put_bucket_notification_configuration(\n                Bucket=event['ResourceProperties']['BucketName'],\n                NotificationConfiguration={}\n            )\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(e)\n        cfnresponse.send(event, context, cfnresponse.FAILED, {})\n"
+                }
+            }
+        },
+        "S3BucketNotificationConfig": {
+            "Type": "Custom::S3BucketNotification",
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "S3NotificationFunction",
+                        "Arn"
+                    ]
+                },
                 "BucketName": {
                     "Ref": "AppDataBucket"
                 },
-                "NotificationConfiguration": {
-                    "LambdaConfigurations": [
-                        {
-                            "Event": "s3:ObjectCreated:*",
-                            "Function": {
-                                "Fn::GetAtt": [
-                                    "ProcessDataLambda",
-                                    "Arn"
-                                ]
-                            }
-                        }
+                "LambdaArn": {
+                    "Fn::GetAtt": [
+                        "ProcessDataLambda",
+                        "Arn"
                     ]
                 }
             },
