@@ -280,7 +280,7 @@ launch_template = aws.ec2.LaunchTemplate(f"{prefix.lower()}-launch-template",
         name=ec2_instance_profile.name
     ),
     user_data=pulumi.Output.all(rds_instance.endpoint, db_name_param.value).apply(
-        lambda args: f"""#!/bin/bash
+        lambda args: __import__('base64').b64encode(f"""#!/bin/bash
 yum update -y
 yum install -y httpd php php-mysqlnd
 systemctl start httpd
@@ -292,7 +292,7 @@ echo "<p>Database Host: {args[0]}</p>" >> /var/www/html/index.html
 echo "<p>Database Name: {args[1]}</p>" >> /var/www/html/index.html
 
 chown -R apache:apache /var/www/html
-"""
+""".encode('utf-8')).decode('utf-8')
     ),
     tag_specifications=[
         aws.ec2.LaunchTemplateTagSpecificationArgs(
