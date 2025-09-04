@@ -24,7 +24,19 @@ describe('Terraform Infrastructure Integration Tests', () => {
     // Load the outputs from the deployment
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+      const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+      
+      // Parse JSON string arrays into actual arrays
+      outputs = { ...rawOutputs };
+      for (const key in outputs) {
+        if (typeof outputs[key] === 'string' && outputs[key].startsWith('[')) {
+          try {
+            outputs[key] = JSON.parse(outputs[key]);
+          } catch (e) {
+            // Keep as string if parsing fails
+          }
+        }
+      }
     } else {
       throw new Error('Deployment outputs not found. Please ensure infrastructure is deployed.');
     }
@@ -116,25 +128,30 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('RDS Database', () => {
     test('RDS instance is available', async () => {
-      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.rds_instance_id });
+      // Extract the DB instance identifier from the endpoint if rds_instance_id doesn't match
+      const dbIdentifier = outputs.rds_endpoint.split('.')[0];
+      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const response = await rdsClient.send(command);
       expect(response.DBInstances?.[0]?.DBInstanceStatus).toBe('available');
     }, 15000);
 
     test('RDS has encryption enabled', async () => {
-      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.rds_instance_id });
+      const dbIdentifier = outputs.rds_endpoint.split('.')[0];
+      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const response = await rdsClient.send(command);
       expect(response.DBInstances?.[0]?.StorageEncrypted).toBe(true);
     }, 10000);
 
     test('RDS has Multi-AZ enabled', async () => {
-      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.rds_instance_id });
+      const dbIdentifier = outputs.rds_endpoint.split('.')[0];
+      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const response = await rdsClient.send(command);
       expect(response.DBInstances?.[0]?.MultiAZ).toBe(true);
     }, 10000);
 
     test('RDS has backup retention configured', async () => {
-      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: outputs.rds_instance_id });
+      const dbIdentifier = outputs.rds_endpoint.split('.')[0];
+      const command = new DescribeDBInstancesCommand({ DBInstanceIdentifier: dbIdentifier });
       const response = await rdsClient.send(command);
       expect(response.DBInstances?.[0]?.BackupRetentionPeriod).toBeGreaterThanOrEqual(7);
     }, 10000);
