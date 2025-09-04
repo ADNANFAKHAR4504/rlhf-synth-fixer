@@ -260,7 +260,7 @@ class TapStack(Stack):
         rds_instance = rds.DatabaseInstance(
             self, "TapRDSInstance",
             engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0_43
+                version=rds.MysqlEngineVersion.VER_8_0_13
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
