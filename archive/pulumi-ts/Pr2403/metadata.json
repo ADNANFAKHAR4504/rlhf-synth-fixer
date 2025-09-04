@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291976",
+  "team": "2",
+  "startedAt": "2025-08-28T04:36:40.600Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Performance Optimization",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "DynamoDB",
+    "S3",
+    "CloudFront",
+    "WAF",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "ashish-a-turing",
+  "dockerS3Location": ""
+}

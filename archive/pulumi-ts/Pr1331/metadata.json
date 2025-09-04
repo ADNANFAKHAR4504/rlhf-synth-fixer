@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "trainr110",
+  "team": "synth",
+  "startedAt": "2025-08-15T14:10:14+05:30",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Database Management",
+    "Network Configuration",
+    "Security Configuration",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Access Control",
+    "Resource Scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Elastic Load Balancer (ALB)",
+    "RDS Aurora Serverless v2",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Route Tables"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

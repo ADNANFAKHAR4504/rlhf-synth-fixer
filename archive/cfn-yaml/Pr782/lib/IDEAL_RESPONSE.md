@@ -1,4 +1,14 @@
-```
+# CloudFormation Infrastructure Solution
+
+This solution implements the infrastructure requirements using AWS CloudFormation.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure, highly available AWS infrastructure for web application with VPC, subnets, ALB, EC2, and S3 in us-west-2'
 
@@ -761,4 +771,24 @@ Outputs:
     Value: !Ref VPCFlowLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-FlowLog-Group'
+
+```
+
+## Key Features
+
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 ```

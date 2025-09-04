@@ -1,3 +1,10 @@
+# CloudFormation Template - Secure Infrastructure
+
+This template creates a production-grade secure infrastructure with comprehensive security, monitoring, and compliance features.
+
+## TapStack.yml
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: '!Ref EnvironmentSuffix-grade secure infrastructure'
 
@@ -701,3 +708,4 @@ Outputs:
   WebACLArn:
     Value: "N/A"
     Description: WAF WebACL ARN — update if WAF is added
+```

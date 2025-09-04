@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291793",
+  "team": "5",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "terraform",
+    "aws",
+    "s3",
+    "ec2",
+    "cloudtrail",
+    "iam",
+    "security-groups",
+    "kms-encryption",
+    "tag-based-access",
+    "infrastructure-testing",
+    "jest",
+    "unit-tests",
+    "integration-tests"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "s3",
+    "ec2",
+    "cloudtrail",
+    "iam",
+    "kms",
+    "vpc",
+    "sts"
+  ],
+  "startedAt": "2025-08-16T13:27:26.764Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akorede28",
+  "dockerS3Location": ""
+}

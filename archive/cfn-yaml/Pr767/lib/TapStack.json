@@ -1,0 +1,620 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-grade serverless architecture with API Gateway v2, Lambda, and S3",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "prod",
+            "Description": "Environment name for resource naming and tagging"
+        },
+        "UseKms": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether to use KMS encryption for S3 bucket"
+        },
+        "KmsKeyArn": {
+            "Type": "String",
+            "Default": "",
+            "Description": "KMS Key ARN for S3 encryption (optional, only used if UseKms is true)"
+        },
+        "LogRetentionDays": {
+            "Type": "Number",
+            "Default": 14,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365,
+                400,
+                545,
+                731,
+                1827,
+                3653
+            ],
+            "Description": "CloudWatch log retention in days"
+        }
+    },
+    "Conditions": {
+        "UseKmsEncryption": {
+            "Fn::Equals": [
+                {
+                    "Ref": "UseKms"
+                },
+                "true"
+            ]
+        },
+        "HasKmsKey": {
+            "Fn::And": [
+                {
+                    "Condition": "UseKmsEncryption"
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "KmsKeyArn"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "OutputBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": [
+                        "${Environment}-s3-app-output-${Suffix}",
+                        {
+                            "Environment": {
+                                "Ref": "Environment"
+                            },
+                            "Suffix": {
+                                "Fn::Select": [
+                                    2,
+                                    {
+                                        "Fn::Split": [
+                                            "/",
+                                            {
+                                                "Ref": "AWS::StackId"
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": {
+                                    "Fn::If": [
+                                        "UseKmsEncryption",
+                                        "aws:kms",
+                                        "AES256"
+                                    ]
+                                },
+                                "KMSMasterKeyID": {
+                                    "Fn::If": [
+                                        "HasKmsKey",
+                                        {
+                                            "Ref": "KmsKeyArn"
+                                        },
+                                        {
+                                            "Ref": "AWS::NoValue"
+                                        }
+                                    ]
+                                }
+                            },
+                            "BucketKeyEnabled": {
+                                "Fn::If": [
+                                    "UseKmsEncryption",
+                                    true,
+                                    {
+                                        "Ref": "AWS::NoValue"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-s3-app-output"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-serverless-app"
+                        }
+                    }
+                ]
+            }
+        },
+        "OutputBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "OutputBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${OutputBucket}"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${OutputBucket}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Fn::If": [
+                                "UseKmsEncryption",
+                                {
+                                    "Sid": "DenyUnencryptedObjectUploads",
+                                    "Effect": "Deny",
+                                    "Principal": "*",
+                                    "Action": "s3:PutObject",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${OutputBucket}/*"
+                                    },
+                                    "Condition": {
+                                        "StringNotEquals": {
+                                            "s3:x-amz-server-side-encryption": "aws:kms"
+                                        }
+                                    }
+                                },
+                                {
+                                    "Sid": "DenyUnencryptedObjectUploads",
+                                    "Effect": "Deny",
+                                    "Principal": "*",
+                                    "Action": "s3:PutObject",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${OutputBucket}/*"
+                                    },
+                                    "Condition": {
+                                        "StringNotEquals": {
+                                            "s3:x-amz-server-side-encryption": "AES256"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "LambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${Environment}-lambda-processor"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-lambda-logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-serverless-app"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigatewayv2/${Environment}-apigw-http"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-apigw-logs"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-serverless-app"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${Environment}-lambda-execution-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-lambda-execution-role"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-serverless-app"
+                        }
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": {
+                    "Fn::Sub": "${Environment}-lambda-execution-policy"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Environment}-lambda-processor*"
+                            }
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "xray:PutTraceSegments",
+                                "xray:PutTelemetryRecords"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:PutObject",
+                                "s3:PutObjectAcl"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:aws:s3:::${OutputBucket}/processed/*"
+                            }
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "LambdaExecutionRole"
+                    }
+                ]
+            }
+        },
+        "ProcessorFunction": {
+            "Type": "AWS::Lambda::Function",
+            "DependsOn": "LambdaLogGroup",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${Environment}-lambda-processor"
+                },
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 128,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "BUCKET_NAME": {
+                            "Ref": "OutputBucket"
+                        },
+                        "OBJECT_PREFIX": "processed/",
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        },
+                        "USE_KMS": {
+                            "Ref": "UseKms"
+                        },
+                        "KMS_KEY_ARN": {
+                            "Fn::If": [
+                                "HasKmsKey",
+                                {
+                                    "Ref": "KmsKeyArn"
+                                },
+                                ""
+                            ]
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json\nimport boto3\nimport os\nimport uuid\nfrom datetime import datetime\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ns3_client = boto3.client('s3')\n\ndef handler(event, context):\n    try:\n        # Log the incoming event\n        logger.info(f\"Received event: {json.dumps(event)}\")\n        \n        # Get environment variables\n        bucket_name = os.environ['BUCKET_NAME']\n        object_prefix = os.environ.get('OBJECT_PREFIX', 'processed/')\n        use_kms = os.environ.get('USE_KMS', 'false').lower() == 'true'\n        kms_key_arn = os.environ.get('KMS_KEY_ARN', '')\n        \n        # Parse the request body\n        if 'body' in event:\n            if isinstance(event['body'], str):\n                try:\n                    body = json.loads(event['body'])\n                except json.JSONDecodeError:\n                    return {\n                        'statusCode': 400,\n                        'headers': {'Content-Type': 'application/json'},\n                        'body': json.dumps({'error': 'Invalid JSON in request body'})\n                    }\n            else:\n                body = event['body']\n        else:\n            body = {}\n        \n        # Validate input\n        if not isinstance(body, dict):\n            return {\n                'statusCode': 400,\n                'headers': {'Content-Type': 'application/json'},\n                'body': json.dumps({'error': 'Request body must be a JSON object'})\n            }\n        \n        # Process the data\n        processed_data = {\n            'timestamp': datetime.utcnow().isoformat(),\n            'request_id': context.aws_request_id,\n            'input_data': body,\n            'processed_by': 'prod-lambda-processor',\n            'processing_result': f\"Processed {len(str(body))} characters\"\n        }\n        \n        # Generate S3 object key\n        object_key = f\"{object_prefix}{datetime.utcnow().strftime('%Y/%m/%d')}/{uuid.uuid4()}.json\"\n        \n        # Prepare S3 put_object parameters\n        put_object_params = {\n            'Bucket': bucket_name,\n            'Key': object_key,\n            'Body': json.dumps(processed_data, indent=2),\n            'ContentType': 'application/json'\n        }\n        \n        # Add encryption parameters based on configuration\n        if use_kms:\n            put_object_params['ServerSideEncryption'] = 'aws:kms'\n            if kms_key_arn:\n                put_object_params['SSEKMSKeyId'] = kms_key_arn\n        else:\n            put_object_params['ServerSideEncryption'] = 'AES256'\n        \n        # Write to S3\n        s3_client.put_object(**put_object_params)\n        \n        logger.info(f\"Successfully wrote object to s3://{bucket_name}/{object_key}\")\n        \n        # Return success response\n        return {\n            'statusCode': 200,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({\n                'message': 'Data processed successfully',\n                's3_object_key': object_key,\n                'bucket_name': bucket_name,\n                'request_id': context.aws_request_id\n            })\n        }\n        \n    except Exception as e:\n        logger.error(f\"Error processing request: {str(e)}\")\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({\n                'error': 'Internal server error',\n                'request_id': context.aws_request_id\n            })\n        }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-lambda-processor"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Fn::Sub": "${Environment}-serverless-app"
+                        }
+                    }
+                ]
+            }
+        },
+        "HttpApi": {
+            "Type": "AWS::ApiGatewayV2::Api",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${Environment}-apigw-http"
+                },
+                "Description": "HTTP API for serverless processing application",
+                "ProtocolType": "HTTP",
+                "CorsConfiguration": {
+                    "AllowCredentials": false,
+                    "AllowHeaders": [
+                        "Content-Type",
+                        "X-Amz-Date",
+                        "Authorization",
+                        "X-Api-Key"
+                    ],
+                    "AllowMethods": [
+                        "POST",
+                        "OPTIONS"
+                    ],
+                    "AllowOrigins": [
+                        "*"
+                    ],
+                    "MaxAge": 86400
+                },
+                "Tags": {
+                    "Name": {
+                        "Fn::Sub": "${Environment}-apigw-http"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "Application": {
+                        "Fn::Sub": "${Environment}-serverless-app"
+                    }
+                }
+            }
+        },
+        "LambdaIntegration": {
+            "Type": "AWS::ApiGatewayV2::Integration",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "HttpApi"
+                },
+                "IntegrationType": "AWS_PROXY",
+                "IntegrationUri": {
+                    "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessorFunction.Arn}/invocations"
+                },
+                "IntegrationMethod": "POST",
+                "PayloadFormatVersion": "2.0"
+            }
+        },
+        "ProcessRoute": {
+            "Type": "AWS::ApiGatewayV2::Route",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "HttpApi"
+                },
+                "RouteKey": "POST /process",
+                "Target": {
+                    "Fn::Sub": "integrations/${LambdaIntegration}"
+                }
+            }
+        },
+        "ApiStage": {
+            "Type": "AWS::ApiGatewayV2::Stage",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "HttpApi"
+                },
+                "StageName": "$default",
+                "AutoDeploy": true,
+                "AccessLogSettings": {
+                    "DestinationArn": {
+                        "Fn::GetAtt": [
+                            "ApiGatewayLogGroup",
+                            "Arn"
+                        ]
+                    },
+                    "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"routeKey\":\"$context.routeKey\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\",\"error\":\"$context.error.message\",\"integration_error\":\"$context.integration.error\",\"integration_status\":\"$context.integration.status\",\"integration_latency\":\"$context.integration.latency\",\"response_latency\":\"$context.responseLatency\"}"
+                },
+                "Tags": {
+                    "Name": {
+                        "Fn::Sub": "${Environment}-apigw-stage"
+                    },
+                    "Environment": {
+                        "Ref": "Environment"
+                    },
+                    "Application": {
+                        "Fn::Sub": "${Environment}-serverless-app"
+                    }
+                }
+            }
+        },
+        "LambdaApiGatewayPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ProcessorFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*/*"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ApiEndpoint": {
+            "Description": "HTTP API Gateway base endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+                }
+            }
+        },
+        "ApiProcessEndpoint": {
+            "Description": "HTTP API Gateway process endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/process"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ApiProcessEndpoint"
+                }
+            }
+        },
+        "LambdaFunctionArn": {
+            "Description": "Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ProcessorFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionArn"
+                }
+            }
+        },
+        "OutputBucketName": {
+            "Description": "S3 Output Bucket Name",
+            "Value": {
+                "Ref": "OutputBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-OutputBucketName"
+                }
+            }
+        },
+        "LambdaFunctionName": {
+            "Description": "Lambda Function Name",
+            "Value": {
+                "Ref": "ProcessorFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
+                }
+            }
+        }
+    }
+}

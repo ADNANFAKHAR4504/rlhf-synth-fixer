@@ -63,7 +63,7 @@ app.synth()
 
 ### lib/tap_stack.py
 ```python
-# mycompany_serverless_stack.py
+# mycompany_serverless_stack.py 
 
 from typing import Optional
 
@@ -95,7 +95,7 @@ class MyCompanyServerlessStack(NestedStack):
         ]
     )
 
-    # Define the Lambda function
+    # Define the Lambda function 
     lambda_function = _lambda.Function(
         self, 'mycompany-LambdaFunction',
         runtime=_lambda.Runtime.PYTHON_3_11,
@@ -164,154 +164,6 @@ class TapStack(Stack):
     )
 ```
 
-### lib/AWS_REGION
-```
-us-west-2
-```
-
-### tests/unit/test_tap_stack.py
-```python
-import unittest
-import aws_cdk as cdk
-from aws_cdk.assertions import Template
-from lib.tap_stack import TapStack
-
-
-class TestMyCompanyServerlessStack(unittest.TestCase):
-
-  def setUp(self):
-    self.app = cdk.App()
-    self.tap_stack = TapStack(self.app, "TestTapStack")
-    # 👇 Access the nested stack directly
-    self.nested_stack = self.tap_stack.serverless_stack
-    self.template = Template.from_stack(self.nested_stack)
-
-  def test_lambda_function_created(self):
-    self.template.has_resource_properties("AWS::Lambda::Function", {
-        "Handler": "index.handler",
-        "Runtime": "python3.11",
-        "Environment": {
-            "Variables": {
-                "LOG_LEVEL": "INFO"
-            }
-        }
-    })
-
-  def test_api_gateway_created(self):
-    self.template.has_resource_properties("AWS::ApiGateway::RestApi", {
-        "Name": "mycompany-Service",
-        "Description": "This service serves mycompany HTTP POST requests."
-    })
-
-  def test_lambda_execution_role_created(self):
-    self.template.has_resource_properties("AWS::IAM::Role", {
-        "AssumeRolePolicyDocument": {
-            "Statement": [{
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "lambda.amazonaws.com"
-                }
-            }]
-        }
-    })
-
-  def test_post_method_exists(self):
-    self.template.has_resource_properties("AWS::ApiGateway::Method", {
-        "HttpMethod": "POST"
-    })
-
-  def test_api_endpoint_output_exists(self):
-    outputs = self.template.find_outputs("*")
-    self.assertIn("ApiEndpoint", outputs)
-
-
-if __name__ == '__main__':
-    unittest.main()
-```
-
-### tests/integration/test_tap_stack.py
-```python
-import unittest
-import json
-import boto3
-import requests
-from pytest_testdox import mark
-
-# Load outputs from deployment
-try:
-    with open("cfn-outputs/flat-outputs.json", "r") as f:
-        flat_outputs = json.load(f)
-except FileNotFoundError:
-    flat_outputs = {}
-
-
-class TestTapStackIntegration(unittest.TestCase):
-
-  def setUp(self):
-    self.api_url = flat_outputs.get("ApiEndpoint")
-    self.lambda_name = flat_outputs.get("LambdaFunctionName")
-    self.lambda_arn = flat_outputs.get("LambdaFunctionArn")
-    self.role_name = flat_outputs.get("LambdaExecutionRoleName")
-    self.api_id = flat_outputs.get("ApiGatewayRestApiId")
-
-    self.lambda_client = boto3.client("lambda")
-    self.iam_client = boto3.client("iam")
-    self.apigateway_client = boto3.client("apigateway")
-
-  @mark.it("POST to /myresource returns expected response")
-  def test_post_to_myresource_returns_expected_response(self):
-    if not self.api_url:
-      self.skipTest("Missing ApiEndpoint in flat-outputs.json")
-
-    url = self.api_url.rstrip("/") + "/myresource"
-    headers = {"Content-Type": "application/json"}
-    payload = {"test": "data"}
-
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
-
-    self.assertEqual(response.status_code, 200)
-    body = response.json()
-    self.assertEqual(body, "Hello from MyCompany!")
-
-  @mark.it("Lambda function exists and is active")
-  def test_lambda_function_exists(self):
-    if not self.lambda_name:
-      self.skipTest("Missing LambdaFunctionName in flat-outputs.json")
-
-    response = self.lambda_client.get_function(FunctionName=self.lambda_name)
-    self.assertEqual(response["Configuration"]["State"], "Active")
-
-  @mark.it("Lambda function ARN is valid")
-  def test_lambda_function_arn_valid(self):
-    if not self.lambda_arn:
-      self.skipTest("Missing LambdaFunctionArn in flat-outputs.json")
-
-    # Try to access function by ARN
-    response = self.lambda_client.get_function(FunctionName=self.lambda_arn)
-    self.assertIsNotNone(response["Configuration"])
-
-  @mark.it("Lambda execution role exists")
-  def test_lambda_execution_role_exists(self):
-    if not self.role_name:
-      self.skipTest("Missing LambdaExecutionRoleName in flat-outputs.json")
-
-    response = self.iam_client.get_role(RoleName=self.role_name)
-    self.assertIsNotNone(response["Role"])
-
-  @mark.it("API Gateway REST API exists")
-  def test_api_gateway_rest_api_exists(self):
-    if not self.api_id:
-      self.skipTest("Missing ApiGatewayRestApiId in flat-outputs.json")
-
-    response = self.apigateway_client.get_rest_api(restApiId=self.api_id)
-    self.assertEqual(response["name"], "mycompany-Service")
-
-
-if __name__ == '__main__':
-    unittest.main()
-```
-
 ## Key Features
 
 1. **Regional Deployment**: All resources deployed to us-west-2 region as specified
@@ -326,7 +178,6 @@ if __name__ == '__main__':
 
 ```bash
 # Install dependencies
-npm install
 pipenv install
 
 # Deploy the infrastructure

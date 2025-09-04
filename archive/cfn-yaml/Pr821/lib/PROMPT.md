@@ -3,24 +3,24 @@ Objective: Create an AWS CloudFormation template in YAML format named security-c
 Requirements:
 
 1. Amazon S3 Encryption:
-   • All S3 buckets defined in the template must have server-side encryption enabled using AWS Key Management Service (KMS).
-   • Create a KMS key within the template and configure bucket policies to use this key for encryption.
-   • Ensure bucket policies explicitly deny unencrypted uploads and enforce encryption with the KMS key.
+• All S3 buckets defined in the template must have server-side encryption enabled using AWS Key Management Service (KMS).
+• Create a KMS key within the template and configure bucket policies to use this key for encryption.
+• Ensure bucket policies explicitly deny unencrypted uploads and enforce encryption with the KMS key.
 2. IAM Roles and Policies:
-   • Define IAM roles and policies for each AWS service in the template.
-   • Policies must follow the principle of least privilege — granting only the specific actions and resources necessary for the intended functionality.
-   • Avoid wildcard actions (\*) and restrict to explicitly required resources.
+• Define IAM roles and policies for each AWS service in the template.
+• Policies must follow the principle of least privilege granting only the specific actions and resources necessary for the intended functionality.
+• Avoid wildcard actions (\*) and restrict to explicitly required resources.
 3. Resource Tagging:
-   • Apply the organization’s standard tagging policy to every resource created in the template.
-   • Required tags:
-   • Environment — parameterized (e.g., dev, staging, prod).
-   • Owner — parameterized (e.g., team or individual name).
-   • Project — parameterized (e.g., project name).
-   • Ensure tags are consistently applied across all supported resources.
+• Apply the organizations standard tagging policy to every resource created in the template.
+• Required tags:
+• Environment parameterized (e.g., dev, staging, prod).
+• Owner parameterized (e.g., team or individual name).
+• Project parameterized (e.g., project name).
+• Ensure tags are consistently applied across all supported resources.
 4. AWS Lambda Security:
-   • All Lambda functions must run inside a Virtual Private Cloud (VPC).
-   • Create the necessary VPC, subnets, and security groups in the template (or allow them to be provided as parameters).
-   • Ensure outbound access is controlled, and inbound traffic is restricted to only necessary sources.
+• All Lambda functions must run inside a Virtual Private Cloud (VPC).
+• Create the necessary VPC, subnets, and security groups in the template (or allow them to be provided as parameters).
+• Ensure outbound access is controlled, and inbound traffic is restricted to only necessary sources.
 
 General Requirements:
 • The template should be deploy-ready and logically organized into parameters, resources, outputs, and optional mappings.

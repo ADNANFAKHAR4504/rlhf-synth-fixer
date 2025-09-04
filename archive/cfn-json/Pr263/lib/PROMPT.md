@@ -76,5 +76,5 @@ Follows AWS security, scalability, and operational best practices.
 Output Format
 Output only a single CloudFormation JSON template.
 
-Do not include any additional explanations, comments, or text—just the template.
+Do not include any additional explanations, comments, or textjust the template.
 

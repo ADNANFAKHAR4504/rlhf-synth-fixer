@@ -1,0 +1,43 @@
+import * as cdk from 'aws-cdk-lib';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import { Construct } from 'constructs';
+
+// ? Import your stacks here
+// import { MyStack } from './my-stack';
+
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
+
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
+
+    // Get environment suffix from props, context, or use 'dev' as default
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
+
+    // ? Add your stack instantiations here
+    // ! Do NOT create resources directly in this stack.
+    // ! Instead, create separate stacks for each resource type.
+
+    // Create S3 bucket
+    const bucket = new s3.Bucket(this, 'MyBucket', {
+      bucketName: `my-bucket-${environmentSuffix}-${Date.now()}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For development - change to RETAIN for production
+      autoDeleteObjects: true, // For development - set to false for production
+    });
+
+    // Output the bucket name
+    new cdk.CfnOutput(this, 'BucketName', {
+      value: bucket.bucketName,
+      description: 'Name of the S3 bucket',
+    });
+  }
+}

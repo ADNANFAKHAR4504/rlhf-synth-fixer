@@ -1,7 +1,7 @@
 > **You are a senior AWS DevOps engineer.**
 > Write a complete **CloudFormation template in JSON** that builds a robust CI/CD pipeline for deploying microservices in AWS.
 >
-> ### 🎯 **Requirements:**
+> ### **Requirements:**
 >
 > 1. The pipeline must:
 >
@@ -24,7 +24,7 @@
 >    * Follow best practices (e.g., IAM role separation, parameterization, modular organization).
 >    * Include inline **comments** (as allowed in JSON via `_Comment` or descriptive names) or provide external documentation blocks.
 >
-> ### 📄 Output:
+> ### Output:
 >
 > * A **single CloudFormation JSON template** that includes:
 >

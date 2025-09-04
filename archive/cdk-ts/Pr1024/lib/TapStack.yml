@@ -1,0 +1,241 @@
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0abcdef1234567890
+    eu-west-1:
+      AMI: ami-0123456789abcdef0
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Financial Services Security Infrastructure with Multi-Region Support'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - Environment
+          - PrimaryRegion
+          - SecondaryRegion
+      - Label:
+          default: 'Security Configuration'
+        Parameters:
+          - KMSKeyAdminRole
+          - CloudTrailBucketName
+    ParameterLabels:
+      Environment:
+        default: 'Environment Type'
+      PrimaryRegion:
+        default: 'Primary AWS Region'
+      SecondaryRegion:
+        default: 'Secondary AWS Region'
+      KMSKeyAdminRole:
+        default: 'KMS Key Administrator Role'
+      CloudTrailBucketName:
+        default: 'CloudTrail S3 Bucket Name'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: staging
+    AllowedValues:
+      - production
+      - staging
+    Description: 'Environment type for deployment'
+    
+  PrimaryRegion:
+    Type: String
+    Default: us-east-1
+    Description: 'Primary AWS region for deployment'
+    
+  SecondaryRegion:
+    Type: String
+    Default: eu-west-1
+    Description: 'Secondary AWS region for disaster recovery'
+    
+  KMSKeyAdminRole:
+    Type: String
+    Description: 'IAM role ARN for KMS key administration'
+    
+  CloudTrailBucketName:
+    Type: String
+    Description: 'S3 bucket name for CloudTrail logs'
+    AllowedPattern: '^[a-z0-9.-]*$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, periods, and hyphens'
+
+Conditions:
+  IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
+  IsProduction: !Equals [!Ref Environment, 'production']
+
+Resources:
+  # Multi-Region VPC with conditional CIDR
+  FinancialServicesVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !If [IsPrimaryRegion, '10.0.0.0/16', '10.1.0.0/16']
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Sub 'FinancialServices-VPC-${Environment}'
+        - Key: Environment
+          Value: Production
+        - Key: Region
+          Value: !Ref 'AWS::Region'
+
+  # Private Subnet 1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinancialServicesVPC
+      CidrBlock: !If [IsPrimaryRegion, '10.0.1.0/24', '10.1.1.0/24']
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'PrivateSubnet1-${Environment}'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Private
+
+  # Private Subnet 2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref FinancialServicesVPC
+      CidrBlock: !If [IsPrimaryRegion, '10.0.2.0/24', '10.1.2.0/24']
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'PrivateSubnet2-${Environment}'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Private
+
+  # KMS Key for Financial Services
+  FinancialServicesKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'Customer-managed KMS key for Financial Services encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Ref KMSKeyAdminRole
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'FinancialServices-KMS-${Environment}'
+        - Key: Environment
+          Value: Production
+
+  # KMS Key Alias
+  FinancialServicesKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/financial-services-${Environment}'
+      TargetKeyId: !Ref FinancialServicesKMSKey
+
+  # Lambda Security Group
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Lambda functions in Financial Services infrastructure'
+      VpcId: !Ref FinancialServicesVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !If [IsPrimaryRegion, '10.0.0.0/16', '10.1.0.0/16']
+          Description: 'HTTPS access from VPC'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS outbound access'
+      Tags:
+        - Key: Name
+          Value: !Sub 'Lambda-SecurityGroup-${Environment}'
+        - Key: Environment
+          Value: Production
+
+  # CloudTrail for audit logging
+  FinancialServicesCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Properties:
+      TrailName: !Sub 'FinancialServices-CloudTrail-${Environment}'
+      S3BucketName: !Ref CloudTrailBucketName
+      S3KeyPrefix: !Sub 'cloudtrail-logs/${AWS::Region}/'
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      KMSKeyId: !Ref FinancialServicesKMSKey
+      Tags:
+        - Key: Name
+          Value: !Sub 'FinancialServices-CloudTrail-${Environment}'
+        - Key: Environment
+          Value: Production
+
+Outputs:
+  VPCId:
+    Description: 'ID of the Financial Services VPC'
+    Value: !Ref FinancialServicesVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+      
+  PrivateSubnet1Id:
+    Description: 'ID of Private Subnet 1'
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+      
+  PrivateSubnet2Id:
+    Description: 'ID of Private Subnet 2'
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+      
+  KMSKeyId:
+    Description: 'ID of the Financial Services KMS Key'
+    Value: !Ref FinancialServicesKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ID'
+      
+  LambdaSecurityGroupId:
+    Description: 'ID of the Lambda Security Group'
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Lambda-SG-ID'
+      
+  CloudTrailArn:
+    Description: 'ARN of the CloudTrail'
+    Value: !GetAtt FinancialServicesCloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'

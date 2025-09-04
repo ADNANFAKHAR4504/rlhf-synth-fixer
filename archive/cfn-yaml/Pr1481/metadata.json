@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291491",
+  "team": "2",
+  "startedAt": "2025-08-17T14:05:21.793Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization",
+    "Resource Scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "API Gateway",
+    "CloudWatch Logs",
+    "IAM",
+    "EventBridge",
+    "KMS",
+    "SQS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

@@ -4,7 +4,7 @@ Your task is to **design and implement a secure, reusable AWS infrastructure** f
 
 ---
 
-### 🧩 **Constraints**:
+### **Constraints**:
 
 * Use **AWS CloudFormation** to define the infrastructure as code.
 * The web application must be hosted on **Amazon S3** using **static website hosting**.
@@ -15,7 +15,7 @@ Your task is to **design and implement a secure, reusable AWS infrastructure** f
 
 ---
 
-### 💡 **Environment**:
+### **Environment**:
 
 You are setting up a web application hosting environment that includes:
 
@@ -24,13 +24,13 @@ You are setting up a web application hosting environment that includes:
 3. A **bucket policy** or **origin access control (OAC)** or **origin access identity (OAI)** setup to **block public access** and allow only CloudFront to fetch content.
 4. Use of **CloudFormation Parameters** for:
 
-   * Environment suffix (e.g., dev, prod)
-   * Application name
-   * Domain alias (optional)
+* Environment suffix (e.g., dev, prod)
+* Application name
+* Domain alias (optional)
 
 ---
 
-### 🎯 **Expected Output**:
+### **Expected Output**:
 
 Submit a well-structured CloudFormation template in **YAML format** named:
 `static_web_app_infra.yaml`
@@ -42,8 +42,8 @@ It must:
 * Use proper logical resource names and exports.
 * Include outputs such as:
 
-  * S3 bucket name
-  * Website endpoint
-  * CloudFront distribution domain name
+* S3 bucket name
+* Website endpoint
+* CloudFront distribution domain name
 
 ---

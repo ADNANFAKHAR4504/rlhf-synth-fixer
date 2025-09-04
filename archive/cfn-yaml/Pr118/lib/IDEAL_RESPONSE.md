@@ -1,3 +1,14 @@
+# CloudFormation Infrastructure Solution
+
+This solution implements the infrastructure requirements using AWS CloudFormation.
+
+## Template Structure
+
+The infrastructure is defined in the following CloudFormation template:
+
+### Main Template (TapStack.yml)
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Highly Available Web Application Infrastructure with VPC, RDS (PostgreSQL), EC2 ASG, and ALB.'
 
@@ -20,6 +31,15 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     Default: 'iac-rlhf-aws-trainer-instance'
     Description: Name of an existing EC2 KeyPair for SSH access
+  RDSPassword:
+    Type: String
+    NoEcho: true
+    Default: 'masterpass123'
+    Description: 'Password for the RDS PostgreSQL master user'
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*?&]{8,41}$'
+    ConstraintDescription: 'Must be between 8 and 41 characters long, contain at least one letter and one number.'
 
 Resources:
   VPC:
@@ -31,7 +51,8 @@ Resources:
       Tags:
         - Key: Name
           Value: WebAppVPC
-
+        - Key: Environment
+          Value: !Sub "${EnvironmentSuffix}"
   # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -47,7 +68,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
@@ -58,35 +79,41 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: PublicSubnet2
+        - Key: Environment
+          Value: !Sub "${EnvironmentSuffix}"
 
   # Private Subnets (AZ a & b)
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.3.0/24
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
           Value: PrivateSubnet1
+        - Key: Environment
+          Value: !Sub "${EnvironmentSuffix}"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      AvailabilityZone: us-east-1b
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.4.0/24
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
           Value: PrivateSubnet2
+        - Key: Environment
+          Value: !Sub "${EnvironmentSuffix}"
 
   # Route Table & Association (Public)
   PublicRouteTable:
@@ -240,10 +267,11 @@ Resources:
       DBName: webappdb
       AllocatedStorage: 20
       DBInstanceClass: db.t3.micro
+      StorageEncrypted: true
       Engine: postgres
       EngineVersion: "15.7"
       MasterUsername: masteruser
-      MasterUserPassword: masterpass123
+      MasterUserPassword: !Sub "${RDSPassword}"
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -251,6 +279,58 @@ Resources:
       MultiAZ: true
 
 Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+
+  RDSInstanceId:
+    Description: RDS PostgreSQL Instance Identifier
+    Value: !Ref DBInstance
+
   LoadBalancerDNSName:
     Description: DNS Name of the Application Load Balancer
     Value: !GetAtt LoadBalancer.DNSName
+
+  LoadBalancerArn:
+    Description: ARN of the Application Load Balancer
+    Value: !Ref LoadBalancer
+
+  TargetGroupArn:
+    Description: ARN of the Target Group
+    Value: !Ref TargetGroup
+```
+
+## Key Features
+
+- Infrastructure as Code using CloudFormation YAML
+- Parameterized configuration for flexibility
+- Resource outputs for integration
+- Environment suffix support for multi-environment deployments
+
+## Deployment
+
+The template can be deployed using AWS CLI or through the CI/CD pipeline:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.yml \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+```

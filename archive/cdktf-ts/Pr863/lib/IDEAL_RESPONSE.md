@@ -1,4 +1,8 @@
-lib/tap-stack.ts
+# CDKTF TypeScript Infrastructure Solution
+
+## lib/tap-stack.ts
+
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -95,10 +99,11 @@ export class TapStack extends TerraformStack {
 const app = new App();
 new TapStack(app, 'tap-aws-stack');
 app.synth();
+```
 
+## lib/modules.ts
 
-
-lib/modules.ts
+```typescript
 import { Construct } from 'constructs';
 
 // Corrected: Import each resource from its specific file path to resolve module errors.
@@ -299,3 +304,4 @@ export class Ec2InstanceModule extends Construct {
     });
   }
 }
+```

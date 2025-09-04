@@ -2,7 +2,7 @@ You are an AWS CloudFormation expert.
 
 Create a complete and production-ready CloudFormation **YAML** template that provisions a **highly available, multi-tier web application infrastructure** on AWS.
 
-### 🌍 Environment Constraints:
+### Environment Constraints:
 
 - Region: `us-east-1`
 - VPC CIDR block: `10.0.0.0/16`
@@ -11,7 +11,7 @@ Create a complete and production-ready CloudFormation **YAML** template that pro
 
 ---
 
-### 🧱 Infrastructure Requirements:
+### Infrastructure Requirements:
 
 #### 1. **Network Layer**:
 
@@ -46,20 +46,20 @@ Create a complete and production-ready CloudFormation **YAML** template that pro
 
 ---
 
-### 📦 Template Features:
+### Template Features:
 
 - Use **Parameters** for:
-  - Environment name
-  - EC2 instance type
-  - DB engine and DB name
+- Environment name
+- EC2 instance type
+- DB engine and DB name
 - Include **Outputs** for:
-  - ALB DNS Name
-  - RDS Endpoint
-  - IAM Role Names
+- ALB DNS Name
+- RDS Endpoint
+- IAM Role Names
 
 ---
 
-### ✅ Post-Template Checklist:
+### Post-Template Checklist:
 
 After the template, include **three validation checks**, such as:
 

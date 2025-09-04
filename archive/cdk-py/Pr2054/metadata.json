@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "trainr128",
+  "team": "synth",
+  "startedAt": "2025-08-22T21:20:39+05:30",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "SecurityGroup",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

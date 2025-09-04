@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "291782",
+  "team": "1",
+  "startedAt": "2025-08-16T07:39:52.312Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Database Management",
+    "Monitoring Setup",
+    "Resource Scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "CloudTrail",
+    "IAM",
+    "SSM",
+    "random_id"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulladumor",
+  "dockerS3Location": ""
+}

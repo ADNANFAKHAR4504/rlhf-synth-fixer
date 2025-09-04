@@ -1,0 +1,16 @@
+{
+  "alb_dns_names_dev": "proj-synthtrainr843-dev-alb-1675795536.us-east-1.elb.amazonaws.com",
+  "backup_vault_name": "proj-synthtrainr843-backup-vault",
+  "ec2_instance_ids_dev-web": "i-03df8dc4e5d1dd230",
+  "elastic_ips_dev-web": "3.232.128.151",
+  "lambda_function_name": "proj-synthtrainr843-example-lambda",
+  "private_subnet_ids_dev-us-east-1a": "subnet-0ae05b4ca75f641d4",
+  "private_subnet_ids_dev-us-east-1b": "subnet-075333ceaa6f35eac",
+  "public_subnet_ids_dev-us-east-1a": "subnet-0c8417af58437593a",
+  "public_subnet_ids_dev-us-east-1b": "subnet-0b286281c41951c77",
+  "rds_endpoints_dev": "proj-synthtrainr843-dev-database.c43eiskmcd0s.us-east-1.rds.amazonaws.com:3306",
+  "s3_bucket_names_dev": "proj-synthtrainr843-dev-data-bucket-x6zsvyho",
+  "secrets_manager_secret_arns_dev": "arn:aws:secretsmanager:us-east-1:718240086340:secret:proj-synthtrainr843-dev-db-credentials-K01ThA",
+  "vpc_ids_dev": "vpc-0835873cbb69c78bf",
+  "waf_web_acl_arn": "arn:aws:wafv2:us-east-1:718240086340:regional/webacl/proj-synthtrainr843-web-acl/9325d599-71a3-4e47-93a4-1e466343e1d3"
+}

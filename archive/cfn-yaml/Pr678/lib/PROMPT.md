@@ -1,11 +1,11 @@
 Claude Sonnet-Optimized Prompt Template
 Prompt Format: Uses structured instruction + constraints + evaluation format
 
-🧠 System Instruction (Implicit via formatting):
+System Instruction (Implicit via formatting):
 
 You are an expert in AWS infrastructure as code (IaC). You will write production-grade AWS CloudFormation YAML templates following best practices for security, naming, permissions, and modularity.
 
-📝 Prompt
+Prompt
 Task:
 Design a complete, production-ready AWS CloudFormation template in YAML format that defines a secure and scalable serverless application architecture. The architecture should include:
 
@@ -23,7 +23,7 @@ Lambda to perform GetItem, PutItem, UpdateItem, and DeleteItem operations on the
 
 Constraints:
 
-Use logical names that clearly reflect each resource’s function (e.g., AppLambdaFunction, AppDynamoTable, ApiGatewayRole).
+Use logical names that clearly reflect each resources function (e.g., AppLambdaFunction, AppDynamoTable, ApiGatewayRole).
 
 The Lambda function must be deployed using AWS::Serverless::Function or equivalent if using SAM transform.
 
@@ -35,7 +35,7 @@ The stack must be deployable in the us-east-1 region.
 
 Follow YAML syntax strictly for CloudFormation (version 2010-09-09).
 
-Use CloudFormation’s intrinsic functions like !Ref, !Sub, and !GetAtt appropriately.
+Use CloudFormations intrinsic functions like !Ref, !Sub, and !GetAtt appropriately.
 
 Evaluation:
 
@@ -45,4 +45,4 @@ The template should deploy successfully in an actual AWS environment (us-east-1)
 
 API endpoint should be functional and allow CRUD operations using the Lambda-DynamoDB backend.
 
-IAM roles should grant minimum privileges for the required operations—nothing more.
+IAM roles should grant minimum privileges for the required operationsnothing more.

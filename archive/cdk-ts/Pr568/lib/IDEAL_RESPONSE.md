@@ -30,14 +30,14 @@ export class SecureNetworkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: SecureNetworkStackProps) {
     super(scope, id, props);
 
-    // KMS Key for encryption with rotation enabled
+    // KMS Key for encryption
     const kmsKey = new kms.Key(this, 'SecureNetworkKMSKey', {
       description: 'KMS Key for secure network infrastructure encryption',
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // S3 Bucket for VPC Flow Logs with comprehensive security
+    // S3 Bucket for VPC Flow Logs with strict security
     this.flowLogsBucket = new s3.Bucket(this, 'VPCFlowLogsBucket', {
       bucketName: `vpc-flow-logs-${props.environmentName}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.KMS,
@@ -59,7 +59,7 @@ export class SecureNetworkStack extends cdk.Stack {
         },
       ],
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: true,
+      autoDeleteObjects: true, // For easy cleanup
     });
 
     // IAM Role for VPC Flow Logs with minimal permissions
@@ -93,7 +93,7 @@ export class SecureNetworkStack extends cdk.Stack {
       },
     });
 
-    // VPC with 3-tier architecture across multiple AZs
+    // VPC with multiple subnets across AZs
     this.vpc = new ec2.Vpc(this, 'SecureVPC', {
       cidr: '10.0.0.0/16',
       maxAzs: 2,
@@ -119,7 +119,9 @@ export class SecureNetworkStack extends cdk.Stack {
       ],
     });
 
-    // VPC Flow Logs configuration
+    // VPC Block Public Access is configured via VPC properties, not as a separate resource
+
+    // VPC Flow Logs
     new ec2.FlowLog(this, 'VPCFlowLog', {
       resourceType: ec2.FlowLogResourceType.fromVpc(this.vpc),
       destination: ec2.FlowLogDestination.toS3(
@@ -137,14 +139,14 @@ export class SecureNetworkStack extends cdk.Stack {
       allowAllOutbound: false,
     });
 
-    // Allow HTTP from internal networks only
+    // Allow HTTP from specific CIDR blocks
     webSecurityGroup.addIngressRule(
       ec2.Peer.ipv4('10.0.0.0/8'),
       ec2.Port.tcp(80),
       'Allow HTTP from internal networks'
     );
 
-    // Allow SSH from internal networks only
+    // Allow SSH from specific CIDR blocks
     webSecurityGroup.addIngressRule(
       ec2.Peer.ipv4('10.0.0.0/8'),
       ec2.Port.tcp(22),
@@ -164,7 +166,50 @@ export class SecureNetworkStack extends cdk.Stack {
       'Allow HTTP outbound'
     );
 
-    // CloudWatch Log Group for VPC Flow Logs analysis
+    // VPC Lattice removed due to deployment issues - can be added later if needed
+
+    // CloudTrail removed due to permission issues - can be configured separately if needed
+    // Note: CloudTrail requires specific bucket policies and KMS key permissions
+
+    // AWS Config for compliance monitoring - commented out as there's already a Config recorder in the region
+    // Only one Config recorder is allowed per region per account
+    // If you need Config, ensure no other recorder exists or remove the existing one first
+
+    // const configBucket = new s3.Bucket(this, 'ConfigBucket', {
+    //   bucketName: `aws-config-${props.environmentName}-${this.account}-${this.region}`,
+    //   encryption: s3.BucketEncryption.KMS,
+    //   encryptionKey: kmsKey,
+    //   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    //   enforceSSL: true,
+    //   removalPolicy: cdk.RemovalPolicy.DESTROY,
+    // });
+
+    // const configRole = new iam.Role(this, 'ConfigRole', {
+    //   assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
+    //   managedPolicies: [
+    //     iam.ManagedPolicy.fromAwsManagedPolicyName(
+    //       'service-role/AWS_ConfigRole'
+    //     ),
+    //   ],
+    // });
+
+    // configBucket.grantWrite(configRole);
+
+    // new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
+    //   name: `config-recorder-${props.environmentName}`,
+    //   roleArn: configRole.roleArn,
+    //   recordingGroup: {
+    //     allSupported: true,
+    //     includeGlobalResourceTypes: true,
+    //   },
+    // });
+
+    // new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
+    //   name: `config-delivery-${props.environmentName}`,
+    //   s3BucketName: configBucket.bucketName,
+    // });
+
+    // CloudWatch Log Group for VPC Flow Logs analysis (without KMS encryption)
     new logs.LogGroup(this, 'FlowLogsAnalysis', {
       logGroupName: `/aws/vpc/flowlogs/${props.environmentName}`,
       retention: logs.RetentionDays.THREE_MONTHS,
@@ -203,7 +248,7 @@ export class SecureNetworkStack extends cdk.Stack {
       cdk.Tags.of(this).add(key, value);
     });
 
-    // Outputs for cross-stack references
+    // Outputs
     new cdk.CfnOutput(this, 'VpcId', {
       value: this.vpc.vpcId,
       description: 'VPC ID',
@@ -219,155 +264,47 @@ export class SecureNetworkStack extends cdk.Stack {
 }
 ```
 
-### 2. Application Entry Point (`bin/tap.ts`)
+
+## tap-stack.ts
 
 ```typescript
-#!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
-import { Tags } from 'aws-cdk-lib';
-import { SecureNetworkStack } from '../lib/secure-network-stack';
+import { Construct } from 'constructs';
+import { SecureNetworkStack } from './secure-network-stack';
 
-const app = new cdk.App();
+interface TapStackProps extends cdk.StackProps {
+  environmentSuffix?: string;
+}
 
-// Get environment suffix from context or environment variable
-const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 
-                         process.env.ENVIRONMENT_SUFFIX || 'dev';
+export class TapStack extends cdk.Stack {
+  constructor(scope: Construct, id: string, props?: TapStackProps) {
+    super(scope, id, props);
 
-const repositoryName = process.env.REPOSITORY || 'enterprise-security-network';
-const commitAuthor = process.env.COMMIT_AUTHOR || 'cloud-ops-team';
+    // Get environment suffix from props, context, or use 'dev' as default
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
-// Get the target region from environment or use default
-const targetRegion = process.env.CDK_DEFAULT_REGION || 'us-east-1';
+    // Deploy to us-east-1
+    new SecureNetworkStack(this, 'SecureNetworkEast', {
+      environmentName: `${environmentSuffix}-east`,
+      costCenter: 'CC-001-Security',
+      env: {
+        account: this.account,
+        region: 'us-east-1',
+      },
+    });
 
-// Determine the environment name based on region
-const regionSuffix = targetRegion === 'us-west-2' ? 'west' : 'east';
-const stackName = `TapStack${environmentSuffix}`;
-
-// Apply enterprise-level tags to all resources
-Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', repositoryName);
-Tags.of(app).add('Author', commitAuthor);
-Tags.of(app).add('SecurityLevel', 'Enterprise');
-Tags.of(app).add('Compliance', 'SOC2-PCI');
-Tags.of(app).add('BackupRequired', 'true');
-Tags.of(app).add('MonitoringLevel', 'Enhanced');
-
-// Create stack for the target region
-new SecureNetworkStack(app, stackName, {
-  stackName: stackName,
-  environmentName: `${environmentSuffix}-${regionSuffix}`,
-  costCenter: 'CC-001-Security',
-  env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: targetRegion,
-  },
-});
-
-app.synth();
+    // Deploy to us-west-2
+    new SecureNetworkStack(this, 'SecureNetworkWest', {
+      environmentName: `${environmentSuffix}-west`,
+      costCenter: 'CC-001-Security',
+      env: {
+        account: this.account,
+        region: 'us-west-2',
+      },
+    });
+  }
+}
 ```
-
-## Key Features Implemented
-
-### 1. **VPC Architecture**
-- ✅ Multi-AZ deployment (2 AZs for high availability)
-- ✅ 3-tier subnet architecture (Public, Private, Database)
-- ✅ NAT Gateways with Elastic IPs for high availability
-- ✅ DNS resolution enabled
-
-### 2. **Security & Compliance**
-- ✅ KMS encryption with key rotation
-- ✅ VPC Flow Logs to encrypted S3 bucket
-- ✅ Security Groups with restrictive CIDR blocks (10.0.0.0/8)
-- ✅ SSH (port 22) and HTTP (port 80) access restrictions
-- ✅ S3 bucket with SSL enforcement and public access blocking
-- ✅ IAM roles with minimal required permissions
-
-### 3. **Monitoring & Alerting**
-- ✅ CloudWatch alarm for unauthorized SSH attempts
-- ✅ CloudWatch Log Groups for Flow Logs analysis
-- ✅ VPC Flow Logs capturing ALL traffic
-
-### 4. **Cost Management & Governance**
-- ✅ Comprehensive tagging strategy
-- ✅ Cost center attribution
-- ✅ Environment-specific naming conventions
-- ✅ S3 lifecycle policies for cost optimization
-
-### 5. **Operational Excellence**
-- ✅ Infrastructure as Code using AWS CDK
-- ✅ Automated resource cleanup (RemovalPolicy.DESTROY)
-- ✅ Stack outputs for cross-stack references
-- ✅ Environment-agnostic deployment
-
-## Deployment Commands
-
-```bash
-# Set environment suffix
-export ENVIRONMENT_SUFFIX=prod
-
-# Deploy to us-east-1
-export CDK_DEFAULT_REGION=us-east-1
-npm run cdk:deploy
-
-# Deploy to us-west-2
-export CDK_DEFAULT_REGION=us-west-2
-npm run cdk:deploy
-
-# Run tests
-npm run test:unit        # Unit tests with 100% coverage
-npm run test:integration # Integration tests against live resources
-
-# Destroy resources
-npm run cdk:destroy
-```
-
-## Testing Coverage
-
-### Unit Tests
-- VPC configuration validation
-- Subnet architecture verification
-- Security group rules testing
-- KMS and S3 encryption validation
-- IAM role permissions testing
-- Tagging compliance verification
-
-### Integration Tests
-- Live VPC resource validation
-- NAT Gateway and Elastic IP verification
-- VPC Flow Logs functionality
-- S3 bucket security settings
-- CloudWatch alarm configuration
-- Multi-AZ deployment verification
-- High availability testing
-
-## Compliance & Security Notes
-
-1. **AWS Well-Architected Framework Alignment**
-   - Security: Defense in depth with multiple layers
-   - Reliability: Multi-AZ deployment for fault tolerance
-   - Performance: Optimized network architecture
-   - Cost Optimization: Lifecycle policies and tagging
-   - Operational Excellence: IaC and monitoring
-
-2. **Security Best Practices**
-   - Least privilege IAM policies
-   - Encryption at rest and in transit
-   - Network segmentation
-   - Comprehensive logging and monitoring
-   - No public access to sensitive resources
-
-3. **Multi-Region Considerations**
-   - Stack is region-agnostic
-   - Supports deployment to us-east-1 and us-west-2
-   - Unique resource naming per region
-   - Cross-region replication ready (for future enhancement)
-
-## Future Enhancements
-
-While not implemented due to deployment constraints, the following services could be added:
-
-1. **AWS Config** - For continuous compliance monitoring (requires only one recorder per region)
-2. **AWS CloudTrail** - For comprehensive API logging (requires additional S3 bucket policies)
-3. **VPC Lattice** - For advanced service networking (when service becomes generally available)
-
-These services were tested but removed to ensure clean, repeatable deployments in shared AWS environments.

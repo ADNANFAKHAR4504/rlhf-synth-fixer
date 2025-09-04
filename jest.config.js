@@ -1,13 +1,19 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts'],
+  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
+  preset: 'ts-jest/presets/default-esm',
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', { useESM: true }],
+    '^.+\\.mjs$': 'babel-jest',
   },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs)/)',
+  ],
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
+    '<rootDir>/lib/**/*.mjs',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.js',
@@ -17,12 +23,13 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 70,
-      functions: 70,
-      lines: 70,
-      statements: 70,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
     },
   },
+  testTimeout: 30000,
   silent: false,
   verbose: true,
 };

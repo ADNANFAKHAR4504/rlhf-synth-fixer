@@ -1,0 +1,1361 @@
+{
+ "Resources": {
+  "SecurityStackFinancialServicesVPCF3C3FC8A": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "FinancialServices-VPC-dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/Resource"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet1SubnetC7F3558F": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "CidrBlock": "10.0.0.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PublicSubnet"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1/Subnet"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet1RouteTableDF6B656A": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1/RouteTable"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet1RouteTableAssociation9870C4A1": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet1RouteTableDF6B656A"
+    },
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet1SubnetC7F3558F"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1/RouteTableAssociation"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet1DefaultRouteA7B0247E": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "SecurityStackFinancialServicesVPCIGWDF9D2BD0"
+    },
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet1RouteTableDF6B656A"
+    }
+   },
+   "DependsOn": [
+    "SecurityStackFinancialServicesVPCVPCGW1EC04B32"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1/DefaultRoute"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet1EIP89CF5938": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1/EIP"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet1NATGateway929B5245": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "SecurityStackFinancialServicesVPCPublicSubnetSubnet1EIP89CF5938",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet1SubnetC7F3558F"
+    },
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "DependsOn": [
+    "SecurityStackFinancialServicesVPCPublicSubnetSubnet1DefaultRouteA7B0247E",
+    "SecurityStackFinancialServicesVPCPublicSubnetSubnet1RouteTableAssociation9870C4A1"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet1/NATGateway"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet2SubnetBA9B7316": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "CidrBlock": "10.0.1.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PublicSubnet"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2/Subnet"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet2RouteTable948D30DC": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2/RouteTable"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet2RouteTableAssociationE2898F3D": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet2RouteTable948D30DC"
+    },
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet2SubnetBA9B7316"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2/RouteTableAssociation"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet2DefaultRoute7107C173": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "SecurityStackFinancialServicesVPCIGWDF9D2BD0"
+    },
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet2RouteTable948D30DC"
+    }
+   },
+   "DependsOn": [
+    "SecurityStackFinancialServicesVPCVPCGW1EC04B32"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2/DefaultRoute"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet2EIP863940F0": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2/EIP"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPublicSubnetSubnet2NATGateway98342970": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "SecurityStackFinancialServicesVPCPublicSubnetSubnet2EIP863940F0",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet2SubnetBA9B7316"
+    },
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "DependsOn": [
+    "SecurityStackFinancialServicesVPCPublicSubnetSubnet2DefaultRoute7107C173",
+    "SecurityStackFinancialServicesVPCPublicSubnetSubnet2RouteTableAssociationE2898F3D"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PublicSubnetSubnet2/NATGateway"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1Subnet51FECCBD": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "CidrBlock": "10.0.2.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PrivateSubnet"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet1"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet1/Subnet"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1RouteTable68374EC1": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet1"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet1/RouteTable"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1RouteTableAssociation2EE6937B": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1RouteTable68374EC1"
+    },
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1Subnet51FECCBD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet1/RouteTableAssociation"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1DefaultRoute4FD0B8D9": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet1NATGateway929B5245"
+    },
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1RouteTable68374EC1"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet1/DefaultRoute"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2Subnet747C82D8": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "CidrBlock": "10.0.3.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "PrivateSubnet"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet2"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet2/Subnet"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2RouteTable3C91F547": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet2"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet2/RouteTable"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2RouteTableAssociation0B314B80": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2RouteTable3C91F547"
+    },
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2Subnet747C82D8"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet2/RouteTableAssociation"
+   }
+  },
+  "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2DefaultRouteC7B289B8": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet2NATGateway98342970"
+    },
+    "RouteTableId": {
+     "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2RouteTable3C91F547"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/PrivateSubnetSubnet2/DefaultRoute"
+   }
+  },
+  "SecurityStackFinancialServicesVPCIGWDF9D2BD0": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "FinancialServices-VPC-dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/IGW"
+   }
+  },
+  "SecurityStackFinancialServicesVPCVPCGW1EC04B32": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "SecurityStackFinancialServicesVPCIGWDF9D2BD0"
+    },
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/VPCGW"
+   }
+  },
+  "SecurityStackFinancialServicesVPCRestrictDefaultSecurityGroupCustomResource3151F0CB": {
+   "Type": "Custom::VpcRestrictDefaultSG",
+   "Properties": {
+    "ServiceToken": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E",
+      "Arn"
+     ]
+    },
+    "DefaultSecurityGroupId": {
+     "Fn::GetAtt": [
+      "SecurityStackFinancialServicesVPCF3C3FC8A",
+      "DefaultSecurityGroup"
+     ]
+    },
+    "Account": "323502797441"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/RestrictDefaultSecurityGroupCustomResource/Default"
+   }
+  },
+  "SecurityStackFinancialServicesVPCSSMEndpoint2FB67956": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "SecurityStackInternalSecurityGroupC8325B99",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-east-1.ssm",
+    "SubnetIds": [
+     {
+      "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1Subnet51FECCBD"
+     },
+     {
+      "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2Subnet747C82D8"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "FinancialServices-VPC-dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/SSMEndpoint/Resource"
+   }
+  },
+  "SecurityStackFinancialServicesVPCSSMMessagesEndpoint680FB4F7": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "SecurityStackInternalSecurityGroupC8325B99",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-east-1.ssmmessages",
+    "SubnetIds": [
+     {
+      "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1Subnet51FECCBD"
+     },
+     {
+      "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2Subnet747C82D8"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "FinancialServices-VPC-dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/SSMMessagesEndpoint/Resource"
+   }
+  },
+  "SecurityStackFinancialServicesVPCEC2MessagesEndpoint09B92166": {
+   "Type": "AWS::EC2::VPCEndpoint",
+   "Properties": {
+    "PrivateDnsEnabled": true,
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "SecurityStackInternalSecurityGroupC8325B99",
+       "GroupId"
+      ]
+     }
+    ],
+    "ServiceName": "com.amazonaws.us-east-1.ec2messages",
+    "SubnetIds": [
+     {
+      "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1Subnet51FECCBD"
+     },
+     {
+      "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2Subnet747C82D8"
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "FinancialServices-VPC-dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcEndpointType": "Interface",
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesVPC/EC2MessagesEndpoint/Resource"
+   }
+  },
+  "SecurityStackFinancialServicesKMSKeyF8B890C0": {
+   "Type": "AWS::KMS::Key",
+   "Properties": {
+    "Description": "Customer-managed KMS key for Financial Services encryption",
+    "EnableKeyRotation": true,
+    "KeyPolicy": {
+     "Statement": [
+      {
+       "Action": "kms:*",
+       "Effect": "Allow",
+       "Principal": {
+        "AWS": "arn:aws:iam::323502797441:root"
+       },
+       "Resource": "*"
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "KeySpec": "SYMMETRIC_DEFAULT",
+    "KeyUsage": "ENCRYPT_DECRYPT",
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesKMSKey/Resource"
+   }
+  },
+  "SecurityStackFinancialServicesKMSKeyAliasFB17D7C6": {
+   "Type": "AWS::KMS::Alias",
+   "Properties": {
+    "AliasName": "alias/financial-services-dev",
+    "TargetKeyId": {
+     "Fn::GetAtt": [
+      "SecurityStackFinancialServicesKMSKeyF8B890C0",
+      "Arn"
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/FinancialServicesKMSKeyAlias/Resource"
+   }
+  },
+  "SecurityStackBastionSecurityGroup42B84D3A": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for bastion hosts",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "10.0.0.0/8",
+      "Description": "SSH access from corporate network",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/BastionSecurityGroup/Resource"
+   }
+  },
+  "SecurityStackInternalSecurityGroupC8325B99": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for internal private resources",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "SecurityStackFinancialServicesVPCF3C3FC8A",
+        "CidrBlock"
+       ]
+      },
+      "Description": {
+       "Fn::Join": [
+        "",
+        [
+         "from ",
+         {
+          "Fn::GetAtt": [
+           "SecurityStackFinancialServicesVPCF3C3FC8A",
+           "CidrBlock"
+          ]
+         },
+         ":443"
+        ]
+       ]
+      },
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "VpcId": {
+     "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/InternalSecurityGroup/Resource"
+   }
+  },
+  "SecurityStackInternalSecurityGroupfromTapStackdevSecurityStackBastionSecurityGroup9373B43C22D9CEB762": {
+   "Type": "AWS::EC2::SecurityGroupIngress",
+   "Properties": {
+    "Description": "SSH access from bastion hosts",
+    "FromPort": 22,
+    "GroupId": {
+     "Fn::GetAtt": [
+      "SecurityStackInternalSecurityGroupC8325B99",
+      "GroupId"
+     ]
+    },
+    "IpProtocol": "tcp",
+    "SourceSecurityGroupId": {
+     "Fn::GetAtt": [
+      "SecurityStackBastionSecurityGroup42B84D3A",
+      "GroupId"
+     ]
+    },
+    "ToPort": 22
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/InternalSecurityGroup/from TapStackdevSecurityStackBastionSecurityGroup9373B43C:22"
+   }
+  },
+  "SecurityStackBastionHostRoleD45E4EE2": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "Description": "IAM role for bastion hosts",
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonSSMManagedInstanceCore"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/BastionHostRole/Resource"
+   }
+  },
+  "SecurityStackBastionInstanceProfile05E4FD00": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "SecurityStackBastionHostRoleD45E4EE2"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/BastionInstanceProfile/Resource"
+   }
+  },
+  "SecurityStackBastionHost1InstanceProfileCEF086A5": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "SecurityStackBastionHostRoleD45E4EE2"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/BastionHost1/InstanceProfile"
+   }
+  },
+  "SecurityStackBastionHost1196E274B": {
+   "Type": "AWS::EC2::Instance",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "IamInstanceProfile": {
+     "Ref": "SecurityStackBastionHost1InstanceProfileCEF086A5"
+    },
+    "ImageId": {
+     "Ref": "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter"
+    },
+    "InstanceType": "t3.micro",
+    "KeyName": "bastion-key",
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "SecurityStackBastionSecurityGroup42B84D3A",
+       "GroupId"
+      ]
+     }
+    ],
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet1SubnetC7F3558F"
+    },
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "BastionHost1-dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": "#!/bin/bash"
+    }
+   },
+   "DependsOn": [
+    "SecurityStackBastionHostRoleD45E4EE2"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/BastionHost1/Resource"
+   }
+  },
+  "SecurityStackBastionHost2InstanceProfile9C852601": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "SecurityStackBastionHostRoleD45E4EE2"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/BastionHost2/InstanceProfile"
+   }
+  },
+  "SecurityStackBastionHost2A624A4D5": {
+   "Type": "AWS::EC2::Instance",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "IamInstanceProfile": {
+     "Ref": "SecurityStackBastionHost2InstanceProfile9C852601"
+    },
+    "ImageId": {
+     "Ref": "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter"
+    },
+    "InstanceType": "t3.micro",
+    "KeyName": "bastion-key",
+    "SecurityGroupIds": [
+     {
+      "Fn::GetAtt": [
+       "SecurityStackBastionSecurityGroup42B84D3A",
+       "GroupId"
+      ]
+     }
+    ],
+    "SubnetId": {
+     "Ref": "SecurityStackFinancialServicesVPCPublicSubnetSubnet2SubnetBA9B7316"
+    },
+    "Tags": [
+     {
+      "Key": "Author",
+      "Value": "unknown"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "BastionHost2-dev"
+     },
+     {
+      "Key": "Repository",
+      "Value": "unknown"
+     }
+    ],
+    "UserData": {
+     "Fn::Base64": "#!/bin/bash"
+    }
+   },
+   "DependsOn": [
+    "SecurityStackBastionHostRoleD45E4EE2"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/SecurityStack/BastionHost2/Resource"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ]
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+     }
+    ],
+    "Policies": [
+     {
+      "PolicyName": "Inline",
+      "PolicyDocument": {
+       "Version": "2012-10-17",
+       "Statement": [
+        {
+         "Effect": "Allow",
+         "Action": [
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress"
+         ],
+         "Resource": [
+          {
+           "Fn::Join": [
+            "",
+            [
+             "arn:aws:ec2:us-east-1:323502797441:security-group/",
+             {
+              "Fn::GetAtt": [
+               "SecurityStackFinancialServicesVPCF3C3FC8A",
+               "DefaultSecurityGroup"
+              ]
+             }
+            ]
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider/Role"
+   }
+  },
+  "CustomVpcRestrictDefaultSGCustomResourceProviderHandlerDC833E5E": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-323502797441-us-east-1",
+     "S3Key": "7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200.zip"
+    },
+    "Timeout": 900,
+    "MemorySize": 128,
+    "Handler": "__entrypoint__.handler",
+    "Role": {
+     "Fn::GetAtt": [
+      "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs22.x",
+    "Description": "Lambda function for removing all inbound/outbound rules from the VPC default security group"
+   },
+   "DependsOn": [
+    "CustomVpcRestrictDefaultSGCustomResourceProviderRole26592FE0"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/Custom::VpcRestrictDefaultSGCustomResourceProvider/Handler",
+    "aws:asset:path": "asset.7fa1e366ee8a9ded01fc355f704cff92bfd179574e6f9cfee800a3541df1b200",
+    "aws:asset:property": "Code"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/31QTWuDQBD9LblvtqkUerYhBCm0oiXXMq5jsonOys5sQhD/e1HT2PbQ0/vgzcxjIh2tnvRqARdemvK0rG2hu1zAnBRc+LNDE+lu1xq1rmiXrlUaitqaPBSEMngzy1wQ/ICixtmfvZjZGQtiHd3DA9kk6QBvIFsQvMBVpd6eQXBenJCgJ7wHpiY3FYuAOTRIosZcBQZ3rdlQ2TpLcgvfZY4meCvXrXehHXv+ayS098isEmIBMjjVmXivTg3r7hXHRgPEtQUexEh6ZaHRXeamh4z4PZt6V9n617qb1fcqQ3bBD8cCi2tmWdFP/h6kDfInlHp3tiX6F2BUMTNKLrC3tB8mUvDQoKDvFbkS9ZEfzlGkH5/1anFka5c+kNgGdTbhF+Vc2RccAgAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "TapStackdev/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "SecurityStackVPCId7DC39107": {
+   "Description": "ID of the Financial Services VPC",
+   "Value": {
+    "Ref": "SecurityStackFinancialServicesVPCF3C3FC8A"
+   },
+   "Export": {
+    "Name": "TapStackdev-VPC-ID"
+   }
+  },
+  "SecurityStackBastionSecurityGroupId02E464D4": {
+   "Description": "ID of the Bastion Security Group",
+   "Value": {
+    "Fn::GetAtt": [
+     "SecurityStackBastionSecurityGroup42B84D3A",
+     "GroupId"
+    ]
+   },
+   "Export": {
+    "Name": "TapStackdev-Bastion-SG-ID"
+   }
+  },
+  "SecurityStackInternalSecurityGroupIdF3056D73": {
+   "Description": "ID of the Internal Security Group",
+   "Value": {
+    "Fn::GetAtt": [
+     "SecurityStackInternalSecurityGroupC8325B99",
+     "GroupId"
+    ]
+   },
+   "Export": {
+    "Name": "TapStackdev-Internal-SG-ID"
+   }
+  },
+  "SecurityStackKMSKeyId28BA565C": {
+   "Description": "ID of the Financial Services KMS Key",
+   "Value": {
+    "Ref": "SecurityStackFinancialServicesKMSKeyF8B890C0"
+   },
+   "Export": {
+    "Name": "TapStackdev-KMS-Key-ID"
+   }
+  },
+  "SecurityStackBastionHost1InstanceIdE4E7096C": {
+   "Description": "Instance ID of Bastion Host 1",
+   "Value": {
+    "Ref": "SecurityStackBastionHost1196E274B"
+   },
+   "Export": {
+    "Name": "TapStackdev-BastionHost1-Instance-ID"
+   }
+  },
+  "SecurityStackBastionHost2InstanceId9F5950DD": {
+   "Description": "Instance ID of Bastion Host 2",
+   "Value": {
+    "Ref": "SecurityStackBastionHost2A624A4D5"
+   },
+   "Export": {
+    "Name": "TapStackdev-BastionHost2-Instance-ID"
+   }
+  },
+  "SecurityStackPrivateSubnet1IdF536E33E": {
+   "Description": "ID of Private Subnet 1",
+   "Value": {
+    "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet1Subnet51FECCBD"
+   },
+   "Export": {
+    "Name": "TapStackdev-Private-Subnet-1-ID"
+   }
+  },
+  "SecurityStackPrivateSubnet2Id4F26ECAD": {
+   "Description": "ID of Private Subnet 2",
+   "Value": {
+    "Ref": "SecurityStackFinancialServicesVPCPrivateSubnetSubnet2Subnet747C82D8"
+   },
+   "Export": {
+    "Name": "TapStackdev-Private-Subnet-2-ID"
+   }
+  }
+ },
+ "Parameters": {
+  "SsmParameterValueawsserviceamiamazonlinuxlatestamzn2amikernel510hvmx8664gp2C96584B6F00A464EAD1953AFF4B05118Parameter": {
+   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+   "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-x86_64-gp2"
+  },
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

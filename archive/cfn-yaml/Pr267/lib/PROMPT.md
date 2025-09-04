@@ -2,19 +2,19 @@ Here is a **comprehensive, production-grade user prompt** tailored for your use 
 
 ---
 
-### ✅ Prompt Title:
+### Prompt Title:
 
 **Generate CloudFormation YAML for S3-triggered Lambda with Versioning, Public Read, and 'corp-' Naming Convention**
 
 ---
 
-### 📌 Prompt Description:
+### Prompt Description:
 
 Act as an expert AWS Solutions Architect. You are tasked with generating a secure and well-structured **AWS CloudFormation YAML template** that provisions an **S3 bucket and a Lambda function**. The deployment must follow **AWS best practices**, **least privilege IAM**, and conform to a strict **'corp-' naming convention**.
 
 ---
 
-### 🧩 Requirements & Constraints:
+### Requirements & Constraints:
 
 Create a single CloudFormation YAML file (`corp-s3-lambda-stack.yaml`) with the following:
 
@@ -37,8 +37,8 @@ Create a single CloudFormation YAML file (`corp-s3-lambda-stack.yaml`) with the 
 * Allow Lambda to assume the role (`AWS::IAM::Role`)
 * Permissions must follow **least privilege**, including:
 
-  * `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`
-  * `s3:GetObject` for the `corp-artifact-bucket`
+* `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`
+* `s3:GetObject` for the `corp-artifact-bucket`
 
 #### 4. **Deployment Region & Metadata**
 
@@ -48,7 +48,7 @@ Create a single CloudFormation YAML file (`corp-s3-lambda-stack.yaml`) with the 
 
 ---
 
-### 📤 Expected Output:
+### Expected Output:
 
 Return a **single CloudFormation YAML template**, fully deployable via `aws cloudformation deploy` CLI command, which:
 

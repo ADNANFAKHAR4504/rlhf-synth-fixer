@@ -1,25 +1,10 @@
-# Security-Focused AWS CDK Infrastructure - IDEAL RESPONSE
-
-This solution creates a comprehensive security-focused cloud infrastructure using AWS CDK TypeScript with the following enhancements over the model response:
-
-## Key Improvements
-
-1. **GuardDuty Conditional Deployment** - Handles existing GuardDuty detectors gracefully
-2. **Environment-specific Naming** - All resources use environment suffix for multi-deployment support
-3. **Complete Test Coverage** - 100% unit test coverage with comprehensive integration tests
-4. **Production-Ready** - Fully deployable with proper cleanup policies
-
-## File Structure
-
-### lib/security-stack.ts
-
 ```typescript
+// security-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
@@ -44,7 +29,7 @@ export class SecurityStack extends cdk.Stack {
       enableKeyRotation: true,
       keySpec: kms.KeySpec.SYMMETRIC_DEFAULT,
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // For non-production environments
     });
 
     // Create VPC with proper security configuration
@@ -87,7 +72,7 @@ export class SecurityStack extends cdk.Stack {
 
     // Allow inbound HTTPS from public subnets
     privateNetworkAcl.addEntry('AllowInboundHttpsFromPublic', {
-      cidr: ec2.AclCidr.ipv4('10.0.0.0/23'),
+      cidr: ec2.AclCidr.ipv4('10.0.0.0/23'), // Public subnet CIDR range
       ruleNumber: 100,
       traffic: ec2.AclTraffic.tcpPort(443),
       direction: ec2.TrafficDirection.INGRESS,
@@ -201,8 +186,34 @@ export class SecurityStack extends cdk.Stack {
       })
     );
 
-    // GuardDuty is handled externally to avoid conflicts in accounts where it's already enabled
-    // Consider using AWS Organizations for centralized GuardDuty management
+    // Enable GuardDuty - Commented out if already exists in account
+    // Note: GuardDuty is a regional service with one detector per region per account
+    // If GuardDuty is already enabled in this region, this will fail
+    // Consider using a custom resource to check first or handle this outside CDK
+    /*
+    const guardDutyDetector = new guardduty.CfnDetector(
+      this,
+      'GuardDutyDetector',
+      {
+        enable: true,
+        dataSources: {
+          s3Logs: {
+            enable: true,
+          },
+          kubernetes: {
+            auditLogs: {
+              enable: true,
+            },
+          },
+          malwareProtection: {
+            scanEc2InstanceWithFindings: {
+              ebsVolumes: true,
+            },
+          },
+        },
+      }
+    );
+    */
 
     // Create CloudWatch log group for VPC Flow Logs
     new logs.LogGroup(this, 'VpcFlowLogsGroup', {
@@ -227,17 +238,25 @@ export class SecurityStack extends cdk.Stack {
       description: 'Secure storage bucket name',
     });
 
+    // GuardDuty output commented out since detector creation is disabled
+    /*
+    new cdk.CfnOutput(this, 'GuardDutyDetectorId', {
+      value: guardDutyDetector.ref,
+      description: 'GuardDuty detector ID',
+    });
+    */
+
     // Add tags to all resources
     cdk.Tags.of(this).add('Environment', envSuffix);
     cdk.Tags.of(this).add('SecurityCompliance', 'enabled');
     cdk.Tags.of(this).add('Project', 'security-infrastructure');
   }
 }
+
 ```
 
-### lib/tap-stack.ts
-
 ```typescript
+// tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { SecurityStack } from './security-stack';

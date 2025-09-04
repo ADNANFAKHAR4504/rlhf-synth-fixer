@@ -1,7 +1,7 @@
-CDK Prompt (Python) — Serverless Infrastructure
+CDK Prompt (Python) Serverless Infrastructure
 You are designing an AWS CDK (Python) application with the following requirements:
 
-📌 Requirements:
+Requirements:
 AWS Lambda Function
 
 Written in Python
@@ -31,15 +31,15 @@ Naming Convention
 Resource names must follow the pattern: projectname-resource-type
 (e.g., tap-lambda-function, tap-ssm-parameter)
 
-🗂 Folder Structure:
+Folder Structure:
 graphql
 Copy
 Edit
 .
-├── tap.py                   # CDK app entrypoint (like app.py)
+├── tap.py # CDK app entrypoint (like app.py)
 └── lib/
-    └── tap_stack.py        # Stack definition
-✅ CDK Output Expectations:
+└── tap_stack.py # Stack definition
+CDK Output Expectations:
 Full implementation in Python CDK (v2)
 
 Reusable and readable structure

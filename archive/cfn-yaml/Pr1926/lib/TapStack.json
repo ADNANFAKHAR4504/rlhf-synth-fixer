@@ -1,0 +1,1523 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TAP Stack - AWS CloudFormation template with security best practices and compliance for TAP environment",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Security Configuration"
+                    },
+                    "Parameters": [
+                        "AllowedSSHCIDR",
+                        "DBUsername"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "AllowedSSHCIDR": {
+            "Type": "String",
+            "Default": "10.0.0.0/8",
+            "Description": "CIDR block allowed for SSH access"
+        },
+        "DBUsername": {
+            "Type": "String",
+            "Default": "admin",
+            "Description": "Database administrator username",
+            "NoEcho": true
+        }
+    },
+    "Resources": {
+        "TAPKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "Customer-managed KMS key for TAP environment",
+                "KeyPolicy": {
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow CloudWatch Logs",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": {
+                                    "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                                }
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow S3 Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "s3.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow Secrets Manager",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "secretsmanager.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow RDS Service",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPKMSKey${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/tap-key-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "TAPKMSKey"
+                }
+            }
+        },
+        "TAPDatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-tap-db-credentials-${EnvironmentSuffix}"
+                },
+                "Description": "Database credentials for TAP RDS instance",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\"
+                },
+                "KmsKeyId": {
+                    "Ref": "TAPKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPDatabaseSecret${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPVPC${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPPublicSubnet1${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPPublicSubnet2${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "CidrBlock": "10.0.3.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPPrivateSubnet1${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "CidrBlock": "10.0.4.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPPrivateSubnet2${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPIGW${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPAttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "TAPInternetGateway"
+                }
+            }
+        },
+        "TAPPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPPublicRouteTable${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "TAPAttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "TAPPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "TAPInternetGateway"
+                }
+            }
+        },
+        "TAPPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "TAPPublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "TAPPublicRouteTable"
+                }
+            }
+        },
+        "TAPPublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "TAPPublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "TAPPublicRouteTable"
+                }
+            }
+        },
+        "TAPALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for TAP Application Load Balancer",
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPALBSecurityGroup${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPEC2SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for TAP EC2 instances",
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": {
+                            "Ref": "AllowedSSHCIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "TAPALBSecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPEC2SecurityGroup${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPDBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for TAP RDS database",
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "SourceSecurityGroupId": {
+                            "Ref": "TAPEC2SecurityGroup"
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPDBSecurityGroup${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPEC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "S3AccessPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${TAPS3Bucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TAPS3Bucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "SecretsManagerPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "TAPDatabaseSecret"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPEC2Role${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPEC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "Roles": [
+                    {
+                        "Ref": "TAPEC2Role"
+                    }
+                ]
+            }
+        },
+        "TAPS3Bucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tap-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "TAPKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "LoggingConfiguration": {
+                    "DestinationBucketName": {
+                        "Ref": "TAPLoggingBucket"
+                    },
+                    "LogFilePrefix": "access-logs/"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPS3Bucket${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPS3BucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "TAPS3Bucket"
+                },
+                "PolicyDocument": {
+                    "Statement": [
+                        {
+                            "Sid": "DenyPublicAccess",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${TAPS3Bucket}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "TAPS3Bucket",
+                                        "Arn"
+                                    ]
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "${TAPS3Bucket}/*"
+                                },
+                                {
+                                    "Fn::GetAtt": [
+                                        "TAPS3Bucket",
+                                        "Arn"
+                                    ]
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "TAPLoggingBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tap-logging-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "TAPKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPLoggingBucket${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPEC2LogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/tap-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "TAPKMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TAPALBLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/alb/tap-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "TAPKMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TAPRDSLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/rds/tap-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "TAPKMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TAPS3LogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/s3/tap-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "TAPKMSKey",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "TAPEC2LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "TAPLaunchTemplate${EnvironmentSuffix}"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+                    "InstanceType": "t3.micro",
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "TAPEC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "TAPEC2SecurityGroup"
+                        }
+                    ],
+                    "UserData": {
+                        "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c ssm:AmazonCloudWatch-linux -s\necho \"AutoTerminate=30\" >> /etc/environment\n"
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "TAPInstance${EnvironmentSuffix}"
+                                    }
+                                },
+                                {
+                                    "Key": "AutoTerminate",
+                                    "Value": "30"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "TAPAutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "TAPASG${EnvironmentSuffix}"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "TAPEC2LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "TAPEC2LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": 1,
+                "MaxSize": 3,
+                "DesiredCapacity": 2,
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "TAPPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "TAPPrivateSubnet2"
+                    }
+                ],
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "TAPALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPASG${EnvironmentSuffix}"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "TAPApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TAPALB${EnvironmentSuffix}"
+                },
+                "Scheme": "internet-facing",
+                "Type": "application",
+                "SecurityGroups": [
+                    {
+                        "Ref": "TAPALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "TAPPublicSubnet1"
+                    },
+                    {
+                        "Ref": "TAPPublicSubnet2"
+                    }
+                ],
+                "LoadBalancerAttributes": [
+                    {
+                        "Key": "access_logs.s3.enabled",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "access_logs.s3.bucket",
+                        "Value": {
+                            "Ref": "TAPLoggingBucket"
+                        }
+                    },
+                    {
+                        "Key": "access_logs.s3.prefix",
+                        "Value": "alb-logs"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPALB${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TAPTargetGroup${EnvironmentSuffix}"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "TAPVPC"
+                },
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPTargetGroup${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "TAPALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "TAPApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "TAPRDSMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPRDSMonitoringRole${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPDBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupDescription": "Subnet group for TAP RDS database",
+                "SubnetIds": [
+                    {
+                        "Ref": "TAPPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "TAPPrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPDBSubnetGroup${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPRDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "tap-database-${EnvironmentSuffix}"
+                },
+                "DBInstanceClass": "db.t3.micro",
+                "Engine": "mysql",
+                "EngineVersion": "8.0.43",
+                "AllocatedStorage": 20,
+                "StorageType": "gp2",
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "TAPKMSKey"
+                },
+                "MasterUsername": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${TAPDatabaseSecret}:SecretString:username}}"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${TAPDatabaseSecret}:SecretString:password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "TAPDBSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "TAPDBSubnetGroup"
+                },
+                "BackupRetentionPeriod": 7,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery"
+                ],
+                "MonitoringInterval": 60,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "TAPRDSMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPRDS${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPCPUAlarmHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TAPCPUHigh${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "TAPAutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "TAPSNSTopic"
+                    }
+                ]
+            }
+        },
+        "TAPMemoryAlarmHigh": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "TAPMemoryHigh${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when Memory exceeds 80%",
+                "MetricName": "MemoryUtilization",
+                "Namespace": "CWAgent",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "TAPAutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "TAPSNSTopic"
+                    }
+                ]
+            }
+        },
+        "TAPSNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "TAPAlerts${EnvironmentSuffix}"
+                },
+                "KmsMasterKeyId": {
+                    "Ref": "TAPKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPSNSTopic${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPConfigBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "tap-config-bucket-${AWS::AccountId}-${AWS::Region}-${EnvironmentSuffix}"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "TAPKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPConfigBucket${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPConfigRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "config.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "ConfigBucketPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetBucketAcl",
+                                        "s3:GetBucketLocation",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TAPConfigBucket",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${TAPConfigBucket.Arn}/*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPConfigRole${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPConfigurationRecorder": {
+            "Type": "AWS::Config::ConfigurationRecorder",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TAPConfigRecorder${EnvironmentSuffix}"
+                },
+                "RoleARN": {
+                    "Fn::GetAtt": [
+                        "TAPConfigRole",
+                        "Arn"
+                    ]
+                },
+                "RecordingGroup": {
+                    "AllSupported": true,
+                    "IncludeGlobalResourceTypes": true
+                }
+            }
+        },
+        "TAPConfigDeliveryChannel": {
+            "Type": "AWS::Config::DeliveryChannel",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TAPConfigDeliveryChannel${EnvironmentSuffix}"
+                },
+                "S3BucketName": {
+                    "Ref": "TAPConfigBucket"
+                }
+            }
+        },
+        "TAPAutoTerminationRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "AutoTerminationPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DescribeInstances",
+                                        "ec2:TerminateInstances",
+                                        "ec2:DescribeTags",
+                                        "rds:DescribeDBInstances",
+                                        "rds:DeleteDBInstance",
+                                        "s3:ListBucket",
+                                        "s3:DeleteBucket",
+                                        "s3:DeleteObject"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPAutoTerminationRole${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPAutoTerminationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "TAPAutoTerminationFunction${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "TAPAutoTerminationRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import boto3\nimport json\nfrom datetime import datetime, timedelta\n\ndef lambda_handler(event, context):\n    ec2 = boto3.client('ec2')\n    rds = boto3.client('rds')\n    s3 = boto3.client('s3')\n    \n    # Check EC2 instances\n    instances = ec2.describe_instances()\n    for reservation in instances['Reservations']:\n        for instance in reservation['Instances']:\n            if instance['State']['Name'] == 'running':\n                launch_time = instance['LaunchTime']\n                if datetime.now(launch_time.tzinfo) - launch_time > timedelta(days=30):\n                    for tag in instance.get('Tags', []):\n                        if tag['Key'] == 'AutoTerminate' and tag['Value'] == '30':\n                            ec2.terminate_instances(InstanceIds=[instance['InstanceId']])\n                            print(f\"Terminated instance: {instance['InstanceId']}\")\n    \n    return {\n        'statusCode': 200,\n        'body': json.dumps('Auto-termination check completed')\n    }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "TAPAutoTerminationFunction${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "AutoTerminate",
+                        "Value": "30"
+                    }
+                ]
+            }
+        },
+        "TAPAutoTerminationSchedule": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "TAPAutoTerminationSchedule${EnvironmentSuffix}"
+                },
+                "Description": {
+                    "Fn::Sub": "Daily check for TAP ${EnvironmentSuffix} resources to auto-terminate"
+                },
+                "ScheduleExpression": "rate(1 day)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "TAPAutoTerminationFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": {
+                            "Fn::Sub": "TAPAutoTerminationTarget${EnvironmentSuffix}"
+                        }
+                    }
+                ]
+            }
+        },
+        "TAPAutoTerminationPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "TAPAutoTerminationFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "TAPAutoTerminationSchedule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "TAPVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPC-ID"
+                }
+            }
+        },
+        "LoadBalancerDNS": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TAPApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALB-DNS"
+                }
+            }
+        },
+        "S3BucketName": {
+            "Description": "TAP S3 Bucket Name",
+            "Value": {
+                "Ref": "TAPS3Bucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3-Bucket"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID",
+            "Value": {
+                "Ref": "TAPKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KMS-Key"
+                }
+            }
+        },
+        "DatabaseSecretArn": {
+            "Description": "Database Secret ARN",
+            "Value": {
+                "Ref": "TAPDatabaseSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-DB-Secret"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}

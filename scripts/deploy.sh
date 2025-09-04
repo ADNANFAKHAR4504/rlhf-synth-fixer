@@ -3,6 +3,8 @@
 # Exit on any error
 set -e
 
+echo "🚀 Running deployment..."
+
 # Read platform and language from metadata.json
 if [ ! -f "metadata.json" ]; then
   echo "❌ metadata.json not found, exiting with failure"
@@ -17,126 +19,163 @@ echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 # Set default environment variables if not provided
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
-export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name || echo "unknown")}
+export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
 export AWS_REGION=${AWS_REGION:-us-east-1}
+export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
+export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
+export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
+export PULUMI_ORG=${PULUMI_ORG:-organization}
+export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 
-echo "Environment suffix: $ENVIRONMENT_SUFFIX"
-echo "Repository: $REPOSITORY"
-echo "Commit author: $COMMIT_AUTHOR"
-echo "AWS region: $AWS_REGION"
+echo "Environment configuration:"
+echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
+echo "  Repository: $REPOSITORY"
+echo "  Commit author: $COMMIT_AUTHOR"
+echo "  AWS region: $AWS_REGION"
+if [ -n "$TERRAFORM_STATE_BUCKET" ]; then
+  echo "  Terraform state bucket: $TERRAFORM_STATE_BUCKET"
+  echo "  Terraform state bucket region: $TERRAFORM_STATE_BUCKET_REGION"
+fi
+if [ -n "$PULUMI_BACKEND_URL" ]; then
+  echo "  Pulumi backend URL: $PULUMI_BACKEND_URL"
+  echo "  Pulumi organization: $PULUMI_ORG"
+fi
 
-# Bootstrap step
 echo "=== Bootstrap Phase ==="
-echo "Cleaning up cdk.out directory before bootstrap..."
-if [ -d "cdk.out" ]; then
-  rm -rf cdk.out
-fi
-
-if [ "$PLATFORM" = "cdk" ]; then
-  echo "✅ CDK project detected, running CDK bootstrap..."
-  npm run cdk:bootstrap
-else
-  echo "ℹ️ Not a CDK project, skipping CDK bootstrap"
-fi
+./scripts/bootstrap.sh
 
 # Deploy step
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK deploy..."
   npm run cdk:deploy
+
 elif [ "$PLATFORM" = "cdktf" ]; then
   echo "✅ CDKTF project detected, running CDKTF deploy..."
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Ensuring .gen exists for CDKTF Go deploy"
+
+    if [ -f "terraform.tfstate" ]; then
+      echo "⚠️ Found legacy terraform.tfstate. Removing for clean CI run..."
+      rm -f terraform.tfstate
+    fi
+
+    if [ -d "cdktf.out" ]; then
+      echo "🗑️ Removing cdktf.out for clean CI run..."
+      rm -rf cdktf.out
+    fi
+
+    if [ ! -d ".gen" ] || [ ! -d ".gen/aws" ]; then
+      echo "Running cdktf get to generate .gen..."
+      npm run cdktf:get || npx --yes cdktf get
+    fi
+    if [ ! -d ".gen/aws" ]; then
+      echo "❌ .gen/aws missing after cdktf get; aborting"
+      exit 1
+    fi
+    # Go modules are prepared during build; avoid cache-clearing and extra tidying here
+  fi
   npm run cdktf:deploy
+
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
   npm run cfn:deploy-yaml
+
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
   npm run cfn:deploy-json
+
+elif [ "$PLATFORM" = "tf" ]; then
+  echo "✅ Terraform HCL project detected, running Terraform deploy..."
+  
+  if [ -z "$TERRAFORM_STATE_BUCKET" ]; then
+    echo "❌ TERRAFORM_STATE_BUCKET environment variable is required for Terraform projects"
+    exit 1
+  fi
+  
+  STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
+  echo "Using state key: $STATE_KEY"
+  
+  cd lib
+  
+
+  # Always remove any stale Terraform plan to avoid cross-run reuse
+  rm -f tfplan
+  
+  # Check if plan file exists
+
+  if [ -f "tfplan" ]; then
+    echo "✅ Terraform plan file found, proceeding with deployment..."
+    # Try to deploy with the plan file
+    if ! npm run tf:deploy; then
+      echo "⚠️ Deployment with plan file failed, checking for state lock issues..."
+      
+      # Extract lock ID from error output if present
+      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
+      
+      if [ -n "$LOCK_ID" ]; then
+        echo "🔓 Detected stuck lock ID: $LOCK_ID. Attempting to force unlock..."
+        terraform force-unlock -force "$LOCK_ID" || echo "Force unlock failed"
+        echo "🔄 Retrying deployment after unlock..."
+        npm run tf:deploy || echo "Deployment still failed after unlock attempt"
+      else
+        echo "❌ Deployment failed but no lock ID detected. Manual intervention may be required."
+      fi
+    fi
+  else
+    echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
+    terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
+    
+    # Try direct apply with lock timeout, and handle lock issues
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan; then
+      echo "⚠️ Direct apply with plan failed, trying without plan..."
+      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s; then
+        echo "❌ All deployment attempts failed. Check for state lock issues."
+        # List any potential locks
+        terraform show -json 2>&1 | grep -i lock || echo "No lock information available"
+      fi
+    fi
+  fi
+  
+  cd ..
+
+elif [ "$PLATFORM" = "pulumi" ]; then
+  echo "✅ Pulumi project detected, running Pulumi deploy..."
+  
+  if [ -z "$PULUMI_BACKEND_URL" ]; then
+    echo "❌ PULUMI_BACKEND_URL environment variable is required for Pulumi projects"
+    exit 1
+  fi
+  
+  echo "Using environment suffix: $ENVIRONMENT_SUFFIX"
+  echo "Selecting or creating Pulumi stack Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
+  
+  if [ "$LANGUAGE" = "go" ]; then
+    echo "🔧 Go Pulumi project detected"
+    pulumi login "$PULUMI_BACKEND_URL"
+    cd lib
+    echo "Selecting or creating Pulumi stack..."
+    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
+    echo "Deploying infrastructure ..."
+    pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"
+    cd ..
+  else
+    echo "🔧 Python Pulumi project detected"
+    export PYTHONPATH=.:bin
+    pipenv run pulumi-create-stack
+    echo "Deploying infrastructure ..."
+    pipenv run pulumi-deploy
+  fi
+
 else
   echo "ℹ️ Unknown deployment method for platform: $PLATFORM, language: $LANGUAGE"
-  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python"
+  echo "💡 Supported combinations: cdk+typescript, cdk+python, cfn+yaml, cfn+json, cdktf+typescript, cdktf+python, tf+hcl, pulumi+python, pulumi+java"
   exit 1
 fi
 
-echo "Deploy completed successfully"
+echo "✅ Deploy completed successfully"
 
-if [ "$PLATFORM" = "cdk" ]; then
-    echo "✅ CDK project detected, getting CDK outputs..."
-    npx cdk list --json > cdk-stacks.json
-    mkdir -p cfn-outputs
-    echo "Getting all CloudFormation stacks..."
-    aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, \`TapStack${ENVIRONMENT_SUFFIX}\`)].StackName" --output text > cf-stacks.txt
-    echo "{}" > cfn-outputs/all-outputs.json
-    if [ -s cf-stacks.txt ]; then
-      for stack in $(cat cf-stacks.txt); do
-        echo "Getting outputs for CloudFormation stack: $stack"
-        aws cloudformation describe-stacks --stack-name "$stack" --query 'Stacks[0].Outputs' --output json > "temp-${stack}-outputs.json" 2>/dev/null || echo "No outputs for $stack"
-        if [ -f "temp-${stack}-outputs.json" ]; then
-          output_count=$(jq 'length' "temp-${stack}-outputs.json" 2>/dev/null || echo "0")
-          if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
-            jq -n --arg stack "$stack" --slurpfile outputs "temp-${stack}-outputs.json" '{($stack): $outputs[0]}' > "temp-stack.json"
-            jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
-            mv temp-merged.json cfn-outputs/all-outputs.json
-            if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
-              echo "{}" > cfn-outputs/flat-outputs.json
-            fi
-            jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
-              jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
-              mv temp-flat.json cfn-outputs/flat-outputs.json
-            done
-          fi
-          rm -f "temp-${stack}-outputs.json"
-        fi
-      done
-      rm -f temp-stack.json temp-merged.json temp-flat.json
-    else
-      echo "No TapStack CloudFormation stacks found"
-    fi
-    echo "Consolidated outputs:"
-    cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
-    echo "Flat outputs:"
-    cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
-  elif [ "$PLATFORM" = "cdktf" ]; then
-    echo "✅ CDKTF project detected, writing outputs to cfn-outputs..."
-    mkdir -p cfn-outputs/
-    touch cfn-outputs/flat-outputs.json
-    cdktf output --outputs-file cfn-outputs/flat-outputs.json
-    cat cfn-outputs/flat-outputs.json || echo "No outputs found in cfn-outputs/flat-outputs.json"
-  elif [ "$PLATFORM" = "cfn" ]; then
-    echo "✅ CloudFormation project detected, getting stack outputs..."
-    mkdir -p cfn-outputs
-    # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
-    STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
-    echo "Getting outputs for CloudFormation stack: $STACK_NAME"
-    aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json > "temp-${STACK_NAME}-outputs.json" 2>/dev/null || echo "No outputs for $STACK_NAME"
-    echo "{}" > cfn-outputs/all-outputs.json
-    if [ -f "temp-${STACK_NAME}-outputs.json" ]; then
-      output_count=$(jq 'length' "temp-${STACK_NAME}-outputs.json" 2>/dev/null || echo "0")
-      if [ "$output_count" != "0" ] && [ "$output_count" != "null" ]; then
-        jq -n --arg stack "$STACK_NAME" --slurpfile outputs "temp-${STACK_NAME}-outputs.json" '{($stack): $outputs[0]}' > temp-stack.json
-        jq -s '.[0] * .[1]' cfn-outputs/all-outputs.json temp-stack.json > temp-merged.json
-        mv temp-merged.json cfn-outputs/all-outputs.json
-        if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
-          echo "{}" > cfn-outputs/flat-outputs.json
-        fi
-        jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
-          jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
-          mv temp-flat.json cfn-outputs/flat-outputs.json
-        done
-      fi
-      rm -f "temp-${STACK_NAME}-outputs.json"
-    fi
-    rm -f temp-stack.json temp-merged.json temp-flat.json
-    echo "Consolidated outputs:"
-    cat cfn-outputs/all-outputs.json || echo "No consolidated outputs"
-    echo "Flat outputs:"
-    cat cfn-outputs/flat-outputs.json || echo "No flat outputs"
-  else
-    echo "ℹ️ Not a CDK TypeScript or CloudFormation project, creating empty outputs for consistency"
-    mkdir -p cfn-outputs
-    echo "{}" > cfn-outputs/all-outputs.json
-    echo "{}" > cfn-outputs/flat-outputs.json
-    echo "# No CDK outputs for non-CDK projects" > cdk-stacks.json
-  fi
-
+# Get outputs using the dedicated script
+echo "📊 Collecting deployment outputs..."
+./scripts/get-outputs.sh

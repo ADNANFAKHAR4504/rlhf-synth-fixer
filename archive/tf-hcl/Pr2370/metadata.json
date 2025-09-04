@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "348752",
+  "team": "1",
+  "startedAt": "2025-08-27T16:08:40.966Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jannatul-turing",
+  "dockerS3Location": ""
+}

@@ -1,10 +1,10 @@
-# Claude Sonnet–Style Prompt: Multi-Region Serverless Deployment with Lambda & API Gateway
+# Claude SonnetStyle Prompt: Multi-Region Serverless Deployment with Lambda & API Gateway
 
 You are an expert AWS infrastructure engineer working with AWS CDK (Python preferred) or CloudFormation.
 
 ---
 
-## 🎯 Objective
+## Objective
 
 Design and implement a secure, highly available AWS cloud environment that spans **multiple regions**, focusing on **serverless components** including:
 
@@ -14,7 +14,7 @@ Design and implement a secure, highly available AWS cloud environment that spans
 
 ---
 
-## 🌍 High Availability & Multi-Region Deployment
+## High Availability & Multi-Region Deployment
 
 - **Deploy AWS Lambda functions across multiple AWS regions** to improve availability and fault tolerance.
 - Ensure the design supports future scalability and regional failover if necessary.
@@ -22,7 +22,7 @@ Design and implement a secure, highly available AWS cloud environment that spans
 
 ---
 
-## 🔀 API Gateway Configuration
+## API Gateway Configuration
 
 - **Configure Amazon API Gateway** to **efficiently route client requests** to the appropriate Lambda functions based on region, latency, or availability.
 - Implement a strategy that supports global or multi-regional APIs using best practices.
@@ -30,31 +30,31 @@ Design and implement a secure, highly available AWS cloud environment that spans
 
 ---
 
-## 🔐 Security & IAM
+## Security & IAM
 
 - **Define IAM roles and policies** that follow the **principle of least privilege**:
-  - Lambda functions should only have access to the specific services or actions they require.
-  - Reuse IAM roles where appropriate, while keeping permissions tightly scoped.
+- Lambda functions should only have access to the specific services or actions they require.
+- Reuse IAM roles where appropriate, while keeping permissions tightly scoped.
 
 ---
 
-## 🧩 Implementation Guidelines
+## Implementation Guidelines
 
 - Use **AWS CDK (Python)** or **CloudFormation** as the infrastructure-as-code tool.
 - Ensure the solution is **modular, reusable, and region-configurable**.
 - Provide complete code that:
-  - Provisions API Gateway and multi-region Lambda deployments
-  - Includes all necessary IAM roles/policies
-  - Can be deployed easily with `cdk deploy` or equivalent
+- Provisions API Gateway and multi-region Lambda deployments
+- Includes all necessary IAM roles/policies
+- Can be deployed easily with `cdk deploy` or equivalent
 
 ---
 
-## ✅ Deliverables
+## Deliverables
 
 - Full infrastructure code (CDK app or CFN template)
 - Modular structure with clearly defined regions and deployment logic
 - All components securely connected and following AWS best practices for:
-  - High availability
-  - Least privilege access
-  - Serverless design
+- High availability
+- Least privilege access
+- Serverless design
 

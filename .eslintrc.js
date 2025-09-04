@@ -56,5 +56,5 @@ module.exports = {
     'class-methods-use-this': 'off',
     'no-new': 'off', // CDK uses 'new' for constructs
   },
-  ignorePatterns: ['node_modules/', 'cdk.out/', 'coverage/', '*.js', '*.d.ts'],
+  ignorePatterns: ['node_modules/', 'cdk.out/', 'coverage/', '*.js', '*.d.ts', 'worktree/'],
 };
