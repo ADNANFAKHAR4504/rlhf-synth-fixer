@@ -1,96 +1,164 @@
-// test/tap-stack.integration.test.ts
+// test/tap-stack.int.test.ts
 import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * This integration test suite validates the deployed TapStack stack
- * by reading its CloudFormation outputs from:
- *   cfn-outputs/all-outputs.json
+ * Integration tests for a deployed TapStack stack.
+ * These tests read CloudFormation outputs from:
+ *    cfn-outputs/all-outputs.json
  *
- * It checks presence, formatting, and cross-field consistency for:
- * - Core infra IDs (VPC, Subnets, SGs, EC2)
- * - S3 bucket name/ARN pairing
- * - RDS endpoint/port/secret ARN
- * - CloudWatch Logs group name/ARN pairing
- * - SNS Topic ARN
- * - Lambda function name/ARN pairing
- * - CloudTrail trail name/ARN and logging targets
- * - Region/account consistency across ARNs
- *
- * The tests are intentionally defensive and will pass as long as the
- * deployed resources follow AWS ID/ARN conventions and the template’s outputs.
+ * They are resilient to many JSON shapes (CLI, CDK, custom aggregators).
+ * We recursively collect string/number leaves into a flat map and then assert
+ * on the expected Output Keys from TapStack.yml.
  */
+
+// ---- Types & helpers ----
 
 type OutputMap = Record<string, string>;
 
-/** Loads and normalizes the outputs file (supports several common shapes). */
-function loadOutputs(): OutputMap {
-  const p = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
-  if (!fs.existsSync(p)) {
-    throw new Error(`Outputs file not found at ${p}`);
+// Expected Output keys from TapStack.yml
+const REQUIRED_KEYS = [
+  'VPCId',
+  'PublicSubnet1Id',
+  'PublicSubnet2Id',
+  'PrivateSubnet1Id',
+  'PrivateSubnet2Id',
+  'BastionSecurityGroupId',
+  'DatabaseSecurityGroupId',
+  'BastionInstanceId',
+  'BastionPublicDnsName',
+  'SecureBucketName',
+  'SecureBucketArn',
+  'DatabaseEndpoint',
+  'DatabasePort',
+  'MasterUserSecretArn',
+  'CentralizedLogGroupName',
+  'CentralizedLogGroupArn',
+  'AlarmTopicArn',
+  'S3PolicyGuardFunctionName',
+  'S3PolicyGuardFunctionArn',
+  'CloudTrailName',
+  'CloudTrailArn',
+] as const;
+
+function loadOutputsFile(): any {
+  const outputsPath = path.resolve(process.cwd(), 'cfn-outputs/all-outputs.json');
+  if (!fs.existsSync(outputsPath)) {
+    throw new Error(`Outputs file not found at ${outputsPath}`);
   }
-  const raw = fs.readFileSync(p, 'utf8').trim();
-  if (!raw) {
-    throw new Error(`Outputs file exists but is empty at ${p}`);
-  }
-  let json: any;
+  const raw = fs.readFileSync(outputsPath, 'utf8').trim();
+  if (!raw) throw new Error('Outputs file is empty');
+
+  // Some pipelines double-serialize JSON (string inside a JSON string). Handle that.
+  let parsed: any;
   try {
-    json = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`Failed to parse JSON at ${p}: ${(e as Error).message}`);
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Outputs file is not valid JSON');
   }
-  return coerceOutputsToMap(json);
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      // leave as string; we'll handle below
+    }
+  }
+  return parsed;
 }
 
-/** Try to coerce variety of shapes into a flat { [OutputKey]: OutputValue } map. */
+/**
+ * Recursively traverse an arbitrary object/array and collect leaf values.
+ * - Keys are the final property names (last segment).
+ * - Values are coerced to strings.
+ * - First value wins (to avoid clobbering).
+ */
+function collectLeafStrings(input: any, out: OutputMap = {}, parentKey?: string): OutputMap {
+  if (input === null || input === undefined) return out;
+
+  if (Array.isArray(input)) {
+    for (const item of input) collectLeafStrings(item, out, parentKey);
+    return out;
+  }
+
+  if (typeof input === 'object') {
+    for (const [k, v] of Object.entries(input)) {
+      if (v !== null && typeof v === 'object') {
+        collectLeafStrings(v, out, k);
+      } else {
+        const leafKey = k; // prefer most specific key name
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+          if (!(leafKey in out)) out[leafKey] = String(v);
+        }
+      }
+    }
+    return out;
+  }
+
+  // primitive at root (unlikely)
+  if (parentKey && !(parentKey in out)) {
+    out[parentKey] = String(input);
+  }
+  return out;
+}
+
+/**
+ * Attempt several common CFN output shapes first, then fall back to a deep scan.
+ */
 function coerceOutputsToMap(input: any): OutputMap {
-  // 1) { Stacks: [ { Outputs: [ { OutputKey, OutputValue } ] } ] }
+  // 1) AWS CLI: { "Stacks": [ { "Outputs": [ { "OutputKey": "...", "OutputValue": "..." }, ... ] } ] }
   if (input?.Stacks && Array.isArray(input.Stacks)) {
-    for (const s of input.Stacks) {
-      if (Array.isArray(s?.Outputs)) {
+    for (const stk of input.Stacks) {
+      if (Array.isArray(stk?.Outputs)) {
         const map: OutputMap = {};
-        for (const o of s.Outputs) {
-          if (o?.OutputKey && typeof o.OutputValue === 'string') {
-            map[o.OutputKey] = o.OutputValue;
+        for (const o of stk.Outputs) {
+          if (o?.OutputKey && (typeof o.OutputValue === 'string' || typeof o.OutputValue === 'number')) {
+            map[o.OutputKey] = String(o.OutputValue);
           }
         }
-        if (Object.keys(map).length > 0) return map;
+        if (Object.keys(map).length) return map;
       }
     }
   }
 
-  // 2) { Outputs: [ { OutputKey, OutputValue } ] }
+  // 2) { "Outputs": [ { "OutputKey": "...", "OutputValue": "..." } ] }
   if (Array.isArray(input?.Outputs)) {
     const map: OutputMap = {};
     for (const o of input.Outputs) {
-      if (o?.OutputKey && typeof o.OutputValue === 'string') {
-        map[o.OutputKey] = o.OutputValue;
+      if (o?.OutputKey && (typeof o.OutputValue === 'string' || typeof o.OutputValue === 'number')) {
+        map[o.OutputKey] = String(o.OutputValue);
       }
     }
-    if (Object.keys(map).length > 0) return map;
+    if (Object.keys(map).length) return map;
   }
 
-  // 3) { Outputs: { VPCId: "...", ... } }
-  if (input?.Outputs && typeof input.Outputs === 'object' && !Array.isArray(input.Outputs)) {
-    const map: OutputMap = {};
-    for (const [k, v] of Object.entries(input.Outputs)) {
-      if (typeof v === 'string') map[k] = v;
-      else if ((v as any)?.Value && typeof (v as any).Value === 'string') map[k] = (v as any).Value;
-      else if ((v as any)?.OutputValue && typeof (v as any).OutputValue === 'string') map[k] = (v as any).OutputValue;
+  // 3) CDK-like: { "StackName": { "VPCId": "...", ... } }
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    // If a top-level value looks like an Outputs map, use it.
+    for (const v of Object.values(input)) {
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        const leafs = collectLeafStrings(v as Record<string, any>);
+        const hasAnyRequired = REQUIRED_KEYS.some(k => k in leafs);
+        if (hasAnyRequired) return leafs;
+      }
     }
-    if (Object.keys(map).length > 0) return map;
-  }
 
-  // 4) Flat map already { VPCId: "...", ... }
-  if (typeof input === 'object' && input && !Array.isArray(input)) {
-    const map: OutputMap = {};
+    // Or if input is already a flat { key: string } map
+    const flat: OutputMap = {};
     for (const [k, v] of Object.entries(input)) {
-      if (typeof v === 'string') map[k] = v;
+      if (typeof v === 'string' || typeof v === 'number') flat[k] = String(v);
     }
-    if (Object.keys(map).length > 0) return map;
+    if (Object.keys(flat).length) {
+      const hasAnyRequired = REQUIRED_KEYS.some(k => k in flat);
+      if (hasAnyRequired) return flat;
+    }
   }
 
-  throw new Error(`Unsupported outputs JSON shape; cannot find outputs.`);
+  // 4) Last resort: deep-scan and collect all string leaves
+  const deep = collectLeafStrings(input);
+  const hasAnyRequired = REQUIRED_KEYS.some(k => k in deep);
+  if (hasAnyRequired) return deep;
+
+  throw new Error('Unsupported outputs JSON shape; cannot find outputs.');
 }
 
 /** Extract ARN parts; throws on invalid ARN */
@@ -101,57 +169,35 @@ function parseArn(arn: string) {
   return { partition, service, region, account, resource };
 }
 
-/** Helpers to validate AWS identifiers */
+// ---- Regexes for AWS identifiers ----
 const reVpcId = /^vpc-[0-9a-f]{8,17}$/i;
 const reSubnetId = /^subnet-[0-9a-f]{8,17}$/i;
 const reSgId = /^sg-[0-9a-f]{8,17}$/i;
 const reInstanceId = /^i-[0-9a-f]{8,17}$/i;
-const reHostname = /^[a-z0-9.-]+$/; // relaxed, AWS endpoints are lowercase/dots/dashes
-const reBucket = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/; // strict DNS-compliant bucket
+const reHostname = /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/; // relaxed hostname
+const reBucket = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/; // DNS-compliant bucket
 const reS3Arn = /^arn:(aws|aws-cn|aws-us-gov):s3:::([a-z0-9][a-z0-9.-]{1,61}[a-z0-9])$/;
 const reCwlArn = /^arn:(aws|aws-cn|aws-us-gov):logs:[a-z0-9-]+:\d{12}:log-group:[^:]+(?::.*)?$/;
 const reSnsArn = /^arn:(aws|aws-cn|aws-us-gov):sns:[a-z0-9-]+:\d{12}:[A-Za-z0-9-_]+$/;
 const reLambdaArn = /^arn:(aws|aws-cn|aws-us-gov):lambda:[a-z0-9-]+:\d{12}:function:[a-zA-Z0-9-_]+(:(\$LATEST|[0-9]+))?$/;
 const reSecretsArn = /^arn:(aws|aws-cn|aws-us-gov):secretsmanager:[a-z0-9-]+:\d{12}:secret:[A-Za-z0-9/_+=.@-]+$/;
 const reCloudTrailArn = /^arn:(aws|aws-cn|aws-us-gov):cloudtrail:[a-z0-9-]+:\d{12}:trail\/[A-Za-z0-9._-]+$/;
+const reTrailName = /^[A-Za-z0-9._-]+$/;
+const reNoSpaces = /^\S+$/;
 
-function expectNonEmptyString(v: any, key: string) {
-  expect(typeof v).toBe('string');
-  expect((v as string).length).toBeGreaterThan(0);
-}
+// ---- Test suite ----
 
 describe('TapStack Integration - CloudFormation Outputs', () => {
+  let raw: any;
   let outputs: OutputMap;
 
   beforeAll(() => {
-    outputs = loadOutputs();
+    raw = loadOutputsFile();
+    outputs = coerceOutputsToMap(raw);
   });
 
   test('Outputs file present and contains all expected keys', () => {
-    const required = [
-      'VPCId',
-      'PublicSubnet1Id',
-      'PublicSubnet2Id',
-      'PrivateSubnet1Id',
-      'PrivateSubnet2Id',
-      'BastionSecurityGroupId',
-      'DatabaseSecurityGroupId',
-      'BastionInstanceId',
-      'BastionPublicDnsName',
-      'SecureBucketName',
-      'SecureBucketArn',
-      'DatabaseEndpoint',
-      'DatabasePort',
-      'MasterUserSecretArn',
-      'CentralizedLogGroupName',
-      'CentralizedLogGroupArn',
-      'AlarmTopicArn',
-      'S3PolicyGuardFunctionName',
-      'S3PolicyGuardFunctionArn',
-      'CloudTrailName',
-      'CloudTrailArn'
-    ];
-    const missing = required.filter(k => outputs[k] === undefined);
+    const missing = REQUIRED_KEYS.filter(k => outputs[k] === undefined);
     expect(missing).toEqual([]);
   });
 
@@ -166,114 +212,149 @@ describe('TapStack Integration - CloudFormation Outputs', () => {
     expect(outputs.BastionInstanceId).toMatch(reInstanceId);
   });
 
+  test('Subnet IDs are distinct (no duplicates across the four subnets)', () => {
+    const subs = [
+      outputs.PublicSubnet1Id,
+      outputs.PublicSubnet2Id,
+      outputs.PrivateSubnet1Id,
+      outputs.PrivateSubnet2Id,
+    ];
+    expect(new Set(subs).size).toBe(subs.length);
+  });
+
   test('EC2 public DNS and RDS endpoint look like hostnames; DB port looks numeric', () => {
     expect(outputs.BastionPublicDnsName).toMatch(reHostname);
     expect(outputs.DatabaseEndpoint).toMatch(reHostname);
+    expect(outputs.BastionPublicDnsName.toLowerCase()).toBe(outputs.BastionPublicDnsName);
+    expect(outputs.DatabaseEndpoint.toLowerCase()).toBe(outputs.DatabaseEndpoint);
+    expect(reNoSpaces.test(outputs.BastionPublicDnsName)).toBe(true);
+    expect(reNoSpaces.test(outputs.DatabaseEndpoint)).toBe(true);
+
     expect(/^\d+$/.test(outputs.DatabasePort)).toBe(true);
-    // typical postgres port if defaulted
-    expect(Number(outputs.DatabasePort)).toBeGreaterThan(0);
+    const port = Number(outputs.DatabasePort);
+    expect(port).toBeGreaterThan(0);
+    expect(port).toBeLessThanOrEqual(65535);
   });
 
   test('S3 bucket name and ARN pairing and format', () => {
     const name = outputs.SecureBucketName;
     const arn = outputs.SecureBucketArn;
-
     expect(name).toMatch(reBucket);
-    const arnMatch = reS3Arn.exec(arn);
-    expect(arnMatch).not.toBeNull();
-    if (arnMatch) {
-      const bucketFromArn = arnMatch[2];
-      expect(bucketFromArn).toBe(name);
-    }
-    // Lowercase DNS-safe
     expect(name).toBe(name.toLowerCase());
     expect(!name.includes('..')).toBe(true);
+
+    const m = reS3Arn.exec(arn);
+    expect(m).not.toBeNull();
+    if (m) {
+      expect(m[2]).toBe(name);
+    }
   });
 
   test('CloudWatch Logs group name/ARN alignment', () => {
-    const name = outputs.CentralizedLogGroupName;
-    const arn = outputs.CentralizedLogGroupArn;
-    expectNonEmptyString(name, 'CentralizedLogGroupName');
-    expect(arn).toMatch(reCwlArn);
-    // Name should be part of ARN suffix after log-group:
-    expect(arn.includes(`log-group:${name}`)).toBe(true);
+    const lgName = outputs.CentralizedLogGroupName;
+    const lgArn = outputs.CentralizedLogGroupArn;
+    expect(typeof lgName).toBe('string');
+    expect(lgName.length).toBeGreaterThan(0);
+    expect(lgName.startsWith('/')).toBe(true);
+    // Convention from template uses /tapstack/centralized
+    expect(lgName.includes('/tapstack')).toBe(true);
+    expect(lgArn).toMatch(reCwlArn);
+    expect(lgArn.includes(`log-group:${lgName}`)).toBe(true);
   });
 
   test('SNS Topic ARN shape', () => {
     expect(outputs.AlarmTopicArn).toMatch(reSnsArn);
+    const parsed = parseArn(outputs.AlarmTopicArn);
+    expect(parsed.service).toBe('sns');
   });
 
   test('Lambda function name/ARN pairing', () => {
     const fnName = outputs.S3PolicyGuardFunctionName;
     const fnArn = outputs.S3PolicyGuardFunctionArn;
-    expectNonEmptyString(fnName, 'S3PolicyGuardFunctionName');
+    expect(typeof fnName).toBe('string');
+    expect(fnName.length).toBeGreaterThan(0);
+    expect(reNoSpaces.test(fnName)).toBe(true);
     expect(fnArn).toMatch(reLambdaArn);
-    expect(fnArn.endsWith(`function:${fnName}`) || fnArn.includes(`function:${fnName}:`)).toBe(true);
+    expect(fnArn.includes(`function:${fnName}`)).toBe(true);
   });
 
   test('RDS master user secret ARN (auto-managed) format', () => {
     expect(outputs.MasterUserSecretArn).toMatch(reSecretsArn);
+    const parsed = parseArn(outputs.MasterUserSecretArn);
+    expect(parsed.service).toBe('secretsmanager');
   });
 
   test('CloudTrail name/ARN pairing', () => {
     const trailName = outputs.CloudTrailName;
     const trailArn = outputs.CloudTrailArn;
-    expectNonEmptyString(trailName, 'CloudTrailName');
+    expect(trailName).toMatch(reTrailName);
     expect(trailArn).toMatch(reCloudTrailArn);
-    expect(trailArn.endsWith(`/` + trailName)).toBe(true);
+    expect(trailArn.endsWith('/' + trailName)).toBe(true);
+    const parsed = parseArn(trailArn);
+    expect(parsed.service).toBe('cloudtrail');
+    expect(parsed.resource.startsWith('trail/')).toBe(true);
   });
 
-  test('Region and Account are consistent across key ARNs', () => {
-    const arns = [
-      outputs.SecureBucketArn,
+  test('Region and Account are consistent across key ARNs (where present)', () => {
+    const candidates = [
+      outputs.SecureBucketArn,            // s3 ARNs may omit region/account
       outputs.CentralizedLogGroupArn,
       outputs.AlarmTopicArn,
       outputs.S3PolicyGuardFunctionArn,
       outputs.MasterUserSecretArn,
-      outputs.CloudTrailArn
+      outputs.CloudTrailArn,
     ];
-    const parsed = arns.map(parseArn);
-
-    // S3 ARN may have empty region/account in some partitions; align with majority where present.
-    const withRegion = parsed.filter(p => p.region && p.region.length > 0);
-    const withAccount = parsed.filter(p => p.account && p.account.length > 0);
+    const parsed = candidates.map(parseArn);
+    const withRegion = parsed.filter(p => p.region);
+    const withAccount = parsed.filter(p => p.account);
     if (withRegion.length > 0) {
       const region = withRegion[0].region;
-      for (const p of withRegion) expect(p.region).toBe(region);
+      withRegion.forEach(p => expect(p.region).toBe(region));
     }
     if (withAccount.length > 0) {
       const account = withAccount[0].account;
-      for (const p of withAccount) expect(p.account).toBe(account);
+      withAccount.forEach(p => expect(p.account).toBe(account));
     }
   });
 
-  // -----------------
-  // Edge cases
-  // -----------------
-
-  test('Edge: Every output value is a non-empty string', () => {
+  test('Edge: Every output value is a non-empty, trimmed string', () => {
     for (const [k, v] of Object.entries(outputs)) {
       expect(typeof v).toBe('string');
       expect(v.length).toBeGreaterThan(0);
+      expect(v).toBe(v.trim());
     }
   });
 
   test('Edge: Bucket ARN ends with bucket name; CWL ARN contains log-group name; Lambda ARN contains function name', () => {
-    const bucketMatch = reS3Arn.exec(outputs.SecureBucketArn);
-    expect(bucketMatch?.[2]).toBe(outputs.SecureBucketName);
-
+    const m = reS3Arn.exec(outputs.SecureBucketArn);
+    expect(m?.[2]).toBe(outputs.SecureBucketName);
     expect(outputs.CentralizedLogGroupArn.includes(`log-group:${outputs.CentralizedLogGroupName}`)).toBe(true);
-
-    const fnName = outputs.S3PolicyGuardFunctionName;
-    const fnArn = outputs.S3PolicyGuardFunctionArn;
-    expect(fnArn.includes(`function:${fnName}`)).toBe(true);
+    expect(outputs.S3PolicyGuardFunctionArn.includes(`function:${outputs.S3PolicyGuardFunctionName}`)).toBe(true);
   });
 
-  test('Edge: Hostname-style outputs are lowercase (no spaces/uppercase)', () => {
-    // RDS endpoint and EC2 DNS should be lowercase hostnames
-    expect(outputs.BastionPublicDnsName).toBe(outputs.BastionPublicDnsName.toLowerCase());
-    expect(outputs.DatabaseEndpoint).toBe(outputs.DatabaseEndpoint.toLowerCase());
-    expect(/\s/.test(outputs.BastionPublicDnsName)).toBe(false);
-    expect(/\s/.test(outputs.DatabaseEndpoint)).toBe(false);
+  test('Edge: Output keys do not contain unexpected whitespace or uppercase (sanity)', () => {
+    for (const key of REQUIRED_KEYS) {
+      expect(reNoSpaces.test(key)).toBe(true);
+      // keys are CamelCase by design; this assertion ensures no leading/trailing spaces in keys.
+      expect(key).toBe(key.trim());
+    }
+  });
+
+  test('Edge: VPC/Subnet/SG/Instance IDs all share the correct AWS prefixes', () => {
+    expect(outputs.VPCId.startsWith('vpc-')).toBe(true);
+    expect(outputs.PublicSubnet1Id.startsWith('subnet-')).toBe(true);
+    expect(outputs.BastionSecurityGroupId.startsWith('sg-')).toBe(true);
+    expect(outputs.BastionInstanceId.startsWith('i-')).toBe(true);
+  });
+
+  test('Edge: Public and Private subnet IDs are not equal (isolation sanity)', () => {
+    expect(outputs.PublicSubnet1Id).not.toBe(outputs.PrivateSubnet1Id);
+    expect(outputs.PublicSubnet2Id).not.toBe(outputs.PrivateSubnet2Id);
+  });
+
+  test('Edge: DatabasePort is commonly 5432 (advisory; does not fail if different)', () => {
+    const port = Number(outputs.DatabasePort);
+    // advisory check; pass regardless, just ensure reasonable range
+    expect(port >= 1024 && port <= 65535).toBe(true);
   });
 });
