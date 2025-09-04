@@ -435,6 +435,9 @@ class TestTapStackIntegration(unittest.TestCase):
                     f"Role {role['RoleName']} has no policies"
                 )
             
+        except unittest.SkipTest:
+            # Re-raise SkipTest exceptions so they're handled properly by pytest
+            raise
         except Exception as e:
             self.fail(f"IAM roles configuration test failed: {str(e)}")
 
