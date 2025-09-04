@@ -9,7 +9,7 @@
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Security Configuration", 
+    "Security Configuration",
     "Network Configuration",
     "Database Management",
     "Access Control",
@@ -19,7 +19,7 @@
   "training_quality": 8,
   "aws_services": [
     "VPC",
-    "EC2", 
+    "EC2",
     "S3",
     "RDS",
     "CloudFront",
@@ -27,5 +27,11 @@
     "CloudWatch",
     "CloudTrail",
     "Secrets Manager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
 }
