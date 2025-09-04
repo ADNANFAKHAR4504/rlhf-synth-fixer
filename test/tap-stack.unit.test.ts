@@ -15,6 +15,42 @@ describe('TapStack', () => {
     template = Template.fromStack(stack);
   });
 
+  describe('Environment Suffix Configuration', () => {
+    test('uses environmentSuffix from props when provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', { environmentSuffix: 'test' });
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'tap-data-table-test',
+      });
+    });
+
+    test('uses environmentSuffix from context when props not provided', () => {
+      const testApp = new cdk.App({
+        context: {
+          environmentSuffix: 'staging',
+        },
+      });
+      const testStack = new TapStack(testApp, 'TestStack', {});
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'tap-data-table-staging',
+      });
+    });
+
+    test('defaults to dev when no environmentSuffix provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', {});
+      const testTemplate = Template.fromStack(testStack);
+      
+      testTemplate.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'tap-data-table-dev',
+      });
+    });
+  });
+
   describe('DynamoDB Table', () => {
     test('creates DynamoDB table with correct configuration', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', {
