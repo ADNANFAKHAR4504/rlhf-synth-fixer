@@ -94,8 +94,10 @@ describe('Terraform AWS Security Stack Integration Tests', () => {
       
       // Security Control 1: Global Tags (via provider default_tags)
       // Security Control 2: KMS Keys
-      expect(stackContent).toContain('resource "aws_kms_key" "regional_cmk"');
-      expect(stackContent).toContain('resource "aws_kms_alias" "regional_cmk"');
+      expect(stackContent).toContain('resource "aws_kms_key" "regional_cmk_us_east_1"');
+      expect(stackContent).toContain('resource "aws_kms_key" "regional_cmk_eu_west_1"');
+      expect(stackContent).toContain('resource "aws_kms_key" "regional_cmk_ap_southeast_2"');
+      expect(stackContent).toContain('resource "aws_kms_alias" "regional_cmk_us_east_1"');
       
       // Security Control 3: IAM + MFA
       expect(stackContent).toContain('resource "aws_iam_account_password_policy" "strict"');

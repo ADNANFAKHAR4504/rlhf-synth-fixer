@@ -14,10 +14,11 @@ locals {
 # 1. GLOBAL TAGS - Applied via provider default_tags
 
 # 2. ENCRYPTION AT REST - KMS Customer Managed Keys per region
-resource "aws_kms_key" "regional_cmk" {
-  for_each = toset(local.regions)
+# US East 1
+resource "aws_kms_key" "regional_cmk_us_east_1" {
+  provider = aws.us_east_1
 
-  description             = "Customer managed key for ${local.name_prefix} in ${each.key}"
+  description             = "Customer managed key for ${local.name_prefix} in us-east-1"
   deletion_window_in_days = 7
   enable_key_rotation     = true
 
@@ -49,7 +50,7 @@ resource "aws_kms_key" "regional_cmk" {
         Sid    = "Allow CloudWatch Logs"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${each.key}.amazonaws.com"
+          Service = "logs.us-east-1.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -64,15 +65,148 @@ resource "aws_kms_key" "regional_cmk" {
   })
 
   tags = {
-    Name = "${local.name_prefix}-cmk-${each.key}"
+    Name = "${local.name_prefix}-cmk-us-east-1"
   }
 }
 
-resource "aws_kms_alias" "regional_cmk" {
-  for_each = toset(local.regions)
+# EU West 1
+resource "aws_kms_key" "regional_cmk_eu_west_1" {
+  provider = aws.eu_west_1
 
-  name          = "alias/${local.name_prefix}-cmk-${each.key}"
-  target_key_id = aws_kms_key.regional_cmk[each.key].key_id
+  description             = "Customer managed key for ${local.name_prefix} in eu-west-1"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail to encrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.eu-west-1.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-cmk-eu-west-1"
+  }
+}
+
+# AP Southeast 2
+resource "aws_kms_key" "regional_cmk_ap_southeast_2" {
+  provider = aws.ap_southeast_2
+
+  description             = "Customer managed key for ${local.name_prefix} in ap-southeast-2"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail to encrypt logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.ap-southeast-2.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${local.name_prefix}-cmk-ap-southeast-2"
+  }
+}
+
+# Locals for KMS key mapping
+locals {
+  kms_keys = {
+    "us-east-1"      = aws_kms_key.regional_cmk_us_east_1
+    "eu-west-1"      = aws_kms_key.regional_cmk_eu_west_1
+    "ap-southeast-2" = aws_kms_key.regional_cmk_ap_southeast_2
+  }
+}
+
+resource "aws_kms_alias" "regional_cmk_us_east_1" {
+  provider = aws.us_east_1
+
+  name          = "alias/${local.name_prefix}-cmk-us-east-1"
+  target_key_id = aws_kms_key.regional_cmk_us_east_1.key_id
+}
+
+resource "aws_kms_alias" "regional_cmk_eu_west_1" {
+  provider = aws.eu_west_1
+
+  name          = "alias/${local.name_prefix}-cmk-eu-west-1"
+  target_key_id = aws_kms_key.regional_cmk_eu_west_1.key_id
+}
+
+resource "aws_kms_alias" "regional_cmk_ap_southeast_2" {
+  provider = aws.ap_southeast_2
+
+  name          = "alias/${local.name_prefix}-cmk-ap-southeast-2"
+  target_key_id = aws_kms_key.regional_cmk_ap_southeast_2.key_id
 }
 
 # 3. IAM + MFA ENFORCEMENT
@@ -165,7 +299,7 @@ locals {
     for region in local.regions : region => (
       length(data.aws_vpcs.existing[region].ids) > 0
       ? data.aws_vpcs.existing[region].ids[0]
-      : aws_vpc.main[region].id
+      : try(aws_vpc.main[region].id, "")
     )
   }
 }
@@ -184,7 +318,7 @@ resource "aws_security_group" "app_tier" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/8"] # Adjust to your corporate CIDR
+    cidr_blocks = [var.corporate_cidr]
   }
 
   # Egress: HTTPS for API calls and updates
@@ -211,16 +345,51 @@ resource "aws_security_group" "app_tier" {
 }
 
 # 5. CLOUDTRAIL - Multi-region trail with S3 and CloudWatch integration
-# S3 bucket for CloudTrail logs (in home region)
-resource "aws_s3_bucket" "cloudtrail" {
-  bucket        = "${local.name_prefix}-cloudtrail-${random_string.bucket_suffix.result}"
-  force_destroy = false
-}
-
+# Random suffix for unique bucket naming
 resource "random_string" "bucket_suffix" {
-  length  = 8
+  length  = 12
   special = false
   upper   = false
+}
+
+# S3 bucket for CloudTrail logs (in home region) with unique naming
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket        = "${local.name_prefix}-cloudtrail-${random_string.bucket_suffix.result}-${formatdate("YYYY-MM-DD", timestamp())}"
+  force_destroy = false
+
+  lifecycle {
+    ignore_changes = [bucket]
+  }
+}
+
+# S3 bucket versioning
+resource "aws_s3_bucket_versioning" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# S3 bucket lifecycle configuration
+resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    id     = "cloudtrail_logs_lifecycle"
+    status = "Enabled"
+
+    filter {
+      prefix = ""
+    }
+
+    expiration {
+      days = 365
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
 }
 
 # S3 bucket encryption
@@ -229,7 +398,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 
   rule {
     apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.regional_cmk[local.home_region].arn
+      kms_master_key_id = local.kms_keys[local.home_region].arn
       sse_algorithm     = "aws:kms"
     }
   }
@@ -298,7 +467,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 resource "aws_cloudwatch_log_group" "cloudtrail" {
   name              = "/aws/cloudtrail/${local.name_prefix}"
   retention_in_days = 90
-  kms_key_id        = aws_kms_key.regional_cmk[local.home_region].arn
+  kms_key_id        = local.kms_keys[local.home_region].arn
 }
 
 # IAM role for CloudTrail to write to CloudWatch Logs
@@ -353,7 +522,7 @@ resource "aws_cloudtrail" "main" {
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_logs.arn
 
   # KMS encryption
-  kms_key_id = aws_kms_key.regional_cmk[local.home_region].arn
+  kms_key_id = local.kms_keys[local.home_region].arn
 
   # Management events only (data events commented for cost optimization)
   event_selector {
@@ -385,7 +554,7 @@ resource "aws_cloudtrail" "main" {
 #   }
 # }
 
-# 7. GUARDDUTY - Enable in all regions
+# 7. GUARDDUTY - Enable in all regions with regional providers
 resource "aws_guardduty_detector" "main" {
   for_each = toset(local.regions)
 
@@ -422,18 +591,35 @@ resource "aws_guardduty_detector_feature" "malware_protection" {
   status      = "ENABLED"
 }
 
+# Additional GuardDuty features for enhanced protection
+resource "aws_guardduty_detector_feature" "lambda_network_logs" {
+  for_each = toset(local.regions)
+
+  detector_id = aws_guardduty_detector.main[each.key].id
+  name        = "LAMBDA_NETWORK_LOGS"
+  status      = "ENABLED"
+}
+
+resource "aws_guardduty_detector_feature" "rds_login_events" {
+  for_each = toset(local.regions)
+
+  detector_id = aws_guardduty_detector.main[each.key].id
+  name        = "RDS_LOGIN_EVENTS"
+  status      = "ENABLED"
+}
+
 # 8. UNAUTHORIZED API CALL ALERTS
 # SNS topic for security alerts
 resource "aws_sns_topic" "security_alerts" {
   name              = "${local.name_prefix}-security-alerts"
-  kms_master_key_id = aws_kms_key.regional_cmk[local.home_region].id
+  kms_master_key_id = local.kms_keys[local.home_region].id
 }
 
 # Example SNS subscription (replace email with actual email)
 resource "aws_sns_topic_subscription" "security_alerts_email" {
   topic_arn = aws_sns_topic.security_alerts.arn
   protocol  = "email"
-  endpoint  = "security-team@example.com" # Replace with actual email
+  endpoint  = var.security_team_email != "" ? var.security_team_email : "security-team@company.local"
 }
 
 # CloudWatch metric filter for unauthorized API calls
@@ -514,7 +700,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
   name              = "/aws/vpc/flowlogs/${local.name_prefix}-${each.key}"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.regional_cmk[each.key].arn
+  kms_key_id        = local.kms_keys[each.key].arn
 }
 
 # VPC Flow Logs (per region)
@@ -543,7 +729,7 @@ resource "aws_s3_account_public_access_block" "main" {
 output "kms_key_arns" {
   description = "ARNs of KMS keys per region"
   value = {
-    for region, key in aws_kms_key.regional_cmk : region => key.arn
+    for region, key in local.kms_keys : region => key.arn
   }
 }
 

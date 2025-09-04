@@ -63,8 +63,9 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
 
   // --- Security Control 2: Encryption at Rest (KMS) ---
   test("declares KMS keys for all regions", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"regional_cmk"/);
-    expect(stackContent).toMatch(/for_each\s*=\s*toset\(local\.regions\)/);
+    expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"regional_cmk_us_east_1"/);
+    expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"regional_cmk_eu_west_1"/);
+    expect(stackContent).toMatch(/resource\s+"aws_kms_key"\s+"regional_cmk_ap_southeast_2"/);
     expect(stackContent).toMatch(/enable_key_rotation\s*=\s*true/);
   });
 
@@ -72,12 +73,14 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
     expect(stackContent).toMatch(/Allow CloudTrail to encrypt logs/);
     expect(stackContent).toMatch(/Allow CloudWatch Logs/);
     expect(stackContent).toMatch(/cloudtrail\.amazonaws\.com/);
-    expect(stackContent).toMatch(/logs\.\$\{each\.key\}\.amazonaws\.com/);
+    expect(stackContent).toMatch(/logs\.(us-east-1|eu-west-1|ap-southeast-2)\.amazonaws\.com/);
   });
 
   test("declares KMS aliases for all keys", () => {
-    expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"regional_cmk"/);
-    expect(stackContent).toMatch(/target_key_id\s*=\s*aws_kms_key\.regional_cmk\[each\.key\]\.key_id/);
+    expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"regional_cmk_us_east_1"/);
+    expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"regional_cmk_eu_west_1"/);
+    expect(stackContent).toMatch(/resource\s+"aws_kms_alias"\s+"regional_cmk_ap_southeast_2"/);
+    expect(stackContent).toMatch(/target_key_id\s*=\s*aws_kms_key\.regional_cmk_us_east_1\.key_id/);
   });
 
   // --- Security Control 3: IAM + MFA Enforcement ---
@@ -112,7 +115,7 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
     expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"app_tier"/);
     expect(stackContent).toMatch(/from_port\s*=\s*443/); // HTTPS
     expect(stackContent).toMatch(/from_port\s*=\s*53/);  // DNS
-    expect(stackContent).toMatch(/cidr_blocks\s*=\s*\["10\.0\.0\.0\/8"\]/);
+    expect(stackContent).toMatch(/cidr_blocks\s*=\s*\[var\.corporate_cidr\]/);
   });
 
   // --- Security Control 5: CloudTrail ---
@@ -125,7 +128,7 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
   test("configures S3 bucket encryption with KMS", () => {
     expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"/);
     expect(stackContent).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
-    expect(stackContent).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.regional_cmk\[local\.home_region\]\.arn/);
+    expect(stackContent).toMatch(/kms_master_key_id\s*=\s*local\.kms_keys\[local\.home_region\]\.arn/);
   });
 
   test("blocks public access on S3 bucket", () => {
@@ -144,7 +147,7 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
   test("creates CloudWatch log group for CloudTrail", () => {
     expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"cloudtrail"/);
     expect(stackContent).toMatch(/\/aws\/cloudtrail/);
-    expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.regional_cmk\[local\.home_region\]\.arn/);
+    expect(stackContent).toMatch(/kms_key_id\s*=\s*local\.kms_keys\[local\.home_region\]\.arn/);
   });
 
   test("declares multi-region CloudTrail", () => {
@@ -169,16 +172,20 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
   });
 
   test("enables comprehensive GuardDuty data sources", () => {
-    expect(stackContent).toMatch(/s3_logs\s*{\s*enable\s*=\s*true/);
-    expect(stackContent).toMatch(/kubernetes\s*{\s*audit_logs\s*{\s*enable\s*=\s*true/);
-    expect(stackContent).toMatch(/malware_protection/);
-    expect(stackContent).toMatch(/ebs_volumes\s*{\s*enable\s*=\s*true/);
+    // Check for new GuardDuty detector feature resources
+    expect(stackContent).toMatch(/resource\s+"aws_guardduty_detector_feature"\s+"s3_logs"/);
+    expect(stackContent).toMatch(/resource\s+"aws_guardduty_detector_feature"\s+"kubernetes_audit_logs"/);
+    expect(stackContent).toMatch(/resource\s+"aws_guardduty_detector_feature"\s+"malware_protection"/);
+    expect(stackContent).toMatch(/name\s*=\s*"S3_DATA_EVENTS"/);
+    expect(stackContent).toMatch(/name\s*=\s*"EKS_AUDIT_LOGS"/);
+    expect(stackContent).toMatch(/name\s*=\s*"EBS_MALWARE_PROTECTION"/);
+    expect(stackContent).toMatch(/status\s*=\s*"ENABLED"/);
   });
 
   // --- Security Control 8: Unauthorized API Call Alerts ---
   test("creates SNS topic for security alerts", () => {
     expect(stackContent).toMatch(/resource\s+"aws_sns_topic"\s+"security_alerts"/);
-    expect(stackContent).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.regional_cmk\[local\.home_region\]\.id/);
+    expect(stackContent).toMatch(/kms_master_key_id\s*=\s*local\.kms_keys\[local\.home_region\]\.id/);
   });
 
   test("creates CloudWatch metric filter for unauthorized API calls", () => {
@@ -203,7 +210,7 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
   test("creates CloudWatch log groups for VPC Flow Logs", () => {
     expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_logs"/);
     expect(stackContent).toMatch(/\/aws\/vpc\/flowlogs/);
-    expect(stackContent).toMatch(/kms_key_id\s*=\s*aws_kms_key\.regional_cmk\[each\.key\]\.arn/);
+    expect(stackContent).toMatch(/kms_key_id\s*=\s*local\.kms_keys\[each\.key\]\.arn/);
   });
 
   test("enables VPC Flow Logs in all regions", () => {
@@ -300,6 +307,6 @@ describe("Terraform AWS Security Stack: tap_stack.tf", () => {
 
   test("includes commented examples for extensibility", () => {
     expect(stackContent).toMatch(/# Uncomment to enable data events/);
-    expect(stackContent).toMatch(/# Replace with actual email/);
+    expect(stackContent).toMatch(/var\.security_team_email/);
   });
 });
