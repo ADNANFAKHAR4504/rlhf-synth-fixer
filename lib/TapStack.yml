@@ -152,7 +152,7 @@ Resources:
     Properties:
       OwnershipControls:
         Rules:
-          - ObjectOwnership: BucketOwnerEnforced
+          - ObjectOwnership: ObjectWriter   # keeps ACLs usable
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -175,6 +175,7 @@ Resources:
               Service: cloudfront.amazonaws.com
             Action: "s3:PutObject"
             Resource: !Sub "${CloudFrontLogBucket.Arn}/*"
+
 
   ########################################
   # CloudFront Distribution
