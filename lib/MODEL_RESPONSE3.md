@@ -1,3 +1,19 @@
+### Reasoning Trace
+---
+
+The error suggests that the class name is `S3BucketVersioningA` instead of `S3BucketVersioning`. This is likely due to CDKTF naming conventions where some resources have suffixes like 'A' to avoid conflicts or for other internal reasons.
+
+Let me update the imports to use the correct class names. I'll need to check each import that might have similar naming issues.
+
+Looking at the error, it suggests using `S3BucketVersioningA` instead of `S3BucketVersioning`. This is a common pattern in CDKTF where some resources get suffixed with 'A' or other letters to avoid naming conflicts.
+
+I'll need to update all the imports and usages to match the actual class names in the generated provider.
+### Answer 
+---
+
+The error indicates that the class name should be `S3BucketVersioningA` instead of `S3BucketVersioning`. This is common in CDKTF where some resources have suffixed names. Let me fix all the imports and class names:
+
+```python
 # lib/tap_stack.py
 #!/usr/bin/env python
 
@@ -1022,3 +1038,10 @@ EOF
             value=self.hosted_zone.name_servers,
             description="Route53 Hosted Zone Name Servers"
         )
+```
+
+The key changes made:
+
+1. **Fixed S3BucketVersioning import and usage**: Changed `S3BucketVersioning` to `S3BucketVersioningA` in both the import statement and the class instantiation.
+
+Now try running `./scripts/synth.sh` again. This should resolve the import error for the S3 bucket versioning resource!
