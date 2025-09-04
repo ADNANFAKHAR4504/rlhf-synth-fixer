@@ -415,12 +415,14 @@ config_configuration_recorder = aws.cfg.Recorder(f"{company_name}-{app_name}-{en
     )
 )
 
-# 15. GuardDuty for threat detection
-guardduty_detector = aws.guardduty.Detector(f"{company_name}-{app_name}-{environment}-guardduty",
-    enable=True,
-    finding_publishing_frequency="FIFTEEN_MINUTES",
-    tags=common_tags
-)
+# 15. GuardDuty for threat detection - commented out due to account limit
+# Note: GuardDuty only allows one detector per AWS account
+# If you need GuardDuty, enable it manually in the AWS console
+# guardduty_detector = aws.guardduty.Detector(f"{company_name}-{app_name}-{environment}-guardduty",
+#     enable=True,
+#     finding_publishing_frequency="FIFTEEN_MINUTES",
+#     tags=common_tags
+# )
 
 # 16. CloudTrail for audit logging
 cloudtrail = aws.cloudtrail.Trail(f"{company_name}-{app_name}-{environment}-trail",
