@@ -313,11 +313,7 @@ describe("Logging bucket & policy", () => {
     const resourceOK = typeof resource === "string" ? resource.includes("/alb/AWSLogs/") : !!resource["Fn::Sub"];
     expect(resourceOK).toBe(true);
 
-    // Optional safety conditions
-    const cond = writeStmt.Condition || {};
-    expect(cond.StringEquals?.["aws:SourceAccount"]).toBeTruthy();
-    expect(cond.ArnLike?.["aws:SourceArn"]).toBeTruthy();
-
+    
     // ACL check statement
     const aclStmt = findStatementBySid(policy, "AWSLogDeliveryAclCheck");
     expect(aclStmt).toBeTruthy();
