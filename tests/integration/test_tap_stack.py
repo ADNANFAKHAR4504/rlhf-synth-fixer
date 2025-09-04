@@ -495,8 +495,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertEqual(asg['DesiredCapacity'], 2)
             self.assertEqual(asg['MaxSize'], 4)
             self.assertEqual(asg['MinSize'], 1)
-            # Note: ASG doesn't have a 'Status' field, it has 'AutoScalingGroupStatus'
-            self.assertIn('AutoScalingGroupStatus', asg)
+            # Note: ASG doesn't have a 'Status' field, check for required fields instead
+            self.assertIn('AutoScalingGroupName', asg)
+            self.assertIn('LaunchTemplate', asg)
             
             # Test ASG tags
             asg_tags = {tag['Key']: tag['Value'] for tag in asg.get('Tags', [])}
