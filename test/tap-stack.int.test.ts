@@ -430,7 +430,9 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
       }
 
       try {
-        const apiId = outputs.ApiGatewayInvokeUrl.split('/')[2];
+        const apiUrl = new URL(outputs.ApiGatewayInvokeUrl);
+        const hostParts = apiUrl.hostname.split('.');
+        const apiId = hostParts[0];
         const command = new GetRestApiCommand({ restApiId: apiId });
         const response = await apiGatewayClient.send(command);
         expect(response).toBeDefined();
@@ -448,7 +450,9 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
       }
 
       try {
-        const apiId = outputs.ApiGatewayInvokeUrl.split('/')[2];
+        const apiUrl = new URL(outputs.ApiGatewayInvokeUrl);
+        const hostParts = apiUrl.hostname.split('.');
+        const apiId = hostParts[0];
         const command = new GetResourcesCommand({ restApiId: apiId });
         const response = await apiGatewayClient.send(command);
         expect(response.items).toBeDefined();
@@ -469,7 +473,9 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
       }
 
       try {
-        const apiId = outputs.ApiGatewayInvokeUrl.split('/')[2];
+        const apiUrl = new URL(outputs.ApiGatewayInvokeUrl);
+        const hostParts = apiUrl.hostname.split('.');
+        const apiId = hostParts[0];
         const resourcesCommand = new GetResourcesCommand({ restApiId: apiId });
         const resourcesResponse = await apiGatewayClient.send(resourcesCommand);
 
@@ -499,7 +505,9 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
       }
 
       try {
-        const apiId = outputs.ApiGatewayInvokeUrl.split('/')[2];
+        const apiUrl = new URL(outputs.ApiGatewayInvokeUrl);
+        const hostParts = apiUrl.hostname.split('.');
+        const apiId = hostParts[0];
         const command = new GetStageCommand({
           restApiId: apiId,
           stageName: 'prod'
@@ -722,7 +730,9 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
       }
 
       try {
-        const apiId = outputs.ApiGatewayInvokeUrl.split('/')[2];
+        const apiUrl = new URL(outputs.ApiGatewayInvokeUrl);
+        const hostParts = apiUrl.hostname.split('.');
+        const apiId = hostParts[0];
         const stageCommand = new GetStageCommand({
           restApiId: apiId,
           stageName: 'prod'
@@ -842,17 +852,20 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
           timestamp: new Date().toISOString()
         };
 
+        const functionName = outputs.StatusNotifierFunctionArn.split(':').pop();
         const command = new InvokeCommand({
-          FunctionName: outputs.StatusNotifierFunctionArn.split(':').pop(),
+          FunctionName: functionName,
           Payload: JSON.stringify(testEvent)
         });
         const response = await lambdaClient.send(command);
         expect(response.StatusCode).toBe(200);
 
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
+        const payloadStr = new TextDecoder().decode(response.Payload);
+        const payload = JSON.parse(payloadStr);
+        const bodyObj = typeof payload.body === 'string' ? JSON.parse(payload.body) : payload.body;
         expect(payload.statusCode).toBe(200);
-        expect(payload.body).toBeDefined();
-        expect(payload.body.message).toContain('Status notification sent successfully');
+        expect(bodyObj).toBeDefined();
+        expect(bodyObj.message).toContain('Status notification sent successfully');
       } catch (error) {
         throw new Error(`Failed to test status notification workflow: ${error}`);
       }
