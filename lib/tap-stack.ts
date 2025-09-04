@@ -351,7 +351,6 @@ export class TapStack extends cdk.Stack {
             deviceName: '/dev/xvda',
             volume: ec2.BlockDeviceVolume.ebs(20, {
               encrypted: true,
-              kmsKey: kmsKey,
             }),
           },
         ],
