@@ -10,17 +10,11 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     ConstraintDescription: Must be dev, staging, or prod
 
-  # BucketName:
-  #   Type: String
-  #   Default: my-app-data-bucket
-  #   Description: Name for the S3 bucket (must be globally unique)
-
 Resources:
   # S3 Bucket with encryption
   AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # BucketName: !Ref BucketName
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -145,7 +139,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/process
 
-  # API Gateway Usage Plan
+  # API Gateway Usage Plan - FIXED with dependency
   ApiGatewayUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
     Properties:
@@ -160,6 +154,7 @@ Resources:
       ApiStages:
         - ApiId: !Ref ApiGatewayRestApi
           Stage: !Ref EnvironmentName
+    DependsOn: ApiGatewayDeployment # CRITICAL: Wait for deployment to complete
 
   # API Gateway API Key
   ApiGatewayApiKey:
