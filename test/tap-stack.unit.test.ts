@@ -203,7 +203,7 @@ describe('TapStack', () => {
   describe('RDS Infrastructure', () => {
     test('creates RDS instance with MySQL engine', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`,
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`,
         Engine: 'mysql',
         DBInstanceClass: 'db.t3.micro',
         MultiAZ: true,
@@ -217,7 +217,7 @@ describe('TapStack', () => {
 
     test('creates DB subnet group for RDS', () => {
       template.hasResourceProperties('AWS::RDS::DBSubnetGroup', {
-        DBSubnetGroupName: `prod-db-subnet-group-${environmentSuffix}`,
+        DBSubnetGroupName: `prod-pr-db-subnet-group-${environmentSuffix}`,
         DBSubnetGroupDescription: 'Subnet group for production RDS instance'
       });
     });
@@ -245,21 +245,21 @@ describe('TapStack', () => {
   describe('CloudWatch Logging', () => {
     test('creates application log group', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/ec2/prod-application-${environmentSuffix}`,
+        LogGroupName: `/aws/ec2/prod-pr-application-${environmentSuffix}`,
         RetentionInDays: 30
       });
     });
 
     test('creates system log group', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/ec2/prod-system-${environmentSuffix}`,
+        LogGroupName: `/aws/ec2/prod-pr-system-${environmentSuffix}`,
         RetentionInDays: 30
       });
     });
 
     test('creates CloudTrail log group', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/cloudtrail/prod-${environmentSuffix}`,
+        LogGroupName: `/aws/cloudtrail/prod-pr-${environmentSuffix}`,
         RetentionInDays: 30
       });
     });
@@ -268,7 +268,7 @@ describe('TapStack', () => {
   describe('CloudTrail Auditing', () => {
     test('creates CloudTrail for auditing', () => {
       template.hasResourceProperties('AWS::CloudTrail::Trail', {
-        TrailName: `prod-cloudtrail-${environmentSuffix}`,
+        TrailName: `prod-pr-cloudtrail-${environmentSuffix}`,
         IncludeGlobalServiceEvents: true,
         IsMultiRegionTrail: true,
         EnableLogFileValidation: true
@@ -426,7 +426,7 @@ describe('TapStack', () => {
       const testTemplate = Template.fromStack(testStack);
       
       testTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
-        DBInstanceIdentifier: 'prod-database-prod'
+        DBInstanceIdentifier: 'prod-pr-database-prod'
       });
     });
 
@@ -436,7 +436,7 @@ describe('TapStack', () => {
       const testTemplate = Template.fromStack(testStack);
       
       testTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
-        DBInstanceIdentifier: 'prod-database-staging'
+        DBInstanceIdentifier: 'prod-pr-database-staging'
       });
     });
 
@@ -446,7 +446,7 @@ describe('TapStack', () => {
       const testTemplate = Template.fromStack(testStack);
       
       testTemplate.hasResourceProperties('AWS::RDS::DBInstance', {
-        DBInstanceIdentifier: 'prod-database-dev'
+        DBInstanceIdentifier: 'prod-pr-database-dev'
       });
     });
   });

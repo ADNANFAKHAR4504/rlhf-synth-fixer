@@ -201,7 +201,7 @@ yum install -y amazon-cloudwatch-agent
 
     // 6. Create RDS subnet group
     const dbSubnetGroup = new rds.SubnetGroup(this, 'ProdDbSubnetGroup', {
-      subnetGroupName: `${namePrefix}-db-subnet-group-${environmentSuffix}`,
+      subnetGroupName: `${namePrefix}-pr-db-subnet-group-${environmentSuffix}`,
       description: 'Subnet group for production RDS instance',
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -229,7 +229,7 @@ yum install -y amazon-cloudwatch-agent
 
     // 7. Create RDS instance with security features
     const rdsInstance = new rds.DatabaseInstance(this, 'ProdRdsInstance', {
-      instanceIdentifier: `${namePrefix}-database-${environmentSuffix}`,
+      instanceIdentifier: `${namePrefix}-pr-database-${environmentSuffix}`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0,
       }),
@@ -264,14 +264,14 @@ yum install -y amazon-cloudwatch-agent
       this,
       'ProdApplicationLogGroup',
       {
-        logGroupName: `/aws/ec2/${namePrefix}-application-${environmentSuffix}`,
+        logGroupName: `/aws/ec2/${namePrefix}-pr-application-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
 
     const systemLogGroup = new logs.LogGroup(this, 'ProdSystemLogGroup', {
-      logGroupName: `/aws/ec2/${namePrefix}-system-${environmentSuffix}`,
+      logGroupName: `/aws/ec2/${namePrefix}-pr-system-${environmentSuffix}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -280,12 +280,12 @@ yum install -y amazon-cloudwatch-agent
     new cdk.CfnOutput(this, 'SystemLogGroupName', {
       value: systemLogGroup.logGroupName,
       description: 'Name of the system log group',
-      exportName: `${namePrefix}-system-log-group-${environmentSuffix}`,
+      exportName: `${namePrefix}-pr-system-log-group-${environmentSuffix}`,
     });
 
     // 9. Set up CloudTrail for auditing
     const cloudTrailBucket = new s3.Bucket(this, 'ProdCloudTrailBucket', {
-      bucketName: `${namePrefix}-cloudtrail-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `${namePrefix}-pr-cloudtrail-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
@@ -300,14 +300,14 @@ yum install -y amazon-cloudwatch-agent
     });
 
     const trail = new cloudtrail.Trail(this, 'ProdCloudTrail', {
-      trailName: `${namePrefix}-cloudtrail-${environmentSuffix}`,
+      trailName: `${namePrefix}-pr-cloudtrail-${environmentSuffix}`,
       bucket: cloudTrailBucket,
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableFileValidation: true,
       sendToCloudWatchLogs: true,
       cloudWatchLogGroup: new logs.LogGroup(this, 'ProdCloudTrailLogGroup', {
-        logGroupName: `/aws/cloudtrail/${namePrefix}-${environmentSuffix}`,
+        logGroupName: `/aws/cloudtrail/${namePrefix}-pr-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_MONTH,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }),

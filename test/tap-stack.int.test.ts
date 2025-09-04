@@ -211,7 +211,7 @@ describe('AWS Infrastructure Integration Tests', () => {
   describe('RDS Infrastructure', () => {
     test('RDS instance is available and properly configured', async () => {
       const response = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
 
       expect(response.DBInstances).toBeDefined();
@@ -239,7 +239,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
     test('RDS security group allows access only from EC2 security group', async () => {
       const response = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
 
       const dbInstance = response.DBInstances![0];
@@ -318,7 +318,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
   describe('CloudTrail Auditing', () => {
     test('CloudTrail is active and logging', async () => {
-      const trailName = `prod-cloudtrail-${environmentSuffix}`;
+      const trailName = `prod-pr-cloudtrail-${environmentSuffix}`;
       
       const response = await cloudTrail.describeTrails({
         trailNameList: [trailName]
@@ -344,7 +344,7 @@ describe('AWS Infrastructure Integration Tests', () => {
   describe('Deletion Configuration', () => {
     test('RDS instance has deletion protection disabled', async () => {
       const response = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
 
       const dbInstance = response.DBInstances![0];
@@ -360,7 +360,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
       // Verify CloudTrail bucket exists
       const trailBucket = await s3.headBucket({
-        Bucket: `prod-cloudtrail-${environmentSuffix}-${process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID}`
+        Bucket: `prod-pr-cloudtrail-${environmentSuffix}-${process.env.CDK_DEFAULT_ACCOUNT || process.env.AWS_ACCOUNT_ID}`
       }).promise().catch(() => null);
       // CloudTrail bucket may or may not exist depending on deployment
     });
@@ -370,7 +370,7 @@ describe('AWS Infrastructure Integration Tests', () => {
     test('no resources have public access when they should not', async () => {
       // Verify RDS is not publicly accessible
       const rdsResponse = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
       expect(rdsResponse.DBInstances![0].PubliclyAccessible).toBe(false);
 
@@ -391,7 +391,7 @@ describe('AWS Infrastructure Integration Tests', () => {
     test('encryption is enabled on storage resources', async () => {
       // Verify RDS encryption
       const rdsResponse = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
       expect(rdsResponse.DBInstances![0].StorageEncrypted).toBe(true);
 
@@ -405,10 +405,10 @@ describe('AWS Infrastructure Integration Tests', () => {
     test('backup and retention policies are properly configured', async () => {
       // Verify RDS backup retention
       const rdsResponse = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
       expect(rdsResponse.DBInstances![0].BackupRetentionPeriod).toBe(7);
-      expect(rdsResponse.DBInstances![0].DeletionProtection).toBe(true);
+      expect(rdsResponse.DBInstances![0].DeletionProtection).toBe(false);
 
       // Verify S3 versioning
       const s3Response = await s3.getBucketVersioning({
@@ -429,7 +429,7 @@ describe('AWS Infrastructure Integration Tests', () => {
     test('resources are distributed across multiple AZs', async () => {
       // Check RDS Multi-AZ
       const rdsResponse = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
       expect(rdsResponse.DBInstances![0].MultiAZ).toBe(true);
 
@@ -452,7 +452,7 @@ describe('AWS Infrastructure Integration Tests', () => {
 
       // Get RDS security group rules
       const rdsResponse = await rds.describeDBInstances({
-        DBInstanceIdentifier: `prod-database-${environmentSuffix}`
+        DBInstanceIdentifier: `prod-pr-database-${environmentSuffix}`
       }).promise();
       const rdsSecurityGroupId = rdsResponse.DBInstances![0].VpcSecurityGroups![0].VpcSecurityGroupId!;
 
