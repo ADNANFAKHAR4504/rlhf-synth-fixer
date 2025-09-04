@@ -170,11 +170,19 @@ jobs:
         if: env.skip_infracost != 'true'
         working-directory: lib
         run: terraform plan -out=tfplan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Convert plan to JSON
         if: env.skip_infracost != 'true'
         working-directory: lib
         run: terraform show -json tfplan > plan.json
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Run Infracost breakdown
         if: env.skip_infracost != 'true'
@@ -182,9 +190,13 @@ jobs:
         run: infracost breakdown --path=plan.json --format=json --out-file=../infracost.json
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Post Infracost comment
         if: env.skip_infracost != 'true'
+        working-directory: lib
         run: |
           infracost comment github --path=../infracost.json \
                                  --pull-request=${{ github.event.pull_request.number }} \
@@ -193,6 +205,9 @@ jobs:
                                  --behavior=update
         env:
           INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
 
   deploy:
     name: Deploy
