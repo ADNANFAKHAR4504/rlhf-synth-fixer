@@ -1,7 +1,7 @@
 Your provided TapStack.yml is failing during deployment with the following error:
 
 === Deploy Phase ===
-✅ CloudFormation YAML project detected, deploying with AWS CLI...
+CloudFormation YAML project detected, deploying with AWS CLI...
 
 > tap@0.1.0 cfn:deploy-yaml
 > aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}
@@ -27,5 +27,6 @@ Please update the TapStack.yml so that:
 The KeyName parameter is optional (or has a safe default).
 
 The EC2 instance definition uses the key only if provided.
+
 
 The template can deploy successfully without requiring a KeyName parameter when not needed.
