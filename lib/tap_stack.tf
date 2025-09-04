@@ -652,7 +652,6 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 resource "aws_iam_group" "mfa_required" {
   name = "mfa-required-group"
   
-  tags = local.common_tags
 }
 
 # IAM Policy for MFA enforcement
@@ -718,8 +717,7 @@ resource "aws_iam_policy" "mfa_required" {
       }
     ]
   })
-  
-  tags = local.common_tags
+  tags = local.common_tags  
 }
 
 resource "aws_iam_group_policy_attachment" "mfa_required" {
