@@ -1,53 +1,82 @@
-# import os
-# import sys
+"""Unit tests for TAP stack."""
 import unittest
-
+from unittest.mock import Mock, patch
 import aws_cdk as cdk
-# import pytest
-# from aws_cdk.assertions import Match, Template
-from aws_cdk.assertions import Template
-from pytest import mark
-
-from lib.tap_stack import TapStack, TapStackProps
+from lib.tap_stack import TapStack
 
 
-@mark.describe("TapStack")
 class TestTapStack(unittest.TestCase):
-  """Test cases for the TapStack CDK stack"""
+    """Test cases for TapStack."""
 
-  def setUp(self):
-    """Set up a fresh CDK app for each test"""
-    self.app = cdk.App()
+    def setUp(self):
+        """Set up test fixtures."""
+        self.app = cdk.App()
+        self.env = cdk.Environment(account="123456789012", region="us-east-1")
 
-  @mark.it("creates an S3 bucket with the correct environment suffix")
-  def test_creates_s3_bucket_with_env_suffix(self):
-    # ARRANGE
-    env_suffix = "testenv"
-    stack = TapStack(self.app, "TapStackTest",
-                     TapStackProps(environment_suffix=env_suffix))
-    template = Template.from_stack(stack)
+    def test_stack_creation(self):
+        """Test that stack can be created without errors."""
+        stack = TapStack(self.app, "TestStack", env=self.env)
+        self.assertIsNotNone(stack)
 
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": f"tap-bucket-{env_suffix}"
-    })
+    def test_vpc_creation(self):
+        """Test VPC creation."""
+        stack = TapStack(self.app, "TestStack", env=self.env)
+        template = cdk.assertions.Template.from_stack(stack)
 
-  @mark.it("defaults environment suffix to 'dev' if not provided")
-  def test_defaults_env_suffix_to_dev(self):
-    # ARRANGE
-    stack = TapStack(self.app, "TapStackTestDefault")
-    template = Template.from_stack(stack)
+        # Check that VPC is created
+        template.has_resource_properties("AWS::EC2::VPC", {
+            "CidrBlock": "10.0.0.0/16",
+            "EnableDnsHostnames": True,
+            "EnableDnsSupport": True
+        })
 
-    # ASSERT
-    template.resource_count_is("AWS::S3::Bucket", 1)
-    template.has_resource_properties("AWS::S3::Bucket", {
-        "BucketName": "tap-bucket-dev"
-    })
+    def test_s3_bucket_creation(self):
+        """Test S3 bucket creation with proper configuration."""
+        stack = TapStack(self.app, "TestStack", env=self.env)
+        template = cdk.assertions.Template.from_stack(stack)
 
-  @mark.it("Write Unit Tests")
-  def test_write_unit_tests(self):
-    # ARRANGE
-    self.fail(
-        "Unit test for TapStack should be implemented here."
-    )
+        # Check that S3 bucket is created with encryption
+        template.has_resource_properties("AWS::S3::Bucket", {
+            "BucketEncryption": {
+                "ServerSideEncryptionConfiguration": [
+                    {
+                        "ServerSideEncryptionByDefault": {
+                            "SSEAlgorithm": "AES256"
+                        }
+                    }
+                ]
+            },
+            "VersioningConfiguration": {
+                "Status": "Enabled"
+            }
+        })
+
+    def test_rds_instance_creation(self):
+        """Test RDS instance creation."""
+        stack = TapStack(self.app, "TestStack", env=self.env)
+        template = cdk.assertions.Template.from_stack(stack)
+
+        # Check that RDS instance is created
+        template.has_resource_properties("AWS::RDS::DBInstance", {
+            "Engine": "mysql",
+            "MultiAZ": True,
+            "StorageEncrypted": True,
+            "BackupRetentionPeriod": 7
+        })
+
+    def test_lambda_function_creation(self):
+        """Test Lambda function creation."""
+        stack = TapStack(self.app, "TestStack", env=self.env)
+        template = cdk.assertions.Template.from_stack(stack)
+
+        # Check that Lambda function is created
+        template.has_resource_properties("AWS::Lambda::Function", {
+            "Runtime": "python3.11",
+            "Handler": "index.handler",
+            "Timeout": 300,
+            "MemorySize": 256
+        })
+
+
+if __name__ == '__main__':
+    unittest.main()
