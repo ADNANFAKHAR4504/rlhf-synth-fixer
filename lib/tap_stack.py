@@ -283,7 +283,7 @@ class TapStack(Stack):
             delete_automated_backups=False,
             removal_policy=RemovalPolicy.DESTROY,  # Change for production
             credentials=rds.Credentials.from_generated_secret(
-                "admin",
+                "dbadmin",
                 secret_name="secure-deployment-db-credentials"
             )
         )
