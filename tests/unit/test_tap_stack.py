@@ -206,12 +206,8 @@ class TestSecureStaticWebsiteInfrastructure(unittest.TestCase):
 
     def test_shield_protection(self):
         """Test AWS Shield protection creation."""
-        # Verify Shield protection exists
-        self.assertTrue(hasattr(tap_stack, 'shield_protection'))
-        
-        # Check protection configuration
-        shield = tap_stack.shield_protection
-        self.assertIsNotNone(shield)
+        # Verify Shield protection is commented out (requires subscription)
+        self.assertFalse(hasattr(tap_stack, 'shield_protection'))
 
     def test_security_hub(self):
         """Test Security Hub account creation."""
@@ -398,13 +394,15 @@ class TestSecureStaticWebsiteInfrastructure(unittest.TestCase):
         # Note: Some services are commented out due to AWS account limits
         security_components = [
             'waf_web_acl',
-            'shield_protection',
             'security_hub_account'
         ]
-        
+
         for component in security_components:
             self.assertTrue(hasattr(tap_stack, component),
                           f"Security component {component} not found")
+        
+        # Verify Shield protection is commented out (requires subscription)
+        self.assertFalse(hasattr(tap_stack, 'shield_protection'))
         
         # Verify commented-out components are not present
         commented_security_components = [
