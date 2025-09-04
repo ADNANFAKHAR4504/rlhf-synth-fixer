@@ -328,54 +328,6 @@
         ]
       }
     },
-    "LogBucketPolicy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": {
-          "Ref": "LogBucket"
-        },
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "delivery.logs.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": {
-                "Fn::Join": [
-                  "",
-                  [
-                    {
-                      "Fn::GetAtt": [
-                        "LogBucket",
-                        "Arn"
-                      ]
-                    },
-                    "/*"
-                  ]
-                ]
-              }
-            }
-          ]
-        }
-      }
-    },
-    "LogBucketOwnershipControls": {
-      "Type": "AWS::S3::BucketOwnershipControls",
-      "Properties": {
-        "Bucket": {
-          "Ref": "LogBucket"
-        },
-        "OwnershipControls": {
-          "Rules": [
-            {
-              "ObjectOwnership": "BucketOwnerPreferred"
-            }
-          ]
-        }
-      }
-    },
     "EC2SecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -657,12 +609,8 @@
         "DBInstanceClass": {
           "Ref": "DBInstanceType"
         },
-        "MasterUsername": {
-          "Fn::Sub": "{{resolve:secretsmanager:{{DatabaseSecret}}:SecretString:username}}"
-        },
-        "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:{{DatabaseSecret}}:SecretString:password}}"
-        },
+        "MasterUsername": "{{resolve:secretsmanager:DatabaseSecret:SecretString:username}}",
+        "MasterUserPassword": "{{resolve:secretsmanager:DatabaseSecret:SecretString:password}}",
         "DBName": {
           "Ref": "DBName"
         },
