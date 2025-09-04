@@ -26,12 +26,25 @@ Parameters:
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     Description: Database admin username
 
-  AvailabilityZones:
-    Type: List<AWS::EC2::AvailabilityZone::Name>
-    Description: "List of Availability Zones to use for the subnets in the VPC"
-    Default:
-      Fn::GetAZs:
-        Ref: "AWS::Region"
+  # Removed AvailabilityZones parameter as it will be handled by Conditions and Mappings
+
+Mappings:
+  RegionAZs:
+    us-east-1:
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+    us-east-2:
+      AZ1: us-east-2a
+      AZ2: us-east-2b
+    us-west-1:
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+    us-west-2:
+      AZ1: us-west-2a
+      AZ2: us-west-2b
+    eu-west-1:
+      AZ1: eu-west-1a
+      AZ2: eu-west-1b
 
 Resources:
   # Database Secret
@@ -85,9 +98,10 @@ Resources:
         Ref: VPC
       CidrBlock: 10.0.1.0/24
       AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Ref: AvailabilityZones
+        Fn::FindInMap:
+          - RegionAZs
+          - Ref: "AWS::Region"
+          - AZ1
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -101,9 +115,10 @@ Resources:
         Ref: VPC
       CidrBlock: 10.0.2.0/24
       AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Ref: AvailabilityZones
+        Fn::FindInMap:
+          - RegionAZs
+          - Ref: "AWS::Region"
+          - AZ2
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -118,9 +133,10 @@ Resources:
         Ref: VPC
       CidrBlock: 10.0.3.0/24
       AvailabilityZone:
-        Fn::Select:
-          - 0
-          - Ref: AvailabilityZones
+        Fn::FindInMap:
+          - RegionAZs
+          - Ref: "AWS::Region"
+          - AZ1
       Tags:
         - Key: Name
           Value:
@@ -133,9 +149,10 @@ Resources:
         Ref: VPC
       CidrBlock: 10.0.4.0/24
       AvailabilityZone:
-        Fn::Select:
-          - 1
-          - Ref: AvailabilityZones
+        Fn::FindInMap:
+          - RegionAZs
+          - Ref: "AWS::Region"
+          - AZ2
       Tags:
         - Key: Name
           Value:
