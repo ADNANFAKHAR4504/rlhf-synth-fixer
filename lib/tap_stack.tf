@@ -817,7 +817,7 @@ resource "aws_s3_bucket_public_access_block" "audit_trail_pab" {
 
 # CloudTrail S3 Bucket Policy
 resource "aws_s3_bucket_policy" "audit_trail_policy" {
-  bucket = aws_s3_bucket.audit_trail.id
+  bucket     = aws_s3_bucket.audit_trail.id
   depends_on = [aws_s3_bucket_public_access_block.audit_trail_pab]
 
   policy = jsonencode({
@@ -847,7 +847,7 @@ resource "aws_s3_bucket_policy" "audit_trail_policy" {
         Resource = "${aws_s3_bucket.audit_trail.arn}/audit-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.environment}-healthcare-audit-${local.env_suffix}"
           }
         }

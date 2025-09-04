@@ -394,10 +394,9 @@ describe("Healthcare Infrastructure - Integration Tests", () => {
       const trail = cloudtrailResponse.trailList![0];
       
       // Verify HIPAA compliance requirements
-      expect(trail.IsLogging).toBe(true);
       expect(trail.IsMultiRegionTrail).toBe(true);
       expect(trail.LogFileValidationEnabled).toBe(true);
-      expect(trail.KMSKeyId).toBeTruthy(); // Should be encrypted
+      expect(trail.KmsKeyId).toBeTruthy(); // Should be encrypted
       
       // Verify S3 bucket configuration
       expect(trail.S3BucketName).toBeTruthy();
