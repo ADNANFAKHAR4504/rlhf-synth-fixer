@@ -27,16 +27,15 @@ export class TapStack extends cdk.Stack {
     // Get environment suffix from props, context, or use 'dev' as default
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
-    const { appName, environment, owner, instanceType, allowedCidrs, dbEngineVersion, targetRegion } = props;
-
-    // Common tags for all resources
-    const commonTags = {
-      Environment: environment,
-      Application: appName,
-      Region: targetRegion,
-      Owner: owner,
-      ManagedBy: 'CDK'
-    };
+    const {
+      appName,
+      environment,
+      owner,
+      instanceType,
+      allowedCidrs,
+      dbEngineVersion,
+      targetRegion,
+    } = props;
 
     // Apply tags to the stack
     cdk.Tags.of(this).add('Environment', environment);
@@ -66,7 +65,7 @@ export class TapStack extends cdk.Stack {
           cidrMask: 24,
           name: 'Private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        }
+        },
       ],
 
       // Create NAT gateways in public subnets for private subnet internet access
@@ -87,30 +86,35 @@ export class TapStack extends cdk.Stack {
       service: ec2.GatewayVpcEndpointAwsService.S3,
 
       // Associate with private subnet route tables only
-      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }]
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
     });
 
     // Add policy to S3 endpoint using addToPolicy method
-    s3Endpoint.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.AnyPrincipal()],
-      actions: [
-        's3:GetObject',
-        's3:PutObject',
-        's3:DeleteObject',
-        's3:ListBucket',
-        's3:GetBucketLocation'
-      ],
-      resources: ['*'], // Can be restricted to specific buckets in production
-      conditions: {
-        StringEquals: {
-          'aws:PrincipalServiceName': ['ec2.amazonaws.com']
-        }
-      }
-    }));
+    s3Endpoint.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.AnyPrincipal()],
+        actions: [
+          's3:GetObject',
+          's3:PutObject',
+          's3:DeleteObject',
+          's3:ListBucket',
+          's3:GetBucketLocation',
+        ],
+        resources: ['*'], // Can be restricted to specific buckets in production
+        conditions: {
+          StringEquals: {
+            'aws:PrincipalServiceName': ['ec2.amazonaws.com'],
+          },
+        },
+      })
+    );
 
     // Name the S3 endpoint
-    cdk.Tags.of(s3Endpoint).add('Name', `${environment}-${appName}-${targetRegion}-s3-endpoint`);
+    cdk.Tags.of(s3Endpoint).add(
+      'Name',
+      `${environment}-${appName}-${targetRegion}-s3-endpoint`
+    );
 
     // =============================================================================
     // SECURITY GROUPS
@@ -192,12 +196,14 @@ export class TapStack extends cdk.Stack {
 
       // Minimal managed policies
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // For Systems Manager
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // For Systems Manager
       ],
 
       // Custom inline policy for specific S3 and SSM access
       inlinePolicies: {
-        'EC2CustomPolicy': new iam.PolicyDocument({
+        EC2CustomPolicy: new iam.PolicyDocument({
           statements: [
             // Allow reading DB credentials from SSM Parameter Store
             new iam.PolicyStatement({
@@ -205,21 +211,19 @@ export class TapStack extends cdk.Stack {
               actions: [
                 'ssm:GetParameter',
                 'ssm:GetParameters',
-                'ssm:GetParametersByPath'
+                'ssm:GetParametersByPath',
               ],
               resources: [
-                `arn:aws:ssm:${targetRegion}:${this.account}:parameter/${environment}/${appName}/db/*`
-              ]
+                `arn:aws:ssm:${targetRegion}:${this.account}:parameter/${environment}/${appName}/db/*`,
+              ],
             }),
             // Allow reading secrets from Secrets Manager
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue'
-              ],
+              actions: ['secretsmanager:GetSecretValue'],
               resources: [
-                `arn:aws:secretsmanager:${targetRegion}:${this.account}:secret:${environment}/${appName}/${targetRegion}/db/credentials*`
-              ]
+                `arn:aws:secretsmanager:${targetRegion}:${this.account}:secret:${environment}/${appName}/${targetRegion}/db/credentials*`,
+              ],
             }),
             // Allow CloudWatch logs for monitoring
             new iam.PolicyStatement({
@@ -228,15 +232,15 @@ export class TapStack extends cdk.Stack {
                 'logs:CreateLogGroup',
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
-                'logs:DescribeLogStreams'
+                'logs:DescribeLogStreams',
               ],
               resources: [
-                `arn:aws:logs:${targetRegion}:${this.account}:log-group:/aws/ec2/*`
-              ]
-            })
-          ]
-        })
-      }
+                `arn:aws:logs:${targetRegion}:${this.account}:log-group:/aws/ec2/*`,
+              ],
+            }),
+          ],
+        }),
+      },
     });
 
     // =============================================================================
@@ -252,16 +256,17 @@ export class TapStack extends cdk.Stack {
         generateStringKey: 'password',
         excludeCharacters: '"@/\\\'',
         includeSpace: false,
-        passwordLength: 32
-      }
+        passwordLength: 32,
+      },
     });
 
     // Store the Secrets Manager ARN in SSM Parameter Store for EC2 access
     new ssm.StringParameter(this, 'DBCredentialsSSMParam', {
       parameterName: `/${environment}/${appName}/db/credentials-secret-arn`,
       stringValue: dbCredentials.secretArn,
-      description: 'ARN of the Secrets Manager secret containing DB credentials',
-      tier: ssm.ParameterTier.STANDARD
+      description:
+        'ARN of the Secrets Manager secret containing DB credentials',
+      tier: ssm.ParameterTier.STANDARD,
     });
 
     // =============================================================================
@@ -274,8 +279,8 @@ export class TapStack extends cdk.Stack {
       description: 'Subnet group for RDS PostgreSQL in private subnets',
       vpc,
       vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
-      }
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
     });
 
     // RDS PostgreSQL with Multi-AZ, encryption, backups, and deletion protection
@@ -285,9 +290,12 @@ export class TapStack extends cdk.Stack {
 
       // Engine configuration
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.of(dbEngineVersion, dbEngineVersion)
+        version: rds.PostgresEngineVersion.of(dbEngineVersion, dbEngineVersion),
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO), // Cost-efficient for demo
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ), // Cost-efficient for demo
 
       // Credentials from Secrets Manager
       credentials: rds.Credentials.fromSecret(dbCredentials),
@@ -325,7 +333,7 @@ export class TapStack extends cdk.Stack {
       port: 5432,
 
       // Deletion behavior
-      removalPolicy: cdk.RemovalPolicy.SNAPSHOT // Take final snapshot on deletion
+      removalPolicy: cdk.RemovalPolicy.SNAPSHOT, // Take final snapshot on deletion
     });
 
     // =============================================================================
@@ -357,7 +365,9 @@ export class TapStack extends cdk.Stack {
     );
 
     // Deploy EC2 instances in public subnets (one per AZ for HA)
-    const publicSubnets = vpc.selectSubnets({ subnetType: ec2.SubnetType.PUBLIC });
+    const publicSubnets = vpc.selectSubnets({
+      subnetType: ec2.SubnetType.PUBLIC,
+    });
 
     publicSubnets.subnets.forEach((subnet, index) => {
       const instance = new ec2.Instance(this, `EC2Instance${index + 1}`, {
@@ -391,9 +401,9 @@ export class TapStack extends cdk.Stack {
             volume: ec2.BlockDeviceVolume.ebs(20, {
               volumeType: ec2.EbsDeviceVolumeType.GP3,
               encrypted: true,
-              deleteOnTermination: true
-            })
-          }
+              deleteOnTermination: true,
+            }),
+          },
         ],
 
         // Key pair (should be created separately and referenced)
@@ -401,7 +411,10 @@ export class TapStack extends cdk.Stack {
       });
 
       // Apply tags to instance
-      cdk.Tags.of(instance).add('Name', `${environment}-${appName}-${targetRegion}-ec2-${index + 1}`);
+      cdk.Tags.of(instance).add(
+        'Name',
+        `${environment}-${appName}-${targetRegion}-ec2-${index + 1}`
+      );
     });
 
     // =============================================================================
@@ -412,43 +425,46 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: 'VPC ID',
-      exportName: `${environment}-${appName}-${targetRegion}-vpc-id`
+      exportName: `${environment}-${appName}-${targetRegion}-vpc-id`,
     });
 
     // Database endpoint
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
       description: 'RDS PostgreSQL endpoint',
-      exportName: `${environment}-${appName}-${targetRegion}-db-endpoint`
+      exportName: `${environment}-${appName}-${targetRegion}-db-endpoint`,
     });
 
     // Database credentials secret ARN
     new cdk.CfnOutput(this, 'DatabaseCredentialsSecretArn', {
       value: dbCredentials.secretArn,
-      description: 'ARN of the Secrets Manager secret containing database credentials',
-      exportName: `${environment}-${appName}-${targetRegion}-db-credentials-arn`
+      description:
+        'ARN of the Secrets Manager secret containing database credentials',
+      exportName: `${environment}-${appName}-${targetRegion}-db-credentials-arn`,
     });
 
     // S3 VPC Endpoint ID
     new cdk.CfnOutput(this, 'S3VpcEndpointId', {
       value: s3Endpoint.vpcEndpointId,
       description: 'S3 VPC Gateway Endpoint ID',
-      exportName: `${environment}-${appName}-${targetRegion}-s3-endpoint-id`
+      exportName: `${environment}-${appName}-${targetRegion}-s3-endpoint-id`,
     });
 
     // Public subnet IDs
     new cdk.CfnOutput(this, 'PublicSubnetIds', {
       value: publicSubnets.subnetIds.join(','),
       description: 'Public subnet IDs',
-      exportName: `${environment}-${appName}-${targetRegion}-public-subnets`
+      exportName: `${environment}-${appName}-${targetRegion}-public-subnets`,
     });
 
     // Private subnet IDs
-    const privateSubnets = vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS });
+    const privateSubnets = vpc.selectSubnets({
+      subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+    });
     new cdk.CfnOutput(this, 'PrivateSubnetIds', {
       value: privateSubnets.subnetIds.join(','),
       description: 'Private subnet IDs',
-      exportName: `${environment}-${appName}-${targetRegion}-private-subnets`
+      exportName: `${environment}-${appName}-${targetRegion}-private-subnets`,
     });
   }
 }

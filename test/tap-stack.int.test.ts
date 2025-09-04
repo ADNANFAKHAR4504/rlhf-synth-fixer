@@ -4,24 +4,9 @@ import fs from 'fs';
 const AWS = require('aws-sdk');
 AWS.config.update({ region: 'us-west-2' }); // Set a default region
 
-let outputs;
-
-try {
-  outputs = JSON.parse(
-    fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-  );
-} catch (error) {
-  // If the file is not found, use the provided default values.
-  console.log('cfn-outputs/flat-outputs.json not found, using hardcoded values.');
-  outputs = {
-    DatabaseCredentialsSecretArn: 'arn:aws:secretsmanager:us-west-2:137068252854:secret:dev/myapp/us-west-2/db/credentials-VV6qFk',
-    DatabaseEndpoint: 'dev-myapp-us-west-2-db.cjki6su4qa5a.us-west-2.rds.amazonaws.com',
-    PrivateSubnetIds: 'subnet-073d33d628c3c5499,subnet-027e9190473a9885b',
-    PublicSubnetIds: 'subnet-0742c4c72814ed209,subnet-0fc62c883170e50cd',
-    S3VpcEndpointId: 'vpce-008ee2542fea2cf91',
-    VpcId: 'vpc-0697e18cf06285f41',
-  };
-}
+let outputs = JSON.parse(
+  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+);
 
 describe('CDK Stack Integration Tests', () => {
   /**

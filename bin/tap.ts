@@ -25,23 +25,24 @@ const defaultConfig = {
 };
 // Get configuration from context or use defaults
 const appName = app.node.tryGetContext('appName') || defaultConfig.appName;
-const environment = app.node.tryGetContext('environment') || defaultConfig.environment;
+const environment =
+  app.node.tryGetContext('environment') || defaultConfig.environment;
 const owner = app.node.tryGetContext('owner') || defaultConfig.owner;
-const instanceType = app.node.tryGetContext('instanceType') || defaultConfig.instanceType;
-const allowedCidrs = app.node.tryGetContext('allowedCidrs') || defaultConfig.allowedCidrs;
-const dbEngineVersion = app.node.tryGetContext('dbEngineVersion') || defaultConfig.dbEngineVersion;
+const instanceType =
+  app.node.tryGetContext('instanceType') || defaultConfig.instanceType;
+const allowedCidrs =
+  app.node.tryGetContext('allowedCidrs') || defaultConfig.allowedCidrs;
+const dbEngineVersion =
+  app.node.tryGetContext('dbEngineVersion') || defaultConfig.dbEngineVersion;
 
 // Target regions for multi-region deployment
 const regions = [
   { name: 'us-east-1', isPrimary: true },
-  { name: 'us-west-2', isPrimary: false }
+  { name: 'us-west-2', isPrimary: false },
 ];
-
 
 // Create stacks for both regions
 regions.forEach(region => {
-  const stackName = `${environment.charAt(0).toUpperCase() + environment.slice(1)}InfrastructureStack-${region.name}`;
-
   new TapStack(app, stackName, {
     stackName,
     environmentSuffix: environmentSuffix,
@@ -49,7 +50,7 @@ regions.forEach(region => {
 
     env: {
       account: process.env.CDK_DEFAULT_ACCOUNT,
-      region: region.name
+      region: region.name,
     },
 
     // Termination protection for production
@@ -71,7 +72,7 @@ regions.forEach(region => {
       Region: region.name,
       Owner: owner,
       IsPrimary: region.isPrimary.toString(),
-      ManagedBy: 'CDK'
-    }
+      ManagedBy: 'CDK',
+    },
   });
 });
