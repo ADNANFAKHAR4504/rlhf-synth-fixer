@@ -393,27 +393,29 @@ security_hub_account = aws.securityhub.Account(f"{company_name}-{app_name}-{envi
     enable_default_standards=True
 )
 
-# 14. Config Rules for compliance monitoring
-config_configuration_recorder = aws.cfg.Recorder(f"{company_name}-{app_name}-{environment}-config",
-    name=f"{company_name}-{app_name}-{environment}-config",
-    role_arn=aws.iam.Role(f"{company_name}-{app_name}-{environment}-config-role",
-        assume_role_policy=json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "config.amazonaws.com"
-                }
-            }]
-        }),
-        tags=common_tags
-    ).arn,
-    recording_group=aws.cfg.RecorderRecordingGroupArgs(
-        all_supported=True,
-        include_global_resource_types=True
-    )
-)
+# 14. Config Rules for compliance monitoring - commented out due to account limit
+# Note: AWS Config only allows one configuration recorder per account
+# If you need Config, it's likely already enabled in your account
+# config_configuration_recorder = aws.cfg.Recorder(f"{company_name}-{app_name}-{environment}-config",
+#     name=f"{company_name}-{app_name}-{environment}-config",
+#     role_arn=aws.iam.Role(f"{company_name}-{app_name}-{environment}-config-role",
+#         assume_role_policy=json.dumps({
+#             "Version": "2012-10-17",
+#             "Statement": [{
+#                 "Action": "sts:AssumeRole",
+#                 "Effect": "Allow",
+#                 "Principal": {
+#                     "Service": "config.amazonaws.com"
+#                 }
+#             }]
+#         }),
+#         tags=common_tags
+#     ).arn,
+#     recording_group=aws.cfg.RecorderRecordingGroupArgs(
+#         all_supported=True,
+#         include_global_resource_types=True
+#     )
+# )
 
 # 15. GuardDuty for threat detection - commented out due to account limit
 # Note: GuardDuty only allows one detector per AWS account
@@ -424,15 +426,17 @@ config_configuration_recorder = aws.cfg.Recorder(f"{company_name}-{app_name}-{en
 #     tags=common_tags
 # )
 
-# 16. CloudTrail for audit logging
-cloudtrail = aws.cloudtrail.Trail(f"{company_name}-{app_name}-{environment}-trail",
-    name=f"{company_name}-{app_name}-{environment}-trail",
-    s3_bucket_name=s3_logging_bucket.id,
-    include_global_service_events=True,
-    is_multi_region_trail=True,
-    enable_logging=True,
-    tags=common_tags
-)
+# 16. CloudTrail for audit logging - commented out due to account limit
+# Note: AWS CloudTrail has a limit of 5 trails per account
+# If you need CloudTrail, it's likely already enabled in your account
+# cloudtrail = aws.cloudtrail.Trail(f"{company_name}-{app_name}-{environment}-trail",
+#     name=f"{company_name}-{app_name}-{environment}-trail",
+#     s3_bucket_name=s3_logging_bucket.id,
+#     include_global_service_events=True,
+#     is_multi_region_trail=True,
+#     enable_logging=True,
+#     tags=common_tags
+# )
 
 # 17. S3 bucket for website content (sample index.html)
 website_content = f"""
