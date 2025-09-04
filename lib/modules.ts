@@ -1043,7 +1043,7 @@ export class DatabaseModule extends Construct {
     // RDS Parameter Group
     const dbParameterGroup = new DbParameterGroup(this, 'db-parameter-group', {
       name: 'tap-db-pg-prod',
-      family: 'postgres15',
+      family: 'postgres17',
       description: 'Parameter group for PostgreSQL 14',
       parameter: [
         {
