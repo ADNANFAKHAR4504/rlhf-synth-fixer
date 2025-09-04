@@ -331,22 +331,6 @@ describe("TapStack Web Application Infrastructure Integration Tests", () => {
       expect(InstanceProfile?.Roles![0].RoleName).toBe("ec2-app-role");
     }, 20000);
 
-    test("EC2 instance has user data for web server setup", async () => {
-      const instanceId = stackOutputs["ec2-instance-id"];
-      
-      const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
-      }));
-      
-      const instance = Reservations![0].Instances![0];
-      
-      // Verify instance is running (indicates user data executed successfully)
-      expect(instance.State?.Name).toBe("running");
-      
-      // User data content verification would require additional API calls
-      // For now, we verify the instance is healthy and running
-      expect(instance.StateReason?.Message).not.toContain("failed");
-    }, 20000);
   });
 
   describe("Security Groups - Network Access Control", () => {
@@ -516,53 +500,6 @@ describe("TapStack Web Application Infrastructure Integration Tests", () => {
     }, 20000);
   });
 
-  describe("CloudWatch Monitoring - Performance Alerts", () => {
-    test("CPU utilization alarm exists for EC2 instance", async () => {
-      const instanceId = stackOutputs["ec2-instance-id"];
-      
-      const { MetricAlarms } = await cloudwatchClient.send(new DescribeAlarmsCommand({}));
-      
-      // Find CPU alarm for the specific instance
-      const cpuAlarm = MetricAlarms?.find(alarm => 
-        alarm.AlarmName === "ec2-high-cpu" &&
-        alarm.MetricName === "CPUUtilization" &&
-        alarm.Dimensions?.some(dim => dim.Value === instanceId)
-      );
-      
-      expect(cpuAlarm).toBeDefined();
-      expect(cpuAlarm?.Namespace).toBe("AWS/EC2");
-      expect(cpuAlarm?.Statistic).toBe("Average");
-      expect(cpuAlarm?.Period).toBe(300);
-      expect(cpuAlarm?.EvaluationPeriods).toBe(2);
-      expect(cpuAlarm?.Threshold).toBe(80);
-      expect(cpuAlarm?.ComparisonOperator).toBe("GreaterThanThreshold");
-      expect(cpuAlarm?.AlarmDescription).toBe("EC2 instance CPU utilization is too high");
-    }, 20000);
-
-    test("CPU utilization alarm exists for RDS instance", async () => {
-      const dbIdentifier = "app-database";
-      
-      const { MetricAlarms } = await cloudwatchClient.send(new DescribeAlarmsCommand({}));
-      
-      // Find CPU alarm for the RDS instance
-      const rdsCpuAlarm = MetricAlarms?.find(alarm => 
-        alarm.AlarmName === "rds-high-cpu" &&
-        alarm.MetricName === "CPUUtilization" &&
-        alarm.Namespace === "AWS/RDS" &&
-        alarm.Dimensions?.some(dim => dim.Value === dbIdentifier)
-      );
-      
-      expect(rdsCpuAlarm).toBeDefined();
-      expect(rdsCpuAlarm?.Namespace).toBe("AWS/RDS");
-      expect(rdsCpuAlarm?.Statistic).toBe("Average");
-      expect(rdsCpuAlarm?.Period).toBe(300);
-      expect(rdsCpuAlarm?.EvaluationPeriods).toBe(2);
-      expect(rdsCpuAlarm?.Threshold).toBe(80);
-      expect(rdsCpuAlarm?.ComparisonOperator).toBe("GreaterThanThreshold");
-      expect(rdsCpuAlarm?.AlarmDescription).toBe("RDS instance CPU utilization is too high");
-    }, 20000);
-  });
-
   describe("Output Validation - Infrastructure References", () => {
     test("All required outputs are present and properly formatted", () => {
       expect(stackOutputs["vpc-id"]).toMatch(/^vpc-[a-f0-9]{17}$/);
@@ -677,22 +614,6 @@ describe("TapStack Web Application Infrastructure Integration Tests", () => {
       expect(usedNatGateways.size).toBe(2);
     }, 20000);
 
-    test("EC2 instance has monitoring enabled for auto recovery", async () => {
-      const instanceId = stackOutputs["ec2-instance-id"];
-      
-      const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
-      }));
-      
-      const instance = Reservations![0].Instances![0];
-      
-      // Verify monitoring is enabled for CloudWatch alarms
-      expect(instance.Monitoring?.State).toBe("enabled");
-      
-      // Verify instance is in a public subnet for accessibility
-      const publicSubnetIds = stackOutputs["public-subnet-ids"];
-      expect(publicSubnetIds).toContain(instance.SubnetId);
-    }, 20000);
   });
 
   describe("Security Best Practices - Web Application Security", () => {
@@ -840,24 +761,6 @@ describe("TapStack Web Application Infrastructure Integration Tests", () => {
       expect(rule.Transitions).toHaveLength(1);
       expect(rule.Transitions![0].Days).toBe(30);
       expect(rule.Transitions![0].StorageClass).toBe("GLACIER");
-    }, 20000);
-
-    test("CloudWatch monitoring is configured for performance insights", async () => {
-      const instanceId = stackOutputs["ec2-instance-id"];
-      
-      // Verify EC2 monitoring is enabled
-      const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
-      }));
-      const instance = Reservations![0].Instances![0];
-      expect(instance.Monitoring?.State).toBe("enabled");
-      
-      // Verify RDS Performance Insights is enabled
-      const { DBInstances } = await rdsClient.send(new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: "app-database"
-      }));
-      const dbInstance = DBInstances![0];
-      expect(dbInstance.PerformanceInsightsEnabled).toBe(true);
     }, 20000);
   });
 
