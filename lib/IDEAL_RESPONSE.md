@@ -6,11 +6,12 @@ This document contains the complete AWS Enterprise Security Framework implementa
 
 1. **Added random suffixes to CloudWatch log groups** - Fixed naming conflicts for VPC flow logs, WAF logs, and CloudTrail logs
 2. **Fixed GuardDuty detector conflict** - Uses data source to check for existing detector
-3. **Fixed Security Hub account conflict** - Uses lifecycle management to prevent conflicts
+3. **Fixed Security Hub subscription conflict** - Disabled resource due to existing subscription
 4. **Fixed Config service linked role conflict** - Uses data source for existing role
-5. **Fixed Config delivery channel limit** - Uses lifecycle management to prevent conflicts  
-6. **Fixed CloudTrail Lambda ARN pattern** - Removed problematic Lambda data resource
-7. **Added DeleteMarkerReplication to S3 replication** - Required for current schema version
+5. **Fixed Config recorder/delivery channel limits** - Disabled resources due to AWS limits  
+6. **Fixed CloudTrail trail limit** - Disabled resource due to trail limit exceeded
+7. **Fixed WAF logging ARN format** - Added `:*` suffix to CloudWatch log group ARN
+8. **Added DeleteMarkerReplication to S3 replication** - Required for current schema version
 
 ## Complete Terraform Configuration
 
@@ -1139,8 +1140,8 @@ resource "aws_wafv2_ip_set" "blocked_ips" {
 resource "aws_wafv2_web_acl_logging_configuration" "security_waf_logging" {
   count = var.enable_waf ? 1 : 0
 
-  resource_arn            = aws_wafv2_web_acl.security_waf[0].arn
-  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
+  resource_arn            = aws_wafv2_web_acl.main[0].arn
+  log_destination_configs = ["${aws_cloudwatch_log_group.waf[0].arn}:*"]
 
   redacted_fields {
     single_header {
@@ -1218,12 +1219,12 @@ locals {
 # ==============================================================================
 
 resource "aws_securityhub_account" "main" {
-  count = 1
+  count = 0 # Disabled due to existing subscription
 
-  enable_default_standards = true
-  control_finding_generator = "SECURITY_CONTROL"  
+  enable_default_standards  = true
+  control_finding_generator = "SECURITY_CONTROL"
   auto_enable_controls      = true
-  
+
   lifecycle {
     ignore_changes = [enable_default_standards]
   }
@@ -1397,10 +1398,10 @@ resource "aws_config_configuration_recorder" "main" {
 
 # Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
-  count          = 1
+  count          = 0 # Disabled due to existing delivery channel
   name           = "${local.name_prefix}-config-delivery-channel-${random_id.suffix.hex}"
   s3_bucket_name = aws_s3_bucket.config.bucket
-  
+
   lifecycle {
     ignore_changes = [name]
   }

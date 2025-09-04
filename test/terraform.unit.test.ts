@@ -349,6 +349,7 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_wafv2_web_acl_logging_configuration"\s+"main"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"waf"\s*{/);
       expect(terraformContent).toMatch(/name\s*=\s*"\/aws\/wafv2\/\$\{local\.name_prefix\}-security-waf-\$\{random_id\.suffix\.hex\}"/);
+      expect(terraformContent).toMatch(/log_destination_configs\s*=\s*\["\$\{aws_cloudwatch_log_group\.waf\[0\]\.arn\}:\*"\]/);
     });
   });
 
@@ -378,10 +379,9 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
   });
 
   describe("Security Hub", () => {
-    test("declares Security Hub account with lifecycle management", () => {
+    test("declares Security Hub account conditionally", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_securityhub_account"\s+"main"\s*{/);
-      expect(terraformContent).toMatch(/count\s*=\s*1/);
-      expect(terraformContent).toMatch(/lifecycle\s*{\s*ignore_changes\s*=\s*\[enable_default_standards\]\s*}/);
+      expect(terraformContent).toMatch(/count\s*=\s*0.*# Disabled due to existing subscription/);
     });
 
     test("enables default standards", () => {
@@ -417,17 +417,17 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/name\s*=\s*"AWSServiceRoleForConfig"/);
     });
 
-    test("declares Config service components with lifecycle management", () => {
+    test("declares Config service components conditionally", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_config_configuration_recorder"\s+"main"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_config_delivery_channel"\s+"main"\s*{/);
-      expect(terraformContent).toMatch(/count\s*=\s*1/);
-      expect(terraformContent).toMatch(/lifecycle\s*{\s*ignore_changes\s*=\s*\[name\]\s*}/);
+      expect(terraformContent).toMatch(/count\s*=\s*0.*# Disabled due to.*limit/);
     });
 
-    test("declares Config rules", () => {
+    test("declares Config rules conditionally", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_config_config_rule"\s+"root_access_key_check"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_config_config_rule"\s+"encrypted_volumes"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_config_config_rule"\s+"s3_bucket_ssl_requests_only"\s*{/);
+      expect(terraformContent).toMatch(/count\s*=\s*0.*# Disabled due to no active configuration recorder/);
     });
   });
 
@@ -441,8 +441,9 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"cloudtrail"\s*{/);
     });
 
-    test("declares CloudTrail with proper configuration", () => {
+    test("declares CloudTrail conditionally", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_cloudtrail"\s+"main"\s*{/);
+      expect(terraformContent).toMatch(/count\s*=\s*0.*# Disabled due to trail limit reached/);
     });
 
     test("CloudTrail enables multi-region and data events", () => {

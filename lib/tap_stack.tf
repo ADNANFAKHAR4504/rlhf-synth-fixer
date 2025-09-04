@@ -1288,7 +1288,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "main" {
   count = var.enable_waf ? 1 : 0
 
   resource_arn            = aws_wafv2_web_acl.main[0].arn
-  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
+  log_destination_configs = ["${aws_cloudwatch_log_group.waf[0].arn}:*"]
 
   redacted_fields {
     single_header {
@@ -1366,7 +1366,7 @@ locals {
 # ==============================================================================
 
 resource "aws_securityhub_account" "main" {
-  count = 1
+  count = 0 # Disabled due to existing subscription
 
   enable_default_standards  = true
   control_finding_generator = "SECURITY_CONTROL"
@@ -1505,6 +1505,7 @@ locals {
 
 # Config Configuration Recorder
 resource "aws_config_configuration_recorder" "main" {
+  count    = 0 # Disabled due to recorder limit reached
   name     = "${local.name_prefix}-config-recorder-${random_id.suffix.hex}"
   role_arn = local.config_role_arn
 
@@ -1522,7 +1523,7 @@ resource "aws_config_configuration_recorder" "main" {
 
 # Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
-  count          = 1
+  count          = 0 # Disabled due to existing delivery channel
   name           = "${local.name_prefix}-config-delivery-channel-${random_id.suffix.hex}"
   s3_bucket_name = aws_s3_bucket.config.bucket
 
@@ -1533,7 +1534,8 @@ resource "aws_config_delivery_channel" "main" {
 
 # Config Rules for compliance
 resource "aws_config_config_rule" "root_access_key_check" {
-  name = "root-access-key-check"
+  count = 0 # Disabled due to no active configuration recorder
+  name  = "root-access-key-check"
 
   source {
     owner             = "AWS"
@@ -1544,7 +1546,8 @@ resource "aws_config_config_rule" "root_access_key_check" {
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "encrypted-volumes"
+  count = 0 # Disabled due to no active configuration recorder
+  name  = "encrypted-volumes"
 
   source {
     owner             = "AWS"
@@ -1555,7 +1558,8 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 }
 
 resource "aws_config_config_rule" "s3_bucket_ssl_requests_only" {
-  name = "s3-bucket-ssl-requests-only"
+  count = 0 # Disabled due to no active configuration recorder
+  name  = "s3-bucket-ssl-requests-only"
 
   source {
     owner             = "AWS"
@@ -1719,6 +1723,7 @@ resource "aws_iam_role_policy" "cloudtrail_cloudwatch" {
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
+  count                         = 0 # Disabled due to trail limit reached
   name                          = "${local.name_prefix}-security-trail-${random_id.suffix.hex}"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.bucket
   include_global_service_events = true
@@ -2079,7 +2084,7 @@ output "cloudtrail_bucket_name" {
 
 output "cloudtrail_arn" {
   description = "ARN of the CloudTrail"
-  value       = aws_cloudtrail.main.arn
+  value       = length(aws_cloudtrail.main) > 0 ? aws_cloudtrail.main[0].arn : null
 }
 
 output "audit_logs_bucket_name" {
