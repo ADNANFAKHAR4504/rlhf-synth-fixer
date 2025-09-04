@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TapStack - Complete secure multi-environment infrastructure with observability and auto-remediation (lint-cleaned)'
+Description: 'TapStack - Complete secure multi-environment infrastructure with observability and auto-remediation (no prompts, lint-cleaned)'
 
 Parameters:
   EnvironmentName:
@@ -17,31 +17,16 @@ Parameters:
   AllowedAdminCidr:
     Type: String
     Default: 203.0.113.0/24
-    Description: CIDR block allowed for SSH admin access
+    Description: CIDR block allowed for SSH admin access (kept for future; SSM used instead)
     AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$'
 
   AlarmEmail:
     Type: String
+    Default: alerts@example.com
     Description: Email address for CloudWatch alarm notifications
     AllowedPattern: '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
 
-  DbMasterUsername:
-    Type: String
-    Default: tapuser
-    Description: Master username for RDS instance
-    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
-    MinLength: 1
-    MaxLength: 63
-
-  DbEngineVersion:
-    Type: String
-    Default: '15.4'
-    Description: PostgreSQL engine version
-
-  PublicKeyMaterial:
-    Type: String
-    Description: SSH public key material for EC2 KeyPair
-
+ 
   CostCenter:
     Type: String
     Default: Engineering
@@ -366,14 +351,14 @@ Resources:
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for bastion host
+      GroupDescription: Security group for bastion host (SSM access; SSH optional)
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AllowedAdminCidr
-          Description: SSH access from admin CIDR
+          Description: SSH access from admin CIDR (optional; use SSM primarily)
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -414,7 +399,7 @@ Resources:
           Value: !Ref Owner
 
   # ---------------------------
-  # IAM (AccountPasswordPolicy removed to satisfy linter)
+  # IAM (AccountPasswordPolicy removed)
   # ---------------------------
   EC2Role:
     Type: AWS::IAM::Role
@@ -624,31 +609,13 @@ Resources:
           Value: !Ref Owner
 
   # ---------------------------
-  # EC2 KeyPair & Instance
+  # EC2 Instance (SSM-first; no KeyPair required)
   # ---------------------------
-  EC2KeyPair:
-    Type: AWS::EC2::KeyPair
-    Properties:
-      KeyName: !Sub ${ProjectName}-${EnvironmentName}-keypair
-      PublicKeyMaterial: !Ref PublicKeyMaterial
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-${EnvironmentName}-keypair
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-        - Key: Owner
-          Value: !Ref Owner
-
   BastionInstance:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref LatestAmiId
       InstanceType: !FindInMap [EnvironmentMap, !Ref EnvironmentName, InstanceType]
-      KeyName: !Ref EC2KeyPair
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       SubnetId: !Ref PublicSubnet1
@@ -681,18 +648,8 @@ Resources:
     Properties:
       LogGroupName: /tapstack/centralized
       RetentionInDays: !FindInMap [EnvironmentMap, !Ref EnvironmentName, LogRetentionDays]
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-${EnvironmentName}-centralized-logs
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-        - Key: Owner
-          Value: !Ref Owner
-
+    # (Tags supported; optional—keeping template concise)
+  
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
@@ -873,8 +830,7 @@ Resources:
       DBInstanceIdentifier: !Sub ${ProjectName}-${EnvironmentName}-postgres
       DBInstanceClass: !FindInMap [EnvironmentMap, !Ref EnvironmentName, RdsInstanceClass]
       Engine: postgres
-      EngineVersion: !Ref DbEngineVersion
-      MasterUsername: !Ref DbMasterUsername
+      # Let AWS choose a supported version to avoid regional version issues
       ManageMasterUserPassword: true
       AllocatedStorage: !FindInMap [EnvironmentMap, !Ref EnvironmentName, RdsAllocatedStorage]
       StorageEncrypted: true
@@ -906,17 +862,6 @@ Resources:
     Properties:
       TopicName: !Sub ${ProjectName}-${EnvironmentName}-alarms
       DisplayName: !Sub ${ProjectName} ${EnvironmentName} Alarms
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-${EnvironmentName}-alarm-topic
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-        - Key: Owner
-          Value: !Ref Owner
 
   AlarmSubscription:
     Type: AWS::SNS::Subscription
@@ -959,35 +904,25 @@ Resources:
           import boto3
           import json
           import logging
-
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-
           s3 = boto3.client('s3')
-
           def lambda_handler(event, context):
               logger.info(f"Received event: {json.dumps(event)}")
-
               try:
                   detail = event.get('detail', {})
                   event_name = detail.get('eventName', '')
                   bucket_name = None
-
                   if event_name == 'PutBucketPolicy':
                       bucket_name = detail.get('requestParameters', {}).get('bucketName')
                   elif event_name == 'PutBucketAcl':
                       bucket_name = detail.get('requestParameters', {}).get('bucketName')
-
                   if not bucket_name:
                       logger.warning("Could not extract bucket name from event")
                       return
-
-                  logger.info(f"Processing bucket: {bucket_name}")
-
                   try:
                       response = s3.get_bucket_policy(Bucket=bucket_name)
                       policy = json.loads(response['Policy'])
-
                       needs_update = False
                       new_statements = []
                       for statement in policy.get('Statement', []):
@@ -997,33 +932,18 @@ Resources:
                               needs_update = True
                               continue
                           new_statements.append(statement)
-
                       if needs_update:
                           policy['Statement'] = new_statements
                           s3.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(policy))
                           logger.info(f"Updated policy for bucket: {bucket_name}")
-
                   except s3.exceptions.NoSuchBucketPolicy:
                       logger.info(f"No bucket policy exists for {bucket_name}")
                   except Exception as e:
                       logger.error(f"Error processing bucket policy: {str(e)}")
-
                   return {'statusCode': 200, 'body': json.dumps('Policy check completed')}
-
               except Exception as e:
                   logger.error(f"Error in lambda_handler: {str(e)}")
                   raise
-      Tags:
-        - Key: Name
-          Value: !Sub ${ProjectName}-${EnvironmentName}-s3-policy-guard
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-        - Key: Owner
-          Value: !Ref Owner
 
   S3PolicyEventRule:
     Type: AWS::Events::Rule
