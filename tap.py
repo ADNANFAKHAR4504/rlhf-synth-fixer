@@ -5,18 +5,18 @@ from lib.tap_stack import TapStack
 app = cdk.App()
 
 # Get context values or use defaults
-environment = app.node.try_get_context("environment") or "dev"
+env_suffix = app.node.try_get_context("environmentSuffix") or "dev"
 project_name = app.node.try_get_context("project") or "tap-serverless"
 
 TapStack(
     app, 
-    f"{project_name}-{environment}",
+    f"{project_name}-{env_suffix}",
     env=cdk.Environment(
         account=app.node.try_get_context("account"),
         region="us-east-1"
     ),
     project_name=project_name,
-    environment=environment
+    environment_suffix=env_suffix
 )
 
 app.synth()
