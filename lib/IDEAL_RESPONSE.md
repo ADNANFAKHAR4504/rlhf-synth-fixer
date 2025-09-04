@@ -1,5 +1,3 @@
-# idealresponse.md
-
 ## Purpose
 
 This document is an _ideal response_ describing, validating, and improving the provided `tapstack.json` CloudFormation template that provisions a secure serverless infrastructure (Lambda triggered by S3, API Gateway + usage plan, encrypted S3, least-privilege IAM). It:
