@@ -10,7 +10,7 @@ This document contains the complete AWS Enterprise Security Framework implementa
 4. **Fixed Config service linked role conflict** - Uses data source for existing role
 5. **Fixed Config recorder/delivery channel limits** - Disabled resources due to AWS limits  
 6. **Fixed CloudTrail trail limit** - Disabled resource due to trail limit exceeded
-7. **Fixed WAF logging ARN format** - Corrected CloudWatch log group ARN format without `:*` suffix
+7. **Fixed WAF logging ARN format** - Added required `:*` suffix to CloudWatch log group ARN for WAF v2
 8. **Added DeleteMarkerReplication to S3 replication** - Required for current schema version
 
 ## Complete Terraform Configuration
@@ -1141,7 +1141,7 @@ resource "aws_wafv2_web_acl_logging_configuration" "security_waf_logging" {
   count = var.enable_waf ? 1 : 0
 
   resource_arn            = aws_wafv2_web_acl.main[0].arn
-  log_destination_configs = [aws_cloudwatch_log_group.waf[0].arn]
+  log_destination_configs = ["${aws_cloudwatch_log_group.waf[0].arn}:*"]
 
   redacted_fields {
     single_header {

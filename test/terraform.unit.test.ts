@@ -349,7 +349,7 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_wafv2_web_acl_logging_configuration"\s+"main"\s*{/);
       expect(terraformContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"waf"\s*{/);
       expect(terraformContent).toMatch(/name\s*=\s*"\/aws\/wafv2\/\$\{local\.name_prefix\}-security-waf-\$\{random_id\.suffix\.hex\}"/);
-      expect(terraformContent).toMatch(/log_destination_configs\s*=\s*\[aws_cloudwatch_log_group\.waf\[0\]\.arn\]/);
+      expect(terraformContent).toMatch(/log_destination_configs\s*=\s*\["\$\{aws_cloudwatch_log_group\.waf\[0\]\.arn\}:\*"\]/);
     });
   });
 
