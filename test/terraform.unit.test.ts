@@ -4,18 +4,16 @@ import * as path from 'path';
 const LIB_DIR = path.resolve(__dirname, '../lib');
 const TAP_STACK_TF = path.join(LIB_DIR, 'tap_stack.tf');
 
-// Read the Terraform file once for all tests
+// Read Terraform code once for all tests
 const tf = fs.readFileSync(TAP_STACK_TF, 'utf8');
 const has = (regex: RegExp) => regex.test(tf);
 
 describe('tap_stack.tf Full Coverage Unit Tests', () => {
-  // -------------------- File Existence --------------------
   it('tap_stack.tf exists and is non-empty', () => {
     expect(fs.existsSync(TAP_STACK_TF)).toBe(true);
     expect(tf.length).toBeGreaterThan(1000);
   });
 
-  // -------------------- Variables --------------------
   it('declares region variable with default and description', () => {
     expect(has(/variable\s+"region"/)).toBe(true);
     expect(has(/default\s*=\s*"us-east-2"/)).toBe(true);
@@ -34,7 +32,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/description\s*=\s*"Domain name for Route 53"/)).toBe(true);
   });
 
-  // -------------------- Data Sources --------------------
   it('declares aws_availability_zones data source filtering available AZs', () => {
     expect(has(/data\s+"aws_availability_zones"\s+"available"/)).toBe(true);
     expect(has(/state\s*=\s*"available"/)).toBe(true);
@@ -48,13 +45,11 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/filter\s+{[^}]*name\s*=\s*"virtualization-type"[^}]*values\s*=\s*\["hvm"\]/)).toBe(true);
   });
 
-  // -------------------- Locals --------------------
   it('defines locals for azs and common_tags', () => {
     expect(has(/locals\s*{[^}]*azs\s*=\s*slice\([^)]*\)/)).toBe(true);
     expect(has(/common_tags\s*=\s*{[^}]*Environment\s*=\s*"Production"/)).toBe(true);
   });
 
-  // -------------------- Random Resources --------------------
   it('defines random_string resources for db_username and bucket_suffix', () => {
     expect(has(/resource\s+"random_string"\s+"db_username"/)).toBe(true);
     expect(has(/resource\s+"random_string"\s+"bucket_suffix"/)).toBe(true);
@@ -65,7 +60,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/override_special\s*=\s*"!#\$%&\*\+\-=\?\^_`\{\|\}~"/)).toBe(true);
   });
 
-  // -------------------- VPC and Subnets --------------------
   it('creates aws_vpc main with dns enabled and correct cidr', () => {
     expect(has(/resource\s+"aws_vpc"\s+"main"/)).toBe(true);
     expect(has(/cidr_block\s*=\s*var.vpc_cidr/)).toBe(true);
@@ -82,7 +76,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/cidr_block\s*=\s*"10\.0\.\$\{count\.index \+ 10\}\.0\/24"/)).toBe(true);
   });
 
-  // -------------------- Internet Gateway and NAT --------------------
   it('creates internet gateway and elastic IPs for NAT', () => {
     expect(has(/resource\s+"aws_internet_gateway"\s+"main"/)).toBe(true);
     expect(has(/resource\s+"aws_eip"\s+"nat"/)).toBe(true);
@@ -94,23 +87,22 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/count\s*=\s*3/)).toBe(true);
   });
 
-  // -------------------- Route Tables and Associations --------------------
   it('defines public route table with 0.0.0.0/0 route to igw', () => {
     expect(has(/resource\s+"aws_route_table"\s+"public"/)).toBe(true);
     expect(has(/route\s*{[^}]*cidr_block\s*=\s*"0\.0\.0\.0\/0"[^}]*gateway_id\s*=\s*aws_internet_gateway.main.id/)).toBe(true);
   });
 
+  // FIXED REGEX for private route tables test - match actual count index interpolation with optional spaces
   it('defines private route tables with NAT routes and associations', () => {
     expect(has(/resource\s+"aws_route_table"\s+"private"/)).toBe(true);
     expect(has(/count\s*=\s*3/)).toBe(true);
-    expect(has(/nat_gateway_id\s*=\s*aws_nat_gateway.main\[\$count.index\]\.id/)).toBe(true);
+    expect(has(/nat_gateway_id\s*=\s*aws_nat_gateway\.main\[\s*count\.index\s*\]\.id/)).toBe(true);
 
     expect(has(/resource\s+"aws_route_table_association"\s+"public"/)).toBe(true);
     expect(has(/resource\s+"aws_route_table_association"\s+"private"/)).toBe(true);
     expect(has(/count\s*=\s*3/)).toBe(true);
   });
 
-  // -------------------- S3 Bucket for VPC Flow Logs --------------------
   it('creates S3 bucket with suffix random_string and enables encryption, versioning, public access block', () => {
     expect(has(/resource\s+"aws_s3_bucket"\s+"flow_logs"/)).toBe(true);
     expect(has(/bucket\s*=\s*"tap-stack-vpc-flow-logs-\${random_string.bucket_suffix.result}"/)).toBe(true);
@@ -123,7 +115,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/block_public_acls\s*=.*true/)).toBe(true);
   });
 
-  // -------------------- VPC Flow Logs --------------------
   it('creates CloudWatch log group, IAM role and policy, and flow logs resource', () => {
     expect(has(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_logs"/)).toBe(true);
     expect(has(/resource\s+"aws_iam_role"\s+"flow_logs"/)).toBe(true);
@@ -132,7 +123,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/traffic_type\s*=\s*"ALL"/)).toBe(true);
   });
 
-  // -------------------- Security Groups --------------------
   it('declares security groups for alb, ec2, and rds with correct ingress and egress rules', () => {
     expect(has(/resource\s+"aws_security_group"\s+"alb"/)).toBe(true);
     expect(has(/ingress\s*{[^}]*from_port\s*=\s*80/)).toBe(true);
@@ -147,7 +137,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/security_groups\s*=\s*\[aws_security_group.ec2.id\]/)).toBe(true);
   });
 
-  // -------------------- IAM Roles and Policies --------------------
   it('sets up IAM role and policy for EC2 with S3 and CloudWatch permissions', () => {
     expect(has(/resource\s+"aws_iam_role"\s+"ec2"/)).toBe(true);
     expect(has(/resource\s+"aws_iam_role_policy"\s+"ec2"/)).toBe(true);
@@ -160,7 +149,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/role\s*=\s*aws_iam_role.ec2.name/)).toBe(true);
   });
 
-  // -------------------- Launch Template and Autoscaling --------------------
   it('defines launch template with user_data, security groups, monitoring enabled', () => {
     expect(has(/resource\s+"aws_launch_template"\s+"main"/)).toBe(true);
     expect(has(/instance_type\s*=\s*"t3.micro"/)).toBe(true);
@@ -179,7 +167,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/instance_refresh/)).toBe(true);
   });
 
-  // -------------------- Application Load Balancer --------------------
   it('defines ALB, target group, listener with HTTP and forwarding action', () => {
     expect(has(/resource\s+"aws_lb"\s+"main"/)).toBe(true);
     expect(has(/load_balancer_type\s*=\s*"application"/)).toBe(true);
@@ -193,20 +180,18 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/protocol\s*=\s*"HTTP"/)).toBe(true);
   });
 
-  // -------------------- Route53 Hosted Zone and Records --------------------
   it('creates Route53 hosted zone and A alias records for root and www', () => {
     expect(has(/resource\s+"aws_route53_zone"\s+"main"/)).toBe(true);
     expect(has(/name\s*=\s*var.domain_name/)).toBe(true);
 
     expect(has(/resource\s+"aws_route53_record"\s+"main"/)).toBe(true);
     expect(has(/type\s*=\s*"A"/)).toBe(true);
-    expect(has(/alias\s+{/)).toBe(true);
+    expect(has(/alias\s*{[^}]*name\s*=\s*aws_lb.main.dns_name/)).toBe(true);
 
     expect(has(/resource\s+"aws_route53_record"\s+"www"/)).toBe(true);
-    expect(has(/name\s*=\s*"www\.\$\{var.domain_name\}"/)).toBe(true);
+    expect(has(/name\s*=\s*"www\.\$\{var\.domain_name\}"/)).toBe(true);
   });
 
-  // -------------------- Secrets Manager for RDS --------------------
   it('creates secretsmanager secret and version with username and password', () => {
     expect(has(/resource\s+"aws_secretsmanager_secret"\s+"db_credentials"/)).toBe(true);
     expect(has(/resource\s+"aws_secretsmanager_secret_version"\s+"db_credentials"/)).toBe(true);
@@ -214,7 +199,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/password\s*=\s*random_password.db_password.result/)).toBe(true);
   });
 
-  // -------------------- RDS --------------------
   it('creates RDS subnet group and multi-AZ MySQL RDS instance with encryption', () => {
     expect(has(/resource\s+"aws_db_subnet_group"\s+"main"/)).toBe(true);
     expect(has(/subnet_ids\s*=\s*aws_subnet.private\[\*\].id/)).toBe(true);
@@ -228,7 +212,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/password\s*=\s*jsondecode\(aws_secretsmanager_secret_version.db_credentials.secret_string\)\["password"\]/)).toBe(true);
   });
 
-  // -------------------- Outputs --------------------
   it('exports expected outputs matching major resources and important attributes', () => {
     [
       "vpc_id",
@@ -267,7 +250,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     });
   });
 
-  // -------------------- Best Practices --------------------
   it('does not contain any hardcoded AWS credentials', () => {
     expect(has(/aws_access_key_id\s*=/)).toBe(false);
     expect(has(/aws_secret_access_key\s*=/)).toBe(false);
@@ -277,7 +259,9 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/lifecycle\s*{[^}]*create_before_destroy\s*=\s*true[^}]*}/)).toBe(true);
   });
 
+  // FIXED common tags merge regex with optional whitespace/newlines
   it('applies common tags merge with local.common_tags and Environment tag', () => {
-    expect(has(/tags\s*=\s*merge\(local\.common_tags,\s*{[^}]*Environment\s*=\s*"Production"[^}]*}\)/)).toBe(true);
+    // This regex allows whitespace, newlines, and other tags within merged map args
+    expect(has(/tags\s*=\s*merge\(\s*local\.common_tags\s*,\s*{[^}]*Environment\s*=\s*"Production"[^}]*}\s*\)/)).toBe(true);
   });
 });
