@@ -1118,17 +1118,17 @@ resource "aws_launch_template" "app" {
     systemctl enable httpd
     
     # Create health check endpoint
-    cat > /var/www/html/health << 'EOL'
+    cat > /var/www/html/health << EOL
 {
   "status": "healthy",
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "instance": "$(curl -s http://169.254.169.254/latest/meta-data/instance-id)",
+  "timestamp": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "instance": "\$(curl -s http://169.254.169.254/latest/meta-data/instance-id)",
   "environment": "${var.environment}"
 }
 EOL
     
     # Create simple index page
-    cat > /var/www/html/index.html << 'EOL'
+    cat > /var/www/html/index.html << EOL
 <!DOCTYPE html>
 <html>
 <head>
@@ -1137,8 +1137,8 @@ EOL
 <body>
     <h1>Multi-Tier Web Application</h1>
     <p>Environment: ${var.environment}</p>
-    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-    <p>Timestamp: $(date)</p>
+    <p>Instance ID: \$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+    <p>Timestamp: \$(date)</p>
 </body>
 </html>
 EOL

@@ -785,7 +785,7 @@ resource "aws_iam_role" "ec2_role" {
 
 resource "aws_iam_policy" "ec2_policy" {
   name        = "${local.name_prefix}-ec2-policy"
-  description = "Policy for EC2 instances with S3 access"
+  description = "Policy for EC2 instances with S3, KMS, and CloudWatch access"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -814,6 +814,19 @@ resource "aws_iam_policy" "ec2_policy" {
             "aws:SourceVpc" = aws_vpc.main.id
           }
         }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey",
+          "kms:ReEncrypt*"
+        ]
+        Resource = [
+          aws_kms_key.main.arn
+        ]
       },
       {
         Effect = "Allow"
@@ -1094,17 +1107,17 @@ resource "aws_launch_template" "app" {
     systemctl enable httpd
     
     # Create health check endpoint
-    cat > /var/www/html/health << 'EOL'
+    cat > /var/www/html/health << EOL
 {
   "status": "healthy",
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "instance": "$(curl -s http://169.254.169.254/latest/meta-data/instance-id)",
+  "timestamp": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "instance": "\$(curl -s http://169.254.169.254/latest/meta-data/instance-id)",
   "environment": "${var.environment}"
 }
 EOL
     
     # Create simple index page
-    cat > /var/www/html/index.html << 'EOL'
+    cat > /var/www/html/index.html << EOL
 <!DOCTYPE html>
 <html>
 <head>
@@ -1113,8 +1126,8 @@ EOL
 <body>
     <h1>Multi-Tier Web Application</h1>
     <p>Environment: ${var.environment}</p>
-    <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-    <p>Timestamp: $(date)</p>
+    <p>Instance ID: \$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+    <p>Timestamp: \$(date)</p>
 </body>
 </html>
 EOL
