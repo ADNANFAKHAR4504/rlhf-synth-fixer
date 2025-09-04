@@ -105,7 +105,7 @@ Resources:
       SourceArn: !GetAtt "AppDataBucket.Arn"
       SourceAccount: !Ref "AWS::AccountId"
 
-  # IAM Role for S3 Notification Lambda
+  # IAM Role for S3 Notification Configuration Lambda
   S3NotificationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -128,14 +128,22 @@ Resources:
                   - s3:PutBucketNotification
                   - s3:GetBucketNotification
                 Resource: !GetAtt AppDataBucket.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:GetFunction
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource: !GetAtt ProcessDataLambda.Arn
 
   # Custom Lambda function to handle S3 notification configuration
   S3NotificationFunction:
     Type: AWS::Lambda::Function
     Properties:
+      FunctionName: !Sub "s3-notification-config-${EnvironmentName}"
       Runtime: python3.9
       Handler: index.handler
       Role: !GetAtt S3NotificationRole.Arn
+      Timeout: 300
       Code:
         ZipFile: |
           import boto3
@@ -145,26 +153,57 @@ Resources:
           def handler(event, context):
               try:
                   s3 = boto3.client('s3')
+                  lambda_client = boto3.client('lambda')
+                  
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  lambda_arn = event['ResourceProperties']['LambdaArn']
+                  
                   if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      # First, ensure Lambda permission exists
+                      try:
+                          lambda_client.add_permission(
+                              FunctionName=lambda_arn,
+                              StatementId='S3InvokePermission',
+                              Action='lambda:InvokeFunction',
+                              Principal='s3.amazonaws.com',
+                              SourceArn=f'arn:aws:s3:::{bucket_name}'
+                          )
+                      except lambda_client.exceptions.ResourceConflictException:
+                          # Permission already exists, which is fine
+                          pass
+                      
+                      # Configure S3 bucket notification
                       s3.put_bucket_notification_configuration(
-                          Bucket=event['ResourceProperties']['BucketName'],
+                          Bucket=bucket_name,
                           NotificationConfiguration={
-                              'LambdaConfigurations': [{
+                              'LambdaFunctionConfigurations': [{
                                   'Id': 'ProcessDataTrigger',
-                                  'LambdaFunctionArn': event['ResourceProperties']['LambdaArn'],
+                                  'LambdaFunctionArn': lambda_arn,
                                   'Events': ['s3:ObjectCreated:*']
                               }]
                           }
                       )
                   elif event['RequestType'] == 'Delete':
+                      # Remove notification configuration
                       s3.put_bucket_notification_configuration(
-                          Bucket=event['ResourceProperties']['BucketName'],
+                          Bucket=bucket_name,
                           NotificationConfiguration={}
                       )
+                      
+                      # Try to remove Lambda permission (optional, as stack deletion will clean up)
+                      try:
+                          lambda_client.remove_permission(
+                              FunctionName=lambda_arn,
+                              StatementId='S3InvokePermission'
+                          )
+                      except:
+                          # Ignore errors during deletion
+                          pass
+                  
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
               except Exception as e:
-                  print(e)
-                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
 
   # Custom resource to configure S3 bucket notifications
   S3BucketNotificationConfig:
@@ -173,8 +212,6 @@ Resources:
       ServiceToken: !GetAtt S3NotificationFunction.Arn
       BucketName: !Ref AppDataBucket
       LambdaArn: !GetAtt ProcessDataLambda.Arn
-    DependsOn:
-      - S3BucketEventPermission
 
   # API Gateway REST API
   ApiGatewayRestApi:
