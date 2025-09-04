@@ -123,33 +123,33 @@ class TapStack extends Stack {
                     vpcConstruct.getPublicSubnet(),
                     securityGroupConstruct.getWebSecurityGroup());
 
-            CfnOutput.Builder.create(this, region + "ec2InstanceIdOutput")
+            CfnOutput.Builder.create(this, region + "-ec2InstanceIdOutput")
                     .value(ec2Construct.getInstanceId())
                     .exportName(region + "-ec2InstanceId")
                     .build();
 
-            CfnOutput.Builder.create(this, region + "ec2InstanceRoleArnOutput")
+            CfnOutput.Builder.create(this, region + "-ec2InstanceRoleArnOutput")
                     .value(ec2Construct.getInstanceRoleArn())
                     .exportName(region + "-ec2InstanceRoleArn")
                     .build();
         }
 
-        CfnOutput.Builder.create(this, region + "securityGroupIdOutput")
+        CfnOutput.Builder.create(this, region + "-securityGroupIdOutput")
                 .value(securityGroupConstruct.getSecurityGroupId())
                 .exportName(region + "-securityGroupId")
                 .build();
 
-        CfnOutput.Builder.create(this, region + "vpcIdOutput")
+        CfnOutput.Builder.create(this, region + "-vpcIdOutput")
                 .value(vpcConstruct.getVpc().getVpcId())
                 .exportName(region + "-vpcId")
                 .build();
 
-        CfnOutput.Builder.create(this, region + "vpcPrivateSubnetIdOutput")
+        CfnOutput.Builder.create(this, region + "-vpcPrivateSubnetIdOutput")
                 .value(vpcConstruct.getPrivateSubnet().getSubnetId())
                 .exportName(region + "-vpcPrivateSubnetId")
                 .build();
 
-        CfnOutput.Builder.create(this, region + "vpcPublicSubnetIdOutput")
+        CfnOutput.Builder.create(this, region + "-vpcPublicSubnetIdOutput")
                 .value(vpcConstruct.getPublicSubnet().getSubnetId())
                 .exportName(region + "-vpcPublicSubnetId")
                 .build();
