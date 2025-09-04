@@ -43,20 +43,20 @@ s3_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}",
 )
 
 # Enable versioning on S3 bucket
-s3_bucket_versioning = aws.s3.BucketVersioningV2(f"{company_name}-{app_name}-{environment}-versioning",
+s3_bucket_versioning = aws.s3.BucketVersioning(f"{company_name}-{app_name}-{environment}-versioning",
     bucket=s3_bucket.id,
-    versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+    versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
         status="Enabled"
     )
 )
 
 # Configure S3 bucket encryption with AES-256
-s3_bucket_server_side_encryption_configuration = aws.s3.BucketServerSideEncryptionConfigurationV2(
+s3_bucket_server_side_encryption_configuration = aws.s3.BucketServerSideEncryptionConfiguration(
     f"{company_name}-{app_name}-{environment}-encryption",
     bucket=s3_bucket.id,
     rules=[
-        aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                 sse_algorithm="AES256"
             ),
             bucket_key_enabled=True
@@ -112,34 +112,34 @@ s3_bucket_policy = aws.s3.BucketPolicy(
 )
 
 # 3. S3 lifecycle policy for storage class management
-s3_bucket_lifecycle_configuration = aws.s3.BucketLifecycleConfigurationV2(
+s3_bucket_lifecycle_configuration = aws.s3.BucketLifecycleConfiguration(
     f"{company_name}-{app_name}-{environment}-lifecycle",
     bucket=s3_bucket.id,
     rules=[
-        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+        aws.s3.BucketLifecycleConfigurationRuleArgs(
             id="TransitionToIA",
             status="Enabled",
             transitions=[
-                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                     days=30,
                     storage_class="STANDARD_IA"
                 ),
-                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
                     days=90,
                     storage_class="GLACIER"
                 )
             ]
         ),
-        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+        aws.s3.BucketLifecycleConfigurationRuleArgs(
             id="DeleteOldVersions",
             status="Enabled",
             noncurrent_version_transitions=[
-                aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionTransitionArgs(
                     noncurrent_days=30,
                     storage_class="STANDARD_IA"
                 )
             ],
-            noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
+            noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
                 noncurrent_days=90
             )
         )
@@ -152,7 +152,7 @@ s3_logging_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}-logs
     tags=common_tags
 )
 
-s3_bucket_logging = aws.s3.BucketLoggingV2(
+s3_bucket_logging = aws.s3.BucketLogging(
     f"{company_name}-{app_name}-{environment}-logging",
     bucket=s3_bucket.id,
     target_bucket=s3_logging_bucket.id,
@@ -164,7 +164,7 @@ ssl_certificate = aws.acm.Certificate(f"{company_name}-{app_name}-{environment}-
     domain_name=certificate_domain,
     validation_method="DNS",
     tags=common_tags,
-    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1", region="us-east-1"))
+    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-acm", region="us-east-1"))
 )
 
 # 6. CloudWatch Log Groups for monitoring
@@ -213,7 +213,7 @@ lambda_edge_function = aws.lambda_.Function(f"{company_name}-{app_name}-{environ
     ).arn,
     runtime="nodejs18.x",
     tags=common_tags,
-    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1", region="us-east-1"))
+    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-lambda", region="us-east-1"))
 )
 
 # 8. AWS WAF Web ACL for protection
@@ -269,7 +269,7 @@ waf_web_acl = aws.wafv2.WebAcl(f"{company_name}-{app_name}-{environment}-waf",
         sampled_requests_enabled=True
     ),
     tags=common_tags,
-    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1", region="us-east-1"))
+    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-waf", region="us-east-1"))
 )
 
 # 9. CloudFront Origin Access Control
@@ -343,7 +343,7 @@ cloudfront_distribution = aws.cloudfront.Distribution(f"{company_name}-{app_name
         prefix="cloudfront-logs/"
     ),
     tags=common_tags,
-    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1", region="us-east-1"))
+    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-cloudfront", region="us-east-1"))
 )
 
 # 11. CloudWatch Alarms for monitoring
@@ -394,7 +394,7 @@ security_hub_account = aws.securityhub.Account(f"{company_name}-{app_name}-{envi
 )
 
 # 14. Config Rules for compliance monitoring
-config_configuration_recorder = aws.cfg.ConfigurationRecorder(f"{company_name}-{app_name}-{environment}-config",
+config_configuration_recorder = aws.cfg.Recorder(f"{company_name}-{app_name}-{environment}-config",
     name=f"{company_name}-{app_name}-{environment}-config",
     role_arn=aws.iam.Role(f"{company_name}-{app_name}-{environment}-config-role",
         assume_role_policy=json.dumps({
@@ -409,7 +409,7 @@ config_configuration_recorder = aws.cfg.ConfigurationRecorder(f"{company_name}-{
         }),
         tags=common_tags
     ).arn,
-    recording_group=aws.cfg.ConfigurationRecorderRecordingGroupArgs(
+    recording_group=aws.cfg.RecorderRecordingGroupArgs(
         all_supported=True,
         include_global_resource_types=True
     )
@@ -429,14 +429,6 @@ cloudtrail = aws.cloudtrail.Trail(f"{company_name}-{app_name}-{environment}-trai
     include_global_service_events=True,
     is_multi_region_trail=True,
     enable_logging=True,
-    event_selector=aws.cloudtrail.TrailEventSelectorArgs(
-        read_write_type="All",
-        include_management_events=True,
-        data_resource=aws.cloudtrail.TrailEventSelectorDataResourceArgs(
-            type="AWS::S3::Object",
-            values=[f"{s3_bucket.arn}/*"]
-        )
-    ),
     tags=common_tags
 )
 
