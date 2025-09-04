@@ -98,7 +98,7 @@ S3 Public Access Block
 - Cost optimization notes (data events disabled by default)
 - Proper resource dependencies and ordering
 
-Validation Checklist
+Validation Checklists
 - terraform init succeeds
 - terraform validate passes
 - terraform plan generates valid execution plan
