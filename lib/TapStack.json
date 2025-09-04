@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "A complete CloudFormation template for a highly available web application with VPC, subnets, EC2, ELB, RDS, S3, and IAM roles.",
+  "Description": "A complete CloudFormation template for a highly available web application with VPC, subnets, EC2, ELB, RDS, S3, and IAM roles, updated to use modern security best practices.",
   "Parameters": {
     "VpcCIDR": {
       "Description": "CIDR block for the VPC",
@@ -40,6 +40,7 @@
     "KeyName": {
       "Description": "The name of an existing EC2 KeyPair to enable SSH access to the instances",
       "Type": "AWS::EC2::KeyPair::KeyName",
+      "Default": "iac-rlhf-aws-trainer-instance",
       "ConstraintDescription": "Must be the name of an existing EC2 KeyPair."
     },
     "DBInstanceType": {
@@ -47,19 +48,14 @@
       "Type": "String",
       "Default": "db.t3.micro"
     },
-    "DBName": {
-      "Description": "Database name",
-      "Type": "String",
-      "Default": "webappdb"
-    },
     "DBUser": {
       "Description": "Database master username",
       "Type": "String"
     },
-    "DBPassword": {
-      "Description": "Database master user password",
+    "DBName": {
+      "Description": "The name of the database to be created.",
       "Type": "String",
-      "NoEcho": "true"
+      "Default": "webappdb"
     }
   },
   "Resources": {
@@ -325,16 +321,62 @@
         }
       }
     },
+    "LogBucketOwnershipControls": {
+      "Type": "AWS::S3::BucketOwnershipControls",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LogBucket"
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerPreferred"
+            }
+          ]
+        }
+      }
+    },
     "LogBucket": {
       "Type": "AWS::S3::Bucket",
+      "DependsOn": "LogBucketOwnershipControls",
       "Properties": {
-        "AccessControl": "LogDeliveryWrite",
         "Tags": [
           {
             "Key": "Name",
             "Value": "web-app-logs"
           }
         ]
+      }
+    },
+    "LogBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LogBucket"
+        },
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:aws:s3:::",
+                    {
+                      "Ref": "LogBucket"
+                    },
+                    "/*"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
       }
     },
     "EC2SecurityGroup": {
@@ -526,29 +568,21 @@
                 "GroupId"
               ]
             }
-          ],
-          "IamInstanceProfile": {
-            "Arn": {
-              "Fn::GetAtt": [
-                "WebServerInstanceProfile",
-                "Arn"
+          ]
+        },
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "\n",
+              [
+                "#!/bin/bash",
+                "sudo yum update -y",
+                "sudo yum install -y httpd",
+                "sudo systemctl start httpd",
+                "sudo systemctl enable httpd",
+                "echo \"<h1>Hello from EC2!</h1>\" > /var/www/html/index.html"
               ]
-            }
-          },
-          "UserData": {
-            "Fn::Base64": {
-              "Fn::Join": [
-                "\n",
-                [
-                  "#!/bin/bash",
-                  "sudo yum update -y",
-                  "sudo yum install -y httpd",
-                  "sudo systemctl start httpd",
-                  "sudo systemctl enable httpd",
-                  "echo \"<h1>Hello from EC2!</h1>\" > /var/www/html/index.html"
-                ]
-              ]
-            }
+            ]
           }
         }
       }
@@ -606,8 +640,23 @@
         ]
       }
     },
+    "DatabasePasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "Database password for the RDS instance",
+        "GenerateSecretString": {
+          "SecretStringTemplate": {
+            "Fn::Sub": "{\"username\":\"${DBUser}\"}"
+          },
+          "PasswordLength": 16,
+          "ExcludeCharacters": "\"@/\\",
+          "GenerateStringKey": "password"
+        }
+      }
+    },
     "RDSDBInstance": {
       "Type": "AWS::RDS::DBInstance",
+      "DependsOn": "DatabasePasswordSecret",
       "Properties": {
         "Engine": "mysql",
         "DBInstanceClass": {
@@ -617,7 +666,10 @@
           "Ref": "DBUser"
         },
         "MasterUserPassword": {
-          "Ref": "DBPassword"
+          "Fn::GetAtt": [
+            "DatabasePasswordSecret",
+            "SecretString"
+          ]
         },
         "DBName": {
           "Ref": "DBName"
@@ -682,6 +734,12 @@
           "ALB",
           "DNSName"
         ]
+      }
+    },
+    "DatabaseSecretARN": {
+      "Description": "ARN of the Secrets Manager secret for the database password",
+      "Value": {
+        "Ref": "DatabasePasswordSecret"
       }
     }
   }
