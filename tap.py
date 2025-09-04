@@ -13,7 +13,7 @@ env = cdk.Environment(
 
 # Create the main stack
 TapStack(
-    app, 
+    app,
     "TapSecureStack",
     env=env,
     description="Secure web application infrastructure with WAF, VPC, ALB, RDS, and Lambda"

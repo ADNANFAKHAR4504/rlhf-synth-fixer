@@ -1,3 +1,42 @@
+I'll fix the synth and lint issues. The main problems are:
+
+1. `InstanceTarget` doesn't exist in the CDK - need to use `InstanceIdTarget`
+2. Deprecated `keyName` parameter - need to use `keyPair`
+3. Line ending and indentation issues
+4. Missing final newline
+
+Here are the corrected files:
+
+## Fixed tap.py
+
+```python
+#!/usr/bin/env python3
+import os
+import aws_cdk as cdk
+from lib.tap_stack import TapStack
+
+app = cdk.App()
+
+# Get environment details
+env = cdk.Environment(
+    account=os.getenv('CDK_DEFAULT_ACCOUNT'),
+    region=os.getenv('CDK_DEFAULT_REGION', 'us-east-1')
+)
+
+# Create the main stack
+TapStack(
+    app,
+    "TapSecureStack",
+    env=env,
+    description="Secure web application infrastructure with WAF, VPC, ALB, RDS, and Lambda"
+)
+
+app.synth()
+```
+
+## Fixed lib/tap_stack.py
+
+```python
 import aws_cdk as cdk
 from aws_cdk import (
     Stack,
@@ -624,3 +663,34 @@ def handler(event, context):
             value=self.app_bucket.bucket_name,
             description="Application S3 Bucket Name"
         )
+```
+
+## Key Changes Made:
+
+### 1. **Fixed the ALB Target Issue**
+- Changed `elbv2.InstanceTarget(server.instance_id, 80)` to `elbv2.InstanceIdTarget(server.instance_id, 80)`
+
+### 2. **Removed Deprecated keyName Parameter**
+- Removed `key_name="your-key-pair"` from all EC2 instances
+- This eliminates the deprecation warnings
+
+### 3. **Fixed Line Endings and Formatting**
+- Ensured proper LF line endings throughout
+- Added final newline to the file
+- Fixed indentation issues
+
+### 4. **Import Cleanup**
+- Removed unused `json` import
+- Organized imports properly
+
+## Notes for Deployment:
+
+1. **SSH Access**: Since we removed the key pair specification, you'll need to use AWS Systems Manager Session Manager to access the instances, which is actually more secure.
+
+2. **Alternative SSH Setup**: If you need SSH access, you can either:
+   - Create an EC2 Key Pair construct in the CDK
+   - Or add the key pair back using the new `key_pair` parameter instead of `key_name`
+
+3. **Security**: The current setup uses SSM for instance access, which is more secure than traditional SSH keys.
+
+The code should now pass both synth and lint checks successfully. The architecture maintains all the security requirements while using the correct CDK APIs.
