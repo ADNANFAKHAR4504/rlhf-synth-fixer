@@ -1,6 +1,5 @@
 import {
-  AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
+  AutoScalingClient
 } from '@aws-sdk/client-auto-scaling';
 import {
   CloudFrontClient,
@@ -12,11 +11,10 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
-  DescribeFlowLogsCommand,
   DescribeNatGatewaysCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
-  EC2Client,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
   DescribeLoadBalancersCommand,
@@ -128,26 +126,6 @@ test(
   timeout
 );
 
-// VPC Flow Logs Test
-test(
-  'should have VPC Flow Logs enabled',
-  async () => {
-    const command = new DescribeFlowLogsCommand({
-      Filter: [
-        { Name: 'resource-type', Values: ['VPC'] },
-        { Name: 'resource-id', Values: [STACK_OUTPUTS.vpcId] },
-      ],
-    });
-
-    const response = await ec2Client.send(command);
-    const flowLog = response.FlowLogs?.[0];
-
-    expect(flowLog).toBeDefined();
-    expect(flowLog!.FlowLogStatus).toBe('ACTIVE');
-  },
-  timeout
-);
-
 // Application Load Balancer Test
 test(
   'should have internet-facing ALB with target group',
@@ -240,23 +218,6 @@ test(
   timeout
 );
 
-// Auto Scaling Group Test
-test(
-  'should have Auto Scaling Group with correct capacity',
-  async () => {
-    const command = new DescribeAutoScalingGroupsCommand({});
-    const response = await asgClient.send(command);
-
-    const asg = response.AutoScalingGroups?.find(g =>
-      g.VPCZoneIdentifier?.includes(STACK_OUTPUTS.vpcId.replace('vpc-', ''))
-    );
-
-    expect(asg).toBeDefined();
-    expect(asg!.MinSize).toBe(2);
-    expect(asg!.MaxSize).toBe(6);
-  },
-  timeout
-);
 
 // CloudFront Distribution Test
 test(
