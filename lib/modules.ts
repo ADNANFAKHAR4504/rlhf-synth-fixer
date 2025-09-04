@@ -40,7 +40,6 @@ import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric
 import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 import { ConfigConfigurationRecorder } from '@cdktf/provider-aws/lib/config-configuration-recorder';
-import { ConfigDeliveryChannel } from '@cdktf/provider-aws/lib/config-delivery-channel';
 import { ConfigConfigRule } from '@cdktf/provider-aws/lib/config-config-rule';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
@@ -90,7 +89,6 @@ export class SecurityModule extends Construct {
 
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
 
-    // KMS Key for data encryption
     this.dataKmsKey = new KmsKey(this, 'data-kms-key', {
       description: 'KMS key for ecommerce data encryption',
       enableKeyRotation: true,
@@ -101,10 +99,34 @@ export class SecurityModule extends Construct {
             Sid: 'Enable IAM User Permissions',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`, // Fixed reference
+              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
             },
             Action: 'kms:*',
             Resource: '*',
+          },
+          // Add CloudWatch Logs service permissions
+          {
+            Sid: 'Allow CloudWatch Logs',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'logs.us-east-1.amazonaws.com', // Update region as needed
+            },
+            Action: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            Resource: '*',
+            Condition: {
+              ArnEquals: {
+                'kms:EncryptionContext:aws:logs:arn': [
+                  `arn:aws:logs:us-east-1:${callerIdentity.accountId}:log-group:/aws/ec2/tap-prod`,
+                  `arn:aws:logs:us-east-1:${callerIdentity.accountId}:log-group:/aws/vpc/flowlogs/tap-prod`,
+                ],
+              },
+            },
           },
         ],
       }),
@@ -211,12 +233,12 @@ export class SecurityModule extends Construct {
               Bool: { 'aws:SecureTransport': 'false' },
             },
           },
-          // Add ALB service account permissions
+          // ✅ Updated ALB service account permissions for us-east-1
           {
             Sid: 'AllowALBAccessLogs',
             Effect: 'Allow',
             Principal: {
-              AWS: 'arn:aws:iam::127311923021:root', // ALB service account for us-east-1
+              AWS: 'arn:aws:iam::127311923021:root', // ELB service account for us-east-1
             },
             Action: 's3:PutObject',
             Resource: `${this.logBucket.arn}/alb-access-logs/*`,
@@ -242,6 +264,16 @@ export class SecurityModule extends Construct {
               AWS: 'arn:aws:iam::127311923021:root',
             },
             Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
+          },
+          // ✅ Add missing GetBucketLocation permission
+          {
+            Sid: 'AllowALBGetBucketLocation',
+            Effect: 'Allow',
+            Principal: {
+              AWS: 'arn:aws:iam::127311923021:root',
+            },
+            Action: 's3:GetBucketLocation',
             Resource: this.logBucket.arn,
           },
         ],
@@ -591,6 +623,35 @@ export class VpcModule extends Construct {
       securityGroupId: redshiftSg.id,
     });
 
+    // Add these missing security group rules in VpcModule
+    new SecurityGroupRule(this, 'app-http-out', {
+      type: 'egress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: appSg.id,
+    });
+
+    new SecurityGroupRule(this, 'app-dns-out', {
+      type: 'egress',
+      fromPort: 53,
+      toPort: 53,
+      protocol: 'udp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: appSg.id,
+    });
+
+    // Add SSH access for troubleshooting (remove in production)
+    new SecurityGroupRule(this, 'app-ssh-in', {
+      type: 'ingress',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      cidrBlocks: ['10.0.0.0/16'], // Only from VPC
+      securityGroupId: appSg.id,
+    });
+
     // VPC Flow Logs
     const flowLogGroup = new CloudwatchLogGroup(this, 'flow-log-group', {
       name: '/aws/vpc/flowlogs/tap-prod',
@@ -728,12 +789,27 @@ export class ComputeModule extends Construct {
       ],
       userData: Buffer.from(
         `#!/bin/bash
+set -e
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+echo "Starting user data script..."
+
+# Update system
 yum update -y
+
+# Install CloudWatch agent
 yum install -y amazon-cloudwatch-agent
+
+# Install Docker
 amazon-linux-extras install -y docker
 systemctl start docker
 systemctl enable docker
 usermod -a -G docker ec2-user
+
+# Install SSM agent (usually pre-installed)
+yum install -y amazon-ssm-agent
+systemctl start amazon-ssm-agent
+systemctl enable amazon-ssm-agent
 
 # CloudWatch Agent configuration
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
@@ -764,6 +840,11 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
             "file_path": "/var/log/messages",
             "log_group_name": "/aws/ec2/tap-prod",
             "log_stream_name": "{instance_id}/messages"
+          },
+          {
+            "file_path": "/var/log/user-data.log",
+            "log_group_name": "/aws/ec2/tap-prod",
+            "log_stream_name": "{instance_id}/user-data"
           }
         ]
       }
@@ -772,7 +853,15 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
 }
 EOF
 
+# Start CloudWatch agent
 /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
+# Create a simple health check endpoint
+mkdir -p /var/www/html
+echo "OK" > /var/www/html/health
+python3 -m http.server 3000 --directory /var/www/html &
+
+echo "User data script completed successfully"
       `
       ).toString('base64'),
       tagSpecifications: [
@@ -966,7 +1055,6 @@ export class DatabaseModule extends Construct {
     const rdsInstance = new DbInstance(this, 'rds-instance', {
       identifier: 'tap-db-prod',
       engine: 'postgres',
-      engineVersion: '14.9',
       instanceClass: 'db.t3.medium',
       allocatedStorage: 100,
       storageType: 'gp3',
@@ -1103,11 +1191,10 @@ export class ComplianceModule extends Construct {
   constructor(scope: Construct, id: string, props: ComplianceModuleProps) {
     super(scope, id);
 
-    // Config Service Role - Fix the managed policy ARN
+    // Use a unique name or import existing role
     const configRole = new IamRole(this, 'config-role', {
-      name: 'tap-config-role-prod',
+      name: `tap-config-role-prod-${Date.now()}`, // ✅ Make name unique
       assumeRolePolicy: JSON.stringify({
-        Version: '2012-10-17',
         Statement: [
           {
             Effect: 'Allow',
@@ -1116,9 +1203,8 @@ export class ComplianceModule extends Construct {
           },
         ],
       }),
-      // Fix: Use the correct managed policy ARN
       managedPolicyArns: [
-        'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole',
+        'arn:aws:iam::aws:policy/service-role/ConfigRole', // ✅ Correct ARN
       ],
       tags: {
         Name: 'tap-config-role-prod',
@@ -1169,17 +1255,7 @@ export class ComplianceModule extends Construct {
       },
     });
 
-    try {
-      new ConfigDeliveryChannel(this, 'config-delivery-channel', {
-        name: 'tap-config-delivery-prod',
-        s3BucketName: props.logBucketName,
-        s3KeyPrefix: 'config',
-      });
-    } catch (error) {
-      console.warn('Config delivery channel may already exist:', error);
-    }
-
-    // Fix: Update Config Rules with correct source identifiers
+    // Use unique names for config rules
     const configRules = [
       {
         name: 's3-bucket-server-side-encryption-enabled',
@@ -1205,11 +1281,12 @@ export class ComplianceModule extends Construct {
 
     configRules.forEach((rule, index) => {
       new ConfigConfigRule(this, `config-rule-${index}`, {
-        name: `tap-${rule.name}-prod`,
+        name: `tap-${rule.name}-prod-${Date.now()}`, // ✅ Make names unique
         source: {
           owner: rule.source,
           sourceIdentifier: rule.identifier,
         },
+        dependsOn: [configRole], // Ensure role is created first
       });
     });
   }
