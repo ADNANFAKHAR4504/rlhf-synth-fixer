@@ -213,7 +213,7 @@ export class TapStack extends cdk.Stack {
   private createConfigSetup(
     projectName: string,
     environment: string,
-    vpc: ec2.IVpc
+    _vpc: ec2.IVpc // VPC is intentionally unused in this method
   ): void {
     // Create Config delivery channel bucket
     const configBucket = new s3.Bucket(
@@ -466,7 +466,7 @@ export class TapStack extends cdk.Stack {
 
   private createIAMRoles(projectName: string, environment: string): void {
     // Create a group that requires MFA
-    const mfaGroup = new iam.Group(
+    const _mfaGroup = new iam.Group(
       this,
       `${projectName}-${environment}-mfa-required-group`,
       {
@@ -550,7 +550,7 @@ export class TapStack extends cdk.Stack {
     environment: string
   ): void {
     // Create patch baseline for security updates
-    const patchBaseline = new ssm.CfnPatchBaseline(
+    const _patchBaseline = new ssm.CfnPatchBaseline(
       this,
       `${projectName}-${environment}-patch-baseline`,
       {
