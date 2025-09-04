@@ -631,7 +631,8 @@ export class LambdaModule extends Construct {
     // Lambda function in VPC private subnets
     this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
       functionName: `${config.companyName}-${config.environment}-processor`,
-      filename: 'lambda-placeholder.zip', // Would contain actual deployment package
+      s3Bucket: 'lambda-ts-1234',
+      s3Key: 'lambda/lambda-function.zip',
       handler: 'index.handler',
       runtime: 'nodejs18.x',
       role: lambdaRole.arn,
@@ -810,16 +811,21 @@ export class MonitoringModule extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
-            Sid: 'Enable CloudTrail Encrypt',
+            Sid: 'EnableCloudTrailEncrypt',
             Effect: 'Allow',
             Principal: {
               Service: 'cloudtrail.amazonaws.com',
             },
-            Action: ['kms:GenerateDataKey', 'kms:DescribeKey'],
+            Action: ['kms:GenerateDataKey*', 'kms:DescribeKey'],
             Resource: '*',
+            Condition: {
+              StringEquals: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${config.region}:*:trail/*`,
+              },
+            },
           },
           {
-            Sid: 'Enable IAM User Permissions',
+            Sid: 'EnableIAMUserPermissions',
             Effect: 'Allow',
             Principal: {
               AWS: 'arn:aws:iam::*:root',
