@@ -8,7 +8,7 @@ Write a **TypeScript implementation** that provisions a **secure AWS environment
 - Define **IAM role + instance profile** for EC2  
 
 ### Security Groups
-- Allow only required traffic  
+- Allow only required traffic  in the project
 - **EC2:** inbound from trusted sources on app port (e.g., 8080)  
 - **RDS:** inbound only from EC2 SG on DB port (e.g., 5432)  
 - Deny all other inbound traffic  
