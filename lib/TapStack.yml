@@ -1,17 +1,16 @@
----
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Secure serverless infrastructure with Lambda, S3, and API Gateway
-
+Description: Secure serverless infrastructure with Lambda, S3, and API Gateway following best practices
 Parameters:
   EnvironmentName:
     Type: String
     Default: dev
     Description: Environment name suffix for resource naming
-    AllowedValues: [dev, staging, prod]
+    AllowedValues:
+      - dev
+      - staging
+      - prod
     ConstraintDescription: Must be dev, staging, or prod
-
 Resources:
-  # S3 Bucket with encryption
   AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -26,8 +25,6 @@ Resources:
         RestrictPublicBuckets: true
       VersioningConfiguration:
         Status: Enabled
-
-  # Lambda Execution Role with least privileges
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -49,150 +46,207 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
-                Resource: !Sub ${AppDataBucket.Arn}/*
-
-  # Lambda Function
+                Resource: !Sub "${AppDataBucket.Arn}/*"
   ProcessDataLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub process-data-${EnvironmentName}
+      FunctionName: !Sub "process-data-${EnvironmentName}"
       Runtime: python3.9
       Handler: index.lambda_handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt "LambdaExecutionRole.Arn"
       Code:
         ZipFile: |
           import json
+          import boto3
+
           def lambda_handler(event, context):
               print("Received event: " + json.dumps(event, indent=2))
+              
+              # Process S3 event if triggered by S3
+              if 'Records' in event and event['Records']:
+                  for record in event['Records']:
+                      if 's3' in record:
+                          bucket_name = record['s3']['bucket']['name']
+                          object_key = record['s3']['object']['key']
+                          print(f"Processing S3 object: s3://{bucket_name}/{object_key}")
+              
               return {
                   'statusCode': 200,
-                  'body': json.dumps('Data processed successfully!')
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                  },
+                  'body': json.dumps({
+                      'message': 'Data processed successfully!',
+                      'environment': context.function_name
+                  })
               }
       MemorySize: 128
       Timeout: 30
       Environment:
         Variables:
-          BUCKET_NAME: !Ref AppDataBucket
-
-  # S3 Bucket Event Permission for Lambda
+          BUCKET_NAME: !Ref "AppDataBucket"
+          ENVIRONMENT: !Ref "EnvironmentName"
   S3BucketEventPermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !GetAtt ProcessDataLambda.Arn
+      FunctionName: !GetAtt "ProcessDataLambda.Arn"
       Principal: s3.amazonaws.com
-      SourceArn: !GetAtt AppDataBucket.Arn
-      SourceAccount: !Ref AWS::AccountId
-
-  # API Gateway REST API
+      SourceArn: !GetAtt "AppDataBucket.Arn"
+      SourceAccount: !Ref "AWS::AccountId"
+  S3BucketNotification:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref "AppDataBucket"
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt "ProcessDataLambda.Arn"
+    DependsOn:
+      - S3BucketEventPermission
   ApiGatewayRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: !Sub data-api-${EnvironmentName}
-      Description: API Gateway for processing data
+      Name: !Sub "data-api-${EnvironmentName}"
+      Description: API Gateway for processing data with security best practices
       EndpointConfiguration:
         Types:
           - REGIONAL
-
-  # API Gateway Resource and Method
   ApiGatewayResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      RestApiId: !Ref "ApiGatewayRestApi"
+      ParentId: !GetAtt "ApiGatewayRestApi.RootResourceId"
       PathPart: process
-
   ApiGatewayMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      ResourceId: !Ref ApiGatewayResource
+      RestApiId: !Ref "ApiGatewayRestApi"
+      ResourceId: !Ref "ApiGatewayResource"
       HttpMethod: POST
       AuthorizationType: NONE
+      ApiKeyRequired: true
       Integration:
         Type: AWS
         IntegrationHttpMethod: POST
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessDataLambda.Arn}/invocations
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessDataLambda.Arn}/invocations"
         IntegrationResponses:
-          - StatusCode: 200
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         PassthroughBehavior: WHEN_NO_MATCH
       MethodResponses:
-        - StatusCode: 200
-          ResponseModels:
-            application/json: Empty
-
-  # API Gateway Deployment
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+  ApiGatewayOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref "ApiGatewayRestApi"
+      ResourceId: !Ref "ApiGatewayResource"
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+            ResponseTemplates:
+              application/json: "{}"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      StageName: !Ref EnvironmentName
+      RestApiId: !Ref "ApiGatewayRestApi"
+      StageName: !Ref "EnvironmentName"
     DependsOn:
       - ApiGatewayMethod
-
-  # Permission for API Gateway to invoke Lambda
+      - ApiGatewayOptionsMethod
   ApiGatewayLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !GetAtt ProcessDataLambda.Arn
+      FunctionName: !GetAtt "ProcessDataLambda.Arn"
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/process
-
-  # API Gateway Usage Plan - FIXED with dependency
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/process"
   ApiGatewayUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
     Properties:
-      UsagePlanName: !Sub data-api-usage-plan-${EnvironmentName}
-      Description: Usage plan with throttling and quotas
+      UsagePlanName: !Sub "data-api-usage-plan-${EnvironmentName}"
+      Description: Usage plan with throttling and quotas for secure API consumption
       Throttle:
-        BurstLimit: 10
-        RateLimit: 5
+        BurstLimit: 50
+        RateLimit: 25
       Quota:
         Limit: 10000
         Period: MONTH
       ApiStages:
-        - ApiId: !Ref ApiGatewayRestApi
-          Stage: !Ref EnvironmentName
-    DependsOn: ApiGatewayDeployment # CRITICAL: Wait for deployment to complete
-
-  # API Gateway API Key
+        - ApiId: !Ref "ApiGatewayRestApi"
+          Stage: !Ref "EnvironmentName"
+    DependsOn: ApiGatewayDeployment
   ApiGatewayApiKey:
     Type: AWS::ApiGateway::ApiKey
     Properties:
-      Name: !Sub data-api-key-${EnvironmentName}
-      Description: API key for data processing API
+      Name: !Sub "data-api-key-${EnvironmentName}"
+      Description: API key for secure access to data processing API
       Enabled: true
-
-  # Usage Plan Key association
   ApiGatewayUsagePlanKey:
     Type: AWS::ApiGateway::UsagePlanKey
     Properties:
-      KeyId: !Ref ApiGatewayApiKey
+      KeyId: !Ref "ApiGatewayApiKey"
       KeyType: API_KEY
-      UsagePlanId: !Ref ApiGatewayUsagePlan
-
+      UsagePlanId: !Ref "ApiGatewayUsagePlan"
 Outputs:
   S3BucketName:
-    Description: Name of the S3 bucket
-    Value: !Ref AppDataBucket
+    Description: Name of the S3 bucket for application data storage
+    Value: !Ref "AppDataBucket"
     Export:
-      Name: !Sub ${AWS::StackName}-S3BucketName
-
+      Name: !Sub "${AWS::StackName}-S3BucketName"
+  S3BucketArn:
+    Description: ARN of the S3 bucket
+    Value: !GetAtt "AppDataBucket.Arn"
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketArn"
   LambdaFunctionName:
     Description: Name of the Lambda function
-    Value: !Ref ProcessDataLambda
+    Value: !Ref "ProcessDataLambda"
     Export:
-      Name: !Sub ${AWS::StackName}-LambdaFunctionName
-
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
+  LambdaFunctionArn:
+    Description: ARN of the Lambda function
+    Value: !GetAtt "ProcessDataLambda.Arn"
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
   ApiGatewayUrl:
-    Description: API Gateway endpoint URL
-    Value: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/process
+    Description: API Gateway endpoint URL for data processing
+    Value: !Sub "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/process"
     Export:
-      Name: !Sub ${AWS::StackName}-ApiGatewayUrl
-
+      Name: !Sub "${AWS::StackName}-ApiGatewayUrl"
+  ApiGatewayId:
+    Description: API Gateway REST API ID
+    Value: !Ref "ApiGatewayRestApi"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiGatewayId"
   ApiKey:
-    Description: API Key for accessing the API
-    Value: !Ref ApiGatewayApiKey
+    Description: API Key for secure access to the API
+    Value: !Ref "ApiGatewayApiKey"
     Export:
-      Name: !Sub ${AWS::StackName}-ApiKey
+      Name: !Sub "${AWS::StackName}-ApiKey"
+  UsagePlanId:
+    Description: Usage Plan ID for API consumption control
+    Value: !Ref "ApiGatewayUsagePlan"
+    Export:
+      Name: !Sub "${AWS::StackName}-UsagePlanId"
