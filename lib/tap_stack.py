@@ -146,16 +146,10 @@ s3_bucket_lifecycle_configuration = aws.s3.BucketLifecycleConfigurationV2(
     ]
 )
 
-# 4. S3 access logging
+# 4. S3 access logging - simplified for demo
 s3_logging_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}-logs",
     bucket=f"{company_name}-{app_name}-{environment}-logs",
     tags=common_tags
-)
-
-# Enable ACL on logging bucket for CloudFront access
-s3_logging_bucket_acl = aws.s3.BucketAclV2(f"{company_name}-{app_name}-{environment}-logs-acl",
-    bucket=s3_logging_bucket.id,
-    acl="log-delivery-write"
 )
 
 s3_bucket_logging = aws.s3.BucketLoggingV2(
@@ -345,11 +339,11 @@ cloudfront_distribution = aws.cloudfront.Distribution(f"{company_name}-{app_name
         minimum_protocol_version="TLSv1.2_2021"
     ),
     web_acl_id=waf_web_acl.arn,
-    logging_config=aws.cloudfront.DistributionLoggingConfigArgs(
-        bucket=s3_logging_bucket.bucket_domain_name,
-        include_cookies=False,
-        prefix="cloudfront-logs/"
-    ),
+    # logging_config=aws.cloudfront.DistributionLoggingConfigArgs(
+    #     bucket=s3_logging_bucket.bucket_domain_name,
+    #     include_cookies=False,
+    #     prefix="cloudfront-logs/"
+    # ),  # Commented out to avoid ACL issues in demo
     tags=common_tags,
     opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-cloudfront", region="us-east-1"))
 )
