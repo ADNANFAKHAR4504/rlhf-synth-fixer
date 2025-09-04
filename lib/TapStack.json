@@ -4,15 +4,18 @@
     "Parameters": {
         "DomainName": {
             "Type": "String",
-            "Description": "The domain name for the web application (must be in Route 53)"
+            "Default": "",
+            "Description": "(Optional) Domain name for the application. Leave empty for demo deployments."
         },
         "HostedZoneId": {
             "Type": "String",
-            "Description": "The Route 53 hosted zone ID for the domain"
+            "Default": "",
+            "Description": "(Optional) Route 53 Hosted Zone ID. Leave empty for demo deployments."
         },
         "CertificateArn": {
             "Type": "String",
-            "Description": "ACM certificate ARN for HTTPS (must be in us-east-1)"
+            "Default": "",
+            "Description": "(Optional) ACM Certificate ARN for HTTPS on CloudFront. Leave empty for demo deployments."
         },
         "InstanceType": {
             "Type": "String",
@@ -26,13 +29,52 @@
             "Description": "EC2 instance type for application servers"
         },
         "KeyPairName": {
-            "Type": "AWS::EC2::KeyPair::KeyName",
-            "Description": "EC2 KeyPair for SSH access (optional)"
+            "Type": "String",
+            "Default": "",
+            "Description": "(Optional) EC2 KeyPair for SSH access. Leave empty to disable."
         },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
             "Description": "SSM parameter for the latest Amazon Linux 2 AMI"
+        }
+    },
+    "Conditions": {
+        "HasKeyPair": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyPairName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasDomain": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "DomainName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -244,10 +286,18 @@
                         ]
                     },
                     "ViewerCertificate": {
-                        "AcmCertificateArn": {
-                            "Ref": "CertificateArn"
-                        },
-                        "SslSupportMethod": "sni-only"
+                        "Fn::If": [
+                            "HasCertificate",
+                            {
+                                "AcmCertificateArn": {
+                                    "Ref": "CertificateArn"
+                                },
+                                "SslSupportMethod": "sni-only"
+                            },
+                            {
+                                "CloudFrontDefaultCertificate": true
+                            }
+                        ]
                     },
                     "Logging": {
                         "Bucket": {
@@ -401,7 +451,15 @@
                         }
                     ],
                     "KeyName": {
-                        "Ref": "KeyPairName"
+                        "Fn::If": [
+                            "HasKeyPair",
+                            {
+                                "Ref": "KeyPairName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     }
                 }
             }
@@ -523,6 +581,7 @@
         },
         "DNSRecord": {
             "Type": "AWS::Route53::RecordSet",
+            "Condition": "HasDomain",
             "Properties": {
                 "HostedZoneId": {
                     "Ref": "HostedZoneId"
@@ -617,6 +676,7 @@
             }
         },
         "DomainRecord": {
+            "Condition": "HasDomain",
             "Description": "Application domain record configured in Route 53",
             "Value": {
                 "Ref": "DomainName"
