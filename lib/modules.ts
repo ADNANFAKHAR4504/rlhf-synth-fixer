@@ -87,55 +87,9 @@ export class SecurityModule extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // Add this inside SecurityModule constructor, after creating logBucket
-    const elbServiceAccount = new DataAwsElbServiceAccount(
-      this,
-      'elb-service-account',
-      {
-        region: 'us-east-1', // Update to your region
-      }
-    );
-    // S3 Bucket Policy for ALB Access Logs
-    new S3BucketPolicy(this, 'log-bucket-policy', {
-      bucket: this.logBucket.id,
-      policy: JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Principal: {
-              AWS: elbServiceAccount.arn,
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
-          },
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
-            },
-            Action: 's3:PutObject',
-            Resource: `${this.logBucket.arn}/*`,
-            Condition: {
-              StringEquals: {
-                's3:x-amz-acl': 'bucket-owner-full-control',
-              },
-            },
-          },
-          {
-            Effect: 'Allow',
-            Principal: {
-              Service: 'delivery.logs.amazonaws.com',
-            },
-            Action: 's3:GetBucketAcl',
-            Resource: this.logBucket.arn,
-          },
-        ],
-      }),
-    });
-
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
 
+    // Create KMS Key first
     this.dataKmsKey = new KmsKey(this, 'data-kms-key', {
       description: 'KMS key for ecommerce data encryption',
       enableKeyRotation: true,
@@ -151,12 +105,11 @@ export class SecurityModule extends Construct {
             Action: 'kms:*',
             Resource: '*',
           },
-          // Add CloudWatch Logs service permissions
           {
             Sid: 'Allow CloudWatch Logs',
             Effect: 'Allow',
             Principal: {
-              Service: 'logs.us-east-1.amazonaws.com', // Update region as needed
+              Service: 'logs.us-east-1.amazonaws.com',
             },
             Action: [
               'kms:Encrypt',
@@ -196,7 +149,7 @@ export class SecurityModule extends Construct {
           {
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`, // Fixed reference
+              AWS: `arn:aws:iam::${callerIdentity.accountId}:root`,
             },
             Action: 'sts:AssumeRole',
             Condition: {
@@ -225,7 +178,7 @@ export class SecurityModule extends Construct {
       }),
     });
 
-    // Log bucket for access logs
+    // Create S3 bucket
     this.logBucket = new S3Bucket(this, 'log-bucket', {
       bucket: 'tap-logs-prod-ts',
       tags: {
@@ -263,6 +216,54 @@ export class SecurityModule extends Construct {
       blockPublicPolicy: true,
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
+    });
+
+    // ELB Service Account for ALB access logs
+    const elbServiceAccount = new DataAwsElbServiceAccount(
+      this,
+      'elb-service-account',
+      {
+        region: 'us-east-1',
+      }
+    );
+
+    // S3 Bucket Policy for ALB Access Logs
+    new S3BucketPolicy(this, 'log-bucket-policy', {
+      bucket: this.logBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              AWS: elbServiceAccount.arn,
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/alb-access-logs/*`,
+          },
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'delivery.logs.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logBucket.arn,
+          },
+        ],
+      }),
     });
   }
 }
