@@ -2,14 +2,50 @@
 variable "aws_region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 # KMS Key for CloudWatch Log Group encryption
+# KMS Key for CloudWatch Log Group encryption with proper policy
 resource "aws_kms_key" "cloudwatch_logs" {
   description             = "KMS key for CloudWatch log encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/secureApp-function"
+          }
+        }
+      }
+    ]
+  })
 
   tags = {
     Name        = "secureApp-cloudwatch-kms-key"
@@ -17,6 +53,9 @@ resource "aws_kms_key" "cloudwatch_logs" {
     Project     = "secureApp"
   }
 }
+
+# Add data source for current AWS account
+data "aws_caller_identity" "current" {}
 
 resource "aws_kms_alias" "cloudwatch_logs" {
   name          = "alias/secureApp-cloudwatch-logs"
@@ -161,6 +200,10 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.cloudwatch_logs.arn
 
+  depends_on = [
+    aws_kms_key.cloudwatch_logs
+  ]
+
   tags = {
     Name        = "secureApp-lambda-logs"
     Environment = var.environment
@@ -185,6 +228,7 @@ resource "aws_lambda_function" "secure_function" {
   depends_on = [
     aws_iam_role_policy.lambda_policy,
     aws_cloudwatch_log_group.lambda_logs,
+    aws_kms_key.cloudwatch_logs
   ]
 
   tags = {
@@ -193,7 +237,6 @@ resource "aws_lambda_function" "secure_function" {
     Project     = "secureApp"
   }
 }
-
 # Lambda deployment package
 data "archive_file" "lambda_zip" {
   type        = "zip"
@@ -225,29 +268,35 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_alarm" {
   }
 }
 
-# WAF WebACL
 resource "aws_wafv2_web_acl" "main" {
+
+  # provider = aws.us_east_1
   name  = "secureApp-waf"
   scope = "CLOUDFRONT"
-
   default_action {
+
     allow {}
+
   }
+
 
   rule {
     name     = "secureApp-rate-limit"
     priority = 1
 
-    override_action {
-      none {}
-    }
+    action {
 
+      block {}
+
+    }
     statement {
       rate_based_statement {
         limit              = 2000
         aggregate_key_type = "IP"
       }
+
     }
+
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -255,25 +304,27 @@ resource "aws_wafv2_web_acl" "main" {
       sampled_requests_enabled   = true
     }
 
-    action {
-      block {}
-    }
   }
 
   rule {
     name     = "secureApp-ip-reputation"
     priority = 2
 
-    override_action {
-      none {}
+    action {
+
+      block {}
+
     }
 
     statement {
+
       managed_rule_group_statement {
         name        = "AWSManagedRulesAmazonIpReputationList"
         vendor_name = "AWS"
       }
+
     }
+
 
     visibility_config {
       cloudwatch_metrics_enabled = true
@@ -281,9 +332,6 @@ resource "aws_wafv2_web_acl" "main" {
       sampled_requests_enabled   = true
     }
 
-    action {
-      block {}
-    }
   }
 
   visibility_config {
@@ -292,11 +340,13 @@ resource "aws_wafv2_web_acl" "main" {
     sampled_requests_enabled   = true
   }
 
+
   tags = {
     Name        = "secureApp-waf"
     Environment = var.environment
     Project     = "secureApp"
   }
+
 }
 
 # CloudFront Distribution
