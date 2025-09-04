@@ -68,7 +68,7 @@ Resources:
 
           def lambda_handler(event, context):
               print("Received event: " + json.dumps(event, indent=2))
-              
+
               # Process S3 event if triggered by S3
               if 'Records' in event and event['Records']:
                   for record in event['Records']:
@@ -76,7 +76,7 @@ Resources:
                           bucket_name = record['s3']['bucket']['name']
                           object_key = record['s3']['object']['key']
                           print(f"Processing S3 object: s3://{bucket_name}/{object_key}")
-              
+
               return {
                   'statusCode': 200,
                   'headers': {
@@ -154,10 +154,10 @@ Resources:
               try:
                   s3 = boto3.client('s3')
                   lambda_client = boto3.client('lambda')
-                  
+
                   bucket_name = event['ResourceProperties']['BucketName']
                   lambda_arn = event['ResourceProperties']['LambdaArn']
-                  
+
                   if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
                       # First, ensure Lambda permission exists
                       try:
@@ -171,7 +171,7 @@ Resources:
                       except lambda_client.exceptions.ResourceConflictException:
                           # Permission already exists, which is fine
                           pass
-                      
+
                       # Configure S3 bucket notification
                       s3.put_bucket_notification_configuration(
                           Bucket=bucket_name,
@@ -189,7 +189,7 @@ Resources:
                           Bucket=bucket_name,
                           NotificationConfiguration={}
                       )
-                      
+
                       # Try to remove Lambda permission (optional, as stack deletion will clean up)
                       try:
                           lambda_client.remove_permission(
@@ -199,7 +199,7 @@ Resources:
                       except:
                           # Ignore errors during deletion
                           pass
-                  
+
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
               except Exception as e:
                   print(f"Error: {str(e)}")
