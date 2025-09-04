@@ -29,10 +29,13 @@ class TapStack(Stack):
         # Create S3 bucket with encryption
         self.s3_bucket = self._create_s3_bucket()
 
-        # Create security groups (order matters for dependencies)
+        # Create security groups (fixed order to avoid circular dependencies)
         self.web_security_group = self._create_web_security_group()
         self.rds_security_group = self._create_rds_security_group()
         self.lambda_security_group = self._create_lambda_security_group()
+
+        # Configure security group rules after creation to avoid circular dependencies
+        self._configure_security_group_rules()
 
         # Create RDS instance
         self.rds_instance = self._create_rds_instance()
@@ -89,12 +92,15 @@ class TapStack(Stack):
 
     def _create_s3_bucket(self) -> s3.Bucket:
         """Create S3 bucket with server-side encryption and security best practices."""
+        # Use a unique bucket name without hardcoded account/region
+        bucket_name = f"tap-secure-bucket-{self.node.addr}"
+        
         bucket = s3.Bucket(
             self, "TapS3Bucket",
-            bucket_name=f"tap-secure-bucket-{self.account}-{self.region}",
+            bucket_name=bucket_name,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            versioned=True,  # Fixed: was 'versioning'
+            versioned=True,
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,  # For development - remove in production
             enforce_ssl=True,
@@ -210,13 +216,6 @@ class TapStack(Stack):
             description="Allow HTTPS for AWS API calls"
         )
 
-        # Allow outbound MySQL connection to RDS
-        security_group.add_egress_rule(
-            peer=ec2.Peer.security_group_id(self.rds_security_group.security_group_id),
-            connection=ec2.Port.tcp(3306),
-            description="Allow MySQL connection to RDS"
-        )
-
         return security_group
 
     def _create_rds_security_group(self) -> ec2.SecurityGroup:
@@ -230,6 +229,22 @@ class TapStack(Stack):
 
         return security_group
 
+    def _configure_security_group_rules(self):
+        """Configure security group rules after all security groups are created."""
+        # Allow Lambda to connect to RDS
+        self.lambda_security_group.add_egress_rule(
+            peer=ec2.Peer.security_group_id(self.rds_security_group.security_group_id),
+            connection=ec2.Port.tcp(3306),
+            description="Allow MySQL connection to RDS"
+        )
+
+        # Allow RDS to accept connections from Lambda
+        self.rds_security_group.add_ingress_rule(
+            peer=ec2.Peer.security_group_id(self.lambda_security_group.security_group_id),
+            connection=ec2.Port.tcp(3306),
+            description="Allow Lambda to connect to MySQL"
+        )
+
     def _create_rds_instance(self) -> rds.DatabaseInstance:
         """Create RDS MySQL instance with Multi-AZ and proper security configuration."""
 
@@ -239,13 +254,6 @@ class TapStack(Stack):
             description="Subnet group for TAP RDS instance",
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
-        )
-
-        # Allow Lambda security group to connect to RDS
-        self.rds_security_group.add_ingress_rule(
-            peer=ec2.Peer.security_group_id(self.lambda_security_group.security_group_id),
-            connection=ec2.Port.tcp(3306),
-            description="Allow Lambda to connect to MySQL"
         )
 
         # Create RDS instance
