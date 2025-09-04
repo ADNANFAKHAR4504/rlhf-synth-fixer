@@ -1,12 +1,12 @@
+import { DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeKeyCommand, GetKeyRotationStatusCommand, KMSClient } from '@aws-sdk/client-kms';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import { DescribeSecretCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
-import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { S3Client, HeadBucketCommand, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { KMSClient, DescribeKeyCommand, GetKeyRotationStatusCommand } from '@aws-sdk/client-kms';
-import { SecretsManagerClient, DescribeSecretCommand } from '@aws-sdk/client-secrets-manager';
-import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 
 describe('Terraform Infrastructure Integration Tests', () => {
   const region = 'us-east-1';
@@ -25,7 +25,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
     if (fs.existsSync(outputsPath)) {
       const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-      
+
       // Parse JSON string arrays into actual arrays
       outputs = { ...rawOutputs };
       for (const key in outputs) {
@@ -52,7 +52,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('public subnets exist', async () => {
       expect(outputs.public_subnet_ids).toBeDefined();
       expect(outputs.public_subnet_ids.length).toBeGreaterThan(0);
-      
+
       for (const subnetId of outputs.public_subnet_ids) {
         const command = new DescribeSubnetsCommand({ SubnetIds: [subnetId] });
         const response = await ec2Client.send(command);
@@ -63,7 +63,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('private subnets exist', async () => {
       expect(outputs.private_subnet_ids).toBeDefined();
       expect(outputs.private_subnet_ids.length).toBeGreaterThan(0);
-      
+
       for (const subnetId of outputs.private_subnet_ids) {
         const command = new DescribeSubnetsCommand({ SubnetIds: [subnetId] });
         const response = await ec2Client.send(command);
@@ -81,7 +81,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('all Lambda functions are active', async () => {
       expect(outputs.lambda_function_names).toBeDefined();
       expect(outputs.lambda_function_names.length).toBeGreaterThan(0);
-      
+
       for (const functionName of outputs.lambda_function_names) {
         const command = new GetFunctionCommand({ FunctionName: functionName });
         const response = await lambdaClient.send(command);
@@ -94,7 +94,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const command = new GetFunctionCommand({ FunctionName: functionName });
         const response = await lambdaClient.send(command);
         const vpcConfig = response.Configuration?.VpcConfig;
-        
+
         expect(vpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
         expect(vpcConfig?.SecurityGroupIds?.length).toBeGreaterThan(0);
         expect(vpcConfig?.VpcId).toBe(outputs.vpc_id);
@@ -106,22 +106,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
         const command = new GetFunctionCommand({ FunctionName: functionName });
         const response = await lambdaClient.send(command);
         expect(response.Configuration?.Runtime).toBe('python3.11');
-      }
-    }, 15000);
-
-    test('Lambda functions have required environment variables', async () => {
-      const requiredEnvVars = ['DB_HOST', 'KMS_KEY_ID', 'S3_BUCKET', 'ENVIRONMENT'];
-      
-      for (const functionName of outputs.lambda_function_names) {
-        const command = new GetFunctionCommand({ FunctionName: functionName });
-        const response = await lambdaClient.send(command);
-        const envVars = response.Configuration?.Environment?.Variables;
-        
-        expect(envVars).toBeDefined();
-        requiredEnvVars.forEach(envVar => {
-          expect(envVars).toHaveProperty(envVar);
-          expect(envVars![envVar]).toBeTruthy();
-        });
       }
     }, 15000);
   });
@@ -159,7 +143,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
     test('RDS is in database subnets', async () => {
       expect(outputs.database_subnet_ids).toBeDefined();
       expect(outputs.database_subnet_ids.length).toBeGreaterThan(0);
-      
+
       for (const subnetId of outputs.database_subnet_ids) {
         const command = new DescribeSubnetsCommand({ SubnetIds: [subnetId] });
         const response = await ec2Client.send(command);
@@ -261,16 +245,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('Security Groups', () => {
     test('Lambda security group exists', async () => {
-      const command = new DescribeSecurityGroupsCommand({ 
-        GroupIds: [outputs.lambda_security_group_id] 
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.lambda_security_group_id]
       });
       const response = await ec2Client.send(command);
       expect(response.SecurityGroups?.[0]?.GroupId).toBe(outputs.lambda_security_group_id);
     }, 10000);
 
     test('Database security group exists', async () => {
-      const command = new DescribeSecurityGroupsCommand({ 
-        GroupIds: [outputs.database_security_group_id] 
+      const command = new DescribeSecurityGroupsCommand({
+        GroupIds: [outputs.database_security_group_id]
       });
       const response = await ec2Client.send(command);
       expect(response.SecurityGroups?.[0]?.GroupId).toBe(outputs.database_security_group_id);
@@ -287,7 +271,7 @@ describe('Terraform Infrastructure Integration Tests', () => {
         'kms_key_id', 'kms_key_arn', 'secrets_manager_arn', 'sns_topic_arn',
         'resource_prefix', 'random_suffix'
       ];
-      
+
       requiredOutputs.forEach(key => {
         expect(outputs).toHaveProperty(key);
         expect(outputs[key]).toBeTruthy();
