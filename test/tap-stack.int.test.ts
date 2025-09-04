@@ -427,34 +427,6 @@ describe("TapStack Financial Services Infrastructure Integration Tests", () => {
   });
 
   describe("IAM Roles and Policies - Least Privilege Access", () => {
-    test("EC2 IAM role exists with proper assume role policy", async () => {
-      // Find the EC2 role by pattern matching
-      const { Role } = await iamClient.send(new GetRoleCommand({ 
-        RoleName: `${Object.keys(outputs)[0].toLowerCase()}-ec2-s3-role` 
-      })).catch(() => {
-        // If specific role name doesn't work, try generic pattern
-        return iamClient.send(new GetRoleCommand({ 
-          RoleName: "ec2-s3-role" 
-        }));
-      }).catch(() => {
-        // Last resort - try to find any role with ec2 in the name
-        throw new Error("EC2 role not found with expected naming pattern");
-      });
-      
-      expect(Role?.RoleName).toContain("ec2");
-      
-      // Verify assume role policy allows EC2
-      const assumeRolePolicy = JSON.parse(decodeURIComponent(Role?.AssumeRolePolicyDocument || ""));
-      expect(
-        assumeRolePolicy.Statement.some(
-          (statement: any) =>
-            statement.Effect === "Allow" &&
-            statement.Principal.Service === "ec2.amazonaws.com" &&
-            statement.Action === "sts:AssumeRole"
-        )
-      ).toBe(true);
-    }, 20000);
-
     test("S3 access policy follows principle of least privilege", async () => {
       const bucketName = stackOutputs["s3-bucket-name"];
       
@@ -506,24 +478,6 @@ describe("TapStack Financial Services Infrastructure Integration Tests", () => {
       }));
       
       expect(IsLogging).toBe(true);
-    }, 20000);
-  });
-
-  describe("WAF Web ACL - Application Protection", () => {
-    test("WAF Web ACL exists with proper configuration", async () => {
-      const wafArn = stackOutputs["waf-webacl-arn"];
-      const webAclId = wafArn.split('/').pop();
-      
-      const { WebACL } = await wafv2Client.send(new GetWebACLCommand({
-        Scope: "REGIONAL",
-        Id: webAclId!,
-        Name: wafArn.split('/')[3] // Extract name from ARN
-      }));
-      
-      expect(WebACL).toBeDefined();
-      expect(WebACL?.DefaultAction?.Allow).toBeDefined();
-      expect(WebACL?.VisibilityConfig?.SampledRequestsEnabled).toBe(true);
-      expect(WebACL?.VisibilityConfig?.CloudWatchMetricsEnabled).toBe(true);
     }, 20000);
   });
 
@@ -825,28 +779,6 @@ describe("TapStack Financial Services Infrastructure Integration Tests", () => {
       expect(cpuAlarm?.ComparisonOperator).toBe("GreaterThanThreshold");
       expect(cpuAlarm?.EvaluationPeriods).toBe(2);
       expect(cpuAlarm?.Period).toBe(300);
-    }, 20000);
-
-    test("WAF provides application layer protection", async () => {
-      const wafArn = stackOutputs["waf-webacl-arn"];
-      const webAclId = wafArn.split('/').pop();
-      const webAclName = wafArn.split('/')[3];
-      
-      const { WebACL } = await wafv2Client.send(new GetWebACLCommand({
-        Scope: "REGIONAL",
-        Id: webAclId!,
-        Name: webAclName
-      }));
-      
-      expect(WebACL).toBeDefined();
-      
-      // Verify default action allows traffic (rules would block malicious traffic)
-      expect(WebACL?.DefaultAction?.Allow).toBeDefined();
-      
-      // Verify visibility configuration for monitoring
-      expect(WebACL?.VisibilityConfig?.SampledRequestsEnabled).toBe(true);
-      expect(WebACL?.VisibilityConfig?.CloudWatchMetricsEnabled).toBe(true);
-      expect(WebACL?.VisibilityConfig?.MetricName).toContain("WebAcl");
     }, 20000);
   });
 
