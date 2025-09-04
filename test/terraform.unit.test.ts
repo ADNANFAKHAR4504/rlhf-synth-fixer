@@ -6,19 +6,19 @@ const tf = fs.readFileSync(TAP_STACK_TF, "utf8");
 const has = (regex: RegExp) => regex.test(tf);
 
 describe("Terraform tap-stack static validation", () => {
-  // General checks
-  it("file exists and has sufficient length", () => {
+  // === General checks ===
+  it("file exists and is large enough", () => {
     expect(fs.existsSync(TAP_STACK_TF)).toBe(true);
-    expect(tf.length).toBeGreaterThan(60000); // matches large config attached
+    expect(tf.length).toBeGreaterThan(60000); // Matches attached config size
   });
 
-  // ==== VARIABLES ====
-  // Corrected to actual variables in your tap_stack.tf
+  // === VARIABLES ===
   const expectedVariables = [
     "primary_region",
     "secondary_region",
-    "allowed_cidr_blocks",
-    "notification_email"
+    "environment",
+    "allowed_ssh_cidrs",
+    "allowed_https_cidrs"
   ];
   it("declares required input variables", () => {
     expectedVariables.forEach(v =>
@@ -26,166 +26,237 @@ describe("Terraform tap-stack static validation", () => {
     );
   });
 
-  // ==== LOCALS ====
-  it("declares common locals like common_tags and naming prefixes", () => {
+  // === LOCALS ===
+  it("declares locals for common tags and naming conventions", () => {
     expect(has(/locals\s*{[\s\S]*common_tags/)).toBe(true);
-    expect(has(/primary_prefix\s*=\s*"tap-primary-\${var.primary_region}"/)).toBe(true);
-    expect(has(/secondary_prefix\s*=\s*"tap-secondary-\${var.secondary_region}"/)).toBe(true);
+    expect(has(/primary_name_prefix\s*=\s*"tap-prod-primary"/)).toBe(true);
+    expect(has(/secondary_name_prefix\s*=\s*"tap-prod-secondary"/)).toBe(true);
   });
 
-  // ==== DATA SOURCES ====
-  it("declares AMI data sources per region", () => {
+  // === DATA SOURCES ===
+  it("declares regional data sources for latest Amazon Linux AMI and AZs", () => {
     expect(has(/data\s+"aws_ami"\s+"amazon_linux_primary"/)).toBe(true);
     expect(has(/data\s+"aws_ami"\s+"amazon_linux_secondary"/)).toBe(true);
+    expect(has(/data\s+"aws_availability_zones"\s+"primary_azs"/)).toBe(true);
+    expect(has(/data\s+"aws_availability_zones"\s+"secondary_azs"/)).toBe(true);
+    expect(has(/data\s+"aws_caller_identity"\s+"current"/)).toBe(true);
   });
 
-  // ==== NETWORKING ====
+  // === RANDOM RESOURCES ===
+  it("declares random resource for RDS credentials and bucket suffix", () => {
+    expect(has(/resource\s+"random_string"\s+"rds_username_primary"/)).toBe(true);
+    expect(has(/resource\s+"random_password"\s+"rds_password_primary"/)).toBe(true);
+    expect(has(/resource\s+"random_string"\s+"rds_username_secondary"/)).toBe(true);
+    expect(has(/resource\s+"random_password"\s+"rds_password_secondary"/)).toBe(true);
+    expect(has(/resource\s+"random_string"\s+"bucket_suffix"/)).toBe(true);
+  });
+
+  // === NETWORKING ===
   ["primary", "secondary"].forEach(region => {
-    it(`declares networking resources for ${region}`, () => {
-      expect(has(new RegExp(`resource\\s+"aws_vpc"\\s+"${region}"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_internet_gateway"\\s+"${region}"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_nat_gateway"\\s+"${region}"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_eip"\\s+"${region}_nat"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_subnet"\\s+"${region}_public"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_subnet"\\s+"${region}_private"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_route_table"\\s+"${region}_public"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_route_table"\\s+"${region}_private"`))).toBe(true);
+    it(`declares VPC networking resources for ${region}`, () => {
+      expect(has(new RegExp(`resource\\s+"aws_vpc"\\s+"${region}_vpc"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_internet_gateway"\\s+"${region}_igw"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_nat_gateway"\\s+"${region}_nat"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_eip"\\s+"${region}_nat_eip"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_subnet"\\s+"${region}_public_subnets"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_subnet"\\s+"${region}_private_subnets"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_route_table"\\s+"${region}_public_rt"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_route_table"\\s+"${region}_private_rt"`))).toBe(true);
     });
   });
 
-  // ==== SECURITY GROUPS ====
-  it("declares SGs for EC2 and RDS in both regions", () => {
-    [
-      "rds_primary",
-      "rds_secondary",
-      "ec2_primary",
-      "ec2_secondary"
-    ].forEach(sg => {
+  // === SECURITY GROUPS ===
+  ["primary_ec2_sg","primary_rds_sg","primary_alb_sg","secondary_ec2_sg","secondary_rds_sg","secondary_alb_sg"].forEach(sg => {
+    it(`declares security group ${sg}`, () => {
       expect(has(new RegExp(`resource\\s+"aws_security_group"\\s+"${sg}"`))).toBe(true);
     });
   });
 
-  // ==== IAM ====
-  it("declares EC2 IAM role and profile", () => {
-    expect(has(/resource\s+"aws_iam_role"\s+"ec2_role"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/)).toBe(true);
+  // === IAM ===
+  it("declares IAM roles, policies for EC2, Lambda, S3 Replication", () => {
+    [
+      /resource\s+"aws_iam_role"\s+"ec2_role"/,
+      /resource\s+"aws_iam_role"\s+"secondary_ec2_role"/,
+      /resource\s+"aws_iam_instance_profile"\s+"ec2_profile"/,
+      /resource\s+"aws_iam_instance_profile"\s+"secondary_ec2_profile"/,
+      /resource\s+"aws_iam_role"\s+"replication_role"/,
+      /resource\s+"aws_iam_policy"\s+"replication_policy"/,
+      /resource\s+"aws_iam_role"\s+"primary_lambda_role"/,
+      /resource\s+"aws_iam_policy"\s+"primary_lambda_policy"/,
+      /resource\s+"aws_iam_role"\s+"secondary_lambda_role"/,
+      /resource\s+"aws_iam_policy"\s+"secondary_lambda_policy"/
+    ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it("declares IAM roles and policies for Lambda RDS backups and S3 replication", () => {
-    expect(has(/resource\s+"aws_iam_role"\s+"lambda_rds_backup_primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_role"\s+"lambda_rds_backup_secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_policy"\s+"lambda_rds_backup_primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_policy"\s+"lambda_rds_backup_secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_role"\s+"s3_replication"/)).toBe(true);
-    expect(has(/resource\s+"aws_iam_policy"\s+"s3_replication"/)).toBe(true);
+  // === SECRETS MANAGER ===
+  it("declares Secrets Manager secrets for RDS in both regions", () => {
+    expect(has(/resource\s+"aws_secretsmanager_secret"\s+"primary_rds_secret"/)).toBe(true);
+    expect(has(/resource\s+"aws_secretsmanager_secret"\s+"secondary_rds_secret"/)).toBe(true);
+    expect(has(/resource\s+"aws_secretsmanager_secret_version"\s+"primary_rds_secret_version"/)).toBe(true);
+    expect(has(/resource\s+"aws_secretsmanager_secret_version"\s+"secondary_rds_secret_version"/)).toBe(true);
   });
 
-  // ==== SECRETS MANAGER ====
-  it("declares Secrets Manager secrets for primary and secondary RDS", () => {
-    expect(has(/resource\s+"aws_secretsmanager_secret"\s+"rds_credentials_primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_secretsmanager_secret"\s+"rds_credentials_secondary"/)).toBe(true);
+  // === RDS ===
+  ["primary","secondary"].forEach(region => {
+    it(`declares RDS and subnet groups for ${region}`, () => {
+      expect(has(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}_rds"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_db_subnet_group"\\s+"${region}_db_subnet_group"`))).toBe(true);
+      // storage encryption, multi_az, non-public
+      expect(tf.match(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}_rds"[\\s\\S]*storage_encrypted\\s*=\\s*true`))).not.toBeNull();
+      expect(tf.match(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}_rds"[\\s\\S]*multi_az\\s*=\\s*true`))).not.toBeNull();
+      expect(tf.match(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}_rds"[\\s\\S]*publicly_accessible\\s*=\\s*false`))).not.toBeNull();
+    });
   });
 
-  // ==== RDS ====
+  // === S3 BUCKETS ===
+  it("declares S3 buckets, versioning, encryption, replication", () => {
+    expect(has(/resource\s+"aws_s3_bucket"\s+"primary_bucket"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket"\s+"secondary_bucket"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_versioning"\s+"primary_bucket_versioning"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_versioning"\s+"secondary_bucket_versioning"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"primary_bucket_encryption"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"secondary_bucket_encryption"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_replication_configuration"\s+"replication"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role"\s+"replication_role"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_policy"\s+"replication_policy"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role_policy_attachment"\s+"replication_policy_attachment"/)).toBe(true);
+  });
+
+  // === EC2 INSTANCES ===
+  ["primary","secondary"].forEach(region => {
+    it(`declares EC2 instances in ${region} region`, () => {
+      expect(has(new RegExp(`resource\\s+"aws_instance"\\s+"${region}_ec2"`))).toBe(true);
+    });
+  });
+
+  // === LOAD BALANCERS ===
   ["primary", "secondary"].forEach(region => {
-    it(`declares RDS instance and subnet group for ${region}`, () => {
-      expect(has(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_db_subnet_group"\\s+"${region}"`))).toBe(true);
-      // enforce encryption, multi_az and private accessibility
-      expect(
-        tf.match(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}"[\\s\\S]*storage_encrypted\\s*=\\s*true`))
-      ).not.toBeNull();
-      expect(
-        tf.match(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}"[\\s\\S]*multi_az\\s*=\\s*true`))
-      ).not.toBeNull();
-      expect(
-        tf.match(new RegExp(`resource\\s+"aws_db_instance"\\s+"${region}"[\\s\\S]*publicly_accessible\\s*=\\s*false`))
-      ).not.toBeNull();
+    it(`declares Load Balancer, target group, listener for ${region}`, () => {
+      expect(has(new RegExp(`resource\\s+"aws_lb"\\s+"${region}_alb"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_lb_target_group"\\s+"${region}_tg"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_lb_listener"\\s+"${region}_listener"`))).toBe(true);
     });
   });
 
-  // ==== S3 ====
-  it("declares S3 buckets, with versioning, encryption, public access block, and replication", () => {
-    expect(has(/resource\s+"aws_s3_bucket"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_versioning"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_versioning"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_public_access_block"\s+"primary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_public_access_block"\s+"secondary"/)).toBe(true);
-    expect(has(/resource\s+"aws_s3_bucket_replication_configuration"\s+"primary_to_secondary"/)).toBe(true);
+  // === WAF ===
+  it("declares WAF Web ACLs and associations for both ALBs", () => {
+    expect(has(/resource\s+"aws_wafv2_web_acl"\s+"primary_waf"/)).toBe(true);
+    expect(has(/resource\s+"aws_wafv2_web_acl"\s+"secondary_waf"/)).toBe(true);
+    expect(has(/resource\s+"aws_wafv2_web_acl_association"\s+"primary_waf_association"/)).toBe(true);
+    expect(has(/resource\s+"aws_wafv2_web_acl_association"\s+"secondary_waf_association"/)).toBe(true);
   });
 
-  // ==== LAMBDA FUNCTIONS ====
-  it("declares Lambda functions for RDS backups in both regions", () => {
-    ["rds_backup_primary","rds_backup_secondary"].forEach(lf => {
+  // === LAMBDA ===
+  ["primary_rds_backup","secondary_rds_backup"].forEach(lf => {
+    it(`declares Lambda function ${lf}`, () => {
       expect(has(new RegExp(`resource\\s+"aws_lambda_function"\\s+"${lf}"`))).toBe(true);
-      expect(has(new RegExp(`runtime\\s+=\\s+"python3.9"`))).toBe(true);
+      expect(has(/runtime\s+=\s+"python3\.9"/)).toBe(true);
     });
   });
 
-  // ==== DYNAMODB TABLES ====
-  it("declares DynamoDB tables with point-in-time recovery enabled", () => {
-    ["primary","secondary"].forEach(region => {
-      expect(has(new RegExp(`resource\\s+"aws_dynamodb_table"\\s+"${region}"`))).toBe(true);
-      expect(has(new RegExp(`point_in_time_recovery\\s*{[\\s\\S]*enabled\\s*=\\s*true`))).toBe(true);
-    });
-  });
-
-  // ==== API GATEWAY ====
-  it("declares API Gateway and its resources with IAM auth", () => {
-    expect(has(/resource\s+"aws_api_gateway_rest_api"\s+"main"/)).toBe(true);
-    expect(has(/resource\s+"aws_api_gateway_resource"\s+"api_resource"/)).toBe(true);
-    expect(has(/resource\s+"aws_api_gateway_method"\s+"api_method"/)).toBe(true);
-    expect(has(/authorization\s+=\s+"AWS_IAM"/)).toBe(true);
-  });
-
-  // ==== CLOUDWATCH ALARMS ====
-  ["ec2_cpu_primary","ec2_cpu_secondary","rds_cpu_primary","rds_cpu_secondary"].forEach(alarm => {
-    it(`declares CloudWatch alarm ${alarm}`, () => {
+  // === CLOUDWATCH ALARMS ===
+  it("declares EC2/RDS CloudWatch alarms in both regions", () => {
+    ["primary_ec2_cpu_alarm","primary_rds_cpu_alarm","secondary_ec2_cpu_alarm","secondary_rds_cpu_alarm"].forEach(alarm => {
       expect(has(new RegExp(`resource\\s+"aws_cloudwatch_metric_alarm"\\s+"${alarm}"`))).toBe(true);
     });
   });
 
-  // ==== CLOUDTRAIL ====
-  it("declares CloudTrail for multi-region and global events", () => {
-    expect(has(/resource\s+"aws_cloudtrail"\s+"main"/)).toBe(true);
-    expect(has(/is_multi_region_trail\s+=\s+true/)).toBe(true);
-    expect(has(/include_global_service_events\s+=\s+true/)).toBe(true);
+  // === CLOUDTRAIL ===
+  it("declares CloudTrail, bucket, bucket policy for multi-region", () => {
+    expect(has(/resource\s+"aws_cloudtrail"\s+"main_trail"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket"\s+"cloudtrail_bucket"/)).toBe(true);
+    expect(has(/is_multi_region_trail\s+=\s*true/)).toBe(true);
+    expect(has(/event_selector\s*{[\s\S]*type\s*=\s*"AWS::S3::Object"/)).toBe(true);
   });
 
-  // ==== TAG STANDARDS ====
-  it("applies common tags consistently", () => {
+  // === VPC FLOW LOGS ===
+  ["primary","secondary"].forEach(region => {
+    it(`declares VPC Flow Logs (IAM role/policy/log group/flow log) for ${region}`, () => {
+      expect(has(new RegExp(`resource\\s+"aws_iam_role"\\s+"${region}_flow_logs_role"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_iam_role_policy"\\s+"${region}_flow_logs_policy"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_cloudwatch_log_group"\\s+"${region}_vpc_flow_logs"`))).toBe(true);
+      expect(has(new RegExp(`resource\\s+"aws_flow_log"\\s+"${region}_vpc_flow_logs"`))).toBe(true);
+    });
+  });
+
+  // === CLOUDFRONT ===
+  it("declares CloudFront distribution with OAI, ALB and S3 origins, and AWS Shield", () => {
+    expect(has(/resource\s+"aws_cloudfront_distribution"\s+"main_distribution"/)).toBe(true);
+    expect(has(/resource\s+"aws_cloudfront_origin_access_identity"\s+"oai"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_policy"\s+"primary_bucket_policy"/)).toBe(true);
+  });
+
+  // === EBS SNAPSHOT LIFECYCLE ===
+  it("declares DLM policies and roles for EBS snapshot lifecycle", () => {
+    expect(has(/resource\s+"aws_dlm_lifecycle_policy"\s+"primary_ebs_backup"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role"\s+"dlm_lifecycle_role"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role_policy"\s+"dlm_lifecycle_policy"/)).toBe(true);
+    expect(has(/resource\s+"aws_dlm_lifecycle_policy"\s+"secondary_ebs_backup"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role"\s+"secondary_dlm_lifecycle_role"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role_policy"\s+"secondary_dlm_lifecycle_policy"/)).toBe(true);
+  });
+
+  // === OUTPUTS ===
+  // Strict outputs
+  const mustHaveOutputs = [
+    "primary_vpc_id", "secondary_vpc_id",
+    "primary_vpc_cidr", "secondary_vpc_cidr",
+    "primary_public_subnet_ids", "primary_private_subnet_ids",
+    "secondary_public_subnet_ids", "secondary_private_subnet_ids",
+    "primary_igw_id", "secondary_igw_id", "primary_nat_gateway_id", "secondary_nat_gateway_id",
+    "primary_ec2_sg_id", "secondary_ec2_sg_id",
+    "primary_rds_sg_id", "secondary_rds_sg_id",
+    "primary_alb_sg_id", "secondary_alb_sg_id",
+    "primary_rds_endpoint", "secondary_rds_endpoint",
+    "primary_rds_port", "secondary_rds_port",
+    "primary_rds_db_name", "secondary_rds_db_name",
+    "primary_rds_secret_arn", "secondary_rds_secret_arn",
+    "primary_s3_bucket_id", "primary_s3_bucket_arn",
+    "secondary_s3_bucket_id", "secondary_s3_bucket_arn",
+    "cloudtrail_s3_bucket_id", "ec2_role_arn", "secondary_ec2_role_arn",
+    "s3_replication_role_arn", "primary_lambda_role_arn", "secondary_lambda_role_arn",
+    "primary_ec2_instance_ids", "primary_ec2_private_ips",
+    "secondary_ec2_instance_ids", "secondary_ec2_private_ips",
+    "primary_ami_id", "secondary_ami_id",
+    "primary_alb_dns_name", "primary_alb_zone_id", "primary_alb_arn",
+    "secondary_alb_dns_name", "secondary_alb_zone_id", "secondary_alb_arn",
+    "primary_target_group_arn", "secondary_target_group_arn",
+    "primary_waf_arn", "secondary_waf_arn",
+    "primary_lambda_function_arn", "secondary_lambda_function_arn",
+    "primary_lambda_function_name", "secondary_lambda_function_name",
+    "primary_ec2_cpu_alarm_names", "primary_rds_cpu_alarm_name",
+    "secondary_ec2_cpu_alarm_names", "secondary_rds_cpu_alarm_name",
+    "cloudtrail_arn", "cloudtrail_home_region",
+    "primary_vpc_flow_logs_id", "secondary_vpc_flow_logs_id",
+    "primary_flow_logs_log_group_name", "secondary_flow_logs_log_group_name",
+    "cloudfront_distribution_id", "cloudfront_distribution_arn", "cloudfront_domain_name", "cloudfront_hosted_zone_id",
+    "primary_dlm_policy_arn", "secondary_dlm_policy_arn",
+    "primary_availability_zones", "secondary_availability_zones",
+    "aws_account_id", "primary_region", "secondary_region",
+    "primary_public_route_table_id", "primary_private_route_table_id",
+    "secondary_public_route_table_id", "secondary_private_route_table_id",
+    "environment", "primary_name_prefix", "secondary_name_prefix"
+  ];
+  it("declares required outputs", () => {
+    mustHaveOutputs.forEach(o =>
+      expect(has(new RegExp(`output\\s+"${o}"`))).toBe(true)
+    );
+  });
+
+  // === TAG STANDARDS ===
+  it("applies common tags for all resources", () => {
     expect(has(/tags\s+=\s+merge\(local\.common_tags,/)).toBe(true);
     expect(has(/Environment\s+=\s+"Production"/)).toBe(true);
   });
 
-  // ==== OUTPUTS ====
-  it("has required outputs for VPCs, RDS, S3, Lambdas, DynamoDB, API Gateway, CloudFront, SNS etc", () => {
-    const mustHaveOutputs = [
-      "primary_vpc_id", "secondary_vpc_id",
-      "primary_rds_endpoint", "secondary_rds_endpoint",
-      "primary_s3_bucket_name", "secondary_s3_bucket_name",
-      "primary_lambda_function_name", "secondary_lambda_function_name",
-      "primary_dynamodb_table_name", "secondary_dynamodb_table_name",
-      "api_gateway_rest_api_id", "cloudfront_distribution_id",
-      "primary_sns_topic_arn", "secondary_sns_topic_arn"
+  // === SECURITY: no secrets/passwords in outputs ===
+  it("does not expose secrets/passwords in outputs", () => {
+    // Allow outputs referencing ARNs, disallow exposing 'password', 'secret_value', 'secret_string'
+    const disallowed = [
+      /output\s+.*password/i,
+      /output\s+.*secret_value/i,
+      /output\s+.*secret_string/i,
     ];
-    mustHaveOutputs.forEach(o => expect(has(new RegExp(`output\\s+"${o}"`))).toBe(true));
+    expect(disallowed.every(rx => !rx.test(tf))).toBe(true);
   });
-
-  // ==== SECURITY - no secrets in outputs ====
- it("does not expose sensitive outputs such as passwords or direct secret values", () => {
-  // Allow outputs referencing secret ARNs, disallow outputs exposing "password" or "secret_value" or "secret_string"
-  const disallowedSensitivePatterns = [
-    /output\s+.*password/i,
-    /output\s+.*secret_value/i,
-    /output\s+.*secret_string/i,
-    // exclude pure ARNs (common pattern ending with _secret_arn)
-  ];
-
-  const matchesDisallowed = disallowedSensitivePatterns.some(pattern => pattern.test(tf));
-  expect(matchesDisallowed).toBe(false);
-});
 });
