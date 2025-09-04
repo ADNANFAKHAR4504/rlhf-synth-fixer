@@ -73,3 +73,7 @@ Verifies Config recorder is recording and that Config delivery channel exists.
 Outputs non-zero exit code if any check fails.
 
 Final instruction: Produce the CloudFormation JSON template with the TemplateVerification section appended at the end of the JSON document.
+
+run: |
+  - echo "Hello"
+  - if [ ! -f "lib/PROMPT.md" ]; then ...
