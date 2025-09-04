@@ -101,7 +101,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         await s3Client.send(command);
         expect(true).toBe(true);
       } catch (error) {
-        fail(`Failed to access S3 bucket: ${error}`);
+        throw new Error(`Failed to access S3 bucket: ${error}`);
       }
     });
 
@@ -116,7 +116,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         const response = await s3Client.send(command);
         expect(response.Status).toBe('Enabled');
       } catch (error) {
-        fail(`Failed to get bucket versioning: ${error}`);
+        throw new Error(`Failed to get bucket versioning: ${error}`);
       }
     });
 
@@ -133,7 +133,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.ServerSideEncryptionConfiguration!.Rules).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(0);
       } catch (error) {
-        fail(`Failed to get bucket encryption: ${error}`);
+        throw new Error(`Failed to get bucket encryption: ${error}`);
       }
     });
 
@@ -152,7 +152,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
         expect(response.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
       } catch (error) {
-        fail(`Failed to get public access block: ${error}`);
+        throw new Error(`Failed to get public access block: ${error}`);
       }
     });
   });
@@ -170,7 +170,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Attributes).toBeDefined();
         expect(response.Attributes!.DisplayName).toBe('Migration Status Notifications');
       } catch (error) {
-        fail(`Failed to access SNS topic: ${error}`);
+        throw new Error(`Failed to access SNS topic: ${error}`);
       }
     });
 
@@ -187,7 +187,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Attributes!.Owner).toBe(accountId);
         expect(response.Attributes!.SubscriptionsConfirmed).toBeDefined();
       } catch (error) {
-        fail(`Failed to get topic attributes: ${error}`);
+        throw new Error(`Failed to get topic attributes: ${error}`);
       }
     });
 
@@ -202,7 +202,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         const response = await snsClient.send(command);
         expect(response.Subscriptions).toBeDefined();
       } catch (error) {
-        fail(`Failed to list subscriptions: ${error}`);
+        throw new Error(`Failed to list subscriptions: ${error}`);
       }
     });
   });
@@ -223,7 +223,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Configuration!.Runtime).toBe('python3.13');
         expect(response.Configuration!.Handler).toBe('index.lambda_handler');
       } catch (error) {
-        fail(`Failed to access migration trigger function: ${error}`);
+        throw new Error(`Failed to access migration trigger function: ${error}`);
       }
     });
 
@@ -242,7 +242,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Configuration!.Runtime).toBe('python3.13');
         expect(response.Configuration!.Handler).toBe('index.lambda_handler');
       } catch (error) {
-        fail(`Failed to access status notifier function: ${error}`);
+        throw new Error(`Failed to access status notifier function: ${error}`);
       }
     });
 
@@ -263,7 +263,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Timeout).toBeGreaterThan(0);
         expect(response.MemorySize).toBeGreaterThan(0);
       } catch (error) {
-        fail(`Failed to get function configuration: ${error}`);
+        throw new Error(`Failed to get function configuration: ${error}`);
       }
     });
 
@@ -283,7 +283,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Timeout).toBe(60);
         expect(response.MemorySize).toBe(128);
       } catch (error) {
-        fail(`Failed to get function configuration: ${error}`);
+        throw new Error(`Failed to get function configuration: ${error}`);
       }
     });
 
@@ -303,7 +303,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.StatusCode).toBe(200);
         expect(response.Payload).toBeDefined();
       } catch (error) {
-        fail(`Failed to invoke migration trigger function: ${error}`);
+        throw new Error(`Failed to invoke migration trigger function: ${error}`);
       }
     });
 
@@ -323,7 +323,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.StatusCode).toBe(200);
         expect(response.Payload).toBeDefined();
       } catch (error) {
-        fail(`Failed to invoke status notifier function: ${error}`);
+        throw new Error(`Failed to invoke status notifier function: ${error}`);
       }
     });
   });
@@ -346,7 +346,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Role!.RoleName).toBe(roleName);
         expect(response.Role!.AssumeRolePolicyDocument).toBeDefined();
       } catch (error) {
-        fail(`Failed to access migration trigger function role: ${error}`);
+        throw new Error(`Failed to access migration trigger function role: ${error}`);
       }
     });
 
@@ -367,7 +367,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Role!.RoleName).toBe(roleName);
         expect(response.Role!.AssumeRolePolicyDocument).toBeDefined();
       } catch (error) {
-        fail(`Failed to access status notifier function role: ${error}`);
+        throw new Error(`Failed to access status notifier function role: ${error}`);
       }
     });
 
@@ -392,7 +392,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         );
         expect(basicExecutionPolicy).toBeDefined();
       } catch (error) {
-        fail(`Failed to get role policies: ${error}`);
+        throw new Error(`Failed to get role policies: ${error}`);
       }
     });
 
@@ -417,7 +417,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         );
         expect(basicExecutionPolicy).toBeDefined();
       } catch (error) {
-        fail(`Failed to get role policies: ${error}`);
+        throw new Error(`Failed to get role policies: ${error}`);
       }
     });
   });
@@ -437,7 +437,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.name).toBeDefined();
         expect(response.description).toBe('REST API for triggering migration processes');
       } catch (error) {
-        fail(`Failed to access API Gateway: ${error}`);
+        throw new Error(`Failed to access API Gateway: ${error}`);
       }
     });
 
@@ -458,7 +458,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         );
         expect(migrateResource).toBeDefined();
       } catch (error) {
-        fail(`Failed to get API Gateway resources: ${error}`);
+        throw new Error(`Failed to get API Gateway resources: ${error}`);
       }
     });
 
@@ -488,7 +488,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(methodResponse.httpMethod).toBe('POST');
         expect(methodResponse.authorizationType).toBe('NONE');
       } catch (error) {
-        fail(`Failed to get API Gateway method: ${error}`);
+        throw new Error(`Failed to get API Gateway method: ${error}`);
       }
     });
 
@@ -508,7 +508,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response).toBeDefined();
         expect(response.stageName).toBe('prod');
       } catch (error) {
-        fail(`Failed to get API Gateway stage: ${error}`);
+        throw new Error(`Failed to get API Gateway stage: ${error}`);
       }
     });
 
@@ -531,7 +531,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         const responseBody = await response.json();
         expect(responseBody).toBeDefined();
       } catch (error) {
-        fail(`Failed to invoke API Gateway: ${error}`);
+        throw new Error(`Failed to invoke API Gateway: ${error}`);
       }
     });
   });
@@ -556,7 +556,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(payload.statusCode).toBe(200);
         expect(payload.body).toBeDefined();
       } catch (error) {
-        fail(`Failed to test Lambda S3 access: ${error}`);
+        throw new Error(`Failed to test Lambda S3 access: ${error}`);
       }
     });
 
@@ -579,7 +579,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(payload.statusCode).toBe(200);
         expect(payload.body).toBeDefined();
       } catch (error) {
-        fail(`Failed to test Lambda SNS access: ${error}`);
+        throw new Error(`Failed to test Lambda SNS access: ${error}`);
       }
     });
 
@@ -603,7 +603,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(responseBody).toBeDefined();
         expect((responseBody as any).message).toContain('Migration process initiated successfully');
       } catch (error) {
-        fail(`Failed to test API Gateway Lambda integration: ${error}`);
+        throw new Error(`Failed to test API Gateway Lambda integration: ${error}`);
       }
     });
   });
@@ -622,7 +622,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.ServerSideEncryptionConfiguration!.Rules).toBeDefined();
         expect(response.ServerSideEncryptionConfiguration!.Rules!.length).toBeGreaterThan(0);
       } catch (error) {
-        fail(`Failed to verify encryption: ${error}`);
+        throw new Error(`Failed to verify encryption: ${error}`);
       }
     });
 
@@ -641,7 +641,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.PublicAccessBlockConfiguration!.IgnorePublicAcls).toBe(true);
         expect(response.PublicAccessBlockConfiguration!.RestrictPublicBuckets).toBe(true);
       } catch (error) {
-        fail(`Failed to verify access controls: ${error}`);
+        throw new Error(`Failed to verify access controls: ${error}`);
       }
     });
 
@@ -668,7 +668,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
           expect(roleResponse.Role).toBeDefined();
           expect(roleResponse.Role!.AssumeRolePolicyDocument).toBeDefined();
         } catch (error) {
-          fail(`Failed to verify ${func.name} execution role: ${error}`);
+          throw new Error(`Failed to verify ${func.name} execution role: ${error}`);
         }
       }
     });
@@ -695,7 +695,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
           expect(response.MemorySize).toBeGreaterThan(0);
           expect(response.MemorySize).toBeLessThanOrEqual(3008);
         } catch (error) {
-          fail(`Failed to verify ${func.name} configuration: ${error}`);
+          throw new Error(`Failed to verify ${func.name} configuration: ${error}`);
         }
       }
     });
@@ -711,7 +711,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         const response = await s3Client.send(command);
         expect(response.Status).toBe('Enabled');
       } catch (error) {
-        fail(`Failed to verify S3 versioning: ${error}`);
+        throw new Error(`Failed to verify S3 versioning: ${error}`);
       }
     });
 
@@ -732,7 +732,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(stageResponse.stageName).toBe('prod');
         expect(stageResponse.deploymentId).toBeDefined();
       } catch (error) {
-        fail(`Failed to verify API Gateway deployment: ${error}`);
+        throw new Error(`Failed to verify API Gateway deployment: ${error}`);
       }
     });
   });
@@ -757,7 +757,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
           expect(response.FunctionName).toBeDefined();
           expect(response.FunctionName).toBeDefined();
         } catch (error) {
-          fail(`Failed to verify ${func.name} logging: ${error}`);
+          throw new Error(`Failed to verify ${func.name} logging: ${error}`);
         }
       }
     });
@@ -774,7 +774,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(response.Attributes).toBeDefined();
         expect(response.Attributes!.Owner).toBe(accountId);
       } catch (error) {
-        fail(`Failed to verify SNS monitoring: ${error}`);
+        throw new Error(`Failed to verify SNS monitoring: ${error}`);
       }
     });
 
@@ -789,7 +789,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         await s3Client.send(command);
         expect(true).toBe(true);
       } catch (error) {
-        fail(`Failed to verify S3 monitoring: ${error}`);
+        throw new Error(`Failed to verify S3 monitoring: ${error}`);
       }
     });
   });
@@ -825,7 +825,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect((responseBody as any).log_location).toBeDefined();
         expect((responseBody as any).log_location).toContain(outputs.MigrationLogsBucketName);
       } catch (error) {
-        fail(`Failed to test end-to-end workflow: ${error}`);
+        throw new Error(`Failed to test end-to-end workflow: ${error}`);
       }
     });
 
@@ -854,7 +854,7 @@ describe('TapStack Integration Tests - Live Resource Validation', () => {
         expect(payload.body).toBeDefined();
         expect(payload.body.message).toContain('Status notification sent successfully');
       } catch (error) {
-        fail(`Failed to test status notification workflow: ${error}`);
+        throw new Error(`Failed to test status notification workflow: ${error}`);
       }
     });
   });
