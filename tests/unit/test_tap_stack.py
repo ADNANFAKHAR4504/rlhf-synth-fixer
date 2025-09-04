@@ -31,8 +31,8 @@ def test_lambda_functions_created():
     )
     template = assertions.Template.from_stack(stack)
 
-    # Should have 3 Lambda functions
-    template.resource_count_is("AWS::Lambda::Function", 3)
+    # Should have 4 Lambda functions (3 main functions + 1 log retention function)
+    template.resource_count_is("AWS::Lambda::Function", 4)
 
 
 def test_api_gateway_created():

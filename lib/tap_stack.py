@@ -115,7 +115,6 @@ class TapStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY if self.environment_suffix == "dev" else RemovalPolicy.RETAIN,
-            point_in_time_recovery_enabled=True,
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
         )
         
