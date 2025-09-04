@@ -416,45 +416,45 @@ jobs:
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
 
-  # claude-code-action:
-  #   runs-on: ubuntu-24.04
-  #   name: 'Claude Review'
-  #   needs: [integration-tests-live]
-  #   permissions:
-  #     contents: write
-  #     pull-requests: write
-  #     issues: write
-  #     id-token: write
-  #     actions: read
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-  #         ref: refs/pull/${{ github.event.pull_request.number }}/head
+  claude-code-action:
+    runs-on: ubuntu-24.04
+    name: 'Claude Review'
+    needs: [integration-tests-live]
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: refs/pull/${{ github.event.pull_request.number }}/head
 
-  #     - name: Check for required documentation files
-  #       id: docs-check
-  #       run: |
-  #         if [ ! -f "lib/PROMPT.md" ]; then
-  #           echo "❌ lib/PROMPT.md not found, exiting with failure"
-  #           exit 1
-  #         fi
+      - name: Check for required documentation files
+        id: docs-check
+        run: |
+          if [ ! -f "lib/PROMPT.md" ]; then
+            echo "❌ lib/PROMPT.md not found, exiting with failure"
+            exit 1
+          fi
 
-  #         if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-  #           echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
-  #           exit 1
-  #         fi
+          if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
+            echo "❌ lib/MODEL_RESPONSE.md not found, exiting with failure"
+            exit 1
+          fi
 
-  #         if [ ! -f "lib/IDEAL_RESPONSE.md" ]; then
-  #           echo "❌ lib/IDEAL_RESPONSE.md not found, exiting with failure"
-  #           exit 1
-  #         fi
+          if [ ! -f "lib/IDEAL_RESPONSE.md" ]; then
+            echo "❌ lib/IDEAL_RESPONSE.md not found, exiting with failure"
+            exit 1
+          fi
 
-  #         if [ ! -f "lib/MODEL_FAILURES.md" ]; then
-  #           echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
-  #           exit 1
-  #         fi
+          if [ ! -f "lib/MODEL_FAILURES.md" ]; then
+            echo "❌ lib/MODEL_FAILURES.md not found, exiting with failure"
+            exit 1
+          fi
 
   #     - name: Run Claude PR Review Action
   #       uses: anthropics/claude-code-action@v1
