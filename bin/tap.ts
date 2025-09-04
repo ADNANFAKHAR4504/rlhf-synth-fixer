@@ -43,8 +43,9 @@ const regions = [
 
 // Create stacks for both regions
 regions.forEach(region => {
-  new TapStack(app, stackName, {
-    stackName,
+  const stackNameRef = `stackName-${region.name}`;
+  new TapStack(app, stackNameRef, {
+    stackName: stackNameRef,
     environmentSuffix: environmentSuffix,
     description: `${environment} infrastructure stack for ${appName} in ${region.name} (${region.isPrimary ? 'Primary' : 'Secondary'})`,
 
