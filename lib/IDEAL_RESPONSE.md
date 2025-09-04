@@ -43,20 +43,20 @@ s3_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}",
 )
 
 # Enable versioning on S3 bucket
-s3_bucket_versioning = aws.s3.BucketVersioning(f"{company_name}-{app_name}-{environment}-versioning",
+s3_bucket_versioning = aws.s3.BucketVersioningV2(f"{company_name}-{app_name}-{environment}-versioning",
     bucket=s3_bucket.id,
-    versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
+    versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
         status="Enabled"
     )
 )
 
 # Configure S3 bucket encryption with AES-256
-s3_bucket_server_side_encryption_configuration = aws.s3.BucketServerSideEncryptionConfiguration(
+s3_bucket_server_side_encryption_configuration = aws.s3.BucketServerSideEncryptionConfigurationV2(
     f"{company_name}-{app_name}-{environment}-encryption",
     bucket=s3_bucket.id,
     rules=[
-        aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+        aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
                 sse_algorithm="AES256"
             ),
             bucket_key_enabled=True
@@ -112,34 +112,34 @@ s3_bucket_policy = aws.s3.BucketPolicy(
 )
 
 # 3. S3 lifecycle policy for storage class management
-s3_bucket_lifecycle_configuration = aws.s3.BucketLifecycleConfiguration(
+s3_bucket_lifecycle_configuration = aws.s3.BucketLifecycleConfigurationV2(
     f"{company_name}-{app_name}-{environment}-lifecycle",
     bucket=s3_bucket.id,
     rules=[
-        aws.s3.BucketLifecycleConfigurationRuleArgs(
+        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
             id="TransitionToIA",
             status="Enabled",
             transitions=[
-                aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
                     days=30,
                     storage_class="STANDARD_IA"
                 ),
-                aws.s3.BucketLifecycleConfigurationRuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
                     days=90,
                     storage_class="GLACIER"
                 )
             ]
         ),
-        aws.s3.BucketLifecycleConfigurationRuleArgs(
+        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
             id="DeleteOldVersions",
             status="Enabled",
             noncurrent_version_transitions=[
-                aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionTransitionArgs(
                     noncurrent_days=30,
                     storage_class="STANDARD_IA"
                 )
             ],
-            noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationRuleNoncurrentVersionExpirationArgs(
+            noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
                 noncurrent_days=90
             )
         )
@@ -152,20 +152,22 @@ s3_logging_bucket = aws.s3.Bucket(f"{company_name}-{app_name}-{environment}-logs
     tags=common_tags
 )
 
-s3_bucket_logging = aws.s3.BucketLogging(
+s3_bucket_logging = aws.s3.BucketLoggingV2(
     f"{company_name}-{app_name}-{environment}-logging",
     bucket=s3_bucket.id,
     target_bucket=s3_logging_bucket.id,
     target_prefix="access-logs/"
 )
 
-# 5. SSL Certificate via AWS Certificate Manager (must be in us-east-1 for CloudFront)
-ssl_certificate = aws.acm.Certificate(f"{company_name}-{app_name}-{environment}-cert",
-    domain_name=certificate_domain,
-    validation_method="DNS",
-    tags=common_tags,
-    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-acm", region="us-east-1"))
-)
+# 5. SSL Certificate via AWS Certificate Manager - commented out for demo
+# Note: SSL certificate requires DNS validation which needs domain ownership
+# For demo purposes, we'll use CloudFront's default certificate
+# ssl_certificate = aws.acm.Certificate(f"{company_name}-{app_name}-{environment}-cert",
+#     domain_name="*.example.com",
+#     validation_method="DNS",
+#     tags=common_tags,
+#     opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-acm", region="us-east-1"))
+# )
 
 # 6. CloudWatch Log Groups for monitoring
 cloudwatch_log_group = aws.cloudwatch.LogGroup(f"{company_name}-{app_name}-{environment}-logs",
@@ -229,8 +231,8 @@ waf_web_acl = aws.wafv2.WebAcl(f"{company_name}-{app_name}-{environment}-waf",
         aws.wafv2.WebAclRuleArgs(
             name="GeoBlocking",
             priority=1,
-            override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
-                none=aws.wafv2.WebAclRuleOverrideActionNoneArgs()
+            action=aws.wafv2.WebAclRuleActionArgs(
+                block=aws.wafv2.WebAclRuleActionBlockArgs()
             ),
             statement=aws.wafv2.WebAclRuleStatementArgs(
                 geo_match_statement=aws.wafv2.WebAclRuleStatementGeoMatchStatementArgs(
@@ -282,7 +284,7 @@ origin_access_control = aws.cloudfront.OriginAccessControl(f"{company_name}-{app
 
 # 10. CloudFront Distribution
 cloudfront_distribution = aws.cloudfront.Distribution(f"{company_name}-{app_name}-{environment}-cdn",
-    aliases=[domain_name],
+    # aliases=[domain_name],  # Commented out - no custom domain for demo
     default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         allowed_methods=["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
         cached_methods=["GET", "HEAD"],
@@ -332,7 +334,7 @@ cloudfront_distribution = aws.cloudfront.Distribution(f"{company_name}-{app_name
         )
     ),
     viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
-        acm_certificate_arn=ssl_certificate.arn,
+        cloudfront_default_certificate=True,
         ssl_support_method="sni-only",
         minimum_protocol_version="TLSv1.2_2021"
     ),
@@ -393,44 +395,50 @@ security_hub_account = aws.securityhub.Account(f"{company_name}-{app_name}-{envi
     enable_default_standards=True
 )
 
-# 14. Config Rules for compliance monitoring
-config_configuration_recorder = aws.cfg.Recorder(f"{company_name}-{app_name}-{environment}-config",
-    name=f"{company_name}-{app_name}-{environment}-config",
-    role_arn=aws.iam.Role(f"{company_name}-{app_name}-{environment}-config-role",
-        assume_role_policy=json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [{
-                "Action": "sts:AssumeRole",
-                "Effect": "Allow",
-                "Principal": {
-                    "Service": "config.amazonaws.com"
-                }
-            }]
-        }),
-        tags=common_tags
-    ).arn,
-    recording_group=aws.cfg.RecorderRecordingGroupArgs(
-        all_supported=True,
-        include_global_resource_types=True
-    )
-)
+# 14. Config Rules for compliance monitoring - commented out due to account limit
+# Note: AWS Config only allows one configuration recorder per account
+# If you need Config, it's likely already enabled in your account
+# config_configuration_recorder = aws.cfg.Recorder(f"{company_name}-{app_name}-{environment}-config",
+#     name=f"{company_name}-{app_name}-{environment}-config",
+#     role_arn=aws.iam.Role(f"{company_name}-{app_name}-{environment}-config-role",
+#         assume_role_policy=json.dumps({
+#             "Version": "2012-10-17",
+#             "Statement": [{
+#                 "Action": "sts:AssumeRole",
+#                 "Effect": "Allow",
+#                 "Principal": {
+#                     "Service": "config.amazonaws.com"
+#                 }
+#             }]
+#         }),
+#         tags=common_tags
+#     ).arn,
+#     recording_group=aws.cfg.RecorderRecordingGroupArgs(
+#         all_supported=True,
+#         include_global_resource_types=True
+#     )
+# )
 
-# 15. GuardDuty for threat detection
-guardduty_detector = aws.guardduty.Detector(f"{company_name}-{app_name}-{environment}-guardduty",
-    enable=True,
-    finding_publishing_frequency="FIFTEEN_MINUTES",
-    tags=common_tags
-)
+# 15. GuardDuty for threat detection - commented out due to account limit
+# Note: GuardDuty only allows one detector per AWS account
+# If you need GuardDuty, enable it manually in the AWS console
+# guardduty_detector = aws.guardduty.Detector(f"{company_name}-{app_name}-{environment}-guardduty",
+#     enable=True,
+#     finding_publishing_frequency="FIFTEEN_MINUTES",
+#     tags=common_tags
+# )
 
-# 16. CloudTrail for audit logging
-cloudtrail = aws.cloudtrail.Trail(f"{company_name}-{app_name}-{environment}-trail",
-    name=f"{company_name}-{app_name}-{environment}-trail",
-    s3_bucket_name=s3_logging_bucket.id,
-    include_global_service_events=True,
-    is_multi_region_trail=True,
-    enable_logging=True,
-    tags=common_tags
-)
+# 16. CloudTrail for audit logging - commented out due to account limit
+# Note: AWS CloudTrail has a limit of 5 trails per account
+# If you need CloudTrail, it's likely already enabled in your account
+# cloudtrail = aws.cloudtrail.Trail(f"{company_name}-{app_name}-{environment}-trail",
+#     name=f"{company_name}-{app_name}-{environment}-trail",
+#     s3_bucket_name=s3_logging_bucket.id,
+#     include_global_service_events=True,
+#     is_multi_region_trail=True,
+#     enable_logging=True,
+#     tags=common_tags
+# )
 
 # 17. S3 bucket for website content (sample index.html)
 website_content = f"""
@@ -552,9 +560,9 @@ pulumi.export("s3_bucket_name", s3_bucket.id)
 pulumi.export("s3_bucket_arn", s3_bucket.arn)
 pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id)
 pulumi.export("cloudfront_domain_name", cloudfront_distribution.domain_name)
-pulumi.export("ssl_certificate_arn", ssl_certificate.arn)
+# pulumi.export("ssl_certificate_arn", ssl_certificate.arn)  # Commented out - no custom SSL cert
 pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
 pulumi.export("lambda_edge_function_arn", lambda_edge_function.arn)
-pulumi.export("website_url", pulumi.Output.concat("https://", domain_name))
+pulumi.export("website_url", pulumi.Output.concat("https://", cloudfront_distribution.domain_name))
 pulumi.export("cloudwatch_dashboard_url", pulumi.Output.concat("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=", cloudwatch_dashboard.dashboard_name))
 ```

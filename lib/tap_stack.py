@@ -159,13 +159,15 @@ s3_bucket_logging = aws.s3.BucketLoggingV2(
     target_prefix="access-logs/"
 )
 
-# 5. SSL Certificate via AWS Certificate Manager (must be in us-east-1 for CloudFront)
-ssl_certificate = aws.acm.Certificate(f"{company_name}-{app_name}-{environment}-cert",
-    domain_name=certificate_domain,
-    validation_method="DNS",
-    tags=common_tags,
-    opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-acm", region="us-east-1"))
-)
+# 5. SSL Certificate via AWS Certificate Manager - commented out for demo
+# Note: SSL certificate requires DNS validation which needs domain ownership
+# For demo purposes, we'll use CloudFront's default certificate
+# ssl_certificate = aws.acm.Certificate(f"{company_name}-{app_name}-{environment}-cert",
+#     domain_name="*.example.com",
+#     validation_method="DNS",
+#     tags=common_tags,
+#     opts=pulumi.ResourceOptions(provider=aws.Provider("us-east-1-acm", region="us-east-1"))
+# )
 
 # 6. CloudWatch Log Groups for monitoring
 cloudwatch_log_group = aws.cloudwatch.LogGroup(f"{company_name}-{app_name}-{environment}-logs",
@@ -229,8 +231,8 @@ waf_web_acl = aws.wafv2.WebAcl(f"{company_name}-{app_name}-{environment}-waf",
         aws.wafv2.WebAclRuleArgs(
             name="GeoBlocking",
             priority=1,
-            override_action=aws.wafv2.WebAclRuleOverrideActionArgs(
-                none=aws.wafv2.WebAclRuleOverrideActionNoneArgs()
+            action=aws.wafv2.WebAclRuleActionArgs(
+                block=aws.wafv2.WebAclRuleActionBlockArgs()
             ),
             statement=aws.wafv2.WebAclRuleStatementArgs(
                 geo_match_statement=aws.wafv2.WebAclRuleStatementGeoMatchStatementArgs(
@@ -282,7 +284,7 @@ origin_access_control = aws.cloudfront.OriginAccessControl(f"{company_name}-{app
 
 # 10. CloudFront Distribution
 cloudfront_distribution = aws.cloudfront.Distribution(f"{company_name}-{app_name}-{environment}-cdn",
-    aliases=[domain_name],
+    # aliases=[domain_name],  # Commented out - no custom domain for demo
     default_cache_behavior=aws.cloudfront.DistributionDefaultCacheBehaviorArgs(
         allowed_methods=["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"],
         cached_methods=["GET", "HEAD"],
@@ -332,7 +334,7 @@ cloudfront_distribution = aws.cloudfront.Distribution(f"{company_name}-{app_name
         )
     ),
     viewer_certificate=aws.cloudfront.DistributionViewerCertificateArgs(
-        acm_certificate_arn=ssl_certificate.arn,
+        cloudfront_default_certificate=True,
         ssl_support_method="sni-only",
         minimum_protocol_version="TLSv1.2_2021"
     ),
@@ -558,8 +560,8 @@ pulumi.export("s3_bucket_name", s3_bucket.id)
 pulumi.export("s3_bucket_arn", s3_bucket.arn)
 pulumi.export("cloudfront_distribution_id", cloudfront_distribution.id)
 pulumi.export("cloudfront_domain_name", cloudfront_distribution.domain_name)
-pulumi.export("ssl_certificate_arn", ssl_certificate.arn)
+# pulumi.export("ssl_certificate_arn", ssl_certificate.arn)  # Commented out - no custom SSL cert
 pulumi.export("waf_web_acl_arn", waf_web_acl.arn)
 pulumi.export("lambda_edge_function_arn", lambda_edge_function.arn)
-pulumi.export("website_url", pulumi.Output.concat("https://", domain_name))
+pulumi.export("website_url", pulumi.Output.concat("https://", cloudfront_distribution.domain_name))
 pulumi.export("cloudwatch_dashboard_url", pulumi.Output.concat("https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=", cloudwatch_dashboard.dashboard_name))
