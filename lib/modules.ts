@@ -478,15 +478,14 @@ export class DatabaseModule extends Construct {
     this.dbInstance = new DbInstance(this, 'database', {
       identifier: 'app-database',
       engine: 'mysql',
-      engineVersion: '8.0',
-      instanceClass: 'db.t3.micro', // Cost-effective for development
+      instanceClass: 'db.t3.medium', // Cost-effective for development
       allocatedStorage: 20,
       storageType: 'gp2',
 
       // Database credentials (use AWS Secrets Manager in production)
       dbName: 'appdb',
-      username: 'admin',
-      password: 'changeme123!', // Use random password or Secrets Manager in production
+      username: process.env.DB_USERNAME || 'admin',
+      password: process.env.DB_PASSWORD || 'changeme123!', // Use random password or Secrets Manager in production
 
       // Security configurations
       dbSubnetGroupName: this.dbSubnetGroup.name,
@@ -501,7 +500,7 @@ export class DatabaseModule extends Construct {
       autoMinorVersionUpgrade: true, // Automatic security updates
 
       // Monitoring
-      monitoringInterval: 60, // Enhanced monitoring
+      monitoringInterval: 0, // Enhanced monitoring
       performanceInsightsEnabled: true, // Performance insights for optimization
 
       // Deletion protection (uncomment for production)

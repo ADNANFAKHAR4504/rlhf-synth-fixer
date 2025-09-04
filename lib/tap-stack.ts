@@ -70,7 +70,7 @@ export class TapStack extends TerraformStack {
       // Replace with your company's IP range for SSH access
       allowedSshCidr: '203.0.113.0/24', // Example IP range - replace with actual
       // S3 bucket name - must be globally unique
-      bucketName: 'my-app-storage-bucket-12345',
+      bucketName: 'my-app-storage-bucket-12345-rlhf-ts',
       // VPC and subnet configuration
       vpcCidr: '10.0.0.0/16',
       publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
