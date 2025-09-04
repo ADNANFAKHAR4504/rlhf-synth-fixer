@@ -269,10 +269,22 @@ rds_instance = aws.rds.Instance(f"{prefix.lower()}-rds-instance",
 # Note: RDS endpoint is available as rds_instance.endpoint
 # Parameter Store values cannot be updated after creation in this way
 
+# Get the latest Amazon Linux 2 AMI
+ami = aws.ec2.get_ami(
+    most_recent=True,
+    owners=["amazon"],
+    filters=[
+        aws.ec2.GetAmiFilterArgs(
+            name="name",
+            values=["amzn2-ami-hvm-*-x86_64-gp2"]
+        )
+    ]
+)
+
 # Create launch template
 launch_template = aws.ec2.LaunchTemplate(f"{prefix.lower()}-launch-template",
     name_prefix=f"{prefix.lower()}-lt",
-    image_id="ami-0c02fb55956c7d316",  # Amazon Linux 2 AMI - update for your region
+    image_id=ami.id,  # Dynamic Amazon Linux 2 AMI lookup
     instance_type="t3.micro",
     key_name="",  # Add your key pair name if you want SSH access
     vpc_security_group_ids=[ec2_security_group.id],
