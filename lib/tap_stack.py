@@ -60,9 +60,6 @@ class TapStack(Stack):
         # Create API Gateway
         self.api_gateway = self._create_api_gateway()
         
-        # Create CloudWatch log groups
-        self._create_log_groups()
-        
         # Create EventBridge rules
         self._create_event_rules()
         
@@ -118,7 +115,7 @@ class TapStack(Stack):
             ),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY if self.environment_suffix == "dev" else RemovalPolicy.RETAIN,
-            point_in_time_recovery=True,
+            point_in_time_recovery_enabled=True,
             stream=dynamodb.StreamViewType.NEW_AND_OLD_IMAGES
         )
         
@@ -382,7 +379,8 @@ def handler(event, context):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             security_groups=[lambda_sg],
             timeout=Duration.seconds(30),
-            memory_size=256
+            memory_size=256,
+            log_retention=logs.RetentionDays.ONE_MONTH
         )
         
         # Async Processor Lambda
@@ -423,7 +421,8 @@ def handler(event, context):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             security_groups=[lambda_sg],
             timeout=Duration.minutes(5),
-            memory_size=512
+            memory_size=512,
+            log_retention=logs.RetentionDays.ONE_MONTH
         )
         
         # Add SQS trigger to async processor
@@ -468,7 +467,8 @@ def handler(event, context):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
             security_groups=[lambda_sg],
             timeout=Duration.seconds(30),
-            memory_size=256
+            memory_size=256,
+            log_retention=logs.RetentionDays.ONE_MONTH
         )
         
         functions["api_handler"] = api_handler
@@ -517,16 +517,6 @@ def handler(event, context):
         data.add_method("GET", lambda_integration)
         
         return api
-
-    def _create_log_groups(self):
-        """Create CloudWatch log groups for Lambda functions"""
-        for name, function in self.lambda_functions.items():
-            logs.LogGroup(
-                self, f"{name}LogGroup",
-                log_group_name=f"/aws/lambda/{function.function_name}",
-                retention=logs.RetentionDays.ONE_MONTH,
-                removal_policy=RemovalPolicy.DESTROY
-            )
 
     def _create_event_rules(self):
         """Create EventBridge rules"""
