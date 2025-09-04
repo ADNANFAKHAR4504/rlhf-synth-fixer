@@ -104,7 +104,6 @@ elif [ "$PLATFORM" = "tf" ]; then
   rm -f tfplan
   
   # Check if plan file exists
-
   if [ -f "tfplan" ]; then
     echo "✅ Terraform plan file found, proceeding with deployment..."
     # Try to deploy with the plan file
@@ -112,7 +111,7 @@ elif [ "$PLATFORM" = "tf" ]; then
       echo "⚠️ Deployment with plan file failed, checking for state lock issues..."
       
       # Extract lock ID from error output if present
-      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
+      LOCK_ID=$(terraform apply -auto-approve -lock=true -lock-timeout=10s -input=false tfplan 2>&1 | grep -oE 'ID:\s+[0-9a-f-]{36}' | cut -d' ' -f2 || echo "")
       
       if [ -n "$LOCK_ID" ]; then
         echo "🔓 Detected stuck lock ID: $LOCK_ID. Attempting to force unlock..."
@@ -125,12 +124,12 @@ elif [ "$PLATFORM" = "tf" ]; then
     fi
   else
     echo "⚠️ Terraform plan file not found, creating new plan and deploying..."
-    terraform plan -out=tfplan || echo "Plan creation failed, attempting direct apply..."
+    terraform plan -lock-timeout=120s -lock=false -input=false -out=tfplan || echo "Plan creation failed, attempting direct apply..."
     
     # Try direct apply with lock timeout, and handle lock issues
-    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s tfplan; then
+    if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false tfplan; then
       echo "⚠️ Direct apply with plan failed, trying without plan..."
-      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s; then
+      if ! terraform apply -auto-approve -lock=true -lock-timeout=300s -input=false; then
         echo "❌ All deployment attempts failed. Check for state lock issues."
         # List any potential locks
         terraform show -json 2>&1 | grep -i lock || echo "No lock information available"

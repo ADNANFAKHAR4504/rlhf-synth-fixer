@@ -79,7 +79,7 @@ elif [ "$PLATFORM" = "tf" ]; then
       -backend-config=key=$STATE_KEY \
       -backend-config=region=${TERRAFORM_STATE_BUCKET_REGION} \
       -backend-config=encrypt=true \
-      -backend-config=use_lockfile=true"
+      -backend-config=use_lockfile=false"
   
   # Initialize Terraform (no fallback init without backend)
   echo "Initializing Terraform with PR-specific backend..."
