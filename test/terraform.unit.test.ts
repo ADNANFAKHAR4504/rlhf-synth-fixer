@@ -60,6 +60,13 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
       expect(terraformContent).toMatch(/validation\s*{[\s\S]*?condition[\s\S]*?contains\(\["prod",\s*"staging",\s*"dev"\]/);
     });
 
+    test("declares environment_suffix variable with validation", () => {
+      expect(terraformContent).toMatch(/variable\s+"environment_suffix"\s*{/);
+      expect(terraformContent).toMatch(/description\s*=\s*"Environment suffix to avoid resource conflicts"/);
+      expect(terraformContent).toMatch(/type\s*=\s*string/);
+      expect(terraformContent).toMatch(/default\s*=\s*""/);
+    });
+
     test("declares organization_name variable", () => {
       expect(terraformContent).toMatch(/variable\s+"organization_name"\s*{/);
     });
@@ -103,7 +110,8 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
   describe("Local Values", () => {
     test("defines locals block with name_prefix", () => {
       expect(terraformContent).toMatch(/locals\s*{/);
-      expect(terraformContent).toMatch(/name_prefix\s*=/);
+      expect(terraformContent).toMatch(/environment_suffix\s*=\s*var\.environment_suffix\s*!=\s*""\s*\?\s*var\.environment_suffix\s*:\s*var\.environment/);
+      expect(terraformContent).toMatch(/name_prefix\s*=.*\$\{var\.organization_name\}-\$\{local\.environment_suffix\}/);
     });
 
     test("defines availability_zones logic in locals", () => {
@@ -112,6 +120,7 @@ describe("Terraform Enterprise Security Framework: tap_stack.tf", () => {
 
     test("defines common_tags in locals", () => {
       expect(terraformContent).toMatch(/common_tags\s*=\s*{/);
+      expect(terraformContent).toMatch(/EnvironmentSuffix\s*=\s*local\.environment_suffix/);
     });
   });
 

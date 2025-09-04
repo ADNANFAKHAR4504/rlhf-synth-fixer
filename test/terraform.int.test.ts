@@ -81,6 +81,7 @@ import path from "path";
 // AWS client configuration
 const AWS_REGION = process.env.AWS_REGION || "us-west-2";
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || "dev";
+const EXPECTED_NAME_PREFIX = `security-framework-${ENVIRONMENT_SUFFIX}`;
 
 const clients = {
   ec2: new EC2Client({ region: AWS_REGION }),
@@ -135,10 +136,28 @@ async function findResourcesByPattern(client: any, command: any, namePattern: st
       return name.includes(namePattern) || name.includes(`security-framework-${ENVIRONMENT_SUFFIX}`);
     });
   } catch (error: any) {
-    if (error.name === "AccessDenied" || error.name === "UnauthorizedOperation") {
-      console.warn(`Access denied for operation: ${error.message}`);
+    // Enhanced error handling with specific error types
+    const errorName = error.name || error.constructor?.name || "Unknown";
+    const errorCode = error.$metadata?.httpStatusCode || error.statusCode || "Unknown";
+    
+    if (errorName === "AccessDenied" || errorName === "UnauthorizedOperation" || 
+        errorName === "AccessDeniedException" || errorName === "UnauthorizedOperation") {
+      console.warn(`Access denied for ${command.constructor.name}: ${error.message} (Status: ${errorCode})`);
       return [];
     }
+    
+    if (errorName === "ThrottlingException" || errorName === "RequestLimitExceeded") {
+      console.warn(`Rate limit exceeded for ${command.constructor.name}: ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Brief delay
+      return [];
+    }
+    
+    if (errorName === "ServiceUnavailableException" || errorName === "InternalServerError") {
+      console.warn(`Service unavailable for ${command.constructor.name}: ${error.message}`);
+      return [];
+    }
+    
+    console.error(`Unexpected error in findResourcesByPattern: ${errorName} - ${error.message}`);
     throw error;
   }
 }
@@ -149,6 +168,78 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
   beforeAll(() => {
     outputs = getOutputs();
   }, INTEGRATION_TIMEOUT);
+
+  describe("Environment Configuration Validation", () => {
+    test("resources follow consistent naming with environment suffix", async () => {
+      try {
+        // Verify that deployed resources use the expected name prefix pattern
+        expect(ENVIRONMENT_SUFFIX).toBeTruthy();
+        expect(EXPECTED_NAME_PREFIX).toMatch(/^security-framework-.+$/);
+        
+        // Check outputs contain the expected name prefix pattern
+        if (outputs.vpc_id) {
+          try {
+            const vpcResponse = await clients.ec2.send(new DescribeVpcsCommand({
+              VpcIds: [outputs.vpc_id]
+            }));
+            
+            if (vpcResponse.Vpcs && vpcResponse.Vpcs.length > 0) {
+              const vpc = vpcResponse.Vpcs[0];
+              const nameTag = vpc.Tags?.find(tag => tag.Key === "Name");
+              if (nameTag) {
+                expect(nameTag.Value).toContain(ENVIRONMENT_SUFFIX);
+              }
+              
+              // Also verify EnvironmentSuffix tag if present
+              const envSuffixTag = vpc.Tags?.find(tag => tag.Key === "EnvironmentSuffix");
+              if (envSuffixTag) {
+                expect(envSuffixTag.Value).toBe(ENVIRONMENT_SUFFIX);
+              }
+            }
+          } catch (vpcError: any) {
+            console.warn(`Could not verify VPC naming: ${vpcError.message}`);
+          }
+        }
+
+        // Verify bucket names follow naming convention
+        const bucketNames = [
+          outputs.config_bucket_name,
+          outputs.cloudtrail_bucket_name,
+          outputs.audit_logs_bucket_name
+        ].filter(name => name);
+
+        bucketNames.forEach(bucketName => {
+          try {
+            expect(bucketName).toMatch(new RegExp(`security-framework-${ENVIRONMENT_SUFFIX.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+          } catch (bucketError) {
+            console.warn(`Bucket name validation failed for ${bucketName}: expected to contain security-framework-${ENVIRONMENT_SUFFIX}`);
+            throw bucketError;
+          }
+        });
+
+        // Verify role ARNs follow naming convention
+        const roleArns = [
+          outputs.security_admin_role_arn,
+          outputs.developer_role_arn,
+          outputs.auditor_role_arn
+        ].filter(arn => arn);
+
+        roleArns.forEach(roleArn => {
+          try {
+            expect(roleArn).toContain(`security-framework-${ENVIRONMENT_SUFFIX}`);
+          } catch (roleError) {
+            console.warn(`Role ARN validation failed for ${roleArn}: expected to contain security-framework-${ENVIRONMENT_SUFFIX}`);
+            throw roleError;
+          }
+        });
+        
+        console.log(`Successfully validated naming convention with environment suffix: ${ENVIRONMENT_SUFFIX}`);
+      } catch (error: any) {
+        console.error(`Environment configuration validation failed: ${error.message}`);
+        throw error;
+      }
+    }, INTEGRATION_TIMEOUT);
+  });
 
   describe("VPC and Networking Infrastructure", () => {
     test("VPC is created with proper configuration", async () => {

@@ -45,6 +45,17 @@ variable "owner" {
   default     = "security-team"
 }
 
+variable "environment_suffix" {
+  description = "Environment suffix to avoid resource conflicts"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9-]*$", var.environment_suffix))
+    error_message = "Environment suffix must be alphanumeric with hyphens only."
+  }
+}
+
 # Network Configuration
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
@@ -223,15 +234,17 @@ data "aws_availability_zones" "available" {
 # ==============================================================================
 
 locals {
-  name_prefix        = "${var.organization_name}-${var.environment}"
+  environment_suffix = var.environment_suffix != "" ? var.environment_suffix : var.environment
+  name_prefix        = "${var.organization_name}-${local.environment_suffix}"
   availability_zones = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, min(3, length(data.aws_availability_zones.available.names)))
 
   common_tags = {
-    Project     = "Enterprise Security Framework"
-    Environment = var.environment
-    Owner       = var.owner
-    ManagedBy   = "Terraform"
-    CreatedDate = formatdate("YYYY-MM-DD", timestamp())
+    Project           = "Enterprise Security Framework"
+    Environment       = var.environment
+    EnvironmentSuffix = local.environment_suffix
+    Owner             = var.owner
+    ManagedBy         = "Terraform"
+    CreatedDate       = formatdate("YYYY-MM-DD", timestamp())
   }
 }
 
