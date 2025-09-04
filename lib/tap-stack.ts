@@ -883,7 +883,7 @@ def handler(event, context):
 
     // SSL Certificate - OPTIONAL: Enable this when you have a real domain
     // For testing/development, you can deploy without SSL and use HTTP only
-    // To enable SSL: 
+    // To enable SSL:
     // 1. Replace 'yourdomain.com' with your actual domain
     // 2. Ensure you have a Route53 hosted zone for DNS validation
     // 3. Uncomment the certificate code and HTTPS listener below
