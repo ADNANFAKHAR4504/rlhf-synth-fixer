@@ -1,40 +1,28 @@
-The ideal response should provide a **production-grade, valid CloudFormation template**
+# idealresponse.md
 
-It must include the following components:
+## Purpose
 
-- **Lambda Function**
+This document is an _ideal response_ describing, validating, and improving the provided `tapstack.json` CloudFormation template that provisions a secure serverless infrastructure (Lambda triggered by S3, API Gateway + usage plan, encrypted S3, least-privilege IAM). It:
 
-  - Runtime: Node.js 22.x
-  - IAM execution role with the least privilege (basic logging + DynamoDB access only)
-  - Environment variables wired to the DynamoDB table
-  - Explicit CloudWatch Log Group with 14-day retention
+- Confirms which requirements are satisfied.
+- Lists correctness issues and security/operational improvements.
+- Provides concrete fixes / code snippets for the most important problems.
+- Recommends additional best-practice additions you should consider before deploying to production.
 
-- **API Gateway**
+---
 
-  - REST API with a `GET` method, integrated with the Lambda (AWS_PROXY)
-  - OPTIONS method for CORS with appropriate headers
-  - Deployment stage (`prod`) configured with logging and metrics
+## Quick checklist vs. user requirements
 
-- **DynamoDB Table**
+**Required items and status:**
 
-  - Partition key: `id` (string)
-  - Provisioned throughput (5 read / 5 write units)
-  - Server-side encryption enabled with KMS
-
-- **S3 Bucket (for logs)**
-
-  - Encrypted with SSE-S3
-  - Versioning enabled
-  - Block public access enabled
-
-- **CloudWatch Monitoring**
-
-  - Log groups for both Lambda and API Gateway with proper retention
-
-- **Tagging**
-  - Every resource tagged with `Environment=Production`
-
-This version is clean, deployable without modification, and aligned with AWS best practices.
+1. **Use CloudFormation** — ✅ Present (JSON template).
+2. **Lambda function triggered by S3 event** — ✅ Achieved (custom resource config + Lambda + permission), but implementation can be simplified/safer (see suggestions).
+3. **IAM Role & least-privilege policy granting S3 read-only** — ✅ Present, but the policy's resource reference has an issue and role could be tightened further.
+4. **S3 bucket with server-side encryption** — ✅ Present (AES256 / SSE-S3). Recommend SSE-KMS for auditability.
+5. **API Gateway calling Lambda** — ✅ Present (RestApi, Resource, Method, Integration).
+6. **API Gateway Usage Plan with throttling + quotas** — ✅ Present.
+7. **CloudFormation Parameter for naming** — ✅ `EnvironmentName` parameter exists.
+8. **Portability (deployable in any region)** — ✅ Template does not hardcode region-specific ARNs. Good.
 
 ---
 
@@ -42,79 +30,40 @@ This version is clean, deployable without modification, and aligned with AWS bes
 
 ```yaml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Production-ready serverless application with Lambda, API Gateway, DynamoDB, and S3 logging"
+Description: Secure serverless infrastructure with Lambda, S3, and API Gateway following best practices
 
 Parameters:
-  Environment:
+  EnvironmentName:
     Type: String
-    Default: Production
-    Description: Environment name for resource tagging
-
-  LambdaFunctionName:
-    Type: String
-    Default: ServerlessFunction
-    Description: Name for the Lambda function
-
-  DynamoDBTableName:
-    Type: String
-    Default: ServerlessTable
-    Description: Name for the DynamoDB table
-
-  S3LogsBucketName:
-    Type: String
-    Default: serverless-logs
-    Description: Name for the S3 logs bucket (will be appended with account ID and region)
+    Default: dev
+    Description: Environment name suffix for resource naming
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    ConstraintDescription: Must be dev, staging, or prod
 
 Resources:
-  # S3 Bucket for Logs
-  LogsBucket:
+  # S3 Bucket for application data storage
+  AppDataBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${S3LogsBucketName}-${AWS::AccountId}-${AWS::Region}"
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Purpose
-          Value: Logging
+      VersioningConfiguration:
+        Status: Enabled
 
-  # DynamoDB Table
-  ServerlessTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Ref DynamoDBTableName
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      ProvisionedThroughput:
-        ReadCapacityUnits: 5
-        WriteCapacityUnits: 5
-      SSESpecification:
-        SSEEnabled: true
-        SSEType: KMS
-        KMSMasterKeyId: alias/aws/dynamodb
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # IAM Role for Lambda Function
+  # IAM Role for Lambda execution with S3 read-only access
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${LambdaFunctionName}-execution-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -125,108 +74,70 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: DynamoDBAccess
+        - PolicyName: S3ReadOnlyAccess
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                Resource: !GetAtt ServerlessTable.Arn
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: !Sub "${AppDataBucket.Arn}/*"
 
-  # Lambda Function
-  ServerlessFunction:
+  # Lambda function for data processing
+  ProcessDataLambda:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Ref LambdaFunctionName
-      Runtime: nodejs22.x
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
+      FunctionName: !Sub "process-data-${EnvironmentName}"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt "LambdaExecutionRole.Arn"
       Code:
         ZipFile: |
-          const AWS = require('aws-sdk');
-          const dynamodb = new AWS.DynamoDB.DocumentClient();
+          import json
+          import boto3
 
-          exports.handler = async (event) => {
-              console.log('Event received:', JSON.stringify(event, null, 2));
+          def lambda_handler(event, context):
+              print("Received event: " + json.dumps(event, indent=2))
 
-              try {
-                  // Get the table name from environment variables
-                  const tableName = process.env.DYNAMODB_TABLE_NAME;
+              # Process S3 event if triggered by S3
+              if 'Records' in event and event['Records']:
+                  for record in event['Records']:
+                      if 's3' in record:
+                          bucket_name = record['s3']['bucket']['name']
+                          object_key = record['s3']['object']['key']
+                          print(f"Processing S3 object: s3://{bucket_name}/{object_key}")
 
-                  // Example: Get item from DynamoDB
-                  const params = {
-                      TableName: tableName,
-                      Key: {
-                          id: 'sample-id'
-                      }
-                  };
-
-                  const result = await dynamodb.get(params).promise();
-
-                  const response = {
-                      statusCode: 200,
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*',
-                          'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
-                          'Access-Control-Allow-Methods': 'GET,OPTIONS'
-                      },
-                      body: JSON.stringify({
-                          message: 'Hello from Lambda!',
-                          timestamp: new Date().toISOString(),
-                          data: result.Item || null
-                      })
-                  };
-
-                  return response;
-              } catch (error) {
-                  console.error('Error:', error);
-
-                  const errorResponse = {
-                      statusCode: 500,
-                      headers: {
-                          'Content-Type': 'application/json',
-                          'Access-Control-Allow-Origin': '*'
-                      },
-                      body: JSON.stringify({
-                          error: 'Internal Server Error',
-                          message: error.message
-                      })
-                  };
-
-                  return errorResponse;
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                  },
+                  'body': json.dumps({
+                      'message': 'Data processed successfully!',
+                      'environment': context.function_name
+                  })
               }
-          };
+      MemorySize: 128
+      Timeout: 30
       Environment:
         Variables:
-          DYNAMODB_TABLE_NAME: !Ref ServerlessTable
-      Timeout: 30
-      MemorySize: 128
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+          BUCKET_NAME: !Ref "AppDataBucket"
+          ENVIRONMENT: !Ref "EnvironmentName"
 
-  # CloudWatch Log Group for Lambda
-  LambdaLogGroup:
-    Type: AWS::Logs::LogGroup
+  # Permission for S3 to invoke Lambda
+  S3BucketEventPermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${LambdaFunctionName}"
-      RetentionInDays: 14
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt "ProcessDataLambda.Arn"
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt "AppDataBucket.Arn"
+      SourceAccount: !Ref "AWS::AccountId"
 
-  # IAM Role for API Gateway CloudWatch logging
-  ApiGatewayCloudWatchRole:
+  # IAM Role for S3 Notification Configuration Lambda
+  S3NotificationRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -234,161 +145,275 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: apigateway.amazonaws.com
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3NotificationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutBucketNotification
+                  - s3:GetBucketNotification
+                Resource: !GetAtt AppDataBucket.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:GetFunction
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource: !GetAtt ProcessDataLambda.Arn
 
-  # API Gateway Account (for CloudWatch logging)
-  ApiGatewayAccount:
-    Type: AWS::ApiGateway::Account
+  # Custom Lambda function to handle S3 notification configuration
+  S3NotificationFunction:
+    Type: AWS::Lambda::Function
     Properties:
-      CloudWatchRoleArn: !GetAtt ApiGatewayCloudWatchRole.Arn
+      FunctionName: !Sub "s3-notification-config-${EnvironmentName}"
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt S3NotificationRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import cfnresponse
+
+          def handler(event, context):
+              try:
+                  s3 = boto3.client('s3')
+                  lambda_client = boto3.client('lambda')
+
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  lambda_arn = event['ResourceProperties']['LambdaArn']
+
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      # First, ensure Lambda permission exists
+                      try:
+                          lambda_client.add_permission(
+                              FunctionName=lambda_arn,
+                              StatementId='S3InvokePermission',
+                              Action='lambda:InvokeFunction',
+                              Principal='s3.amazonaws.com',
+                              SourceArn=f'arn:aws:s3:::{bucket_name}'
+                          )
+                      except lambda_client.exceptions.ResourceConflictException:
+                          # Permission already exists, which is fine
+                          pass
+
+                      # Configure S3 bucket notification
+                      s3.put_bucket_notification_configuration(
+                          Bucket=bucket_name,
+                          NotificationConfiguration={
+                              'LambdaFunctionConfigurations': [{
+                                  'Id': 'ProcessDataTrigger',
+                                  'LambdaFunctionArn': lambda_arn,
+                                  'Events': ['s3:ObjectCreated:*']
+                              }]
+                          }
+                      )
+                  elif event['RequestType'] == 'Delete':
+                      # Remove notification configuration
+                      s3.put_bucket_notification_configuration(
+                          Bucket=bucket_name,
+                          NotificationConfiguration={}
+                      )
+
+                      # Try to remove Lambda permission (optional, as stack deletion will clean up)
+                      try:
+                          lambda_client.remove_permission(
+                              FunctionName=lambda_arn,
+                              StatementId='S3InvokePermission'
+                          )
+                      except:
+                          # Ignore errors during deletion
+                          pass
+
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
+  # Custom resource to configure S3 bucket notifications
+  S3BucketNotificationConfig:
+    Type: Custom::S3BucketNotification
+    Properties:
+      ServiceToken: !GetAtt S3NotificationFunction.Arn
+      BucketName: !Ref AppDataBucket
+      LambdaArn: !GetAtt ProcessDataLambda.Arn
 
   # API Gateway REST API
-  ServerlessApi:
+  ApiGatewayRestApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: ServerlessAPI
-      Description: Serverless application API Gateway
+      Name: !Sub "data-api-${EnvironmentName}"
+      Description: API Gateway for processing data with security best practices
       EndpointConfiguration:
         Types:
           - REGIONAL
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
 
   # API Gateway Resource
-  ApiResource:
+  ApiGatewayResource:
     Type: AWS::ApiGateway::Resource
     Properties:
-      RestApiId: !Ref ServerlessApi
-      ParentId: !GetAtt ServerlessApi.RootResourceId
-      PathPart: "data"
+      RestApiId: !Ref "ApiGatewayRestApi"
+      ParentId: !GetAtt "ApiGatewayRestApi.RootResourceId"
+      PathPart: process
 
-  # API Gateway Method (GET)
-  ApiMethod:
+  # API Gateway POST Method
+  ApiGatewayMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref ServerlessApi
-      ResourceId: !Ref ApiResource
-      HttpMethod: GET
+      RestApiId: !Ref "ApiGatewayRestApi"
+      ResourceId: !Ref "ApiGatewayResource"
+      HttpMethod: POST
       AuthorizationType: NONE
+      ApiKeyRequired: true
       Integration:
-        Type: AWS_PROXY
+        Type: AWS
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ServerlessFunction.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessDataLambda.Arn}/invocations"
         IntegrationResponses:
-          - StatusCode: 200
+          - StatusCode: "200"
             ResponseParameters:
               method.response.header.Access-Control-Allow-Origin: "'*'"
-          - StatusCode: 500
-            ResponseParameters:
-              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        PassthroughBehavior: WHEN_NO_MATCH
       MethodResponses:
-        - StatusCode: 200
+        - StatusCode: "200"
           ResponseParameters:
             method.response.header.Access-Control-Allow-Origin: true
-        - StatusCode: 500
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
 
   # API Gateway OPTIONS Method for CORS
-  ApiMethodOptions:
+  ApiGatewayOptionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref ServerlessApi
-      ResourceId: !Ref ApiResource
+      RestApiId: !Ref "ApiGatewayRestApi"
+      ResourceId: !Ref "ApiGatewayResource"
       HttpMethod: OPTIONS
       AuthorizationType: NONE
       Integration:
         Type: MOCK
         IntegrationResponses:
-          - StatusCode: 200
+          - StatusCode: "200"
             ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
               method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
             ResponseTemplates:
-              application/json: ""
+              application/json: "{}"
         RequestTemplates:
           application/json: '{"statusCode": 200}'
       MethodResponses:
-        - StatusCode: 200
+        - StatusCode: "200"
           ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Headers: true
 
-  # API Gateway Deployment with Stage
-  ApiDeployment:
+  # API Gateway Deployment
+  ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref "ApiGatewayRestApi"
+      StageName: !Ref "EnvironmentName"
     DependsOn:
-      - ApiMethod
-      - ApiMethodOptions
-    Properties:
-      RestApiId: !Ref ServerlessApi
-      StageName: prod
-      StageDescription:
-        AccessLogSetting:
-          DestinationArn: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ServerlessApi}"
-          Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}'
-        MethodSettings:
-          - ResourcePath: "/*"
-            HttpMethod: "*"
-            LoggingLevel: INFO
-            DataTraceEnabled: true
-            MetricsEnabled: true
-        Tags:
-          - Key: Environment
-            Value: !Ref Environment
+      - ApiGatewayMethod
+      - ApiGatewayOptionsMethod
 
-  # CloudWatch Log Group for API Gateway
-  ApiLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/apigateway/${ServerlessApi}"
-      RetentionInDays: 14
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # Lambda Permission for API Gateway
-  LambdaApiGatewayPermission:
+  # Permission for API Gateway to invoke Lambda
+  ApiGatewayLambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref ServerlessFunction
       Action: lambda:InvokeFunction
+      FunctionName: !GetAtt "ProcessDataLambda.Arn"
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ServerlessApi}/*/GET/data"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/process"
+
+  # API Gateway Usage Plan
+  ApiGatewayUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub "data-api-usage-plan-${EnvironmentName}"
+      Description: Usage plan with throttling and quotas for secure API consumption
+      Throttle:
+        BurstLimit: 50
+        RateLimit: 25
+      Quota:
+        Limit: 10000
+        Period: MONTH
+      ApiStages:
+        - ApiId: !Ref "ApiGatewayRestApi"
+          Stage: !Ref "EnvironmentName"
+    DependsOn: ApiGatewayDeployment
+
+  # API Gateway API Key
+  ApiGatewayApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub "data-api-key-${EnvironmentName}"
+      Description: API key for secure access to data processing API
+      Enabled: true
+
+  # Associate API Key with Usage Plan
+  ApiGatewayUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref "ApiGatewayApiKey"
+      KeyType: API_KEY
+      UsagePlanId: !Ref "ApiGatewayUsagePlan"
 
 Outputs:
-  ApiEndpoint:
-    Description: API Gateway endpoint URL
-    Value: !Sub "https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/prod/data"
+  S3BucketName:
+    Description: Name of the S3 bucket for application data storage
+    Value: !Ref "AppDataBucket"
     Export:
-      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+      Name: !Sub "${AWS::StackName}-S3BucketName"
+
+  S3BucketArn:
+    Description: ARN of the S3 bucket
+    Value: !GetAtt "AppDataBucket.Arn"
+    Export:
+      Name: !Sub "${AWS::StackName}-S3BucketArn"
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref "ProcessDataLambda"
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
 
   LambdaFunctionArn:
-    Description: Lambda function ARN
-    Value: !GetAtt ServerlessFunction.Arn
+    Description: ARN of the Lambda function
+    Value: !GetAtt "ProcessDataLambda.Arn"
     Export:
       Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
 
-  DynamoDBTableName:
-    Description: DynamoDB table name
-    Value: !Ref ServerlessTable
+  ApiGatewayUrl:
+    Description: API Gateway endpoint URL for data processing
+    Value: !Sub "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/process"
     Export:
-      Name: !Sub "${AWS::StackName}-DynamoDBTableName"
+      Name: !Sub "${AWS::StackName}-ApiGatewayUrl"
 
-  S3LogsBucketName:
-    Description: S3 logs bucket name
-    Value: !Ref LogsBucket
+  ApiGatewayId:
+    Description: API Gateway REST API ID
+    Value: !Ref "ApiGatewayRestApi"
     Export:
-      Name: !Sub "${AWS::StackName}-S3LogsBucketName"
+      Name: !Sub "${AWS::StackName}-ApiGatewayId"
+
+  ApiKey:
+    Description: API Key for secure access to the API
+    Value: !Ref "ApiGatewayApiKey"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiKey"
+
+  UsagePlanId:
+    Description: Usage Plan ID for API consumption control
+    Value: !Ref "ApiGatewayUsagePlan"
+    Export:
+      Name: !Sub "${AWS::StackName}-UsagePlanId"
 ```
 
 ## CloudFormation Template (JSON)
@@ -396,36 +421,20 @@ Outputs:
 ```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Production-ready serverless application with Lambda, API Gateway, DynamoDB, and S3 logging",
+  "Description": "Secure serverless infrastructure with Lambda, S3, and API Gateway following best practices",
   "Parameters": {
-    "Environment": {
+    "EnvironmentName": {
       "Type": "String",
-      "Default": "Production",
-      "Description": "Environment name for resource tagging"
-    },
-    "LambdaFunctionName": {
-      "Type": "String",
-      "Default": "ServerlessFunction",
-      "Description": "Name for the Lambda function"
-    },
-    "DynamoDBTableName": {
-      "Type": "String",
-      "Default": "ServerlessTable",
-      "Description": "Name for the DynamoDB table"
-    },
-    "S3LogsBucketName": {
-      "Type": "String",
-      "Default": "serverless-logs",
-      "Description": "Name for the S3 logs bucket (will be appended with account ID and region)"
+      "Default": "dev",
+      "Description": "Environment name suffix for resource naming",
+      "AllowedValues": ["dev", "staging", "prod"],
+      "ConstraintDescription": "Must be dev, staging, or prod"
     }
   },
   "Resources": {
-    "LogsBucket": {
+    "AppDataBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Fn::Sub": "${S3LogsBucketName}-${AWS::AccountId}-${AWS::Region}"
-        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -435,72 +444,20 @@ Outputs:
             }
           ]
         },
-        "VersioningConfiguration": {
-          "Status": "Enabled"
-        },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
           "BlockPublicPolicy": true,
           "IgnorePublicAcls": true,
           "RestrictPublicBuckets": true
         },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          },
-          {
-            "Key": "Purpose",
-            "Value": "Logging"
-          }
-        ]
-      }
-    },
-    "ServerlessTable": {
-      "Type": "AWS::DynamoDB::Table",
-      "Properties": {
-        "TableName": {
-          "Ref": "DynamoDBTableName"
-        },
-        "AttributeDefinitions": [
-          {
-            "AttributeName": "id",
-            "AttributeType": "S"
-          }
-        ],
-        "KeySchema": [
-          {
-            "AttributeName": "id",
-            "KeyType": "HASH"
-          }
-        ],
-        "ProvisionedThroughput": {
-          "ReadCapacityUnits": 5,
-          "WriteCapacityUnits": 5
-        },
-        "SSESpecification": {
-          "SSEEnabled": true,
-          "SSEType": "KMS",
-          "KMSMasterKeyId": "alias/aws/dynamodb"
-        },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
-        ]
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
       }
     },
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {
-          "Fn::Sub": "${LambdaFunctionName}-execution-role"
-        },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -518,89 +475,68 @@ Outputs:
         ],
         "Policies": [
           {
-            "PolicyName": "DynamoDBAccess",
+            "PolicyName": "S3ReadOnlyAccess",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
                 {
                   "Effect": "Allow",
-                  "Action": [
-                    "dynamodb:GetItem",
-                    "dynamodb:PutItem",
-                    "dynamodb:UpdateItem",
-                    "dynamodb:DeleteItem",
-                    "dynamodb:Query",
-                    "dynamodb:Scan"
-                  ],
+                  "Action": ["s3:GetObject", "s3:GetObjectVersion"],
                   "Resource": {
-                    "Fn::GetAtt": ["ServerlessTable", "Arn"]
+                    "Fn::Sub": "${AppDataBucket.Arn}/*"
                   }
                 }
               ]
             }
           }
-        ],
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
         ]
       }
     },
-    "ServerlessFunction": {
+    "ProcessDataLambda": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": {
-          "Ref": "LambdaFunctionName"
+          "Fn::Sub": "process-data-${EnvironmentName}"
         },
-        "Runtime": "nodejs22.x",
-        "Handler": "index.handler",
+        "Runtime": "python3.9",
+        "Handler": "index.lambda_handler",
         "Role": {
           "Fn::GetAtt": ["LambdaExecutionRole", "Arn"]
         },
         "Code": {
-          "ZipFile": "const AWS = require('aws-sdk');\nconst dynamodb = new AWS.DynamoDB.DocumentClient();\n\nexports.handler = async (event) => {\n    console.log('Event received:', JSON.stringify(event, null, 2));\n    \n    try {\n        // Get the table name from environment variables\n        const tableName = process.env.DYNAMODB_TABLE_NAME;\n        \n        // Example: Get item from DynamoDB\n        const params = {\n            TableName: tableName,\n            Key: {\n                id: 'sample-id'\n            }\n        };\n        \n        const result = await dynamodb.get(params).promise();\n        \n        const response = {\n            statusCode: 200,\n            headers: {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*',\n                'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',\n                'Access-Control-Allow-Methods': 'GET,OPTIONS'\n            },\n            body: JSON.stringify({\n                message: 'Hello from Lambda!',\n                timestamp: new Date().toISOString(),\n                data: result.Item || null\n            })\n        };\n        \n        return response;\n    } catch (error) {\n        console.error('Error:', error);\n        \n        const errorResponse = {\n            statusCode: 500,\n            headers: {\n                'Content-Type': 'application/json',\n                'Access-Control-Allow-Origin': '*'\n            },\n            body: JSON.stringify({\n                error: 'Internal Server Error',\n                message: error.message\n            })\n        };\n        \n        return errorResponse;\n    }\n};\n"
+          "ZipFile": "import json\nimport boto3\n\ndef lambda_handler(event, context):\n    print(\"Received event: \" + json.dumps(event, indent=2))\n    \n    # Process S3 event if triggered by S3\n    if 'Records' in event and event['Records']:\n        for record in event['Records']:\n            if 's3' in record:\n                bucket_name = record['s3']['bucket']['name']\n                object_key = record['s3']['object']['key']\n                print(f\"Processing S3 object: s3://{bucket_name}/{object_key}\")\n    \n    return {\n        'statusCode': 200,\n        'headers': {\n            'Content-Type': 'application/json',\n            'Access-Control-Allow-Origin': '*'\n        },\n        'body': json.dumps({\n            'message': 'Data processed successfully!',\n            'environment': context.function_name\n        })\n    }\n"
         },
+        "MemorySize": 128,
+        "Timeout": 30,
         "Environment": {
           "Variables": {
-            "DYNAMODB_TABLE_NAME": {
-              "Ref": "ServerlessTable"
+            "BUCKET_NAME": {
+              "Ref": "AppDataBucket"
+            },
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentName"
             }
           }
-        },
-        "Timeout": 30,
-        "MemorySize": 128,
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
-        ]
+        }
       }
     },
-    "LambdaLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
+    "S3BucketEventPermission": {
+      "Type": "AWS::Lambda::Permission",
       "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/lambda/${LambdaFunctionName}"
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": ["ProcessDataLambda", "Arn"]
         },
-        "RetentionInDays": 14,
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
-        ]
+        "Principal": "s3.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": ["AppDataBucket", "Arn"]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
       }
     },
-    "ApiGatewayCloudWatchRole": {
+    "S3NotificationRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "AssumeRolePolicyDocument": {
@@ -609,119 +545,151 @@ Outputs:
             {
               "Effect": "Allow",
               "Principal": {
-                "Service": "apigateway.amazonaws.com"
+                "Service": "lambda.amazonaws.com"
               },
               "Action": "sts:AssumeRole"
             }
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         ],
-        "Tags": [
+        "Policies": [
           {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
+            "PolicyName": "S3NotificationPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutBucketNotification",
+                    "s3:GetBucketNotification"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["AppDataBucket", "Arn"]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:GetFunction",
+                    "lambda:AddPermission",
+                    "lambda:RemovePermission"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": ["ProcessDataLambda", "Arn"]
+                  }
+                }
+              ]
             }
           }
         ]
       }
     },
-    "ApiGatewayAccount": {
-      "Type": "AWS::ApiGateway::Account",
+    "S3NotificationFunction": {
+      "Type": "AWS::Lambda::Function",
       "Properties": {
-        "CloudWatchRoleArn": {
-          "Fn::GetAtt": ["ApiGatewayCloudWatchRole", "Arn"]
+        "FunctionName": {
+          "Fn::Sub": "s3-notification-config-${EnvironmentName}"
+        },
+        "Runtime": "python3.9",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": ["S3NotificationRole", "Arn"]
+        },
+        "Timeout": 300,
+        "Code": {
+          "ZipFile": "import boto3\nimport json\nimport cfnresponse\n\ndef handler(event, context):\n    try:\n        s3 = boto3.client('s3')\n        lambda_client = boto3.client('lambda')\n        \n        bucket_name = event['ResourceProperties']['BucketName']\n        lambda_arn = event['ResourceProperties']['LambdaArn']\n        \n        if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':\n            # First, ensure Lambda permission exists\n            try:\n                lambda_client.add_permission(\n                    FunctionName=lambda_arn,\n                    StatementId='S3InvokePermission',\n                    Action='lambda:InvokeFunction',\n                    Principal='s3.amazonaws.com',\n                    SourceArn=f'arn:aws:s3:::{bucket_name}'\n                )\n            except lambda_client.exceptions.ResourceConflictException:\n                # Permission already exists, which is fine\n                pass\n            \n            # Configure S3 bucket notification\n            s3.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration={\n                    'LambdaFunctionConfigurations': [{\n                        'Id': 'ProcessDataTrigger',\n                        'LambdaFunctionArn': lambda_arn,\n                        'Events': ['s3:ObjectCreated:*']\n                    }]\n                }\n            )\n        elif event['RequestType'] == 'Delete':\n            # Remove notification configuration\n            s3.put_bucket_notification_configuration(\n                Bucket=bucket_name,\n                NotificationConfiguration={}\n            )\n            \n            # Try to remove Lambda permission (optional, as stack deletion will clean up)\n            try:\n                lambda_client.remove_permission(\n                    FunctionName=lambda_arn,\n                    StatementId='S3InvokePermission'\n                )\n            except:\n                # Ignore errors during deletion\n                pass\n        \n        cfnresponse.send(event, context, cfnresponse.SUCCESS, {})\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})\n"
         }
       }
     },
-    "ServerlessApi": {
-      "Type": "AWS::ApiGateway::RestApi",
+    "S3BucketNotificationConfig": {
+      "Type": "Custom::S3BucketNotification",
       "Properties": {
-        "Name": "ServerlessAPI",
-        "Description": "Serverless application API Gateway",
-        "EndpointConfiguration": {
-          "Types": ["REGIONAL"]
+        "ServiceToken": {
+          "Fn::GetAtt": ["S3NotificationFunction", "Arn"]
         },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
-            }
-          }
-        ]
+        "BucketName": {
+          "Ref": "AppDataBucket"
+        },
+        "LambdaArn": {
+          "Fn::GetAtt": ["ProcessDataLambda", "Arn"]
+        }
       }
     },
-    "ApiResource": {
+    "ApiGatewayRestApi": {
+      "Type": "AWS::ApiGateway::RestApi",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "data-api-${EnvironmentName}"
+        },
+        "Description": "API Gateway for processing data with security best practices",
+        "EndpointConfiguration": {
+          "Types": ["REGIONAL"]
+        }
+      }
+    },
+    "ApiGatewayResource": {
       "Type": "AWS::ApiGateway::Resource",
       "Properties": {
         "RestApiId": {
-          "Ref": "ServerlessApi"
+          "Ref": "ApiGatewayRestApi"
         },
         "ParentId": {
-          "Fn::GetAtt": ["ServerlessApi", "RootResourceId"]
+          "Fn::GetAtt": ["ApiGatewayRestApi", "RootResourceId"]
         },
-        "PathPart": "data"
+        "PathPart": "process"
       }
     },
-    "ApiMethod": {
+    "ApiGatewayMethod": {
       "Type": "AWS::ApiGateway::Method",
       "Properties": {
         "RestApiId": {
-          "Ref": "ServerlessApi"
+          "Ref": "ApiGatewayRestApi"
         },
         "ResourceId": {
-          "Ref": "ApiResource"
+          "Ref": "ApiGatewayResource"
         },
-        "HttpMethod": "GET",
+        "HttpMethod": "POST",
         "AuthorizationType": "NONE",
+        "ApiKeyRequired": true,
         "Integration": {
-          "Type": "AWS_PROXY",
+          "Type": "AWS",
           "IntegrationHttpMethod": "POST",
           "Uri": {
-            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ServerlessFunction.Arn}/invocations"
+            "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessDataLambda.Arn}/invocations"
           },
           "IntegrationResponses": [
             {
-              "StatusCode": 200,
+              "StatusCode": "200",
               "ResponseParameters": {
-                "method.response.header.Access-Control-Allow-Origin": "'*'"
-              }
-            },
-            {
-              "StatusCode": 500,
-              "ResponseParameters": {
-                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               }
             }
-          ]
+          ],
+          "PassthroughBehavior": "WHEN_NO_MATCH"
         },
         "MethodResponses": [
           {
-            "StatusCode": 200,
+            "StatusCode": "200",
             "ResponseParameters": {
-              "method.response.header.Access-Control-Allow-Origin": true
-            }
-          },
-          {
-            "StatusCode": 500,
-            "ResponseParameters": {
-              "method.response.header.Access-Control-Allow-Origin": true
+              "method.response.header.Access-Control-Allow-Origin": true,
+              "method.response.header.Access-Control-Allow-Headers": true
             }
           }
         ]
       }
     },
-    "ApiMethodOptions": {
+    "ApiGatewayOptionsMethod": {
       "Type": "AWS::ApiGateway::Method",
       "Properties": {
         "RestApiId": {
-          "Ref": "ServerlessApi"
+          "Ref": "ApiGatewayRestApi"
         },
         "ResourceId": {
-          "Ref": "ApiResource"
+          "Ref": "ApiGatewayResource"
         },
         "HttpMethod": "OPTIONS",
         "AuthorizationType": "NONE",
@@ -729,14 +697,14 @@ Outputs:
           "Type": "MOCK",
           "IntegrationResponses": [
             {
-              "StatusCode": 200,
+              "StatusCode": "200",
               "ResponseParameters": {
-                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
-                "method.response.header.Access-Control-Allow-Methods": "'GET,OPTIONS'",
-                "method.response.header.Access-Control-Allow-Origin": "'*'"
+                "method.response.header.Access-Control-Allow-Origin": "'*'",
+                "method.response.header.Access-Control-Allow-Methods": "'POST,OPTIONS'",
+                "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
               },
               "ResponseTemplates": {
-                "application/json": ""
+                "application/json": "{}"
               }
             }
           ],
@@ -746,98 +714,130 @@ Outputs:
         },
         "MethodResponses": [
           {
-            "StatusCode": 200,
+            "StatusCode": "200",
             "ResponseParameters": {
-              "method.response.header.Access-Control-Allow-Headers": true,
+              "method.response.header.Access-Control-Allow-Origin": true,
               "method.response.header.Access-Control-Allow-Methods": true,
-              "method.response.header.Access-Control-Allow-Origin": true
+              "method.response.header.Access-Control-Allow-Headers": true
             }
           }
         ]
       }
     },
-    "ApiDeployment": {
+    "ApiGatewayDeployment": {
       "Type": "AWS::ApiGateway::Deployment",
-      "DependsOn": ["ApiMethod", "ApiMethodOptions"],
       "Properties": {
         "RestApiId": {
-          "Ref": "ServerlessApi"
+          "Ref": "ApiGatewayRestApi"
         },
-        "StageName": "prod",
-        "StageDescription": {
-          "AccessLogSetting": {
-            "DestinationArn": {
-              "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ServerlessApi}"
-            },
-            "Format": "{\"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"caller\":\"$context.identity.caller\",\"user\":\"$context.identity.user\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\"}"
-          },
-          "MethodSettings": [
-            {
-              "ResourcePath": "/*",
-              "HttpMethod": "*",
-              "LoggingLevel": "INFO",
-              "DataTraceEnabled": true,
-              "MetricsEnabled": true
-            }
-          ],
-          "Tags": [
-            {
-              "Key": "Environment",
-              "Value": {
-                "Ref": "Environment"
-              }
-            }
-          ]
+        "StageName": {
+          "Ref": "EnvironmentName"
+        }
+      },
+      "DependsOn": ["ApiGatewayMethod", "ApiGatewayOptionsMethod"]
+    },
+    "ApiGatewayLambdaPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": ["ProcessDataLambda", "Arn"]
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/process"
         }
       }
     },
-    "ApiLogGroup": {
-      "Type": "AWS::Logs::LogGroup",
+    "ApiGatewayUsagePlan": {
+      "Type": "AWS::ApiGateway::UsagePlan",
       "Properties": {
-        "LogGroupName": {
-          "Fn::Sub": "/aws/apigateway/${ServerlessApi}"
+        "UsagePlanName": {
+          "Fn::Sub": "data-api-usage-plan-${EnvironmentName}"
         },
-        "RetentionInDays": 14,
-        "Tags": [
+        "Description": "Usage plan with throttling and quotas for secure API consumption",
+        "Throttle": {
+          "BurstLimit": 50,
+          "RateLimit": 25
+        },
+        "Quota": {
+          "Limit": 10000,
+          "Period": "MONTH"
+        },
+        "ApiStages": [
           {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "Environment"
+            "ApiId": {
+              "Ref": "ApiGatewayRestApi"
+            },
+            "Stage": {
+              "Ref": "EnvironmentName"
             }
           }
         ]
+      },
+      "DependsOn": "ApiGatewayDeployment"
+    },
+    "ApiGatewayApiKey": {
+      "Type": "AWS::ApiGateway::ApiKey",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "data-api-key-${EnvironmentName}"
+        },
+        "Description": "API key for secure access to data processing API",
+        "Enabled": true
       }
     },
-    "LambdaApiGatewayPermission": {
-      "Type": "AWS::Lambda::Permission",
+    "ApiGatewayUsagePlanKey": {
+      "Type": "AWS::ApiGateway::UsagePlanKey",
       "Properties": {
-        "FunctionName": {
-          "Ref": "ServerlessFunction"
+        "KeyId": {
+          "Ref": "ApiGatewayApiKey"
         },
-        "Action": "lambda:InvokeFunction",
-        "Principal": "apigateway.amazonaws.com",
-        "SourceArn": {
-          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ServerlessApi}/*/GET/data"
+        "KeyType": "API_KEY",
+        "UsagePlanId": {
+          "Ref": "ApiGatewayUsagePlan"
         }
       }
     }
   },
   "Outputs": {
-    "ApiEndpoint": {
-      "Description": "API Gateway endpoint URL",
+    "S3BucketName": {
+      "Description": "Name of the S3 bucket for application data storage",
       "Value": {
-        "Fn::Sub": "https://${ServerlessApi}.execute-api.${AWS::Region}.amazonaws.com/prod/data"
+        "Ref": "AppDataBucket"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-ApiEndpoint"
+          "Fn::Sub": "${AWS::StackName}-S3BucketName"
+        }
+      }
+    },
+    "S3BucketArn": {
+      "Description": "ARN of the S3 bucket",
+      "Value": {
+        "Fn::GetAtt": ["AppDataBucket", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-S3BucketArn"
+        }
+      }
+    },
+    "LambdaFunctionName": {
+      "Description": "Name of the Lambda function",
+      "Value": {
+        "Ref": "ProcessDataLambda"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-LambdaFunctionName"
         }
       }
     },
     "LambdaFunctionArn": {
-      "Description": "Lambda function ARN",
+      "Description": "ARN of the Lambda function",
       "Value": {
-        "Fn::GetAtt": ["ServerlessFunction", "Arn"]
+        "Fn::GetAtt": ["ProcessDataLambda", "Arn"]
       },
       "Export": {
         "Name": {
@@ -845,25 +845,47 @@ Outputs:
         }
       }
     },
-    "DynamoDBTableName": {
-      "Description": "DynamoDB table name",
+    "ApiGatewayUrl": {
+      "Description": "API Gateway endpoint URL for data processing",
       "Value": {
-        "Ref": "ServerlessTable"
+        "Fn::Sub": "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}/process"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-DynamoDBTableName"
+          "Fn::Sub": "${AWS::StackName}-ApiGatewayUrl"
         }
       }
     },
-    "S3LogsBucketName": {
-      "Description": "S3 logs bucket name",
+    "ApiGatewayId": {
+      "Description": "API Gateway REST API ID",
       "Value": {
-        "Ref": "LogsBucket"
+        "Ref": "ApiGatewayRestApi"
       },
       "Export": {
         "Name": {
-          "Fn::Sub": "${AWS::StackName}-S3LogsBucketName"
+          "Fn::Sub": "${AWS::StackName}-ApiGatewayId"
+        }
+      }
+    },
+    "ApiKey": {
+      "Description": "API Key for secure access to the API",
+      "Value": {
+        "Ref": "ApiGatewayApiKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ApiKey"
+        }
+      }
+    },
+    "UsagePlanId": {
+      "Description": "Usage Plan ID for API consumption control",
+      "Value": {
+        "Ref": "ApiGatewayUsagePlan"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-UsagePlanId"
         }
       }
     }

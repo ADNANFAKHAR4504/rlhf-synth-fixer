@@ -1,193 +1,140 @@
-## Overview
+# Overview
 
-This document outlines potential failure scenarios and mitigation strategies for the serverless infrastructure defined in the CloudFormation template.
+This document outlines potential failure scenarios and mitigation strategies for the secure serverless infrastructure defined in the CloudFormation template.
 
 ---
 
 ## Infrastructure Deployment Failures
 
-### 1. Resource Naming Conflicts
+### 1. **S3 Bucket Name Collision**
 
-- **Scenario:** S3 bucket name already exists in the target region
-- **Impact:** CloudFormation stack creation fails
-- **Root Cause:** S3 bucket names are globally unique
+- **Scenario**: The `AppDataBucket` name already exists globally
+- **Impact**: Stack creation fails
+- **Root Cause**: S3 bucket names are globally unique
+- **Mitigation**:
+  - Use unique naming with suffixes (e.g., `${AWS::AccountId}-${AWS::Region}`)
+  - Validate names pre-deployment
 
-**Mitigation:**
+### 2. **Custom Resource Failure (S3 Notifications)**
 
-- Use `!Sub "${S3LogsBucketName}-${AWS::AccountId}-${AWS::Region}"` to ensure uniqueness
-- Implement automated retry with alternative naming convention
+- **Scenario**: `S3NotificationFunction` fails to configure notifications
+- **Impact**: Lambda not triggered on S3 events
+- **Root Cause**: IAM permission issues, missing `cfnresponse` package, or Lambda error
+- **Mitigation**:
+  - Verify IAM permissions on `S3NotificationRole`
+  - Test custom resource function independently
+  - Add CloudWatch alarms for failures
 
----
+### 3. **IAM Role Policy Errors**
 
-### 2. IAM Role Creation Issues
-
-- **Scenario:** IAM role policies exceed size limits
-- **Impact:** Lambda function cannot assume execution role
-- **Root Cause:** Too many policies or overly complex permissions
-
-**Mitigation:**
-
-- Use managed policies where possible
-- Implement least privilege principles
-- Regularly audit and optimize IAM policies
-
----
-
-### 3. Regional Service Limitations
-
-- **Scenario:** AWS service limits exceeded in `us-west-2`
-- **Impact:** Resource creation fails (API Gateway, Lambda, DynamoDB)
-- **Root Cause:** Account-level service quotas reached
-
-**Mitigation:**
-
-- Pre-check service quotas before deployment
-- Request quota increases proactively
-- Implement retry logic with exponential backoff
+- **Scenario**: Incorrect inline IAM policy syntax or size limit exceeded
+- **Impact**: Lambda deployment fails
+- **Root Cause**: Policy misconfiguration
+- **Mitigation**:
+  - Validate JSON IAM policy with **IAM Policy Simulator**
+  - Keep inline policies minimal, prefer managed policies
 
 ---
 
 ## Runtime Failures
 
-### 1. Lambda Function Execution
+### 1. **Lambda Invocation Errors**
 
-- **Scenario:** Cold start timeout
-- **Impact:** API Gateway returns 500 error
-- **Root Cause:** Node.js module loading or initialization delay
+- **Scenario**: Lambda fails on S3 or API Gateway event
+- **Impact**: Events not processed, API returns 500 errors
+- **Root Cause**: Invalid event format, permission issues, or unhandled exceptions
+- **Mitigation**:
+  - Add error handling and structured logging in Lambda code
+  - Test S3-triggered and API-triggered flows separately
+  - Use **Dead Letter Queues (DLQ)** for failed executions
 
-**Mitigation:**
+### 2. **API Gateway Integration Timeout**
 
-- Optimize package size
-- Use provisioned concurrency for production workloads
-- Implement appropriate timeout configuration (current: 30 seconds)
+- **Scenario**: Lambda takes longer than 30 seconds
+- **Impact**: API Gateway responds with 504 error
+- **Root Cause**: Heavy processing or downstream latency
+- **Mitigation**:
+  - Reduce Lambda workload or use asynchronous processing
+  - Ensure Lambda timeout < API Gateway timeout
 
----
+### 3. **API Usage Plan Throttling**
 
-### 2. DynamoDB Throttling
-
-- **Scenario:** Read/Write capacity exceeded
-- **Impact:** Lambda function fails to read/write data
-- **Root Cause:** Provisioned throughput insufficient for traffic spikes
-
-**Mitigation:**
-
-- Implement retry logic with exponential backoff in Lambda code
-- Consider auto-scaling for DynamoDB table
-- Monitor CloudWatch metrics for capacity usage
-
----
-
-### 3. API Gateway Integration
-
-- **Scenario:** Lambda integration timeout
-- **Impact:** Client receives 500 error instead of graceful timeout response
-- **Root Cause:** Lambda execution exceeds API Gateway timeout (29 seconds max)
-
-**Mitigation:**
-
-- Set Lambda timeout lower than API Gateway timeout
-- Implement asynchronous processing pattern for long-running operations
+- **Scenario**: Clients exceed quota or rate limits
+- **Impact**: Requests rejected with 429 (Too Many Requests)
+- **Root Cause**: High traffic or insufficient quota
+- **Mitigation**:
+  - Monitor CloudWatch metrics for throttling
+  - Adjust **UsagePlan** limits for production workloads
 
 ---
 
 ## Security and Compliance Failures
 
-### 1. Encryption Issues
+### 1. **CORS Misconfiguration**
 
-- **Scenario:** KMS key unavailable for DynamoDB encryption
-- **Impact:** Table creation fails or operates without encryption
-- **Root Cause:** KMS key policy restrictions or service disruption
+- **Scenario**: Missing or incorrect CORS headers
+- **Impact**: Browser clients blocked from accessing API
+- **Root Cause**: Misconfigured integration or method responses
+- **Mitigation**:
+  - Validate CORS with browser-based testing tools
+  - Ensure both `OPTIONS` and method responses return headers
 
-**Mitigation:**
+### 2. **API Key Leakage**
 
-- Use AWS-managed KMS keys (`alias/aws/dynamodb`)
-- Implement proper key policy configurations
-- Test encryption functionality during deployment validation
-
----
-
-### 2. Cross-Origin Resource Sharing (CORS)
-
-- **Scenario:** CORS configuration incorrect
-- **Impact:** Web applications cannot access API from different domains
-- **Root Cause:** Misconfigured `Access-Control-Allow-*` headers
-
-**Mitigation:**
-
-- Test CORS configuration from different origin domains
-- Implement proper `OPTIONS` method handling
-- Validate headers in both integration responses and method responses
+- **Scenario**: API key is exposed publicly
+- **Impact**: Unauthorized access to API Gateway
+- **Root Cause**: Poor key management practices
+- **Mitigation**:
+  - Rotate API keys regularly
+  - Store keys in secure systems (e.g., AWS Secrets Manager)
+  - Monitor API usage for anomalies
 
 ---
 
 ## Monitoring and Logging Failures
 
-### 1. CloudWatch Logs Delivery
+### 1. **CloudWatch Log Delivery**
 
-- **Scenario:** Logs not delivered to CloudWatch
-- **Impact:** Loss of visibility into Lambda and API Gateway execution
-- **Root Cause:** IAM permissions issues or service disruptions
+- **Scenario**: Logs not appearing in CloudWatch
+- **Impact**: Lack of visibility into Lambda/API execution
+- **Root Cause**: Missing IAM permissions or service disruption
+- **Mitigation**:
+  - Ensure execution roles include `AWSLambdaBasicExecutionRole`
+  - Test log delivery post-deployment
 
-**Mitigation:**
+### 2. **API Gateway Access Logging Disabled**
 
-- Validate IAM roles have necessary CloudWatch permissions
-- Implement CloudWatch alarms for log delivery failures
-- Regularly test log functionality
-
----
-
-### 2. S3 Logging Configuration
-
-- **Scenario:** API Gateway access logs not delivered to S3
-- **Impact:** Loss of API request history
-- **Root Cause:** S3 bucket policy restrictions or incorrect configuration
-
-**Mitigation:**
-
-- Validate S3 bucket permissions for API Gateway
-- Test log delivery mechanism
-- Implement S3 lifecycle policies for log management
+- **Scenario**: No API request logs captured
+- **Impact**: Hard to diagnose client/API errors
+- **Root Cause**: Access logs not explicitly configured
+- **Mitigation**:
+  - Enable API Gateway access logs with CloudWatch or S3
+  - Define standard log retention policies
 
 ---
 
 ## Recovery Strategies
 
-### 1. Automated Rollback
-
-- CloudFormation automatically rolls back on critical failures
-- Implement nested stacks for partial deployments
-- Use change sets to preview modifications
-
-### 2. Disaster Recovery
-
-- Regular backups of DynamoDB table
-- Cross-region replication configuration for critical data
-- Deployment automation for quick region migration
-
-### 3. Performance Degradation
-
-- Implement auto-scaling policies for DynamoDB
-- Configure Lambda provisioned concurrency
-- Use API Gateway caching for frequently accessed data
+- **Rollback** → CloudFormation auto-rollback on critical failures
+- **Cross-Region** → Redeploy stack in alternate AWS region if service outage occurs
+- **Data Recovery** → Use S3 versioning to recover deleted or overwritten data
+- **API Scaling** → Adjust usage plan quotas and Lambda concurrency as needed
 
 ---
 
 ## Testing Recommendations
 
-### Pre-deployment Validation
+### Pre-deployment
 
-- Test template with CloudFormation linting tools
-- Validate IAM policies using IAM policy simulator
+- Run `cfn-lint` and IAM policy validation
 
-### Post-deployment Verification
+### Post-deployment
 
-- Test API endpoints with CORS requests
-- Validate encryption settings on all resources
-- Verify CloudWatch logs are being populated
-- Test error scenarios by forcing Lambda failures
+- Upload test objects to S3 and confirm Lambda triggers
+- Call API endpoint with API key and validate response
+- Test CORS requests from browser clients
 
 ### Load Testing
 
-- Test DynamoDB throughput under expected load
-- Validate Lambda performance during concurrent executions
-- Monitor API Gateway latency metrics
+- Validate API Gateway throttling under heavy load
+- Confirm Lambda concurrency scaling
