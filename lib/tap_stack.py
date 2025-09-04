@@ -18,7 +18,6 @@ from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
 from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.cloudtrail import Cloudtrail
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
@@ -303,88 +302,6 @@ class TapStack(TerraformStack):
             }
         )
 
-        # S3 Bucket for CloudTrail logs
-        cloudtrail_bucket = S3Bucket(self, "cloudtrail_bucket",
-            bucket=f"production-cloudtrail-logs-{environment_suffix}-{aws_region}",
-            force_destroy=True,
-            tags={
-                "Name": f"production-cloudtrail-bucket-{environment_suffix}",
-                "Environment": "Production",
-                "Department": "IT"
-            }
-        )
-
-        # CloudTrail bucket encryption
-        S3BucketServerSideEncryptionConfigurationA(self, "cloudtrail_bucket_encryption",
-            bucket=cloudtrail_bucket.id,
-            rule=[
-                S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=
-                        S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-                            sse_algorithm="AES256"
-                        )
-                )
-            ]
-        )
-
-        # Block public access for CloudTrail bucket
-        S3BucketPublicAccessBlock(self, "cloudtrail_bucket_pab",
-            bucket=cloudtrail_bucket.id,
-            block_public_acls=True,
-            block_public_policy=True,
-            ignore_public_acls=True,
-            restrict_public_buckets=True
-        )
-
-        # CloudTrail bucket policy
-        S3BucketPolicy(self, "cloudtrail_bucket_policy",
-            bucket=cloudtrail_bucket.id,
-            policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "AWSCloudTrailAclCheck",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": "s3:GetBucketAcl",
-                        "Resource": cloudtrail_bucket.arn
-                    },
-                    {
-                        "Sid": "AWSCloudTrailWrite",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": "s3:PutObject",
-                        "Resource": f"{cloudtrail_bucket.arn}/*",
-                        "Condition": {
-                            "StringEquals": {
-                                "s3:x-amz-acl": "bucket-owner-full-control"
-                            }
-                        }
-                    }
-                ]
-            })
-        )
-
-        # CloudTrail for audit logging
-        cloudtrail = Cloudtrail(self, "cloudtrail",
-            name=f"production-cloudtrail-{environment_suffix}",
-            s3_bucket_name=cloudtrail_bucket.bucket,
-            s3_key_prefix="cloudtrail-logs",
-            include_global_service_events=True,
-            is_multi_region_trail=True,
-            enable_logging=True,
-            enable_log_file_validation=True,
-            tags={
-                "Name": f"production-cloudtrail-{environment_suffix}",
-                "Environment": "Production",
-                "Department": "IT"
-            }
-        )
-
         # Outputs
         TerraformOutput(self, "vpc_id",
             value=vpc.id,
@@ -414,14 +331,4 @@ class TapStack(TerraformStack):
         TerraformOutput(self, "rds_endpoint",
             value=rds_instance.endpoint,
             description="RDS PostgreSQL Endpoint"
-        )
-
-        TerraformOutput(self, "cloudtrail_name",
-            value=cloudtrail.name,
-            description="CloudTrail Name"
-        )
-
-        TerraformOutput(self, "cloudtrail_s3_bucket",
-            value=cloudtrail_bucket.bucket,
-            description="CloudTrail S3 Bucket Name"
         )
