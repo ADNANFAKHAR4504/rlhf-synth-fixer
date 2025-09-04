@@ -88,7 +88,7 @@ Resources:
   ProdKMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub "alias/prod-${EnvironmentSuffix}-security-key"
+      AliasName: !Sub "alias/prod-${Environment}-security-key"
       TargetKeyId: !Ref ProdKMSKey
 
   # ========================================
@@ -579,7 +579,8 @@ Resources:
                   - 's3:GetObject'
                   - 's3:PutObject'
                 Resource: 
-                  - !Sub '${ProdS3Bucket}/*'
+                  - !GetAtt ProdS3Bucket.Arn
+                  - !Sub '${ProdS3Bucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - 'kms:Decrypt'
@@ -638,7 +639,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - 's3:GetObject'
-                Resource: !Sub '${ProdS3Bucket}/*'
+                Resource: !Sub '${ProdS3Bucket.Arn}/*'
       Tags:
         - Key: Name
           Value: 'prod-role-lambda-execution'
@@ -733,7 +734,7 @@ Resources:
               - 's3:GetObject'
               - 's3:PutObject'
             Resource:
-              - !Sub 'arn:aws:s3:::${ProdS3Bucket}/*'
+              - !Sub '${ProdS3Bucket.Arn}/*'
           - Effect: Allow
             Principal: '*'
             Action:
@@ -863,18 +864,6 @@ Outputs:
     Value: !Ref ProdS3Bucket
     Export:
       Name: !Sub '${AWS::StackName}-S3Bucket-Name'
-
-  S3BucketArn:
-    Description: 'Production S3 Bucket ARN'
-    Value: !GetAtt ProdS3Bucket.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket-Arn'
-
-  S3BucketObjectsArn:
-    Description: 'Production S3 Bucket Objects ARN'
-    Value: !Sub '${S3BucketArn}/*'
-    Export:
-      Name: !Sub '${AWS::StackName}-S3Bucket-Objects-Arn'
 
   EC2RoleArn:
     Description: 'EC2 Instance Role ARN'

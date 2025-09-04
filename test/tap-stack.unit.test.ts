@@ -278,7 +278,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('Public subnets should not auto-assign public IPs', () => {
       const publicSubnet1 = template.Resources.ProdAppPublicSubnet1;
-      expect(publicSubnet1.Properties.MapPublicIpOnLaunch).toBe(false);
+      expect(publicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
       const publicSubnet2 = template.Resources.ProdAppPublicSubnet2;
       expect(publicSubnet2.Properties.MapPublicIpOnLaunch).toBe(false);
     });

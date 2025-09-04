@@ -117,7 +117,7 @@
             "Type": "AWS::KMS::Alias",
             "Properties": {
                 "AliasName": {
-                    "Fn::Sub": "alias/prod-${EnvironmentSuffix}-security-key"
+                    "Fn::Sub": "alias/prod-${Environment}-security-key"
                 },
                 "TargetKeyId": {
                     "Ref": "ProdKMSKey"
@@ -1127,7 +1127,13 @@
                                     ],
                                     "Resource": [
                                         {
-                                            "Fn::Sub": "${ProdS3Bucket}/*"
+                                            "Fn::GetAtt": [
+                                                "ProdS3Bucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ProdS3Bucket.Arn}/*"
                                         }
                                     ]
                                 },
@@ -1248,7 +1254,7 @@
                                         "s3:GetObject"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "${ProdS3Bucket}/*"
+                                        "Fn::Sub": "${ProdS3Bucket.Arn}/*"
                                     }
                                 }
                             ]
@@ -1425,7 +1431,7 @@
                             ],
                             "Resource": [
                                 {
-                                    "Fn::Sub": "arn:aws:s3:::${ProdS3Bucket}/*"
+                                    "Fn::Sub": "${ProdS3Bucket.Arn}/*"
                                 }
                             ]
                         },
@@ -1693,31 +1699,6 @@
             "Export": {
                 "Name": {
                     "Fn::Sub": "${AWS::StackName}-S3Bucket-Name"
-                }
-            }
-        },
-        "S3BucketArn": {
-            "Description": "Production S3 Bucket ARN",
-            "Value": {
-                "Fn::GetAtt": [
-                    "ProdS3Bucket",
-                    "Arn"
-                ]
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-S3Bucket-Arn"
-                }
-            }
-        },
-        "S3BucketObjectsArn": {
-            "Description": "Production S3 Bucket Objects ARN",
-            "Value": {
-                "Fn::Sub": "${S3BucketArn}/*"
-            },
-            "Export": {
-                "Name": {
-                    "Fn::Sub": "${AWS::StackName}-S3Bucket-Objects-Arn"
                 }
             }
         },
