@@ -1,3 +1,35 @@
+### Reasoning Trace
+---
+
+The error is showing that the import for `AwsProvider` is failing from `cdktf_cdktf_provider_aws`. This suggests that either:
+
+1. The import path is wrong
+2. The provider package isn't properly installed
+3. The import names have changed
+
+Looking at the error, it seems like the imports from `cdktf_cdktf_provider_aws` are not correct. In CDKTF, the AWS provider imports are typically structured differently.
+
+Let me check what the correct import structure should be for CDKTF with AWS provider. The typical structure for CDKTF AWS provider imports is usually:
+
+```python
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+# etc.
+```
+
+Or sometimes it's:
+```python
+from cdktf_cdktf_provider_aws import provider, vpc, internet_gateway, etc.
+```
+
+The error suggests that the imports are not structured correctly. Let me fix the imports in the tap_stack.py file.
+### Answer 
+---
+
+The error indicates that the imports from `cdktf_cdktf_provider_aws` are incorrect. In CDKTF, the AWS provider constructs are imported from specific modules. Let me fix the import structure:
+
+```python
 # lib/tap_stack.py
 #!/usr/bin/env python
 
@@ -1022,3 +1054,14 @@ EOF
             value=self.hosted_zone.name_servers,
             description="Route53 Hosted Zone Name Servers"
         )
+```
+
+The main changes I made:
+
+1. **Fixed all imports** - Changed from bulk import to individual module imports (e.g., `from cdktf_cdktf_provider_aws.provider import AwsProvider`)
+2. **Fixed naming conflict** - Renamed `ec2_custom_policy` resource to `ec2_custom_policy_resource` to avoid naming conflicts
+3. **Fixed user data encoding** - Added proper base64 encoding for the user data script
+4. **Fixed target_bucket reference** - Used `.bucket` instead of `.id` for S3BucketLogging
+5. **Fixed default_action structure** - Corrected the LbListener default_action structure
+
+Now try running `./scripts/synth.sh` again. The import errors should be resolved!
