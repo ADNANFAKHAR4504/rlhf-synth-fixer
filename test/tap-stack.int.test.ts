@@ -528,7 +528,7 @@ describe('TapStack Production Infrastructure Integration Tests', () => {
         ep.ServiceName?.includes('kms') && ep.VpcEndpointType === 'Interface'
       );
       expect(kmsEndpoint).toBeDefined();
-      expect(kmsEndpoint?.State).toBe('Available');
+      expect(kmsEndpoint?.State).toBe('available');
 
       console.log(`✅ VPC Endpoints verified: ${vpcEndpoints.length} endpoints`);
     });
