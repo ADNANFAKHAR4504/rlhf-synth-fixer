@@ -895,11 +895,11 @@ echo "User data script completed successfully"
       securityGroups: [props.albSecurityGroupId],
       subnets: props.publicSubnetIds,
       enableDeletionProtection: true,
-      accessLogs: {
-        bucket: props.logBucketName, // Use props instead of hardcoded value
-        enabled: true,
-        prefix: 'alb-access-logs',
-      },
+      // accessLogs: {
+      //   bucket: props.logBucketName, // Use props instead of hardcoded value
+      //   enabled: true,
+      //   prefix: 'alb-access-logs',
+      // },
       tags: {
         Name: 'tap-alb-prod',
       },
