@@ -32,15 +32,10 @@
       "Type": "String",
       "Default": "t2.micro"
     },
-    "WebServerAMI": {
-      "Description": "AMI ID for the web servers",
-      "Type": "AWS::EC2::Image::Id",
-      "Default": "ami-0c55b159cbfafe1f0"
-    },
     "KeyName": {
       "Description": "The name of an existing EC2 KeyPair to enable SSH access to the instances",
       "Type": "AWS::EC2::KeyPair::KeyName",
-      "Default": "tap-dev-keypair",
+      "Default": "iac-rlhf-aws-trainer-instance",
       "ConstraintDescription": "Must be the name of an existing EC2 KeyPair."
     },
     "DBInstanceType": {
@@ -504,9 +499,7 @@
           "InstanceType": {
             "Ref": "InstanceType"
           },
-          "ImageId": {
-            "Ref": "WebServerAMI"
-          },
+          "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-2/amzn2-ami-hvm-x86_64-gp2}}",
           "KeyName": {
             "Ref": "KeyName"
           },
