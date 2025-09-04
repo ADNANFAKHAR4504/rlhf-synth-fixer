@@ -17,6 +17,7 @@ from aws_cdk import (
     CfnOutput
 )
 from constructs import Construct
+import time
 
 
 class TapStack(Stack):
@@ -28,6 +29,8 @@ class TapStack(Stack):
         
         self.project_name = project_name
         self.environment_suffix = environment_suffix
+        # Add unique suffix to avoid resource conflicts
+        self.unique_suffix = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
         
         # Common tags for all resources
         self.common_tags = {
@@ -104,7 +107,7 @@ class TapStack(Stack):
         """Create DynamoDB table with on-demand billing"""
         table = dynamodb.Table(
             self, "TapTable",
-            table_name=f"{self.project_name}-{self.environment_suffix}-data",
+            table_name=f"{self.project_name}-{self.environment_suffix}-data-{self.unique_suffix}",
             partition_key=dynamodb.Attribute(
                 name="pk",
                 type=dynamodb.AttributeType.STRING
@@ -140,7 +143,7 @@ class TapStack(Stack):
         # Data bucket with lifecycle policy
         data_bucket = s3.Bucket(
             self, "TapDataBucket",
-            bucket_name=f"{self.project_name}-{self.environment_suffix}-data-{self.account}",
+            bucket_name=f"{self.project_name}-{self.environment_suffix}-data-{self.unique_suffix}",
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -175,7 +178,7 @@ class TapStack(Stack):
         # Logs bucket
         logs_bucket = s3.Bucket(
             self, "TapLogsBucket",
-            bucket_name=f"{self.project_name}-{self.environment_suffix}-logs-{self.account}",
+            bucket_name=f"{self.project_name}-{self.environment_suffix}-logs-{self.unique_suffix}",
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             removal_policy=RemovalPolicy.DESTROY if self.environment_suffix == "dev" else RemovalPolicy.RETAIN,
@@ -198,14 +201,14 @@ class TapStack(Stack):
         # Dead letter queue
         dlq = sqs.Queue(
             self, "TapDLQ",
-            queue_name=f"{self.project_name}-{self.environment_suffix}-dlq",
+            queue_name=f"{self.project_name}-{self.environment_suffix}-dlq-{self.unique_suffix}",
             retention_period=Duration.days(14)
         )
         
         # Main queue
         queue = sqs.Queue(
             self, "TapQueue",
-            queue_name=f"{self.project_name}-{self.environment_suffix}-async-queue",
+            queue_name=f"{self.project_name}-{self.environment_suffix}-async-queue-{self.unique_suffix}",
             visibility_timeout=Duration.minutes(5),
             retention_period=Duration.days(14),
             dead_letter_queue=sqs.DeadLetterQueue(
@@ -220,7 +223,7 @@ class TapStack(Stack):
         """Create custom EventBridge bus"""
         event_bus = events.EventBus(
             self, "TapEventBus",
-            event_bus_name=f"{self.project_name}-{self.environment_suffix}-events"
+            event_bus_name=f"{self.project_name}-{self.environment_suffix}-events-{self.unique_suffix}"
         )
         
         return event_bus
@@ -309,7 +312,7 @@ class TapStack(Stack):
         # API Handler Lambda
         api_handler = _lambda.Function(
             self, "ApiHandler",
-            function_name=f"{self.project_name}-{self.environment_suffix}-api-handler",
+            function_name=f"{self.project_name}-{self.environment_suffix}-api-handler-{self.unique_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
@@ -385,7 +388,7 @@ def handler(event, context):
         # Async Processor Lambda
         async_processor = _lambda.Function(
             self, "AsyncProcessor",
-            function_name=f"{self.project_name}-{self.environment_suffix}-async-processor",
+            function_name=f"{self.project_name}-{self.environment_suffix}-async-processor-{self.unique_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
@@ -436,7 +439,7 @@ def handler(event, context):
         # Event Processor Lambda
         event_processor = _lambda.Function(
             self, "EventProcessor",
-            function_name=f"{self.project_name}-{self.environment_suffix}-event-processor",
+            function_name=f"{self.project_name}-{self.environment_suffix}-event-processor-{self.unique_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_inline("""
