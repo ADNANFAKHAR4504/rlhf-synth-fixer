@@ -124,11 +124,21 @@ public class MainIntegrationTest {
                 ObjectMapper mapper = new ObjectMapper();
                 stackOutputs = mapper.readValue(content, new TypeReference<Map<String, String>>(){});
                 System.out.println("Loaded stack outputs from flat-outputs.json: " + stackOutputs.keySet());
-                return;
+                
+                // If the file is empty or contains no relevant outputs, fall back to CloudFormation
+                if (stackOutputs.isEmpty()) {
+                    System.out.println("flat-outputs.json is empty, falling back to CloudFormation...");
+                } else {
+                    return; // Only return early if we have actual data
+                }
             }
 
             // Fallback: Query CloudFormation directly for stack outputs from both regions
-            System.out.println("flat-outputs.json not found, querying CloudFormation directly...");
+            if (!flatOutputsFile.exists()) {
+                System.out.println("flat-outputs.json not found, querying CloudFormation directly...");
+            } else {
+                System.out.println("Querying CloudFormation directly...");
+            }
             stackOutputs = new HashMap<>();
             
             // Load outputs from us-east-1
