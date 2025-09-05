@@ -21,7 +21,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   createCertificate: false, // Set to true if you want to create a new certificate
   env: {
-    account: '149536495831',
+    account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-east-1',
-  }
+  },
 });

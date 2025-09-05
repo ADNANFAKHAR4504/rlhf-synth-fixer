@@ -4,13 +4,7 @@ import fs from 'fs';
 import * as net from 'net';
 
 // Default outputs if file does not exist
-const defaultOutputs = {
-  'ProductionAccessUrl-pr117': 'http://ApplicationLoadBalancer-pr117-377609417.us-east-1.elb.amazonaws.com',
-  'ProductionASGName-pr117': 'AutoScalingGroup-pr117',
-  'ProductionDBEndpoint-pr117': 'postgresqldatabase-pr117.cr40qsyomeka.us-east-1.rds.amazonaws.com',
-  'ProductionALBDNS-pr117': 'ApplicationLoadBalancer-pr117-377609417.us-east-1.elb.amazonaws.com',
-  'ProductionVPCId-pr117': 'vpc-053cd6085ff855a6b'
-};
+
 
 let outputs: Record<string, string>;
 try {
@@ -18,7 +12,7 @@ try {
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
 } catch (err) {
-  outputs = defaultOutputs;
+  console.error('Error reading outputs file:', err);
 }
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr117';

@@ -17,11 +17,10 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // Get environment suffix from props, context, or use 'dev' as default
-    // Get environment suffix from props, context, or use 'dev' as default
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
-      'pr117';
+      'dev';
 
     // Certificate creation flag - default false to avoid validation issues
     const createCertificate = props?.createCertificate || false;
@@ -33,7 +32,7 @@ export class TapStack extends cdk.Stack {
       validationEmails: {
         'admin@yourdomain.com': 'yourdomain.com',
         'wildcard@yourdomain.com': '*.yourdomain.com',
-      }
+      },
     };
 
     // Common tags for all resources
@@ -42,7 +41,7 @@ export class TapStack extends cdk.Stack {
       Project: 'WebApplication',
       ManagedBy: 'CDK',
       CostCenter: 'Engineering',
-      Owner: 'Platform-Team'
+      Owner: 'Platform-Team',
     };
 
     // Apply tags to the entire stack
@@ -150,12 +149,14 @@ export class TapStack extends cdk.Stack {
       description: `IAM role for EC2 instances with S3 read-only access - ${environmentSuffix}`,
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonS3ReadOnlyAccess'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // For Systems Manager
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // For Systems Manager
       ],
     });
 
     // Instance Profile for EC2 instances
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
       instanceProfileName: `EC2InstanceProfile-${environmentSuffix}`,
       role: ec2Role,
     });
@@ -197,7 +198,7 @@ export class TapStack extends cdk.Stack {
       'yum install -y httpd',
       'systemctl start httpd',
       'systemctl enable httpd',
-      `echo "<h1>Production Web Server - Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html`,
+      'echo "<h1>Production Web Server - Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</h1>" > /var/www/html/index.html',
       `echo "<p>Environment: ${environmentSuffix}</p>" >> /var/www/html/index.html`,
       'echo "<p>Deployed with AWS CDK</p>" >> /var/www/html/index.html'
     );
@@ -205,7 +206,10 @@ export class TapStack extends cdk.Stack {
     // Launch Template for EC2 instances
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
       launchTemplateName: `LaunchTemplate-${environmentSuffix}`,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MEDIUM
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       securityGroup: ec2SecurityGroup,
       role: ec2Role,
@@ -222,20 +226,24 @@ export class TapStack extends cdk.Stack {
     });
 
     // Auto Scaling Group
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'AutoScalingGroup', {
-      autoScalingGroupName: `AutoScalingGroup-${environmentSuffix}`,
-      vpc,
-      launchTemplate,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      minCapacity: 2,
-      maxCapacity: 10,
-      desiredCapacity: 3,
-      healthCheck: autoscaling.HealthCheck.elb({
-        grace: cdk.Duration.seconds(300),
-      }),
-    });
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'AutoScalingGroup',
+      {
+        autoScalingGroupName: `AutoScalingGroup-${environmentSuffix}`,
+        vpc,
+        launchTemplate,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        minCapacity: 2,
+        maxCapacity: 10,
+        desiredCapacity: 3,
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.seconds(300),
+        }),
+      }
+    );
 
     // Add scaling policies
     autoScalingGroup.scaleOnCpuUtilization('CPUScaling', {
@@ -248,15 +256,19 @@ export class TapStack extends cdk.Stack {
     // =============================================================================
 
     // Application Load Balancer
-    const alb = new elbv2.ApplicationLoadBalancer(this, 'ApplicationLoadBalancer', {
-      loadBalancerName: `ApplicationLoadBalancer-${environmentSuffix}`,
-      vpc,
-      internetFacing: true,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
-      },
-      securityGroup: albSecurityGroup,
-    });
+    const alb = new elbv2.ApplicationLoadBalancer(
+      this,
+      'ApplicationLoadBalancer',
+      {
+        loadBalancerName: `ApplicationLoadBalancer-${environmentSuffix}`,
+        vpc,
+        internetFacing: true,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        securityGroup: albSecurityGroup,
+      }
+    );
 
     // Target Group for EC2 instances
     const targetGroup = new elbv2.ApplicationTargetGroup(this, 'TargetGroup', {
@@ -276,10 +288,8 @@ export class TapStack extends cdk.Stack {
     });
 
     // HTTPS Listener with SSL certificate (only if certificate is enabled)
-    let httpsListener: elbv2.ApplicationListener | undefined;
-
     if (certificate) {
-      httpsListener = alb.addListener('HTTPSListener', {
+      alb.addListener('HTTPSListener', {
         port: 443,
         protocol: elbv2.ApplicationProtocol.HTTPS,
         certificates: [certificate],
@@ -288,18 +298,17 @@ export class TapStack extends cdk.Stack {
     }
 
     // HTTP Listener - redirect to HTTPS if certificate exists, otherwise serve directly
-    const httpListener = alb.addListener('HTTPListener', {
+    alb.addListener('HTTPListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultAction: certificate
         ? elbv2.ListenerAction.redirect({
-          protocol: 'HTTPS',
-          port: '443',
-          permanent: true,
-        })
+            protocol: 'HTTPS',
+            port: '443',
+            permanent: true,
+          })
         : elbv2.ListenerAction.forward([targetGroup]),
     });
-
     // =============================================================================
     // DATABASE - RDS POSTGRESQL
     // =============================================================================
@@ -329,7 +338,10 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.M5,
+        ec2.InstanceSize.LARGE
+      ),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -345,7 +357,7 @@ export class TapStack extends cdk.Stack {
       multiAz: true, // High availability
       autoMinorVersionUpgrade: true,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: false,
+      deletionProtection: true,
       parameterGroup: dbParameterGroup,
       monitoringInterval: cdk.Duration.seconds(60),
       enablePerformanceInsights: true,
