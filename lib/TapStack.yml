@@ -353,7 +353,7 @@ Resources:
   # ============================================================================
   # Database Security (RDS with KMS)
   # ============================================================================
-  KMSKeyForRDS:
+  KMSKey:
     Type: AWS::KMS::Key
     Properties:
       Description: 'KMS key for RDS encryption'
@@ -363,7 +363,20 @@ Resources:
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
-            Action: 'kms:*'
+            Action:
+              - 'kms:CreateKey'
+              - 'kms:Decrypt'
+              - 'kms:Encrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:ReEncrypt*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+              - 'kms:GetKeyPolicy'
+              - 'kms:GetKeyRotationStatus'
+              - 'kms:ListResourceTags'
+              - 'kms:PutKeyPolicy'
+              - 'kms:ScheduleKeyDeletion'
+              - 'kms:CancelKeyDeletion'
             Resource: '*'
           - Sid: Allow RDS Service
             Effect: Allow
@@ -385,7 +398,7 @@ Resources:
     Type: AWS::KMS::Alias
     Properties:
       AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-rds-key'
-      TargetKeyId: !Ref KMSKeyForRDS
+      TargetKeyId: !Ref KMSKey
 
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -425,7 +438,25 @@ Resources:
         - Key: Project
           Value: !Ref ProjectName
 
-  DatabaseInstance:
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${ProjectName}-${EnvironmentSuffix}-db-credentials'
+      Description: 'Database credentials for RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "admin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
+  Database:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-database'
@@ -435,9 +466,11 @@ Resources:
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
-      KmsKeyId: !Ref KMSKeyForRDS
+      KmsKeyId: !Ref KMSKey
       MasterUsername: admin
-      MasterUserPassword: !Sub '${ProjectName}${EnvironmentSuffix}Password123!'
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        SecretArn: !Ref DBSecret
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
@@ -701,13 +734,13 @@ Outputs:
 
   DatabaseEndpoint:
     Description: 'RDS database endpoint'
-    Value: !GetAtt DatabaseInstance.Endpoint.Address
+    Value: !GetAtt Database.Endpoint.Address
     Export:
       Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
 
   KMSKeyId:
     Description: 'KMS Key ID for RDS encryption'
-    Value: !Ref KMSKeyForRDS
+    Value: !Ref KMSKey
     Export:
       Name: !Sub '${AWS::StackName}-KMSKey'
 
