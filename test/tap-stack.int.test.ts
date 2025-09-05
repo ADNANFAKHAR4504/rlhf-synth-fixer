@@ -608,7 +608,7 @@ describe('Secure Infrastructure Integration Tests', () => {
       // Debug: Show what outputs we have
       if (Object.keys(outputs).length === 0) {
         console.error('❌ No outputs loaded! Available outputs:', outputs);
-        fail('Outputs file is empty or not loaded properly');
+        throw new Error('Outputs file is empty or not loaded properly');
       }
 
       // Check VPC exists
