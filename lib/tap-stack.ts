@@ -17,7 +17,8 @@ import { Construct } from 'constructs';
 export interface TapStackProps extends cdk.StackProps {
   projectName: string;
   environment: string;
-  vpcId: string;
+  vpcId?: string; // Make optional
+  environmentSuffix?: string;
 }
 
 export class TapStack extends cdk.Stack {
@@ -27,16 +28,20 @@ export class TapStack extends cdk.Stack {
   public readonly guardDuty: guardduty.CfnDetector;
   public readonly webAcl: wafv2.CfnWebACL;
   public readonly remediationFunction: lambda.Function;
+  public readonly vpc: ec2.IVpc;
 
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    const { projectName, environment, vpcId } = props;
+    const { projectName, environment, vpcId, environmentSuffix = '' } = props;
 
-    // Import existing VPC
-    const vpc = ec2.Vpc.fromLookup(this, 'ExistingVPC', {
-      vpcId: vpcId,
-    });
+    // Get or create VPC
+    this.vpc = this.getOrCreateVpc(
+      projectName,
+      environment,
+      environmentSuffix,
+      vpcId
+    );
 
     // Create KMS Key for encryption
     this.kmsKey = this.createKMSKey(projectName, environment);
@@ -48,7 +53,7 @@ export class TapStack extends cdk.Stack {
     this.cloudTrail = this.createCloudTrail(projectName, environment);
 
     // Setup AWS Config
-    this.createConfigSetup(projectName, environment, vpc);
+    this.createConfigSetup(projectName, environment);
 
     // Setup GuardDuty
     this.guardDuty = this.createGuardDuty(projectName, environment);
@@ -73,6 +78,145 @@ export class TapStack extends cdk.Stack {
 
     // Apply tags to all resources
     this.applyTags(projectName, environment);
+
+    // Output VPC ID for reference
+    new cdk.CfnOutput(this, 'SecurityVpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID used by security stack',
+    });
+    new cdk.CfnOutput(this, 'SecurityVpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID used by security stack',
+    });
+
+    new cdk.CfnOutput(this, 'SecurityVpcCidr', {
+      value: this.vpc.vpcCidrBlock,
+      description: 'VPC CIDR block',
+    });
+
+    // KMS Outputs
+    new cdk.CfnOutput(this, 'KmsKeyId', {
+      value: this.kmsKey.keyId,
+      description: 'KMS Key ID for encryption',
+    });
+
+    new cdk.CfnOutput(this, 'KmsKeyArn', {
+      value: this.kmsKey.keyArn,
+      description: 'KMS Key ARN',
+    });
+
+    // S3 Outputs
+    new cdk.CfnOutput(this, 'SecurityBucketName', {
+      value: this.securityBucket.bucketName,
+      description: 'Security logs bucket name',
+    });
+
+    new cdk.CfnOutput(this, 'SecurityBucketArn', {
+      value: this.securityBucket.bucketArn,
+      description: 'Security logs bucket ARN',
+    });
+
+    new cdk.CfnOutput(this, 'CloudTrailArn', {
+      value: this.cloudTrail.trailArn,
+      description: 'CloudTrail ARN',
+    });
+
+    // GuardDuty Output
+    new cdk.CfnOutput(this, 'GuardDutyDetectorId', {
+      value: this.guardDuty.attrId,
+      description: 'GuardDuty detector ID',
+    });
+
+    // WAF Output
+    new cdk.CfnOutput(this, 'WebAclId', {
+      value: this.webAcl.attrId,
+      description: 'WAF Web ACL ID',
+    });
+
+    new cdk.CfnOutput(this, 'WebAclArn', {
+      value: this.webAcl.attrArn,
+      description: 'WAF Web ACL ARN',
+    });
+
+    // Lambda Outputs
+    new cdk.CfnOutput(this, 'RemediationFunctionName', {
+      value: this.remediationFunction.functionName,
+      description: 'Remediation Lambda function name',
+    });
+
+    new cdk.CfnOutput(this, 'RemediationFunctionArn', {
+      value: this.remediationFunction.functionArn,
+      description: 'Remediation Lambda function ARN',
+    });
+
+    // IAM Role Outputs (for testing access)
+    new cdk.CfnOutput(this, 'RemediationRoleArn', {
+      value: this.remediationFunction.role?.roleArn || '',
+      description: 'Remediation Lambda role ARN',
+    });
+
+    // Config Outputs
+    new cdk.CfnOutput(this, 'ConfigRecorderName', {
+      value: `${projectName}-${environment}-config-recorder`,
+      description: 'AWS Config recorder name',
+    });
+
+    // SSM Outputs
+    new cdk.CfnOutput(this, 'PatchBaselineId', {
+      value: `/${projectName}-${environment}-security-patch-baseline`,
+      description: 'SSM Patch Baseline ID',
+    });
+
+    // Regional Output
+    new cdk.CfnOutput(this, 'Region', {
+      value: this.region,
+      description: 'AWS region where resources are deployed',
+    });
+
+    new cdk.CfnOutput(this, 'AccountId', {
+      value: this.account,
+      description: 'AWS account ID',
+    });
+  }
+
+  private getOrCreateVpc(
+    projectName: string,
+    environment: string,
+    environmentSuffix: string,
+    vpcId?: string
+  ): ec2.IVpc {
+    if (vpcId) {
+      try {
+        // Try to import existing VPC
+        return ec2.Vpc.fromLookup(this, 'ExistingVPC', {
+          vpcId: vpcId,
+        });
+      } catch (error) {
+        console.warn(
+          `VPC ${vpcId} not found, creating new VPC for security stack`
+        );
+      }
+    }
+
+    // Create new VPC for security stack
+    return new ec2.Vpc(this, `${projectName}-${environment}-security-vpc`, {
+      vpcName: `corp-${projectName}-security-vpc${environmentSuffix}`,
+      maxAzs: 2,
+      ipAddresses: ec2.IpAddresses.cidr('10.1.0.0/16'), // Different CIDR than main stack
+      natGateways: 1,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
   }
 
   private createKMSKey(projectName: string, environment: string): kms.Key {
@@ -103,6 +247,13 @@ export class TapStack extends cdk.Stack {
               actions: ['kms:GenerateDataKey', 'kms:DescribeKey'],
               resources: ['*'],
             }),
+            new iam.PolicyStatement({
+              sid: 'Allow Config to encrypt logs',
+              effect: iam.Effect.ALLOW,
+              principals: [new iam.ServicePrincipal('config.amazonaws.com')],
+              actions: ['kms:GenerateDataKey', 'kms:DescribeKey'],
+              resources: ['*'],
+            }),
           ],
         }),
       }
@@ -119,7 +270,8 @@ export class TapStack extends cdk.Stack {
       this,
       `${projectName}-${environment}-security-logs-bucket`,
       {
-        bucketName: `${projectName}-${environment}-security-logs-${this.account}`,
+        bucketName:
+          `${projectName}-${environment}-security-logs-${this.account}`.toLowerCase(),
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: this.kmsKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -205,22 +357,20 @@ export class TapStack extends cdk.Stack {
     ]);
 
     // Log all management events
-    trail.logAllS3DataEvents(); // Optional: if you want S3 data events
-    trail.logAllLambdaDataEvents(); // Optional: if you want Lamb
+    trail.logAllS3DataEvents();
+    trail.logAllLambdaDataEvents();
+
     return trail;
   }
 
-  private createConfigSetup(
-    projectName: string,
-    environment: string,
-    _vpc: ec2.IVpc // VPC is intentionally unused in this method
-  ): void {
+  private createConfigSetup(projectName: string, environment: string): void {
     // Create Config delivery channel bucket
     const configBucket = new s3.Bucket(
       this,
       `${projectName}-${environment}-config-bucket`,
       {
-        bucketName: `${projectName}-${environment}-config-${this.account}`,
+        bucketName:
+          `${projectName}-${environment}-config-${this.account}`.toLowerCase(),
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: this.kmsKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -261,6 +411,11 @@ export class TapStack extends cdk.Stack {
                   },
                 },
               }),
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['kms:GenerateDataKey', 'kms:Decrypt'],
+                resources: [this.kmsKey.keyArn],
+              }),
             ],
           }),
         },
@@ -289,6 +444,9 @@ export class TapStack extends cdk.Stack {
         name: `${projectName}-${environment}-config-delivery`,
         s3BucketName: configBucket.bucketName,
         s3KeyPrefix: 'config/',
+        configSnapshotDeliveryProperties: {
+          deliveryFrequency: 'Twelve_Hours',
+        },
       }
     );
 
@@ -339,6 +497,26 @@ export class TapStack extends cdk.Stack {
         configRuleName: `${projectName}-${environment}-mfa-enabled-for-iam-console-access`,
         identifier:
           config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
+      }
+    );
+
+    // Encrypted volumes
+    new config.ManagedRule(
+      this,
+      `${projectName}-${environment}-encrypted-volumes`,
+      {
+        configRuleName: `${projectName}-${environment}-encrypted-volumes`,
+        identifier: config.ManagedRuleIdentifiers.EC2_EBS_ENCRYPTION_BY_DEFAULT,
+      }
+    );
+
+    // RDS storage encrypted
+    new config.ManagedRule(
+      this,
+      `${projectName}-${environment}-rds-storage-encrypted`,
+      {
+        configRuleName: `${projectName}-${environment}-rds-storage-encrypted`,
+        identifier: config.ManagedRuleIdentifiers.RDS_STORAGE_ENCRYPTED,
       }
     );
   }
@@ -399,7 +577,7 @@ export class TapStack extends cdk.Stack {
       this,
       `${projectName}-${environment}-web-acl`,
       {
-        scope: 'CLOUDFRONT',
+        scope: 'REGIONAL', // Changed from CLOUDFRONT to REGIONAL for broader compatibility
         defaultAction: { allow: {} },
         name: `${projectName}-${environment}-web-acl`,
         description: 'Web ACL for application protection',
@@ -503,44 +681,34 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Create application-specific roles with least privilege
-    const appRole = new iam.Role(
+    // Create security monitoring role
+    const securityMonitoringRole = new iam.Role(
       this,
-      `${projectName}-${environment}-app-role`,
+      `${projectName}-${environment}-security-monitoring-role`,
       {
-        roleName: `${projectName}-${environment}-app-role`,
-        assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+        roleName: `${projectName}-${environment}-security-monitoring-role`,
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'CloudWatchAgentServerPolicy'
-          ),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('SecurityAudit'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
         ],
         inlinePolicies: {
-          AppSpecificPolicy: new iam.PolicyDocument({
+          SecurityMonitoringPolicy: new iam.PolicyDocument({
             statements: [
               new iam.PolicyStatement({
                 effect: iam.Effect.ALLOW,
-                actions: ['s3:GetObject', 's3:PutObject'],
-                resources: [`${this.securityBucket.bucketArn}/app-data/*`],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-                resources: [this.kmsKey.keyArn],
+                actions: [
+                  'guardduty:GetFindings',
+                  'guardduty:ListDetectors',
+                  'config:DescribeComplianceByConfigRule',
+                  'config:DescribeConfigRules',
+                  'cloudtrail:LookupEvents',
+                ],
+                resources: ['*'],
               }),
             ],
           }),
         },
-      }
-    );
-
-    // Create instance profile for EC2
-    new iam.CfnInstanceProfile(
-      this,
-      `${projectName}-${environment}-app-instance-profile`,
-      {
-        instanceProfileName: `${projectName}-${environment}-app-instance-profile`,
-        roles: [appRole.roleName],
       }
     );
   }
@@ -679,6 +847,7 @@ export class TapStack extends cdk.Stack {
                   'iam:AttachRolePolicy',
                   'iam:DetachRolePolicy',
                   'config:PutEvaluations',
+                  'rds:ModifyDBInstance',
                 ],
                 resources: ['*'],
               }),
@@ -726,6 +895,8 @@ def handler(event, context):
             remediate_s3_bucket(resource_id)
         elif resource_type == 'AWS::EC2::Instance':
             remediate_ec2_instance(resource_id)
+        elif resource_type == 'AWS::RDS::DBInstance':
+            remediate_rds_instance(resource_id)
         
         return {
             'statusCode': 200,
@@ -765,6 +936,21 @@ def remediate_ec2_instance(instance_id):
     # Enable detailed monitoring if not already enabled
     ec2.monitor_instances(InstanceIds=[instance_id])
     logger.info(f"Enabled detailed monitoring for instance: {instance_id}")
+
+def remediate_rds_instance(instance_id):
+    """Remediate RDS instance security issues"""
+    rds = boto3.client('rds')
+    
+    # Enable storage encryption if not enabled
+    try:
+        rds.modify_db_instance(
+            DBInstanceIdentifier=instance_id,
+            StorageEncrypted=True,
+            ApplyImmediately=True
+        )
+        logger.info(f"Enabled storage encryption for RDS instance: {instance_id}")
+    except Exception as e:
+        logger.warning(f"Could not enable encryption for RDS instance {instance_id}: {e}")
 `),
       }
     );
