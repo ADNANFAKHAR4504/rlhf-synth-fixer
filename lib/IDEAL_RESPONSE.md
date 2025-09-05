@@ -1019,7 +1019,7 @@ resource "aws_iam_policy" "ec2_policy" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/*"
+        Resource = "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ec2/*"
       },
       {
         Effect = "Allow"
@@ -1150,7 +1150,10 @@ resource "aws_lb" "main" {
     Name = "${local.name_prefix}-alb"
   })
 
-  depends_on = [aws_s3_bucket_policy.logs_bucket_policy]
+  depends_on = [
+    aws_s3_bucket_policy.logs_bucket_policy,
+    aws_s3_bucket_public_access_block.logs_bucket
+  ]
 }
 
 # Self-signed certificate for HTTPS (for demo purposes)

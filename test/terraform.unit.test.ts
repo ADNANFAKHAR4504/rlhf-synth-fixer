@@ -329,9 +329,9 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
     });
 
     test("auto scaling group has proper scaling configuration", () => {
-      expect(terraformContent).toMatch(/min_size\s*=\s*1/);
-      expect(terraformContent).toMatch(/max_size\s*=\s*1/);
-      expect(terraformContent).toMatch(/desired_capacity\s*=\s*1/);
+      expect(terraformContent).toMatch(/min_size\s*=\s*2/);
+      expect(terraformContent).toMatch(/max_size\s*=\s*4/);
+      expect(terraformContent).toMatch(/desired_capacity\s*=\s*2/);
     });
   });
 
@@ -524,8 +524,8 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
   // Performance and scalability
   describe("Performance and Scalability Configuration", () => {
     test("auto scaling is properly configured", () => {
-      expect(terraformContent).toMatch(/min_size\s*=\s*1/);
-      expect(terraformContent).toMatch(/max_size\s*=\s*1/);
+      expect(terraformContent).toMatch(/min_size\s*=\s*2/);
+      expect(terraformContent).toMatch(/max_size\s*=\s*4/);
       expect(terraformContent).toMatch(/health_check_type\s*=\s*"ELB"/);
     });
 
