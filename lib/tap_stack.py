@@ -113,6 +113,7 @@ class TapStack(cdk.Stack):
             object_lock_enabled=True,  # Must be enabled at creation
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,  # Required for OAC
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
         )
@@ -304,19 +305,14 @@ exports.handler = async (event) => {
         usage_plan.add_api_key(api_key)
         usage_plan.add_api_stage(stage=api.deployment_stage)
 
-        # CloudFront Origin Access Control
-        oac = cloudfront.S3OriginAccessControl(
-            self, "OAC", description="OAC for processed data bucket"
-        )
+        # CloudFront will auto-create OAC with S3BucketOrigin.with_origin_access_control()
 
         # CloudFront Distribution
         distribution = cloudfront.Distribution(
             self,
             "ProcessedDataDistribution",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3Origin(
-                    bucket, origin_access_control_id=oac.origin_access_control_id
-                ),
+                origin=origins.S3BucketOrigin.with_origin_access_control(bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
                 allowed_methods=cloudfront.AllowedMethods.ALLOW_GET_HEAD,
                 cached_methods=cloudfront.CachedMethods.CACHE_GET_HEAD,
@@ -324,24 +320,7 @@ exports.handler = async (event) => {
             price_class=cloudfront.PriceClass.PRICE_CLASS_100,
         )
 
-        # Update S3 bucket policy to allow CloudFront OAC
-        bucket.add_to_resource_policy(
-            iam.PolicyStatement(
-                sid="AllowCloudFrontServicePrincipal",
-                effect=iam.Effect.ALLOW,
-                principals=[iam.ServicePrincipal("cloudfront.amazonaws.com")],
-                actions=["s3:GetObject"],
-                resources=[bucket.bucket_arn + "/*"],
-                conditions={
-                    "StringEquals": {
-                        "AWS:SourceArn": (
-                            f"arn:aws:cloudfront::{self.account}:distribution/"
-                            f"{distribution.distribution_id}"
-                        )
-                    }
-                },
-            )
-        )
+        # S3 bucket policy is automatically configured by S3BucketOrigin.with_origin_access_control()
 
         # Apply tags to all resources
         Tags.of(self).add("Environment", "Production")
