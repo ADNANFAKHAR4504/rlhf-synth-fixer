@@ -32,6 +32,8 @@ import { cloudtrail } from '@cdktf/provider-aws';
 
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+
 
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 
@@ -344,7 +346,7 @@ export class ComputeModule extends Construct {
         // Enable detailed monitoring for better observability
         monitoring: true,
         // Ensure instance is replaced if user data changes
-        userData: Buffer.from(
+        userDataBase64: Buffer.from(
           `#!/bin/bash
           yum update -y
           yum install -y amazon-cloudwatch-agent
@@ -804,9 +806,10 @@ export class MonitoringModule extends Construct {
     super(scope, id);
 
     // Get current AWS account ID dynamically
-    const accountId =
-      process.env.CDK_DEFAULT_ACCOUNT || '${aws:PrincipalAccount}';
     const region = config.region;
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+    const accountId = callerIdentity.accountId;
+
 
     // KMS key for CloudTrail encryption with corrected policy
     this.kmsKey = new KmsKey(this, 'cloudtrail-kms-key', {
