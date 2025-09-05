@@ -304,10 +304,10 @@ export class TapStack extends cdk.Stack {
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultAction: certificate
         ? elbv2.ListenerAction.redirect({
-          protocol: 'HTTPS',
-          port: '443',
-          permanent: true,
-        })
+            protocol: 'HTTPS',
+            port: '443',
+            permanent: true,
+          })
         : elbv2.ListenerAction.forward([targetGroup]),
     });
     // =============================================================================
