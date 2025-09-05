@@ -481,15 +481,19 @@ export class TapStack extends cdk.Stack {
         s3KeyPrefix: 'config/',
       }
     );
+
+    // ✅ Ensure delivery channel is created after recorder
     deliveryChannel.addDependency(configRecorder);
 
-    // compliance rules depend on recorder being available
-    this.createConfigRules(environmentSuffix);
+    // ✅ Ensure config rules wait for delivery channel
+    this.createConfigRules(environmentSuffix, deliveryChannel);
   }
 
-  private createConfigRules(environmentSuffix: string): void {
-    // S3 bucket public read prohibited
-    new config.ManagedRule(
+  private createConfigRules(
+    environmentSuffix: string,
+    dependency: cdk.CfnResource
+  ): void {
+    const rule1 = new config.ManagedRule(
       this,
       `TapS3PublicReadProhibited-${environmentSuffix}`,
       {
@@ -498,21 +502,19 @@ export class TapStack extends cdk.Stack {
           config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
       }
     );
+    rule1.node.addDependency(dependency);
 
-    // S3 bucket public write prohibited
-    // new config.ManagedRule(this, `TapS3PublicWriteProhibited-${environmentSuffix}`, {
-    //   configRuleName: `tap-s3-bucket-public-write-prohibited-${environmentSuffix}`,
-    //   // identifier: config.ManagedRuleIdentifiers.S3_BUCKET_PPUBLIC_WRITE_PROHIBITED
-    // });
+    const rule2 = new config.ManagedRule(
+      this,
+      `TapRootAccessKeyCheck-${environmentSuffix}`,
+      {
+        configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
+        identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
+      }
+    );
+    rule2.node.addDependency(dependency);
 
-    // Root access key check
-    new config.ManagedRule(this, `TapRootAccessKeyCheck-${environmentSuffix}`, {
-      configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
-      identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
-    });
-
-    // MFA enabled for IAM console access
-    new config.ManagedRule(
+    const rule3 = new config.ManagedRule(
       this,
       `TapMfaEnabledForIamConsole-${environmentSuffix}`,
       {
@@ -521,6 +523,7 @@ export class TapStack extends cdk.Stack {
           config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
       }
     );
+    rule3.node.addDependency(dependency);
   }
 
   private createGuardDuty(environmentSuffix: string, kmsKey: kms.Key): void {
