@@ -432,7 +432,6 @@ export class TapStack extends cdk.Stack {
     vpc: ec2.IVpc,
     kmsKey: kms.Key
   ): void {
-    // Create Config delivery channel bucket
     const configBucket = new s3.Bucket(
       this,
       `TapConfigBucket-${environmentSuffix}`,
@@ -448,7 +447,6 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Create Config role
     const configRole = new iam.Role(
       this,
       `TapConfigRole-${environmentSuffix}`,
@@ -458,35 +456,9 @@ export class TapStack extends cdk.Stack {
         managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
         ],
-        inlinePolicies: {
-          ConfigDeliveryPermissions: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetBucketAcl',
-                  's3:ListBucket',
-                  's3:GetBucketLocation',
-                ],
-                resources: [configBucket.bucketArn],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['s3:PutObject'],
-                resources: [`${configBucket.bucketArn}/*`],
-                conditions: {
-                  StringEquals: {
-                    's3:x-amz-acl': 'bucket-owner-full-control',
-                  },
-                },
-              }),
-            ],
-          }),
-        },
       }
     );
 
-    // Create Config configuration recorder
     const configRecorder = new config.CfnConfigurationRecorder(
       this,
       `TapConfigRecorder-${environmentSuffix}`,
@@ -500,7 +472,6 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Create Config delivery channel
     const deliveryChannel = new config.CfnDeliveryChannel(
       this,
       `TapConfigDelivery-${environmentSuffix}`,
@@ -510,10 +481,9 @@ export class TapStack extends cdk.Stack {
         s3KeyPrefix: 'config/',
       }
     );
-
     deliveryChannel.addDependency(configRecorder);
 
-    // Create compliance rules
+    // compliance rules depend on recorder being available
     this.createConfigRules(environmentSuffix);
   }
 
