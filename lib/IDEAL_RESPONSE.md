@@ -874,6 +874,13 @@ resource "aws_iam_policy" "ec2_policy" {
       {
         Effect = "Allow"
         Action = [
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
@@ -1135,9 +1142,8 @@ resource "aws_launch_template" "app" {
     device_name = "/dev/xvda"
     ebs {
       volume_size           = 20
-      volume_type          = "gp3"
-      encrypted            = true
-      kms_key_id          = aws_kms_key.main.arn
+      volume_type           = "gp3"
+      encrypted             = true
       delete_on_termination = true
     }
   }
@@ -1224,7 +1230,6 @@ resource "aws_instance" "bastion" {
     volume_type = "gp3"
     volume_size = 8
     encrypted   = true
-    kms_key_id = aws_kms_key.main.arn
   }
 
   user_data = <<-EOF
