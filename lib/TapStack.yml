@@ -13,6 +13,7 @@ Metadata:
           - PrivateDbSubnetCidrs
       - Label: { default: "EC2 Configuration" }
         Parameters:
+          - AmiId
           - InstanceType
           - KeyName
           - DesiredCapacity
@@ -30,6 +31,7 @@ Metadata:
     ParameterLabels:
       VpcCidr: { default: "VPC CIDR Block" }
       AZs: { default: "Availability Zones" }
+      AmiId: { default: "Amazon Linux 2 AMI (SSM Alias)" }
       InstanceType: { default: "EC2 Instance Type" }
       DbUsername: { default: "Database Username" }
       KeyName: { default: "EC2 Key Pair (optional)" }
@@ -62,6 +64,12 @@ Parameters:
     Default: '10.0.30.0/24,10.0.40.0/24'
     Description: 'CIDR blocks for private DB subnets'
 
+  # Properly initialized AMI parameter (SSM alias) that exists in us-east-1
+  AmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Amazon Linux 2 AMI ID from SSM Parameter Store (leave default)'
+
   InstanceType:
     Type: String
     Default: 't3.micro'
@@ -75,7 +83,7 @@ Parameters:
       - m5.xlarge
     Description: 'EC2 instance type'
 
-  # NOTE: Make KeyName optional to avoid validation failures when not provided
+  # Optional; omitted from LT if left empty (prevents validation failure)
   KeyName:
     Type: String
     Default: ''
@@ -560,7 +568,7 @@ Resources:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp3}}'
+        ImageId: !Ref AmiId
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
         IamInstanceProfile: { Name: !Ref InstanceProfile }
