@@ -325,10 +325,20 @@ resource "aws_s3_bucket_public_access_block" "main_usw2" {
   restrict_public_buckets = false
 }
 
+resource "aws_s3_account_public_access_block" "account" {
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
 resource "aws_s3_bucket_policy" "main_use1" {
   provider   = aws.use1
   bucket     = aws_s3_bucket.main_use1.id
-  depends_on = [aws_s3_bucket_public_access_block.main_use1]
+  depends_on = [
+    aws_s3_bucket_public_access_block.main_use1,
+    aws_s3_account_public_access_block.account,
+  ]
   
   policy = jsonencode({
     Version = "2012-10-17"
@@ -347,7 +357,10 @@ resource "aws_s3_bucket_policy" "main_use1" {
 resource "aws_s3_bucket_policy" "main_usw2" {
   provider   = aws.usw2
   bucket     = aws_s3_bucket.main_usw2.id
-  depends_on = [aws_s3_bucket_public_access_block.main_usw2]
+  depends_on = [
+    aws_s3_bucket_public_access_block.main_use1,
+    aws_s3_account_public_access_block.account,
+  ]
   
   policy = jsonencode({
     Version = "2012-10-17"
