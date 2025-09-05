@@ -345,11 +345,13 @@ Resources:
   #########################################
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: LoggingBucketPolicy
     Properties:
       S3BucketName: !Ref LoggingBucket
       IsLogging: true
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
+
 
   #########################################
   # AWS Config Role + Recorder (without DeliveryChannel)
