@@ -169,6 +169,78 @@ After running the CLI, you'll have:
 - **metadata.json**: Contains task metadata (platform, language, complexity, turn type, task ID)
 - **Project files**: Copied from the selected template (bin/, lib/, test/, cdk.json)
 
+## Commit Message Guidelines
+
+To maintain a clear and consistent commit history, we adhere to the [Conventional Commits](https://www.conventionalcommits.org/) specification. This helps in automating changelog generation and understanding the nature of changes at a glance.
+
+### Format
+
+Each commit message consists of a **header**, a **body**, and a **footer**.
+
+```
+<type>(<scope>): <subject>
+<BLANK LINE>
+<body>
+<BLANK LINE>
+<footer>
+```
+
+**Note:** The body of the commit message has a line length limit of 100 characters.
+
+### Example
+
+#### For a new feature:
+
+```
+feat(lambda): TASK-123 - Add support for S3 event triggers
+
+- Implemented a new Lambda function that processes images uploaded to the `images` S3 bucket.
+- The function resizes images to 100x100 and saves them to the `thumbnails` bucket.
+```
+
+#### For a bug fix:
+
+```
+fix(api): TASK-456 - Correct the endpoint for user profile updates
+
+- The `PUT /users/{id}` endpoint was incorrectly pointing to the `createUser` function.
+- This has been corrected to point to the `updateUser` function.
+```
+
+### Types
+
+The following are the most common types to use:
+
+- **feat**: A new Task. (Appears in the changelog)
+- **fix**: A fix for a task. (Appears in the changelog)
+
+### Other Types
+
+Commits with the following types will not appear in the changelog. Use these for internal changes, maintenance, or documentation.
+
+- **chore**: Changes to the build process or auxiliary tools.
+
+  ```
+  chore(deps): TASK-789 - Update dependency `some-library` to v2.0.0
+  ```
+
+- **ci**: Changes to CI configuration files and scripts.
+
+  ```
+  ci(github-actions): TASK-101 - Add a new step to run linting
+  ```
+
+- **docs**: Documentation only changes.
+
+  ```
+  docs(readme): TASK-112 - Update the setup instructions
+  ```
+
+- **test**: Adding missing tests or correcting existing tests.
+  ```
+  test(lambda): TASK-314 - Add unit tests for the S3 event handler
+  ```
+
 ## Development Commands
 
 ### Build and Test Commands
@@ -196,6 +268,7 @@ After running the CLI, you'll have:
 - `npm run cfn:destroy-json` destroy CloudFormation JSON stack and all resources
 
 ### Terraform Commands
+
 Quick Note:
 Install terraform cli on your computer: https://developer.hashicorp.com/terraform/tutorials/aws-get-started/install-cli
 
@@ -222,6 +295,7 @@ Install terraform cli on your computer: https://developer.hashicorp.com/terrafor
 If you don't have Java installed or need Java 17:
 
 **Option 1: Using SDKMAN (Recommended)**
+
 ```bash
 # Install SDKMAN
 curl -s "https://get.sdkman.io" | bash
@@ -238,12 +312,14 @@ java -version  # Should show Java 17
 **Option 2: Using Package Managers**
 
 On macOS:
+
 ```bash
 brew install openjdk@17
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 ```
 
 On Ubuntu/Debian:
+
 ```bash
 sudo apt update
 sudo apt install openjdk-17-jdk
@@ -251,6 +327,7 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ```
 
 On Windows:
+
 - Download OpenJDK 17 from [Adoptium](https://adoptium.net/)
 - Install and set JAVA_HOME environment variable
 
@@ -272,6 +349,7 @@ On Windows:
 #### Java Testing Commands
 
 **Unit Tests:**
+
 ```bash
 # Run all unit tests (shows pass/fail results)
 ./gradlew test
@@ -287,6 +365,7 @@ On Windows:
 ```
 
 **Integration Tests:**
+
 ```bash
 # Run integration tests
 ./gradlew integrationTest
@@ -303,6 +382,7 @@ On Windows:
 
 **Test Reports:**
 After running tests, reports are available at:
+
 - Unit test report: `build/reports/tests/test/index.html`
 - Integration test report: `build/reports/tests/integrationTest/index.html`
 - Coverage report: `build/reports/jacoco/test/html/index.html`
