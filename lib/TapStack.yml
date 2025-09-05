@@ -370,7 +370,7 @@ Resources:
           DataResources:
             - Type: 'AWS::S3::Object'
               Values: 
-                - !Sub '${ApplicationBucket}/*'
+                - !Sub 'arn:aws:s3:::${ApplicationBucket}/*'
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
