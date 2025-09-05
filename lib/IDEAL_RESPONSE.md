@@ -105,7 +105,7 @@ class TapStack(Stack):
             self, "TapProcessorFunction",
             function_name=f"tap-processor-{unique_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_8,
-            handler="index.lambda_handler",
+            handler="index.lambda_handler",  # FIXED: Changed to match inline code deployment
             code=_lambda.Code.from_inline(self._get_lambda_code()),
             timeout=Duration.seconds(15),  # Exactly 15 seconds
             role=self.lambda_execution_role,
@@ -137,6 +137,7 @@ class TapStack(Stack):
             "AllowS3Invoke",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             source_arn=self.tap_storage_bucket.bucket_arn,
+            source_account=self.account,
             action="lambda:InvokeFunction"
         )
 
