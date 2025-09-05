@@ -87,6 +87,7 @@ terraform {
     // Generate plan file for tests that need it
     try {
       const testVars = `
+terraform_test_mode = true
 aws_region = "us-east-1"
 project_name = "test-project"
 allowed_ssh_cidr = "10.0.0.1/32"
@@ -140,6 +141,7 @@ sns_https_endpoint = "https://hooks.slack.com/test"
       () => {
         // Create a local tfvars file for testing to avoid backend issues
         const testVars = `
+terraform_test_mode = true
 aws_region = "us-east-1"
 project_name = "test-project"
 allowed_ssh_cidr = "10.0.0.1/32"
@@ -250,6 +252,7 @@ sns_https_endpoint = "https://hooks.slack.com/test"
         // Since we're using local backend, we'll test with variables instead
         // Create staging vars
         const stagingVars = `
+terraform_test_mode = true
 aws_region = "us-east-1"
 project_name = "staging-project"
 `;
@@ -347,7 +350,7 @@ project_name = "staging-project"
       'invalid CIDR blocks are rejected',
       () => {
         expect(() => {
-          execSync('terraform plan -var="allowed_ssh_cidr=invalid-cidr"', {
+          execSync('terraform plan -var="terraform_test_mode=true" -var="allowed_ssh_cidr=invalid-cidr"', {
             stdio: 'pipe',
             cwd: TF_DIR,
           });
@@ -361,7 +364,7 @@ project_name = "staging-project"
       () => {
         expect(() => {
           execSync(
-            'terraform plan -var="sns_https_endpoint=http://example.com"',
+            'terraform plan -var="terraform_test_mode=true" -var="sns_https_endpoint=http://example.com"',
             {
               stdio: 'pipe',
               cwd: TF_DIR,
@@ -377,6 +380,7 @@ project_name = "staging-project"
       () => {
         // Create a test vars file with valid values
         const validVars = `
+terraform_test_mode = true
 allowed_ssh_cidr = "10.0.0.1/32"
 sns_https_endpoint = "https://hooks.slack.com/test"
 aws_region = "us-east-1"
@@ -404,6 +408,7 @@ project_name = "test-project"
       () => {
         // Create test vars for graph generation
         const testVars = `
+terraform_test_mode = true
 aws_region = "us-east-1"
 project_name = "test-project"
 `;
@@ -866,6 +871,7 @@ project_name = "test-project"
       () => {
         // Create test vars for performance test
         const testVars = `
+terraform_test_mode = true
 aws_region = "us-east-1"
 project_name = "perf-test"
 `;
@@ -898,6 +904,7 @@ project_name = "perf-test"
       () => {
         // Test staging configuration with variables
         const stagingVars = `
+terraform_test_mode = true
 aws_region = "us-east-1"
 project_name = "staging-test"
 `;
@@ -914,6 +921,7 @@ project_name = "staging-test"
 
         // Test production configuration with different variables
         const prodVars = `
+terraform_test_mode = true
 aws_region = "us-east-1"
 project_name = "production-test"
 `;
