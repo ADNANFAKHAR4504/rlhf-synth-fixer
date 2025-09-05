@@ -255,7 +255,7 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
     test("creates RDS instance with latest MySQL version", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
       expect(terraformContent).toMatch(/engine\s*=\s*"mysql"/);
-      expect(terraformContent).toMatch(/engine_version\s*=\s*"8\.0\.34"/);
+      expect(terraformContent).toMatch(/engine_version\s*=\s*"8\.0\.42"/);
     });
 
     test("RDS uses random password without special characters", () => {

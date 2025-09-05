@@ -891,7 +891,7 @@ resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-database"
 
   engine         = "mysql"
-  engine_version = "8.0.34"
+  engine_version = "8.0.42"
   instance_class = var.db_instance_class
 
   allocated_storage     = 20
@@ -1114,34 +1114,14 @@ resource "aws_launch_template" "app" {
     #!/bin/bash
     yum update -y
     yum install -y httpd
-    systemctl start httpd
     systemctl enable httpd
+    systemctl start httpd
     
     # Create health check endpoint
-    cat > /var/www/html/health << EOL
-{
-  "status": "healthy",
-  "timestamp": "\$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "instance": "\$(curl -s http://169.254.169.254/latest/meta-data/instance-id)",
-  "environment": "${var.environment}"
-}
-EOL
+    echo '{"status":"healthy"}' > /var/www/html/health
     
-    # Create simple index page
-    cat > /var/www/html/index.html << EOL
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Enterprise Security Framework - ${var.environment}</title>
-</head>
-<body>
-    <h1>Multi-Tier Web Application</h1>
-    <p>Environment: ${var.environment}</p>
-    <p>Instance ID: \$(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
-    <p>Timestamp: \$(date)</p>
-</body>
-</html>
-EOL
+    # Create basic index page
+    echo "<h1>Apache is running on \$(hostname -f)</h1>" > /var/www/html/index.html
   EOF
   )
 
