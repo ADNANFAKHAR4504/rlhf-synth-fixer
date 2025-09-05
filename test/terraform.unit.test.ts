@@ -274,7 +274,7 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
     });
 
     test("RDS has monitoring and backup configuration", () => {
-      expect(terraformContent).toMatch(/performance_insights_enabled\s*=\s*true/);
+      expect(terraformContent).toMatch(/performance_insights_enabled\s*=\s*false/);
       expect(terraformContent).toMatch(/backup_retention_period/);
       expect(terraformContent).toMatch(/monitoring_role_arn/);
     });
@@ -535,7 +535,7 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
     });
 
     test("monitoring and alerting configured", () => {
-      expect(terraformContent).toMatch(/performance_insights_enabled\s*=\s*true/);
+      expect(terraformContent).toMatch(/performance_insights_enabled\s*=\s*false/);
       expect(terraformContent).toMatch(/monitoring_interval\s*=\s*60/);
     });
   });

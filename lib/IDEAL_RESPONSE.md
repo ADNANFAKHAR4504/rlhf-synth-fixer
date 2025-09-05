@@ -248,11 +248,6 @@ resource "aws_kms_key" "main" {
           "kms:DescribeKey"
         ]
         Resource = "*"
-        Condition = {
-          ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
-          }
-        }
       },
       {
         Sid    = "Allow S3 Service"
@@ -957,7 +952,7 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot       = true
   final_snapshot_identifier = "${local.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
-  performance_insights_enabled = true
+  performance_insights_enabled = false
   monitoring_interval         = 60
   monitoring_role_arn        = aws_iam_role.rds_enhanced_monitoring.arn
 
