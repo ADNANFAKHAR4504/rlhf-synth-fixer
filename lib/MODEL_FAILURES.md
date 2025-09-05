@@ -1,4 +1,4 @@
-MODEL FAILURE DOCUMENTATION
+MODEL FAILURE DOCUMENTATION:
 
 OVERVIEW
 This document outlines common failure patterns and troubleshooting steps for the TAP-Stack infrastructure deployment.
