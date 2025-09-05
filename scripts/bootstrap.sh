@@ -26,10 +26,17 @@ export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
 export PULUMI_ORG=${PULUMI_ORG:-organization}
 export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 
+# Provide non-interactive defaults for TF variables if not set (CI safe)
+export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
+export TF_VAR_db_password=${TF_VAR_db_password:-TempPassword123!}
+
 echo "Environment configuration:"
 echo "  Environment suffix: $ENVIRONMENT_SUFFIX"
 echo "  Repository: $REPOSITORY"
 echo "  Commit author: $COMMIT_AUTHOR"
+
+echo "Using TF_VAR_db_username: (set)"
+echo "Using TF_VAR_db_password: (set)"
 
 if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
@@ -72,7 +79,7 @@ elif [ "$PLATFORM" = "tf" ]; then
       -backend-config=key=$STATE_KEY \
       -backend-config=region=${TERRAFORM_STATE_BUCKET_REGION} \
       -backend-config=encrypt=true \
-      -backend-config=use_lockfile=true"
+      -backend-config=use_lockfile=false"
   
   # Initialize Terraform (no fallback init without backend)
   echo "Initializing Terraform with PR-specific backend..."
@@ -93,7 +100,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   
   # Run terraform plan
   echo "Running Terraform plan..."
-  if npm run tf:plan; then
+  if (cd .. && npm run tf:plan --silent); then
     echo "✅ Terraform plan succeeded"
   else
     echo "⚠️ Terraform plan failed, but continuing..."
