@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348802",
+  "team": "3",
+  "startedAt": "2025-08-29T09:51:39.684Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "misra-s-turing",
+  "dockerS3Location": ""
+}

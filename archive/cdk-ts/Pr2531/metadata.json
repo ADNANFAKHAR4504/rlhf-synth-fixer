@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291945",
+  "team": "5",
+  "startedAt": "2025-09-01T05:52:00.519Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Database Management",
+    "Monitoring Setup",
+    "Performance Optimization",
+    "Security Configuration"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "Amazon CloudWatch Logs",
+    "AWS Application Auto Scaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}

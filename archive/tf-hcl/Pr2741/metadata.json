@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "354006",
+  "team": "5",
+  "startedAt": "2025-09-04T14:50:56.313Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Monitoring Setup",
+    "Access Control",
+    "Web Application Deployment"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS VPC",
+    "AWS EC2",
+    "AWS RDS",
+    "AWS S3",
+    "AWS IAM",
+    "AWS Lambda",
+    "AWS CloudWatch",
+    "AWS SNS",
+    "AWS EventBridge",
+    "AWS NAT Gateway",
+    "AWS Internet Gateway",
+    "AWS Security Groups",
+    "AWS EBS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sadaf-jamal-au27",
+  "dockerS3Location": ""
+}

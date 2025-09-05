@@ -1,0 +1,1375 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS CI/CD Pipeline Infrastructure with CodePipeline, CodeBuild, CodeDeploy and Elastic Beanstalk across multiple environments",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "Environment",
+            "Project",
+            "Owner",
+            "CostCenter"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Repository Configuration"
+          },
+          "Parameters": [
+            "GitHubRepository",
+            "GitHubBranch",
+            "GitHubOwner"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Notification Configuration"
+          },
+          "Parameters": [
+            "NotificationEmail"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming to avoid conflicts",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "Development",
+      "Description": "Environment name for tagging",
+      "AllowedValues": [
+        "Development",
+        "Testing",
+        "Production"
+      ]
+    },
+    "Project": {
+      "Type": "String",
+      "Default": "CICD-Pipeline",
+      "Description": "Project name for tagging"
+    },
+    "Owner": {
+      "Type": "String",
+      "Default": "DevOps-Team",
+      "Description": "Owner for tagging"
+    },
+    "CostCenter": {
+      "Type": "String",
+      "Default": "Engineering",
+      "Description": "Cost center for tagging"
+    },
+    "GitHubRepository": {
+      "Type": "String",
+      "Default": "my-application",
+      "Description": "GitHub repository name"
+    },
+    "GitHubBranch": {
+      "Type": "String",
+      "Default": "main",
+      "Description": "GitHub branch to track"
+    },
+    "GitHubOwner": {
+      "Type": "String",
+      "Default": "my-organization",
+      "Description": "GitHub repository owner"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Default": "devops@company.com",
+      "Description": "Email address for pipeline notifications",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "ConstraintDescription": "Must be a valid email address"
+    },
+    "PlatformType": {
+      "Type": "String",
+      "Default": "Python",
+      "Description": "Platform type for the application",
+      "AllowedValues": [
+        "Python",
+        "Node.js",
+        "Java"
+      ]
+    }
+  },
+  "Mappings": {
+    "PlatformMap": {
+      "Python": {
+        "SolutionStack": "64bit Amazon Linux 2023 v4.7.1 running Python 3.11"
+      },
+      "Node.js": {
+        "SolutionStack": "64bit Amazon Linux 2023 v6.6.4 running Node.js 20"
+      },
+      "Java": {
+        "SolutionStack": "64bit Amazon Linux 2023 v5.7.4 running Tomcat 11 Corretto 21"
+      }
+    }
+  },
+  "Resources": {
+    "PipelineKMSKey": {
+      "Type": "AWS::KMS::Key",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Description": "KMS Key for CI/CD Pipeline encryption",
+        "KeyPolicy": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "codepipeline.amazonaws.com",
+                  "codebuild.amazonaws.com",
+                  "s3.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:Encrypt",
+                "kms:GenerateDataKey",
+                "kms:GenerateDataKeyWithoutPlaintext",
+                "kms:ReEncrypt*"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "PipelineKMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/cicd-pipeline-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "PipelineKMSKey"
+        }
+      }
+    },
+    "ArtifactsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "cicd-artifacts-${EnvironmentSuffix}-${AWS::Region}-${AWS::AccountId}"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
+                  "Ref": "PipelineKMSKey"
+                }
+              },
+              "BucketKeyEnabled": true
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "DeleteOldVersions",
+              "Status": "Enabled",
+              "NoncurrentVersionExpirationInDays": 30
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "PipelineNotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "cicd-pipeline-notifications-${EnvironmentSuffix}"
+        },
+        "KmsMasterKeyId": {
+          "Ref": "PipelineKMSKey"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "PipelineNotificationSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "Protocol": "email",
+        "TopicArn": {
+          "Ref": "PipelineNotificationTopic"
+        },
+        "Endpoint": {
+          "Ref": "NotificationEmail"
+        }
+      }
+    },
+    "CodePipelineRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "CodePipelineRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codepipeline.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSCodePipelineFullAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "PipelinePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject",
+                    "s3:GetBucketVersioning"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${ArtifactsBucket}/*"
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "ArtifactsBucket",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:BatchGetBuilds",
+                    "codebuild:StartBuild"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "CodeBuildProject",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticbeanstalk:CreateApplicationVersion",
+                    "elasticbeanstalk:DescribeApplicationVersions",
+                    "elasticbeanstalk:DescribeEnvironments",
+                    "elasticbeanstalk:DescribeApplications",
+                    "elasticbeanstalk:UpdateEnvironment"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Ref": "PipelineNotificationTopic"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:DescribeKey",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey",
+                    "kms:ReEncrypt*"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "PipelineKMSKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuildRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "CodeBuildRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "BuildPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ArtifactsBucket}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:DescribeKey",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey",
+                    "kms:ReEncrypt*"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "PipelineKMSKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuildProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cicd-build-${EnvironmentSuffix}"
+        },
+        "Description": "Build project for CI/CD pipeline",
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "CodeBuildRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE",
+          "EncryptionDisabled": false
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_MEDIUM",
+          "Image": "aws/codebuild/amazonlinux2-x86_64-standard:5.0",
+          "PrivilegedMode": true
+        },
+        "Source": {
+          "Type": "CODEPIPELINE",
+          "BuildSpec": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Logging in to Amazon ECR...\n      - echo Build started on `date`\n      - echo Installing dependencies...\n  build:\n    commands:\n      - echo Build started on `date`\n      - echo Compiling the application...\n      - echo Running tests...\n  post_build:\n    commands:\n      - echo Build completed on `date`\n      - echo Creating deployment artifact...\nartifacts:\n  files:\n    - '**/*'\n  name: BuildArtifact\n"
+        },
+        "EncryptionKey": {
+          "Fn::GetAtt": [
+            "PipelineKMSKey",
+            "Arn"
+          ]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Fn::Sub": "/aws/codebuild/cicd-build-${EnvironmentSuffix}"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ElasticBeanstalkApplication": {
+      "Type": "AWS::ElasticBeanstalk::Application",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ApplicationName": {
+          "Fn::Sub": "cicd-app-${EnvironmentSuffix}"
+        },
+        "Description": "Application for CI/CD pipeline deployment",
+        "ResourceLifecycleConfig": {
+          "ServiceRole": {
+            "Fn::GetAtt": [
+              "EBServiceRole",
+              "Arn"
+            ]
+          },
+          "VersionLifecycleConfig": {
+            "MaxCountRule": {
+              "Enabled": true,
+              "MaxCount": 5,
+              "DeleteSourceFromS3": true
+            }
+          }
+        }
+      }
+    },
+    "EBServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "EBServiceRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "elasticbeanstalk.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSElasticBeanstalkEnhancedHealth",
+          "arn:aws:iam::aws:policy/AWSElasticBeanstalkManagedUpdatesCustomerRolePolicy"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "EBInstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "EBInstanceRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSElasticBeanstalkWebTier",
+          "arn:aws:iam::aws:policy/AWSElasticBeanstalkMulticontainerDocker",
+          "arn:aws:iam::aws:policy/AWSElasticBeanstalkWorkerTier"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "EBInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "InstanceProfileName": {
+          "Fn::Sub": "EBInstanceProfile-${EnvironmentSuffix}"
+        },
+        "Roles": [
+          {
+            "Ref": "EBInstanceRole"
+          }
+        ]
+      }
+    },
+    "DevelopmentEnvironment": {
+      "Type": "AWS::ElasticBeanstalk::Environment",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "ElasticBeanstalkApplication"
+        },
+        "EnvironmentName": {
+          "Fn::Sub": "cicd-dev-${EnvironmentSuffix}"
+        },
+        "Description": "Development environment for CI/CD pipeline",
+        "SolutionStackName": "64bit Amazon Linux 2023 v4.3.0 running Python 3.11",
+        "OptionSettings": [
+          {
+            "Namespace": "aws:autoscaling:launchconfiguration",
+            "OptionName": "IamInstanceProfile",
+            "Value": {
+              "Ref": "EBInstanceProfile"
+            }
+          },
+          {
+            "Namespace": "aws:elasticbeanstalk:environment",
+            "OptionName": "ServiceRole",
+            "Value": {
+              "Ref": "EBServiceRole"
+            }
+          },
+          {
+            "Namespace": "aws:elasticbeanstalk:healthreporting:system",
+            "OptionName": "SystemType",
+            "Value": "enhanced"
+          },
+          {
+            "Namespace": "aws:autoscaling:asg",
+            "OptionName": "MinSize",
+            "Value": "1"
+          },
+          {
+            "Namespace": "aws:autoscaling:asg",
+            "OptionName": "MaxSize",
+            "Value": "2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Development"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "TestingEnvironment": {
+      "Type": "AWS::ElasticBeanstalk::Environment",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "ElasticBeanstalkApplication"
+        },
+        "EnvironmentName": {
+          "Fn::Sub": "cicd-test-${EnvironmentSuffix}"
+        },
+        "Description": "Testing environment for CI/CD pipeline",
+        "SolutionStackName": "64bit Amazon Linux 2023 v4.3.0 running Python 3.11",
+        "OptionSettings": [
+          {
+            "Namespace": "aws:autoscaling:launchconfiguration",
+            "OptionName": "IamInstanceProfile",
+            "Value": {
+              "Ref": "EBInstanceProfile"
+            }
+          },
+          {
+            "Namespace": "aws:elasticbeanstalk:environment",
+            "OptionName": "ServiceRole",
+            "Value": {
+              "Ref": "EBServiceRole"
+            }
+          },
+          {
+            "Namespace": "aws:elasticbeanstalk:healthreporting:system",
+            "OptionName": "SystemType",
+            "Value": "enhanced"
+          },
+          {
+            "Namespace": "aws:autoscaling:asg",
+            "OptionName": "MinSize",
+            "Value": "1"
+          },
+          {
+            "Namespace": "aws:autoscaling:asg",
+            "OptionName": "MaxSize",
+            "Value": "2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Testing"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "ProductionEnvironment": {
+      "Type": "AWS::ElasticBeanstalk::Environment",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "ApplicationName": {
+          "Ref": "ElasticBeanstalkApplication"
+        },
+        "EnvironmentName": {
+          "Fn::Sub": "cicd-prod-${EnvironmentSuffix}"
+        },
+        "Description": "Production environment for CI/CD pipeline",
+        "SolutionStackName": "64bit Amazon Linux 2023 v4.3.0 running Python 3.11",
+        "OptionSettings": [
+          {
+            "Namespace": "aws:autoscaling:launchconfiguration",
+            "OptionName": "IamInstanceProfile",
+            "Value": {
+              "Ref": "EBInstanceProfile"
+            }
+          },
+          {
+            "Namespace": "aws:elasticbeanstalk:environment",
+            "OptionName": "ServiceRole",
+            "Value": {
+              "Ref": "EBServiceRole"
+            }
+          },
+          {
+            "Namespace": "aws:elasticbeanstalk:healthreporting:system",
+            "OptionName": "SystemType",
+            "Value": "enhanced"
+          },
+          {
+            "Namespace": "aws:autoscaling:asg",
+            "OptionName": "MinSize",
+            "Value": "2"
+          },
+          {
+            "Namespace": "aws:autoscaling:asg",
+            "OptionName": "MaxSize",
+            "Value": "4"
+          },
+          {
+            "Namespace": "aws:autoscaling:launchconfiguration",
+            "OptionName": "InstanceType",
+            "Value": "t3.medium"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "CodePipeline": {
+      "Type": "AWS::CodePipeline::Pipeline",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cicd-pipeline-${EnvironmentSuffix}"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "CodePipelineRole",
+            "Arn"
+          ]
+        },
+        "ArtifactStore": {
+          "Type": "S3",
+          "Location": {
+            "Ref": "ArtifactsBucket"
+          },
+          "EncryptionKey": {
+            "Id": {
+              "Fn::GetAtt": [
+                "PipelineKMSKey",
+                "Arn"
+              ]
+            },
+            "Type": "KMS"
+          }
+        },
+        "Stages": [
+          {
+            "Name": "Source",
+            "Actions": [
+              {
+                "Name": "SourceAction",
+                "ActionTypeId": {
+                  "Category": "Source",
+                  "Owner": "ThirdParty",
+                  "Provider": "GitHub",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "Owner": {
+                    "Ref": "GitHubOwner"
+                  },
+                  "Repo": {
+                    "Ref": "GitHubRepository"
+                  },
+                  "Branch": {
+                    "Ref": "GitHubBranch"
+                  },
+                  "OAuthToken": "{{resolve:secretsmanager:github-token:SecretString:token}}"
+                },
+                "OutputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Build",
+            "Actions": [
+              {
+                "Name": "BuildAction",
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Provider": "CodeBuild",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuildProject"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ],
+                "OutputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ],
+                "OnFailure": {
+                  "ActionTypeId": {
+                    "Category": "Invoke",
+                    "Owner": "SNS",
+                    "Provider": "SNS",
+                    "Version": "1"
+                  },
+                  "Configuration": {
+                    "TopicArn": {
+                      "Ref": "PipelineNotificationTopic"
+                    },
+                    "Message": "Build failed in CI/CD Pipeline"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "Name": "DeployToDev",
+            "Actions": [
+              {
+                "Name": "DeployToDevAction",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "ElasticBeanstalk",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ApplicationName": {
+                    "Ref": "ElasticBeanstalkApplication"
+                  },
+                  "EnvironmentName": {
+                    "Ref": "DevelopmentEnvironment"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "DeployToTest",
+            "Actions": [
+              {
+                "Name": "DeployToTestAction",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "ElasticBeanstalk",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ApplicationName": {
+                    "Ref": "ElasticBeanstalkApplication"
+                  },
+                  "EnvironmentName": {
+                    "Ref": "TestingEnvironment"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "DeployToProd",
+            "Actions": [
+              {
+                "Name": "ApprovalAction",
+                "ActionTypeId": {
+                  "Category": "Approval",
+                  "Owner": "AWS",
+                  "Provider": "Manual",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "NotificationArn": {
+                    "Ref": "PipelineNotificationTopic"
+                  },
+                  "CustomData": "Please approve deployment to production environment"
+                }
+              },
+              {
+                "Name": "DeployToProdAction",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "ElasticBeanstalk",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ApplicationName": {
+                    "Ref": "ElasticBeanstalkApplication"
+                  },
+                  "EnvironmentName": {
+                    "Ref": "ProductionEnvironment"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ],
+                "RunOrder": 2
+              }
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "Project"
+            }
+          },
+          {
+            "Key": "Owner",
+            "Value": {
+              "Ref": "Owner"
+            }
+          },
+          {
+            "Key": "CostCenter",
+            "Value": {
+              "Ref": "CostCenter"
+            }
+          }
+        ]
+      }
+    },
+    "PipelineEventRule": {
+      "Type": "AWS::Events::Rule",
+      "DeletionPolicy": "Delete",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "cicd-pipeline-events-${EnvironmentSuffix}"
+        },
+        "Description": "Capture pipeline state changes",
+        "EventPattern": {
+          "source": [
+            "aws.codepipeline"
+          ],
+          "detail-type": [
+            "CodePipeline Pipeline Execution State Change",
+            "CodePipeline Stage Execution State Change"
+          ],
+          "detail": {
+            "pipeline": [
+              {
+                "Ref": "CodePipeline"
+              }
+            ]
+          }
+        },
+        "Targets": [
+          {
+            "Arn": {
+              "Ref": "PipelineNotificationTopic"
+            },
+            "Id": "PipelineNotificationTarget",
+            "InputTransformer": {
+              "InputPathsMap": {
+                "pipeline": "$.detail.pipeline",
+                "state": "$.detail.state",
+                "stage": "$.detail.stage"
+              },
+              "InputTemplate": "\"Pipeline '<pipeline>' stage '<stage>' has entered state '<state>'\"\n"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PipelineName": {
+      "Description": "Name of the CodePipeline",
+      "Value": {
+        "Ref": "CodePipeline"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-PipelineName"
+        }
+      }
+    },
+    "ArtifactsBucketName": {
+      "Description": "Name of the S3 bucket for artifacts",
+      "Value": {
+        "Ref": "ArtifactsBucket"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ArtifactsBucketName"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {
+        "Ref": "PipelineKMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic for notifications",
+      "Value": {
+        "Ref": "PipelineNotificationTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    },
+    "DevelopmentEnvironmentURL": {
+      "Description": "URL of the Development environment",
+      "Value": {
+        "Fn::Sub": "http://${DevelopmentEnvironment}.${AWS::Region}.elasticbeanstalk.com"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-DevelopmentEnvironmentURL"
+        }
+      }
+    },
+    "TestingEnvironmentURL": {
+      "Description": "URL of the Testing environment",
+      "Value": {
+        "Fn::Sub": "http://${TestingEnvironment}.${AWS::Region}.elasticbeanstalk.com"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TestingEnvironmentURL"
+        }
+      }
+    },
+    "ProductionEnvironmentURL": {
+      "Description": "URL of the Production environment",
+      "Value": {
+        "Fn::Sub": "http://${ProductionEnvironment}.${AWS::Region}.elasticbeanstalk.com"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ProductionEnvironmentURL"
+        }
+      }
+    },
+    "CodeBuildProjectName": {
+      "Description": "Name of the CodeBuild project",
+      "Value": {
+        "Ref": "CodeBuildProject"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-CodeBuildProjectName"
+        }
+      }
+    },
+    "ElasticBeanstalkApplicationName": {
+      "Description": "Name of the Elastic Beanstalk application",
+      "Value": {
+        "Ref": "ElasticBeanstalkApplication"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ElasticBeanstalkApplicationName"
+        }
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "SelectedSolutionStack": {
+      "Description": "Selected Solution Stack for the platform",
+      "Value": {
+        "Fn::FindInMap": [
+          "PlatformMap",
+          {
+            "Ref": "PlatformType"
+          },
+          "SolutionStack"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SelectedSolutionStack"
+        }
+      }
+    }
+  }
+}
