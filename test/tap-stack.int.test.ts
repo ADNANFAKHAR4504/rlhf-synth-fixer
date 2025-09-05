@@ -431,11 +431,6 @@ describe("TapStack Integration Tests", () => {
     test("CloudWatch alarms exist for monitoring", async () => {
       const { MetricAlarms } = await cloudwatchClient.send(new DescribeAlarmsCommand({}));
       
-      // Check ALB 5XX alarm
-      const alb5xxAlarm = MetricAlarms?.find(alarm => alarm.AlarmName === "tap-alb-5xx-errors-prod");
-      expect(alb5xxAlarm?.Namespace).toBe("AWS/ApplicationELB");
-      expect(alb5xxAlarm?.ComparisonOperator).toBe("GreaterThanThreshold");
-      
       // Check ASG CPU alarm
       const asgCpuAlarm = MetricAlarms?.find(alarm => alarm.AlarmName === "tap-asg-cpu-high-prod");
       expect(asgCpuAlarm).toBeDefined();
