@@ -46,14 +46,17 @@ Mappings:
 Resources:
 
   #########################################
-  # Secret in Secrets Manager
+  # Secret in Secrets Manager (JSON format)
   #########################################
   DBSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub "${ProjectName}-${Environment}-db-password"
       Description: RDS DB password stored securely in Secrets Manager
-      SecretString: !Ref DBPassword
+      SecretString: !Sub |
+        {
+          "password": "${DBPassword}"
+        }
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -283,7 +286,7 @@ Resources:
       TargetGroupARNs: [!Ref ALBTargetGroup]
 
   #########################################
-  # RDS (Multi-AZ, Encrypted, password from Secrets Manager)
+  # RDS (Multi-AZ, Encrypted, password from Secrets Manager JSON key)
   #########################################
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -293,7 +296,7 @@ Resources:
       AllocatedStorage: 20
       MultiAZ: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}::SecretString}}"
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}::password}}"
       VPCSecurityGroups: [!Ref InstanceSG]
       DBSubnetGroupName: !Ref DBSubnetGroup
       StorageEncrypted: true

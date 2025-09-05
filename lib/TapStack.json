@@ -56,7 +56,7 @@
                 },
                 "Description": "RDS DB password stored securely in Secrets Manager",
                 "SecretString": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{\n  \"password\": \"${DBPassword}\"\n}\n"
                 },
                 "Tags": [
                     {
@@ -518,7 +518,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}::SecretString}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}::password}}"
                 },
                 "VPCSecurityGroups": [
                     {
