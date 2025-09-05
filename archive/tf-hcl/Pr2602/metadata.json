@@ -37,6 +37,10 @@
     "WAFv2",
     "GuardDuty"
   ],
-  "author": "olatunjym",
-  "dockerS3Location": ""
+  "author": "Olatunjym",
+  "dockerS3Location": "",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
