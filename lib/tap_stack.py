@@ -479,21 +479,6 @@ def lambda_handler(event, context):
             opts=ResourceOptions(parent=self)
         )
 
-        # API Gateway deployment
-        self.api_deployment = apigateway.Deployment(
-            f"{self.name_prefix}-api-deployment",
-            rest_api=self.api_gateway.id,
-            opts=ResourceOptions(parent=self)
-        )
-
-        # API Gateway URL
-        self.api_gateway_url = Output.concat(
-            "https://",
-            self.api_gateway.id,
-            ".execute-api.us-east-1.amazonaws.com/",
-            self.environment_suffix
-        )
-
         # Lambda permission for API Gateway
         self.lambda_permission = lambda_.Permission(
             f"{self.name_prefix}-lambda-permission",
@@ -507,6 +492,21 @@ def lambda_handler(event, context):
                 "/*/*"
             ),
             opts=ResourceOptions(parent=self)
+        )
+
+        # API Gateway deployment (must happen after all methods and integrations)
+        self.api_deployment = apigateway.Deployment(
+            f"{self.name_prefix}-api-deployment",
+            rest_api=self.api_gateway.id,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # API Gateway URL
+        self.api_gateway_url = Output.concat(
+            "https://",
+            self.api_gateway.id,
+            ".execute-api.us-east-1.amazonaws.com/",
+            self.environment_suffix
         )
 
     def _create_cloudwatch_alarms(self):
