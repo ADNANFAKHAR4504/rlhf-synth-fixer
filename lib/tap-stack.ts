@@ -453,11 +453,31 @@ export class TapStack extends cdk.Stack {
       {
         roleName: `tap-config-role-${environmentSuffix}`,
         assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName(
-            'service-role/AWSConfigRole'
-          ),
-        ],
+        inlinePolicies: {
+          ConfigDeliveryPermissions: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  's3:GetBucketAcl',
+                  's3:ListBucket',
+                  's3:GetBucketLocation',
+                ],
+                resources: [configBucket.bucketArn],
+              }),
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: ['s3:PutObject'],
+                resources: [`${configBucket.bucketArn}/*`],
+                conditions: {
+                  StringEquals: {
+                    's3:x-amz-acl': 'bucket-owner-full-control',
+                  },
+                },
+              }),
+            ],
+          }),
+        },
       }
     );
 
@@ -483,8 +503,6 @@ export class TapStack extends cdk.Stack {
         s3KeyPrefix: 'config/',
       }
     );
-
-    // ✅ Ensure delivery channel is created after recorder
     deliveryChannel.addDependency(configRecorder);
 
     // ✅ Ensure config rules wait for delivery channel
