@@ -222,7 +222,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const key = await kms.describeKey({ KeyId: keyId }).promise();
       expect(key.KeyMetadata?.KeyState).toBe('Enabled');
       expect(key.KeyMetadata?.KeyUsage).toBe('ENCRYPT_DECRYPT');
-      expect(key.KeyMetadata?.Description).toContain('KMS key for encrypting RDS');
+      expect(key.KeyMetadata?.Description).toContain('KMS key for RDS encryption');
     });
 
     test('should verify KMS key alias exists', async () => {
