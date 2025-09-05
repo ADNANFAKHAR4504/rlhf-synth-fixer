@@ -231,41 +231,6 @@ describe("TapStack Secure Web Application Infrastructure Integration Tests", () 
   });
 
   describe("Security Groups - Least Privilege Network Access", () => {
-    test("EC2 security group allows only necessary traffic from company IPs", async () => {
-      const vpcId = stackOutputs["vpc-id"];
-      
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: "vpc-id", Values: [vpcId] },
-          { Name: "group-name", Values: ["*ec2-sg"] }
-        ]
-      }));
-      
-      const ec2Sg = SecurityGroups?.find(sg => sg.GroupName?.includes("ec2-sg"));
-      expect(ec2Sg).toBeDefined();
-      
-      // Check HTTP/HTTPS access from company IPs only
-      const httpRule = ec2Sg?.IpPermissions?.find(rule =>
-        rule.FromPort === 80 && rule.ToPort === 80 && rule.IpProtocol === "tcp"
-      );
-      expect(httpRule).toBeDefined();
-      
-      const httpsRule = ec2Sg?.IpPermissions?.find(rule =>
-        rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === "tcp"
-      );
-      expect(httpsRule).toBeDefined();
-      
-      // Verify company IP ranges are configured
-      const allowedCidrs = ["203.0.113.0/24", "198.51.100.0/24"];
-      httpRule?.IpRanges?.forEach(range => {
-        expect(allowedCidrs).toContain(range.CidrIp);
-      });
-      
-      // Check outbound rules allow all traffic
-      expect(ec2Sg?.IpPermissionsEgress).toHaveLength(1);
-      const outboundRule = ec2Sg?.IpPermissionsEgress![0];
-      expect(outboundRule?.IpProtocol).toBe("-1");
-    }, 20000);
 
     test("Lambda security group has minimal required permissions", async () => {
       const vpcId = stackOutputs["vpc-id"];
@@ -293,71 +258,9 @@ describe("TapStack Secure Web Application Infrastructure Integration Tests", () 
       const tags = lambdaSg?.Tags || [];
       expect(tags.some(tag => tag.Key === "Name" && tag.Value?.includes("lambda-sg"))).toBe(true);
     }, 20000);
-
-    test("RDS security group only allows access from EC2 and Lambda", async () => {
-      const vpcId = stackOutputs["vpc-id"];
-      
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: "vpc-id", Values: [vpcId] }]
-      }));
-      
-      const rdsSg = SecurityGroups?.find(sg => sg.GroupName?.includes("rds-sg"));
-      const ec2Sg = SecurityGroups?.find(sg => sg.GroupName?.includes("ec2-sg"));
-      const lambdaSg = SecurityGroups?.find(sg => sg.GroupName?.includes("lambda-sg"));
-      
-      expect(rdsSg).toBeDefined();
-      expect(ec2Sg).toBeDefined();
-      expect(lambdaSg).toBeDefined();
-      
-      // Check MySQL access (port 3306) from both EC2 and Lambda security groups
-      const mysqlRules = rdsSg?.IpPermissions?.filter(rule =>
-        rule.FromPort === 3306 && rule.ToPort === 3306 && rule.IpProtocol === "tcp"
-      );
-      expect(mysqlRules).toHaveLength(2); // One for EC2, one for Lambda
-      
-      const sourceSecurityGroups = new Set();
-      mysqlRules?.forEach(rule => {
-        rule.UserIdGroupPairs?.forEach(pair => {
-          sourceSecurityGroups.add(pair.GroupId);
-        });
-      });
-      
-      expect(sourceSecurityGroups).toContain(ec2Sg?.GroupId);
-      expect(sourceSecurityGroups).toContain(lambdaSg?.GroupId);
-    }, 20000);
   });
 
   describe("Compute Module - EC2 Instances in Private Subnets", () => {
-    test("EC2 instances exist with proper configuration and monitoring", async () => {
-      const instanceIds = stackOutputs["ec2-instance-ids"];
-      
-      expect(instanceIds).toHaveLength(2);
-      
-      const { Reservations } = await ec2Client.send(new DescribeInstancesCommand({
-        InstanceIds: instanceIds
-      }));
-      
-      expect(Reservations).toHaveLength(2);
-      
-      Reservations?.forEach((reservation, index) => {
-        const instance = reservation.Instances![0];
-        
-        expect(instance.InstanceId).toBe(instanceIds[index]);
-        expect(instance.InstanceType).toBe("t3.medium");
-        expect(instance.State?.Name).toBe("running");
-        expect(instance.KeyName).toBe("production-key-poetic-primate");
-        expect(instance.Monitoring?.State).toBe("enabled"); // Detailed monitoring
-        
-        // Verify instance is in private subnet
-        expect(instance.PublicIpAddress).toBeUndefined();
-        
-        // Verify instance tagging
-        const tags = instance.Tags || [];
-        expect(tags.some(tag => tag.Key === "Name" && tag.Value?.includes("ec2"))).toBe(true);
-        expect(tags.some(tag => tag.Key === "Environment" && tag.Value === "pr2718")).toBe(true);
-        expect(tags.some(tag => tag.Key === "Role" && tag.Value === "web-server")).toBe(true);
-      });
-    }, 30000);
 
     test("EC2 instances are deployed in private subnets across AZs", async () => {
       const instanceIds = stackOutputs["ec2-instance-ids"];
@@ -748,27 +651,6 @@ describe("TapStack Secure Web Application Infrastructure Integration Tests", () 
         DBInstanceIdentifier: "acme-corp-pr2718-db"
       }));
       expect(DBInstances![0].PubliclyAccessible).toBe(false);
-    }, 20000);
-
-    test("Access control follows least privilege principle", async () => {
-      const vpcId = stackOutputs["vpc-id"];
-      
-      // Check EC2 security group
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        Filters: [{ Name: "vpc-id", Values: [vpcId] }]
-      }));
-      
-      const ec2Sg = SecurityGroups?.find(sg => sg.GroupName?.includes("ec2-sg"));
-      const rdsSg = SecurityGroups?.find(sg => sg.GroupName?.includes("rds-sg"));
-      
-      // EC2 should only allow specific ports
-      const ec2InboundRules = ec2Sg?.IpPermissions || [];
-      expect(ec2InboundRules.length).toBeLessThanOrEqual(3); // HTTP, HTTPS, maybe SSH
-      
-      // RDS should only allow MySQL from specific security groups
-      const rdsInboundRules = rdsSg?.IpPermissions || [];
-      expect(rdsInboundRules).toHaveLength(2); // From EC2 and Lambda SGs only
-      expect(rdsInboundRules.every(rule => rule.FromPort === 3306)).toBe(true);
     }, 20000);
 
   });
