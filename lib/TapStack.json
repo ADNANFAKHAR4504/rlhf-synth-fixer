@@ -5,7 +5,7 @@
     "HostedZoneId": {
       "Type": "String",
       "Description": "Route 53 Hosted Zone ID",
-      "Default": "example-v1.com"
+      "Default": "Z08622691233KF7UHD3C6"
     }
   },
   "Resources": {
