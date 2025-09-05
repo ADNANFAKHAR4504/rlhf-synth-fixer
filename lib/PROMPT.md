@@ -42,7 +42,7 @@ Template must be scalable and structured to support multiple stacks/environments
 
 Testing & Quality Requirements
 
-Provide unit tests with Jest to achieve >90% coverage on the CDK constructs and resources defined in tapstack.ts.
+Provide unit tests with Jest to achieve >90% coverage on the CDK constructs & resources defined in tapstack.ts.
 
 Add live integration tests that validate successful stack deployment and critical security configurations.
 
