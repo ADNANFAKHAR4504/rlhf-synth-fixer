@@ -521,40 +521,39 @@ export class TapStack extends cdk.Stack {
     environmentSuffix: string,
     configRecorder: config.CfnConfigurationRecorder
   ): void {
-    // S3 bucket public read prohibited
-    const s3PublicReadRule = new config.ManagedRule(
-      this,
-      `TapS3PublicReadProhibited-${environmentSuffix}`,
-      {
-        configRuleName: `tap-s3-bucket-public-read-prohibited-${environmentSuffix}`,
-        identifier:
-          config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
-      }
-    );
-    s3PublicReadRule.node.addDependency(configRecorder);
+    const rules = [
+      new config.ManagedRule(
+        this,
+        `TapS3PublicReadProhibited-${environmentSuffix}`,
+        {
+          configRuleName: `tap-s3-bucket-public-read-prohibited-${environmentSuffix}`,
+          identifier:
+            config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
+        }
+      ),
+      new config.ManagedRule(
+        this,
+        `TapRootAccessKeyCheck-${environmentSuffix}`,
+        {
+          configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
+          identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
+        }
+      ),
+      new config.ManagedRule(
+        this,
+        `TapMfaEnabledForIamConsole-${environmentSuffix}`,
+        {
+          configRuleName: `tap-mfa-enabled-for-iam-console-access-${environmentSuffix}`,
+          identifier:
+            config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
+        }
+      ),
+    ];
 
-    // Root access key check
-    const rootAccessKeyRule = new config.ManagedRule(
-      this,
-      `TapRootAccessKeyCheck-${environmentSuffix}`,
-      {
-        configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
-        identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
-      }
-    );
-    rootAccessKeyRule.node.addDependency(configRecorder);
-
-    // MFA enabled for IAM console access
-    const mfaRule = new config.ManagedRule(
-      this,
-      `TapMfaEnabledForIamConsole-${environmentSuffix}`,
-      {
-        configRuleName: `tap-mfa-enabled-for-iam-console-access-${environmentSuffix}`,
-        identifier:
-          config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
-      }
-    );
-    mfaRule.node.addDependency(configRecorder);
+    // Add dependency for each rule
+    rules.forEach(rule => {
+      rule.node.addDependency(configRecorder);
+    });
   }
 
   private createGuardDuty(environmentSuffix: string, kmsKey: kms.Key): void {
