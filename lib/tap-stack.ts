@@ -147,7 +147,7 @@ export class TapStack extends cdk.Stack {
   }
 
   private createKMSKey(environmentSuffix: string): kms.Key {
-    const key = new kms.Key(this, `TapSecurityKmsKey-${environmentSuffix}`, {
+    const kmsKey = new kms.Key(this, `TapSecurityKmsKey-${environmentSuffix}`, {
       description: `KMS key for security-related resources ${environmentSuffix}`,
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -155,6 +155,7 @@ export class TapStack extends cdk.Stack {
       keyUsage: kms.KeyUsage.ENCRYPT_DECRYPT,
       policy: new iam.PolicyDocument({
         statements: [
+          // Allow root account full access
           new iam.PolicyStatement({
             sid: 'Enable IAM root permissions',
             effect: iam.Effect.ALLOW,
@@ -162,18 +163,45 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:*'],
             resources: ['*'],
           }),
+          // CloudTrail
           new iam.PolicyStatement({
-            sid: 'Allow CloudTrail to encrypt logs',
+            sid: 'Allow CloudTrail to use key',
             effect: iam.Effect.ALLOW,
             principals: [new iam.ServicePrincipal('cloudtrail.amazonaws.com')],
             actions: ['kms:GenerateDataKey', 'kms:DescribeKey'],
+            resources: ['*'],
+          }),
+          // CloudWatch Logs
+          new iam.PolicyStatement({
+            sid: 'Allow CloudWatchLogs to use key',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('logs.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:GenerateDataKey',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          // EventBridge (for GuardDuty / security alerts)
+          new iam.PolicyStatement({
+            sid: 'Allow EventBridge to use key',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('events.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:GenerateDataKey',
+              'kms:DescribeKey',
+            ],
             resources: ['*'],
           }),
         ],
       }),
     });
 
-    return key;
+    return kmsKey;
   }
 
   private createSecurityBucket(
