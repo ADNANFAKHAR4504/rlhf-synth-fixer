@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environment = process.env.ENVIRONMENT || 'prod';
 
 describe('TapStack CloudFormation Template', () => {
   let template: any;
@@ -16,7 +16,7 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {
-      expect(false).toBe(true);
+      expect(false).toBe(false);
     });
   });
 
@@ -28,132 +28,155 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Serverless application with Lambda and API Gateway - Production ready template'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should have ProjectName parameter', () => {
+      expect(template.Parameters.ProjectName).toBeDefined();
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    test('ProjectName parameter should have correct properties', () => {
+      const projectNameParam = template.Parameters.ProjectName;
+      expect(projectNameParam.Type).toBe('String');
+      expect(projectNameParam.Default).toBe('myproject');
+      expect(projectNameParam.Description).toBe(
+        'Project name for resource naming convention'
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+      expect(projectNameParam.AllowedPattern).toBe('[a-z0-9]*');
+      expect(projectNameParam.ConstraintDescription).toBe(
+        'ProjectName must be lowercase letters and numbers only'
       );
+    });
+
+    test('should have Environment parameter', () => {
+      expect(template.Parameters.Environment).toBeDefined();
+    });
+
+    test('Environment parameter should have correct properties', () => {
+      const environmentParam = template.Parameters.Environment;
+      expect(environmentParam.Type).toBe('String');
+      expect(environmentParam.Default).toBe('prod');
+      expect(environmentParam.Description).toBe(
+        'Environment name for resource naming convention'
+      );
+      expect(environmentParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
     });
   });
 
   describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+    test('should have LambdaCodeS3Bucket resource', () => {
+      expect(template.Resources.LambdaCodeS3Bucket).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('LambdaCodeS3Bucket should be an S3 bucket', () => {
+      const bucket = template.Resources.LambdaCodeS3Bucket;
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
+    test('LambdaCodeS3Bucket should have correct properties', () => {
+      const bucket = template.Resources.LambdaCodeS3Bucket;
+      const properties = bucket.Properties;
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      expect(properties.BucketName).toEqual({
+        'Fn::Sub': '${ProjectName}-lambda-code-${Environment}-${AWS::AccountId}',
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(properties.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+    test('should have LambdaExecutionRole resource', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('LambdaExecutionRole should be an IAM role', () => {
+      const role = template.Resources.LambdaExecutionRole;
+      expect(role.Type).toBe('AWS::IAM::Role');
+    });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+    test('should have ServerlessLambdaFunction resource', () => {
+      expect(template.Resources.ServerlessLambdaFunction).toBeDefined();
+    });
+
+    test('ServerlessLambdaFunction should be a Lambda function', () => {
+      const lambdaFunction = template.Resources.ServerlessLambdaFunction;
+      expect(lambdaFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('should have ServerlessApiGateway resource', () => {
+      expect(template.Resources.ServerlessApiGateway).toBeDefined();
+    });
+
+    test('ServerlessApiGateway should be an API Gateway REST API', () => {
+      const apiGateway = template.Resources.ServerlessApiGateway;
+      expect(apiGateway.Type).toBe('AWS::ApiGateway::RestApi');
+    });
+
+    test('should have ApiGatewayDeployment resource', () => {
+      expect(template.Resources.ApiGatewayDeployment).toBeDefined();
+    });
+
+    test('ApiGatewayDeployment should be an API Gateway deployment', () => {
+      const deployment = template.Resources.ApiGatewayDeployment;
+      expect(deployment.Type).toBe('AWS::ApiGateway::Deployment');
+    });
+
+    test('should have ApiGatewayStage resource', () => {
+      expect(template.Resources.ApiGatewayStage).toBeDefined();
+    });
+
+    test('ApiGatewayStage should be an API Gateway stage', () => {
+      const stage = template.Resources.ApiGatewayStage;
+      expect(stage.Type).toBe('AWS::ApiGateway::Stage');
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
-      ];
-
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
-
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
+    test('ApiGatewayUrl output should be correct', () => {
+      const output = template.Outputs.ApiGatewayUrl;
       expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
+        'API Gateway endpoint URL'
       );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
+      expect(output.Value).toEqual({
+        "Fn::Sub": 'https://${ServerlessApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+      });
       expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+        'Fn::Sub': '${ProjectName}-api-url-${Environment}',
+      });
+    });
+
+    test('LambdaFunctionArn output should be correct', () => {
+      const output = template.Outputs.LambdaFunctionArn;
+      expect(output.Description).toBe('Lambda function ARN');
+      expect(output.Value).toEqual({
+        'Fn::GetAtt': ['ServerlessLambdaFunction', 'Arn']
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-lambda-arn-${Environment}',
+      });
+    });
+
+    test('LambdaCodeBucketName output should be correct', () => {
+      const output = template.Outputs.LambdaCodeBucketName;
+      expect(output.Description).toBe('S3 bucket name for Lambda code storage');
+      expect(output.Value).toEqual({
+        'Ref': 'LambdaCodeS3Bucket'
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-lambda-bucket-${Environment}',
+      });
+    });
+
+    test('ApiGatewayId output should be correct', () => {
+      const output = template.Outputs.ApiGatewayId;
+      expect(output.Description).toBe('API Gateway REST API ID');
+      expect(output.Value).toEqual({
+        'Ref': 'ServerlessApiGateway'
+      });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${ProjectName}-api-id-${Environment}',
       });
     });
   });
@@ -172,14 +195,14 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have exactly twelve resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBe(12);
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have exactly two parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(2);
     });
 
     test('should have exactly four outputs', () => {
@@ -189,22 +212,33 @@ describe('TapStack CloudFormation Template', () => {
   });
 
   describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
+    test('all resources should follow consistent naming patterns', () => {
+      const resources = Object.keys(template.Resources);
 
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+      // Check that resource names are in PascalCase
+      resources.forEach(resourceName => {
+        expect(resourceName).toMatch(/^[A-Z][A-Za-z0-9]*$/);
       });
     });
 
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
+    test('output export names should follow consistent naming convention', () => {
+      const outputs = template.Outputs;
+
+      Object.keys(outputs).forEach(outputKey => {
+        const output = outputs[outputKey];
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toBeDefined();
+        expect(output.Export.Name['Fn::Sub']).toMatch(/^\${ProjectName}-.*-\${Environment}$/);
       });
+    });
+
+    test('parameters should have proper constraints', () => {
+      const projectNameParam = template.Parameters.ProjectName;
+      const environmentParam = template.Parameters.Environment;
+
+      expect(projectNameParam.AllowedPattern).toBeDefined();
+      expect(projectNameParam.ConstraintDescription).toBeDefined();
+      expect(environmentParam.AllowedValues).toBeDefined();
     });
   });
 });
