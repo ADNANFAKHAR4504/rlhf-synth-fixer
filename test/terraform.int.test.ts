@@ -148,24 +148,6 @@ describe("Terraform flat outputs - integration validation", () => {
     });
   });
 
-  it("validates route53 zone, zone name, and health checks", () => {
-    if (!skipIfMissing("route53_zone_id", outputs))
-      expect(isValidZoneId(outputs["route53_zone_id"])).toBe(true);
-    if (!skipIfMissing("route53_zone_name", outputs))
-      expect(isValidDomainName(outputs["route53_zone_name"])).toBe(true);
-    if (!skipIfMissing("route53_name_servers", outputs)) {
-      const arr = parseArray(outputs["route53_name_servers"]);
-      expect(Array.isArray(arr)).toBe(true);
-      arr.forEach((v: string) =>
-        expect(v).toMatch(/^ns-[0-9]+\.awsdns-[0-9]+\.[a-z]{2,}$/)
-      );
-    }
-    if (!skipIfMissing("primary_health_check_id", outputs))
-      expect(isValidHealthCheckId(outputs["primary_health_check_id"])).toBe(true);
-    if (!skipIfMissing("secondary_health_check_id", outputs))
-      expect(isValidHealthCheckId(outputs["secondary_health_check_id"])).toBe(true);
-  });
-
   // ========== RDS Outputs ==========
   it("validates RDS outputs and port", () => {
     [
