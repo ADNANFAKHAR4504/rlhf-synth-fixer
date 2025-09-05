@@ -31,5 +31,11 @@
     "API Gateway",
     "NAT Gateway",
     "Internet Gateway"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "caiof-turing",
+  "dockerS3Location": ""
 }
