@@ -1,7 +1,6 @@
 terraform {
   required_version = ">= 1.0"
   
-  # Add backend configuration (optional)
   backend "local" {
     path = "terraform.tfstate"
   }
@@ -35,7 +34,7 @@ provider "aws" {
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
-
+  
   default_tags {
     tags = {
       Project     = "TAP-Stack"
@@ -49,7 +48,7 @@ provider "aws" {
 provider "aws" {
   alias  = "us_west_2"
   region = "us-west-2"
-
+  
   default_tags {
     tags = {
       Project     = "TAP-Stack"
