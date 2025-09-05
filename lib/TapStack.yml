@@ -28,7 +28,7 @@ Parameters:
 
   DBUsername:
     Type: String
-    Default: admin
+    Default: dbmaster
     NoEcho: true
     Description: Master username for RDS
 
