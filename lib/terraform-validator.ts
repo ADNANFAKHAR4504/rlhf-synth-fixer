@@ -9,7 +9,7 @@ import path from 'path';
 export class TerraformValidator {
   private stackPath: string;
   private providerPath: string;
-  
+
   constructor(libPath: string = path.resolve(__dirname)) {
     this.stackPath = path.join(libPath, 'tap_stack.tf');
     this.providerPath = path.join(libPath, 'provider.tf');
@@ -21,7 +21,7 @@ export class TerraformValidator {
   public checkFilesExist(): { stack: boolean; provider: boolean } {
     return {
       stack: fs.existsSync(this.stackPath),
-      provider: fs.existsSync(this.providerPath)
+      provider: fs.existsSync(this.providerPath),
     };
   }
 
@@ -36,13 +36,15 @@ export class TerraformValidator {
     region?: string;
   } {
     const content = fs.readFileSync(this.providerPath, 'utf8');
-    
+
     return {
-      hasRequiredProviders: /terraform\s*{[\s\S]*required_providers\s*{/.test(content),
+      hasRequiredProviders: /terraform\s*{[\s\S]*required_providers\s*{/.test(
+        content
+      ),
       hasAWSProvider: /provider\s+"aws"\s*{/.test(content),
       hasCorrectVersion: /version\s*=\s*"~>\s*5\.0"/.test(content),
       hasRegion: /region\s*=\s*"[^"]+"/.test(content),
-      region: content.match(/region\s*=\s*"([^"]+)"/)?.[1]
+      region: content.match(/region\s*=\s*"([^"]+)"/)?.[1],
     };
   }
 
@@ -60,20 +62,31 @@ export class TerraformValidator {
     outputs: string[];
   } {
     const content = fs.readFileSync(this.stackPath, 'utf8');
-    
-    const subnetMatches = content.match(/resource\s+"aws_subnet"\s+"[^"]+"/g) || [];
-    const associationMatches = content.match(/resource\s+"aws_route_table_association"\s+"[^"]+"/g) || [];
+
+    const subnetMatches =
+      content.match(/resource\s+"aws_subnet"\s+"[^"]+"/g) || [];
+    const associationMatches =
+      content.match(/resource\s+"aws_route_table_association"\s+"[^"]+"/g) ||
+      [];
     const outputMatches = content.match(/output\s+"([^"]+)"/g) || [];
-    
+
     return {
-      hasEnvironmentVariable: /variable\s+"environment_suffix"\s*{/.test(content),
+      hasEnvironmentVariable: /variable\s+"environment_suffix"\s*{/.test(
+        content
+      ),
       hasVPC: /resource\s+"aws_vpc"\s+"basic_vpc"\s*{/.test(content),
-      hasIGW: /resource\s+"aws_internet_gateway"\s+"basic_igw"\s*{/.test(content),
+      hasIGW: /resource\s+"aws_internet_gateway"\s+"basic_igw"\s*{/.test(
+        content
+      ),
       hasSubnets: subnetMatches.length,
-      hasRouteTable: /resource\s+"aws_route_table"\s+"public_rt"\s*{/.test(content),
-      hasRoute: /resource\s+"aws_route"\s+"public_internet_access"\s*{/.test(content),
+      hasRouteTable: /resource\s+"aws_route_table"\s+"public_rt"\s*{/.test(
+        content
+      ),
+      hasRoute: /resource\s+"aws_route"\s+"public_internet_access"\s*{/.test(
+        content
+      ),
       hasAssociations: associationMatches.length,
-      outputs: outputMatches.map(m => m.replace(/output\s+"([^"]+)"/, '$1'))
+      outputs: outputMatches.map(m => m.replace(/output\s+"([^"]+)"/, '$1')),
     };
   }
 
@@ -86,17 +99,21 @@ export class TerraformValidator {
     resourcesWithSuffix: string[];
   } {
     const content = fs.readFileSync(this.stackPath, 'utf8');
-    
+
     // Find all Name tags
     const nameTagMatches = content.match(/Name\s*=\s*"[^"]+"/g) || [];
-    const allTagsUseVariable = nameTagMatches.every(tag => 
+    const allTagsUseVariable = nameTagMatches.every(tag =>
       tag.includes('${var.environment_suffix}')
     );
-    
+
     // Check variable default
-    const variableBlock = content.match(/variable\s+"environment_suffix"\s*{[^}]+}/s);
-    const variableHasDefault = variableBlock ? /default\s*=\s*"[^"]+"/.test(variableBlock[0]) : false;
-    
+    const variableBlock = content.match(
+      /variable\s+"environment_suffix"\s*{[^}]+}/s
+    );
+    const variableHasDefault = variableBlock
+      ? /default\s*=\s*"[^"]+"/.test(variableBlock[0])
+      : false;
+
     // Find resources using the suffix
     const resourcesWithSuffix = nameTagMatches
       .filter(tag => tag.includes('${var.environment_suffix}'))
@@ -105,11 +122,11 @@ export class TerraformValidator {
         return match ? match[1] : '';
       })
       .filter(Boolean);
-    
+
     return {
       allTagsUseVariable,
       variableHasDefault,
-      resourcesWithSuffix
+      resourcesWithSuffix,
     };
   }
 
@@ -122,24 +139,28 @@ export class TerraformValidator {
     validCIDRs: boolean;
   } {
     const content = fs.readFileSync(this.stackPath, 'utf8');
-    
-    const vpcCIDRMatch = content.match(/resource\s+"aws_vpc"[^}]+cidr_block\s*=\s*"([^"]+)"/s);
+
+    const vpcCIDRMatch = content.match(
+      /resource\s+"aws_vpc"[^}]+cidr_block\s*=\s*"([^"]+)"/s
+    );
     const vpcCIDR = vpcCIDRMatch ? vpcCIDRMatch[1] : null;
-    
+
     const subnetBlocks = content.match(/resource\s+"aws_subnet"[^}]+}/gs) || [];
-    const subnetCIDRs = subnetBlocks.map(block => {
-      const match = block.match(/cidr_block\s*=\s*"([^"]+)"/);
-      return match ? match[1] : '';
-    }).filter(Boolean);
-    
+    const subnetCIDRs = subnetBlocks
+      .map(block => {
+        const match = block.match(/cidr_block\s*=\s*"([^"]+)"/);
+        return match ? match[1] : '';
+      })
+      .filter(Boolean);
+
     // Basic validation: all subnet CIDRs should start with VPC network prefix
     const vpcPrefix = vpcCIDR ? vpcCIDR.split('.').slice(0, 2).join('.') : '';
     const validCIDRs = subnetCIDRs.every(cidr => cidr.startsWith(vpcPrefix));
-    
+
     return {
       vpcCIDR,
       subnetCIDRs,
-      validCIDRs
+      validCIDRs,
     };
   }
 
@@ -153,23 +174,26 @@ export class TerraformValidator {
   } {
     const stackContent = fs.readFileSync(this.stackPath, 'utf8');
     const providerContent = fs.readFileSync(this.providerPath, 'utf8');
-    
+
     const regionMatch = providerContent.match(/region\s*=\s*"([^"]+)"/);
     const region = regionMatch ? regionMatch[1] : '';
-    
-    const subnetBlocks = stackContent.match(/resource\s+"aws_subnet"[^}]+}/gs) || [];
-    const zones = subnetBlocks.map(block => {
-      const match = block.match(/availability_zone\s*=\s*"([^"]+)"/);
-      return match ? match[1] : '';
-    }).filter(Boolean);
-    
+
+    const subnetBlocks =
+      stackContent.match(/resource\s+"aws_subnet"[^}]+}/gs) || [];
+    const zones = subnetBlocks
+      .map(block => {
+        const match = block.match(/availability_zone\s*=\s*"([^"]+)"/);
+        return match ? match[1] : '';
+      })
+      .filter(Boolean);
+
     const uniqueZones = zones.length === new Set(zones).size;
     const matchRegion = zones.every(zone => zone.startsWith(region));
-    
+
     return {
       zones,
       uniqueZones,
-      matchRegion
+      matchRegion,
     };
   }
 
@@ -184,40 +208,51 @@ export class TerraformValidator {
     associationsReferenceResources: boolean;
   } {
     const content = fs.readFileSync(this.stackPath, 'utf8');
-    
+
     // Check IGW references VPC
     const igwBlock = content.match(/resource\s+"aws_internet_gateway"[^}]+}/s);
-    const igwReferencesVPC = igwBlock ? /vpc_id\s*=\s*aws_vpc\.basic_vpc\.id/.test(igwBlock[0]) : false;
-    
+    const igwReferencesVPC = igwBlock
+      ? /vpc_id\s*=\s*aws_vpc\.basic_vpc\.id/.test(igwBlock[0])
+      : false;
+
     // Check subnets reference VPC
     const subnetBlocks = content.match(/resource\s+"aws_subnet"[^}]+}/gs) || [];
-    const subnetsReferenceVPC = subnetBlocks.every(block => 
+    const subnetsReferenceVPC = subnetBlocks.every(block =>
       /vpc_id\s*=\s*aws_vpc\.basic_vpc\.id/.test(block)
     );
-    
+
     // Check route table references VPC
     const rtBlock = content.match(/resource\s+"aws_route_table"[^}]+}/s);
-    const routeTableReferencesVPC = rtBlock ? /vpc_id\s*=\s*aws_vpc\.basic_vpc\.id/.test(rtBlock[0]) : false;
-    
+    const routeTableReferencesVPC = rtBlock
+      ? /vpc_id\s*=\s*aws_vpc\.basic_vpc\.id/.test(rtBlock[0])
+      : false;
+
     // Check route references
     const routeBlock = content.match(/resource\s+"aws_route"[^}]+}/s);
-    const routeReferencesResources = routeBlock ? 
-      /route_table_id\s*=\s*aws_route_table\.public_rt\.id/.test(routeBlock[0]) &&
-      /gateway_id\s*=\s*aws_internet_gateway\.basic_igw\.id/.test(routeBlock[0]) : false;
-    
+    const routeReferencesResources = routeBlock
+      ? /route_table_id\s*=\s*aws_route_table\.public_rt\.id/.test(
+          routeBlock[0]
+        ) &&
+        /gateway_id\s*=\s*aws_internet_gateway\.basic_igw\.id/.test(
+          routeBlock[0]
+        )
+      : false;
+
     // Check associations reference resources
-    const associationBlocks = content.match(/resource\s+"aws_route_table_association"[^}]+}/gs) || [];
-    const associationsReferenceResources = associationBlocks.every(block =>
-      /subnet_id\s*=\s*aws_subnet\.\w+\.id/.test(block) &&
-      /route_table_id\s*=\s*aws_route_table\.public_rt\.id/.test(block)
+    const associationBlocks =
+      content.match(/resource\s+"aws_route_table_association"[^}]+}/gs) || [];
+    const associationsReferenceResources = associationBlocks.every(
+      block =>
+        /subnet_id\s*=\s*aws_subnet\.\w+\.id/.test(block) &&
+        /route_table_id\s*=\s*aws_route_table\.public_rt\.id/.test(block)
     );
-    
+
     return {
       igwReferencesVPC,
       subnetsReferenceVPC,
       routeTableReferencesVPC,
       routeReferencesResources,
-      associationsReferenceResources
+      associationsReferenceResources,
     };
   }
 
@@ -230,17 +265,26 @@ export class TerraformValidator {
     outputsWithValues: string[];
   } {
     const content = fs.readFileSync(this.stackPath, 'utf8');
-    
-    const requiredOutputs = ['vpc_id', 'subnet_ids', 'internet_gateway_id', 'route_table_id'];
+
+    const requiredOutputs = [
+      'vpc_id',
+      'subnet_ids',
+      'internet_gateway_id',
+      'route_table_id',
+    ];
     const outputBlocks = content.match(/output\s+"([^"]+)"\s*{[^}]+}/gs) || [];
-    
-    const outputs = outputBlocks.map(block => {
-      const nameMatch = block.match(/output\s+"([^"]+)"/);
-      return nameMatch ? nameMatch[1] : '';
-    }).filter(Boolean);
-    
-    const hasAllRequiredOutputs = requiredOutputs.every(req => outputs.includes(req));
-    
+
+    const outputs = outputBlocks
+      .map(block => {
+        const nameMatch = block.match(/output\s+"([^"]+)"/);
+        return nameMatch ? nameMatch[1] : '';
+      })
+      .filter(Boolean);
+
+    const hasAllRequiredOutputs = requiredOutputs.every(req =>
+      outputs.includes(req)
+    );
+
     const outputsWithDescriptions = outputBlocks
       .filter(block => /description\s*=/.test(block))
       .map(block => {
@@ -248,7 +292,7 @@ export class TerraformValidator {
         return match ? match[1] : '';
       })
       .filter(Boolean);
-    
+
     const outputsWithValues = outputBlocks
       .filter(block => /value\s*=/.test(block))
       .map(block => {
@@ -256,28 +300,18 @@ export class TerraformValidator {
         return match ? match[1] : '';
       })
       .filter(Boolean);
-    
+
     return {
       hasAllRequiredOutputs,
       outputsWithDescriptions,
-      outputsWithValues
+      outputsWithValues,
     };
   }
 
   /**
    * Get comprehensive validation report
    */
-  public getValidationReport(): {
-    filesExist: ReturnType<typeof this.checkFilesExist>;
-    provider: ReturnType<typeof this.validateProviderConfig>;
-    stack: ReturnType<typeof this.validateStackConfig>;
-    environmentSuffix: ReturnType<typeof this.validateEnvironmentSuffix>;
-    cidr: ReturnType<typeof this.validateCIDRConfig>;
-    availabilityZones: ReturnType<typeof this.validateAvailabilityZones>;
-    dependencies: ReturnType<typeof this.validateDependencies>;
-    outputs: ReturnType<typeof this.validateOutputs>;
-    isValid: boolean;
-  } {
+  public getValidationReport() {
     const filesExist = this.checkFilesExist();
     const provider = this.validateProviderConfig();
     const stack = this.validateStackConfig();
@@ -286,15 +320,23 @@ export class TerraformValidator {
     const availabilityZones = this.validateAvailabilityZones();
     const dependencies = this.validateDependencies();
     const outputs = this.validateOutputs();
-    
-    const isValid = filesExist.stack && filesExist.provider &&
-      provider.hasRequiredProviders && provider.hasAWSProvider &&
-      stack.hasVPC && stack.hasIGW && stack.hasSubnets >= 2 &&
-      environmentSuffix.allTagsUseVariable && environmentSuffix.variableHasDefault &&
-      cidr.validCIDRs && availabilityZones.uniqueZones &&
-      dependencies.igwReferencesVPC && dependencies.subnetsReferenceVPC &&
+
+    const isValid =
+      filesExist.stack &&
+      filesExist.provider &&
+      provider.hasRequiredProviders &&
+      provider.hasAWSProvider &&
+      stack.hasVPC &&
+      stack.hasIGW &&
+      stack.hasSubnets >= 2 &&
+      environmentSuffix.allTagsUseVariable &&
+      environmentSuffix.variableHasDefault &&
+      cidr.validCIDRs &&
+      availabilityZones.uniqueZones &&
+      dependencies.igwReferencesVPC &&
+      dependencies.subnetsReferenceVPC &&
       outputs.hasAllRequiredOutputs;
-    
+
     return {
       filesExist,
       provider,
@@ -304,7 +346,7 @@ export class TerraformValidator {
       availabilityZones,
       dependencies,
       outputs,
-      isValid
+      isValid,
     };
   }
 }
