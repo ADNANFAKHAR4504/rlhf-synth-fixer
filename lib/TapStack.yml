@@ -1,46 +1,37 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Production-grade web application stack with VPC, ALB, Auto Scaling, RDS MySQL, and S3 logging'
+Description: 'Production-grade web app: VPC, ALB, ASG (Amazon Linux 2), RDS MySQL, S3 logs, CloudWatch logging — us-east-1'
 
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-      - Label:
-          default: "Network Configuration"
+      - Label: { default: "Network Configuration" }
         Parameters:
           - VpcCidr
           - AZs
           - PublicSubnetCidrs
           - PrivateAppSubnetCidrs
           - PrivateDbSubnetCidrs
-      - Label:
-          default: "EC2 Configuration"
+      - Label: { default: "EC2 Configuration" }
         Parameters:
           - InstanceType
           - KeyName
           - DesiredCapacity
           - MinSize
           - MaxSize
-      - Label:
-          default: "Database Configuration"
+      - Label: { default: "Database Configuration" }
         Parameters:
           - DbName
           - DbUsername
-          - DbPassword
           - DbInstanceClass
           - DbAllocatedStorage
-      - Label:
-          default: "Logging Configuration"
+      - Label: { default: "Logging Configuration" }
         Parameters:
           - LogsRetentionDays
     ParameterLabels:
-      VpcCidr:
-        default: "VPC CIDR Block"
-      AZs:
-        default: "Availability Zones"
-      InstanceType:
-        default: "EC2 Instance Type"
-      DbPassword:
-        default: "Database Password"
+      VpcCidr: { default: "VPC CIDR Block" }
+      AZs: { default: "Availability Zones" }
+      InstanceType: { default: "EC2 Instance Type" }
+      DbUsername: { default: "Database Username" }
 
 Parameters:
   VpcCidr:
@@ -53,7 +44,7 @@ Parameters:
   AZs:
     Type: List<AWS::EC2::AvailabilityZone::Name>
     Default: 'us-east-1a,us-east-1b'
-    Description: 'Availability Zones to use'
+    Description: 'Availability Zones to use (2 minimum)'
 
   PublicSubnetCidrs:
     Type: CommaDelimitedList
@@ -125,15 +116,6 @@ Parameters:
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: 'Database admin username'
 
-  DbPassword:
-    Type: String
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!?]*'
-    Description: 'Database admin password (min 8 characters)'
-    ConstraintDescription: 'Must contain 8-41 alphanumeric characters'
-
   DbInstanceClass:
     Type: String
     Default: 'db.t3.micro'
@@ -162,7 +144,9 @@ Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
 
 Resources:
-  # VPC
+  ############################
+  # Networking
+  ############################
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -170,24 +154,17 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-vpc'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-vpc' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
-  # Internet Gateway
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-igw'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-igw' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -195,7 +172,6 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
 
-  # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -204,12 +180,9 @@ Resources:
       CidrBlock: !Select [0, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-public-subnet-1'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-public-subnet-1' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -219,14 +192,10 @@ Resources:
       CidrBlock: !Select [1, !Ref PublicSubnetCidrs]
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-public-subnet-2'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-public-subnet-2' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
-  # Private App Subnets
   PrivateAppSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -234,12 +203,9 @@ Resources:
       AvailabilityZone: !Select [0, !Ref AZs]
       CidrBlock: !Select [0, !Ref PrivateAppSubnetCidrs]
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-app-subnet-1'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-private-app-subnet-1' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   PrivateAppSubnet2:
     Type: AWS::EC2::Subnet
@@ -248,14 +214,10 @@ Resources:
       AvailabilityZone: !Select [1, !Ref AZs]
       CidrBlock: !Select [1, !Ref PrivateAppSubnetCidrs]
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-app-subnet-2'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-private-app-subnet-2' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
-  # Private DB Subnets
   PrivateDbSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -263,12 +225,9 @@ Resources:
       AvailabilityZone: !Select [0, !Ref AZs]
       CidrBlock: !Select [0, !Ref PrivateDbSubnetCidrs]
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-db-subnet-1'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-private-db-subnet-1' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   PrivateDbSubnet2:
     Type: AWS::EC2::Subnet
@@ -277,26 +236,19 @@ Resources:
       AvailabilityZone: !Select [1, !Ref AZs]
       CidrBlock: !Select [1, !Ref PrivateDbSubnetCidrs]
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-db-subnet-2'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-private-db-subnet-2' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
-  # NAT Gateways
   NatGateway1EIP:
     Type: AWS::EC2::EIP
     DependsOn: InternetGatewayAttachment
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-eip-1'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-nat-eip-1' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
@@ -304,12 +256,9 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-eip-2'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-nat-eip-2' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -317,12 +266,9 @@ Resources:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-1'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-nat-1' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -330,25 +276,18 @@ Resources:
       AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-nat-2'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-nat-2' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
-  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-public-rt'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-public-rt' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -375,12 +314,9 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-rt-1'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-private-rt-1' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -406,12 +342,9 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-private-rt-2'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-private-rt-2' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -432,34 +365,23 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateDbSubnet2
 
+  ############################
   # Security Groups
+  ############################
   AlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTP access from anywhere'
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: '0.0.0.0/0'
-          Description: 'HTTPS access from anywhere (future use)'
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0', Description: 'HTTP access from anywhere' }
+        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0', Description: 'HTTPS (future use)' }
       SecurityGroupEgress:
-        - IpProtocol: '-1'
-          CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
+        - { IpProtocol: '-1', CidrIp: '0.0.0.0/0', Description: 'All outbound traffic' }
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-alb-sg'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-alb-sg' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   AppSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -467,22 +389,13 @@ Resources:
       GroupDescription: 'Security group for EC2 instances'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref AlbSecurityGroup
-          Description: 'HTTP access from ALB only'
+        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, SourceSecurityGroupId: !Ref AlbSecurityGroup, Description: 'HTTP from ALB only' }
       SecurityGroupEgress:
-        - IpProtocol: '-1'
-          CidrIp: '0.0.0.0/0'
-          Description: 'All outbound traffic'
+        - { IpProtocol: '-1', CidrIp: '0.0.0.0/0', Description: 'All outbound traffic' }
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-app-sg'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-app-sg' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -490,24 +403,18 @@ Resources:
       GroupDescription: 'Security group for RDS database'
       VpcId: !Ref VPC
       SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          SourceSecurityGroupId: !Ref AppSecurityGroup
-          Description: 'MySQL access from app instances only'
+        - { IpProtocol: tcp, FromPort: 3306, ToPort: 3306, SourceSecurityGroupId: !Ref AppSecurityGroup, Description: 'MySQL from app only' }
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-db-sg'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-db-sg' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
-  # S3 Bucket for Logs
+  ############################
+  # S3 for Logs (+ Policy)
+  ############################
   LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs-${AWS::AccountId}-${AWS::Region}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -515,54 +422,52 @@ Resources:
         RestrictPublicBuckets: true
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      VersioningConfiguration: { Status: Enabled }
       LifecycleConfiguration:
         Rules:
           - Id: 'TransitionAndExpiration'
             Status: Enabled
             Transitions:
-              - TransitionInDays: 30
-                StorageClass: STANDARD_IA
+              - { TransitionInDays: 30, StorageClass: STANDARD_IA }
             ExpirationInDays: 90
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-logs-bucket'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-logs-bucket' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   LogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref LogsBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: 'DenyInsecureConnections'
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${LogsBucket}/*'
-              - !Ref LogsBucket
+              - !Sub 'arn:aws:s3:::${LogsBucket}'
+              - !Sub 'arn:aws:s3:::${LogsBucket}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
           - Sid: 'AllowALBAccessLogs'
             Effect: Allow
             Principal:
-              AWS: 'arn:aws:iam::127311923021:root'
+              AWS: 'arn:aws:iam::127311923021:root' # us-east-1 ELB log delivery
             Action: 's3:PutObject'
-            Resource: !Sub '${LogsBucket}/alb-logs/*'
+            Resource: !Sub 'arn:aws:s3:::${LogsBucket}/alb-logs/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
 
-  # Application Load Balancer
+  ############################
+  # ALB + Target Group + Listener (HTTP only)
+  ############################
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${AWS::StackName}-alb'
       Scheme: internet-facing
       Type: application
       Subnets:
@@ -571,26 +476,18 @@ Resources:
       SecurityGroups:
         - !Ref AlbSecurityGroup
       LoadBalancerAttributes:
-        - Key: access_logs.s3.enabled
-          Value: 'true'
-        - Key: access_logs.s3.bucket
-          Value: !Ref LogsBucket
-        - Key: access_logs.s3.prefix
-          Value: 'alb-logs'
-        - Key: idle_timeout.timeout_seconds
-          Value: '60'
+        - { Key: access_logs.s3.enabled, Value: 'true' }
+        - { Key: access_logs.s3.bucket, Value: !Ref LogsBucket }
+        - { Key: access_logs.s3.prefix, Value: 'alb-logs' }
+        - { Key: idle_timeout.timeout_seconds, Value: '60' }
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-alb'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-alb' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${AWS::StackName}-tg'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -603,12 +500,9 @@ Resources:
       UnhealthyThresholdCount: 5
       TargetType: instance
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-tg'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-tg' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -619,51 +513,49 @@ Resources:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
-      # Note: HTTPS listener can be added later once an ACM certificate is available
+      # NOTE: HTTPS listener intentionally omitted (add later when ACM cert is available)
 
-  # CloudWatch Log Group
+  ############################
+  # CloudWatch Logs + IAM
+  ############################
   AppLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: '/tapstack/app'
       RetentionInDays: !Ref LogsRetentionDays
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-app-logs'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-app-logs' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
-  # IAM Role and Instance Profile
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub '${AWS::StackName}-instance-role'
       AssumeRolePolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
+            Principal: { Service: ec2.amazonaws.com }
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-instance-role'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-instance-role' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub '${AWS::StackName}-instance-profile'
-      Roles:
-        - !Ref InstanceRole
+      Roles: [ !Ref InstanceRole ]
 
-  # Launch Template
+  ############################
+  # Launch Template & ASG
+  ############################
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -672,85 +564,65 @@ Resources:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
-        IamInstanceProfile:
-          Name: !Ref InstanceProfile
-        SecurityGroupIds:
-          - !Ref AppSecurityGroup
-        Monitoring:
-          Enabled: true
+        IamInstanceProfile: { Name: !Ref InstanceProfile }
+        SecurityGroupIds: [ !Ref AppSecurityGroup ]
+        Monitoring: { Enabled: true }
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
             yum update -y
             yum install -y nginx awslogs
-            
-            # Configure nginx
-            systemctl start nginx
+
             systemctl enable nginx
-            
-            # Create simple index page
+            systemctl start nginx
+
             echo "<h1>Hello from TapStack</h1>" > /usr/share/nginx/html/index.html
             echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /usr/share/nginx/html/index.html
             echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /usr/share/nginx/html/index.html
-            
-            # Configure CloudWatch Logs
-            cat << EOF > /etc/awslogs/awslogs.conf
+
+            cat << 'EOF' > /etc/awslogs/awslogs.conf
             [general]
             state_file = /var/lib/awslogs/agent-state
-            
+
             [/var/log/messages]
             file = /var/log/messages
-            log_group_name = ${AppLogGroup}
+            log_group_name = /tapstack/app
             log_stream_name = {instance_id}/messages
             datetime_format = %b %d %H:%M:%S
-            
+
             [/var/log/nginx/access.log]
             file = /var/log/nginx/access.log
-            log_group_name = ${AppLogGroup}
+            log_group_name = /tapstack/app
             log_stream_name = {instance_id}/nginx-access
             datetime_format = %d/%b/%Y:%H:%M:%S %z
-            
+
             [/var/log/nginx/error.log]
             file = /var/log/nginx/error.log
-            log_group_name = ${AppLogGroup}
+            log_group_name = /tapstack/app
             log_stream_name = {instance_id}/nginx-error
             datetime_format = %Y/%m/%d %H:%M:%S
             EOF
-            
-            # Update awslogs region
-            sed -i "s/region = us-east-1/region = ${AWS::Region}/g" /etc/awslogs/awscli.conf
-            
-            # Start awslogs
-            systemctl start awslogsd
-            systemctl enable awslogsd.service
-            
-            # Log instance information
-            echo "TapStack instance started: $(date)" >> /var/log/messages
-            echo "Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)" >> /var/log/messages
+
+            sed -i "s/region = .*/region = ${AWS::Region}/g" /etc/awslogs/awscli.conf || echo -e "[default]\nregion = ${AWS::Region}" > /etc/awslogs/awscli.conf
+            systemctl enable awslogsd.service || true
+            systemctl start awslogsd || true
+
         TagSpecifications:
           - ResourceType: instance
             Tags:
-              - Key: Name
-                Value: !Sub '${AWS::StackName}-instance'
-              - Key: Environment
-                Value: Production
-              - Key: Project
-                Value: TapStack
+              - { Key: Name, Value: !Sub '${AWS::StackName}-instance' }
+              - { Key: Environment, Value: Production }
+              - { Key: Project, Value: TapStack }
       TagSpecifications:
         - ResourceType: launch-template
           Tags:
-            - Key: Name
-              Value: !Sub '${AWS::StackName}-launch-template'
-            - Key: Environment
-              Value: Production
-            - Key: Project
-              Value: TapStack
+            - { Key: Name, Value: !Sub '${AWS::StackName}-launch-template' }
+            - { Key: Environment, Value: Production }
+            - { Key: Project, Value: TapStack }
 
-  # Auto Scaling Group
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub '${AWS::StackName}-asg'
       VPCZoneIdentifier:
         - !Ref PrivateAppSubnet1
         - !Ref PrivateAppSubnet2
@@ -762,14 +634,7 @@ Resources:
       DesiredCapacity: !Ref DesiredCapacity
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
-      TargetGroupARNs:
-        - !Ref TargetGroup
-      UpdatePolicy:
-        AutoScalingRollingUpdate:
-          MinInstancesInService: 1
-          MaxBatchSize: 1
-          PauseTime: PT5M
-          WaitOnResourceSignals: false
+      TargetGroupARNs: [ !Ref TargetGroup ]
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-asg'
@@ -780,39 +645,57 @@ Resources:
         - Key: Project
           Value: TapStack
           PropagateAtLaunch: true
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: 1
+        MaxBatchSize: 1
+        PauseTime: PT5M
+        WaitOnResourceSignals: false
 
-  # Database Subnet Group
+  ############################
+  # RDS Secrets + Subnet Group + DB
+  ############################
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub '${AWS::StackName}-db-subnet-group'
       DBSubnetGroupDescription: 'Subnet group for RDS database'
       SubnetIds:
         - !Ref PrivateDbSubnet1
         - !Ref PrivateDbSubnet2
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-db-subnet-group'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-db-subnet-group' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
-  # RDS Database Instance
+  DbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-db-credentials'
+      Description: 'RDS master credentials for TapStack'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username":"${DbUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+        ExcludePunctuation: true
+      Tags:
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
+
   Database:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: !Sub '${AWS::StackName}-db'
       DBName: !Ref DbName
       DBInstanceClass: !Ref DbInstanceClass
       AllocatedStorage: !Ref DbAllocatedStorage
       Engine: MySQL
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       MasterUsername: !Ref DbUsername
-      MasterUserPassword: !Ref DbPassword
-      VPCSecurityGroups:
-        - !Ref DbSecurityGroup
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DbSecret}::password}}'
+      VPCSecurityGroups: [ !Ref DbSecurityGroup ]
       DBSubnetGroupName: !Ref DbSubnetGroup
       BackupRetentionPeriod: 7
       MultiAZ: true
@@ -820,100 +703,82 @@ Resources:
       PubliclyAccessible: false
       DeletionProtection: true
       Tags:
-        - Key: Name
-          Value: !Sub '${AWS::StackName}-db'
-        - Key: Environment
-          Value: Production
-        - Key: Project
-          Value: TapStack
+        - { Key: Name, Value: !Sub '${AWS::StackName}-db' }
+        - { Key: Environment, Value: Production }
+        - { Key: Project, Value: TapStack }
 
 Outputs:
   VPCId:
     Description: 'VPC ID'
     Value: !Ref VPC
-    Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+    Export: { Name: !Sub '${AWS::StackName}-VPCId' }
 
   PublicSubnetIds:
     Description: 'Public subnet IDs'
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
-    Export:
-      Name: !Sub '${AWS::StackName}-PublicSubnetIds'
+    Export: { Name: !Sub '${AWS::StackName}-PublicSubnetIds' }
 
   PrivateAppSubnetIds:
     Description: 'Private app subnet IDs'
     Value: !Join [',', [!Ref PrivateAppSubnet1, !Ref PrivateAppSubnet2]]
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateAppSubnetIds'
+    Export: { Name: !Sub '${AWS::StackName}-PrivateAppSubnetIds' }
 
   PrivateDbSubnetIds:
     Description: 'Private DB subnet IDs'
     Value: !Join [',', [!Ref PrivateDbSubnet1, !Ref PrivateDbSubnet2]]
-    Export:
-      Name: !Sub '${AWS::StackName}-PrivateDbSubnetIds'
+    Export: { Name: !Sub '${AWS::StackName}-PrivateDbSubnetIds' }
 
   AlbArn:
     Description: 'Application Load Balancer ARN'
     Value: !Ref ApplicationLoadBalancer
-    Export:
-      Name: !Sub '${AWS::StackName}-AlbArn'
+    Export: { Name: !Sub '${AWS::StackName}-AlbArn' }
 
   AlbDnsName:
     Description: 'Application Load Balancer DNS name'
     Value: !GetAtt ApplicationLoadBalancer.DNSName
-    Export:
-      Name: !Sub '${AWS::StackName}-AlbDnsName'
+    Export: { Name: !Sub '${AWS::StackName}-AlbDnsName' }
 
   TargetGroupArn:
     Description: 'Target Group ARN'
     Value: !Ref TargetGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-TargetGroupArn'
+    Export: { Name: !Sub '${AWS::StackName}-TargetGroupArn' }
 
   AutoScalingGroupName:
     Description: 'Auto Scaling Group name'
     Value: !Ref AutoScalingGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-AutoScalingGroupName'
+    Export: { Name: !Sub '${AWS::StackName}-AutoScalingGroupName' }
 
   LaunchTemplateId:
     Description: 'Launch Template ID and latest version'
     Value: !Sub '${LaunchTemplate}:${LaunchTemplate.LatestVersionNumber}'
-    Export:
-      Name: !Sub '${AWS::StackName}-LaunchTemplateId'
+    Export: { Name: !Sub '${AWS::StackName}-LaunchTemplateId' }
 
   InstanceRoleArn:
     Description: 'Instance IAM Role ARN'
     Value: !GetAtt InstanceRole.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-InstanceRoleArn'
+    Export: { Name: !Sub '${AWS::StackName}-InstanceRoleArn' }
 
   InstanceProfileName:
     Description: 'Instance Profile name'
     Value: !Ref InstanceProfile
-    Export:
-      Name: !Sub '${AWS::StackName}-InstanceProfileName'
+    Export: { Name: !Sub '${AWS::StackName}-InstanceProfileName' }
 
   LogsBucketName:
     Description: 'S3 logs bucket name'
     Value: !Ref LogsBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-LogsBucketName'
+    Export: { Name: !Sub '${AWS::StackName}-LogsBucketName' }
 
   RdsEndpointAddress:
     Description: 'RDS endpoint address'
     Value: !GetAtt Database.Endpoint.Address
-    Export:
-      Name: !Sub '${AWS::StackName}-RdsEndpointAddress'
+    Export: { Name: !Sub '${AWS::StackName}-RdsEndpointAddress' }
 
   RdsArn:
     Description: 'RDS instance ARN'
-    Value: !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${Database}'
-    Export:
-      Name: !Sub '${AWS::StackName}-RdsArn'
+    Value: !GetAtt Database.DBInstanceArn
+    Export: { Name: !Sub '${AWS::StackName}-RdsArn' }
 
   DbSubnetGroupName:
     Description: 'Database subnet group name'
     Value: !Ref DbSubnetGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-DbSubnetGroupName'
+    Export: { Name: !Sub '${AWS::StackName}-DbSubnetGroupName' }
