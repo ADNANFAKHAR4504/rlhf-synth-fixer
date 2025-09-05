@@ -1,65 +1,67 @@
-# Model Response - Terraform Infrastructure Implementation
+MODEL RESPONSE DOCUMENTATION
 
-## Reasoning Trace
+OVERVIEW
+This document provides guidance on proper model responses and best practices for infrastructure as code deployments.
 
-This is a comprehensive Terraform infrastructure task requiring multiple AWS services across three environments. Let me break down what I need to create:
+RESPONSE QUALITY STANDARDS
 
-### 1. Environment Configuration
-- Three environments: dev, staging, prod
-- Each with specific configurations for VPC CIDRs, instance types, etc.
-- Consistent tagging strategy across all resources
+Clear Communication
+- Provide explicit explanations for each action taken
+- Use consistent terminology throughout responses
+- Include context for decision-making processes
 
-### 2. Core Infrastructure Components
+Technical Accuracy
+- Validate all configuration changes before suggesting them
+- Ensure resource references are correct and consistent
+- Verify provider configurations match deployment requirements
 
-#### Networking
-- VPC with public and private subnets
-- Internet Gateway for public access
-- NAT Gateway for private subnet outbound access
-- Route tables and associations
-- Security groups with appropriate rules
+Problem Resolution
+- Identify root causes before proposing solutions
+- Provide step-by-step troubleshooting guidance
+- Include validation steps to confirm fixes
 
-#### Compute
-- EC2 instances in appropriate subnets
-- Auto Scaling Groups for high availability
-- Application Load Balancer for traffic distribution
-- Launch templates with proper configurations
+BEST PRACTICES
 
-#### Database
-- RDS instances with Multi-AZ deployment
-- Subnet groups for database placement
-- Parameter groups for database configuration
-- Security groups for database access
+Configuration Management
+- Use consistent naming conventions across all resources
+- Implement proper tagging strategies for resource organization
+- Maintain clear separation between environments
 
-#### Storage
-- S3 buckets for various purposes
-- KMS keys for encryption
-- Bucket policies for access control
-- Lifecycle policies for cost optimization
+Multi-Region Deployments
+- Properly configure provider aliases for each region
+- Ensure resource assignments use correct provider references
+- Validate cross-region dependencies and limitations
 
-#### Security & Compliance
-- IAM roles and policies
-- CloudTrail for audit logging
-- Config for compliance monitoring
-- Secrets Manager for sensitive data
+Security Considerations
+- Implement least privilege access principles
+- Use secure credential management practices
+- Enable encryption for sensitive data and communications
 
-#### Monitoring
-- CloudWatch alarms
-- Log groups
-- SNS topics for notifications
-- Dashboards for monitoring
+Testing and Validation
+- Always run terraform validate before deployment
+- Use terraform plan to review proposed changes
+- Implement automated testing for infrastructure code
 
-### 3. Implementation Strategy
-- Use for_each loops for environment-specific resources
-- Implement proper variable definitions
-- Use locals for common configurations
-- Follow Terraform best practices
-- Ensure proper resource dependencies
+ERROR HANDLING
 
-### 4. Outputs
-- VPC IDs and subnet IDs
-- Security group IDs
-- Load balancer DNS names
-- Database endpoints
-- S3 bucket names
+Proactive Error Prevention
+- Validate configurations before execution
+- Check for common pitfalls and misconfigurations
+- Provide clear error messages and resolution steps
 
-This approach ensures scalability, maintainability, and follows AWS best practices for multi-environment deployments.
+Recovery Procedures
+- Document rollback procedures for failed deployments
+- Maintain backup configurations for critical infrastructure
+- Implement monitoring and alerting for infrastructure health
+
+DOCUMENTATION STANDARDS
+
+Code Documentation
+- Include clear comments explaining complex logic
+- Document variable purposes and expected values
+- Provide examples of proper usage patterns
+
+Operational Documentation
+- Maintain deployment procedures and prerequisites
+- Document troubleshooting steps for common issues
+- Include contact information for support escalation

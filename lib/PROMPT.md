@@ -1,61 +1,78 @@
-# Terraform Infrastructure Prompt
+TAP-STACK TERRAFORM CONFIGURATION
 
-## Task Overview
+OVERVIEW
+This document provides comprehensive information about the TAP-Stack Terraform infrastructure configuration.
 
-You are tasked with creating a Terraform file (.tf) that provisions AWS infrastructure across three environments: Dev, Staging, and Production. Each environment must be fully isolated but identical in functionality, ensuring strict consistency and scalability.
+PROJECT STRUCTURE
 
-## Requirements
+Core Files
+- provider.tf: AWS provider configuration with multi-region support
+- tap_stack.tf: Main infrastructure definition for all environments
+- terraform.tfvars: Variable configuration for customization
 
-### Networking & Compute
-- VPC with public/private subnets across multiple AZs
+Environment Configuration
+The infrastructure supports three environments:
+- dev: Development environment in us-east-1
+- staging: Staging environment in us-east-1  
+- prod: Production environment in us-west-2
+
+INFRASTRUCTURE COMPONENTS
+
+Network Infrastructure
+- VPC with DNS support enabled
+- Public and private subnets across multiple availability zones
+- Internet gateways for public internet access
+- Route tables for traffic routing
+- Security groups for network access control
+
+Compute Resources
+- EC2 instances for web servers
+- Auto-configured with Apache HTTP server
+- Public IP addresses for external access
+- Security group allowing HTTP and SSH access
+
+Database Resources
+- RDS MySQL instances for data storage
+- Encrypted storage with automated backups
+- Private subnet deployment for security
+- Database subnet groups for high availability
+
+DEPLOYMENT CONFIGURATION
+
+Backend Options
+- Local backend for development and testing
+- S3 backend option for production deployments
+- Configurable through provider.tf settings
+
+Variable Customization
+- Company name for resource naming
+- Instance types for EC2 and RDS
+- SSH access CIDR blocks
+- Environment-specific configurations
+
+SECURITY FEATURES
+
+Network Security
+- Private subnets for database resources
 - Security groups with least privilege access
-- Internet Gateway and NAT Gateway for connectivity
-- Route tables for proper traffic routing
-- EC2 instances with Auto Scaling Groups
-- Application Load Balancer for traffic distribution
+- SSH access restricted to specific CIDR blocks
+- Database access limited to web tier
 
-### Database & Storage
-- RDS instances with Multi-AZ deployment
-- S3 buckets for data storage and backups
-- KMS keys for encryption
-- Parameter Store for configuration management
+Data Protection
+- RDS encryption enabled for all instances
+- Automated backup retention policies
+- Secure password generation for databases
+- Sensitive output protection
 
-### Security & Compliance
-- IAM roles and policies with minimal permissions
-- CloudTrail for audit logging
-- Config for compliance monitoring
-- Secrets Manager for sensitive data
+MONITORING AND MANAGEMENT
 
-### Monitoring & Logging
-- CloudWatch alarms for key metrics
-- Log groups for application logs
-- SNS topics for notifications
-- Dashboards for monitoring
+Resource Tagging
+- Consistent tagging strategy across all resources
+- Environment and cost center identification
+- Project and management tool tracking
 
-## Environment Configuration
-
-Each environment should have:
-- Unique VPC CIDR blocks
-- Environment-specific resource naming
-- Appropriate instance sizes for each environment
-- Consistent tagging strategy
-- Proper cost allocation tags
-
-## Implementation Guidelines
-
-1. Use for_each loops for environment-specific resources
-2. Implement proper variable definitions
-3. Use locals for common configurations
-4. Follow Terraform best practices
-5. Ensure proper resource dependencies
-6. Use modules for reusability
-7. Implement proper tagging strategy
-
-## Expected Outputs
-
-- VPC IDs and subnet IDs for each environment
-- Security group IDs
-- Load balancer DNS names
-- Database endpoints
-- S3 bucket names
-- CloudWatch log group names
+Output Information
+- Complete environment infrastructure details
+- Database connection endpoints
+- Instance networking information
+- Secure password management

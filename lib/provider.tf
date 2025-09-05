@@ -20,6 +20,12 @@ terraform {
 # Default AWS provider (us-east-1)
 provider "aws" {
   region = "us-east-1"
+  
+  # Uncomment and configure if using assume role with jumphost
+  # assume_role {
+  #   role_arn     = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+  #   session_name = "terraform-session"
+  # }
 
   default_tags {
     tags = {
@@ -35,6 +41,12 @@ provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
   
+  # Uncomment and configure if using assume role with jumphost
+  # assume_role {
+  #   role_arn     = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+  #   session_name = "terraform-session"
+  # }
+  
   default_tags {
     tags = {
       Project     = "TAP-Stack"
@@ -48,6 +60,12 @@ provider "aws" {
 provider "aws" {
   alias  = "us_west_2"
   region = "us-west-2"
+  
+  # Uncomment and configure if using assume role with jumphost
+  # assume_role {
+  #   role_arn     = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+  #   session_name = "terraform-session"
+  # }
   
   default_tags {
     tags = {

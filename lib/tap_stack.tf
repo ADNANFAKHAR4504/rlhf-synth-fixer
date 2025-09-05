@@ -79,8 +79,14 @@ data "aws_ami" "amazon_linux" {
 }
 
 # Data sources for availability zones
-data "aws_availability_zones" "available" {
-  state = "available"
+data "aws_availability_zones" "us_east_1" {
+  provider = aws.us_east_1
+  state    = "available"
+}
+
+data "aws_availability_zones" "us_west_2" {
+  provider = aws.us_west_2
+  state    = "available"
 }
 
 # Random password for RDS instances
@@ -90,9 +96,13 @@ resource "random_password" "db_password" {
   special  = true
 }
 
-# VPC
-resource "aws_vpc" "main" {
-  for_each = local.environments
+# VPC for US-East-1 environments (dev, staging)
+resource "aws_vpc" "us_east_1" {
+  for_each = {
+    for env_key, env in local.environments : env_key => env
+    if env.region == "us-east-1"
+  }
+  provider = aws.us_east_1
 
   cidr_block           = each.value.vpc_cidr
   enable_dns_hostnames = true
@@ -105,10 +115,34 @@ resource "aws_vpc" "main" {
   })
 }
 
+# VPC for US-West-2 environments (prod)
+resource "aws_vpc" "us_west_2" {
+  for_each = {
+    for env_key, env in local.environments : env_key => env
+    if env.region == "us-west-2"
+  }
+  provider = aws.us_west_2
+
+  cidr_block           = each.value.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = merge(local.common_tags, {
+    Name        = "${var.company_name}-${each.key}-vpc"
+    Environment = each.value.name
+    CostCenter  = each.value.cost_center
+  })
+}
+
+# Local to combine VPCs
+locals {
+  all_vpcs = merge(aws_vpc.us_east_1, aws_vpc.us_west_2)
+}
+
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   for_each = local.environments
-  vpc_id   = aws_vpc.main[each.key].id
+  vpc_id   = local.all_vpcs[each.key].id
 
   tags = merge(local.common_tags, {
     Name        = "${var.company_name}-${each.key}-igw"
@@ -120,16 +154,21 @@ resource "aws_internet_gateway" "main" {
 # Public Subnets
 resource "aws_subnet" "public" {
   for_each = {
-    for idx, env in local.environments : "${env.name}-${idx}" => {
-      env_key    = env.name
-      env        = env
-      subnet_idx = idx
-    }
+    for combo in flatten([
+      for env_key, env in local.environments : [
+        for subnet_idx in range(length(env.public_subnet_cidrs)) : {
+          key        = "${env_key}-${subnet_idx}"
+          env_key    = env_key
+          env        = env
+          subnet_idx = subnet_idx
+        }
+      ]
+    ]) : combo.key => combo
   }
 
-  vpc_id                  = aws_vpc.main[each.value.env_key].id
+  vpc_id                  = local.all_vpcs[each.value.env_key].id
   cidr_block              = each.value.env.public_subnet_cidrs[each.value.subnet_idx]
-  availability_zone       = data.aws_availability_zones.available.names[each.value.subnet_idx]
+  availability_zone       = each.value.env.region == "us-west-2" ? data.aws_availability_zones.us_west_2.names[each.value.subnet_idx] : data.aws_availability_zones.us_east_1.names[each.value.subnet_idx]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
@@ -143,16 +182,21 @@ resource "aws_subnet" "public" {
 # Private Subnets
 resource "aws_subnet" "private" {
   for_each = {
-    for idx, env in local.environments : "${env.name}-${idx}" => {
-      env_key    = env.name
-      env        = env
-      subnet_idx = idx
-    }
+    for combo in flatten([
+      for env_key, env in local.environments : [
+        for subnet_idx in range(length(env.private_subnet_cidrs)) : {
+          key        = "${env_key}-${subnet_idx}"
+          env_key    = env_key
+          env        = env
+          subnet_idx = subnet_idx
+        }
+      ]
+    ]) : combo.key => combo
   }
 
-  vpc_id            = aws_vpc.main[each.value.env_key].id
+  vpc_id            = local.all_vpcs[each.value.env_key].id
   cidr_block        = each.value.env.private_subnet_cidrs[each.value.subnet_idx]
-  availability_zone = data.aws_availability_zones.available.names[each.value.subnet_idx]
+  availability_zone = each.value.env.region == "us-west-2" ? data.aws_availability_zones.us_west_2.names[each.value.subnet_idx] : data.aws_availability_zones.us_east_1.names[each.value.subnet_idx]
 
   tags = merge(local.common_tags, {
     Name        = "${var.company_name}-${each.value.env_key}-private-subnet-${each.value.subnet_idx + 1}"
@@ -165,7 +209,7 @@ resource "aws_subnet" "private" {
 # Route Tables
 resource "aws_route_table" "public" {
   for_each = local.environments
-  vpc_id   = aws_vpc.main[each.key].id
+  vpc_id   = local.all_vpcs[each.key].id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -181,7 +225,7 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table" "private" {
   for_each = local.environments
-  vpc_id   = aws_vpc.main[each.key].id
+  vpc_id   = local.all_vpcs[each.key].id
 
   tags = merge(local.common_tags, {
     Name        = "${var.company_name}-${each.key}-private-rt"
@@ -192,27 +236,17 @@ resource "aws_route_table" "private" {
 
 # Route Table Associations
 resource "aws_route_table_association" "public" {
-  for_each = {
-    for idx, env in local.environments : "${env.name}-${idx}" => {
-      env_key   = env.name
-      subnet_id = aws_subnet.public["${env.name}-${idx}"].id
-    }
-  }
+  for_each = aws_subnet.public
 
-  subnet_id      = each.value.subnet_id
-  route_table_id = aws_route_table.public[each.value.env_key].id
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.public[split("-", each.key)[0]].id
 }
 
 resource "aws_route_table_association" "private" {
-  for_each = {
-    for idx, env in local.environments : "${env.name}-${idx}" => {
-      env_key   = env.name
-      subnet_id = aws_subnet.private["${env.name}-${idx}"].id
-    }
-  }
+  for_each = aws_subnet.private
 
-  subnet_id      = each.value.subnet_id
-  route_table_id = aws_route_table.private[each.value.env_key].id
+  subnet_id      = each.value.id
+  route_table_id = aws_route_table.private[split("-", each.key)[0]].id
 }
 
 # Security Groups
@@ -220,7 +254,7 @@ resource "aws_security_group" "web" {
   for_each = local.environments
 
   name_prefix = "${var.company_name}-${each.key}-web-"
-  vpc_id      = aws_vpc.main[each.key].id
+  vpc_id      = local.all_vpcs[each.key].id
 
   ingress {
     description = "HTTP"
@@ -256,7 +290,7 @@ resource "aws_security_group" "rds" {
   for_each = local.environments
 
   name_prefix = "${var.company_name}-${each.key}-rds-"
-  vpc_id      = aws_vpc.main[each.key].id
+  vpc_id      = local.all_vpcs[each.key].id
 
   ingress {
     description     = "MySQL/Aurora"
@@ -273,13 +307,127 @@ resource "aws_security_group" "rds" {
   })
 }
 
+# DB Subnet Groups
+resource "aws_db_subnet_group" "main" {
+  for_each = local.environments
+
+  name = "${var.company_name}-${each.key}-db-subnet-group"
+  subnet_ids = [
+    for subnet_key, subnet in aws_subnet.private : subnet.id
+    if startswith(subnet_key, each.key)
+  ]
+
+  tags = merge(local.common_tags, {
+    Name        = "${var.company_name}-${each.key}-db-subnet-group"
+    Environment = each.value.name
+    CostCenter  = each.value.cost_center
+  })
+}
+
+# RDS Instances
+resource "aws_db_instance" "main" {
+  for_each = local.environments
+
+  identifier     = "${var.company_name}-${each.key}-db"
+  engine         = "mysql"
+  engine_version = "8.0"
+  instance_class = var.db_instance_class
+
+  allocated_storage     = 20
+  max_allocated_storage = 100
+  storage_encrypted     = true
+  storage_type          = "gp3"
+
+  db_name  = "${var.company_name}${each.key}db"
+  username = "admin"
+  password = random_password.db_password[each.key].result
+
+  vpc_security_group_ids = [aws_security_group.rds[each.key].id]
+  db_subnet_group_name   = aws_db_subnet_group.main[each.key].name
+
+  backup_retention_period = each.value.backup_retention
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+
+  skip_final_snapshot = true
+  deletion_protection = false
+
+  tags = merge(local.common_tags, {
+    Name        = "${var.company_name}-${each.key}-db"
+    Environment = each.value.name
+    CostCenter  = each.value.cost_center
+  })
+}
+
+# EC2 Instances
+resource "aws_instance" "web" {
+  for_each = local.environments
+
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.ec2_instance_type
+  
+  subnet_id = [
+    for subnet_key, subnet in aws_subnet.public : subnet.id
+    if startswith(subnet_key, each.key)
+  ][0]
+  vpc_security_group_ids      = [aws_security_group.web[each.key].id]
+  associate_public_ip_address = true
+
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Hello from ${each.key} environment</h1>" > /var/www/html/index.html
+              EOF
+  )
+
+  tags = merge(local.common_tags, {
+    Name        = "${var.company_name}-${each.key}-web"
+    Environment = each.value.name
+    CostCenter  = each.value.cost_center
+  })
+}
+
 # Outputs
 output "environment_info" {
   value = {
     for env_key, env in local.environments : env_key => {
-      region = env.region
-      vpc_id = aws_vpc.main[env_key].id
+      region         = env.region
+      vpc_id         = local.all_vpcs[env_key].id
+      vpc_cidr       = local.all_vpcs[env_key].cidr_block
+      public_subnets = [
+        for subnet_key, subnet in aws_subnet.public : {
+          id   = subnet.id
+          cidr = subnet.cidr_block
+          az   = subnet.availability_zone
+        }
+        if startswith(subnet_key, env_key)
+      ]
+      private_subnets = [
+        for subnet_key, subnet in aws_subnet.private : {
+          id   = subnet.id
+          cidr = subnet.cidr_block
+          az   = subnet.availability_zone
+        }
+        if startswith(subnet_key, env_key)
+      ]
+      rds_endpoint = aws_db_instance.main[env_key].endpoint
+      ec2_instance = {
+        id         = aws_instance.web[env_key].id
+        public_ip  = aws_instance.web[env_key].public_ip
+        private_ip = aws_instance.web[env_key].private_ip
+      }
     }
   }
   description = "Environment infrastructure details"
+}
+
+output "database_passwords" {
+  value = {
+    for env_key in keys(local.environments) : env_key => random_password.db_password[env_key].result
+  }
+  description = "Database passwords for each environment"
+  sensitive   = true
 }

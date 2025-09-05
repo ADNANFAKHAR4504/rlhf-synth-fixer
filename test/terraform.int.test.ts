@@ -61,15 +61,17 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('Networking Integration', () => {
     test('VPC and subnet configuration is properly integrated', () => {
-      // Verify VPC references in subnets (simplified structure)
-      expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\[each\.key\]\.id/);
-      expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.public/);
-      expect(stackContent).toMatch(/subnet_id\s*=\s*aws_subnet\.private/);
+      // Verify VPC references in subnets (current multi-region structure)
+      expect(stackContent).toMatch(/vpc_id\s*=\s*local\.all_vpcs\[each\.value\.env_key\]\.id/);
+      // Verify subnet selection logic for EC2 instances
+      expect(stackContent).toMatch(/subnet_id\s*=\s*\[[\s\S]*for\s+subnet_key,\s*subnet\s+in\s+aws_subnet\.public/);
+      // Verify DB subnet group uses private subnets
+      expect(stackContent).toMatch(/subnet_ids\s*=\s*\[[\s\S]*for\s+subnet_key,\s*subnet\s+in\s+aws_subnet\.private/);
     });
 
     test('Security groups reference VPC correctly', () => {
-      // Verify security groups are attached to the correct VPC (simplified structure)
-      expect(stackContent).toMatch(/vpc_id\s*=\s*aws_vpc\.main\[each\.key\]\.id/);
+      // Verify security groups are attached to the correct VPC (current multi-region structure)
+      expect(stackContent).toMatch(/vpc_id\s*=\s*local\.all_vpcs\[each\.key\]\.id/);
     });
 
     test('Basic load balancer infrastructure is ready', () => {
@@ -161,16 +163,16 @@ describe('Terraform Infrastructure Integration Tests', () => {
 
   describe('Output Integration', () => {
     test('Outputs reference correct resources', () => {
-      // Verify outputs reference the correct resource attributes (simplified structure)
+      // Verify outputs reference the correct resource attributes (current multi-region structure)
       expect(stackContent).toMatch(/output\s+"environment_info"/);
-      expect(stackContent).toMatch(/aws_vpc\.main\[env_key\]\.id/);
+      expect(stackContent).toMatch(/local\.all_vpcs\[env_key\]\.id/);
     });
   });
 
   describe('Resource Dependencies', () => {
     test('Resources have proper dependencies', () => {
-      // Verify that resources reference other resources they depend on (simplified structure)
-      expect(stackContent).toMatch(/aws_vpc\.main\[each\.key\]\.id/);
+      // Verify that resources reference other resources they depend on (current multi-region structure)
+      expect(stackContent).toMatch(/local\.all_vpcs\[each\.key\]\.id/);
       expect(stackContent).toMatch(/aws_internet_gateway\.main\[each\.key\]\.id/);
       expect(stackContent).toMatch(/aws_security_group\.web\[each\.key\]\.id/);
     });
