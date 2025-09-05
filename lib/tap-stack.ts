@@ -84,10 +84,6 @@ export class TapStack extends cdk.Stack {
       value: this.vpc.vpcId,
       description: 'VPC ID used by security stack',
     });
-    new cdk.CfnOutput(this, 'SecurityVpcId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID used by security stack',
-    });
 
     new cdk.CfnOutput(this, 'SecurityVpcCidr', {
       value: this.vpc.vpcCidrBlock,
@@ -644,73 +640,72 @@ export class TapStack extends cdk.Stack {
 
   private createIAMRoles(projectName: string, environment: string): void {
     // Create a group that requires MFA
-    const _mfaGroup = new iam.Group(
-      this,
-      `${projectName}-${environment}-mfa-required-group`,
-      {
-        groupName: `${projectName}-${environment}-mfa-required-group`,
-        managedPolicies: [
-          new iam.ManagedPolicy(
-            this,
-            `${projectName}-${environment}-force-mfa-policy`,
-            {
-              managedPolicyName: `${projectName}-${environment}-force-mfa-policy`,
-              statements: [
-                new iam.PolicyStatement({
-                  effect: iam.Effect.DENY,
-                  notActions: [
-                    'iam:CreateVirtualMFADevice',
-                    'iam:EnableMFADevice',
-                    'iam:GetUser',
-                    'iam:ListMFADevices',
-                    'iam:ListVirtualMFADevices',
-                    'iam:ResyncMFADevice',
-                    'sts:GetSessionToken',
-                  ],
-                  resources: ['*'],
-                  conditions: {
-                    BoolIfExists: {
-                      'aws:MultiFactorAuthPresent': 'false',
-                    },
-                  },
-                }),
-              ],
-            }
-          ),
-        ],
-      }
-    );
-
-    // Create security monitoring role
-    const securityMonitoringRole = new iam.Role(
-      this,
-      `${projectName}-${environment}-security-monitoring-role`,
-      {
-        roleName: `${projectName}-${environment}-security-monitoring-role`,
-        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-        managedPolicies: [
-          iam.ManagedPolicy.fromAwsManagedPolicyName('SecurityAudit'),
-          iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
-        ],
-        inlinePolicies: {
-          SecurityMonitoringPolicy: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  'guardduty:GetFindings',
-                  'guardduty:ListDetectors',
-                  'config:DescribeComplianceByConfigRule',
-                  'config:DescribeConfigRules',
-                  'cloudtrail:LookupEvents',
-                ],
-                resources: ['*'],
-              }),
-            ],
-          }),
-        },
-      }
-    );
+    // const _mfaGroup = new iam.Group(
+    //   this,
+    //   `${projectName}-${environment}-mfa-required-group`,
+    //   {
+    //     groupName: `${projectName}-${environment}-mfa-required-group`,
+    //     managedPolicies: [
+    //       new iam.ManagedPolicy(
+    //         this,
+    //         `${projectName}-${environment}-force-mfa-policy`,
+    //         {
+    //           managedPolicyName: `${projectName}-${environment}-force-mfa-policy`,
+    //           statements: [
+    //             new iam.PolicyStatement({
+    //               effect: iam.Effect.DENY,
+    //               notActions: [
+    //                 'iam:CreateVirtualMFADevice',
+    //                 'iam:EnableMFADevice',
+    //                 'iam:GetUser',
+    //                 'iam:ListMFADevices',
+    //                 'iam:ListVirtualMFADevices',
+    //                 'iam:ResyncMFADevice',
+    //                 'sts:GetSessionToken',
+    //               ],
+    //               resources: ['*'],
+    //               conditions: {
+    //                 BoolIfExists: {
+    //                   'aws:MultiFactorAuthPresent': 'false',
+    //                 },
+    //               },
+    //             }),
+    //           ],
+    //         }
+    //       ),
+    //     ],
+    //   }
+    // );
+    // // Create security monitoring role
+    // const securityMonitoringRole = new iam.Role(
+    //   this,
+    //   `${projectName}-${environment}-security-monitoring-role`,
+    //   {
+    //     roleName: `${projectName}-${environment}-security-monitoring-role`,
+    //     assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    //     managedPolicies: [
+    //       iam.ManagedPolicy.fromAwsManagedPolicyName('SecurityAudit'),
+    //       iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
+    //     ],
+    //     inlinePolicies: {
+    //       SecurityMonitoringPolicy: new iam.PolicyDocument({
+    //         statements: [
+    //           new iam.PolicyStatement({
+    //             effect: iam.Effect.ALLOW,
+    //             actions: [
+    //               'guardduty:GetFindings',
+    //               'guardduty:ListDetectors',
+    //               'config:DescribeComplianceByConfigRule',
+    //               'config:DescribeConfigRules',
+    //               'cloudtrail:LookupEvents',
+    //             ],
+    //             resources: ['*'],
+    //           }),
+    //         ],
+    //       }),
+    //     },
+    //   }
+    // );
   }
 
   private createSystemsManagerSetup(
@@ -718,34 +713,34 @@ export class TapStack extends cdk.Stack {
     environment: string
   ): void {
     // Create patch baseline for security updates
-    const _patchBaseline = new ssm.CfnPatchBaseline(
-      this,
-      `${projectName}-${environment}-patch-baseline`,
-      {
-        name: `${projectName}-${environment}-security-patch-baseline`,
-        operatingSystem: 'AMAZON_LINUX_2',
-        description: 'Patch baseline for security updates',
-        approvalRules: {
-          patchRules: [
-            {
-              patchFilterGroup: {
-                patchFilters: [
-                  {
-                    key: 'CLASSIFICATION',
-                    values: ['Security', 'Critical'],
-                  },
-                ],
-              },
-              approveAfterDays: 0,
-              enableNonSecurity: false,
-              complianceLevel: 'CRITICAL',
-            },
-          ],
-        },
-        approvedPatches: [],
-        rejectedPatches: [],
-      }
-    );
+    // const _patchBaseline = new ssm.CfnPatchBaseline(
+    //   this,
+    //   `${projectName}-${environment}-patch-baseline`,
+    //   {
+    //     name: `${projectName}-${environment}-security-patch-baseline`,
+    //     operatingSystem: 'AMAZON_LINUX_2',
+    //     description: 'Patch baseline for security updates',
+    //     approvalRules: {
+    //       patchRules: [
+    //         {
+    //           patchFilterGroup: {
+    //             patchFilters: [
+    //               {
+    //                 key: 'CLASSIFICATION',
+    //                 values: ['Security', 'Critical'],
+    //               },
+    //             ],
+    //           },
+    //           approveAfterDays: 0,
+    //           enableNonSecurity: false,
+    //           complianceLevel: 'CRITICAL',
+    //         },
+    //       ],
+    //     },
+    //     approvedPatches: [],
+    //     rejectedPatches: [],
+    //   }
+    // );
 
     // Create maintenance window
     const maintenanceWindow = new ssm.CfnMaintenanceWindow(
