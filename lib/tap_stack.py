@@ -136,7 +136,6 @@ class TapStack(Stack):
             "AllowS3Invoke",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
             source_arn=self.tap_storage_bucket.bucket_arn,
-            source_account=self.account,
             action="lambda:InvokeFunction"
         )
 
