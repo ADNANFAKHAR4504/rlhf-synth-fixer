@@ -55,7 +55,7 @@ class TestTapStack(unittest.TestCase):
     @mark.it("creates Lambda function with correct runtime and environment")
     def test_creates_lambda_function(self):
         # ASSERT - Lambda function with nodejs20.x runtime
-        self.template.resource_count_is("AWS::Lambda::Function", 2)  # Main function + auto-delete helper
+        self.template.resource_count_is("AWS::Lambda::Function", 1)  # Main function only
         self.template.has_resource_properties("AWS::Lambda::Function", {
             "Runtime": "nodejs20.x",
             "Handler": "index.handler",

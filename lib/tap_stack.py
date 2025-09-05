@@ -115,7 +115,6 @@ class TapStack(cdk.Stack):
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             object_ownership=s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,  # Required for OAC
             removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
         )
 
         # CloudWatch Log Group for Lambda
