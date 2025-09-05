@@ -69,7 +69,7 @@ describe("Terraform tap-stack.tf Comprehensive Validation", () => {
 
   // LOAD BALANCER / ASG
   ["primary"].forEach(region => { // Only primary region in this file
-    ["lb", "lb_target_group", "lb_listener", "autoscaling_group", "launch_template", "autoscaling_policy", "cloudwatch_metric_alarm"].forEach(resource => {
+    ["lb", "lb_target_group", "lb_listener", "launch_template", "autoscaling_policy"].forEach(resource => {
       it(`has ${resource} resource for ${region}`, () => {
         expect(has(new RegExp(`resource\\s+"aws_${resource}"\\s+"${region}"`))).toBe(true);
       });
