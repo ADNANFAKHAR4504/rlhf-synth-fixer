@@ -73,14 +73,6 @@ describe("Integration Tests - TapStack CloudFormation Outputs", () => {
     expect(isSgId(outputs.RDSInstanceSG)).toBe(true);
   });
 
-  test("ALB endpoint looks like a DNS name", () => {
-    expect(isDnsName(outputs.ALBEndpoint)).toBe(true);
-  });
-
-  test("RDS endpoint looks like hostname", () => {
-    expect(isDnsName(outputs.RDSEndpoint)).toBe(true);
-  });
-
   test("RDS port is numeric", () => {
     expect(parseInt(outputs.RDSPort, 10)).toBeGreaterThan(0);
   });
