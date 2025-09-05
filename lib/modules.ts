@@ -34,7 +34,6 @@ import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
-
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
@@ -513,6 +512,9 @@ export class StorageModule extends Construct {
   constructor(scope: Construct, id: string, config: ModuleConfig) {
     super(scope, id);
 
+    // Get AWS account ID for bucket policy
+    const callerIdentity = new DataAwsCallerIdentity(this, 'current');
+
     // Application S3 bucket with security best practices
     this.appBucket = new S3Bucket(this, 'app-bucket', {
       bucket: `${config.companyName}-${config.environment}-app`,
@@ -613,6 +615,57 @@ export class StorageModule extends Construct {
       ignorePublicAcls: true,
       restrictPublicBuckets: true,
     });
+
+    // **FIXED: CloudTrail-specific bucket policy**
+    new S3BucketPolicy(this, 'logs-bucket-policy', {
+      bucket: this.logsBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSCloudTrailAclCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: this.logsBucket.arn,
+            Condition: {
+              StringEquals: {
+                'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/${config.companyName}-${config.environment}-trail`,
+              },
+            },
+          },
+          {
+            Sid: 'AWSCloudTrailWrite',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${this.logsBucket.arn}/cloudtrail-logs/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+                'AWS:SourceArn': `arn:aws:cloudtrail:${config.region}:${callerIdentity.accountId}:trail/${config.companyName}-${config.environment}-trail`,
+              },
+            },
+          },
+          {
+            Sid: 'DenyInsecureTransport',
+            Effect: 'Deny',
+            Principal: '*',
+            Action: 's3:*',
+            Resource: [this.logsBucket.arn, `${this.logsBucket.arn}/*`],
+            Condition: {
+              Bool: {
+                'aws:SecureTransport': 'false',
+              },
+            },
+          },
+        ],
+      }),
+    });
   }
 }
 
@@ -633,7 +686,7 @@ export class LambdaModule extends Construct {
     // Lambda function in VPC private subnets
     this.lambdaFunction = new LambdaFunction(this, 'lambda', {
       functionName: `${config.companyName}-${config.environment}-processor`,
-      s3Bucket: 'lambda-ts-1234',
+      s3Bucket: 'lambda-ts-12345',
       s3Key: 'lambda.zip',
       handler: 'lambda_function.handler',
       runtime: 'python3.9',
@@ -809,7 +862,6 @@ export class MonitoringModule extends Construct {
     const region = config.region;
     const callerIdentity = new DataAwsCallerIdentity(this, 'current');
     const accountId = callerIdentity.accountId;
-
 
     // KMS key for CloudTrail encryption with corrected policy
     this.kmsKey = new KmsKey(this, 'cloudtrail-kms-key', {
