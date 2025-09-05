@@ -31,5 +31,11 @@
     "AWS::SNS::Subscription",
     "AWS::EC2::SecurityGroup",
     "AWS::EC2::Subnet"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
 }
