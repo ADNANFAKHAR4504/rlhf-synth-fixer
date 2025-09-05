@@ -629,12 +629,12 @@ export class LambdaModule extends Construct {
     super(scope, id);
 
     // Lambda function in VPC private subnets
-    this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
+    this.lambdaFunction = new LambdaFunction(this, 'lambda', {
       functionName: `${config.companyName}-${config.environment}-processor`,
       s3Bucket: 'lambda-ts-1234',
       s3Key: 'lambda.zip',
-      handler: 'index.handler',
-      runtime: 'nodejs18.x',
+      handler: 'lambda_function.handler',
+      runtime: 'python3.9',
       role: lambdaRole.arn,
       timeout: 30,
       memorySize: 512,
@@ -803,7 +803,12 @@ export class MonitoringModule extends Construct {
   ) {
     super(scope, id);
 
-    // KMS key for CloudTrail encryption
+    // Get current AWS account ID dynamically
+    const accountId =
+      process.env.CDK_DEFAULT_ACCOUNT || '${aws:PrincipalAccount}';
+    const region = config.region;
+
+    // KMS key for CloudTrail encryption with corrected policy
     this.kmsKey = new KmsKey(this, 'cloudtrail-kms-key', {
       description: 'KMS key for CloudTrail log encryption',
       keyUsage: 'ENCRYPT_DECRYPT',
@@ -811,27 +816,16 @@ export class MonitoringModule extends Construct {
         Version: '2012-10-17',
         Statement: [
           {
-            Sid: 'EnableCloudTrailEncrypt',
+            Sid: 'EnableIAMUserPermissions',
             Effect: 'Allow',
             Principal: {
-              Service: 'cloudtrail.amazonaws.com',
+              AWS: `arn:aws:iam::${accountId}:root`,
             },
-            Action: [
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-              'kms:Encrypt',
-              'kms:ReEncrypt*',
-              'kms:Decrypt',
-            ],
+            Action: 'kms:*',
             Resource: '*',
-            Condition: {
-              StringEquals: {
-                'kms:EncryptionContext:aws:cloudtrail:arn': `arn:aws:cloudtrail:${config.region}:*:trail/*`,
-              },
-            },
           },
           {
-            Sid: 'EnableCloudTrailAccess',
+            Sid: 'AllowCloudTrailToDescribeKey',
             Effect: 'Allow',
             Principal: {
               Service: 'cloudtrail.amazonaws.com',
@@ -840,13 +834,36 @@ export class MonitoringModule extends Construct {
             Resource: '*',
           },
           {
-            Sid: 'EnableIAMUserPermissions',
+            Sid: 'AllowCloudTrailToGenerateDataKey',
             Effect: 'Allow',
             Principal: {
-              AWS: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID || '123456789012'}:root`,
+              Service: 'cloudtrail.amazonaws.com',
             },
-            Action: 'kms:*',
+            Action: ['kms:GenerateDataKey*'],
             Resource: '*',
+            Condition: {
+              StringEquals: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': [
+                  `arn:aws:cloudtrail:${region}:${accountId}:trail/${config.companyName}-${config.environment}-trail`,
+                ],
+              },
+            },
+          },
+          {
+            Sid: 'AllowCloudTrailToDecrypt',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: ['kms:Decrypt', 'kms:ReEncrypt*'],
+            Resource: '*',
+            Condition: {
+              StringEquals: {
+                'kms:EncryptionContext:aws:cloudtrail:arn': [
+                  `arn:aws:cloudtrail:${region}:${accountId}:trail/${config.companyName}-${config.environment}-trail`,
+                ],
+              },
+            },
           },
         ],
       }),
@@ -897,24 +914,26 @@ export class MonitoringModule extends Construct {
     });
 
     // CloudWatch Alarm for EC2 CPU utilization
-    this.cpuAlarm = new CloudwatchMetricAlarm(this, 'cpu-alarm', {
-      alarmName: `${config.companyName}-${config.environment}-high-cpu`,
-      comparisonOperator: 'GreaterThanThreshold',
-      evaluationPeriods: 2,
-      metricName: 'CPUUtilization',
-      namespace: 'AWS/EC2',
-      period: 300,
-      statistic: 'Average',
-      threshold: 80,
-      alarmDescription: 'This metric monitors ec2 cpu utilization',
-      alarmActions: [this.snsTopic.arn],
-      dimensions: {
-        InstanceId: instances[0].id,
-      },
-      tags: {
-        Name: `${config.companyName}-${config.environment}-cpu-alarm`,
-        Environment: config.environment,
-      },
-    });
+    if (instances.length > 0) {
+      this.cpuAlarm = new CloudwatchMetricAlarm(this, 'cpu-alarm', {
+        alarmName: `${config.companyName}-${config.environment}-high-cpu`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'CPUUtilization',
+        namespace: 'AWS/EC2',
+        period: 300,
+        statistic: 'Average',
+        threshold: 80,
+        alarmDescription: 'This metric monitors ec2 cpu utilization',
+        alarmActions: [this.snsTopic.arn],
+        dimensions: {
+          InstanceId: instances[0].id,
+        },
+        tags: {
+          Name: `${config.companyName}-${config.environment}-cpu-alarm`,
+          Environment: config.environment,
+        },
+      });
+    }
   }
 }
