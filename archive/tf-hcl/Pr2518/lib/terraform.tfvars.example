@@ -1,0 +1,23 @@
+# Example Terraform variables file
+# Copy this file to terraform.tfvars and update with your values
+
+# AWS Region
+aws_region = "us-east-1"
+
+# Environment suffix (if needed)
+environment_suffix = "dev"
+
+# Common tags for all resources
+common_tags = {
+  Environment = "development"
+  ManagedBy   = "Terraform"
+  Project     = "IAC-Test-Automations"
+  Owner       = "DevOps Team"
+}
+
+# Uncomment and set these if using static credentials (NOT recommended for production)
+# aws_access_key_id     = "your-access-key-id"
+# aws_secret_access_key = "your-secret-access-key"
+
+# Uncomment and set this if using assume role
+# aws_assume_role_arn = "arn:aws:iam::123456789012:role/TerraformRole"
