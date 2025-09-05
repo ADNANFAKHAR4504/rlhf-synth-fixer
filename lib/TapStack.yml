@@ -40,10 +40,6 @@ Parameters:
     Type: String
     Default: t3.micro
     Description: EC2 instance type
-  KeyName:
-    Type: String
-    Default: my-key-pair
-    Description: Name of an existing EC2 KeyPair to enable SSH access
 
 Conditions:
   UseSecretsManager: !Equals [!Ref DBPassword, ""]
@@ -100,8 +96,8 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24 # Use a different CIDR block
-      AvailabilityZone: !Select [1, !GetAZs ""] # Different AZ than first subnet
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
           Value: PrivateSubnet2
@@ -353,7 +349,7 @@ Resources:
       Engine: mysql
       EngineVersion: 8.0.40
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}::password}}" # Dynamic reference
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}::password}}"
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -369,13 +365,12 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # EC2 Instance
+  # EC2 Instance (without KeyName)
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
       ImageId: !FindInMap [AWSRegionArch2AMI, !Ref "AWS::Region", AMI]
-      KeyName: !Ref KeyName
       NetworkInterfaces:
         - AssociatePublicIpAddress: false
           DeviceIndex: 0
