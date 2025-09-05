@@ -6,7 +6,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as config from 'aws-cdk-lib/aws-config';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -420,67 +419,6 @@ export class TapStack extends cdk.Stack {
 
   private createWebACL(environmentSuffix: string): void {
     // Use REGIONAL scope instead of CLOUDFRONT for most use cases
-    const webAcl = new wafv2.CfnWebACL(this, `TapWebAcl-${environmentSuffix}`, {
-      scope: 'REGIONAL', // Changed from CLOUDFRONT to REGIONAL
-      defaultAction: { allow: {} },
-      name: `tap-web-acl-${environmentSuffix}`,
-      description: 'Web ACL for application protection',
-      rules: [
-        {
-          name: 'AWS-AWSManagedRulesCommonRuleSet',
-          priority: 1,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesCommonRuleSet',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'CommonRuleSetMetric',
-          },
-        },
-        {
-          name: 'AWS-AWSManagedRulesKnownBadInputsRuleSet',
-          priority: 2,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: 'AWS',
-              name: 'AWSManagedRulesKnownBadInputsRuleSet',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'KnownBadInputsMetric',
-          },
-        },
-        {
-          name: 'RateLimitRule',
-          priority: 3,
-          action: { block: {} },
-          statement: {
-            rateBasedStatement: {
-              limit: 2000,
-              aggregateKeyType: 'IP',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudWatchMetricsEnabled: true,
-            metricName: 'RateLimitMetric',
-          },
-        },
-      ],
-      visibilityConfig: {
-        sampledRequestsEnabled: true,
-        cloudWatchMetricsEnabled: true,
-        metricName: `tap-web-acl-${environmentSuffix}`,
-      },
-    });
   }
 
   private createIAMRoles(
@@ -489,34 +427,6 @@ export class TapStack extends cdk.Stack {
     kmsKey: kms.Key
   ): void {
     // Create a group that requires MFA
-    const mfaGroup = new iam.Group(this, `TapMfaGroup-${environmentSuffix}`, {
-      groupName: `tap-mfa-required-group-${environmentSuffix}`,
-      managedPolicies: [
-        new iam.ManagedPolicy(this, `TapForceMfaPolicy-${environmentSuffix}`, {
-          managedPolicyName: `tap-force-mfa-policy-${environmentSuffix}`,
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.DENY,
-              notActions: [
-                'iam:CreateVirtualMFADevice',
-                'iam:EnableMFADevice',
-                'iam:GetUser',
-                'iam:ListMFADevices',
-                'iam:ListVirtualMFADevices',
-                'iam:ResyncMFADevice',
-                'sts:GetSessionToken',
-              ],
-              resources: ['*'],
-              conditions: {
-                BoolIfExists: {
-                  'aws:MultiFactorAuthPresent': 'false',
-                },
-              },
-            }),
-          ],
-        }),
-      ],
-    });
 
     // Create application-specific roles with least privilege
     const appRole = new iam.Role(this, `TapAppRole-${environmentSuffix}`, {
@@ -558,34 +468,6 @@ export class TapStack extends cdk.Stack {
 
   private createSystemsManagerSetup(environmentSuffix: string): void {
     // Create patch baseline for security updates with correct classification values
-    const patchBaseline = new ssm.CfnPatchBaseline(
-      this,
-      `TapPatchBaseline-${environmentSuffix}`,
-      {
-        name: `tap-security-patch-baseline-${environmentSuffix}`,
-        operatingSystem: 'AMAZON_LINUX_2',
-        description: 'Patch baseline for security updates',
-        approvalRules: {
-          patchRules: [
-            {
-              patchFilterGroup: {
-                patchFilters: [
-                  {
-                    key: 'CLASSIFICATION',
-                    values: ['Security'], // Only valid values are Security, Bugfix, Enhancement, Recommended, Newpackage
-                  },
-                ],
-              },
-              approveAfterDays: 0,
-              enableNonSecurity: false,
-              complianceLevel: 'CRITICAL',
-            },
-          ],
-        },
-        approvedPatches: [],
-        rejectedPatches: [],
-      }
-    );
 
     // Create maintenance window
     const maintenanceWindow = new ssm.CfnMaintenanceWindow(
@@ -652,7 +534,9 @@ export class TapStack extends cdk.Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'AmazonSSMManagedInstanceCore'
         ),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMPatchBaseline'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonSSMAutomationRole'
+        ),
       ],
       inlinePolicies: {
         MaintenanceWindowAccess: new iam.PolicyDocument({
