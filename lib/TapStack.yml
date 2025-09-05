@@ -96,6 +96,18 @@ Resources:
         - Key: Environment
           Value: Production
 
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24 # Use a different CIDR block
+      AvailabilityZone: !Select [1, !GetAZs ""] # Different AZ than first subnet
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+        - Key: Environment
+          Value: Production
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -125,6 +137,12 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
 
   NatGatewayEIP:
@@ -319,6 +337,7 @@ Resources:
       DBSubnetGroupDescription: Subnet group for RDS instances
       SubnetIds:
         - !Ref PrivateSubnet
+        - !Ref PrivateSubnet2
       Tags:
         - Key: Name
           Value: RDSSubnetGroup
