@@ -5,10 +5,12 @@
     "HostedZoneId": {
       "Type": "String",
       "Description": "Route 53 Hosted Zone ID (e.g., Z00001111A1ABCaaABC11)",
+      "Default": "ecommerce-app.com",
       "AllowedPattern": "^[A-Z0-9]{1,32}$"
     },
     "VPCId": {
       "Type": "String",
+      "Default": "vpc-03a05c55d8e4b4a87",
       "Description": "ID of the VPC to enable Flow Logs on"
     }
   },
