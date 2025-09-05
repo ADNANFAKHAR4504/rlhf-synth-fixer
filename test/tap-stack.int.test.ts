@@ -27,11 +27,11 @@ describe('Infrastructure Integration Tests', () => {
   let elbv2Client: ElasticLoadBalancingV2Client;
 
   beforeEach(() => {
-    s3Client = new S3Client({ region: 'us-east-1' });
-    ec2Client = new EC2Client({ region: 'us-east-1' });
-    rdsClient = new RDSClient({ region: 'us-east-1' });
-    iamClient = new IAMClient({ region: 'us-east-1' });
-    elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
+    s3Client = new S3Client({ region: 'us-west-1' });
+    ec2Client = new EC2Client({ region: 'us-west-1' });
+    rdsClient = new RDSClient({ region: 'us-west-1' });
+    iamClient = new IAMClient({ region: 'us-west-1' });
+    elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-west-1' });
   });
 
   describe('VPC and Networking', () => {
@@ -96,7 +96,7 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should validate bucket name follows naming convention', () => {
       expect(outputs.AppDataBucketName).toMatch(
-        new RegExp(`^tap-${environmentSuffix.toLowerCase()}-app-data-\\d+-us-east-1$`)
+        new RegExp(`^tap-${environmentSuffix.toLowerCase()}-app-data-\\d+-us-west-1$`)
       );
     });
   });
@@ -287,7 +287,7 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should validate load balancer DNS name format', () => {
       expect(outputs.LoadBalancerDnsName).toMatch(
-        /^tap-[\w\-]+-alb-\d+\.us-east-1\.elb\.amazonaws\.com$/
+/^tap-[\w\-]+-alb-\d+\.us-west-1\.elb\.amazonaws\.com$/
       );
     });
   });
@@ -400,7 +400,7 @@ describe('Infrastructure Integration Tests', () => {
     test('should validate security configuration meets requirements', () => {
       // Validate that RDS endpoint indicates public accessibility
       // (In real deployment, this would be tested with actual network calls)
-      expect(outputs.RdsEndpoint).toMatch(/\.us-east-1\.rds\.amazonaws\.com$/);
+      expect(outputs.RdsEndpoint).toMatch(/\.us-west-1\.rds\.amazonaws\.com$/);
       
       // Validate ALB is internet-facing
       expect(outputs.LoadBalancerDnsName).toMatch(/\.elb\.amazonaws\.com$/);

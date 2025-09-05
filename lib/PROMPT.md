@@ -6,7 +6,7 @@
 
 **Scope**:
 
-* Region **must** be `us-east-1`.
+* Region **must** be `us-west-1`.
 * Two EC2 instances (latest Amazon Linux 2) in different subnets/AZs with **detailed monitoring** enabled.
 * VPC with at least two subnets spread across AZs.
 * Application Load Balancer with **access logging enabled** that targets both EC2 instances.
@@ -15,7 +15,7 @@
 * IAM roles granting EC2 and Lambda access to that S3 bucket.
 * Tag **all** resources with `Environment=Production`.
 
-**Constraints**: The infrastructure must be launched in the us-east-1 region. | All resources should be tagged with 'Environment: Production'. | The EC2 instance should use the latest Amazon Linux 2 AMI. | Enable detailed CloudWatch monitoring for the EC2 instance. | The RDS instance should be of type db.t3.micro. | The RDS instance must be configured to be publicly accessible. | S3 bucket must have server-side encryption enabled with AES-256. | IAM roles should be defined for both EC2 and Lambda functions to access the S3 bucket. | Vpc must contain at least two subnets spread across different availability zones. | Configure an Application Load Balancer to distribute traffic to two EC2 instances in different subnets. | Ensure access logging is enabled for the Application Load Balancer.
+**Constraints**: The infrastructure must be launched in the us-west-1 region. | All resources should be tagged with 'Environment: Production'. | The EC2 instance should use the latest Amazon Linux 2 AMI. | Enable detailed CloudWatch monitoring for the EC2 instance. | The RDS instance should be of type db.t3.micro. | The RDS instance must be configured to be publicly accessible. | S3 bucket must have server-side encryption enabled with AES-256. | IAM roles should be defined for both EC2 and Lambda functions to access the S3 bucket. | Vpc must contain at least two subnets spread across different availability zones. | Configure an Application Load Balancer to distribute traffic to two EC2 instances in different subnets. | Ensure access logging is enabled for the Application Load Balancer.
 
 **Artifacts**:
 
@@ -27,7 +27,7 @@
 
 * CDK compiles (tsc) and synthesizes (cdk synth) without errors.
 * Security groups least‑privilege where possible; explain any exceptions (e.g., public RDS requirement).
-* In‑code region guard to enforce `us-east-1`.
+* In‑code region guard to enforce `us-west-1`.
 
 **Deliver**: Full code + brief deployment instructions.
 

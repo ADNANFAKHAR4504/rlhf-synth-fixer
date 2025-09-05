@@ -16,14 +16,14 @@ describe('TapStack', () => {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-east-1'
+        region: 'us-west-1'
       }
     });
     template = Template.fromStack(stack);
   });
 
   describe('Region Guard', () => {
-    test('should enforce us-east-1 region', () => {
+    test('should enforce us-west-1 region', () => {
       expect(() => {
         new TapStack(app, 'WrongRegionStack', {
           environmentSuffix: 'test',
@@ -32,16 +32,16 @@ describe('TapStack', () => {
             region: 'us-west-2'
           }
         });
-      }).toThrow('Stack must be deployed in us-east-1. Current region: us-west-2');
+      }).toThrow('Stack must be deployed in us-west-1. Current region: us-west-2');
     });
 
-    test('should allow us-east-1 region', () => {
+    test('should allow us-west-1 region', () => {
       expect(() => {
         new TapStack(app, 'CorrectRegionStack', {
           environmentSuffix: 'test',
           env: {
             account: '123456789012',
-            region: 'us-east-1'
+            region: 'us-west-1'
           }
         });
       }).not.toThrow();
@@ -332,7 +332,7 @@ describe('TapStack', () => {
       const fallbackStack = new TapStack(fallbackApp, 'FallbackTestStack', {
         env: {
           account: '123456789012',
-          region: 'us-east-1'
+          region: 'us-west-1'
         }
         // No environmentSuffix provided to test fallback
       });
@@ -349,7 +349,7 @@ describe('TapStack', () => {
       const fallbackStack = new TapStack(fallbackApp, 'FallbackTestStack2', {
         env: {
           account: '123456789012',
-          region: 'us-east-1'
+          region: 'us-west-1'
         }
         // props is provided but environmentSuffix is undefined, testing the fallback
       });
