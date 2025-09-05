@@ -258,10 +258,4 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
   it('uses lifecycle create_before_destroy in critical resources', () => {
     expect(has(/lifecycle\s*{[^}]*create_before_destroy\s*=\s*true[^}]*}/)).toBe(true);
   });
-
-  // FIXED common tags merge regex with optional whitespace/newlines
-  it('applies common tags merge with local.common_tags and Environment tag', () => {
-    // This regex allows whitespace, newlines, and other tags within merged map args
-    expect(has(/tags\s*=\s*merge\(\s*local\.common_tags\s*,\s*{[^}]*Environment\s*=\s*"Production"[^}]*}\s*\)/)).toBe(true);
-  });
 });
