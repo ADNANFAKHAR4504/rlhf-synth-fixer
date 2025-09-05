@@ -373,7 +373,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
         const executionRole = functionConfig.Configuration?.Role;
         
         expect(executionRole).toBeDefined();
-        expect(executionRole).toContain('LambdaExecutionRole');
+        expect(executionRole).toContain('lambda-role');
         
       } catch (error: any) {
         if (error.code === 'ResourceNotFound') {
