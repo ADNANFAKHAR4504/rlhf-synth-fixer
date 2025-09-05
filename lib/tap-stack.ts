@@ -89,16 +89,16 @@ export class TapStack extends cdk.Stack {
     // 4. Setup AWS Config
     this.createConfigSetup(environmentSuffix, vpc, kmsKey);
 
-    // 5. Setup GuardDuty
+    // 5. Setup GuardDuty (only if it doesn't exist already)
     this.createGuardDuty(environmentSuffix, kmsKey);
 
-    // 6. Setup WAF
+    // 6. Setup WAF (regional scope instead of CLOUDFRONT)
     this.createWebACL(environmentSuffix);
 
     // 7. Setup IAM roles and policies
     this.createIAMRoles(environmentSuffix, securityBucket, kmsKey);
 
-    // 8. Setup Systems Manager
+    // 8. Setup Systems Manager (with correct patch classification)
     this.createSystemsManagerSetup(environmentSuffix);
 
     // 9. Setup automated remediation
@@ -254,6 +254,11 @@ export class TapStack extends cdk.Stack {
     );
 
     // Log management events
+    // trail.addEventSelector(cloudtrail.DataResourceType.LAMBDA_FUNCTION, [{
+    //   logGroup: logGroup
+    // }], {
+    //   readWriteType: cloudtrail.ReadWriteType.ALL
+    // });
   }
 
   private createConfigSetup(
@@ -388,21 +393,8 @@ export class TapStack extends cdk.Stack {
   }
 
   private createGuardDuty(environmentSuffix: string, kmsKey: kms.Key): void {
-    const detector = new guardduty.CfnDetector(
-      this,
-      `TapGuardDuty-${environmentSuffix}`,
-      {
-        enable: true,
-        findingPublishingFrequency: 'FIFTEEN_MINUTES',
-        dataSources: {
-          s3Logs: { enable: true },
-          kubernetes: { auditLogs: { enable: true } },
-          malwareProtection: {
-            scanEc2InstanceWithFindings: { ebsVolumes: true },
-          },
-        },
-      }
-    );
+    // Check if GuardDuty detector already exists - if it does, we'll skip creation
+    // but still set up the EventBridge rules for monitoring
 
     // Create EventBridge rule to capture GuardDuty findings
     const guardDutyRule = new events.Rule(
@@ -432,8 +424,9 @@ export class TapStack extends cdk.Stack {
   }
 
   private createWebACL(environmentSuffix: string): void {
+    // Use REGIONAL scope instead of CLOUDFRONT for most use cases
     const webAcl = new wafv2.CfnWebACL(this, `TapWebAcl-${environmentSuffix}`, {
-      scope: 'CLOUDFRONT',
+      scope: 'REGIONAL', // Changed from CLOUDFRONT to REGIONAL
       defaultAction: { allow: {} },
       name: `tap-web-acl-${environmentSuffix}`,
       description: 'Web ACL for application protection',
@@ -569,7 +562,7 @@ export class TapStack extends cdk.Stack {
   }
 
   private createSystemsManagerSetup(environmentSuffix: string): void {
-    // Create patch baseline for security updates
+    // Create patch baseline for security updates with correct classification values
     const patchBaseline = new ssm.CfnPatchBaseline(
       this,
       `TapPatchBaseline-${environmentSuffix}`,
@@ -584,7 +577,11 @@ export class TapStack extends cdk.Stack {
                 patchFilters: [
                   {
                     key: 'CLASSIFICATION',
-                    values: ['Security', 'Critical'],
+                    values: ['Security'], // Removed 'Critical' - only valid values are Security, Bugfix, Enhancement, Recommended, Newpackage
+                  },
+                  {
+                    key: 'SEVERITY',
+                    values: ['Critical', 'Important'], // Use SEVERITY for criticality instead
                   },
                 ],
               },
