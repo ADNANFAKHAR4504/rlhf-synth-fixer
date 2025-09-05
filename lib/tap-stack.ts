@@ -61,6 +61,7 @@ export class TapStack extends cdk.Stack {
       maxAzs: 2,
       cidr: '10.0.0.0/16',
       natGateways: 2, // One NAT Gateway per AZ for high availability
+      restrictDefaultSecurityGroup: false,
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -303,10 +304,10 @@ export class TapStack extends cdk.Stack {
       protocol: elbv2.ApplicationProtocol.HTTP,
       defaultAction: certificate
         ? elbv2.ListenerAction.redirect({
-            protocol: 'HTTPS',
-            port: '443',
-            permanent: true,
-          })
+          protocol: 'HTTPS',
+          port: '443',
+          permanent: true,
+        })
         : elbv2.ListenerAction.forward([targetGroup]),
     });
     // =============================================================================
