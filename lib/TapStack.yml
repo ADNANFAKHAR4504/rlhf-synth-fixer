@@ -30,12 +30,13 @@ Parameters:
     Type: String
     Default: admin
     NoEcho: true
-    Description: Master username for RDS
+    Description: Master username for RDS (default provided, override in prod)
 
   DBPassword:
     Type: String
+    Default: ChangeMe123!
     NoEcho: true
-    Description: Initial RDS master password (stored in SSM Parameter Store)
+    Description: Master password for RDS (default provided, override in prod)
 
 Mappings:
   RegionMap:
@@ -194,7 +195,7 @@ Resources:
       Roles: [!Ref EC2Role]
 
   #########################################
-  # Bastion Host (SSM only)
+  # Bastion Host (SSM only, no keypair)
   #########################################
   BastionHost:
     Type: AWS::EC2::Instance
@@ -272,7 +273,6 @@ Resources:
     Properties:
       Name: !Sub "/app/${Environment}/db/password"
       Type: String
-      Tier: Standard
       Value: !Ref DBPassword
       Description: RDS Master Password stored securely
 

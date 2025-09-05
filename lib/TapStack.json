@@ -31,12 +31,13 @@
             "Type": "String",
             "Default": "admin",
             "NoEcho": true,
-            "Description": "Master username for RDS"
+            "Description": "Master username for RDS (default provided, override in prod)"
         },
         "DBPassword": {
             "Type": "String",
+            "Default": "ChangeMe123!",
             "NoEcho": true,
-            "Description": "Initial RDS master password (stored in SSM Parameter Store)"
+            "Description": "Master password for RDS (default provided, override in prod)"
         }
     },
     "Mappings": {
@@ -481,7 +482,6 @@
                     "Fn::Sub": "/app/${Environment}/db/password"
                 },
                 "Type": "String",
-                "Tier": "Standard",
                 "Value": {
                     "Ref": "DBPassword"
                 },
