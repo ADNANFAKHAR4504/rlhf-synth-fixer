@@ -23,7 +23,8 @@ import {
   ElasticLoadBalancingV2Client, 
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  DescribeListenersCommand
+  DescribeListenersCommand,
+  DescribeLoadBalancerAttributesCommand
 } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { 
   KMSClient, 
@@ -45,8 +46,22 @@ import {
 } from "@aws-sdk/client-route-53";
 import { 
   AutoScalingClient, 
-  DescribeAutoScalingGroupsCommand 
+  DescribeAutoScalingGroupsCommand,
+  DescribePoliciesCommand
 } from "@aws-sdk/client-auto-scaling";
+import { 
+  SecretsManagerClient, 
+  DescribeSecretCommand 
+} from "@aws-sdk/client-secrets-manager";
+import { 
+  CloudTrailClient, 
+  DescribeTrailsCommand,
+  GetTrailStatusCommand
+} from "@aws-sdk/client-cloudtrail";
+import { 
+  ACMClient, 
+  DescribeCertificateCommand 
+} from "@aws-sdk/client-acm";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -65,7 +80,10 @@ const clients = {
   logs: new CloudWatchLogsClient({ region: AWS_REGION }),
   wafv2: new WAFV2Client({ region: AWS_REGION }),
   route53: new Route53Client({ region: AWS_REGION }),
-  autoscaling: new AutoScalingClient({ region: AWS_REGION })
+  autoscaling: new AutoScalingClient({ region: AWS_REGION }),
+  secretsmanager: new SecretsManagerClient({ region: AWS_REGION }),
+  cloudtrail: new CloudTrailClient({ region: AWS_REGION }),
+  acm: new ACMClient({ region: AWS_REGION })
 };
 
 // Helper function to get outputs from deployment
@@ -439,9 +457,9 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
         );
         
         if (asg) {
-          expect(asg.MinSize).toBe(1);
-          expect(asg.MaxSize).toBe(1);
-          expect(asg.DesiredCapacity).toBe(1);
+          expect(asg.MinSize).toBe(2);
+          expect(asg.MaxSize).toBe(4);
+          expect(asg.DesiredCapacity).toBe(2);
           expect(asg.HealthCheckType).toBe("ELB");
           expect(asg.VPCZoneIdentifier).toBeTruthy();
         }
@@ -669,6 +687,181 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
           // Check EBS encryption
           // EBS encryption status is not directly available in instance description
           // Would need to check the volumes separately
+        }
+      }
+    }, INTEGRATION_TIMEOUT);
+  });
+
+  describe("Enhanced Security Features", () => {
+    test("HTTPS listener is configured with SSL certificate", async () => {
+      if (!outputs.alb_dns_name) {
+        console.warn("ALB DNS name not found in outputs, skipping HTTPS tests");
+        return;
+      }
+
+      // Find the load balancer
+      const albResponse = await withRetry(() =>
+        clients.elbv2.send(new DescribeLoadBalancersCommand({}))
+      );
+
+      const alb = albResponse?.LoadBalancers?.find(lb => 
+        lb.DNSName === outputs.alb_dns_name
+      );
+
+      if (alb) {
+        // Check for HTTPS listener
+        const listenersResponse = await withRetry(() =>
+          clients.elbv2.send(new DescribeListenersCommand({
+            LoadBalancerArn: alb.LoadBalancerArn
+          }))
+        );
+
+        if (listenersResponse && listenersResponse.Listeners) {
+          const httpsListener = listenersResponse.Listeners.find(l => 
+            l.Port === 443 && l.Protocol === "HTTPS"
+          );
+          
+          expect(httpsListener).toBeTruthy();
+          expect(httpsListener?.SslPolicy).toBeTruthy();
+          expect(httpsListener?.Certificates?.[0]?.CertificateArn).toBeTruthy();
+
+          // Check HTTP redirect to HTTPS
+          const httpListener = listenersResponse.Listeners.find(l => 
+            l.Port === 80 && l.Protocol === "HTTP"
+          );
+          
+          if (httpListener) {
+            const redirectAction = httpListener.DefaultActions?.find(a => 
+              a.Type === "redirect"
+            );
+            expect(redirectAction?.RedirectConfig?.Protocol).toBe("HTTPS");
+            expect(redirectAction?.RedirectConfig?.Port).toBe("443");
+          }
+        }
+      }
+    }, INTEGRATION_TIMEOUT);
+
+    test("Auto Scaling policies are configured", async () => {
+      const policiesResponse = await withRetry(() =>
+        clients.autoscaling.send(new DescribePoliciesCommand({}))
+      );
+
+      if (policiesResponse && policiesResponse.ScalingPolicies) {
+        const scalingPolicies = policiesResponse.ScalingPolicies.filter(policy =>
+          policy.AutoScalingGroupName?.includes("security-framework") &&
+          policy.AutoScalingGroupName?.includes("app-asg")
+        );
+
+        expect(scalingPolicies.length).toBeGreaterThan(0);
+
+        // Should have scale up and scale down policies
+        const scaleUpPolicy = scalingPolicies.find(p => 
+          p.PolicyName?.includes("scale-up") || p.PolicyName?.includes("out")
+        );
+        const scaleDownPolicy = scalingPolicies.find(p => 
+          p.PolicyName?.includes("scale-down") || p.PolicyName?.includes("in")
+        );
+
+        expect(scaleUpPolicy).toBeTruthy();
+        expect(scaleDownPolicy).toBeTruthy();
+
+        // Check policy types
+        scalingPolicies.forEach(policy => {
+          expect(policy.PolicyType).toBe("TargetTrackingScaling");
+          expect(policy.TargetTrackingConfiguration).toBeTruthy();
+        });
+      }
+    }, INTEGRATION_TIMEOUT);
+
+    test("AWS Secrets Manager contains database credentials", async () => {
+      // Find secrets that match our naming pattern
+      const secretName = `security-framework-${ENVIRONMENT_SUFFIX}-db-credentials`;
+      
+      const response = await withRetry(() =>
+        clients.secretsmanager.send(new DescribeSecretCommand({
+          SecretId: secretName
+        }))
+      );
+
+      if (response) {
+        expect(response.Name).toContain("db-credentials");
+        expect(response.Description).toBeTruthy();
+        expect(response.KmsKeyId).toBeTruthy(); // Should be encrypted
+        
+        // Check automatic rotation is configured
+        expect(response.RotationEnabled).toBe(true);
+        expect(response.RotationRules?.AutomaticallyAfterDays).toBe(30);
+      }
+    }, INTEGRATION_TIMEOUT);
+
+    test("CloudTrail is enabled for audit logging", async () => {
+      const trailsResponse = await withRetry(() =>
+        clients.cloudtrail.send(new DescribeTrailsCommand({}))
+      );
+
+      if (trailsResponse && trailsResponse.trailList) {
+        const cloudTrail = trailsResponse.trailList.find(trail =>
+          trail.Name?.includes("security-framework") &&
+          trail.Name?.includes("cloudtrail")
+        );
+
+        expect(cloudTrail).toBeTruthy();
+
+        if (cloudTrail) {
+          // Check trail status
+          const statusResponse = await withRetry(() =>
+            clients.cloudtrail.send(new GetTrailStatusCommand({
+              Name: cloudTrail.TrailARN
+            }))
+          );
+
+          if (statusResponse) {
+            expect(statusResponse.IsLogging).toBe(true);
+          }
+
+          // Check trail configuration
+          expect(cloudTrail.IncludeGlobalServiceEvents).toBe(true);
+          expect(cloudTrail.IsMultiRegionTrail).toBe(true);
+          expect(cloudTrail.LogFileValidationEnabled).toBe(true);
+          expect(cloudTrail.KmsKeyId).toBeTruthy(); // Should be encrypted
+        }
+      }
+    }, INTEGRATION_TIMEOUT);
+
+    test("ALB access logging is enabled", async () => {
+      if (!outputs.alb_dns_name) {
+        console.warn("ALB DNS name not found in outputs, skipping ALB access logging tests");
+        return;
+      }
+
+      // Find the load balancer
+      const albResponse = await withRetry(() =>
+        clients.elbv2.send(new DescribeLoadBalancersCommand({}))
+      );
+
+      const alb = albResponse?.LoadBalancers?.find(lb => 
+        lb.DNSName === outputs.alb_dns_name
+      );
+
+      if (alb) {
+        // Check for access logging attribute
+        const attributesResponse = await withRetry(() =>
+          clients.elbv2.send(new DescribeLoadBalancerAttributesCommand({
+            LoadBalancerArn: alb.LoadBalancerArn
+          }))
+        );
+
+        if (attributesResponse && attributesResponse.Attributes) {
+          const accessLogsEnabled = attributesResponse.Attributes.find(attr =>
+            attr.Key === "access_logs.s3.enabled"
+          );
+          const accessLogsBucket = attributesResponse.Attributes.find(attr =>
+            attr.Key === "access_logs.s3.bucket"
+          );
+
+          expect(accessLogsEnabled?.Value).toBe("true");
+          expect(accessLogsBucket?.Value).toBeTruthy();
+          expect(accessLogsBucket?.Value).toContain("security-framework");
         }
       }
     }, INTEGRATION_TIMEOUT);

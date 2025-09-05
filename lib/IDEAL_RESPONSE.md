@@ -7,17 +7,20 @@ This document contains the complete and ideal implementation of a multi-tier web
 The infrastructure implements a secure, scalable, and highly available multi-tier web application on AWS with the following components:
 
 - **VPC with Multi-AZ networking** - Public, private, and database subnets across multiple availability zones
-- **Application Load Balancer** - Internet-facing ALB with WAF protection and access logging
-- **Auto Scaling Group** - Scalable application tier in private subnets
-- **RDS MySQL Database** - Encrypted database in private subnets with automated backups
+- **Application Load Balancer** - Internet-facing ALB with WAF protection, HTTPS support, and access logging
+- **Auto Scaling Group** - Scalable application tier (2-4 instances) with auto-scaling policies
+- **RDS MySQL Database** - Encrypted database with automated backups and multi-AZ support
 - **S3 Buckets** - Encrypted storage for application data and logs
 - **KMS Key Management** - Customer-managed keys for encryption at rest
 - **IAM Roles and Policies** - Least privilege access controls
+- **AWS Secrets Manager** - Secure database credential management with rotation
+- **CloudTrail** - Multi-region audit logging with encryption
 - **CloudWatch Monitoring** - Comprehensive logging and alerting
 - **VPC Flow Logs** - Network traffic monitoring
 - **WAF Protection** - Web application firewall with managed rule sets
 - **Route 53 DNS** - Optional DNS configuration
 - **Bastion Host** - Secure access to private resources
+- **HTTPS/TLS** - SSL certificate and HTTPS listener with HTTP redirect
 
 ## Complete Terraform Configuration
 
@@ -216,6 +219,126 @@ resource "random_password" "db_password" {
   numeric = true
 }
 
+# AWS Secrets Manager for database credentials
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name                    = "${local.name_prefix}-db-credentials"
+  description             = "Database credentials for ${local.name_prefix}"
+  recovery_window_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-credentials"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = random_password.db_password.result
+    engine   = "mysql"
+    host     = aws_db_instance.main.endpoint
+    port     = aws_db_instance.main.port
+    dbname   = aws_db_instance.main.db_name
+  })
+
+  depends_on = [aws_db_instance.main]
+}
+
+# CloudTrail for audit logging
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket        = "cloudtrail-${local.name_prefix}-${random_id.suffix.hex}"
+  force_destroy = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.cloudtrail]
+}
+
+resource "aws_cloudtrail" "main" {
+  name           = "${local.name_prefix}-cloudtrail"
+  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+
+  enable_logging                = true
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+
+  kms_key_id = aws_kms_key.main.arn
+
+  event_selector {
+    read_write_type                  = "All"
+    include_management_events        = true
+    exclude_management_event_sources = []
+
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["${aws_s3_bucket.app_bucket.arn}/*"]
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
+}
+
 # KMS Key for encryption
 resource "aws_kms_key" "main" {
   description             = "${local.name_prefix}-main-key"
@@ -308,6 +431,21 @@ resource "aws_kms_key" "main" {
           "kms:GenerateDataKey*",
           "kms:DescribeKey",
           "kms:CreateGrant"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       }
@@ -774,10 +912,10 @@ resource "aws_s3_bucket_policy" "app_bucket_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.app_bucket.arn,
           "${aws_s3_bucket.app_bucket.arn}/*"
@@ -789,8 +927,8 @@ resource "aws_s3_bucket_policy" "app_bucket_policy" {
         }
       },
       {
-        Sid    = "AllowVPCAccess"
-        Effect = "Allow"
+        Sid       = "AllowVPCAccess"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "s3:GetObject",
@@ -836,7 +974,7 @@ resource "aws_iam_role" "ec2_role" {
 
 resource "aws_iam_policy" "ec2_policy" {
   name        = "${local.name_prefix}-ec2-policy"
-  description = "Policy for EC2 instances with S3 access"
+  description = "Policy for EC2 instances with S3, KMS, and CloudWatch access"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -932,7 +1070,7 @@ resource "aws_db_instance" "main" {
   max_allocated_storage = 100
   storage_type          = "gp3"
   storage_encrypted     = true
-  kms_key_id           = aws_kms_key.main.arn
+  kms_key_id            = aws_kms_key.main.arn
 
   db_name  = "appdb"
   username = var.db_username
@@ -942,19 +1080,23 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = var.backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-  multi_az               = var.enable_multi_az
-  publicly_accessible    = false
-  deletion_protection    = var.enable_deletion_protection
-  
+  # Enhanced backup configuration for production
+  copy_tags_to_snapshot    = true
+  delete_automated_backups = false
+
+  multi_az            = var.enable_multi_az
+  publicly_accessible = false
+  deletion_protection = var.enable_deletion_protection
+
   skip_final_snapshot       = true
   final_snapshot_identifier = "${local.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   performance_insights_enabled = false
-  monitoring_interval         = 60
-  monitoring_role_arn        = aws_iam_role.rds_enhanced_monitoring.arn
+  monitoring_interval          = 60
+  monitoring_role_arn          = aws_iam_role.rds_enhanced_monitoring.arn
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database"
@@ -1001,7 +1143,7 @@ resource "aws_lb" "main" {
   access_logs {
     bucket  = aws_s3_bucket.logs_bucket.id
     prefix  = "alb-access-logs"
-    enabled = false
+    enabled = true
   }
 
   tags = merge(local.common_tags, {
@@ -1009,6 +1151,38 @@ resource "aws_lb" "main" {
   })
 
   depends_on = [aws_s3_bucket_policy.logs_bucket_policy]
+}
+
+# Self-signed certificate for HTTPS (for demo purposes)
+resource "tls_private_key" "main" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+resource "tls_self_signed_cert" "main" {
+  private_key_pem = tls_private_key.main.private_key_pem
+
+  subject {
+    common_name  = "*.${local.name_prefix}.local"
+    organization = "Security Framework Demo"
+  }
+
+  validity_period_hours = 8760 # 1 year
+
+  allowed_uses = [
+    "key_encipherment",
+    "digital_signature",
+    "server_auth",
+  ]
+}
+
+resource "aws_acm_certificate" "main" {
+  private_key      = tls_private_key.main.private_key_pem
+  certificate_body = tls_self_signed_cert.main.cert_pem
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cert"
+  })
 }
 
 # S3 Bucket Policy for ALB Logs
@@ -1019,10 +1193,10 @@ resource "aws_s3_bucket_policy" "logs_bucket_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.logs_bucket.arn,
           "${aws_s3_bucket.logs_bucket.arn}/*"
@@ -1039,7 +1213,7 @@ resource "aws_s3_bucket_policy" "logs_bucket_policy" {
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
         }
-        Action = "s3:PutObject"
+        Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs_bucket.arn}/alb-access-logs/*"
         Condition = {
           StringEquals = {
@@ -1053,7 +1227,7 @@ resource "aws_s3_bucket_policy" "logs_bucket_policy" {
         Principal = {
           AWS = data.aws_elb_service_account.main.arn
         }
-        Action = "s3:GetBucketAcl"
+        Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.logs_bucket.arn
       }
     ]
@@ -1087,14 +1261,36 @@ resource "aws_lb_target_group" "app" {
 }
 
 # ALB Listener
-resource "aws_lb_listener" "app" {
+# HTTP listener (redirects to HTTPS)
+resource "aws_lb_listener" "app_http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# HTTPS listener
+resource "aws_lb_listener" "app_https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate.main.arn
+
+  default_action {
     type = "forward"
-    
+
     forward {
       target_group {
         arn = aws_lb_target_group.app.arn
@@ -1173,15 +1369,15 @@ resource "aws_launch_template" "app" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "app" {
-  name                = "${local.name_prefix}-app-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
-  health_check_type   = "ELB"
+  name                      = "${local.name_prefix}-app-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.app.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
-  min_size         = 1
-  max_size         = 1
-  desired_capacity = 1
+  min_size         = 2
+  max_size         = 4
+  desired_capacity = 2
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -1211,14 +1407,47 @@ resource "aws_autoscaling_group" "app" {
   }
 }
 
+# Auto Scaling Policies
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "${local.name_prefix}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "${local.name_prefix}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "SimpleScaling"
+}
+
+# Target tracking scaling policy (more advanced)
+resource "aws_autoscaling_policy" "target_tracking" {
+  name                   = "${local.name_prefix}-target-tracking"
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 50.0
+  }
+}
+
 # Bastion Host
 resource "aws_instance" "bastion" {
   count = var.create_bastion_host ? 1 : 0
 
   ami                    = data.aws_ami.amazon_linux.id
-  instance_type         = "t3.micro"
-  key_name              = var.key_pair_name != "" ? var.key_pair_name : null
-  subnet_id             = aws_subnet.public[0].id
+  instance_type          = "t3.micro"
+  key_name               = var.key_pair_name != "" ? var.key_pair_name : null
+  subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.bastion.id]
 
   root_block_device {
@@ -1284,7 +1513,7 @@ resource "aws_route53_record" "alb" {
 resource "aws_cloudwatch_log_group" "application" {
   name              = "/aws/ec2/${local.name_prefix}-application"
   retention_in_days = var.log_retention_days
-  kms_key_id       = aws_kms_key.main.arn
+  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-application-logs"
@@ -1359,7 +1588,7 @@ resource "aws_wafv2_web_acl" "main" {
 resource "aws_cloudwatch_log_group" "waf" {
   name              = "aws-waf-logs-${local.name_prefix}-security-waf-${random_id.suffix.hex}"
   retention_in_days = var.log_retention_days
-  kms_key_id       = aws_kms_key.main.arn
+  kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-waf-logs"
@@ -1395,6 +1624,27 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = "70"
   alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+
+  tags = local.common_tags
+}
+
+# CPU Low alarm for scaling down
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${local.name_prefix}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "20"
+  alarm_description   = "This metric monitors low ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.app.name
@@ -1515,46 +1765,3 @@ output "waf_web_acl_arn" {
   value       = aws_wafv2_web_acl.main.arn
 }
 ```
-
-## Key Security Features
-
-### Network Security
-- **VPC Isolation**: Complete network isolation with public, private, and database subnet tiers
-- **Security Groups**: Principle of least privilege with security group references instead of CIDR blocks
-- **Network ACLs**: Additional layer of network security
-- **VPC Flow Logs**: Complete network traffic logging for monitoring and forensics
-
-### Encryption
-- **Encryption at Rest**: All storage (RDS, S3, EBS) encrypted with customer-managed KMS keys
-- **Encryption in Transit**: HTTPS/TLS enforcement for all communications
-- **Key Management**: Centralized KMS key with proper service permissions
-
-### Access Control
-- **IAM Roles**: Service-specific roles with minimal permissions
-- **Instance Profiles**: No hardcoded credentials in instances
-- **Bastion Host**: Secure access pattern for private resources
-- **Private Database**: Database accessible only from application tier
-
-### Monitoring and Logging
-- **CloudWatch**: Comprehensive metrics and alarms
-- **VPC Flow Logs**: Network traffic monitoring
-- **Application Logs**: Structured logging with retention policies
-- **WAF Logs**: Web application firewall activity logging
-
-### High Availability
-- **Multi-AZ Deployment**: Resources distributed across availability zones
-- **Auto Scaling**: Automatic scaling based on demand
-- **Load Balancing**: Traffic distribution with health checks
-- **Backup and Recovery**: Automated database backups with point-in-time recovery
-
-## Compliance and Best Practices
-
-This infrastructure follows AWS Well-Architected Framework principles and implements security best practices including:
-
-- **Defense in Depth**: Multiple layers of security controls
-- **Least Privilege Access**: Minimal permissions for all resources
-- **Encryption Everywhere**: Data encrypted at rest and in transit
-- **Comprehensive Monitoring**: Full visibility into system operations
-- **Automated Backup**: Data protection and disaster recovery
-- **Network Segmentation**: Proper isolation between tiers
-- **Security by Default**: Secure configurations as baseline

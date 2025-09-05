@@ -192,6 +192,126 @@ resource "random_password" "db_password" {
   numeric = true
 }
 
+# AWS Secrets Manager for database credentials
+resource "aws_secretsmanager_secret" "db_credentials" {
+  name                    = "${local.name_prefix}-db-credentials"
+  description             = "Database credentials for ${local.name_prefix}"
+  recovery_window_in_days = 7
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-db-credentials"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "db_credentials" {
+  secret_id = aws_secretsmanager_secret.db_credentials.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = random_password.db_password.result
+    engine   = "mysql"
+    host     = aws_db_instance.main.endpoint
+    port     = aws_db_instance.main.port
+    dbname   = aws_db_instance.main.db_name
+  })
+
+  depends_on = [aws_db_instance.main]
+}
+
+# CloudTrail for audit logging
+resource "aws_s3_bucket" "cloudtrail" {
+  bucket        = "cloudtrail-${local.name_prefix}-${random_id.suffix.hex}"
+  force_destroy = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [aws_s3_bucket_public_access_block.cloudtrail]
+}
+
+resource "aws_cloudtrail" "main" {
+  name           = "${local.name_prefix}-cloudtrail"
+  s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
+
+  enable_logging                = true
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  enable_log_file_validation    = true
+
+  kms_key_id = aws_kms_key.main.arn
+
+  event_selector {
+    read_write_type                  = "All"
+    include_management_events        = true
+    exclude_management_event_sources = []
+
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["${aws_s3_bucket.app_bucket.arn}/*"]
+    }
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cloudtrail"
+  })
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
+}
+
 # KMS Key for encryption
 resource "aws_kms_key" "main" {
   description             = "${local.name_prefix}-main-key"
@@ -284,6 +404,21 @@ resource "aws_kms_key" "main" {
           "kms:GenerateDataKey*",
           "kms:DescribeKey",
           "kms:CreateGrant"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudTrail Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       }
@@ -921,6 +1056,10 @@ resource "aws_db_instance" "main" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "sun:04:00-sun:05:00"
 
+  # Enhanced backup configuration for production
+  copy_tags_to_snapshot    = true
+  delete_automated_backups = false
+
   multi_az            = var.enable_multi_az
   publicly_accessible = false
   deletion_protection = var.enable_deletion_protection
@@ -977,7 +1116,7 @@ resource "aws_lb" "main" {
   access_logs {
     bucket  = aws_s3_bucket.logs_bucket.id
     prefix  = "alb-access-logs"
-    enabled = false
+    enabled = true
   }
 
   tags = merge(local.common_tags, {
@@ -985,6 +1124,38 @@ resource "aws_lb" "main" {
   })
 
   depends_on = [aws_s3_bucket_policy.logs_bucket_policy]
+}
+
+# Self-signed certificate for HTTPS (for demo purposes)
+resource "tls_private_key" "main" {
+  algorithm = "RSA"
+  rsa_bits  = 2048
+}
+
+resource "tls_self_signed_cert" "main" {
+  private_key_pem = tls_private_key.main.private_key_pem
+
+  subject {
+    common_name  = "*.${local.name_prefix}.local"
+    organization = "Security Framework Demo"
+  }
+
+  validity_period_hours = 8760 # 1 year
+
+  allowed_uses = [
+    "key_encipherment",
+    "digital_signature",
+    "server_auth",
+  ]
+}
+
+resource "aws_acm_certificate" "main" {
+  private_key      = tls_private_key.main.private_key_pem
+  certificate_body = tls_self_signed_cert.main.cert_pem
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-cert"
+  })
 }
 
 # S3 Bucket Policy for ALB Logs
@@ -1063,10 +1234,32 @@ resource "aws_lb_target_group" "app" {
 }
 
 # ALB Listener
-resource "aws_lb_listener" "app" {
+# HTTP listener (redirects to HTTPS)
+resource "aws_lb_listener" "app_http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  tags = local.common_tags
+}
+
+# HTTPS listener
+resource "aws_lb_listener" "app_https" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = aws_acm_certificate.main.arn
 
   default_action {
     type = "forward"
@@ -1155,9 +1348,9 @@ resource "aws_autoscaling_group" "app" {
   health_check_type         = "ELB"
   health_check_grace_period = 300
 
-  min_size         = 1
-  max_size         = 1
-  desired_capacity = 1
+  min_size         = 2
+  max_size         = 4
+  desired_capacity = 2
 
   launch_template {
     id      = aws_launch_template.app.id
@@ -1184,6 +1377,39 @@ resource "aws_autoscaling_group" "app" {
     preferences {
       min_healthy_percentage = 50
     }
+  }
+}
+
+# Auto Scaling Policies
+resource "aws_autoscaling_policy" "scale_up" {
+  name                   = "${local.name_prefix}-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "SimpleScaling"
+}
+
+resource "aws_autoscaling_policy" "scale_down" {
+  name                   = "${local.name_prefix}-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "SimpleScaling"
+}
+
+# Target tracking scaling policy (more advanced)
+resource "aws_autoscaling_policy" "target_tracking" {
+  name                   = "${local.name_prefix}-target-tracking"
+  autoscaling_group_name = aws_autoscaling_group.app.name
+  policy_type            = "TargetTrackingScaling"
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = 50.0
   }
 }
 
@@ -1371,6 +1597,27 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   statistic           = "Average"
   threshold           = "70"
   alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+
+  tags = local.common_tags
+}
+
+# CPU Low alarm for scaling down
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${local.name_prefix}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "20"
+  alarm_description   = "This metric monitors low ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.app.name
