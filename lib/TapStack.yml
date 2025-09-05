@@ -431,7 +431,7 @@ Resources:
       DBInstanceIdentifier: !Sub '${ProjectName}-${EnvironmentSuffix}-database'
       DBInstanceClass: db.t3.micro
       Engine: mysql
-      EngineVersion: '8.0.35'
+      EngineVersion: '8.0.43'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -503,11 +503,11 @@ Resources:
                 Action:
                   - s3:GetObjectVersionForReplication
                   - s3:GetObjectVersionAcl
-                Resource: !Sub '${CrossRegionBackupBucket}/*'
+                Resource: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-dr-backup-${AWS::AccountId}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref CrossRegionBackupBucket
+                Resource: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-dr-backup-${AWS::AccountId}'
               - Effect: Allow
                 Action:
                   - s3:ReplicateObject
