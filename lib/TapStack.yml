@@ -268,7 +268,7 @@ Resources:
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub cloudtrail-logs-${AWS::Region}-${AWS::AccountId}
+      BucketName: !Sub ${AWS::Region}-${AWS::AccountId}-cloudtrail-logs
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
