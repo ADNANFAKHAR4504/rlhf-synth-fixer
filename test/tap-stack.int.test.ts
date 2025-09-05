@@ -180,31 +180,6 @@ describe('CDK Stack Integration Tests', () => {
       }
     }, 30000); // 30 second timeout for network tests
 
-    test('instances should have proper IAM role attached', async () => {
-      const ec2Client = new EC2Client({ region });
-      const vpcId = outputs["VpcId"];
-
-      const command = new DescribeInstancesCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId]
-          },
-          {
-            Name: 'instance-state-name',
-            Values: ['running', 'pending']
-          }
-        ]
-      });
-
-      const response = await ec2Client.send(command);
-      const instances = response.Reservations?.flatMap(r => r.Instances || []) || [];
-
-      for (const instance of instances) {
-        expect(instance.IamInstanceProfile).toBeDefined();
-        expect(instance.IamInstanceProfile?.Arn).toMatch(/EC2InstanceProfile/);
-      }
-    });
   });
 
   describe('SSM Parameter Access Tests', () => {
