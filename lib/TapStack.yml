@@ -6,72 +6,69 @@ Parameters:
     Type: String
     Default: TapStack
     Description: Name of the project for resource tagging and naming
-    
+
   Environment:
     Type: String
     Default: production
     AllowedValues: [dev, staging, production]
     Description: Environment for deployment
-    
+
   Owner:
     Type: String
     Description: Owner/Team responsible for this stack
     Default: DevOpsTeam
-    
+
   VpcCidr:
     Type: String
     Default: 10.0.0.0/16
     Description: CIDR block for the VPC
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
-    
+
   PublicSubnetCidrs:
     Type: CommaDelimitedList
     Default: "10.0.1.0/24,10.0.2.0/24"
     Description: CIDR blocks for public subnets (must be within VPC CIDR)
-    
+
   PrivateSubnetCidrs:
     Type: CommaDelimitedList
     Default: "10.0.10.0/24,10.0.11.0/24"
     Description: CIDR blocks for private subnets (must be within VPC CIDR)
-    
+
   AllowedSshCidr:
     Type: String
     Description: CIDR block allowed to SSH to bastion host (e.g. your office IP/32)
-    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(0|[1-9]|[1-2][0-9]|3[0-2]))$
-    
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|3[0-2])$
+
   BastionInstanceType:
     Type: String
     Default: t3.micro
     Description: Instance type for bastion host
     AllowedValues: [t3.nano, t3.micro, t3.small, t3.medium]
-    
+
   PrivateInstanceType:
     Type: String
     Default: t3.micro
     Description: Instance type for private instances
     AllowedValues: [t3.nano, t3.micro, t3.small, t3.medium, t3.large]
-    
+
   EbsCleanupRetentionHours:
     Type: Number
     Default: 24
     MinValue: 1
     MaxValue: 8760
     Description: Hours after which unattached EBS volumes can be deleted (1-8760)
-    
+
   EbsCleanupRequireTag:
     Type: String
     Default: 'true'
     AllowedValues: ['true', 'false']
     Description: Whether to require AutoDelete=true tag for EBS cleanup
 
-Conditions:
-  RequireAutoDeleteTag: !Equals [!Ref EbsCleanupRequireTag, 'true']
-
 Resources:
   # =============================================================================
   # VPC AND NETWORKING
   # =============================================================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -79,27 +76,19 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-vpc'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-vpc' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-igw'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-igw' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -107,7 +96,6 @@ Resources:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
 
-  # Public Subnets
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -116,14 +104,10 @@ Resources:
       AvailabilityZone: !Select [0, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-public-subnet-1'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-1' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -133,16 +117,11 @@ Resources:
       AvailabilityZone: !Select [1, !GetAZs '']
       MapPublicIpOnLaunch: true
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-public-subnet-2'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-2' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
-  # Private Subnets
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -150,14 +129,10 @@ Resources:
       CidrBlock: !Select [0, !Ref PrivateSubnetCidrs]
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-subnet-1'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-1' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -166,43 +141,30 @@ Resources:
       CidrBlock: !Select [1, !Ref PrivateSubnetCidrs]
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-subnet-2'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-2' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
-  # NAT Gateways
   NatEip1:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-nat-eip-1'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-eip-1' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   NatEip2:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-nat-eip-2'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-eip-2' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -210,14 +172,10 @@ Resources:
       AllocationId: !GetAtt NatEip1.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-nat-gw-1'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-gw-1' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
@@ -225,59 +183,41 @@ Resources:
       AllocationId: !GetAtt NatEip2.AllocationId
       SubnetId: !Ref PublicSubnet2
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-nat-gw-2'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-nat-gw-2' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
-  # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-public-rt'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-public-rt' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-rt-1'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-private-rt-1' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-rt-2'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-private-rt-2' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
-  # Routes
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -300,7 +240,6 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway2
 
-  # Route Table Associations
   PublicSubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -328,44 +267,34 @@ Resources:
   # =============================================================================
   # KMS ENCRYPTION
   # =============================================================================
-  
+
   KmsKey:
     Type: AWS::KMS::Key
     Properties:
       Description: !Sub 'KMS key for ${ProjectName} S3 encryption and CloudTrail'
       KeyPolicy:
+        Version: '2012-10-17'
         Statement:
-          - Sid: Enable IAM User Permissions
+          - Sid: EnableIAMUserPermissions
             Effect: Allow
-            Principal:
-              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow CloudTrail to use the key
+          - Sid: AllowCloudTrail
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
+            Principal: { Service: cloudtrail.amazonaws.com }
+            Action: [ kms:Decrypt, kms:GenerateDataKey* ]
             Resource: '*'
-          - Sid: Allow S3 service to use the key
+          - Sid: AllowS3Service
             Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
+            Principal: { Service: s3.amazonaws.com }
+            Action: [ kms:Decrypt, kms:GenerateDataKey* ]
             Resource: '*'
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-kms-key'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-kms-key' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
 
@@ -376,13 +305,12 @@ Resources:
       TargetKeyId: !Ref KmsKey
 
   # =============================================================================
-  # S3 BUCKETS
+  # S3 BUCKETS (avoid hard-coded names to satisfy DNS naming rules)
   # =============================================================================
-  
+
   S3AppBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-app-data-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -399,25 +327,15 @@ Resources:
         LogFilePrefix: app-access-logs/
       VersioningConfiguration:
         Status: Enabled
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:ObjectCreated:*
-            CloudWatchConfiguration:
-              LogGroupName: !Sub '/aws/s3/${ProjectName}'
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-app-bucket'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-app-bucket' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   S3LogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${ProjectName}-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -438,42 +356,38 @@ Resources:
             NoncurrentVersionExpirationInDays: 90
           - Id: TransitionToIA
             Status: Enabled
-            TransitionInDays: 30
-            StorageClass: STANDARD_IA
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-logs-bucket'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-logs-bucket' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
 
-  # S3 Bucket Policies
   S3AppBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref S3AppBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${S3AppBucket}/*'
-              - !Sub '${S3AppBucket}'
+              - !Sub 'arn:aws:s3:::${S3AppBucket}'
+              - !Sub 'arn:aws:s3:::${S3AppBucket}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
           - Sid: DenyUnencryptedObjectUploads
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${S3AppBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${S3AppBucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'aws:kms'
@@ -481,7 +395,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
-            Resource: !Sub '${S3AppBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${S3AppBucket}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt KmsKey.Arn
@@ -491,43 +405,39 @@ Resources:
     Properties:
       Bucket: !Ref S3LogsBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${S3LogsBucket}/*'
-              - !Sub '${S3LogsBucket}'
+              - !Sub 'arn:aws:s3:::${S3LogsBucket}'
+              - !Sub 'arn:aws:s3:::${S3LogsBucket}/*'
             Condition:
-              Bool:
-                'aws:SecureTransport': 'false'
+              Bool: { 'aws:SecureTransport': 'false' }
           - Sid: AWSCloudTrailAclCheck
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
+            Principal: { Service: cloudtrail.amazonaws.com }
             Action: 's3:GetBucketAcl'
-            Resource: !Sub '${S3LogsBucket}'
+            Resource: !Sub 'arn:aws:s3:::${S3LogsBucket}'
           - Sid: AWSCloudTrailWrite
             Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
+            Principal: { Service: cloudtrail.amazonaws.com }
             Action: 's3:PutObject'
-            Resource: !Sub '${S3LogsBucket}/cloudtrail-logs/*'
+            Resource: !Sub 'arn:aws:s3:::${S3LogsBucket}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
-              StringEquals:
-                's3:x-amz-acl': bucket-owner-full-control
+              StringEquals: { 's3:x-amz-acl': bucket-owner-full-control }
           - Sid: AllowS3AccessLogDelivery
             Effect: Allow
-            Principal:
-              Service: logging.s3.amazonaws.com
+            Principal: { Service: logging.s3.amazonaws.com }
             Action: 's3:PutObject'
-            Resource: !Sub '${S3LogsBucket}/app-access-logs/*'
+            Resource: !Sub 'arn:aws:s3:::${S3LogsBucket}/app-access-logs/*'
 
   # =============================================================================
   # CLOUDTRAIL
   # =============================================================================
-  
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
@@ -538,27 +448,24 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       KMSKeyId: !Ref KmsKey
+      IsLogging: true
       EventSelectors:
         - ReadWriteType: All
           IncludeManagementEvents: true
           DataResources:
             - Type: 'AWS::S3::Object'
               Values:
-                - !Sub '${S3AppBucket}/*'
+                - !Sub 'arn:aws:s3:::${S3AppBucket}/'
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-cloudtrail'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-cloudtrail' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   # =============================================================================
   # IAM MANAGED POLICIES
   # =============================================================================
-  
+
   AppDataAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -572,14 +479,14 @@ Resources:
             Action:
               - s3:ListBucket
               - s3:GetBucketLocation
-            Resource: !Sub '${S3AppBucket}'
+            Resource: !Sub 'arn:aws:s3:::${S3AppBucket}'
           - Sid: S3ObjectAccess
             Effect: Allow
             Action:
               - s3:GetObject
               - s3:PutObject
               - s3:DeleteObject
-            Resource: !Sub '${S3AppBucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${S3AppBucket}/*'
           - Sid: KMSAccess
             Effect: Allow
             Action:
@@ -594,30 +501,26 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: !Sub '${ProjectName}-MfaEnforcement'
-      Description: Policy that denies console actions without MFA
+      Description: Policy that denies sensitive console/API actions without MFA
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyAllExceptListActionsWithoutMFA
+          - Sid: DenyIAMandSTSWithoutMFA
             Effect: Deny
-            Action:
-              - 'iam:*'
-              - 'sts:*'
+            Action: [ 'iam:*', 'sts:*' ]
             Resource: '*'
             Condition:
-              BoolIfExists:
-                'aws:MultiFactorAuthPresent': 'false'
-          - Sid: DenyConsoleSigninWithoutMFA
+              BoolIfExists: { 'aws:MultiFactorAuthPresent': 'false' }
+          - Sid: DenyLoginProfileWithoutMFA
             Effect: Deny
             Action:
-              - 'iam:CreateLoginProfile'
-              - 'iam:DeleteLoginProfile'
-              - 'iam:UpdateLoginProfile'
-              - 'iam:ChangePassword'
+              - iam:CreateLoginProfile
+              - iam:DeleteLoginProfile
+              - iam:UpdateLoginProfile
+              - iam:ChangePassword
             Resource: '*'
             Condition:
-              BoolIfExists:
-                'aws:MultiFactorAuthPresent': 'false'
+              BoolIfExists: { 'aws:MultiFactorAuthPresent': 'false' }
 
   LambdaEbsCleanupPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -629,22 +532,17 @@ Resources:
         Statement:
           - Sid: EC2VolumeAccess
             Effect: Allow
-            Action:
-              - ec2:DescribeVolumes
-              - ec2:DeleteVolume
+            Action: [ ec2:DescribeVolumes, ec2:DeleteVolume ]
             Resource: '*'
           - Sid: CloudWatchLogs
             Effect: Allow
-            Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
+            Action: [ logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents ]
             Resource: '*'
 
   # =============================================================================
-  # IAM ROLES AND GROUPS
+  # IAM ROLES / GROUPS / PROFILES
   # =============================================================================
-  
+
   BastionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -653,20 +551,15 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
+            Principal: { Service: ec2.amazonaws.com }
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-bastion-role'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-bastion-role' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   PrivateInstanceRole:
     Type: AWS::IAM::Role
@@ -676,21 +569,16 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
+            Principal: { Service: ec2.amazonaws.com }
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
         - !Ref AppDataAccessPolicy
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-instance-role'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-private-instance-role' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   EbsCleanupLambdaRole:
     Type: AWS::IAM::Role
@@ -700,21 +588,16 @@ Resources:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
+            Principal: { Service: lambda.amazonaws.com }
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - !Ref LambdaEbsCleanupPolicy
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-ebs-cleanup-lambda-role'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-ebs-cleanup-lambda-role' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   ConsoleUsersGroup:
     Type: AWS::IAM::Group
@@ -723,25 +606,22 @@ Resources:
       ManagedPolicyArns:
         - !Ref MfaEnforcementPolicy
 
-  # Instance Profiles
   BastionInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub '${ProjectName}-BastionInstanceProfile'
-      Roles:
-        - !Ref BastionRole
+      Roles: [ !Ref BastionRole ]
 
   PrivateInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub '${ProjectName}-PrivateInstanceProfile'
-      Roles:
-        - !Ref PrivateInstanceRole
+      Roles: [ !Ref PrivateInstanceRole ]
 
   # =============================================================================
   # SECURITY GROUPS
   # =============================================================================
-  
+
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -759,14 +639,10 @@ Resources:
           CidrIp: 0.0.0.0/0
           Description: All outbound traffic
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-bastion-sg'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-bastion-sg' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   PrivateSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -785,37 +661,58 @@ Resources:
           CidrIp: 0.0.0.0/0
           Description: All outbound traffic
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-private-sg'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-private-sg' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   # =============================================================================
   # VPC ENDPOINTS
   # =============================================================================
-  
+
   S3Endpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       VpcId: !Ref VPC
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
       VpcEndpointType: Gateway
-      RouteTableIds:
-        - !Ref PrivateRouteTable1
-        - !Ref PrivateRouteTable2
+      RouteTableIds: [ !Ref PrivateRouteTable1, !Ref PrivateRouteTable2 ]
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::${S3AppBucket}'
+              - !Sub 'arn:aws:s3:::${S3LogsBucket}'
           - Effect: Allow
             Principal: '*'
             Action:
               - s3:GetObject
               - s3:PutObject
-              - s3:ListBucket
-            Resource: '*'
+            Resource:
+              - !Sub 'arn:aws:s3:::${S3AppBucket}/*'
+              - !Sub 'arn:aws:s3:::${S3LogsBucket}/*'
+
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-vpc-endpoint-sg'
+      GroupDescription: Security group for VPC interface endpoints
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+          Description: HTTPS from within the VPC
+      Tags:
+        - { Key: Name, Value: !Sub '${ProjectName}-vpc-endpoint-sg' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   SsmEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -823,17 +720,9 @@ Resources:
       VpcId: !Ref VPC
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
       VpcEndpointType: Interface
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      SecurityGroupIds:
-        - !Ref VpcEndpointSecurityGroup
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: '*'
-            Resource: '*'
+      PrivateDnsEnabled: true
+      SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
+      SecurityGroupIds: [ !Ref VpcEndpointSecurityGroup ]
 
   Ec2MessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -841,11 +730,9 @@ Resources:
       VpcId: !Ref VPC
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
       VpcEndpointType: Interface
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      SecurityGroupIds:
-        - !Ref VpcEndpointSecurityGroup
+      PrivateDnsEnabled: true
+      SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
+      SecurityGroupIds: [ !Ref VpcEndpointSecurityGroup ]
 
   SsmMessagesEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -853,83 +740,50 @@ Resources:
       VpcId: !Ref VPC
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
       VpcEndpointType: Interface
-      SubnetIds:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
-      SecurityGroupIds:
-        - !Ref VpcEndpointSecurityGroup
-
-  VpcEndpointSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupName: !Sub '${ProjectName}-vpc-endpoint-sg'
-      GroupDescription: Security group for VPC endpoints
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: !Ref VpcCidr
-          Description: HTTPS from VPC
-      Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-vpc-endpoint-sg'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+      PrivateDnsEnabled: true
+      SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
+      SecurityGroupIds: [ !Ref VpcEndpointSecurityGroup ]
 
   # =============================================================================
   # EC2 INSTANCES
   # =============================================================================
-  
+
   BastionInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       InstanceType: !Ref BastionInstanceType
       IamInstanceProfile: !Ref BastionInstanceProfile
-      SecurityGroupIds:
-        - !Ref BastionSecurityGroup
+      SecurityGroupIds: [ !Ref BastionSecurityGroup ]
       SubnetId: !Ref PublicSubnet1
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64:  |
           #!/bin/bash
           yum update -y
           yum install -y amazon-ssm-agent
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
-          
           # Harden SSH
           sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
           sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
           systemctl restart sshd
-          
           # Install CloudWatch agent
           yum install -y amazon-cloudwatch-agent
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-bastion'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-bastion' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   PrivateLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateName: !Sub '${ProjectName}-private-lt'
       LaunchTemplateData:
-        ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId:  '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
         InstanceType: !Ref PrivateInstanceType
-        IamInstanceProfile:
-          Name: !Ref PrivateInstanceProfile
-        SecurityGroupIds:
-          - !Ref PrivateSecurityGroup
+        IamInstanceProfile: { Name: !Ref PrivateInstanceProfile }
+        SecurityGroupIds: [ !Ref PrivateSecurityGroup ]
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -937,25 +791,19 @@ Resources:
             yum install -y amazon-ssm-agent amazon-cloudwatch-agent
             systemctl enable amazon-ssm-agent
             systemctl start amazon-ssm-agent
-            
             # Install AWS CLI v2
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
             unzip awscliv2.zip
-            sudo ./aws/install
-            
-            # Test S3 access
+            ./aws/install
+            # Test S3 access over TLS
             aws s3 ls s3://${S3AppBucket} || echo "S3 access test failed"
         TagSpecifications:
           - ResourceType: instance
             Tags:
-              - Key: Name
-                Value: !Sub '${ProjectName}-private-instance'
-              - Key: Project
-                Value: !Ref ProjectName
-              - Key: Environment
-                Value: !Ref Environment
-              - Key: Owner
-                Value: !Ref Owner
+              - { Key: Name, Value: !Sub '${ProjectName}-private-instance' }
+              - { Key: Project, Value: !Ref ProjectName }
+              - { Key: Environment, Value: !Ref Environment }
+              - { Key: Owner, Value: !Ref Owner }
 
   PrivateAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -967,9 +815,7 @@ Resources:
       MinSize: 1
       MaxSize: 2
       DesiredCapacity: 1
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet1
-        - !Ref PrivateSubnet2
+      VPCZoneIdentifier: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
       HealthCheckType: EC2
       HealthCheckGracePeriod: 300
       Tags:
@@ -989,7 +835,7 @@ Resources:
   # =============================================================================
   # EBS CLEANUP LAMBDA
   # =============================================================================
-  
+
   EbsCleanupLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -1003,70 +849,54 @@ Resources:
           RETENTION_HOURS: !Ref EbsCleanupRetentionHours
           REQUIRE_TAG: !Ref EbsCleanupRequireTag
       Code:
-        ZipFile: !Sub |
+        ZipFile:  |
           import boto3
           import json
           import os
-          from datetime import datetime, timedelta
-          
+          from datetime import datetime, timedelta, timezone
+
           def lambda_handler(event, context):
               ec2 = boto3.client('ec2')
               retention_hours = int(os.environ['RETENTION_HOURS'])
               require_tag = os.environ['REQUIRE_TAG'].lower() == 'true'
-              
-              cutoff_time = datetime.now() - timedelta(hours=retention_hours)
+
+              cutoff_time = datetime.now(timezone.utc) - timedelta(hours=retention_hours)
               deleted_volumes = []
-              
-              try:
-                  # Get all available (unattached) volumes
-                  response = ec2.describe_volumes(
-                      Filters=[{'Name': 'status', 'Values': ['available']}]
-                  )
-                  
-                  for volume in response['Volumes']:
+
+              paginator = ec2.get_paginator('describe_volumes')
+              page_iterator = paginator.paginate(Filters=[{'Name': 'status', 'Values': ['available']}])
+
+              for page in page_iterator:
+                  for volume in page.get('Volumes', []):
                       volume_id = volume['VolumeId']
-                      create_time = volume['CreateTime'].replace(tzinfo=None)
-                      
-                      # Check if volume is old enough
+                      create_time = volume['CreateTime']  # already in UTC
+
+                      # Old enough?
                       if create_time > cutoff_time:
                           continue
-                      
-                      # Check for AutoDelete tag if required
+
+                      # Require AutoDelete=true tag if configured
                       if require_tag:
-                          tags = {tag['Key']: tag['Value'] for tag in volume.get('Tags', [])}
+                          tags = {t['Key']: t['Value'] for t in volume.get('Tags', [])}
                           if tags.get('AutoDelete', '').lower() != 'true':
                               continue
-                      
+
                       try:
                           ec2.delete_volume(VolumeId=volume_id)
                           deleted_volumes.append(volume_id)
                           print(f"Deleted volume: {volume_id}")
                       except Exception as e:
                           print(f"Failed to delete volume {volume_id}: {str(e)}")
-                  
-                  return {
-                      'statusCode': 200,
-                      'body': json.dumps({
-                          'deleted_volumes': deleted_volumes,
-                          'count': len(deleted_volumes)
-                      })
-                  }
-                  
-              except Exception as e:
-                  print(f"Error: {str(e)}")
-                  return {
-                      'statusCode': 500,
-                      'body': json.dumps({'error': str(e)})
-                  }
+
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({'deleted_volumes': deleted_volumes, 'count': len(deleted_volumes)})
+              }
       Tags:
-        - Key: Name
-          Value: !Sub '${ProjectName}-ebs-cleanup'
-        - Key: Project
-          Value: !Ref ProjectName
-        - Key: Environment
-          Value: !Ref Environment
-        - Key: Owner
-          Value: !Ref Owner
+        - { Key: Name, Value: !Sub '${ProjectName}-ebs-cleanup' }
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: Owner, Value: !Ref Owner }
 
   EbsCleanupScheduleRule:
     Type: AWS::Events::Rule
@@ -1095,119 +925,99 @@ Outputs:
   VpcId:
     Description: ID of the created VPC
     Value: !Ref VPC
-    Export:
-      Name: !Sub '${ProjectName}-VpcId'
+    Export: { Name: !Sub '${ProjectName}-VpcId' }
 
   PublicSubnetIds:
     Description: List of public subnet IDs
     Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
-    Export:
-      Name: !Sub '${ProjectName}-PublicSubnetIds'
+    Export: { Name: !Sub '${ProjectName}-PublicSubnetIds' }
 
   PrivateSubnetIds:
     Description: List of private subnet IDs
     Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
-    Export:
-      Name: !Sub '${ProjectName}-PrivateSubnetIds'
+    Export: { Name: !Sub '${ProjectName}-PrivateSubnetIds' }
 
   NatGatewayIds:
     Description: List of NAT Gateway IDs
     Value: !Join [',', [!Ref NatGateway1, !Ref NatGateway2]]
-    Export:
-      Name: !Sub '${ProjectName}-NatGatewayIds'
+    Export: { Name: !Sub '${ProjectName}-NatGatewayIds' }
 
   InternetGatewayId:
     Description: ID of the Internet Gateway
     Value: !Ref InternetGateway
-    Export:
-      Name: !Sub '${ProjectName}-InternetGatewayId'
+    Export: { Name: !Sub '${ProjectName}-InternetGatewayId' }
 
   S3AppBucketName:
     Description: Name of the application data S3 bucket
     Value: !Ref S3AppBucket
-    Export:
-      Name: !Sub '${ProjectName}-S3AppBucketName'
+    Export: { Name: !Sub '${ProjectName}-S3AppBucketName' }
 
   S3LogsBucketName:
     Description: Name of the logs S3 bucket
     Value: !Ref S3LogsBucket
-    Export:
-      Name: !Sub '${ProjectName}-S3LogsBucketName'
+    Export: { Name: !Sub '${ProjectName}-S3LogsBucketName' }
 
   KmsKeyArn:
     Description: ARN of the KMS key
     Value: !GetAtt KmsKey.Arn
-    Export:
-      Name: !Sub '${ProjectName}-KmsKeyArn'
+    Export: { Name: !Sub '${ProjectName}-KmsKeyArn' }
 
   KmsAliasName:
     Description: Alias name of the KMS key
     Value: !Ref KmsAlias
-    Export:
-      Name: !Sub '${ProjectName}-KmsAliasName'
+    Export: { Name: !Sub '${ProjectName}-KmsAliasName' }
 
   CloudTrailArn:
     Description: ARN of the CloudTrail
     Value: !GetAtt CloudTrail.Arn
-    Export:
-      Name: !Sub '${ProjectName}-CloudTrailArn'
+    Export: { Name: !Sub '${ProjectName}-CloudTrailArn' }
 
   TrailS3LogPrefix:
     Description: S3 prefix for CloudTrail logs
     Value: cloudtrail-logs
-    Export:
-      Name: !Sub '${ProjectName}-TrailS3LogPrefix'
+    Export: { Name: !Sub '${ProjectName}-TrailS3LogPrefix' }
 
   BastionInstanceId:
     Description: Instance ID of the bastion host
     Value: !Ref BastionInstance
-    Export:
-      Name: !Sub '${ProjectName}-BastionInstanceId'
+    Export: { Name: !Sub '${ProjectName}-BastionInstanceId' }
 
   BastionPublicIp:
     Description: Public IP address of the bastion host
     Value: !GetAtt BastionInstance.PublicIp
-    Export:
-      Name: !Sub '${ProjectName}-BastionPublicIp'
+    Export: { Name: !Sub '${ProjectName}-BastionPublicIp' }
 
   PrivateInstanceProfileName:
     Description: Name of the private instance profile
     Value: !Ref PrivateInstanceProfile
-    Export:
-      Name: !Sub '${ProjectName}-PrivateInstanceProfileName'
+    Export: { Name: !Sub '${ProjectName}-PrivateInstanceProfileName' }
 
   PrivateInstanceRoleName:
     Description: Name of the private instance role
     Value: !Ref PrivateInstanceRole
-    Export:
-      Name: !Sub '${ProjectName}-PrivateInstanceRoleName'
+    Export: { Name: !Sub '${ProjectName}-PrivateInstanceRoleName' }
 
   EbsCleanupLambdaArn:
     Description: ARN of the EBS cleanup Lambda function
     Value: !GetAtt EbsCleanupLambda.Arn
-    Export:
-      Name: !Sub '${ProjectName}-EbsCleanupLambdaArn'
+    Export: { Name: !Sub '${ProjectName}-EbsCleanupLambdaArn' }
 
   EbsCleanupRuleName:
     Description: Name of the EBS cleanup EventBridge rule
     Value: !Ref EbsCleanupScheduleRule
-    Export:
-      Name: !Sub '${ProjectName}-EbsCleanupRuleName'
+    Export: { Name: !Sub '${ProjectName}-EbsCleanupRuleName' }
 
   BastionSecurityGroupId:
     Description: ID of the bastion security group
     Value: !Ref BastionSecurityGroup
-    Export:
-      Name: !Sub '${ProjectName}-BastionSecurityGroupId'
+    Export: { Name: !Sub '${ProjectName}-BastionSecurityGroupId' }
 
   PrivateSecurityGroupId:
     Description: ID of the private security group
     Value: !Ref PrivateSecurityGroup
-    Export:
-      Name: !Sub '${ProjectName}-PrivateSecurityGroupId'
+    Export: { Name: !Sub '${ProjectName}-PrivateSecurityGroupId' }
 
   ConsoleUsersGroupName:
     Description: Name of the console users group with MFA enforcement
     Value: !Ref ConsoleUsersGroup
-    Export:
-      Name: !Sub '${ProjectName}-ConsoleUsersGroupName'
+    Export: { Name: !Sub '${ProjectName}-ConsoleUsersGroupName' }
