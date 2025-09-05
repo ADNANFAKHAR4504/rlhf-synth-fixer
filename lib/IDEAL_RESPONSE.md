@@ -402,7 +402,7 @@ class TapStack(cdk.Stack):
         # Create S3 bucket for centralized logging
         logging_bucket = s3.Bucket(
             self, f"CentralizedLoggingBucket-{self.environment_suffix}",
-            bucket_name=f"tap-logs-{self.environment_suffix}-{self.account}-{self.region}",
+            bucket_name=f"tap-logs-{self.environment_suffix}-{self.region}",
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             public_read_access=False,
