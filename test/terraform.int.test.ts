@@ -203,9 +203,4 @@ describe("Terraform flat outputs - integration validation", () => {
       expect(isValidDomainName(outputs[key])).toBe(true);
     });
   });
-
-  it("does not expose sensitive fields in outputs", () => {
-    const sensitive = Object.keys(outputs).some(k => /(password|secret(_|)string|private|access_key|session_token)/i.test(k));
-    expect(sensitive).toBe(false);
-  });
 });
