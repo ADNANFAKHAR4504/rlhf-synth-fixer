@@ -1,0 +1,50 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348806",
+  "team": "3",
+  "startedAt": "2025-09-01T07:18:23.688Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "Route",
+    "RouteTableAssociation",
+    "NatGateway",
+    "Eip",
+    "SecurityGroup",
+    "Instance",
+    "IamRole",
+    "IamRolePolicy",
+    "IamInstanceProfile",
+    "S3Bucket",
+    "S3BucketVersioning",
+    "S3BucketPublicAccessBlock",
+    "S3BucketServerSideEncryptionConfiguration",
+    "LaunchTemplate",
+    "AutoscalingGroup",
+    "CloudwatchMetricAlarm",
+    "Route53Zone",
+    "DataAwsAvailabilityZones",
+    "DataAwsAmi"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}

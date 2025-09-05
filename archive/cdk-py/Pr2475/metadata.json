@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348878",
+  "team": "4",
+  "startedAt": "2025-08-29T11:13:37.545Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Security Configuration",
+    "Performance Optimization",
+    "Resource Scaling"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS S3",
+    "AWS Lambda",
+    "Amazon DynamoDB",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

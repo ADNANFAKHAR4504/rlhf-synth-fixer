@@ -1,0 +1,1502 @@
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-grade secure infrastructure with comprehensive security controls and multi-region support'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: 'Environment Configuration' }
+        Parameters: [Environment, PrimaryRegion]
+      - Label: { default: 'Network Configuration' }
+        Parameters:
+          [
+            VpcCidr,
+            PublicSubnetCidr1,
+            PublicSubnetCidr2,
+            PrivateSubnetCidr1,
+            PrivateSubnetCidr2,
+            CorporateIPRange,
+          ]
+      - Label: { default: 'Security Configuration' }
+        Parameters: [NotificationEmail, EnableCloudTrail, EnableAWSConfig]
+      - Label: { default: 'Database Configuration' }
+        Parameters: [DBUsername, DBPassword]
+      - Label: { default: 'Web Configuration' }
+        Parameters: [DomainName, EnableCloudFront]
+  cfn-lint:
+    config:
+      ignore_checks:
+        - W1001
+        - W1030
+
+Parameters:
+  Environment:
+    Type: String
+    Description: 'Deployment environment'
+    Default: 'production'
+    AllowedValues: ['production', 'staging', 'development']
+    ConstraintDescription: 'Must be production, staging, or development'
+
+  PrimaryRegion:
+    Type: String
+    Description: 'Primary AWS Region'
+    Default: 'us-east-1'
+    AllowedValues: ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1']
+
+  VpcCidr:
+    Type: String
+    Description: 'VPC CIDR block'
+    Default: '10.0.0.0/16'
+    AllowedPattern: '^(([0-9]{1,3}\.){3}[0-9]{1,3})/(1[6-9]|2[0-8])$'
+    ConstraintDescription: 'Must be a valid CIDR block between /16 and /28'
+
+  PublicSubnetCidr1:
+    Type: String
+    Description: 'CIDR block for Public Subnet 1'
+    Default: '10.0.1.0/24'
+    AllowedPattern: '^(([0-9]{1,3}\.){3}[0-9]{1,3})/(1[6-9]|2[0-8])$'
+
+  PublicSubnetCidr2:
+    Type: String
+    Description: 'CIDR block for Public Subnet 2'
+    Default: '10.0.2.0/24'
+    AllowedPattern: '^(([0-9]{1,3}\.){3}[0-9]{1,3})/(1[6-9]|2[0-8])$'
+
+  PrivateSubnetCidr1:
+    Type: String
+    Description: 'CIDR block for Private Subnet 1'
+    Default: '10.0.10.0/24'
+    AllowedPattern: '^(([0-9]{1,3}\.){3}[0-9]{1,3})/(1[6-9]|2[0-8])$'
+
+  PrivateSubnetCidr2:
+    Type: String
+    Description: 'CIDR block for Private Subnet 2'
+    Default: '10.0.20.0/24'
+    AllowedPattern: '^(([0-9]{1,3}\.){3}[0-9]{1,3})/(1[6-9]|2[0-8])$'
+
+  CorporateIPRange:
+    Type: String
+    Default: '203.0.113.0/24'
+    Description: 'Corporate IP range for SSH access'
+    AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$'
+
+  NotificationEmail:
+    Type: String
+    Description: 'Email address for security notifications'
+    AllowedPattern: '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    Default: 'security@example.com'
+
+  DBUsername:
+    Type: String
+    Description: 'Database master username'
+    Default: 'dbadmin'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+
+  DBPassword:
+    Type: String
+    Description: 'Database master password'
+    Default: 'SecurePassword123'
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: '[a-zA-Z0-9]*'
+
+  DomainName:
+    Type: String
+    Description: 'Domain name for SSL certificate'
+    Default: 'example.com'
+
+  EnableCloudTrail:
+    Type: String
+    Description: 'Enable CloudTrail creation'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  EnableAWSConfig:
+    Type: String
+    Description: 'Enable AWS Config resources'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  EnableCloudFront:
+    Type: String
+    Description: 'Enable CloudFront distribution'
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  EnableNatGateway:
+    Type: String
+    Description: 'Enable creation of a new NAT Gateway when no ExistingNatGatewayId is provided'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CreateDetector:
+    Type: String
+    Description: 'Set to true to create a new GuardDuty detector; set false to skip.'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  ExistingKMSKeyArn:
+    Type: String
+    Description: 'If provided, use this KMS Key ARN instead of creating a new one.'
+    Default: ''
+    AllowedValues: ['', 'placeholder-arn']
+
+  ExistingDBSubnetGroupName:
+    Type: String
+    Description: 'If provided, use this DB Subnet Group name instead of creating a new one.'
+    Default: ''
+
+  ExistingCloudTrailBucketName:
+    Type: String
+    Description: 'If provided, use this S3 bucket name for CloudTrail logs instead of creating a new one.'
+    Default: ''
+
+  ExistingKMSKeyAlias:
+    Type: String
+    Description: 'If provided, use this existing KMS alias name (e.g., alias/production-encryption-key) and do not create a new alias.'
+    Default: ''
+
+  ExistingGuardDutyCheckFunctionArn:
+    Type: String
+    Description: 'If provided, use this existing Lambda ARN for GuardDuty detector check and do not create a new function.'
+    Default: ''
+
+  ExistingNatGatewayId:
+    Type: String
+    Description: 'If provided, use this existing NAT Gateway ID and do not create a new one.'
+    Default: ''
+
+  ExistingALBDNSName:
+    Type: String
+    Description: 'If provided, use this existing ALB DNS name and do not create a new ALB.'
+    Default: ''
+
+  ExistingCertificateArn:
+    Type: String
+    Description: 'If provided, use this existing ACM certificate ARN and do not create a new certificate.'
+    Default: ''
+    AllowedPattern: '^$|^arn:aws:acm:us-east-1:[0-9]{12}:certificate/.+'
+
+  HostedZoneId:
+    Type: String
+    Description: 'Route53 Hosted Zone ID for DomainName (optional, used to auto-create DNS validation records)'
+    Default: ''
+
+  ExistingConfigRecorderName:
+    Type: String
+    Description: 'If provided, use this existing AWS Config recorder name and do not create a new one.'
+    Default: ''
+
+  ExistingConfigDeliveryChannelName:
+    Type: String
+    Description: 'If provided, use this existing AWS Config delivery channel name and do not create a new one.'
+    Default: ''
+
+  CreateAWSConfigResources:
+    Type: String
+    Description: 'Set to true to create AWS Config recorder and delivery channel; false to skip.'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  EnableDBSubnetGroupCreation:
+    Type: String
+    Description: 'Set to true to create a new DB Subnet Group when no existing name is provided.'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  ExistingDBInstanceIdentifier:
+    Type: String
+    Description: 'If provided, use this existing RDS DB instance and do not create a new one.'
+    Default: ''
+
+  ExistingRDSEndpointAddress:
+    Type: String
+    Description: 'Endpoint address of the existing RDS instance (used when not creating a new one).'
+    Default: ''
+
+  CreateKMSResources:
+    Type: String
+    Description: 'Set to true to allow creating new KMS Key and Alias; set false to always use existing.'
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+Conditions:
+  IsPrimaryRegion: !Equals [!Ref 'AWS::Region', !Ref PrimaryRegion]
+
+  EnableCloudTrailCondition:
+    !And [!Equals [!Ref EnableCloudTrail, 'true'], !Condition IsPrimaryRegion]
+  EnableAWSConfigCondition:
+    !And [!Equals [!Ref EnableAWSConfig, 'true'], !Condition IsPrimaryRegion]
+  EnableCloudFrontCondition: !Equals [!Ref EnableCloudFront, 'true']
+  CreateKMSKey: !And
+    - !Equals [!Ref CreateKMSResources, 'true']
+    - !Equals [!Ref ExistingKMSKeyArn, '']
+    - !Equals [!Ref ExistingKMSKeyAlias, '']
+  HasKmsKey:
+    !Or [!Condition CreateKMSKey, !Not [!Equals [!Ref ExistingKMSKeyArn, '']]]
+  CreateDBSubnetGroup:
+    !And [
+      !Equals [!Ref ExistingDBSubnetGroupName, ''],
+      !Equals [!Ref EnableDBSubnetGroupCreation, 'true'],
+    ]
+  CreateCloudTrailBucket: !Equals [!Ref ExistingCloudTrailBucketName, '']
+  CreateKMSKeyAlias: !And
+    - !Equals [!Ref CreateKMSResources, 'true']
+    - !Equals [!Ref ExistingKMSKeyAlias, '']
+  CreateGuardDutyCheckFunction:
+    !Equals [!Ref ExistingGuardDutyCheckFunctionArn, '']
+  CreateNatGateway: !And
+    - !Equals [!Ref ExistingNatGatewayId, '']
+    - !Equals [!Ref EnableNatGateway, 'true']
+  UseExistingNatGateway: !Not [!Equals [!Ref ExistingNatGatewayId, '']]
+  CreatePrivateDefaultRoute:
+    !Or [!Condition CreateNatGateway, !Condition UseExistingNatGateway]
+  CreateALB: !Equals [!Ref ExistingALBDNSName, '']
+  IsUsEast1: !Equals [!Ref 'AWS::Region', 'us-east-1']
+  CreateCertificate: !And
+    - !Equals [!Ref ExistingCertificateArn, '']
+    - !Not [!Equals [!Ref HostedZoneId, '']]
+    - !Condition IsUsEast1
+  HasCertificateArn:
+    !Or [
+      !Condition CreateCertificate,
+      !Not [!Equals [!Ref ExistingCertificateArn, '']],
+    ]
+  CreateGuardDuty:
+    !And [!Equals [!Ref CreateDetector, 'true'], !Condition IsPrimaryRegion]
+  CreateConfigRecorder:
+    !And [
+      !Condition EnableAWSConfigCondition,
+      !Equals [!Ref CreateAWSConfigResources, 'true'],
+      !Equals [!Ref ExistingConfigRecorderName, ''],
+    ]
+  CreateConfigDeliveryChannel:
+    !And [
+      !Condition EnableAWSConfigCondition,
+      !Equals [!Ref CreateAWSConfigResources, 'true'],
+      !Equals [!Ref ExistingConfigDeliveryChannelName, ''],
+    ]
+  CreateDBInstance: !Equals [!Ref ExistingDBInstanceIdentifier, '']
+
+  # Ensure we only create a DB instance when a subnet group will be available
+  HasExistingDBSubnetGroupName:
+    !Not [!Equals [!Ref ExistingDBSubnetGroupName, '']]
+  CanUseDBSubnetGroup:
+    !Or [
+      !Condition CreateDBSubnetGroup,
+      !Condition HasExistingDBSubnetGroupName,
+    ]
+  CreateDBInstanceEffective:
+    !And [!Condition CreateDBInstance, !Condition CanUseDBSubnetGroup]
+  HasExistingRDSEndpointAddress:
+    !Not [!Equals [!Ref ExistingRDSEndpointAddress, '']]
+  HasExistingConfigRecorderName:
+    !Not [!Equals [!Ref ExistingConfigRecorderName, '']]
+  HasExistingKMSKeyAlias: !Not [!Equals [!Ref ExistingKMSKeyAlias, '']]
+
+Resources:
+  # VPC and Networking Resources
+  ProdVPC:
+    Type: AWS::EC2::VPC
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-vpc'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-igw'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref ProdVPC
+      InternetGatewayId: !Ref ProdInternetGateway
+
+  ProdPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: !Ref PublicSubnetCidr1
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-1'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: !Ref PublicSubnetCidr2
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-subnet-2'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: !Ref PrivateSubnetCidr1
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-1'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      VpcId: !Ref ProdVPC
+      CidrBlock: !Ref PrivateSubnetCidr2
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-subnet-2'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdEIPForNAT:
+    Type: AWS::EC2::EIP
+    DependsOn: ProdVPCGatewayAttachment
+    Condition: CreateNatGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat-eip'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdNATGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNatGateway
+    Properties:
+      AllocationId: !GetAtt ProdEIPForNAT.AllocationId
+      SubnetId: !Ref ProdPublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-nat-gateway'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ProdVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-public-rt'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ProdVPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-private-rt'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: ProdVPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref ProdPublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref ProdInternetGateway
+
+  ProdPrivateRoute:
+    Type: AWS::EC2::Route
+    Condition: CreatePrivateDefaultRoute
+    Properties:
+      RouteTableId: !Ref ProdPrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId:
+        !If [CreateNatGateway, !Ref ProdNATGateway, !Ref ExistingNatGatewayId]
+
+  ProdPublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ProdPublicSubnet1
+      RouteTableId: !Ref ProdPublicRouteTable
+
+  ProdPublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ProdPublicSubnet2
+      RouteTableId: !Ref ProdPublicRouteTable
+
+  ProdPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ProdPrivateSubnet1
+      RouteTableId: !Ref ProdPrivateRouteTable
+
+  ProdPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ProdPrivateSubnet2
+      RouteTableId: !Ref ProdPrivateRouteTable
+
+  # KMS Key for Encryption
+  ProdKMSKey:
+    Type: AWS::KMS::Key
+    Condition: CreateKMSKey
+    Properties:
+      Description: !Sub 'KMS Key for ${Environment} environment encryption'
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableIAMUserPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudTrail
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: AllowRDS
+            Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey*'
+              - 'kms:ReEncrypt*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: AllowS3
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey*'
+              - 'kms:ReEncrypt*'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: AllowCloudWatch
+            Effect: Allow
+            Principal:
+              Service: logs.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+          - Sid: Allow CloudWatch Logs
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-kms-key'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Condition: CreateKMSKeyAlias
+    Properties:
+      AliasName: !Sub 'alias/${Environment}-encryption-key'
+      TargetKeyId: !Ref ProdKMSKey
+
+  # S3 Buckets with Encryption
+  ProdCloudTrailBucket:
+    Type: AWS::S3::Bucket
+    Condition: CreateCloudTrailBucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${Environment}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - !If
+            - HasKmsKey
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: aws:kms
+                KMSMasterKeyID:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt ProdKMSKey.Arn,
+                    !Ref ExistingKMSKeyArn,
+                  ]
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cloudtrail-bucket'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdConfigBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-config-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - !If
+            - HasKmsKey
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: aws:kms
+                KMSMasterKeyID:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt ProdKMSKey.Arn,
+                    !Ref ExistingKMSKeyArn,
+                  ]
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-config-bucket'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdApplicationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${Environment}-application-data-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - !If
+            - HasKmsKey
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: aws:kms
+                KMSMasterKeyID:
+                  !If [
+                    CreateKMSKey,
+                    !GetAtt ProdKMSKey.Arn,
+                    !Ref ExistingKMSKeyArn,
+                  ]
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-application-bucket'
+        - Key: environment
+          Value: !Ref Environment
+
+  # CloudTrail Bucket Policy
+  ProdCloudTrailBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateCloudTrailBucket
+    Properties:
+      Bucket: !Ref ProdCloudTrailBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt ProdCloudTrailBucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${ProdCloudTrailBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt ProdCloudTrailBucket.Arn
+              - !Sub '${ProdCloudTrailBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+
+  # CloudWatch Log Group for CloudTrail
+  ProdCloudTrailLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/cloudtrail/${Environment}-trail'
+      RetentionInDays: 365
+      KmsKeyId:
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cloudtrail-logs'
+        - Key: environment
+          Value: !Ref Environment
+
+  # CloudTrail Role
+  ProdCloudTrailRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudTrailLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:PutLogEvents
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                Resource: !Sub '${ProdCloudTrailLogGroup.Arn}:*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cloudtrail-role'
+        - Key: environment
+          Value: !Ref Environment
+
+  # CloudTrail
+  ProdCloudTrail:
+    Type: AWS::CloudTrail::Trail
+    Condition: EnableCloudTrailCondition
+    Properties:
+      TrailName: !Sub '${Environment}-cloudtrail'
+      S3BucketName:
+        !If [
+          CreateCloudTrailBucket,
+          !Ref ProdCloudTrailBucket,
+          !Ref ExistingCloudTrailBucketName,
+        ]
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+      IsLogging: true
+      EnableLogFileValidation: true
+      CloudWatchLogsLogGroupArn: !GetAtt ProdCloudTrailLogGroup.Arn
+      CloudWatchLogsRoleArn: !GetAtt ProdCloudTrailRole.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cloudtrail'
+        - Key: environment
+          Value: !Ref Environment
+
+  # AWS Config Service Role
+  ProdConfigRole:
+    Type: AWS::IAM::Role
+    Condition: EnableAWSConfigCondition
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Policies:
+        - PolicyName: ConfigS3Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketAcl
+                  - s3:ListBucket
+                Resource: !GetAtt ProdConfigBucket.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${ProdConfigBucket.Arn}/AWSLogs/${AWS::AccountId}/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': 'bucket-owner-full-control'
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${ProdConfigBucket.Arn}/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-config-role'
+        - Key: environment
+          Value: !Ref Environment
+
+  # AWS Config Configuration Recorder
+  ProdConfigRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    Condition: CreateConfigRecorder
+    Properties:
+      Name: !Sub '${Environment}-config-recorder'
+      RoleARN: !GetAtt ProdConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
+
+  # AWS Config Delivery Channel
+  ProdConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    Condition: CreateConfigDeliveryChannel
+    Properties:
+      Name: !Sub '${Environment}-config-delivery-channel'
+      S3BucketName: !Ref ProdConfigBucket
+
+  # AWS Config Rules
+  ProdConfigRuleMFA:
+    Type: AWS::Config::ConfigRule
+    Condition: CreateConfigRecorder
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-iam-user-mfa-enabled'
+      Description: 'Checks whether the AWS Identity and Access Management users have multi-factor authentication (MFA) enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: IAM_USER_MFA_ENABLED
+
+  ProdConfigRuleEncryptedVolumes:
+    Type: AWS::Config::ConfigRule
+    Condition: CreateConfigRecorder
+    Properties:
+      ConfigRuleName: !Sub '${Environment}-encrypted-volumes'
+      Description: 'Checks whether EBS volumes are encrypted'
+      Source:
+        Owner: AWS
+        SourceIdentifier: ENCRYPTED_VOLUMES
+
+  # SNS Topic for Security Notifications
+  ProdSecurityNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${Environment}-security-notifications'
+      DisplayName: !Sub '${Environment} Security Notifications'
+      KmsMasterKeyId:
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-security-notifications'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdSecurityNotificationsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref ProdSecurityNotificationsTopic
+      Endpoint: !Ref NotificationEmail
+
+  # SNS Topic Policy for CloudWatch Events
+  ProdSNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref ProdSecurityNotificationsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudWatchEventsToPublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref ProdSecurityNotificationsTopic
+
+  # CloudWatch Metric Filter for Unauthorized Operations
+  ProdUnauthorizedOperationMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      LogGroupName: !Ref ProdCloudTrailLogGroup
+      FilterPattern: '{ ($.errorCode = "*UnauthorizedOperation") || ($.errorCode = "AccessDenied*") }'
+      MetricTransformations:
+        - MetricNamespace: 'Security'
+          MetricName: 'UnauthorizedOperations'
+          MetricValue: '1'
+
+  # CloudWatch Alarm for Unauthorized Operations
+  ProdUnauthorizedOperationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-unauthorized-operations'
+      AlarmDescription: 'Alarm for unauthorized operations or access denied events'
+      MetricName: 'UnauthorizedOperations'
+      Namespace: 'Security'
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref ProdSecurityNotificationsTopic
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-unauthorized-operations-alarm'
+        - Key: environment
+          Value: !Ref Environment
+
+  # CloudWatch Events Rule for Config Compliance
+  ProdConfigComplianceRule:
+    Type: AWS::Events::Rule
+    Condition: CreateConfigRecorder
+    Properties:
+      Name: !Sub '${Environment}-config-compliance-rule'
+      Description: 'Trigger SNS notification for non-compliant resources'
+      EventPattern:
+        source:
+          - aws.config
+        detail-type:
+          - Config Rules Compliance Change
+        detail:
+          newEvaluationResult:
+            complianceType:
+              - NON_COMPLIANT
+      State: ENABLED
+      Targets:
+        - Arn: !Ref ProdSecurityNotificationsTopic
+          Id: 'ConfigComplianceTarget'
+
+  # Custom Resource to check for existing GuardDuty detectors
+  GuardDutyDetectorCheck:
+    Type: Custom::GuardDutyDetectorCheck
+    Condition: CreateGuardDuty
+    Properties:
+      ServiceToken:
+        !If [
+          CreateGuardDutyCheckFunction,
+          !GetAtt GuardDutyDetectorCheckFunction.Arn,
+          !Ref ExistingGuardDutyCheckFunctionArn,
+        ]
+
+  # Lambda function to check for existing GuardDuty detectors
+  GuardDutyDetectorCheckFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Condition: CreateGuardDuty
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt GuardDutyDetectorCheckRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ['Create', 'Update']:
+                      guardduty = boto3.client('guardduty')
+                      response = guardduty.list_detectors()
+                      
+                      if response['DetectorIds']:
+                          # Detector already exists
+                          cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                         {'DetectorExists': 'true', 'DetectorId': response['DetectorIds'][0]})
+                      else:
+                          # No detector exists
+                          cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                         {'DetectorExists': 'false'})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  logger.error(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  # IAM Role for Lambda function
+  GuardDutyDetectorCheckRole:
+    Type: AWS::IAM::Role
+    Condition: CreateGuardDuty
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: GuardDutyCheckPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - guardduty:ListDetectors
+                Resource: '*'
+
+  # GuardDuty Detector - Only created if no detector exists
+  ProdGuardDutyDetector:
+    Type: AWS::GuardDuty::Detector
+    Condition: CreateGuardDuty
+    DependsOn: GuardDutyDetectorCheck
+    Properties:
+      Enable: true
+      FindingPublishingFrequency: 'FIFTEEN_MINUTES'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-guardduty-detector'
+        - Key: environment
+          Value: !Ref Environment
+
+  # Security Groups
+  ProdALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-alb-sg'
+      GroupDescription: 'Security group for Application Load Balancer'
+      VpcId: !Ref ProdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP access from anywhere'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS access from anywhere'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-alb-sg'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdWebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-web-sg'
+      GroupDescription: 'Security group for web servers'
+      VpcId: !Ref ProdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ProdALBSecurityGroup
+          Description: 'HTTP access from ALB'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ProdALBSecurityGroup
+          Description: 'HTTPS access from ALB'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref CorporateIPRange
+          Description: 'SSH access from corporate network'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-web-sg'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdDatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupName: !Sub '${Environment}-db-sg'
+      GroupDescription: 'Security group for database servers'
+      VpcId: !Ref ProdVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref ProdWebSecurityGroup
+          Description: 'MySQL access from web servers'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-sg'
+        - Key: environment
+          Value: !Ref Environment
+
+  # IAM Role for EC2 Instances
+  ProdEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3ReadOnlyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt ProdApplicationBucket.Arn
+                  - !Sub '${ProdApplicationBucket.Arn}/*'
+        - PolicyName: CloudWatchLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ec2-role'
+        - Key: environment
+          Value: !Ref Environment
+
+  ProdEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ProdEC2Role
+
+  # RDS Subnet Group
+  ProdDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Condition: CreateDBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: 'Subnet group for RDS instances'
+      SubnetIds:
+        - !Ref ProdPrivateSubnet1
+        - !Ref ProdPrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-db-subnet-group'
+        - Key: environment
+          Value: !Ref Environment
+
+  # Database Secret
+  ProdDatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${Environment}-database-credentials'
+      Description: !Sub 'Database credentials for ${Environment} environment'
+      KmsKeyId:
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
+      SecretString: !Sub |
+        {
+          "username": "${DBUsername}",
+          "password": "${DBPassword}"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database-secret'
+        - Key: environment
+          Value: !Ref Environment
+
+  # RDS Instance
+  ProdRDSInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Condition: CreateDBInstanceEffective
+    Properties:
+      DBInstanceIdentifier: !Join
+        - '-'
+        - - !Ref Environment
+          - tapstack
+          - !Select
+            - 0
+            - !Split
+              - '-'
+              - !Select
+                - 2
+                - !Split
+                  - '/'
+                  - !Ref 'AWS::StackId'
+      DBInstanceClass: db.t3.micro
+      Engine: mysql
+      EngineVersion: '8.0.43'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      KmsKeyId:
+        !If [
+          HasKmsKey,
+          !If [CreateKMSKey, !GetAtt ProdKMSKey.Arn, !Ref ExistingKMSKeyArn],
+          !Ref 'AWS::NoValue',
+        ]
+      MasterUsername: !Sub '{{resolve:secretsmanager:${ProdDatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${ProdDatabaseSecret}:SecretString:password}}'
+      VPCSecurityGroups:
+        - !Ref ProdDatabaseSecurityGroup
+      DBSubnetGroupName:
+        !If [
+          CreateDBSubnetGroup,
+          !Ref ProdDBSubnetGroup,
+          !Ref ExistingDBSubnetGroupName,
+        ]
+      BackupRetentionPeriod: 7
+      MultiAZ: false
+      PubliclyAccessible: false
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-database'
+        - Key: environment
+          Value: !Ref Environment
+
+  # Application Load Balancer
+  ProdApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Condition: CreateALB
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ProdALBSecurityGroup
+      Subnets:
+        - !Ref ProdPublicSubnet1
+        - !Ref ProdPublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-alb'
+        - Key: environment
+          Value: !Ref Environment
+
+  # ACM Certificate
+  ProdSSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: CreateCertificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-ssl-certificate'
+        - Key: environment
+          Value: !Ref Environment
+
+  # AWS WAF WebACL for CloudFront
+  ProdWAFWebACL:
+    Type: AWS::WAFv2::WebACL
+    Condition: EnableCloudFrontCondition
+    Properties:
+      Name: !Sub '${Environment}-waf-webacl'
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 1
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesCommonRuleSet
+        - Name: AWSManagedRulesSQLiRuleSet
+          Priority: 2
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesSQLiRuleSet
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${Environment}-WAF-WebACL'
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-waf-webacl'
+        - Key: environment
+          Value: !Ref Environment
+
+  # CloudFront Distribution
+  ProdCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Condition: EnableCloudFrontCondition
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub 'CloudFront distribution for ${Environment} environment'
+        Origins:
+          - Id: !Sub '${Environment}-alb-origin'
+            DomainName:
+              !If [
+                CreateALB,
+                !GetAtt ProdApplicationLoadBalancer.DNSName,
+                !Ref ExistingALBDNSName,
+              ]
+            CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginProtocolPolicy: 'https-only'
+        DefaultCacheBehavior:
+          TargetOriginId: !Sub '${Environment}-alb-origin'
+          ViewerProtocolPolicy: 'redirect-to-https'
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: all
+          MinTTL: 0
+          DefaultTTL: 3600
+          MaxTTL: 86400
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn:
+            !If [
+              HasCertificateArn,
+              !If [
+                CreateCertificate,
+                !Ref ProdSSLCertificate,
+                !Ref ExistingCertificateArn,
+              ],
+              !Ref 'AWS::NoValue',
+            ]
+          SslSupportMethod:
+            !If [HasCertificateArn, 'sni-only', !Ref 'AWS::NoValue']
+          CloudFrontDefaultCertificate:
+            !If [HasCertificateArn, !Ref 'AWS::NoValue', true]
+        WebACLId: !GetAtt ProdWAFWebACL.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${Environment}-cloudfront-distribution'
+        - Key: environment
+          Value: !Ref Environment
+
+Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref ProdVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  KMSKeyArnCreated:
+    Condition: CreateKMSKey
+    Description: 'KMS Key ARN for encryption (created)'
+    Value: !GetAtt ProdKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
+
+  KMSKeyArnExisting:
+    Condition: HasKmsKey
+    Description: 'KMS Key ARN for encryption (existing)'
+    Value: !Ref ExistingKMSKeyArn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Key-ARN'
+
+  CloudTrailName:
+    Description: 'CloudTrail name'
+    Value: !Ref ProdCloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-Name'
+
+  ConfigRecorderNameCreated:
+    Condition: CreateConfigRecorder
+    Description: 'AWS Config recorder name (created)'
+    Value: !Ref ProdConfigRecorder
+    Export:
+      Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
+
+  ConfigRecorderNameExisting:
+    Condition: HasExistingConfigRecorderName
+    Description: 'AWS Config recorder name (existing)'
+    Value: !Ref ExistingConfigRecorderName
+    Export:
+      Name: !Sub '${AWS::StackName}-Config-Recorder-Name'
+
+  GuardDutyDetectorId:
+    Description: 'GuardDuty detector ID'
+    Condition: CreateGuardDuty
+    Value: !Ref ProdGuardDutyDetector
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDuty-Detector-ID'
+
+  WAFWebACLId:
+    Description: 'WAF Web ACL ID'
+    Value: !Ref ProdWAFWebACL
+    Export:
+      Name: !Sub '${AWS::StackName}-WAF-WebACL-ID'
+
+  CloudFrontDistributionId:
+    Description: 'CloudFront distribution ID'
+    Value: !Ref ProdCloudFrontDistribution
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudFront-Distribution-ID'
+
+  ALBDNSName:
+    Description: 'Application Load Balancer DNS name'
+    Value:
+      !If [
+        CreateALB,
+        !GetAtt ProdApplicationLoadBalancer.DNSName,
+        !Ref ExistingALBDNSName,
+      ]
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DNS-Name'
+
+  RDSEndpointCreated:
+    Condition: CreateDBInstanceEffective
+    Description: 'RDS endpoint address (created)'
+    Value: !GetAtt ProdRDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
+
+  RDSEndpointExisting:
+    Condition: HasExistingRDSEndpointAddress
+    Description: 'RDS endpoint address (existing)'
+    Value: !Ref ExistingRDSEndpointAddress
+    Export:
+      Name: !Sub '${AWS::StackName}-RDS-Endpoint'
+
+  SNSTopicArn:
+    Description: 'SNS topic ARN for security notifications'
+    Value: !Ref ProdSecurityNotificationsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SNS-Topic-ARN'
+
+  KmsAliasNameCreated:
+    Condition: CreateKMSKeyAlias
+    Description: 'KMS alias name in use (created)'
+    Value: !Sub 'alias/${Environment}-encryption-key'
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Alias-Name'
+
+  KmsAliasNameExisting:
+    Condition: HasExistingKMSKeyAlias
+    Description: 'KMS alias name in use (existing)'
+    Value: !Ref ExistingKMSKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KMS-Alias-Name'
+```
