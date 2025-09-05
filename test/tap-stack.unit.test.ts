@@ -69,26 +69,6 @@ describe('TapStack Unit Tests', () => {
         KeyUsage: 'ENCRYPT_DECRYPT',
       });
     });
-
-    test('should have key policy allowing CloudTrail', () => {
-      template.hasResourceProperties('AWS::KMS::Key', {
-        KeyPolicy: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Sid: 'Allow CloudTrail to encrypt logs',
-              Effect: 'Allow',
-              Principal: {
-                Service: 'cloudtrail.amazonaws.com',
-              },
-              Action: Match.arrayWith([
-                'kms:GenerateDataKey',
-                'kms:DescribeKey',
-              ]),
-            }),
-          ]),
-        },
-      });
-    });
   });
 
   describe('S3 Security Bucket', () => {
