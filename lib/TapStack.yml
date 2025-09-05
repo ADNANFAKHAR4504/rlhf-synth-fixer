@@ -32,6 +32,7 @@ Metadata:
       AZs: { default: "Availability Zones" }
       InstanceType: { default: "EC2 Instance Type" }
       DbUsername: { default: "Database Username" }
+      KeyName: { default: "EC2 Key Pair (optional)" }
 
 Parameters:
   VpcCidr:
@@ -74,10 +75,11 @@ Parameters:
       - m5.xlarge
     Description: 'EC2 instance type'
 
+  # NOTE: Make KeyName optional to avoid validation failures when not provided
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: 'Optional EC2 Key Pair for SSH access'
+    Type: String
     Default: ''
+    Description: 'Optional EC2 Key Pair name for SSH access (leave empty for none)'
 
   DesiredCapacity:
     Type: Number
@@ -533,7 +535,6 @@ Resources:
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-instance-role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -550,7 +551,6 @@ Resources:
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub '${AWS::StackName}-instance-profile'
       Roles: [ !Ref InstanceRole ]
 
   ############################
@@ -559,9 +559,8 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub '${AWS::StackName}-launch-template'
       LaunchTemplateData:
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp3}}'
         InstanceType: !Ref InstanceType
         KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
         IamInstanceProfile: { Name: !Ref InstanceProfile }
@@ -687,7 +686,6 @@ Resources:
     DeletionPolicy: Snapshot
     UpdateReplacePolicy: Snapshot
     Properties:
-      DBInstanceIdentifier: !Sub '${AWS::StackName}-db'
       DBName: !Ref DbName
       DBInstanceClass: !Ref DbInstanceClass
       AllocatedStorage: !Ref DbAllocatedStorage
