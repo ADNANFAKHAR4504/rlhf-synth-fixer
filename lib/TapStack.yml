@@ -411,9 +411,9 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName:
-        Fn::Sub: ${AWS::StackName}-${Environment}-${AWS::Region}-alarms
+        Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
       TopicName:
-        Fn::Sub: ${AWS::StackName}-${Environment}-${AWS::Region}-${AWS::AccountId}-alarms
+        Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
 
   # AWS Config
   ConfigRecorderManager:
