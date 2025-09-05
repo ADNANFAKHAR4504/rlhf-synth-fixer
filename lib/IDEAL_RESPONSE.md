@@ -101,9 +101,9 @@ S3 Public Access Block
 Validation Checklists
 - terraform init succeeds
 - terraform validate passes
-- terraform plan generates valid execution plan
+- terraform plan generates valid execution plans.
 - All 10 security controls implemented
-- Multi-region resources properly scoped
+- Multi-region resources properly scoped.
 - Consistent tagging applied
 - Outputs provide necessary resource references
 - Comments explain key security decisions
