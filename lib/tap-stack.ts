@@ -232,13 +232,6 @@ exports.handler = async (event) => {
       tracing: lambda.Tracing.ACTIVE,
     });
 
-    // Create custom log group for Lambda
-    new logs.LogGroup(this, 'TapLambdaLogGroup', {
-      logGroupName: `/aws/lambda/${lambdaFunction.functionName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
     // Create CloudWatch Log Group for API Gateway
     const apiLogGroup = new logs.LogGroup(this, 'TapApiGatewayLogGroup', {
       logGroupName: `/aws/apigateway/tap-api-${environmentSuffix}-${this.region}`,
