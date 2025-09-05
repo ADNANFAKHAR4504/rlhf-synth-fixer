@@ -1312,28 +1312,6 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  rule {
-    name     = "RateLimitRule"
-    priority = 3
-
-    action {
-      block {}
-    }
-
-    statement {
-      rate_based_statement {
-        limit              = 10000
-        aggregate_key_type = "IP"
-      }
-    }
-
-    visibility_config {
-      cloudwatch_metrics_enabled = true
-      metric_name                = "${local.name_prefix}-RateLimitMetric"
-      sampled_requests_enabled   = true
-    }
-  }
-
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-security-waf"
   })

@@ -343,11 +343,6 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
       expect(terraformContent).toMatch(/AWSManagedRulesCommonRuleSet/);
     });
 
-    test("WAF has rate limiting rule", () => {
-      expect(terraformContent).toMatch(/rate_based_statement\s*\{/);
-      expect(terraformContent).toMatch(/limit\s*=\s*10000/);
-    });
-
     test("WAF logging is properly configured", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_wafv2_web_acl_logging_configuration"/);
       expect(terraformContent).toMatch(/aws-waf-logs-.*-security-waf-/);
