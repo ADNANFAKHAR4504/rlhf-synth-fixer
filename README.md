@@ -187,6 +187,22 @@ Each commit message consists of a **header**, a **body**, and a **footer**.
 
 **Note:** The body of the commit message has a line length limit of 100 characters.
 
+#### Writing Multiline Commit Messages
+
+To write a multiline commit message, you can use the following methods:
+
+1.  **Using `git commit`:**
+
+    Running `git commit` without the `-m` flag will open your default text editor, allowing you to write a detailed commit message. The first line will be the subject, followed by a blank line and the body of the commit.
+
+2.  **Using `-m` flags:**
+
+    You can use multiple `-m` flags to create a multiline commit message. The first `-m` will be the subject, and subsequent `-m` flags will be paragraphs in the body.
+
+    ```bash
+    git commit -m "feat(api): Add new endpoint" -m "This endpoint allows users to retrieve their profile information."
+    ```
+
 ### Example
 
 #### For a new feature:
@@ -407,7 +423,7 @@ This project uses Checkstyle for Java code quality:
 
 **Important Note**: When deploying CloudFormation templates to a specific AWS region for the first time, you need to create the S3 bucket that stores the CloudFormation state files.
 
-This is a **one-time setup** per region. Run this command before your first deployment in a new region:
+This is a **one-time setup** per region. Run this in your terminal before your first deployment in a new region:
 
 ```bash
 # Replace 'us-east-2' with your target region
