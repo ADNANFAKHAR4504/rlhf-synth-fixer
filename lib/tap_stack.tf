@@ -768,6 +768,8 @@ resource "aws_db_instance" "main_use1" {
   deletion_protection = true
   skip_final_snapshot = false
   final_snapshot_identifier = "${local.name_prefix}-db-use1-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
+
+  multi_az = true
   
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
@@ -812,17 +814,19 @@ resource "aws_db_instance" "main_usw2" {
   deletion_protection = true
   skip_final_snapshot = false
   final_snapshot_identifier = "${local.name_prefix}-db-usw2-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
+  multi_az = true
+
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
   
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-db-usw2"
     Region = "us-west-2"
   })
-  
+
   lifecycle {
     prevent_destroy = true
   }

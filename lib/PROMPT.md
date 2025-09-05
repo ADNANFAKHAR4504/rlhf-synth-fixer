@@ -15,8 +15,7 @@ Design a **Terraform** that provisions a multi-environment, consistent infrastru
    - S3 bucket names  
    - EC2 security settings (e.g., allowed CIDR blocks)  
    - RDS credentials (ensuring secure storage of the master password)  
-7. Ensure the template supports **stack updates without downtime**.  
-8. Validate that the CloudFormation template runs without errors and provisions all resources successfully in both regions.  
+7. Ensure the template supports **stack updates without downtime**.
 
 ### Expected output:
 - Write the Terraform configuration files in HCL format and ensure all constraints above are met.
