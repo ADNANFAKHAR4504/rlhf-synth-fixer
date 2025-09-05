@@ -8,7 +8,7 @@ AttributeError: module 'aws_cdk.aws_sns' has no attribute 'Alias'.
 ```
 
 ## Root Cause
-It simply means you are referencing the KMS key wrongly.
+It simply means the model is referencing the KMS key wrongly.
 
 
 Kindly correct this error.

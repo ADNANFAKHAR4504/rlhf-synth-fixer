@@ -104,7 +104,7 @@ class TapStack(Stack):
             self, "TapProcessorFunction",
             function_name=f"tap-processor-{unique_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_8,
-            handler="index.lambda_handler",  # FIXED: Changed to match inline code deployment
+            handler="index.lambda_handler",
             code=_lambda.Code.from_inline(self._get_lambda_code()),
             timeout=Duration.seconds(15),  # Exactly 15 seconds
             role=self.lambda_execution_role,
@@ -131,7 +131,15 @@ class TapStack(Stack):
         # 5. Grant Lambda permission to read from S3 bucket
         self.tap_storage_bucket.grant_read(self.tap_processor_function)
 
-        # 6. Create explicit bucket policy for Lambda access (additional security layer)
+        # 6. Add explicit permission for S3 to invoke Lambda (CRITICAL FIX)
+        self.tap_processor_function.add_permission(
+            "AllowS3Invoke",
+            principal=iam.ServicePrincipal("s3.amazonaws.com"),
+            source_arn=self.tap_storage_bucket.bucket_arn,
+            action="lambda:InvokeFunction"
+        )
+
+        # 7. Create explicit bucket policy for Lambda access (additional security layer)
         bucket_policy_statement = iam.PolicyStatement(
             sid="AllowLambdaReadAccess",
             effect=iam.Effect.ALLOW,
@@ -145,13 +153,13 @@ class TapStack(Stack):
         
         self.tap_storage_bucket.add_to_resource_policy(bucket_policy_statement)
 
-        # 7. Configure S3 event notification for PUT events only
+        # 8. Configure S3 event notification for PUT events only (MOVED AFTER PERMISSIONS)
         self.tap_storage_bucket.add_event_notification(
             s3.EventType.OBJECT_CREATED_PUT,
             s3n.LambdaDestination(self.tap_processor_function)
         )
 
-        # 8. Create CloudWatch Alarm for Lambda errors
+        # 9. Create CloudWatch Alarm for Lambda errors
         lambda_error_alarm = cloudwatch.Alarm(
             self, "LambdaErrorAlarm",
             alarm_name=f"TAP-Lambda-Errors-{unique_suffix}",
@@ -166,15 +174,15 @@ class TapStack(Stack):
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING
         )
 
-        # 9. Connect CloudWatch Alarm to SNS Topic
+        # 10. Connect CloudWatch Alarm to SNS Topic
         lambda_error_alarm.add_alarm_action(
             cw_actions.SnsAction(self.error_notification_topic)
         )
 
-        # 10. Tag all resources
+        # 11. Tag all resources
         self._tag_all_resources()
 
-        # 11. Create CloudFormation Outputs
+        # 12. Create CloudFormation Outputs
         self._create_outputs(unique_suffix)
 
     def _get_lambda_code(self) -> str:

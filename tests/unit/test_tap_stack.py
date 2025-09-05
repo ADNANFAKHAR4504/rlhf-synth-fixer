@@ -198,6 +198,7 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         # Check for Lambda permission for S3 to invoke
+        # We now have 2 permissions: our explicit one + CDK's auto-generated one
         template.has_resource_properties("AWS::Lambda::Permission", {
             "Action": "lambda:InvokeFunction",
             "Principal": "s3.amazonaws.com"
@@ -329,7 +330,7 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::IAM::Role", 2)  # Main + BucketNotificationsHandler role
         template.resource_count_is("AWS::SNS::Topic", 1)
         template.resource_count_is("AWS::CloudWatch::Alarm", 1)
-        template.resource_count_is("AWS::Lambda::Permission", 1)  # For S3 to invoke Lambda
+        template.resource_count_is("AWS::Lambda::Permission", 2)
         template.resource_count_is("AWS::S3::BucketPolicy", 1)
         
         # Verify environment suffix is used consistently
