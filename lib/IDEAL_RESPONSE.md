@@ -7,9 +7,9 @@ This document outlines the ideal response for creating a comprehensive Terraform
 
 ### Networking & Compute
 - VPC with public/private subnets across multiple AZs
-- Security groups with least privilege access
-- Internet Gateway and NAT Gateway for outbound connectivity
-- Route tables for proper traffic routing
+- Security groups with least privilege access.
+- Internet Gateway and NAT Gateway for outbound connectivity.
+- Route tables for proper traffic routing.
 
 ### Security & Compliance
 - IAM roles and policies with minimal permissions
