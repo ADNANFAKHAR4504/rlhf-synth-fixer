@@ -397,7 +397,7 @@ Resources:
   KMSKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/${ProjectName}-${EnvironmentSuffix}-rds-key'
+      AliasName: !Sub 'alias/${EnvironmentSuffix}-rds-key'
       TargetKeyId: !Ref KMSKey
 
   DatabaseSubnetGroup:
