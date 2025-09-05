@@ -30,10 +30,10 @@ Metadata:
 Parameters:
   ProjectName:
     Type: String
-    Default: TapStack
-    Description: Project name used for resource naming and tagging
-    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9-]*$
-    ConstraintDescription: Must start with a letter and contain only alphanumeric characters and hyphens
+    Default: tapstack
+    Description: Project name used for resource naming and tagging (lowercase; DNS-safe)
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*$'
+    ConstraintDescription: 'Must be lowercase alphanumeric and hyphens; start/end with alphanumeric.'
 
   EnvironmentName:
     Type: String
@@ -95,7 +95,7 @@ Parameters:
     Default: 365
     MinValue: 1
     MaxValue: 3650
-    Description: Days after which objects expire
+    Description: Days after which current object versions expire
 
   KmsKeyArn:
     Type: String
@@ -343,7 +343,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
-  # S3 Bucket
+  # S3 Bucket (DNS-safe name; includes account & region for uniqueness)
   AppBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -351,7 +351,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: !If [UseKmsEncryption, aws:kms, AES256]
+              SSEAlgorithm: !If [UseKmsEncryption, 'aws:kms', 'AES256']
               KMSMasterKeyID: !If [UseKmsEncryption, !Ref KmsKeyArn, !Ref 'AWS::NoValue']
             BucketKeyEnabled: !If [UseKmsEncryption, true, !Ref 'AWS::NoValue']
       PublicAccessBlockConfiguration:
@@ -363,7 +363,7 @@ Resources:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: TransitionRule
+          - Id: TransitionAndExpire
             Status: Enabled
             Transitions:
               - TransitionInDays: !Ref S3TransitionDaysIA
@@ -371,7 +371,8 @@ Resources:
               - TransitionInDays: !Ref S3TransitionDaysGlacier
                 StorageClass: GLACIER
             ExpirationInDays: !Ref S3ExpireDays
-            NoncurrentVersionExpirationInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-${EnvironmentName}-app-bucket'
@@ -380,7 +381,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
 
-  # IAM Role for EC2
+  # IAM Role for EC2 with least-privilege S3 access to the bucket above
   EC2Role:
     Type: AWS::IAM::Role
     Properties:
@@ -403,7 +404,7 @@ Resources:
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Sub '${AppBucket}/*'
+                Resource: !Sub '${AppBucket.Arn}/*'
               - Effect: Allow
                 Action:
                   - s3:ListBucket
@@ -448,11 +449,11 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
 
-  # EC2 Instances
+  # EC2 Instances in private subnets (no public IPs), IMDSv2 required, encrypted EBS
   EC2Instance1:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -471,11 +472,10 @@ Resources:
             Encrypted: true
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y aws-cli
-          # Ensure SSM agent is running
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
       Tags:
@@ -489,7 +489,7 @@ Resources:
   EC2Instance2:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
       InstanceType: !Ref InstanceType
       KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
       IamInstanceProfile: !Ref EC2InstanceProfile
@@ -508,11 +508,10 @@ Resources:
             Encrypted: true
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           yum update -y
           yum install -y aws-cli
-          # Ensure SSM agent is running
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
       Tags:
@@ -550,7 +549,7 @@ Outputs:
 
   NatGatewayIds:
     Description: NAT Gateway IDs
-    Value: !If 
+    Value: !If
       - CreateNatPerAz
       - !Join [',', [!Ref NatGateway1, !Ref NatGateway2]]
       - !Ref NatGateway1
