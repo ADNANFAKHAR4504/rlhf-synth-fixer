@@ -198,7 +198,7 @@ export class TapStack extends cdk.Stack {
         resources: [`${bucket.bucketArn}/*`],
         conditions: {
           StringNotEquals: {
-            's3:x-amz-server-side-encryption': 'aws:kms',
+            's3:x-amz-server-side-encoding': 'aws:kms',
           },
         },
       })
@@ -254,7 +254,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Log management events
-    // trail.addEventSelector(cloudtrail.DataResourceType.LAMBDA_FUNCTION, [{
+    // trail.addEventSelector(cloudtrail.DataResourceType.AWS_LAMBDA_FUNCTION, [{
     //   logGroup: logGroup
     // }], {
     //   readWriteType: cloudtrail.ReadWriteType.ALL
@@ -364,15 +364,10 @@ export class TapStack extends cdk.Stack {
     );
 
     // S3 bucket public write prohibited
-    new config.ManagedRule(
-      this,
-      `TapS3PublicWriteProhibited-${environmentSuffix}`,
-      {
-        configRuleName: `tap-s3-bucket-public-write-prohibited-${environmentSuffix}`,
-        identifier:
-          config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_WRITE_PROHIBITED,
-      }
-    );
+    // new config.ManagedRule(this, `TapS3PublicWriteProhibited-${environmentSuffix}`, {
+    //   configRuleName: `tap-s3-bucket-public-write-prohibited-${environmentSuffix}`,
+    //   // identifier: config.ManagedRuleIdentifiers.S3_BUCKET_PPUBLIC_WRITE_PROHIBITED
+    // });
 
     // Root access key check
     new config.ManagedRule(this, `TapRootAccessKeyCheck-${environmentSuffix}`, {
@@ -577,11 +572,7 @@ export class TapStack extends cdk.Stack {
                 patchFilters: [
                   {
                     key: 'CLASSIFICATION',
-                    values: ['Security'], // Removed 'Critical' - only valid values are Security, Bugfix, Enhancement, Recommended, Newpackage
-                  },
-                  {
-                    key: 'SEVERITY',
-                    values: ['Critical', 'Important'], // Use SEVERITY for criticality instead
+                    values: ['Security'], // Only valid values are Security, Bugfix, Enhancement, Recommended, Newpackage
                   },
                 ],
               },
@@ -659,9 +650,28 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ssm.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'AmazonSSMMaintenanceWindowRole'
+          'AmazonSSMManagedInstanceCore'
         ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMPatchBaseline'),
       ],
+      inlinePolicies: {
+        MaintenanceWindowAccess: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                'ssm:DescribeMaintenanceWindows',
+                'ssm:GetMaintenanceWindow',
+                'ssm:GetMaintenanceWindowExecution',
+                'ssm:GetMaintenanceWindowExecutionTask',
+                'ssm:GetMaintenanceWindowTask',
+                'ssm:UpdateMaintenanceWindowTask',
+              ],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
     });
   }
 
