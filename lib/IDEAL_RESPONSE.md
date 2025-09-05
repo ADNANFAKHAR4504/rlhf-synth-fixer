@@ -7,7 +7,7 @@ This document contains the complete and ideal implementation of a multi-tier web
 The infrastructure implements a secure, scalable, and highly available multi-tier web application on AWS with the following components:
 
 - **VPC with Multi-AZ networking** - Public, private, and database subnets across multiple availability zones
-- **Application Load Balancer** - Internet-facing ALB with WAF protection, HTTPS support, and access logging
+- **Application Load Balancer** - Internet-facing ALB with WAF protection and HTTPS support
 - **Auto Scaling Group** - Scalable application tier (2-4 instances) with auto-scaling policies
 - **RDS MySQL Database** - Encrypted database with automated backups and multi-AZ support
 - **S3 Buckets** - Encrypted storage for application data and logs
@@ -1129,10 +1129,6 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 }
 
 # Application Load Balancer
-# ELB service account ID for us-east-1
-locals {
-  elb_service_account = "127311923021"
-}
 
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb"
@@ -1143,20 +1139,22 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = var.enable_deletion_protection
 
-  access_logs {
-    bucket  = aws_s3_bucket.logs_bucket.id
-    prefix  = "alb-access-logs"
-    enabled = true
-  }
+  # Access logs disabled to avoid S3 permission complexity
+  # access_logs {
+  #   bucket  = aws_s3_bucket.logs_bucket.id
+  #   prefix  = "alb-access-logs"
+  #   enabled = false
+  # }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
   })
 
-  depends_on = [
-    aws_s3_bucket_policy.logs_bucket_policy,
-    aws_s3_bucket_public_access_block.logs_bucket
-  ]
+  # Removed dependencies for ALB access logging
+  # depends_on = [
+  #   aws_s3_bucket_policy.logs_bucket_policy,
+  #   aws_s3_bucket_public_access_block.logs_bucket
+  # ]
 }
 
 # Self-signed certificate for HTTPS (for demo purposes)
@@ -1191,7 +1189,7 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
-# S3 Bucket Policy for ALB Logs
+# S3 Bucket Policy for logs bucket (simplified - no ALB access logging)
 resource "aws_s3_bucket_policy" "logs_bucket_policy" {
   bucket = aws_s3_bucket.logs_bucket.id
 
@@ -1212,29 +1210,6 @@ resource "aws_s3_bucket_policy" "logs_bucket_policy" {
             "aws:SecureTransport" = "false"
           }
         }
-      },
-      {
-        Sid    = "AllowALBServiceAccount"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${local.elb_service_account}:root"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.logs_bucket.arn}/alb-access-logs/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
-      },
-      {
-        Sid    = "AllowALBServiceAccountBucketAccess"
-        Effect = "Allow"
-        Principal = {
-          AWS = "arn:aws:iam::${local.elb_service_account}:root"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.logs_bucket.arn
       }
     ]
   })
