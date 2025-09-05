@@ -486,6 +486,7 @@ jobs:
                 - Emojis or special symbols (icons) used for formatting
                 - Table structures
                 - Overly formal or template-like language
+                - Logs are allowed when we have multiple prompt files. 
                 - Perfect formatting that suggests AI assistance
                 - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
             5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
