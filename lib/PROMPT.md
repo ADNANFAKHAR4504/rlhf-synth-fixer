@@ -1,55 +1,61 @@
+# Terraform Infrastructure Prompt
+
+## Task Overview
+
 You are tasked with creating a Terraform file (.tf) that provisions AWS infrastructure across three environments: Dev, Staging, and Production. Each environment must be fully isolated but identical in functionality, ensuring strict consistency and scalability.
 
-Requirements
+## Requirements
 
-Networking & Compute:
+### Networking & Compute
+- VPC with public/private subnets across multiple AZs
+- Security groups with least privilege access
+- Internet Gateway and NAT Gateway for connectivity
+- Route tables for proper traffic routing
+- EC2 instances with Auto Scaling Groups
+- Application Load Balancer for traffic distribution
 
-Each environment must include a VPC, subnets, routing, and a primary EC2 instance.
+### Database & Storage
+- RDS instances with Multi-AZ deployment
+- S3 buckets for data storage and backups
+- KMS keys for encryption
+- Parameter Store for configuration management
 
-Use the same AMI for EC2 across environments, with the AMI ID passed as a parameter.
+### Security & Compliance
+- IAM roles and policies with minimal permissions
+- CloudTrail for audit logging
+- Config for compliance monitoring
+- Secrets Manager for sensitive data
 
-Attach an Elastic Load Balancer in front of the EC2 instance.
+### Monitoring & Logging
+- CloudWatch alarms for key metrics
+- Log groups for application logs
+- SNS topics for notifications
+- Dashboards for monitoring
 
-Database Layer:
+## Environment Configuration
 
-Deploy RDS instances with encryption, Multi-AZ setup, and consistent automated backup configurations.
+Each environment should have:
+- Unique VPC CIDR blocks
+- Environment-specific resource naming
+- Appropriate instance sizes for each environment
+- Consistent tagging strategy
+- Proper cost allocation tags
 
-IAM roles must restrict EC2 access to RDS by environment only.
+## Implementation Guidelines
 
-Lambda functions should automate regular RDS snapshots.
+1. Use for_each loops for environment-specific resources
+2. Implement proper variable definitions
+3. Use locals for common configurations
+4. Follow Terraform best practices
+5. Ensure proper resource dependencies
+6. Use modules for reusability
+7. Implement proper tagging strategy
 
-Security & Compliance:
+## Expected Outputs
 
-Define Security Groups identically across environments: SSH access from a specified IP range and HTTP open to the world.
-
-Enable CloudTrail with logs sent to a designated S3 bucket.
-
-Configure CloudWatch Alarms for EC2 CPU usage > 75%.
-
-Storage & Parameters:
-
-Each environment should have a separate S3 bucket with a uniform naming convention prefixed by environment name.
-
-Store AMI IDs and DB credentials in Parameter Store for secure management.
-
-Operational & Cost Best Practices:
-
-Apply Reserved Instances for both EC2 and RDS consistently across environments.
-
-Tag all resources following company tagging policies for cost allocation.
-
-Ensure no direct peering or resource sharing across environments.
-
-Constraints
-
-Regions: Dev and Staging in us-east-1, Production in us-west-2.
-
-Three distinct environments (Dev, Staging, Production) must be defined.
-
-Consistent VPC, EC2, RDS, and Security Group configurations across all environments.
-
-Expected Output
-
-A complete Terraform .tf file that, once deployed, creates all required AWS resources in Dev, Staging, and Production without manual steps. all the files should be in tap_stack.tf and provider.tf
-
-Verified consistency across environments with successful deployment tests.
+- VPC IDs and subnet IDs for each environment
+- Security group IDs
+- Load balancer DNS names
+- Database endpoints
+- S3 bucket names
+- CloudWatch log group names
