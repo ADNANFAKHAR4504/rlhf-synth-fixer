@@ -431,10 +431,14 @@ Resources:
       Handler: index.handler
       Role:
         Fn::GetAtt: [ConfigManagerRole, Arn]
+      Timeout: 300
       Code:
         ZipFile: |
           import boto3
+          import json
           import cfnresponse
+          import time
+          from botocore.exceptions import ClientError
 
           def create_config_role(iam):
               try:
@@ -450,21 +454,28 @@ Resources:
                       }]
                   }
                   
-                  role = iam.create_role(
-                      RoleName=role_name,
-                      AssumeRolePolicyDocument=json.dumps(assume_role_policy)
-                  )
-                  
-                  iam.attach_role_policy(
-                      RoleName=role_name,
-                      PolicyArn='arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
-                  )
-                  
-                  return role.get('Role', {}).get('Arn')
-              except iam.exceptions.EntityAlreadyExistsException:
-                  return f'arn:aws:iam::{iam.get_caller_identity()["Account"]}:role/{role_name}'
+                  try:
+                      role = iam.get_role(RoleName=role_name)
+                      return role['Role']['Arn']
+                  except ClientError as e:
+                      if e.response['Error']['Code'] == 'NoSuchEntity':
+                          role = iam.create_role(
+                              RoleName=role_name,
+                              AssumeRolePolicyDocument=json.dumps(assume_role_policy)
+                          )
+                          
+                          # Wait for role to be available
+                          time.sleep(10)
+                          
+                          iam.attach_role_policy(
+                              RoleName=role_name,
+                              PolicyArn='arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
+                          )
+                          
+                          return role['Role']['Arn']
+                      raise
               except Exception as e:
-                  print(f"Error creating role: {str(e)}")
+                  print(f"Error managing role: {str(e)}")
                   raise
 
           def handler(event, context):
