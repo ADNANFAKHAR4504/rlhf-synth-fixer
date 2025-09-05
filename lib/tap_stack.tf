@@ -358,7 +358,7 @@ resource "aws_s3_bucket_policy" "website" {
 # EC2 Instances
 resource "aws_instance" "web" {
   count                  = terraform.workspace == "production" ? 2 : 1
-  ami                    = data.aws_ami.amazon_linux.id
+  ami                    = local.amazon_linux_ami_id
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.public[count.index % length(aws_subnet.public)].id
   vpc_security_group_ids = [aws_security_group.web_public.id]
@@ -422,7 +422,7 @@ resource "aws_instance" "web" {
 
 resource "aws_instance" "backend" {
   count                  = 1
-  ami                    = data.aws_ami.amazon_linux.id
+  ami                    = local.amazon_linux_ami_id
   instance_type          = "t2.micro"
   subnet_id              = aws_subnet.private[0].id
   vpc_security_group_ids = [aws_security_group.backend.id]
@@ -510,7 +510,7 @@ resource "aws_sns_topic_subscription" "alerts_https" {
 
 # Lambda function for EC2 shutdown
 resource "aws_iam_role" "lambda_shutdown_role" {
-  name_prefix = "${var.project_name}-lambda-shutdown-${terraform.workspace}-"
+  name_prefix = "${substr(var.project_name, 0, 10)}-lambda-${terraform.workspace}-"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -527,7 +527,7 @@ resource "aws_iam_role" "lambda_shutdown_role" {
 }
 
 resource "aws_iam_policy" "lambda_shutdown_policy" {
-  name_prefix = "${var.project_name}-lambda-shutdown-${terraform.workspace}-"
+  name_prefix = "${substr(var.project_name, 0, 10)}-lambda-policy-${terraform.workspace}-"
 
   policy = jsonencode({
     Version = "2012-10-17"
