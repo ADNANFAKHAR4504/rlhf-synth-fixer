@@ -14,10 +14,10 @@ Create a secure, auditable CloudFormation JSON template that:
 - Tags all created resources with required tags for cost tracking.
 
 INPUT PARAMETERS:
-- Environment (String) — e.g., dev|staging|prod
+- Environment (String) - e.g., dev|staging|prod
 - Owner (String)
 - Project (String)
-- AllowedSSHRanges (CommaDelimitedList) — CIDR(s) allowed for SSH
+- AllowedSSHRanges (CommaDelimitedList) - CIDR(s) allowed for SSH
 - KeyName (AWS::EC2::KeyPair::KeyName)
 - InstanceType (String, Default t3.micro)
 - AMIId (AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>)
