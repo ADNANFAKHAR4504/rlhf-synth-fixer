@@ -392,12 +392,127 @@ Resources:
                 Resource: "*"
 
 Outputs:
+  #########################################
+  # Networking Outputs
+  #########################################
   VpcId:
     Description: VPC ID
     Value: !Ref VPC
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-VpcId"
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+
+  NatGatewayId:
+    Description: NAT Gateway ID
+    Value: !Ref NatGateway1
+  NatEIP:
+    Description: NAT Gateway Elastic IP
+    Value: !Ref NatEIP1
+
+  #########################################
+  # Security Groups
+  #########################################
+  BastionSGId:
+    Description: Bastion Host Security Group
+    Value: !Ref BastionSG
+  InstanceSGId:
+    Description: Instance Security Group
+    Value: !Ref InstanceSG
+  ALBSGId:
+    Description: ALB Security Group
+    Value: !Ref ALBSG
+
+  #########################################
+  # Bastion Host
+  #########################################
+  BastionHostId:
+    Description: Bastion Host Instance ID
+    Value: !Ref BastionHost
+
+  #########################################
+  # ALB Outputs
+  #########################################
+  ALBArn:
+    Description: ALB ARN
+    Value: !Ref ALB
   ALBEndpoint:
     Description: DNS Name of ALB
     Value: !GetAtt ALB.DNSName
+  ALBTargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref ALBTargetGroup
+  ALBListenerArn:
+    Description: ALB Listener ARN
+    Value: !Ref ALBListener
+
+  #########################################
+  # AutoScaling Outputs
+  #########################################
+  AutoScalingGroupName:
+    Description: Name of AutoScaling Group
+    Value: !Ref AutoScalingGroup
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+  LaunchTemplateVersion:
+    Description: Launch Template Latest Version
+    Value: !GetAtt LaunchTemplate.LatestVersionNumber
+
+  #########################################
+  # RDS Outputs
+  #########################################
   RDSEndpoint:
     Description: Endpoint of RDS
     Value: !GetAtt RDSInstance.Endpoint.Address
+  RDSPort:
+    Description: RDS Port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+  RDSInstanceId:
+    Description: RDS Instance Identifier
+    Value: !Ref RDSInstance
+  RDSSubnetGroup:
+    Description: RDS Subnet Group
+    Value: !Ref DBSubnetGroup
+  RDSInstanceSG:
+    Description: Security Group for RDS
+    Value: !Ref InstanceSG
+
+  #########################################
+  # S3 Logging Bucket Outputs
+  #########################################
+  LoggingBucketName:
+    Description: S3 Logging Bucket Name
+    Value: !Ref LoggingBucket
+  LoggingBucketArn:
+    Description: S3 Logging Bucket ARN
+    Value: !GetAtt LoggingBucket.Arn
+
+  #########################################
+  # CloudTrail Outputs
+  #########################################
+  CloudTrailArn:
+    Description: CloudTrail ARN
+    Value: !Ref CloudTrail
+
+  #########################################
+  # IAM / Config Role
+  #########################################
+  ConfigRoleArn:
+    Description: IAM Role ARN for AWS Config
+    Value: !GetAtt ConfigRole.Arn
+  EC2InstanceProfileArn:
+    Description: EC2 Instance Profile ARN
+    Value: !GetAtt EC2InstanceProfile.Arn
+
