@@ -76,11 +76,11 @@ describe('TapStack', () => {
     test('RDS MySQL is configured with Multi-AZ', () => {
       template.hasResourceProperties('AWS::RDS::DBInstance', {
         Engine: 'mysql',
-        EngineVersion: '8.0.35',
+        EngineVersion: '8.0.39',
         MultiAZ: true,
         DBInstanceClass: 'db.t3.micro',
         StorageEncrypted: true,
-        DeletionProtection: true,
+        DeletionProtection: false,
       });
     });
 

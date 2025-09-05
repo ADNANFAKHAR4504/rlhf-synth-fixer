@@ -147,7 +147,7 @@ export class TapStack extends cdk.Stack {
     // RDS MySQL Multi-AZ - Constraint #7
     const database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0_39,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -160,7 +160,7 @@ export class TapStack extends cdk.Stack {
       multiAz: true, // Multi-AZ for high availability
       storageEncrypted: true,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
+      deletionProtection: false, // Allow deletion for testing
     });
     cdk.Tags.of(database).add('Environment', 'Production');
 
