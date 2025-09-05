@@ -404,7 +404,7 @@ Resources:
               - 'kms:PutKeyPolicy'
               - 'kms:ScheduleKeyDeletion'
               - 'kms:CancelKeyDeletion'
-            Resource: '*'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
           - Sid: Allow RDS Service
             Effect: Allow
             Principal:
@@ -412,7 +412,11 @@ Resources:
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
-            Resource: '*'
+              - 'kms:CreateGrant'
+            Resource: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 'rds.${AWS::Region}.amazonaws.com'
       Tags:
         - Key: Owner
           Value: !Ref OwnerName
@@ -804,3 +808,21 @@ Outputs:
     Value: !Ref CrossRegionReplicaBucket
     Export:
       Name: !Sub '${AWS::StackName}-CrossRegionReplicaBucket'
+
+  SecurityResponseFunctionName:
+    Description: 'Lambda function name for security response'
+    Value: !Ref SecurityResponseFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityResponseFunction'
+
+  RootAccessAlarmName:
+    Description: 'CloudWatch alarm name for root access monitoring'
+    Value: !Ref RootAccessAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-RootAccessAlarm'
+
+  SecurityAlertsTopicArn:
+    Description: 'SNS topic ARN for security alerts'
+    Value: !Ref SecurityAlertsTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityAlertsTopic'

@@ -6,11 +6,8 @@
   "po_id": "291624",
   "team": "2",
   "startedAt": "2025-08-23T07:56:18.156Z",
-  "subtask": "security-infrastructure",
-  "subject_labels": ["aws", "cloudformation", "security", "kms", "s3", "rds", "vpc", "cloudtrail", "sns", "lambda"],
-  "training_quality": {
-    "score": 9,
-    "justification": "High-quality security-focused CloudFormation infrastructure with comprehensive testing coverage, proper encryption, least-privilege IAM, and defensive security controls including KMS, CloudTrail, VPC isolation, and monitoring"
-  },
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": ["Security Configuration", "General Infrastructure Tooling QA", "Database Management", "Network Configuration", "Access Control", "Performance Optimization", "Monitoring Setup"],
+  "training_quality": 8,
   "aws_services": ["S3", "VPC", "EC2", "RDS", "KMS", "CloudTrail", "SNS", "Lambda", "SecretsManager", "CloudWatch", "IAM"]
 }
