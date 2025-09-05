@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350053",
+  "team": "3",
+  "startedAt": "2025-09-05T04:01:42.524Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Database Management",
+    "Security Configuration",
+    "Resource Scaling",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Application Load Balancer",
+    "Security Groups",
+    "Network ACLs",
+    "Subnets",
+    "Internet Gateway",
+    "Route Tables",
+    "Elastic IP",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
+}
