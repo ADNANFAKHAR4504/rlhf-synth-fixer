@@ -1,60 +1,59 @@
 ``````python
-"""
-Issue 1: AutoScalingGroup CPU Metric - Corrected Implementation
-"""
-def _create_monitoring_and_logging(self):
+def create_monitoring_and_logging(self):
     """
-    Creates CloudWatch Alarms and S3 bucket for centralized logging
+    Create CloudWatch alarms and S3 bucket for logging
     """
-    # Create S3 bucket for centralized logging
-    self.logging_bucket = s3.Bucket(
-        self, "CentralizedLoggingBucket",
+    # S3 bucket for centralized logging
+    log_bucket = s3.Bucket(
+        self, "CentralizedLogsBucket",
         bucket_name=f"production-logs-{self.account}-{self.region}",
         versioned=True,
         encryption=s3.BucketEncryption.S3_MANAGED,
-        public_read_access=False,
         block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+        removal_policy=RemovalPolicy.RETAIN,
         lifecycle_rules=[
             s3.LifecycleRule(
-                id="DeleteOldLogs",
+                id="LogRetentionRule",
                 enabled=True,
-                expiration=Duration.days(90)
+                expiration=Duration.days(365),  # Keep logs for 1 year
+                transitions=[
+                    s3.Transition(
+                        storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                        transition_after=Duration.days(30)
+                    ),
+                    s3.Transition(
+                        storage_class=s3.StorageClass.GLACIER,
+                        transition_after=Duration.days(90)
+                    )
+                ]
             )
-        ],
-        removal_policy=RemovalPolicy.DESTROY,
-        auto_delete_objects=True
+        ]
     )
-
-    # Add bucket policy for secure access
-    bucket_policy_statement = iam.PolicyStatement(
-        sid="DenyInsecureConnections",
-        effect=iam.Effect.DENY,
-        principals=[iam.AnyPrincipal()],
-        actions=["s3:*"],
-        resources=[
-            self.logging_bucket.bucket_arn,
-            f"{self.logging_bucket.bucket_arn}/*"
-        ],
-        conditions={
-            "Bool": {
-                "aws:SecureTransport": "false"
-            }
-        }
+    
+    # Bucket policy for ALB access logs
+    log_bucket.add_to_resource_policy(
+        iam.PolicyStatement(
+            sid="AWSLogDeliveryWrite",
+            effect=iam.Effect.ALLOW,
+            principals=[
+                iam.ServicePrincipal("delivery.logs.amazonaws.com")
+            ],
+            actions=["s3:PutObject"],
+            resources=[f"{log_bucket.bucket_arn}/*"]
+        )
     )
-    self.logging_bucket.add_to_resource_policy(bucket_policy_statement)
-
-    # Create CloudWatch Log Group
+    
+    # CloudWatch Log Group for application logs
     log_group = logs.LogGroup(
         self, "ApplicationLogGroup",
-        log_group_name="/aws/ec2/production",
+        log_group_name="/aws/production/webapp",
         retention=logs.RetentionDays.ONE_MONTH,
-        removal_policy=RemovalPolicy.DESTROY
+        removal_policy=RemovalPolicy.RETAIN
     )
-
-    # FIXED: Create CloudWatch Alarm for Auto Scaling Group CPU utilization
-    # ASG doesn't have metric_cpu_utilization() method, need to create manually
+    
+    # ✅ FIX 1: Correct way to create AutoScalingGroup CPU metric
     asg_cpu_metric = cloudwatch.Metric(
-        namespace="AWS/EC2",
+        namespace="AWS/AutoScaling",
         metric_name="CPUUtilization",
         dimensions_map={
             "AutoScalingGroupName": self.asg.auto_scaling_group_name
@@ -62,35 +61,36 @@ def _create_monitoring_and_logging(self):
         statistic="Average",
         period=Duration.minutes(5)
     )
-
+    
+    # CloudWatch Alarms for Auto Scaling Group
     cpu_alarm = cloudwatch.Alarm(
         self, "HighCPUAlarm",
         alarm_name="Production-High-CPU-Utilization",
         alarm_description="Alarm when CPU exceeds 70%",
-        metric=asg_cpu_metric,
+        metric=asg_cpu_metric,  # ✅ Using the correctly created metric
         threshold=70,
         evaluation_periods=2,
         datapoints_to_alarm=2,
-        treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
-        comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
+        comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+        treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING
     )
-
-    # Create CloudWatch Alarm for RDS CPU utilization
-    rds_cpu_alarm = cloudwatch.Alarm(
-        self, "RDSHighCPUAlarm",
-        alarm_name="Production-RDS-High-CPU",
-        alarm_description="Alarm when RDS CPU exceeds 70%",
-        metric=self.rds_instance.metric_cpu_utilization(),
+    
+    # Database CPU alarm (this one was correct, but adding for completeness)
+    db_cpu_alarm = cloudwatch.Alarm(
+        self, "DatabaseHighCPUAlarm",
+        alarm_name="Production-Database-High-CPU",
+        alarm_description="Database CPU utilization is high",
+        metric=self.database.metric_cpu_utilization(),  # RDS does have this method
         threshold=70,
         evaluation_periods=2,
         comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD
     )
-
-    # Create CloudWatch Alarm for ALB target health
-    alb_unhealthy_targets = cloudwatch.Alarm(
-        self, "ALBUnhealthyTargets",
-        alarm_name="Production-ALB-Unhealthy-Targets",
-        alarm_description="Alarm when ALB has unhealthy targets",
+    
+    # ALB target health alarm
+    target_health_alarm = cloudwatch.Alarm(
+        self, "UnhealthyTargetsAlarm",
+        alarm_name="Production-Unhealthy-Targets",
+        alarm_description="ALB has unhealthy targets",
         metric=cloudwatch.Metric(
             namespace="AWS/ApplicationELB",
             metric_name="UnHealthyHostCount",
@@ -104,13 +104,16 @@ def _create_monitoring_and_logging(self):
         evaluation_periods=2,
         comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD
     )
+    
+    return {
+        'log_bucket': log_bucket,
+        'log_group': log_group,
+        'alarms': [cpu_alarm, db_cpu_alarm, target_health_alarm]
+    }
 
-"""
-Issue 2 & 3: RDS Configuration Fixes
-"""
-def _create_database_layer(self) -> rds.DatabaseInstance:
+def create_database_layer(self):
     """
-    Creates RDS instance with automated backups in private subnets
+    Create RDS MySQL instance in private subnets
     """
     # Create DB subnet group
     db_subnet_group = rds.SubnetGroup(
@@ -118,15 +121,16 @@ def _create_database_layer(self) -> rds.DatabaseInstance:
         description="Subnet group for RDS database",
         vpc=self.vpc,
         vpc_subnets=ec2.SubnetSelection(
-            subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS
-        )
+            subnet_type=ec2.SubnetType.PRIVATE_ISOLATED
+        ),
+        subnet_group_name="production-db-subnet-group"
     )
-
-    # Create RDS instance
-    rds_instance = rds.DatabaseInstance(
+    
+    # ✅ FIX 3: Create RDS instance with correct monitoring interval
+    database = rds.DatabaseInstance(
         self, "ProductionDatabase",
         engine=rds.DatabaseInstanceEngine.mysql(
-            version=rds.MysqlEngineVersion.VER_8_0
+            version=rds.MysqlEngineVersion.VER_8_0_35
         ),
         instance_type=ec2.InstanceType.of(
             ec2.InstanceClass.T3,
@@ -134,108 +138,80 @@ def _create_database_layer(self) -> rds.DatabaseInstance:
         ),
         vpc=self.vpc,
         subnet_group=db_subnet_group,
-        security_groups=[self.rds_sg],
-        database_name="productiondb",
+        security_groups=[self.security_groups['database']],
         credentials=rds.Credentials.from_generated_secret(
             "dbadmin",
             secret_name="production-db-credentials"
         ),
-        # Automated backups configuration
-        backup_retention=Duration.days(7),
+        database_name="productiondb",
+        backup_retention=Duration.days(7),  # This Duration is fine for backup retention
         delete_automated_backups=False,
         deletion_protection=True,
-        # Multi-AZ deployment for production
-        multi_az=True,
-        # Storage configuration
+        instance_identifier="production-mysql-db",
         allocated_storage=20,
-        storage_type=rds.StorageType.GP2,
         storage_encrypted=True,
-        # FIXED: Monitoring interval as integer seconds instead of Duration
-        monitoring_interval=60,  # 1 minute in seconds
+        multi_az=False,  # Set to True for production HA
+        auto_minor_version_upgrade=True,
+        removal_policy=RemovalPolicy.RETAIN,
+        # ✅ FIX 3: Use integer seconds instead of Duration objects
+        monitoring_interval=60,  # 60 seconds = 1 minute (use 0, 1, 5, 10, 15, 30, 60)
         enable_performance_insights=True,
-        performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
-        # Maintenance window
-        preferred_backup_window="03:00-04:00",
-        preferred_maintenance_window="sun:04:00-sun:05:00",
-        # Remove instance on stack deletion (change for production)
-        removal_policy=RemovalPolicy.DESTROY
+        performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,  # 7 days for free tier
+        cloudwatch_logs_exports=["error", "general", "slow-query"]  # Enable log exports
     )
+    
+    return database
 
-    return rds_instance
-
-"""
-Issue 2: Fixed CfnOutput for RDS Endpoint
-"""
-def _create_outputs(self):
+def create_outputs(self):
     """
-    Creates CloudFormation outputs for key resources
+    Create CloudFormation outputs for important resources
     """
-    # VPC Outputs
     CfnOutput(
         self, "VPCId",
         value=self.vpc.vpc_id,
-        description="VPC ID",
+        description="VPC ID for the production environment",
         export_name="Production-VPC-ID"
     )
-
-    CfnOutput(
-        self, "VPCCidr",
-        value=self.vpc.vpc_cidr_block,
-        description="VPC CIDR Block",
-        export_name="Production-VPC-CIDR"
-    )
-
-    # ALB Outputs
-    CfnOutput(
-        self, "LoadBalancerDNS",
-        value=self.alb.load_balancer_dns_name,
-        description="Application Load Balancer DNS Name",
-        export_name="Production-ALB-DNS"
-    )
-
+    
     CfnOutput(
         self, "LoadBalancerURL",
         value=f"http://{self.alb.load_balancer_dns_name}",
-        description="Application URL",
-        export_name="Production-App-URL"
+        description="URL of the Application Load Balancer",
+        export_name="Production-ALB-URL"
     )
-
-    # FIXED: RDS Outputs with proper type conversion
+    
+    CfnOutput(
+        self, "LoadBalancerDNS",
+        value=self.alb.load_balancer_dns_name,
+        description="DNS name of the Application Load Balancer",
+        export_name="Production-ALB-DNS"
+    )
+    
+    # ✅ FIX 2: Convert RDS endpoint and port to strings
     CfnOutput(
         self, "DatabaseEndpoint",
-        value=self.rds_instance.instance_endpoint.hostname,
-        description="RDS Database Endpoint",
+        value=self.database.instance_endpoint.hostname,
+        description="RDS database endpoint hostname",
         export_name="Production-DB-Endpoint"
     )
-
-    # FIXED: Convert port number to string for CfnOutput
+    
     CfnOutput(
         self, "DatabasePort",
-        value=str(self.rds_instance.instance_endpoint.port),
-        description="RDS Database Port",
+        value=str(self.database.instance_endpoint.port),  # ✅ Convert to string
+        description="RDS database port",
         export_name="Production-DB-Port"
     )
-
-    # Database connection string output
+    
     CfnOutput(
         self, "DatabaseConnectionString",
-        value=f"{self.rds_instance.instance_endpoint.hostname}:{self.rds_instance.instance_endpoint.port}",
-        description="RDS Database Connection String",
+        value=f"{self.database.instance_endpoint.hostname}:{str(self.database.instance_endpoint.port)}",  # ✅ Both converted to string
+        description="Complete RDS database connection endpoint",
         export_name="Production-DB-Connection"
     )
-
-    # S3 Outputs
-    CfnOutput(
-        self, "LoggingBucketName",
-        value=self.logging_bucket.bucket_name,
-        description="Centralized Logging S3 Bucket",
-        export_name="Production-Logging-Bucket"
-    )
-
-    # Auto Scaling Group Output
+    
     CfnOutput(
         self, "AutoScalingGroupName",
         value=self.asg.auto_scaling_group_name,
-        description="Auto Scaling Group Name",
+        description="Auto Scaling Group name",
         export_name="Production-ASG-Name"
     )
