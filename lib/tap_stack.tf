@@ -346,8 +346,8 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main[each.key].name
 
   backup_retention_period = each.value.backup_retention
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -365,7 +365,7 @@ resource "aws_instance" "web" {
 
   ami           = data.aws_ami.amazon_linux.id
   instance_type = var.ec2_instance_type
-  
+
   subnet_id = [
     for subnet_key, subnet in aws_subnet.public : subnet.id
     if startswith(subnet_key, each.key)
@@ -394,9 +394,9 @@ resource "aws_instance" "web" {
 output "environment_info" {
   value = {
     for env_key, env in local.environments : env_key => {
-      region         = env.region
-      vpc_id         = local.all_vpcs[env_key].id
-      vpc_cidr       = local.all_vpcs[env_key].cidr_block
+      region   = env.region
+      vpc_id   = local.all_vpcs[env_key].id
+      vpc_cidr = local.all_vpcs[env_key].cidr_block
       public_subnets = [
         for subnet_key, subnet in aws_subnet.public : {
           id   = subnet.id
