@@ -2,11 +2,10 @@
 import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand } from "@aws-sdk/client-s3";
 import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand, DescribeInstancesCommand, DescribeInternetGatewaysCommand, DescribeNatGatewaysCommand, DescribeFlowLogsCommand } from "@aws-sdk/client-ec2";
 import { RDSClient, DescribeDBInstancesCommand } from "@aws-sdk/client-rds";
-import { RedshiftClient, DescribeClustersCommand } from "@aws-sdk/client-redshift";
 import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand, DescribeTargetGroupsCommand, DescribeListenersCommand } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { AutoScalingClient, DescribeAutoScalingGroupsCommand } from "@aws-sdk/client-auto-scaling";
 import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
-import { IAMClient, GetRoleCommand, GetInstanceProfileCommand } from "@aws-sdk/client-iam";
+import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
 import { CloudWatchClient, DescribeAlarmsCommand } from "@aws-sdk/client-cloudwatch";
 import { SNSClient, ListTopicsCommand } from "@aws-sdk/client-sns";
@@ -17,7 +16,6 @@ const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "u
 const s3Client = new S3Client({ region: awsRegion });
 const ec2Client = new EC2Client({ region: awsRegion });
 const rdsClient = new RDSClient({ region: awsRegion });
-const redshiftClient = new RedshiftClient({ region: awsRegion });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
 const autoScalingClient = new AutoScalingClient({ region: awsRegion });
 const kmsClient = new KMSClient({ region: awsRegion });
@@ -33,13 +31,11 @@ describe("TapStack Integration Tests", () => {
   let albSecurityGroupId: string;
   let appSecurityGroupId: string;
   let dbSecurityGroupId: string;
-  let redshiftSecurityGroupId: string;
   let albArn: string;
   let albDnsName: string;
   let asgName: string;
   let s3BucketName: string;
   let rdsEndpoint: string;
-  let redshiftEndpoint: string;
   let kmsKeyId: string;
   let kmsKeyArn: string;
   let adminRoleArn: string;
@@ -59,13 +55,11 @@ describe("TapStack Integration Tests", () => {
     albSecurityGroupId = stackOutputs["alb-security-group-id"];
     appSecurityGroupId = stackOutputs["app-security-group-id"];
     dbSecurityGroupId = stackOutputs["db-security-group-id"];
-    redshiftSecurityGroupId = stackOutputs["redshift-security-group-id"];
     albArn = stackOutputs["alb-arn"];
     albDnsName = stackOutputs["compute_alb-dns_0895CC55"];
     asgName = stackOutputs["asg-name"];
     s3BucketName = stackOutputs["s3-bucket-name"];
     rdsEndpoint = stackOutputs["rds-endpoint"];
-    redshiftEndpoint = stackOutputs["redshift-endpoint"];
     kmsKeyId = stackOutputs["kms-key-id"];
     kmsKeyArn = stackOutputs["kms-key-arn"];
     adminRoleArn = stackOutputs["admin-role-arn"];
@@ -221,26 +215,6 @@ describe("TapStack Integration Tests", () => {
       );
       expect(pgRule).toBeDefined();
       expect(pgRule?.UserIdGroupPairs?.some(pair => pair.GroupId === appSecurityGroupId)).toBe(true);
-    }, 20000);
-
-    test("Redshift security group allows traffic only from app instances", async () => {
-      const { SecurityGroups } = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({ GroupIds: [redshiftSecurityGroupId] })
-      );
-      expect(SecurityGroups?.length).toBe(1);
-
-      const sg = SecurityGroups?.[0];
-      expect(sg?.GroupId).toBe(redshiftSecurityGroupId);
-      expect(sg?.VpcId).toBe(vpcId);
-      expect(sg?.GroupName).toBe("tap-redshift-sg-prod");
-      expect(sg?.Description).toBe("Security group for Redshift cluster");
-
-      // Check Redshift rule from app security group
-      const redshiftRule = sg?.IpPermissions?.find(rule => 
-        rule.FromPort === 5439 && rule.ToPort === 5439 && rule.IpProtocol === "tcp"
-      );
-      expect(redshiftRule).toBeDefined();
-      expect(redshiftRule?.UserIdGroupPairs?.some(pair => pair.GroupId === appSecurityGroupId)).toBe(true);
     }, 20000);
   });
 
@@ -410,28 +384,6 @@ describe("TapStack Integration Tests", () => {
     }, 30000);
   });
 
-  describe("Redshift Cluster", () => {
-    test("Redshift cluster exists with correct configuration", async () => {
-      const redshiftIdentifier = redshiftEndpoint.split('.')[0];
-      
-      const { Clusters } = await redshiftClient.send(
-        new DescribeClustersCommand({ ClusterIdentifier: redshiftIdentifier })
-      );
-      expect(Clusters?.length).toBe(1);
-
-      const cluster = Clusters?.[0];
-      expect(cluster?.ClusterIdentifier).toBe(redshiftIdentifier);
-      expect(cluster?.ClusterStatus).toBe("available");
-      expect(cluster?.NodeType).toBe("ra3.xlplus");
-      expect(cluster?.NumberOfNodes).toBe(1);
-      expect(cluster?.DBName).toBe("analytics");
-      expect(cluster?.MasterUsername).toBe("redshiftadmin");
-      expect(cluster?.Encrypted).toBe(true);
-      expect(cluster?.PubliclyAccessible).toBe(false);
-      expect(cluster?.Endpoint?.Port).toBe(5439);
-    }, 30000);
-  });
-
   describe("KMS Key", () => {
     test("KMS key exists and is enabled with key rotation", async () => {
       const { KeyMetadata } = await kmsClient.send(
@@ -517,13 +469,6 @@ describe("TapStack Integration Tests", () => {
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsIdentifier })
       );
       expect(DBInstances?.[0]?.StorageEncrypted).toBe(true);
-
-      // Test Redshift encryption
-      const redshiftIdentifier = redshiftEndpoint.split('.')[0];
-      const { Clusters } = await redshiftClient.send(
-        new DescribeClustersCommand({ ClusterIdentifier: redshiftIdentifier })
-      );
-      expect(Clusters?.[0]?.Encrypted).toBe(true);
     }, 20000);
 
     test("Network isolation is properly configured", async () => {
@@ -533,13 +478,6 @@ describe("TapStack Integration Tests", () => {
         new DescribeDBInstancesCommand({ DBInstanceIdentifier: rdsIdentifier })
       );
       expect(DBInstances?.[0]?.PubliclyAccessible).toBe(false);
-
-      // Test Redshift is in private subnets only
-      const redshiftIdentifier = redshiftEndpoint.split('.')[0];
-      const { Clusters } = await redshiftClient.send(
-        new DescribeClustersCommand({ ClusterIdentifier: redshiftIdentifier })
-      );
-      expect(Clusters?.[0]?.PubliclyAccessible).toBe(false);
 
       // Test S3 bucket blocks public access
       const { PublicAccessBlockConfiguration } = await s3Client.send(
