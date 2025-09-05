@@ -135,23 +135,24 @@ class TapStack(Stack):
         self.tap_processor_function.add_permission(
             "AllowS3Invoke",
             principal=iam.ServicePrincipal("s3.amazonaws.com"),
-            source_arn=self.tap_storage_bucket.bucket_arn,
+            source_arn=f"{self.tap_storage_bucket.bucket_arn}/*",
             action="lambda:InvokeFunction"
         )
 
         # 7. Create explicit bucket policy for Lambda access (additional security layer)
-        bucket_policy_statement = iam.PolicyStatement(
-            sid="AllowLambdaReadAccess",
-            effect=iam.Effect.ALLOW,
-            principals=[iam.ArnPrincipal(self.lambda_execution_role.role_arn)],
-            actions=[
-                "s3:GetObject",
-                "s3:GetObjectVersion"
-            ],
-            resources=[f"{self.tap_storage_bucket.bucket_arn}/*"]
-        )
+        # bucket_policy_statement = iam.PolicyStatement(
+        #     sid="AllowLambdaReadAccess",
+        #     effect=iam.Effect.ALLOW,
+        #     principals=[iam.ArnPrincipal(self.lambda_execution_role.role_arn)],
+        #     actions=[
+        #         "s3:GetObject",
+        #         "s3:GetObjectVersion"
+        #     ],
+        #     resources=[f"{self.tap_storage_bucket.bucket_arn}/*"]
+        # )
         
-        self.tap_storage_bucket.add_to_resource_policy(bucket_policy_statement)
+        # self.tap_storage_bucket.add_to_resource_policy(bucket_policy_statement)
+        # self.tap_storage_bucket.node.add_dependency(self.tap_processor_function)
 
         # 8. Configure S3 event notification for PUT events only (MOVED AFTER PERMISSIONS)
         self.tap_storage_bucket.add_event_notification(
