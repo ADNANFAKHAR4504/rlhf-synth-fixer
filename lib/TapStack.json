@@ -31,13 +31,7 @@
             "Type": "String",
             "Default": "admin",
             "NoEcho": true,
-            "Description": "Master username for RDS (default provided, override in prod)"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "Default": "ChangeMe123!",
-            "NoEcho": true,
-            "Description": "Master password for RDS (default provided, override in prod)"
+            "Description": "Master username for RDS"
         }
     },
     "Mappings": {
@@ -475,19 +469,6 @@
                 ]
             }
         },
-        "DBPasswordParam": {
-            "Type": "AWS::SSM::Parameter",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "/app/${Environment}/db/password"
-                },
-                "Type": "String",
-                "Value": {
-                    "Ref": "DBPassword"
-                },
-                "Description": "RDS Master Password stored securely"
-            }
-        },
         "RDSInstance": {
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
@@ -499,7 +480,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:ssm-secure:/app/${Environment}/db/password:1}}"
+                    "Fn::Sub": "{{resolve:ssm-secure:/app/${Environment}/db/password}}"
                 },
                 "VPCSecurityGroups": [
                     {

@@ -30,13 +30,7 @@ Parameters:
     Type: String
     Default: admin
     NoEcho: true
-    Description: Master username for RDS (default provided, override in prod)
-
-  DBPassword:
-    Type: String
-    Default: ChangeMe123!
-    NoEcho: true
-    Description: Master password for RDS (default provided, override in prod)
+    Description: Master username for RDS
 
 Mappings:
   RegionMap:
@@ -195,7 +189,7 @@ Resources:
       Roles: [!Ref EC2Role]
 
   #########################################
-  # Bastion Host (SSM only, no keypair)
+  # Bastion Host (SSM only)
   #########################################
   BastionHost:
     Type: AWS::EC2::Instance
@@ -266,18 +260,7 @@ Resources:
       TargetGroupARNs: [!Ref ALBTargetGroup]
 
   #########################################
-  # SSM Parameter for RDS Password
-  #########################################
-  DBPasswordParam:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub "/app/${Environment}/db/password"
-      Type: String
-      Value: !Ref DBPassword
-      Description: RDS Master Password stored securely
-
-  #########################################
-  # RDS (Multi-AZ, Encrypted, Secure Password)
+  # RDS (Multi-AZ, Encrypted, Secure Password from SSM)
   #########################################
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -287,7 +270,7 @@ Resources:
       AllocatedStorage: 20
       MultiAZ: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub "{{resolve:ssm-secure:/app/${Environment}/db/password:1}}"
+      MasterUserPassword: !Sub "{{resolve:ssm-secure:/app/${Environment}/db/password}}"
       VPCSecurityGroups: [!Ref InstanceSG]
       DBSubnetGroupName: !Ref DBSubnetGroup
       StorageEncrypted: true
