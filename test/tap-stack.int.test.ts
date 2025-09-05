@@ -503,12 +503,27 @@ describe("TapStack – Integration tests using cfn-outputs/all-outputs.json", ()
     }
   });
 
-  test("18) AlbDnsName and RdsEndpointAddress do not contain uppercase characters (DNS-safe)", () => {
-    const alb = req(outputs, "AlbDnsName");
-    const rds = req(outputs, "RdsEndpointAddress");
-    expect(alb).toBe(alb.toLowerCase());
-    expect(rds).toBe(rds.toLowerCase());
-  });
+  test("18) AlbDnsName and RdsEndpointAddress are DNS-safe (case-insensitive)", () => {
+  const alb = req(outputs, "AlbDnsName");
+  const rds = req(outputs, "RdsEndpointAddress");
+
+  // Accept mixed-case inputs but validate normalized (lowercased) DNS strings.
+  const albLc = alb.trim().toLowerCase();
+  const rdsLc = rds.trim().toLowerCase();
+
+  // Basic DNS-safe charset check
+  expect(/^[a-z0-9.-]+$/.test(albLc)).toBe(true);
+  expect(/^[a-z0-9.-]+$/.test(rdsLc)).toBe(true);
+
+  // Domain endings (no protocol, no port)
+  expect(/\.elb\.amazonaws\.com(\.cn)?$/.test(albLc)).toBe(true);
+  expect(/\.rds\.amazonaws\.com(\.cn)?$/.test(rdsLc)).toBe(true);
+
+  // No whitespace allowed
+  expect(/\s/.test(alb)).toBe(false);
+  expect(/\s/.test(rds)).toBe(false);
+});
+
 
   test("19) TargetGroupArn and AlbArn reference ELBv2 service", () => {
     const tg = extractArnParts(req(outputs, "TargetGroupArn"))!;
