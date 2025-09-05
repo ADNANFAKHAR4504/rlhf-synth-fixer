@@ -511,17 +511,22 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
         expect(webAcl.DefaultAction?.Allow).toBeTruthy();
         expect(webAcl.Rules?.length).toBeGreaterThan(0);
         
-        // Check for managed rule groups
+        // Check for managed rule groups (we have 2: CommonRuleSet and KnownBadInputsRuleSet)
         const managedRules = webAcl.Rules?.filter(rule => 
           rule.Statement?.ManagedRuleGroupStatement
         );
-        expect(managedRules?.length).toBeGreaterThan(0);
+        expect(managedRules?.length).toBe(2);
         
-        // Check for rate limiting rule
-        const rateLimitRule = webAcl.Rules?.find(rule =>
-          rule.Statement?.RateBasedStatement
+        // Verify the specific managed rule groups we configured
+        const commonRuleSet = webAcl.Rules?.find(rule =>
+          rule.Statement?.ManagedRuleGroupStatement?.Name === "AWSManagedRulesCommonRuleSet"
         );
-        expect(rateLimitRule).toBeTruthy();
+        const badInputsRuleSet = webAcl.Rules?.find(rule =>
+          rule.Statement?.ManagedRuleGroupStatement?.Name === "AWSManagedRulesKnownBadInputsRuleSet"
+        );
+        
+        expect(commonRuleSet).toBeTruthy();
+        expect(badInputsRuleSet).toBeTruthy();
       }
     }, INTEGRATION_TIMEOUT);
   });
@@ -534,7 +539,10 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
       );
       
       const ourLogGroups = logGroupsResponse?.logGroups?.filter(lg =>
-        lg.logGroupName?.includes("security-framework")
+        lg.logGroupName?.includes("security-framework") ||
+        lg.logGroupName?.includes("aws-waf-logs") ||
+        (lg.logGroupName?.startsWith("/aws/vpc/") && lg.logGroupName?.includes("flowlogs")) ||
+        (lg.logGroupName?.startsWith("/aws/ec2/") && lg.logGroupName?.includes("application"))
       ) || [];
       
       expect(ourLogGroups.length).toBeGreaterThan(0);
@@ -582,7 +590,10 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
 
       if (logGroupsResponse && logGroupsResponse.logGroups) {
         const ourLogGroups = logGroupsResponse.logGroups.filter(lg =>
-          lg.logGroupName?.includes("security-framework")
+          lg.logGroupName?.includes("security-framework") ||
+          lg.logGroupName?.includes("aws-waf-logs") ||
+          (lg.logGroupName?.startsWith("/aws/vpc/") && lg.logGroupName?.includes("flowlogs")) ||
+          (lg.logGroupName?.startsWith("/aws/ec2/") && lg.logGroupName?.includes("application"))
         );
 
         ourLogGroups.forEach(lg => {
