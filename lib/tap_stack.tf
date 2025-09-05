@@ -67,6 +67,9 @@ locals {
   primary_prefix   = "${var.project_name}-${var.environment}-primary"
   secondary_prefix = "${var.project_name}-${var.environment}-secondary"
   
+  primary_alb_name   = "${var.project_name}-prod-pri-alb"    # 21 characters
+  secondary_alb_name = "${var.project_name}-prod-sec-alb"
+
   # Network configuration
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
@@ -1213,7 +1216,7 @@ resource "aws_lb" "primary" {
 # ALB for secondary region
 resource "aws_lb" "secondary" {
   provider           = aws.us_west_1
-  name               = "${local.secondary_prefix}-alb"
+  name               = local.secondary_alb_name
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.secondary_alb.id]

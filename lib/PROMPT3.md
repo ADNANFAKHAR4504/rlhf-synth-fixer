@@ -18,4 +18,12 @@ can you provide the code snippet to fix this issue -
 ╵
 Error: Terraform exited with code 1.
 
+and another error
+
+│ Error: "name" cannot be longer than 32 characters: "tapstack-production-secondary-alb"
+│ 
+│   with aws_lb.secondary,
+│   on tap_stack.tf line 1216, in resource "aws_lb" "secondary":
+│ 1216:   name               = "${local.secondary_prefix}-alb"
+
 ```
