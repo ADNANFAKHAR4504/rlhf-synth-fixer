@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack - Secure, Scalable, and Compliant AWS Infrastructure
   Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail,
-  CloudFront, S3, IAM, Config Rules, and Logging.
+  CloudFront, S3, IAM, Config Rules, Logging, and SSM-enabled Bastion Host.
 
 Parameters:
   Environment:
@@ -24,7 +24,7 @@ Parameters:
   SSHAllowedCidr:
     Type: String
     Default: 203.0.113.0/24
-    Description: Allowed CIDR block for SSH access to Bastion host
+    Description: Allowed CIDR block for SSH access to Bastion host (retained if needed)
 
   InstanceType:
     Type: String
@@ -36,10 +36,6 @@ Parameters:
     Default: admin
     NoEcho: true
     Description: Master username for RDS
-
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Existing EC2 KeyPair for bastion host
 
 Mappings:
   RegionMap:
@@ -203,16 +199,16 @@ Resources:
       Roles: [!Ref EC2Role]
 
   #########################################
-  # Bastion Host
+  # Bastion Host (SSM enabled, no key pair)
   #########################################
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t3.micro
-      KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnet1
       SecurityGroupIds: [!Ref BastionSG]
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      IamInstanceProfile: !Ref EC2InstanceProfile
       Tags:
         - Key: Name
           Value: !Sub "${ProjectName}-${Environment}-bastion"
