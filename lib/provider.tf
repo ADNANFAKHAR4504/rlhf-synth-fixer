@@ -1,5 +1,11 @@
 terraform {
   required_version = ">= 1.0"
+  
+  # Add backend configuration (optional)
+  backend "local" {
+    path = "terraform.tfstate"
+  }
+  
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -8,6 +14,19 @@ terraform {
     random = {
       source  = "hashicorp/random"
       version = "~> 3.1"
+    }
+  }
+}
+
+# Default AWS provider (us-east-1)
+provider "aws" {
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = "TAP-Stack"
+      ManagedBy   = "Terraform"
+      CreatedDate = formatdate("YYYY-MM-DD", timestamp())
     }
   }
 }
