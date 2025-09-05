@@ -64,9 +64,11 @@ Parameters:
     Description: EC2 instance type
 
   KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access (optional)
+    Type: String
+    Description: (Optional) Existing EC2 Key Pair name for SSH; leave empty to skip and still launch instances in private subnets
     Default: ''
+    AllowedPattern: '^$|^[A-Za-z0-9._-]{1,255}$'
+    ConstraintDescription: 'Key pair name may be empty or contain letters, numbers, dot, underscore, and hyphen.'
 
   EnableNatPerAz:
     Type: String
