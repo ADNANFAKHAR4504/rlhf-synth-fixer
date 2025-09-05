@@ -101,11 +101,56 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('KMS Resources', () => {
+    test('should have KMS key resource', () => {
+      expect(template.Resources.TAPKMSKey).toBeDefined();
+      const kmsKey = template.Resources.TAPKMSKey;
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      expect(kmsKey.Condition).toBe('EnableKMSEncryptionCondition');
+    });
+
+    test('should have KMS key alias', () => {
+      expect(template.Resources.TAPKMSKeyAlias).toBeDefined();
+      const alias = template.Resources.TAPKMSKeyAlias;
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Condition).toBe('EnableKMSEncryptionCondition');
+    });
+
+    test('KMS key should have correct properties', () => {
+      const kmsKey = template.Resources.TAPKMSKey;
+      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
+      expect(kmsKey.Properties.KeyPolicy).toBeDefined();
+      expect(kmsKey.Metadata.SecurityJustification).toBeDefined();
+    });
+  });
+
+  describe('CloudWatch Resources', () => {
+    test('should have CloudWatch log group', () => {
+      expect(template.Resources.TAPCloudWatchLogGroup).toBeDefined();
+      const logGroup = template.Resources.TAPCloudWatchLogGroup;
+      expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(logGroup.Properties.RetentionInDays).toBe(30);
+    });
+  });
+
+  describe('Conditions', () => {
+    test('should have KMS encryption condition', () => {
+      expect(template.Conditions.EnableKMSEncryptionCondition).toBeDefined();
+      const condition = template.Conditions.EnableKMSEncryptionCondition;
+      expect(condition['Fn::Equals']).toBeDefined();
+      expect(condition['Fn::Equals'][0]).toEqual({ Ref: 'EnableKMSEncryption' });
+      expect(condition['Fn::Equals'][1]).toBe('true');
+    });
+  });
+
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
         'TurnAroundPromptTableName',
         'TurnAroundPromptTableArn',
+        'KMSKeyArn',
+        'KMSKeyAlias',
+        'CloudWatchLogGroupName',
         'StackName',
         'EnvironmentSuffix',
       ];
@@ -170,19 +215,44 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      // TurnAroundPromptTable, TAPKMSKey, TAPKMSKeyAlias, TAPCloudWatchLogGroup
+      expect(resourceCount).toBe(4);
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      // EnvironmentSuffix and EnableKMSEncryption
+      expect(parameterCount).toBe(2);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have EnableKMSEncryption parameter', () => {
+      expect(template.Parameters.EnableKMSEncryption).toBeDefined();
+      const param = template.Parameters.EnableKMSEncryption;
+      expect(param.Type).toBe('String');
+      expect(param.Default).toBe('true');
+      expect(param.AllowedValues).toEqual(['true', 'false']);
+    });
+
+    test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
+      // TurnAroundPromptTableName, TurnAroundPromptTableArn, KMSKeyArn, KMSKeyAlias, CloudWatchLogGroupName, StackName, EnvironmentSuffix
+      expect(outputCount).toBe(7);
+    });
+
+    test('should have conditional KMS outputs', () => {
+      expect(template.Outputs.KMSKeyArn).toBeDefined();
+      expect(template.Outputs.KMSKeyArn.Condition).toBe('EnableKMSEncryptionCondition');
+      expect(template.Outputs.KMSKeyAlias).toBeDefined();
+      expect(template.Outputs.KMSKeyAlias.Condition).toBe('EnableKMSEncryptionCondition');
+    });
+
+    test('should have CloudWatch log group output', () => {
+      expect(template.Outputs.CloudWatchLogGroupName).toBeDefined();
+      const output = template.Outputs.CloudWatchLogGroupName;
+      expect(output.Description).toBe('Name of the CloudWatch log group');
+      expect(output.Value.Ref).toBe('TAPCloudWatchLogGroup');
     });
   });
 
