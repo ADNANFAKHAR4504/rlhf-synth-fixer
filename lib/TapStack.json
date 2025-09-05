@@ -32,6 +32,12 @@
             "Default": "admin",
             "NoEcho": true,
             "Description": "Master username for RDS"
+        },
+        "DBPassword": {
+            "Type": "String",
+            "Default": "ChangeMe123!",
+            "NoEcho": true,
+            "Description": "Master password for RDS (override in production)"
         }
     },
     "Mappings": {
@@ -480,7 +486,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:ssm-secure:/app/${Environment}/db/password}}"
+                    "Ref": "DBPassword"
                 },
                 "VPCSecurityGroups": [
                     {
