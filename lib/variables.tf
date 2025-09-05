@@ -35,6 +35,12 @@ variable "lambda_environment_variables" {
   sensitive   = true
 }
 
+variable "name_prefix" {
+  description = "Prefix used for naming resources (logical names). Lowercasing may be applied where required by AWS (e.g., S3 buckets)."
+  type        = string
+  default     = "secureApp"
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log retention period in days"
   type        = number

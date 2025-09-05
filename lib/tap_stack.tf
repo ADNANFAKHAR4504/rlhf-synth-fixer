@@ -40,7 +40,7 @@ resource "aws_kms_key" "cloudwatch_logs" {
         Resource = "*"
         Condition = {
           ArnEquals = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/secureApp-function"
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/${var.name_prefix}-function"
           }
         }
       }
@@ -48,7 +48,7 @@ resource "aws_kms_key" "cloudwatch_logs" {
   })
 
   tags = {
-    Name        = "secureApp-cloudwatch-kms-key"
+    Name        = "${var.name_prefix}-cloudwatch-kms-key"
     Environment = var.environment
     Project     = "secureApp"
   }
@@ -64,10 +64,10 @@ resource "aws_kms_alias" "cloudwatch_logs" {
 
 # S3 Bucket with AES-256 encryption and blocked public access
 resource "aws_s3_bucket" "secure_bucket" {
-  bucket = "secureapp-${random_string.bucket_suffix.result}"
+  bucket = "${lower(var.name_prefix)}-${random_string.bucket_suffix.result}"
 
   tags = {
-    Name        = "secureApp-secure-bucket"
+    Name        = "${var.name_prefix}-secure-bucket"
     Environment = var.environment
     Project     = "secureApp"
   }
@@ -127,7 +127,7 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 
       principals {
         type        = "AWS"
-        identifiers = ["arn:aws:iam::${statement.value}:root"]
+        identifiers = ["arn:aws:iam::${each.value}:root"]
       }
 
       actions = ["sts:AssumeRole"]
@@ -142,11 +142,11 @@ data "aws_iam_policy_document" "lambda_assume_role" {
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name               = "secureApp-lambda-role"
+  name               = "${var.name_prefix}-lambda-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 
   tags = {
-    Name        = "secureApp-lambda-role"
+    Name        = "${var.name_prefix}-lambda-role"
     Environment = var.environment
     Project     = "secureApp"
   }
@@ -205,7 +205,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   ]
 
   tags = {
-    Name        = "secureApp-lambda-logs"
+    Name        = "${var.name_prefix}-lambda-logs"
     Environment = var.environment
     Project     = "secureApp"
   }
@@ -232,7 +232,7 @@ resource "aws_lambda_function" "secure_function" {
   ]
 
   tags = {
-    Name        = "secureApp-function"
+    Name        = "${var.name_prefix}-function"
     Environment = var.environment
     Project     = "secureApp"
   }
@@ -262,7 +262,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_alarm" {
   }
 
   tags = {
-    Name        = "secureApp-lambda-error-alarm"
+    Name        = "${var.name_prefix}-lambda-error-alarm"
     Environment = var.environment
     Project     = "secureApp"
   }
@@ -271,7 +271,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_error_alarm" {
 resource "aws_wafv2_web_acl" "main" {
 
   # provider = aws.us_east_1
-  name  = "secureApp-waf"
+  name  = "${var.name_prefix}-waf"
   scope = "CLOUDFRONT"
   default_action {
 
@@ -300,7 +300,7 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "secureAppRateLimit"
+      metric_name                = "${var.name_prefix}RateLimit"
       sampled_requests_enabled   = true
     }
 
@@ -328,7 +328,7 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "secureAppIPReputation"
+      metric_name                = "${var.name_prefix}IPReputation"
       sampled_requests_enabled   = true
     }
 
@@ -336,13 +336,13 @@ resource "aws_wafv2_web_acl" "main" {
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "secureAppWAF"
+    metric_name                = "${var.name_prefix}WAF"
     sampled_requests_enabled   = true
   }
 
 
   tags = {
-    Name        = "secureApp-waf"
+    Name        = "${var.name_prefix}-waf"
     Environment = var.environment
     Project     = "secureApp"
   }
@@ -353,7 +353,7 @@ resource "aws_wafv2_web_acl" "main" {
 resource "aws_cloudfront_distribution" "main" {
   origin {
     domain_name = aws_s3_bucket.secure_bucket.bucket_regional_domain_name
-    origin_id   = "secureApp-S3-${aws_s3_bucket.secure_bucket.id}"
+    origin_id   = "${var.name_prefix}-S3-${aws_s3_bucket.secure_bucket.id}"
 
     s3_origin_config {
       origin_access_identity = aws_cloudfront_origin_access_identity.main.cloudfront_access_identity_path
@@ -368,7 +368,7 @@ resource "aws_cloudfront_distribution" "main" {
   default_cache_behavior {
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
-    target_origin_id       = "secureApp-S3-${aws_s3_bucket.secure_bucket.id}"
+    target_origin_id       = "${var.name_prefix}-S3-${aws_s3_bucket.secure_bucket.id}"
     compress               = true
     viewer_protocol_policy = "redirect-to-https"
 
@@ -400,14 +400,14 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   tags = {
-    Name        = "secureApp-distribution"
+    Name        = "${var.name_prefix}-distribution"
     Environment = var.environment
     Project     = "secureApp"
   }
 }
 
 resource "aws_cloudfront_origin_access_identity" "main" {
-  comment = "secureApp origin access identity"
+  comment = "${var.name_prefix} origin access identity"
 }
 
 # S3 bucket policy for CloudFront

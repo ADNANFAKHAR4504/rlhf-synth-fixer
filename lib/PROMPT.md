@@ -1,88 +1,52 @@
-Problem Statement:
-You are tasked with creating a security-focused serverless application using AWS and Terraform HCL. The application should consist of a series of AWS components that ensure data security, access management, and monitoring.
+Problem statement
 
-# Requirements include:
+Create a small, production-ready serverless stack on AWS with a security-first mindset. Use Terraform HCL for the implementation and aim for secure defaults, clear variableization, and readable outputs. This document is the authoritative specification for `lib/tap_stack.tf`.
 
-Provision a secure S3 bucket with encryption and disable public access.
+What to build
 
-Deploy a Lambda function using Node.js 14.x with specific timeout and environment configurations.
+- Secure S3 storage
+  - An S3 bucket with server-side encryption using AES-256.
+  - Block all public access (public ACLs and public policies disabled).
+  - Versioning enabled.
 
-Set up CloudWatch monitoring and logging with necessary encryption,
+- Serverless compute
+  - A Lambda function running Node.js 14.x.
+  - Timeout must be configurable but must not exceed 30 seconds.
+  - Configuration via environment variables; secrets must come from a secrets manager or be provided via secure inputs (no hardcoded credentials).
 
-Implement an IAM role with least privilege and cross-account accessibility, and
+- Monitoring & logging
+  - CloudWatch log groups encrypted with a KMS key.
+  - A CloudWatch metric alarm for Lambda errors (threshold: 5 errors within 1 minute).
 
-Create a CloudFront distribution paired with a Web Application Firewall (WAF).
+- Edge protection
+  - CloudFront distribution using the S3 bucket as origin.
+  - Enforce HTTPS for viewers (redirect-to-https).
+  - Attach a WAF with basic IP/rate rules to the distribution.
 
-Environment This environment will be set up within the us-west-2 AWS region. Resources must follow naming conventions beginning with 'secureApp-'. This includes setting up infrastructure to handle security, logging, and monitoring, with Terraform deployed resources accessed by IAM roles and services.
+- IAM & access control
+  - A least-privilege IAM role for Lambda (only the permissions it needs for S3 and CloudWatch).
+  - Optionally allow cross-account role assumption via a parameterized list of trusted account IDs.
 
-# Constraints Items:
+Constraints and non-negotiables
 
-Must use Terraform HCL to define resources.
+- Use Terraform HCL for all resources in this stack (no external modules required).
+- `provider.tf` already contains provider and backend configuration; do not add another provider block in `tap_stack.tf`.
+- `tap_stack.tf` must declare `variable "aws_region"` (it is consumed by `provider.tf`).
+- S3 bucket names must follow AWS DNS rules (lowercase). Logical names, tags and other identifiers should use the `secureApp-` prefix for clarity; for DNS-constrained resources (like S3) use a lowercased form of that prefix.
+- No hardcoded secrets. Use environment variables, Terraform variables marked sensitive, or Secrets Manager for any credentials or secrets.
+- All resources should be tagged and core values exported via `lib/outputs.tf`.
 
-Ensure the S3 bucket is encrypted using AES-256 encryption.
+Reusability and configuration
 
-IAM role should have least privilege access to S3 and CloudWatch services.
+- The stack must be parameterized: environment, name prefix, lambda timeout, trusted account IDs, alarm actions and similar settings should be variables with sensible defaults.
+- Keep defaults safe: short Lambda timeout (<=30s), encrypted logs, restricted S3 access, and rate-limited WAF rules.
 
-Lambda function must have a timeout set to a maximum of 30 seconds.
+Testing and quality
 
-All resources should be deployed in the us-west-2 region.
+- Terraform code should be formatted (`terraform fmt`) and validate (`terraform validate`).
+- Unit and integration tests live under `test/` and should check the HCL for required constructs and optionally verify live resources when AWS credentials are available.
+- Provide clear outputs for S3 bucket name/ARN, Lambda name/ARN, CloudFront ID/domain, WAF ARN, KMS key id, log group name and alarm name.
 
-S3 bucket should block all public access settings.
+Deliverable
 
-Setup a CloudWatch alarm for Lambda function errors with a threshold of 5 errors within 1 minute.
-
-Encrypt CloudWatch log groups using KMS managed keys.
-
-All resource names must be prefixed with 'secureApp-'.
-
-All outputs should be exportable and properly tagged.
-
-Lambda should be deployed with Node.js 14.x runtime.
-
-Define a CloudFront distribution with S3 as origin with SSL enabled.
-
-Implement a WAF with a basic IP rule set attached to CloudFront.
-
-Resource stack should be reusable with parameterized inputs.
-
-Follow the AWS best practices for handling secrets.
-
-Utilize environment variables for configuration details of Lambda.
-
-Ensure no hardcoded secrets within codebase.
-
-Role for Lambda should be cross-account accessible.
-
-# Non-negotiable:
-
-The provider.tf already exists and holds the AWS provider + S3 backend.
-
-Do not put a provider block in main.tf. That stays in provider.tf.
-
-The variable "aws_region" must be declared in main.tf and is consumed by provider.tf.
-
-Quality, Testing & Linting
-
-Output HCL must be formatted and readable (terraform fmt compatible).
-
-Include tflint friendly code and avoid deprecated attributes.
-
-Provide a short Makefile or scripts/ entries with commands to run terraform fmt, terraform validate, terraform plan, tflint, and a suggested tfsec or checkov command for static security checks.
-
-Provide a simple unit/acceptance checklist in the README describing how to validate:
-
-S3 has AES-256 (SSE-S3) enabled and public access blocked.
-
-Lambda runtime is nodejs14.x and timeout <= 30s.
-
-CloudWatch log group kms_key_id is set and the key exists.
-
-Alarm triggers at >=5 errors within 1 minute.
-
-CloudFront distribution serves via HTTPS, and WAF is attached.
-
-IAM role ARN includes trust policy for the Lambda service and the configured trusted_account_ids.
-
-# Output Expectations:
-
-- Produce a complete, runnable Terraform HCL modules.
+An implementation consisting of `tap_stack.tf` (core resources), `variables.tf` and `outputs.tf` that meets the above requirements. The stack should be documented via tags and readable variable names. If any constraint is impractical (for example, the `secureApp-` prefix vs S3 DNS case sensitivity), document the exception and rationale in the repository README.
