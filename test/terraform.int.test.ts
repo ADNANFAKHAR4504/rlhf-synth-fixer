@@ -86,12 +86,10 @@ async function findInstanceIdByPublicIp(region: Region): Promise<string> {
     );
   }
 
-  const res = await ec2(region)
-    .describeInstances({
-      Filters: [{ Name: "ip-address", Values: [ip] }],
-      MaxResults: 50,
-    })
-    .promise();
+  const res = await ec2(region).describeInstances({
+    Filters: [{ Name: "network-interface.addresses.association.public-ip", Values: [ip.trim()] }],
+    MaxResults: 1000,
+  }).promise();
 
   const inst =
     res.Reservations?.flatMap((r) => r.Instances || [])?.find((i) => i.PublicIpAddress === ip) ||
@@ -160,16 +158,14 @@ describe("Integration — Multi-Env / Multi-Region using all-outputs.json (exact
 
   describe("RDS — exact DB by ID, class, deletion protection, monitoring & VPC", () => {
     REGIONS.forEach((region) => {
-      test(`RDS in ${region}: class db.m4.large, deletion protection, monitoring`, async () => {
+      test(`RDS in ${region}: class db.m5.large, deletion protection, monitoring`, async () => {
         const dbId = rdsIdFor(region);
         expect(dbId).toBeTruthy();
 
-        const dbRes = await rds(region).describeDBInstances({ DBInstanceIdentifier: dbId! }).promise();
-        const db = dbRes.DBInstances?.[0];
+        const db = await getDbArnByInternalId(region, dbId!)
         expect(db).toBeTruthy();
 
-        expect(db?.DBInstanceIdentifier).toBe(dbId);
-        expect(db?.DBInstanceClass).toBe("db.m4.large");
+        expect(db?.DBInstanceClass).toBe("db.m5.large");
         expect(db?.DeletionProtection).toBe(true);
         const mon = db?.MonitoringInterval ?? 0;
         expect(mon).toBeGreaterThan(0);
@@ -182,10 +178,9 @@ describe("Integration — Multi-Env / Multi-Region using all-outputs.json (exact
         expect(dbId).toBeTruthy();
         expect(vpcId).toBeTruthy();
 
-        const dbRes = await rds(region).describeDBInstances({ DBInstanceIdentifier: dbId! }).promise();
-        const db = dbRes.DBInstances?.[0];
+        const dbRes = await getDbArnByInternalId(region, dbId!)
 
-        expect(db?.DBSubnetGroup?.VpcId).toBe(vpcId);
+        expect(dbRes?.DBSubnetGroup?.VpcId).toBe(vpcId);
       });
 
       test(`RDS in ${region}: secret ARN region matches (if provided)`, async () => {
@@ -326,8 +321,8 @@ describe("Integration — Multi-Env / Multi-Region using all-outputs.json (exact
         const dbId = rdsIdFor(region);
         expect(dbId).toBeTruthy();
 
-        const dbRes = await rds(region).describeDBInstances({ DBInstanceIdentifier: dbId! }).promise();
-        const arn = dbRes.DBInstances?.[0]?.DBInstanceArn!;
+        const dbRes = await getDbArnByInternalId(region, dbId!)
+        const arn = dbRes.DBInstanceArn!
         const rdsTags = await rds(region).listTagsForResource({ ResourceName: arn }).promise();
         const rdsTagMap = Object.fromEntries((rdsTags.TagList || []).map((t) => [t.Key, t.Value]));
         expect(rdsTagMap.Environment).toBeTruthy();
@@ -336,3 +331,27 @@ describe("Integration — Multi-Env / Multi-Region using all-outputs.json (exact
     });
   });
 });
+
+export async function getDbArnByInternalId(region: Region, internalId: string): Promise<AWS.RDS.DBInstance> {
+  const client = rds(region);
+  let Marker: string | undefined;
+  const MaxRecords = 100;
+
+  do {
+    const page = await client
+      .describeDBInstances({ Marker, MaxRecords })
+      .promise();
+
+    const match = (page.DBInstances || []).find(
+      (db) => db.DbiResourceId === internalId
+    );
+
+    if (match?.DBInstanceArn) {
+      return match;
+    }
+
+    Marker = page.Marker;
+  } while (Marker);
+
+  throw new Error(`DBID ${internalId} not found in ${region}`);
+}
