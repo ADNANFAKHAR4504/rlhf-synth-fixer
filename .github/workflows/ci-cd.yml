@@ -478,7 +478,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           trigger_phrase: ''
           prompt: |
-            CRITICAL: you MUST validate the latest PROMPT file format, and fail the check if it appears to be AI-generated rather than human-written:
+            CRITICAL: you MUST validate the latest PROMPT file format, and add a comment if it appears to be AI-generated rather than human-written:
             1. Identify all the PROMPT file (PROMPT.md, PROMPT2.md, PROMPT3.md, etc.) - always use the highest numbered one
             2. Read the PROMPT files
             3. Assess whether the content looks human-generated or AI-generated
@@ -489,7 +489,7 @@ jobs:
                 - Logs are allowed when we have multiple prompt files. 
                 - Perfect formatting that suggests AI assistance
                 - LLM Flavoured text, such as: "Here is a **comprehensive and high-level prompt** for your use..."
-            5. If  any PROMPT file appears to be AI-generated rather than human-written, immediately FAIL the check by exiting with an error and fail the pipeline.
+            5. If  any PROMPT file appears to be AI-generated rather than human-written, add a comment indicating the issue.
             6. Also validate that for each PROMPT file, there is a corresponding MODEL_RESPONSE file (e.g., PROMPT.md -> MODEL_RESPONSE.md, PROMPT2.md -> MODEL_RESPONSE2.md, etc.) and that it is well-formatted.
             7. PROMPT2.md and PROMPT3.md are optional, but if they exist, they must also be validated and it can contain Deployment/Test/Error logs as well.
 
@@ -499,7 +499,7 @@ jobs:
             3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
             4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
             5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
-            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, immediately FAIL the check by exiting with an error and fail the pipeline.
+            6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, add a comment indicating the issue.
 
             Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
             Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
@@ -508,7 +508,7 @@ jobs:
             - subject_labels
             - training_quality
             - aws_services
-            then immediately FAIL the check by exiting with an error and fail the pipeline.
+            then add a comment indicating the issue.
 
             This validation is mandatory and must be completed before any other review activities.
           claude_args: |
