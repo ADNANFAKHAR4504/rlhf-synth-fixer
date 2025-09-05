@@ -1,73 +1,38 @@
-Here’s a minimal but complete version of your prompt, still in `.md` format, covering all aspects without unnecessary repetition:
-# LLM Prompt: Production-Grade AWS CDK-TS Serverless App
+# Build AWS Serverless App with CDK TypeScript
 
-## Role
-Act as an expert AWS Cloud Engineer specializing in AWS CDK with TypeScript.
+Create a complete CDK-TS project for serverless web app.
 
-## Objective
-Generate a **fully functional CDK-TypeScript project** that provisions a **serverless web app** with:
-- Frontend: S3 static hosting
-- API: API Gateway + Lambda (Python)
-- Data: RDS PostgreSQL in a secure VPC
+## Stack
+- Region: `us-west-1` 
+- S3 static hosting + API Gateway + Lambda + RDS PostgreSQL
+- Single stack, no hardcoded secrets
 
-Output must include **entire project structure & code**, deployable with `cdk deploy`.
-
-## Requirements
-
-### General
-- Region: `us-west-1`
-- Language: TypeScript
-- Use L2 constructs, no hardcoded secrets (Secrets Manager).
-- Add comments, type-safe code.
-
-### Networking
-- VPC `10.0.0.0/16` with public + private subnets (≥2 AZs).
-- Lambda & RDS in private subnets.
-
-### S3 (Frontend)
-- Static site hosting (`index.html`, `error.html`)
-- `publicReadAccess: true`
-- `removalPolicy: DESTROY`, `autoDeleteObjects: true`
-
-### RDS (Data)
-- PostgreSQL 14, t3.micro
-- Private subnets, SG allows port 5432 from Lambda SG only
-- Credentials in Secrets Manager
-- Backups: enabled, retention 7 days
-
-### Lambda (Compute)
-- Runtime: Python 3.8
-- Location: `lambda/handler.py`
-- Inside private subnets
-- IAM Role: basic exec, VPC access, read RDS secret
-- Env var: DB secret ARN
-- Code: fetch secret, connect to DB, return JSON `{status: success}`
-- `requirements.txt`: `psycopg2-binary`, `aws-secretsmanager-caching`
-
-### API Gateway
-- REST API, Lambda Proxy Integration
-- Resource `/api` with GET
-- Enable CORS (*)
-- Output endpoint URL
+## Infrastructure
+- **VPC:** `10.0.0.0/16`, public/private subnets, 2+ AZs
+- **S3:** Static hosting, public read, auto-delete
+- **Lambda:** Python 3.8, private subnets, connects to RDS
+- **RDS:** PostgreSQL 14, t3.micro, private, 7-day backups
+- **API Gateway:** REST `/api` GET, CORS enabled
+- **Security:** Proper SGs, RDS secrets in Secrets Manager
 
 ## Project Structure
-
-
+```
 my-serverless-app/
 ├── bin/my-serverless-app.ts
-├── lib/my-serverless-app-stack.ts
-   ├── lambda/
-            ├── handler.py
-            ├── requirements.txt
-├── .gitignore
-├── cdk.json
+├── lib/
+│   ├── my-serverless-app-stack.ts
+│   └── lambda/
+│       ├── handler.py
+│       └── requirements.txt
 ├── package.json
-├── README.md
+├── cdk.json
 └── tsconfig.json
+```
 
+## Lambda Code
+- Connect to RDS via Secrets Manager
+- Return `{status: "success"}`
+- Dependencies: `psycopg2-binary`, `aws-secretsmanager-caching`
 
-
-## Final Instructions
-- Provide all files/code in one response.  
-- Must pass `cdk synth` & `cdk deploy` without edits.  
-
+## Output
+Complete working code ready for `cdk deploy`. Include all files.
