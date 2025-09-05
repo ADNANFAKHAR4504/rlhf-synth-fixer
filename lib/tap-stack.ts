@@ -366,7 +366,7 @@ export class TapStack extends cdk.Stack {
       {
         instanceIdentifier: `tap-rds-postgres-${environmentSuffix}`,
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_3,
+          version: rds.PostgresEngineVersion.VER_15_7,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
