@@ -46,5 +46,11 @@
     "AWS::Config::ConfigRule",
     "AWS::SecretsManager::Secret",
     "AWS::CloudWatch::Alarm"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
 }
