@@ -1,3 +1,4 @@
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Production-grade secure AWS foundation with multi-VPC architecture, least-privilege IAM, and encryption at rest'
 
@@ -814,3 +815,4 @@ Outputs:
     Value: !GetAtt ProdEC2InstanceProfile.Arn
     Export:
       Name: !Sub '${AWS::StackName}-InstanceProfile-ARN'
+```
