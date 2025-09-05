@@ -33,13 +33,15 @@ import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
 import fs from 'fs';
 import path from 'path';
 
-// Read deployment outputs
-let outputs: any;
+// Read deployment outputs with error handling
+let outputs: any = {};
 try {
   const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-  console.log('Reading outputs from:', outputsPath);
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-  console.log('Loaded outputs:', outputs);
+  if (fs.existsSync(outputsPath)) {
+    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  } else {
+    console.warn('Outputs file not found at:', outputsPath);
+  }
 } catch (error) {
   console.error('Error reading outputs file:', error);
   outputs = {};
@@ -602,6 +604,12 @@ describe('Secure Infrastructure Integration Tests', () => {
   describe('End-to-End Connectivity', () => {
     test('Infrastructure components are properly connected', async () => {
       // This test validates that all components can theoretically work together
+
+      // Debug: Show what outputs we have
+      if (Object.keys(outputs).length === 0) {
+        console.error('❌ No outputs loaded! Available outputs:', outputs);
+        fail('Outputs file is empty or not loaded properly');
+      }
 
       // Check VPC exists
       expect(outputs.VPCId).toBeDefined();
