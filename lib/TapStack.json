@@ -5,8 +5,7 @@
     "HostedZoneId": {
       "Type": "String",
       "Description": "Route 53 Hosted Zone ID (e.g., Z00001111A1ABCaaABC11)",
-      "Default": "ecommerce-app.com",
-      "AllowedPattern": "^[A-Z0-9]{1,32}$"
+      "Default": "ecommerce-app.com"
     },
     "VPCId": {
       "Type": "String",
