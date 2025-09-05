@@ -110,6 +110,7 @@ class TapStack(cdk.Stack):
             vpc_name=f"tap-vpc-{self.environment_suffix}",
             ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/16"),
             max_azs=2,  # Deploy across 2 availability zones
+            restrict_default_security_group=False,
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     subnet_type=ec2.SubnetType.PUBLIC,
@@ -413,8 +414,7 @@ class TapStack(cdk.Stack):
                     expiration=Duration.days(90 if self.environment_suffix == 'prod' else 30)
                 )
             ],
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True
+            removal_policy=RemovalPolicy.RETAIN,
         )
 
         # Add bucket policy for secure access
