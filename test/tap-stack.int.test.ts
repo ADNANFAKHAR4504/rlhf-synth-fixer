@@ -709,6 +709,12 @@ describe('Secure Infrastructure Integration Tests', () => {
         console.log('- ALB_DNS_NAME:', process.env.ALB_DNS_NAME ? 'Set' : 'Not set');
         console.log('- API_GATEWAY_URL:', process.env.API_GATEWAY_URL ? 'Set' : 'Not set');
 
+        // Check if we should skip integration tests entirely
+        if (shouldSkipIntegrationTests()) {
+          console.log('🔄 Skipping integration tests - running in CI without integration test phase');
+          return;
+        }
+
         // Skip the test if running in CI without outputs (e.g., during build phase)
         if (process.env.CI && !process.env.INTEGRATION_TEST_PHASE) {
           console.log('🔄 Skipping integration test - not in integration test phase');
