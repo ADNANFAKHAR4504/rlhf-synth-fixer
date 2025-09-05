@@ -3,10 +3,11 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as config from 'aws-cdk-lib/aws-config';
-import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
+// import * as wafv2 from 'aws-cdk-lib/aws-wafv2'; // Commented as WAF is not implemented yet
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -31,10 +32,10 @@ export class TapStack extends cdk.Stack {
     // Get VPC ID from props or context
     const vpcId = props?.vpcId || this.node.tryGetContext('vpcId');
 
-    // Common tags for all resources
+    // Common tags for all resources (matching PROMPT requirements)
     const commonTags = {
-      Environment: environmentSuffix,
-      Department: 'Security',
+      Environment: 'Production',
+      Department: 'IT',
       Project: 'TapSecurity',
     };
 
@@ -82,32 +83,43 @@ export class TapStack extends cdk.Stack {
     // 2. Security logging bucket
     const securityBucket = this.createSecurityBucket(environmentSuffix, kmsKey);
 
-    // 3. Setup CloudTrail
+    // 3. Create EC2 instance in public subnet
+    const ec2Instance = this.createEC2Instance(environmentSuffix, vpc, kmsKey);
+
+    // 4. Create RDS PostgreSQL instance in private subnets
+    const rdsInstance = this.createRDSInstance(
+      environmentSuffix,
+      vpc,
+      kmsKey,
+      ec2Instance.connections.securityGroups[0]
+    );
+
+    // 5. Setup CloudTrail
     this.createCloudTrail(environmentSuffix, securityBucket, kmsKey);
 
-    // 4. Setup AWS Config
+    // 6. Setup AWS Config
     this.createConfigSetup(environmentSuffix, vpc, kmsKey);
 
-    // 5. Setup GuardDuty (only if it doesn't exist already)
+    // 7. Setup GuardDuty (only if it doesn't exist already)
     this.createGuardDuty(environmentSuffix, kmsKey);
 
-    // 6. Setup WAF (regional scope instead of CLOUDFRONT)
+    // 8. Setup WAF (regional scope instead of CLOUDFRONT)
     this.createWebACL(environmentSuffix);
 
-    // 7. Setup IAM roles and policies
+    // 9. Setup IAM roles and policies
     this.createIAMRoles(environmentSuffix, securityBucket, kmsKey);
 
-    // 8. Setup Systems Manager (with correct patch classification)
+    // 10. Setup Systems Manager (with correct patch classification)
     this.createSystemsManagerSetup(environmentSuffix);
 
-    // 9. Setup automated remediation
+    // 11. Setup automated remediation
     const remediationFunction =
       this.createRemediationFunction(environmentSuffix);
 
-    // 10. Setup monitoring and alerting
+    // 12. Setup monitoring and alerting
     this.createMonitoring(environmentSuffix, remediationFunction, kmsKey);
 
-    // 11. Output important values
+    // 13. Output important values
     new cdk.CfnOutput(this, 'SecurityKmsKeyId', {
       value: kmsKey.keyId,
       description: 'KMS Key ID for security resources',
@@ -116,6 +128,21 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'SecurityBucketName', {
       value: securityBucket.bucketName,
       description: 'Security Logs Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, 'EC2InstanceId', {
+      value: ec2Instance.instanceId,
+      description: 'EC2 Instance ID',
+    });
+
+    new cdk.CfnOutput(this, 'RDSEndpoint', {
+      value: rdsInstance.dbInstanceEndpointAddress,
+      description: 'RDS PostgreSQL Endpoint',
+    });
+
+    new cdk.CfnOutput(this, 'VPCId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
     });
   }
 
@@ -204,6 +231,146 @@ export class TapStack extends cdk.Stack {
     );
 
     return bucket;
+  }
+
+  private createEC2Instance(
+    environmentSuffix: string,
+    vpc: ec2.IVpc,
+    kmsKey: kms.Key
+  ): ec2.Instance {
+    // Create HTTPS-only security group for EC2 instance
+    const ec2SecurityGroup = new ec2.SecurityGroup(
+      this,
+      `TapEC2SecurityGroup-${environmentSuffix}`,
+      {
+        vpc,
+        description: 'Security group for EC2 instance - HTTPS only',
+        allowAllOutbound: true,
+      }
+    );
+
+    // Allow HTTPS inbound traffic only
+    ec2SecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS traffic'
+    );
+
+    // Create EC2 instance in public subnet
+    const instance = new ec2.Instance(
+      this,
+      `TapEC2Instance-${environmentSuffix}`,
+      {
+        instanceName: `tap-ec2-${environmentSuffix}`,
+        vpc,
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ec2.MachineImage.latestAmazonLinux2(),
+        securityGroup: ec2SecurityGroup,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        blockDevices: [
+          {
+            deviceName: '/dev/xvda',
+            volume: ec2.BlockDeviceVolume.ebs(20, {
+              encrypted: true,
+              kmsKey: kmsKey,
+              volumeType: ec2.EbsDeviceVolumeType.GP3,
+            }),
+          },
+        ],
+      }
+    );
+
+    // Add tags to EC2 instance
+    cdk.Tags.of(instance).add(
+      'PatchGroup',
+      `tap-security-${environmentSuffix}`
+    );
+
+    return instance;
+  }
+
+  private createRDSInstance(
+    environmentSuffix: string,
+    vpc: ec2.IVpc,
+    kmsKey: kms.Key,
+    ec2SecurityGroup: ec2.ISecurityGroup
+  ): rds.DatabaseInstance {
+    // Create security group for RDS
+    const rdsSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `TapRDSSecurityGroup-${environmentSuffix}`,
+      {
+        vpc,
+        description: 'Security group for RDS PostgreSQL - access from EC2 only',
+        allowAllOutbound: false,
+      }
+    );
+
+    // Allow access only from EC2 security group
+    rdsSecurityGroup.addIngressRule(
+      ec2SecurityGroup,
+      ec2.Port.tcp(5432),
+      'Allow PostgreSQL access from EC2 instance only'
+    );
+
+    // Create RDS subnet group
+    const subnetGroup = new rds.SubnetGroup(
+      this,
+      `TapRDSSubnetGroup-${environmentSuffix}`,
+      {
+        description: 'Subnet group for RDS PostgreSQL',
+        vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      }
+    );
+
+    // Create RDS PostgreSQL instance
+    const dbInstance = new rds.DatabaseInstance(
+      this,
+      `TapRDSInstance-${environmentSuffix}`,
+      {
+        instanceIdentifier: `tap-rds-postgres-${environmentSuffix}`,
+        engine: rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_15_3,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        vpc,
+        subnetGroup,
+        securityGroups: [rdsSecurityGroup],
+        storageEncrypted: true,
+        storageEncryptionKey: kmsKey,
+        allocatedStorage: 20,
+        maxAllocatedStorage: 100,
+        storageType: rds.StorageType.GP3,
+        multiAz: true,
+        autoMinorVersionUpgrade: true,
+        deleteAutomatedBackups: true,
+        backupRetention: cdk.Duration.days(7),
+        preferredBackupWindow: '03:00-04:00',
+        preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
+        enablePerformanceInsights: true,
+        performanceInsightEncryptionKey: kmsKey,
+        performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+        monitoringInterval: cdk.Duration.seconds(60),
+        cloudwatchLogsExports: ['postgresql'],
+        credentials: rds.Credentials.fromGeneratedSecret('postgres', {
+          secretName: `tap-rds-credentials-${environmentSuffix}`,
+        }),
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    return dbInstance;
   }
 
   private createCloudTrail(
@@ -417,8 +584,9 @@ export class TapStack extends cdk.Stack {
     guardDutyRule.addTarget(new targets.CloudWatchLogGroup(guardDutyLogGroup));
   }
 
-  private createWebACL(environmentSuffix: string): void {
+  private createWebACL(_environmentSuffix: string): void {
     // Use REGIONAL scope instead of CLOUDFRONT for most use cases
+    // WAF implementation is currently disabled
   }
 
   private createIAMRoles(
