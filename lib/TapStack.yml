@@ -21,11 +21,6 @@ Parameters:
     Default: SAARZ
     Description: Owner tag for resources
 
-  SSHAllowedCidr:
-    Type: String
-    Default: 203.0.113.0/24
-    Description: Allowed CIDR block for SSH access to Bastion host (retained if needed)
-
   InstanceType:
     Type: String
     Default: t3.medium
@@ -36,6 +31,11 @@ Parameters:
     Default: admin
     NoEcho: true
     Description: Master username for RDS
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Initial RDS master password (stored in SSM Parameter Store)
 
 Mappings:
   RegionMap:
@@ -131,13 +131,8 @@ Resources:
   BastionSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Bastion host SG
+      GroupDescription: Bastion host SG (SSM-only, no ingress)
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref SSHAllowedCidr
 
   InstanceSG:
     Type: AWS::EC2::SecurityGroup
@@ -199,7 +194,7 @@ Resources:
       Roles: [!Ref EC2Role]
 
   #########################################
-  # Bastion Host (SSM enabled, no key pair)
+  # Bastion Host (SSM only)
   #########################################
   BastionHost:
     Type: AWS::EC2::Instance
@@ -268,6 +263,18 @@ Resources:
       MaxSize: 6
       DesiredCapacity: 3
       TargetGroupARNs: [!Ref ALBTargetGroup]
+
+  #########################################
+  # SSM Parameter for RDS Password
+  #########################################
+  DBPasswordParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/app/${Environment}/db/password"
+      Type: String
+      Tier: Standard
+      Value: !Ref DBPassword
+      Description: RDS Master Password stored securely
 
   #########################################
   # RDS (Multi-AZ, Encrypted, Secure Password)
