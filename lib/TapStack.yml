@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack - Secure, Scalable, and Compliant AWS Infrastructure
   Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail,
-  CloudFront, S3, IAM, Config Rules, Logging, and SSM-enabled Bastion Host.
+  S3, IAM, Config Rules, Logging, and SSM-enabled Bastion Host.
 
 Parameters:
   Environment:
@@ -31,12 +31,6 @@ Parameters:
     Default: admin
     NoEcho: true
     Description: Master username for RDS
-
-  DBPassword:
-    Type: String
-    Default: ChangeMe123!
-    NoEcho: true
-    Description: Master password for RDS (override in production)
 
 Mappings:
   RegionMap:
@@ -266,7 +260,7 @@ Resources:
       TargetGroupARNs: [!Ref ALBTargetGroup]
 
   #########################################
-  # RDS (Multi-AZ, Encrypted, password from param)
+  # RDS (Multi-AZ, Encrypted, password from SSM)
   #########################################
   RDSInstance:
     Type: AWS::RDS::DBInstance
@@ -276,7 +270,7 @@ Resources:
       AllocatedStorage: 20
       MultiAZ: true
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword   # <-- deployable, no missing refs
+      MasterUserPassword: !Sub "{{resolve:ssm-secure:/app/${Environment}/db/password}}"
       VPCSecurityGroups: [!Ref InstanceSG]
       DBSubnetGroupName: !Ref DBSubnetGroup
       StorageEncrypted: true
@@ -312,7 +306,7 @@ Resources:
       IsMultiRegionTrail: true
 
   #########################################
-  # AWS Config Role + Recorder
+  # AWS Config Role + Recorder (fixed)
   #########################################
   ConfigRole:
     Type: AWS::IAM::Role
@@ -324,8 +318,28 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRole
+      Policies:
+        - PolicyName: AWSConfigInlinePermissions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                Resource: !Sub "arn:aws:s3:::${LoggingBucket}/*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - rds:Describe*
+                  - iam:GetAccountAuthorizationDetails
+                  - iam:GetAccountSummary
+                  - iam:List*
+                Resource: "*"
 
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder

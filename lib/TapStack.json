@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack - Secure, Scalable, and Compliant AWS Infrastructure Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail, CloudFront, S3, IAM, Config Rules, Logging, and SSM-enabled Bastion Host.\n",
+    "Description": "TapStack - Secure, Scalable, and Compliant AWS Infrastructure Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail, S3, IAM, Config Rules, Logging, and SSM-enabled Bastion Host.\n",
     "Parameters": {
         "Environment": {
             "Type": "String",
@@ -32,12 +32,6 @@
             "Default": "admin",
             "NoEcho": true,
             "Description": "Master username for RDS"
-        },
-        "DBPassword": {
-            "Type": "String",
-            "Default": "ChangeMe123!",
-            "NoEcho": true,
-            "Description": "Master password for RDS (override in production)"
         }
     },
     "Mappings": {
@@ -486,7 +480,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Ref": "DBPassword"
+                    "Fn::Sub": "{{resolve:ssm-secure:/app/${Environment}/db/password}}"
                 },
                 "VPCSecurityGroups": [
                     {
@@ -556,8 +550,43 @@
                         }
                     ]
                 },
-                "ManagedPolicyArns": [
-                    "arn:aws:iam::aws:policy/service-role/AWSConfigRole"
+                "Policies": [
+                    {
+                        "PolicyName": "AWSConfigInlinePermissions",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:PutObject",
+                                        "s3:GetBucketAcl"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${LoggingBucket}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:Describe*",
+                                        "rds:Describe*",
+                                        "iam:GetAccountAuthorizationDetails",
+                                        "iam:GetAccountSummary",
+                                        "iam:List*"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
                 ]
             }
         },
