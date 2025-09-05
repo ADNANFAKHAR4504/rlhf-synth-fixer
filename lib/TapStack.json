@@ -1,19 +1,54 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Security‑focused AWS infrastructure as code (fixed characters and lint issues)",
+  "Description": "Security-focused AWS infrastructure with IAM, WAF, Lambda monitoring, and logging.",
   "Parameters": {
     "HostedZoneId": {
       "Type": "String",
-      "Description": "Route 53 Hosted Zone ID (e.g., Z00001111A1ABCaaABC11)",
-      "Default": "ecommerce-app.com"
-    },
-    "VPCId": {
-      "Type": "String",
-      "Default": "vpc-03a05c55d8e4b4a87",
-      "Description": "ID of the VPC to enable Flow Logs on"
+      "Description": "Route 53 Hosted Zone ID",
+      "AllowedPattern": "^[A-Z0-9]{1,32}$"
     }
   },
   "Resources": {
+    "MainVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          { "Key": "project", "Value": "env-security" },
+          { "Key": "Name", "Value": "SecurityVPC" }
+        ]
+      }
+    },
+    "FlowLogBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "Tags": [
+          { "Key": "project", "Value": "env-security" }
+        ]
+      }
+    },
+    "VPCFlowLogs": {
+      "Type": "AWS::EC2::FlowLog",
+      "Properties": {
+        "ResourceType": "VPC",
+        "ResourceId": { "Ref": "MainVPC" },
+        "TrafficType": "ALL",
+        "LogDestinationType": "s3",
+        "LogDestination": { "Fn::GetAtt": ["FlowLogBucket", "Arn"] },
+        "DeliverLogsPermissionArn": "arn:aws:iam::aws:policy/service-role/AmazonEC2FlowLogsRole"
+      }
+    },
     "WAFWebACL": {
       "Type": "AWS::WAFv2::WebACL",
       "Properties": {
@@ -27,8 +62,8 @@
         },
         "Rules": [
           {
-            "Name": "AWSBasicRuleSet",
-            "Priority": 0,
+            "Name": "AWSCommonRuleSet",
+            "Priority": 1,
             "Statement": {
               "ManagedRuleGroupStatement": {
                 "VendorName": "AWS",
@@ -48,23 +83,19 @@
         ]
       }
     },
-    "ApiGateway": {
-      "Type": "AWS::ApiGateway::RestApi",
+    "SecuritySNS": {
+      "Type": "AWS::SNS::Topic",
       "Properties": {
-        "Name": "ProtectedApi",
-        "EndpointConfiguration": { "Types": ["REGIONAL"] },
+        "TopicName": "SecurityAlertsTopic",
         "Tags": [
           { "Key": "project", "Value": "env-security" }
         ]
       }
     },
-    "WAFAssociation": {
-      "Type": "AWS::WAFv2::WebACLAssociation",
+    "Route53DNSSEC": {
+      "Type": "AWS::Route53::DNSSEC",
       "Properties": {
-        "ResourceArn": {
-          "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${ApiGateway}/stages/prod"
-        },
-        "WebACLArn": { "Ref": "WAFWebACL" }
+        "HostedZoneId": { "Ref": "HostedZoneId" }
       }
     },
     "CloudFrontRealtimeLogRole": {
@@ -75,14 +106,16 @@
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": { "Service": "cloudfront.amazonaws.com" },
+              "Principal": {
+                "Service": "cloudfront.amazonaws.com"
+              },
               "Action": "sts:AssumeRole"
             }
           ]
         },
         "Policies": [
           {
-            "PolicyName": "KinesisPutRecords",
+            "PolicyName": "CloudFrontKinesisPolicy",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
@@ -126,51 +159,7 @@
         ]
       }
     },
-    "Route53DNSSEC": {
-      "Type": "AWS::Route53::DNSSEC",
-      "Properties": {
-        "HostedZoneId": { "Ref": "HostedZoneId" }
-      }
-    },
-    "LogBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": { "Fn::Sub": "${AWS::StackName}-vpcflow-logs" },
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
-              }
-            }
-          ]
-        },
-        "Tags": [
-          { "Key": "project", "Value": "env-security" }
-        ]
-      }
-    },
-    "VPCFlowLogs": {
-      "Type": "AWS::EC2::FlowLog",
-      "Properties": {
-        "ResourceType": "VPC",
-        "ResourceId": { "Ref": "VPCId" },
-        "TrafficType": "ALL",
-        "LogDestinationType": "s3",
-        "LogDestination": { "Fn::GetAtt": ["LogBucket", "Arn"] },
-        "DeliverLogsPermissionArn": "arn:aws:iam::aws:policy/service-role/AmazonEC2FlowLogsRole"
-      }
-    },
-    "SecuritySNS": {
-      "Type": "AWS::SNS::Topic",
-      "Properties": {
-        "TopicName": "SecurityAlertsTopic",
-        "Tags": [
-          { "Key": "project", "Value": "env-security" }
-        ]
-      }
-    },
-    "LambdaExecRole": {
+    "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
         "RoleName": "LambdaExecLeastPrivilege",
@@ -179,7 +168,9 @@
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": { "Service": "lambda.amazonaws.com" },
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
               "Action": "sts:AssumeRole"
             }
           ]
@@ -204,13 +195,13 @@
         ]
       }
     },
-    "MonitoredLambda": {
+    "MonitoredLambdaFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
         "FunctionName": "SecureMonitoredFunction",
         "Handler": "index.handler",
-        "Role": { "Fn::GetAtt": ["LambdaExecRole", "Arn"] },
         "Runtime": "python3.9",
+        "Role": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] },
         "Code": {
           "ZipFile": "def handler(event, context):\n  return {'statusCode':200,'body':'OK'}"
         },
@@ -219,10 +210,10 @@
         ]
       }
     },
-    "LambdaInvocationsAlarm": {
+    "LambdaInvocationAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": "LambdaInvocationsTooHigh",
+        "AlarmName": "LambdaInvocationCount",
         "MetricName": "Invocations",
         "Namespace": "AWS/Lambda",
         "Statistic": "Sum",
@@ -233,19 +224,16 @@
         "Dimensions": [
           {
             "Name": "FunctionName",
-            "Value": { "Ref": "MonitoredLambda" }
+            "Value": { "Ref": "MonitoredLambdaFunction" }
           }
         ],
-        "AlarmActions": [{ "Ref": "SecuritySNS" }],
-        "Tags": [
-          { "Key": "project", "Value": "env-security" }
-        ]
+        "AlarmActions": [{ "Ref": "SecuritySNS" }]
       }
     },
-    "LambdaErrorsAlarm": {
+    "LambdaErrorAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
-        "AlarmName": "LambdaErrorsDetected",
+        "AlarmName": "LambdaErrorCount",
         "MetricName": "Errors",
         "Namespace": "AWS/Lambda",
         "Statistic": "Sum",
@@ -256,19 +244,16 @@
         "Dimensions": [
           {
             "Name": "FunctionName",
-            "Value": { "Ref": "MonitoredLambda" }
+            "Value": { "Ref": "MonitoredLambdaFunction" }
           }
         ],
-        "AlarmActions": [{ "Ref": "SecuritySNS" }],
-        "Tags": [
-          { "Key": "project", "Value": "env-security" }
-        ]
+        "AlarmActions": [{ "Ref": "SecuritySNS" }]
       }
     },
     "S3ReadOnlyPolicy": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
-        "PolicyName": "S3ListGetObjectOnly",
+        "PolicyName": "S3ListGetOnlyPolicy",
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -279,26 +264,26 @@
             }
           ]
         },
-        "Roles": [{ "Ref": "LambdaExecRole" }]
+        "Roles": [{ "Ref": "LambdaExecutionRole" }]
       }
     }
   },
   "Outputs": {
-    "WAFWebACLArn": {
-      "Description": "Web ACL ARN",
-      "Value": { "Ref": "WAFWebACL" }
-    },
-    "RealtimeLogStreamArn": {
-      "Description": "Kinesis Stream ARN for real‑time logs",
-      "Value": { "Fn::GetAtt": ["RealtimeLogStream", "Arn"] }
+    "VPCId": {
+      "Description": "ID of created VPC",
+      "Value": { "Ref": "MainVPC" }
     },
     "SecurityTopicArn": {
-      "Description": "SNS Topic for security alerts",
+      "Description": "SNS Topic ARN for security alerts",
       "Value": { "Ref": "SecuritySNS" }
     },
     "LambdaRoleArn": {
-      "Description": "Execution Role ARN for Lambda",
-      "Value": { "Fn::GetAtt": ["LambdaExecRole", "Arn"] }
+      "Description": "IAM Role ARN for Lambda",
+      "Value": { "Fn::GetAtt": ["LambdaExecutionRole", "Arn"] }
+    },
+    "FlowLogsBucket": {
+      "Description": "S3 Bucket for VPC Flow Logs",
+      "Value": { "Ref": "FlowLogBucket" }
     }
   }
 }
