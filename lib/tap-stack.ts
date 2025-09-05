@@ -25,25 +25,26 @@ export class TapStack extends cdk.Stack {
     super(scope, id, props);
 
     // CloudFormation Parameters - Constraint #9
-    const regionParameter = new cdk.CfnParameter(this, 'Region', {
+    new cdk.CfnParameter(this, 'Region', {
       type: 'String',
       default: 'us-west-2',
       allowedValues: ['us-west-2'],
-      description: 'AWS Region (must be us-west-2)'
+      description: 'AWS Region (must be us-west-2)',
     });
 
-    const desiredCapacityParameter = new cdk.CfnParameter(this, 'DesiredCapacity', {
-      type: 'Number',
-      default: 2,
-      minValue: 2,
-      maxValue: 5,
-      description: 'Desired number of EC2 instances (2-5)'
-    });
+    const desiredCapacityParameter = new cdk.CfnParameter(
+      this,
+      'DesiredCapacity',
+      {
+        type: 'Number',
+        default: 2,
+        minValue: 2,
+        maxValue: 5,
+        description: 'Desired number of EC2 instances (2-5)',
+      }
+    );
 
-    // Common tags - Constraint #10
-    const commonTags = {
-      Environment: 'Production'
-    };
+    // Common tags applied via cdk.Tags.of() calls below
 
     // VPC with Flow Logs - Constraint #11
     const vpc = new ec2.Vpc(this, 'HaWebappVpc', {
@@ -64,14 +65,14 @@ export class TapStack extends cdk.Stack {
           cidrMask: 28,
           name: 'Isolated',
           subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        }
+        },
       ],
       flowLogs: {
-        'VpcFlowLogs': {
+        VpcFlowLogs: {
           trafficType: ec2.FlowLogTrafficType.ALL,
-          destination: ec2.FlowLogDestination.toCloudWatchLogs()
-        }
-      }
+          destination: ec2.FlowLogDestination.toCloudWatchLogs(),
+        },
+      },
     });
 
     // Apply tags to VPC
@@ -81,15 +82,19 @@ export class TapStack extends cdk.Stack {
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
       versioned: true, // Versioned
       encryption: s3.BucketEncryption.S3_MANAGED, // AES-256
-      lifecycleRules: [{
-        id: 'GlacierTransition',
-        enabled: true,
-        transitions: [{
-          storageClass: s3.StorageClass.GLACIER,
-          transitionAfter: cdk.Duration.days(30) // Glacier after 30 days
-        }]
-      }],
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL
+      lifecycleRules: [
+        {
+          id: 'GlacierTransition',
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(30), // Glacier after 30 days
+            },
+          ],
+        },
+      ],
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
     cdk.Tags.of(logsBucket).add('Environment', 'Production');
 
@@ -97,18 +102,23 @@ export class TapStack extends cdk.Stack {
     const staticContentBucket = new s3.Bucket(this, 'StaticContentBucket', {
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
     cdk.Tags.of(staticContentBucket).add('Environment', 'Production');
 
     // CloudFront Distribution - Constraint #12
-    const distribution = new cloudfront.Distribution(this, 'CloudFrontDistribution', {
-      defaultBehavior: {
-        origin: new origins.S3Origin(staticContentBucket),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED
+    const distribution = new cloudfront.Distribution(
+      this,
+      'CloudFrontDistribution',
+      {
+        defaultBehavior: {
+          origin: new origins.S3Origin(staticContentBucket),
+          viewerProtocolPolicy:
+            cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        },
       }
-    });
+    );
     cdk.Tags.of(distribution).add('Environment', 'Production');
 
     // RDS Secret - Constraint #7
@@ -117,25 +127,32 @@ export class TapStack extends cdk.Stack {
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'admin' }),
         generateStringKey: 'password',
-        excludeCharacters: '"@/\\'
-      }
+        excludeCharacters: '"@/\\',
+      },
     });
     cdk.Tags.of(dbSecret).add('Environment', 'Production');
 
     // Security Group for RDS
-    const dbSecurityGroup = new ec2.SecurityGroup(this, 'DatabaseSecurityGroup', {
-      vpc,
-      description: 'Security group for RDS MySQL database',
-      allowAllOutbound: false
-    });
+    const dbSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'DatabaseSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for RDS MySQL database',
+        allowAllOutbound: false,
+      }
+    );
     cdk.Tags.of(dbSecurityGroup).add('Environment', 'Production');
 
     // RDS MySQL Multi-AZ - Constraint #7
     const database = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35
+        version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       credentials: rds.Credentials.fromSecret(dbSecret),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -143,7 +160,7 @@ export class TapStack extends cdk.Stack {
       multiAz: true, // Multi-AZ for high availability
       storageEncrypted: true,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: true
+      deletionProtection: true,
     });
     cdk.Tags.of(database).add('Environment', 'Production');
 
@@ -151,49 +168,65 @@ export class TapStack extends cdk.Stack {
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy') // CloudWatch Agent
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ), // CloudWatch Agent
       ],
       inlinePolicies: {
-        'SecretsManagerAccess': new iam.PolicyDocument({
+        SecretsManagerAccess: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'secretsmanager:GetSecretValue'
-              ],
-              resources: [dbSecret.secretArn] // Only access to DB secret
-            })
-          ]
-        })
-      }
+              actions: ['secretsmanager:GetSecretValue'],
+              resources: [dbSecret.secretArn], // Only access to DB secret
+            }),
+          ],
+        }),
+      },
     });
     cdk.Tags.of(ec2Role).add('Environment', 'Production');
 
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
-      role: ec2Role
+    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+      role: ec2Role,
     });
 
     // Security Group for ALB - Constraint #13
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
       description: 'Security group for Application Load Balancer',
-      allowAllOutbound: true
+      allowAllOutbound: true,
     });
-    albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP');
-    albSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS');
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP'
+    );
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(443),
+      'Allow HTTPS'
+    );
     cdk.Tags.of(albSecurityGroup).add('Environment', 'Production');
 
     // Security Group for EC2 instances
     const ec2SecurityGroup = new ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc,
       description: 'Security group for EC2 instances',
-      allowAllOutbound: true
+      allowAllOutbound: true,
     });
-    ec2SecurityGroup.addIngressRule(albSecurityGroup, ec2.Port.tcp(80), 'Allow HTTP from ALB');
+    ec2SecurityGroup.addIngressRule(
+      albSecurityGroup,
+      ec2.Port.tcp(80),
+      'Allow HTTP from ALB'
+    );
     cdk.Tags.of(ec2SecurityGroup).add('Environment', 'Production');
 
     // Allow EC2 to connect to RDS
-    dbSecurityGroup.addIngressRule(ec2SecurityGroup, ec2.Port.tcp(3306), 'Allow MySQL from EC2');
+    dbSecurityGroup.addIngressRule(
+      ec2SecurityGroup,
+      ec2.Port.tcp(3306),
+      'Allow MySQL from EC2'
+    );
 
     // UserData for EC2 instances - Constraint #4 & #6
     const userData = ec2.UserData.forLinux();
@@ -232,34 +265,46 @@ export class TapStack extends cdk.Stack {
 
     // Launch Template for Auto Scaling Group
     const launchTemplate = new ec2.LaunchTemplate(this, 'LaunchTemplate', {
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO), // t3.micro
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ), // t3.micro
       machineImage: ec2.MachineImage.latestAmazonLinux2(),
       userData,
       securityGroup: ec2SecurityGroup,
-      role: ec2Role
+      role: ec2Role,
     });
     cdk.Tags.of(launchTemplate).add('Environment', 'Production');
 
     // Auto Scaling Group - Constraint #3
-    const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'AutoScalingGroup', {
-      vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      launchTemplate,
-      minCapacity: 2,
-      maxCapacity: 5,
-      desiredCapacity: desiredCapacityParameter.valueAsNumber,
-      healthCheckType: autoscaling.HealthCheckType.ELB,
-      healthCheckGracePeriod: cdk.Duration.seconds(300)
-    });
+    const autoScalingGroup = new autoscaling.AutoScalingGroup(
+      this,
+      'AutoScalingGroup',
+      {
+        vpc,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+        launchTemplate,
+        minCapacity: 2,
+        maxCapacity: 5,
+        desiredCapacity: desiredCapacityParameter.valueAsNumber,
+        healthCheck: autoscaling.HealthCheck.elb({
+          grace: cdk.Duration.seconds(300),
+        }),
+      }
+    );
     cdk.Tags.of(autoScalingGroup).add('Environment', 'Production');
 
     // Application Load Balancer - Constraint #2
-    const alb = new elbv2.ApplicationLoadBalancer(this, 'ApplicationLoadBalancer', {
-      vpc,
-      internetFacing: true,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      securityGroup: albSecurityGroup
-    });
+    const alb = new elbv2.ApplicationLoadBalancer(
+      this,
+      'ApplicationLoadBalancer',
+      {
+        vpc,
+        internetFacing: true,
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+        securityGroup: albSecurityGroup,
+      }
+    );
     cdk.Tags.of(alb).add('Environment', 'Production');
 
     // ALB Target Group
@@ -268,40 +313,41 @@ export class TapStack extends cdk.Stack {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [autoScalingGroup],
-      healthCheckPath: '/',
-      healthCheckIntervalSeconds: 30,
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 3
+      healthCheck: {
+        path: '/',
+        interval: cdk.Duration.seconds(30),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
     });
     cdk.Tags.of(targetGroup).add('Environment', 'Production');
 
     // ALB Listener
-    const listener = alb.addListener('Listener', {
+    alb.addListener('Listener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.forward([targetGroup])
+      defaultAction: elbv2.ListenerAction.forward([targetGroup]),
     });
 
     // Lambda execution role for RDS snapshots
     const lambdaRole = new iam.Role(this, 'LambdaRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
       ],
       inlinePolicies: {
-        'RDSSnapshotPolicy': new iam.PolicyDocument({
+        RDSSnapshotPolicy: new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'rds:CreateDBSnapshot',
-                'rds:DescribeDBInstances'
-              ],
-              resources: ['*']
-            })
-          ]
-        })
-      }
+              actions: ['rds:CreateDBSnapshot', 'rds:DescribeDBInstances'],
+              resources: ['*'],
+            }),
+          ],
+        }),
+      },
     });
     cdk.Tags.of(lambdaRole).add('Environment', 'Production');
 
@@ -311,7 +357,7 @@ export class TapStack extends cdk.Stack {
       handler: 'index.handler',
       role: lambdaRole,
       environment: {
-        DB_INSTANCE_ID: database.instanceIdentifier
+        DB_INSTANCE_ID: database.instanceIdentifier,
       },
       code: lambda.Code.fromInline(`
 import boto3
@@ -343,41 +389,41 @@ def handler(event, context):
     except Exception as e:
         print(f'Error creating snapshot: {str(e)}')
         raise e
-      `)
+      `),
     });
     cdk.Tags.of(snapshotLambda).add('Environment', 'Production');
 
     // EventBridge rule to trigger Lambda every 12 hours - Constraint #14
     const scheduleRule = new events.Rule(this, 'SnapshotScheduleRule', {
       schedule: events.Schedule.rate(cdk.Duration.hours(12)),
-      targets: [new targets.LambdaFunction(snapshotLambda)]
+      targets: [new targets.LambdaFunction(snapshotLambda)],
     });
     cdk.Tags.of(scheduleRule).add('Environment', 'Production');
 
     // Outputs
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: alb.loadBalancerDnsName,
-      description: 'Application Load Balancer DNS Name'
+      description: 'Application Load Balancer DNS Name',
     });
 
     new cdk.CfnOutput(this, 'CloudFrontDistributionDomain', {
       value: distribution.distributionDomainName,
-      description: 'CloudFront Distribution Domain Name'
+      description: 'CloudFront Distribution Domain Name',
     });
 
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: database.instanceEndpoint.hostname,
-      description: 'RDS Database Endpoint'
+      description: 'RDS Database Endpoint',
     });
 
     new cdk.CfnOutput(this, 'LogsBucketName', {
       value: logsBucket.bucketName,
-      description: 'S3 Logs Bucket Name'
+      description: 'S3 Logs Bucket Name',
     });
 
     new cdk.CfnOutput(this, 'StaticContentBucketName', {
       value: staticContentBucket.bucketName,
-      description: 'S3 Static Content Bucket Name'
+      description: 'S3 Static Content Bucket Name',
     });
   }
 }
