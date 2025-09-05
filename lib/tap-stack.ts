@@ -24,7 +24,7 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    // CloudFormation Parameters - Constraint #9
+    // 'CloudFormation' Parameters - Constraint #9
     new cdk.CfnParameter(this, 'Region', {
       type: 'String',
       default: 'us-west-2',
