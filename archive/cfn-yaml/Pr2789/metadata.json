@@ -21,5 +21,11 @@
     "Amazon S3",
     "AWS IAM",
     "AWS CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "balasl342",
+  "dockerS3Location": ""
 }
