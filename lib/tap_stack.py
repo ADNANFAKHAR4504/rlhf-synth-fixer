@@ -108,7 +108,6 @@ class TapStack(pulumi.ComponentResource):
         self._create_encrypted_parameters()
         self._create_lambda_functions()
         self._create_api_gateway()
-        self._create_api_gateway_deployment()
         self._create_cloudwatch_alarms()
         self._create_log_groups()
 
@@ -497,22 +496,6 @@ def lambda_handler(event, context):
             opts=ResourceOptions(parent=self)
         )
 
-        # Store methods and integrations for later deployment
-        self.health_method = health_method
-        self.data_method = data_method
-        self.health_integration = health_integration
-        self.data_integration = data_integration
-
-        # API Gateway URL
-        self.api_gateway_url = Output.concat(
-            "https://",
-            self.api_gateway.id,
-            ".execute-api.us-east-1.amazonaws.com/",
-            self.environment_suffix
-        )
-
-    def _create_api_gateway_deployment(self):
-        """Create API Gateway deployment after all methods and integrations are ready."""
         # API Gateway deployment (must happen after all methods and integrations)
         self.api_deployment = apigateway.Deployment(
             f"{self.name_prefix}-api-deployment",
@@ -528,6 +511,15 @@ def lambda_handler(event, context):
             stage_name=self.environment_suffix,
             opts=ResourceOptions(parent=self)
         )
+
+        # API Gateway URL
+        self.api_gateway_url = Output.concat(
+            "https://",
+            self.api_gateway.id,
+            ".execute-api.us-east-1.amazonaws.com/",
+            self.environment_suffix
+        )
+
 
     def _create_cloudwatch_alarms(self):
         """Create CloudWatch alarms for monitoring Lambda functions."""
