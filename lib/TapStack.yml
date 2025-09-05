@@ -329,7 +329,7 @@ Resources:
       IsMultiRegionTrail: true
 
   #########################################
-  # AWS Config Role + Recorder (fixed)
+  # AWS Config Role + Recorder (without DeliveryChannel)
   #########################################
   ConfigRole:
     Type: AWS::IAM::Role
@@ -371,11 +371,6 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      S3BucketName: !Ref LoggingBucket
 
 Outputs:
   VpcId:

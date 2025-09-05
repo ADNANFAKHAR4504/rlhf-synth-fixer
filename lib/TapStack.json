@@ -642,14 +642,6 @@
                     "IncludeGlobalResourceTypes": true
                 }
             }
-        },
-        "ConfigDeliveryChannel": {
-            "Type": "AWS::Config::DeliveryChannel",
-            "Properties": {
-                "S3BucketName": {
-                    "Ref": "LoggingBucket"
-                }
-            }
         }
     },
     "Outputs": {
