@@ -357,7 +357,7 @@
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "InstanceType": "t2.micro",
-        "ImageId": "ami-0c55b159cbfafe1f0",
+        "ImageId": "ami-00ca32bbc84273381",
         "SubnetId": {
           "Ref": "PrivateSubnet2"
         },
