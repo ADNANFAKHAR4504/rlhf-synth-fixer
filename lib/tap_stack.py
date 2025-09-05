@@ -168,7 +168,7 @@ class TapStack(cdk.Stack):
             self,
             "ProcessorLambda",
             function_name=f"{resource_prefix.value_as_string}-processor",
-            runtime=lambda_.Runtime.NODEJS_14_X,
+            runtime=lambda_.Runtime.NODEJS_20_X,
             handler="index.handler",
             role=lambda_role,
             log_group=lambda_log_group,
