@@ -36,7 +36,7 @@ Each environment (dev, staging, prod) should be:
 - Properly tagged for cost tracking
 - Following naming conventions
 
-## Best Practices
+Best Practices
 - Use modules for reusability
 - Implement proper tagging strategy
 - Use variables for environment-specific values
