@@ -35,7 +35,7 @@ export class TapStack extends cdk.Stack {
 
     const { projectName, environment, vpcId, environmentSuffix = '' } = props;
 
-    // Get or create VPC
+    // Get or create VPC - FIXED to handle non-existent VPC
     this.vpc = this.getOrCreateVpc(
       projectName,
       environment,
@@ -76,10 +76,8 @@ export class TapStack extends cdk.Stack {
     // Setup monitoring and alerting
     this.createMonitoring(projectName, environment);
 
-    // Apply tags to all resources
-    this.applyTags(projectName, environment);
-
-    // Output VPC ID for reference
+    // ==================== OUTPUTS FOR TESTING ====================
+    // VPC Outputs
     new cdk.CfnOutput(this, 'SecurityVpcId', {
       value: this.vpc.vpcId,
       description: 'VPC ID used by security stack',
@@ -111,6 +109,8 @@ export class TapStack extends cdk.Stack {
       value: this.securityBucket.bucketArn,
       description: 'Security logs bucket ARN',
     });
+
+    // CloudTrail Outputs
 
     new cdk.CfnOutput(this, 'CloudTrailArn', {
       value: this.cloudTrail.trailArn,
@@ -145,24 +145,6 @@ export class TapStack extends cdk.Stack {
       description: 'Remediation Lambda function ARN',
     });
 
-    // IAM Role Outputs (for testing access)
-    new cdk.CfnOutput(this, 'RemediationRoleArn', {
-      value: this.remediationFunction.role?.roleArn || '',
-      description: 'Remediation Lambda role ARN',
-    });
-
-    // Config Outputs
-    new cdk.CfnOutput(this, 'ConfigRecorderName', {
-      value: `${projectName}-${environment}-config-recorder`,
-      description: 'AWS Config recorder name',
-    });
-
-    // SSM Outputs
-    new cdk.CfnOutput(this, 'PatchBaselineId', {
-      value: `/${projectName}-${environment}-security-patch-baseline`,
-      description: 'SSM Patch Baseline ID',
-    });
-
     // Regional Output
     new cdk.CfnOutput(this, 'Region', {
       value: this.region,
@@ -173,6 +155,9 @@ export class TapStack extends cdk.Stack {
       value: this.account,
       description: 'AWS account ID',
     });
+
+    // Apply tags to all resources
+    this.applyTags(projectName, environment);
   }
 
   private getOrCreateVpc(
@@ -181,20 +166,29 @@ export class TapStack extends cdk.Stack {
     environmentSuffix: string,
     vpcId?: string
   ): ec2.IVpc {
-    if (vpcId) {
-      try {
-        // Try to import existing VPC
-        return ec2.Vpc.fromLookup(this, 'ExistingVPC', {
-          vpcId: vpcId,
-        });
-      } catch (error) {
-        console.warn(
-          `VPC ${vpcId} not found, creating new VPC for security stack`
-        );
-      }
+    // If no VPC ID provided, create a new one
+    if (!vpcId) {
+      return this.createNewVpc(projectName, environment, environmentSuffix);
     }
 
-    // Create new VPC for security stack
+    try {
+      // Try to import existing VPC
+      return ec2.Vpc.fromLookup(this, 'ExistingVPC', {
+        vpcId: vpcId,
+      });
+    } catch (error) {
+      console.warn(
+        `VPC ${vpcId} not found, creating new VPC for security stack`
+      );
+      return this.createNewVpc(projectName, environment, environmentSuffix);
+    }
+  }
+
+  private createNewVpc(
+    projectName: string,
+    environment: string,
+    environmentSuffix: string
+  ): ec2.Vpc {
     return new ec2.Vpc(this, `${projectName}-${environment}-security-vpc`, {
       vpcName: `corp-${projectName}-security-vpc${environmentSuffix}`,
       maxAzs: 2,
@@ -215,6 +209,7 @@ export class TapStack extends cdk.Stack {
     });
   }
 
+  // ... rest of your methods (createKMSKey, createSecurityBucket, etc.) remain the same
   private createKMSKey(projectName: string, environment: string): kms.Key {
     const key = new kms.Key(
       this,
@@ -573,7 +568,7 @@ export class TapStack extends cdk.Stack {
       this,
       `${projectName}-${environment}-web-acl`,
       {
-        scope: 'REGIONAL', // Changed from CLOUDFRONT to REGIONAL for broader compatibility
+        scope: 'REGIONAL',
         defaultAction: { allow: {} },
         name: `${projectName}-${environment}-web-acl`,
         description: 'Web ACL for application protection',
@@ -640,72 +635,73 @@ export class TapStack extends cdk.Stack {
 
   private createIAMRoles(projectName: string, environment: string): void {
     // Create a group that requires MFA
-    // const _mfaGroup = new iam.Group(
-    //   this,
-    //   `${projectName}-${environment}-mfa-required-group`,
-    //   {
-    //     groupName: `${projectName}-${environment}-mfa-required-group`,
-    //     managedPolicies: [
-    //       new iam.ManagedPolicy(
-    //         this,
-    //         `${projectName}-${environment}-force-mfa-policy`,
-    //         {
-    //           managedPolicyName: `${projectName}-${environment}-force-mfa-policy`,
-    //           statements: [
-    //             new iam.PolicyStatement({
-    //               effect: iam.Effect.DENY,
-    //               notActions: [
-    //                 'iam:CreateVirtualMFADevice',
-    //                 'iam:EnableMFADevice',
-    //                 'iam:GetUser',
-    //                 'iam:ListMFADevices',
-    //                 'iam:ListVirtualMFADevices',
-    //                 'iam:ResyncMFADevice',
-    //                 'sts:GetSessionToken',
-    //               ],
-    //               resources: ['*'],
-    //               conditions: {
-    //                 BoolIfExists: {
-    //                   'aws:MultiFactorAuthPresent': 'false',
-    //                 },
-    //               },
-    //             }),
-    //           ],
-    //         }
-    //       ),
-    //     ],
-    //   }
-    // );
-    // // Create security monitoring role
-    // const securityMonitoringRole = new iam.Role(
-    //   this,
-    //   `${projectName}-${environment}-security-monitoring-role`,
-    //   {
-    //     roleName: `${projectName}-${environment}-security-monitoring-role`,
-    //     assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-    //     managedPolicies: [
-    //       iam.ManagedPolicy.fromAwsManagedPolicyName('SecurityAudit'),
-    //       iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
-    //     ],
-    //     inlinePolicies: {
-    //       SecurityMonitoringPolicy: new iam.PolicyDocument({
-    //         statements: [
-    //           new iam.PolicyStatement({
-    //             effect: iam.Effect.ALLOW,
-    //             actions: [
-    //               'guardduty:GetFindings',
-    //               'guardduty:ListDetectors',
-    //               'config:DescribeComplianceByConfigRule',
-    //               'config:DescribeConfigRules',
-    //               'cloudtrail:LookupEvents',
-    //             ],
-    //             resources: ['*'],
-    //           }),
-    //         ],
-    //       }),
-    //     },
-    //   }
-    // );
+    const _mfaGroup = new iam.Group(
+      this,
+      `${projectName}-${environment}-mfa-required-group`,
+      {
+        groupName: `${projectName}-${environment}-mfa-required-group`,
+        managedPolicies: [
+          new iam.ManagedPolicy(
+            this,
+            `${projectName}-${environment}-force-mfa-policy`,
+            {
+              managedPolicyName: `${projectName}-${environment}-force-mfa-policy`,
+              statements: [
+                new iam.PolicyStatement({
+                  effect: iam.Effect.DENY,
+                  notActions: [
+                    'iam:CreateVirtualMFADevice',
+                    'iam:EnableMFADevice',
+                    'iam:GetUser',
+                    'iam:ListMFADevices',
+                    'iam:ListVirtualMFADevices',
+                    'iam:ResyncMFADevice',
+                    'sts:GetSessionToken',
+                  ],
+                  resources: ['*'],
+                  conditions: {
+                    BoolIfExists: {
+                      'aws:MultiFactorAuthPresent': 'false',
+                    },
+                  },
+                }),
+              ],
+            }
+          ),
+        ],
+      }
+    );
+
+    // Create security monitoring role
+    const securityMonitoringRole = new iam.Role(
+      this,
+      `${projectName}-${environment}-security-monitoring-role`,
+      {
+        roleName: `${projectName}-${environment}-security-monitoring-role`,
+        assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('SecurityAudit'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('ReadOnlyAccess'),
+        ],
+        inlinePolicies: {
+          SecurityMonitoringPolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'guardduty:GetFindings',
+                  'guardduty:ListDetectors',
+                  'config:DescribeComplianceByConfigRule',
+                  'config:DescribeConfigRules',
+                  'cloudtrail:LookupEvents',
+                ],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
+      }
+    );
   }
 
   private createSystemsManagerSetup(
@@ -713,34 +709,34 @@ export class TapStack extends cdk.Stack {
     environment: string
   ): void {
     // Create patch baseline for security updates
-    // const _patchBaseline = new ssm.CfnPatchBaseline(
-    //   this,
-    //   `${projectName}-${environment}-patch-baseline`,
-    //   {
-    //     name: `${projectName}-${environment}-security-patch-baseline`,
-    //     operatingSystem: 'AMAZON_LINUX_2',
-    //     description: 'Patch baseline for security updates',
-    //     approvalRules: {
-    //       patchRules: [
-    //         {
-    //           patchFilterGroup: {
-    //             patchFilters: [
-    //               {
-    //                 key: 'CLASSIFICATION',
-    //                 values: ['Security', 'Critical'],
-    //               },
-    //             ],
-    //           },
-    //           approveAfterDays: 0,
-    //           enableNonSecurity: false,
-    //           complianceLevel: 'CRITICAL',
-    //         },
-    //       ],
-    //     },
-    //     approvedPatches: [],
-    //     rejectedPatches: [],
-    //   }
-    // );
+    const _patchBaseline = new ssm.CfnPatchBaseline(
+      this,
+      `${projectName}-${environment}-patch-baseline`,
+      {
+        name: `${projectName}-${environment}-security-patch-baseline`,
+        operatingSystem: 'AMAZON_LINUX_2',
+        description: 'Patch baseline for security updates',
+        approvalRules: {
+          patchRules: [
+            {
+              patchFilterGroup: {
+                patchFilters: [
+                  {
+                    key: 'CLASSIFICATION',
+                    values: ['Security', 'Critical'],
+                  },
+                ],
+              },
+              approveAfterDays: 0,
+              enableNonSecurity: false,
+              complianceLevel: 'CRITICAL',
+            },
+          ],
+        },
+        approvedPatches: [],
+        rejectedPatches: [],
+      }
+    );
 
     // Create maintenance window
     const maintenanceWindow = new ssm.CfnMaintenanceWindow(
