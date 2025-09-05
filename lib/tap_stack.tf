@@ -1116,7 +1116,7 @@ resource "aws_lb" "main" {
   access_logs {
     bucket  = aws_s3_bucket.logs_bucket.id
     prefix  = "alb-access-logs"
-    enabled = true
+    enabled = false
   }
 
   tags = merge(local.common_tags, {
@@ -1127,6 +1127,30 @@ resource "aws_lb" "main" {
     aws_s3_bucket_policy.logs_bucket_policy,
     aws_s3_bucket_public_access_block.logs_bucket
   ]
+}
+
+# Enable ALB access logging after ALB is created and S3 bucket policy is ready
+resource "null_resource" "enable_alb_logging" {
+  depends_on = [
+    aws_lb.main,
+    aws_s3_bucket_policy.logs_bucket_policy
+  ]
+
+  provisioner "local-exec" {
+    command = <<-EOF
+      aws elbv2 modify-load-balancer-attributes \
+        --load-balancer-arn ${aws_lb.main.arn} \
+        --attributes Key=access_logs.s3.enabled,Value=true \
+                    Key=access_logs.s3.bucket,Value=${aws_s3_bucket.logs_bucket.id} \
+                    Key=access_logs.s3.prefix,Value=alb-access-logs \
+        --region ${data.aws_region.current.id}
+    EOF
+  }
+
+  triggers = {
+    alb_arn     = aws_lb.main.arn
+    bucket_name = aws_s3_bucket.logs_bucket.id
+  }
 }
 
 # Self-signed certificate for HTTPS (for demo purposes)
