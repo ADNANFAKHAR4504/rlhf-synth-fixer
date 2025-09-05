@@ -285,6 +285,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
             Resource: !GetAtt CloudTrailBucket.Arn
+
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
@@ -297,6 +298,7 @@ Resources:
 
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName: AllRegionsTrail
       S3BucketName: !Ref CloudTrailBucket
