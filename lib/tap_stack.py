@@ -487,7 +487,9 @@ def lambda_handler(event, context):
             function=self.lambda_function.name,
             principal="apigateway.amazonaws.com",
             source_arn=Output.concat(
-                "arn:aws:execute-api:us-east-1:*:",
+                "arn:aws:execute-api:us-east-1:",
+                self.api_gateway.execution_arn.apply(lambda arn: arn.split(':')[4]),
+                ":",
                 self.api_gateway.id,
                 "/*/*"
             ),
