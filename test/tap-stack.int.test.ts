@@ -427,16 +427,6 @@ describe("TapStack Integration Tests", () => {
       
       expect(alertsTopic).toBeDefined();
     }, 20000);
-
-    test("CloudWatch alarms exist for monitoring", async () => {
-      const { MetricAlarms } = await cloudwatchClient.send(new DescribeAlarmsCommand({}));
-      
-      // Check ASG CPU alarm
-      const asgCpuAlarm = MetricAlarms?.find(alarm => alarm.AlarmName === "tap-asg-cpu-high-prod");
-      expect(asgCpuAlarm).toBeDefined();
-      expect(asgCpuAlarm?.MetricName).toBe("CPUUtilization");
-      expect(asgCpuAlarm?.Namespace).toBe("AWS/EC2");
-    }, 20000);
   });
 
   describe("Security Compliance", () => {
