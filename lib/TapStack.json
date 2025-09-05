@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack - Secure, Scalable, and Compliant AWS Infrastructure Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail, S3, IAM, Config Rules, Logging, and SSM-enabled Bastion Host.\n",
+    "Description": "TapStack - Secure, Scalable, and Compliant AWS Infrastructure Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail, S3, IAM, Config Role, Logging, and SSM-enabled Bastion Host.\n",
     "Parameters": {
         "Environment": {
             "Type": "String",
@@ -667,21 +667,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "ConfigRecorder": {
-            "Type": "AWS::Config::ConfigurationRecorder",
-            "Properties": {
-                "RoleARN": {
-                    "Fn::GetAtt": [
-                        "ConfigRole",
-                        "Arn"
-                    ]
-                },
-                "RecordingGroup": {
-                    "AllSupported": true,
-                    "IncludeGlobalResourceTypes": true
-                }
             }
         }
     },

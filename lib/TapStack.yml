@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   TapStack - Secure, Scalable, and Compliant AWS Infrastructure
   Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail,
-  S3, IAM, Config Rules, Logging, and SSM-enabled Bastion Host.
+  S3, IAM, Config Role, Logging, and SSM-enabled Bastion Host.
 
 Parameters:
   Environment:
@@ -352,9 +352,8 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsMultiRegionTrail: true
 
-
   #########################################
-  # AWS Config Role + Recorder (without DeliveryChannel)
+  # AWS Config Role (recorder and delivery channel removed)
   #########################################
   ConfigRole:
     Type: AWS::IAM::Role
@@ -388,14 +387,6 @@ Resources:
                   - iam:GetAccountSummary
                   - iam:List*
                 Resource: "*"
-
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
 
 Outputs:
   VpcId:
