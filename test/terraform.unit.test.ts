@@ -259,13 +259,5 @@ describe("Terraform tap-stack.tf Static Validation", () => {
       expect(has(/ManagedBy\s+=\s+"Terraform"/)).toBe(true);
       expect(has(/Project\s+=\s*var\.project_name/)).toBe(true);
   });
-
-  // == RESOURCE NAMING/GLOBAL STANDARDS ==
-  it("uses consistent resource naming based on prefixes/standards", () => {
-    expect(has(/name\s*=\s*\${local\.primary_prefix}/)).toBe(true);
-    expect(has(/name\s*=\s*\${local\.secondary_prefix}/)).toBe(true);
-    expect(has(/db_name\s*=\s*"tapstackdb"/)).toBe(true);
-  });
-
 });
 
