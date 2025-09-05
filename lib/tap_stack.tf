@@ -1071,9 +1071,9 @@ resource "aws_s3_bucket_replication_configuration" "primary_to_secondary" {
       bucket        = aws_s3_bucket.secondary.arn
       storage_class = "STANDARD"
 
-      encryption_configuration {
-        replica_kms_key_id = aws_kms_key.s3_secondary.arn
-      }
+      #encryption_configuration {
+      #  replica_kms_key_id = aws_kms_key.s3_secondary.arn
+      #}
     }
   }
 }
