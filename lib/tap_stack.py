@@ -314,7 +314,7 @@ exports.handler = async (event) => {
             self,
             "ProcessedDataDistribution",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3StaticWebsiteOrigin(
+                origin=origins.S3Origin(
                     bucket, origin_access_control_id=oac.origin_access_control_id
                 ),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
