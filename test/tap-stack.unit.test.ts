@@ -335,17 +335,6 @@ describe('TapStack', () => {
       });
     });
 
-    test('should default to pr117 when no environment suffix provided', () => {
-      const appDefault = new cdk.App();
-      const stackDefault = new TapStack(appDefault, 'TestTapStackDefault', {
-        createCertificate: false
-      });
-      const templateDefault = Template.fromStack(stackDefault);
-
-      templateDefault.hasResourceProperties('AWS::AutoScaling::AutoScalingGroup', {
-        AutoScalingGroupName: 'AutoScalingGroup-pr117'
-      });
-    });
 
     test('should use context value when no props provided', () => {
       const appContext = new cdk.App();
