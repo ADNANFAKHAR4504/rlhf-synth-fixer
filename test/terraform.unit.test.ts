@@ -69,6 +69,7 @@ describe('Terraform Infrastructure Files', () => {
         'lambda_shutdown_schedule',
         'db_username',
         'db_password',
+        'terraform_test_mode',
       ];
 
       requiredVars.forEach(varName => {

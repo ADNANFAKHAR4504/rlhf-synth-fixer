@@ -26,13 +26,15 @@ terraform {
 provider "aws" {
   region = var.aws_region
 
-  # For testing without real AWS credentials
-  access_key                  = "test"
-  secret_key                  = "test"
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_region_validation      = true
-  skip_requesting_account_id  = true
+  # Conditional configuration for testing vs deployment
+  # If TERRAFORM_TEST_MODE is set, use fake credentials for unit tests
+  # Otherwise use real credentials from environment or instance profile
+  access_key                  = var.terraform_test_mode ? "test" : null
+  secret_key                  = var.terraform_test_mode ? "test" : null
+  skip_credentials_validation = var.terraform_test_mode
+  skip_metadata_api_check     = var.terraform_test_mode
+  skip_region_validation      = var.terraform_test_mode
+  skip_requesting_account_id  = var.terraform_test_mode
 
   default_tags {
     tags = {
@@ -94,6 +96,12 @@ variable "db_password" {
   type        = string
   default     = "changeme123!"
   sensitive   = true
+}
+
+variable "terraform_test_mode" {
+  description = "Enable test mode with fake AWS credentials"
+  type        = bool
+  default     = false
 }
 
 # Local values
