@@ -514,46 +514,43 @@ export class TapStack extends cdk.Stack {
     deliveryChannel.addDependency(configRecorder);
 
     // Create compliance rules
-    this.createConfigRules(environmentSuffix, configRecorder);
+    this.createConfigRules(environmentSuffix);
   }
 
-  private createConfigRules(
-    environmentSuffix: string,
-    configRecorder: config.CfnConfigurationRecorder
-  ): void {
-    const rules = [
-      new config.ManagedRule(
-        this,
-        `TapS3PublicReadProhibited-${environmentSuffix}`,
-        {
-          configRuleName: `tap-s3-bucket-public-read-prohibited-${environmentSuffix}`,
-          identifier:
-            config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
-        }
-      ),
-      new config.ManagedRule(
-        this,
-        `TapRootAccessKeyCheck-${environmentSuffix}`,
-        {
-          configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
-          identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
-        }
-      ),
-      new config.ManagedRule(
-        this,
-        `TapMfaEnabledForIamConsole-${environmentSuffix}`,
-        {
-          configRuleName: `tap-mfa-enabled-for-iam-console-access-${environmentSuffix}`,
-          identifier:
-            config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
-        }
-      ),
-    ];
+  private createConfigRules(environmentSuffix: string): void {
+    // S3 bucket public read prohibited
+    new config.ManagedRule(
+      this,
+      `TapS3PublicReadProhibited-${environmentSuffix}`,
+      {
+        configRuleName: `tap-s3-bucket-public-read-prohibited-${environmentSuffix}`,
+        identifier:
+          config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
+      }
+    );
 
-    // Add dependency for each rule
-    rules.forEach(rule => {
-      rule.node.addDependency(configRecorder);
+    // S3 bucket public write prohibited
+    // new config.ManagedRule(this, `TapS3PublicWriteProhibited-${environmentSuffix}`, {
+    //   configRuleName: `tap-s3-bucket-public-write-prohibited-${environmentSuffix}`,
+    //   // identifier: config.ManagedRuleIdentifiers.S3_BUCKET_PPUBLIC_WRITE_PROHIBITED
+    // });
+
+    // Root access key check
+    new config.ManagedRule(this, `TapRootAccessKeyCheck-${environmentSuffix}`, {
+      configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
+      identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
     });
+
+    // MFA enabled for IAM console access
+    new config.ManagedRule(
+      this,
+      `TapMfaEnabledForIamConsole-${environmentSuffix}`,
+      {
+        configRuleName: `tap-mfa-enabled-for-iam-console-access-${environmentSuffix}`,
+        identifier:
+          config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
+      }
+    );
   }
 
   private createGuardDuty(environmentSuffix: string, kmsKey: kms.Key): void {
