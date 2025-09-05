@@ -5,5 +5,25 @@
   "turn_type": "multi",
   "po_id": "348832",
   "team": "2",
-  "startedAt": "2025-08-28T18:38:10.145Z"
+  "startedAt": "2025-08-28T18:38:10.145Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Database Management",
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "EC2",
+    "RDS",
+    "VPC",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch"
+  ]
 }
