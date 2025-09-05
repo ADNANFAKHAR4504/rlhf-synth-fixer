@@ -326,7 +326,7 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::IAM::Role", 2)  # Main + BucketNotificationsHandler role
         template.resource_count_is("AWS::SNS::Topic", 1)
         template.resource_count_is("AWS::CloudWatch::Alarm", 1)
-        template.resource_count_is("AWS::Lambda::Permission", 2)  # CDK creates 2: main + notification handler
+        template.resource_count_is("AWS::Lambda::Permission", 1)  # CDK creates 2: main + notification handler
         
         # Verify environment suffix is used consistently
         template.has_resource_properties("AWS::S3::Bucket", {

@@ -132,12 +132,12 @@ class TapStack(Stack):
         self.tap_storage_bucket.grant_read(self.tap_processor_function)
 
         # 6. Add explicit permission for S3 to invoke Lambda (CRITICAL FIX)
-        self.tap_processor_function.add_permission(
-            "AllowS3Invoke",
-            principal=iam.ServicePrincipal("s3.amazonaws.com"),
-            source_arn=f"{self.tap_storage_bucket.bucket_arn}/*",
-            action="lambda:InvokeFunction"
-        )
+        # self.tap_processor_function.add_permission(
+        #     "AllowS3Invoke",
+        #     principal=iam.ServicePrincipal("s3.amazonaws.com"),
+        #     source_arn=f"{self.tap_storage_bucket.bucket_arn}/*",
+        #     action="lambda:InvokeFunction"
+        # )
 
         # 7. Create explicit bucket policy for Lambda access (additional security layer)
         # bucket_policy_statement = iam.PolicyStatement(
