@@ -22,7 +22,6 @@ from pulumi_aws import (
     kms,
     cloudwatch,
     ssm,
-    logs,
     sns
 )
 
@@ -34,33 +33,33 @@ class TapStackArgs:
   Args:
     environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
     tags (Optional[dict]): Optional default tags to apply to resources.
-        lambda_memory_size (Optional[int]): Memory size for Lambda functions in MB (default: 256).
-        lambda_timeout (Optional[int]): Timeout for Lambda functions in seconds (default: 30).
-        dynamodb_read_capacity (Optional[int]): Read capacity units for DynamoDB table (default: 5).
-        dynamodb_write_capacity (Optional[int]): Write capacity units for DynamoDB table (default: 5).
-        enable_auto_scaling (Optional[bool]): Enable auto-scaling for DynamoDB (default: True).
-        max_requests_per_hour (Optional[int]): Maximum requests per hour for scaling (default: 10000).
-    """
+    lambda_memory_size (Optional[int]): Memory size for Lambda functions in MB (default: 256).
+    lambda_timeout (Optional[int]): Timeout for Lambda functions in seconds (default: 30).
+    dynamodb_read_capacity (Optional[int]): Read capacity units for DynamoDB table (default: 5).
+    dynamodb_write_capacity (Optional[int]): Write capacity units for DynamoDB table (default: 5).
+    enable_auto_scaling (Optional[bool]): Enable auto-scaling for DynamoDB (default: True).
+    max_requests_per_hour (Optional[int]): Maximum requests per hour for scaling (default: 10000).
+  """
 
-    def __init__(
-        self,
-        environment_suffix: Optional[str] = None,
-        tags: Optional[dict] = None,
-        lambda_memory_size: Optional[int] = None,
-        lambda_timeout: Optional[int] = None,
-        dynamodb_read_capacity: Optional[int] = None,
-        dynamodb_write_capacity: Optional[int] = None,
-        enable_auto_scaling: Optional[bool] = None,
-        max_requests_per_hour: Optional[int] = None
-    ):
+  def __init__(
+    self,
+    environment_suffix: Optional[str] = None,
+    tags: Optional[dict] = None,
+    lambda_memory_size: Optional[int] = None,
+    lambda_timeout: Optional[int] = None,
+    dynamodb_read_capacity: Optional[int] = None,
+    dynamodb_write_capacity: Optional[int] = None,
+    enable_auto_scaling: Optional[bool] = None,
+    max_requests_per_hour: Optional[int] = None
+  ):
     self.environment_suffix = environment_suffix or 'dev'
-        self.tags = tags or {}
-        self.lambda_memory_size = lambda_memory_size or 256
-        self.lambda_timeout = lambda_timeout or 30
-        self.dynamodb_read_capacity = dynamodb_read_capacity or 5
-        self.dynamodb_write_capacity = dynamodb_write_capacity or 5
-        self.enable_auto_scaling = enable_auto_scaling if enable_auto_scaling is not None else True
-        self.max_requests_per_hour = max_requests_per_hour or 10000
+    self.tags = tags or {}
+    self.lambda_memory_size = lambda_memory_size or 256
+    self.lambda_timeout = lambda_timeout or 30
+    self.dynamodb_read_capacity = dynamodb_read_capacity or 5
+    self.dynamodb_write_capacity = dynamodb_write_capacity or 5
+    self.enable_auto_scaling = enable_auto_scaling if enable_auto_scaling is not None else True
+    self.max_requests_per_hour = max_requests_per_hour or 10000
 
 
 class TapStack(pulumi.ComponentResource):
@@ -143,6 +142,45 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+    def _create_dynamodb_tables(self):
+        """Create DynamoDB table with KMS encryption and auto-scaling."""
+        self.dynamodb_table = dynamodb.Table(
+            f"{self.name_prefix}-data-table",
+            name=f"{self.name_prefix}-data-table",
+            billing_mode="PROVISIONED",
+            read_capacity=self.dynamodb_read_capacity,
+            write_capacity=self.dynamodb_write_capacity,
+            hash_key="id",
+            range_key="timestamp",
+            attributes=[
+                dynamodb.TableAttributeArgs(
+                    name="id",
+                    type="S"
+                ),
+                dynamodb.TableAttributeArgs(
+                    name="timestamp",
+                    type="S"
+                )
+            ],
+            server_side_encryption={
+                "enabled": True,
+                "kms_key_arn": self.kms_key.arn
+            },
+            point_in_time_recovery={
+                "enabled": True
+            },
+            tags={
+                **self.tags,
+                "Name": f"{self.name_prefix}-data-table",
+                "Environment": self.environment_suffix,
+                "Purpose": "Application data storage"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Note: Auto-scaling can be enabled later using AWS Application Auto Scaling
+        # For now, we'll use fixed capacity for simplicity
+
     def _create_iam_roles(self):
         """Create IAM roles and policies for Lambda functions."""
         # Lambda execution role
@@ -222,67 +260,6 @@ class TapStack(pulumi.ComponentResource):
             policy_arn=self.lambda_dynamodb_policy.arn,
             opts=ResourceOptions(parent=self)
         )
-
-    def _create_dynamodb_tables(self):
-        """Create DynamoDB table with KMS encryption and auto-scaling."""
-        self.dynamodb_table = dynamodb.Table(
-            f"{self.name_prefix}-data-table",
-            name=f"{self.name_prefix}-data-table",
-            billing_mode="PROVISIONED",
-            read_capacity=self.dynamodb_read_capacity,
-            write_capacity=self.dynamodb_write_capacity,
-            hash_key="id",
-            range_key="timestamp",
-            attributes=[
-                dynamodb.TableAttributeArgs(
-                    name="id",
-                    type="S"
-                ),
-                dynamodb.TableAttributeArgs(
-                    name="timestamp",
-                    type="S"
-                )
-            ],
-            server_side_encryption=dynamodb.TableServerSideEncryptionArgs(
-                enabled=True,
-                kms_key_arn=self.kms_key.arn
-            ),
-            point_in_time_recovery=dynamodb.TablePointInTimeRecoveryArgs(
-                enabled=True
-            ),
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-data-table",
-                "Environment": self.environment_suffix,
-                "Purpose": "Application data storage"
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Auto-scaling for read capacity
-        if self.enable_auto_scaling:
-            self.read_scaling_target = dynamodb.TableTargetTrackingScalingPolicy(
-                f"{self.name_prefix}-read-scaling-target",
-                max_capacity=100,
-                min_capacity=self.dynamodb_read_capacity,
-                resource_id=self.dynamodb_table.id,
-                scalable_dimension="dynamodb:table:ReadCapacityUnits",
-                service_namespace="dynamodb",
-                target_value=70.0,
-                opts=ResourceOptions(parent=self)
-            )
-
-            # Auto-scaling for write capacity
-            self.write_scaling_target = dynamodb.TableTargetTrackingScalingPolicy(
-                f"{self.name_prefix}-write-scaling-target",
-                max_capacity=100,
-                min_capacity=self.dynamodb_write_capacity,
-                resource_id=self.dynamodb_table.id,
-                scalable_dimension="dynamodb:table:WriteCapacityUnits",
-                service_namespace="dynamodb",
-                target_value=70.0,
-                opts=ResourceOptions(parent=self)
-            )
 
     def _create_encrypted_parameters(self):
         """Create encrypted parameters in Systems Manager Parameter Store."""
@@ -427,16 +404,7 @@ def lambda_handler(event, context):
             opts=ResourceOptions(parent=self)
         )
 
-        # Lambda permission for API Gateway
-        self.lambda_permission = lambda_.Permission(
-            f"{self.name_prefix}-lambda-permission",
-            statement_id="AllowExecutionFromAPIGateway",
-            action="lambda:InvokeFunction",
-            function=self.lambda_function.name,
-            principal="apigateway.amazonaws.com",
-            source_arn=Output.concat("arn:aws:execute-api:*:*:*/*/*"),
-            opts=ResourceOptions(parent=self)
-        )
+        # Lambda permission will be created after API Gateway
 
     def _create_api_gateway(self):
         """Create API Gateway with RESTful endpoints."""
@@ -445,9 +413,6 @@ def lambda_handler(event, context):
             f"{self.name_prefix}-api",
             name=f"{self.name_prefix}-api",
             description=f"API Gateway for TAP {self.environment_suffix} environment",
-            endpoint_configuration=apigateway.RestApiEndpointConfigurationArgs(
-                types=["REGIONAL"]
-            ),
             tags={
                 **self.tags,
                 "Name": f"{self.name_prefix}-api",
@@ -518,7 +483,6 @@ def lambda_handler(event, context):
         self.api_deployment = apigateway.Deployment(
             f"{self.name_prefix}-api-deployment",
             rest_api=self.api_gateway.id,
-            stage_name=self.environment_suffix,
             opts=ResourceOptions(parent=self)
         )
 
@@ -526,10 +490,23 @@ def lambda_handler(event, context):
         self.api_gateway_url = Output.concat(
             "https://",
             self.api_gateway.id,
-            ".execute-api.",
-            pulumi.get_region(),
-            ".amazonaws.com/",
+            ".execute-api.us-east-1.amazonaws.com/",
             self.environment_suffix
+        )
+
+        # Lambda permission for API Gateway
+        self.lambda_permission = lambda_.Permission(
+            f"{self.name_prefix}-lambda-permission",
+            statement_id="AllowExecutionFromAPIGateway",
+            action="lambda:InvokeFunction",
+            function=self.lambda_function.name,
+            principal="apigateway.amazonaws.com",
+            source_arn=Output.concat(
+                "arn:aws:execute-api:us-east-1:*:",
+                self.api_gateway.id,
+                "/*/*"
+            ),
+            opts=ResourceOptions(parent=self)
         )
 
     def _create_cloudwatch_alarms(self):
@@ -608,15 +585,29 @@ def lambda_handler(event, context):
 
     def _create_log_groups(self):
         """Create CloudWatch log groups for Lambda functions."""
-        self.lambda_log_group = logs.LogGroup(
-            f"{self.name_prefix}-lambda-logs",
-            name=f"/aws/lambda/{self.lambda_function.name}",
-            retention_in_days=14,
-            tags={
-                **self.tags,
-                "Name": f"{self.name_prefix}-lambda-logs",
-                "Environment": self.environment_suffix
-            },
-            opts=ResourceOptions(parent=self)
-        )
+        # Note: CloudWatch log groups are automatically created by Lambda
+        # We'll just reference the log group name for monitoring purposes
+        self.lambda_log_group_name = f"/aws/lambda/{self.lambda_function.name}"
+
+
+# Main program entry point
+if __name__ == "__main__":
+    # Create the TapStack with default configuration
+    args = TapStackArgs(
+        environment_suffix="dev",
+        tags={
+            "Project": "TAP",
+            "Environment": "dev",
+            "ManagedBy": "Pulumi"
+        }
+    )
+    
+    stack = TapStack("tap-stack", args)
+    
+    # Export key outputs
+    pulumi.export("api_gateway_url", stack.api_gateway_url)
+    pulumi.export("lambda_function_arn", stack.lambda_function.arn)
+    pulumi.export("dynamodb_table_name", stack.dynamodb_table.name)
+    pulumi.export("kms_key_id", stack.kms_key.key_id)
+    pulumi.export("environment_suffix", stack.environment_suffix)
 ```

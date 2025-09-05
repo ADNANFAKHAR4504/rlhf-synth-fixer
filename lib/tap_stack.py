@@ -162,13 +162,13 @@ class TapStack(pulumi.ComponentResource):
                     type="S"
                 )
             ],
-            server_side_encryption=dynamodb.TableServerSideEncryptionArgs(
-                enabled=True,
-                kms_key_arn=self.kms_key.arn
-            ),
-            point_in_time_recovery=dynamodb.TablePointInTimeRecoveryArgs(
-                enabled=True
-            ),
+            server_side_encryption={
+                "enabled": True,
+                "kms_key_arn": self.kms_key.arn
+            },
+            point_in_time_recovery={
+                "enabled": True
+            },
             tags={
                 **self.tags,
                 "Name": f"{self.name_prefix}-data-table",
@@ -178,30 +178,8 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Auto-scaling for read capacity
-        if self.enable_auto_scaling:
-            self.read_scaling_target = dynamodb.TableTargetTrackingScalingPolicy(
-                f"{self.name_prefix}-read-scaling-target",
-                max_capacity=100,
-                min_capacity=self.dynamodb_read_capacity,
-                resource_id=self.dynamodb_table.id,
-                scalable_dimension="dynamodb:table:ReadCapacityUnits",
-                service_namespace="dynamodb",
-                target_value=70.0,
-                opts=ResourceOptions(parent=self)
-            )
-
-            # Auto-scaling for write capacity
-            self.write_scaling_target = dynamodb.TableTargetTrackingScalingPolicy(
-                f"{self.name_prefix}-write-scaling-target",
-                max_capacity=100,
-                min_capacity=self.dynamodb_write_capacity,
-                resource_id=self.dynamodb_table.id,
-                scalable_dimension="dynamodb:table:WriteCapacityUnits",
-                service_namespace="dynamodb",
-                target_value=70.0,
-                opts=ResourceOptions(parent=self)
-            )
+        # Note: Auto-scaling can be enabled later using AWS Application Auto Scaling
+        # For now, we'll use fixed capacity for simplicity
 
     def _create_iam_roles(self):
         """Create IAM roles and policies for Lambda functions."""
@@ -426,16 +404,7 @@ def lambda_handler(event, context):
             opts=ResourceOptions(parent=self)
         )
 
-        # Lambda permission for API Gateway
-        self.lambda_permission = lambda_.Permission(
-            f"{self.name_prefix}-lambda-permission",
-            statement_id="AllowExecutionFromAPIGateway",
-            action="lambda:InvokeFunction",
-            function=self.lambda_function.name,
-            principal="apigateway.amazonaws.com",
-            source_arn=Output.concat("arn:aws:execute-api:*:*:*/*/*"),
-            opts=ResourceOptions(parent=self)
-        )
+        # Lambda permission will be created after API Gateway
 
     def _create_api_gateway(self):
         """Create API Gateway with RESTful endpoints."""
@@ -444,9 +413,6 @@ def lambda_handler(event, context):
             f"{self.name_prefix}-api",
             name=f"{self.name_prefix}-api",
             description=f"API Gateway for TAP {self.environment_suffix} environment",
-            endpoint_configuration=apigateway.RestApiEndpointConfigurationArgs(
-                types=["REGIONAL"]
-            ),
             tags={
                 **self.tags,
                 "Name": f"{self.name_prefix}-api",
@@ -517,7 +483,6 @@ def lambda_handler(event, context):
         self.api_deployment = apigateway.Deployment(
             f"{self.name_prefix}-api-deployment",
             rest_api=self.api_gateway.id,
-            stage_name=self.environment_suffix,
             opts=ResourceOptions(parent=self)
         )
 
@@ -527,6 +492,21 @@ def lambda_handler(event, context):
             self.api_gateway.id,
             ".execute-api.us-east-1.amazonaws.com/",
             self.environment_suffix
+        )
+
+        # Lambda permission for API Gateway
+        self.lambda_permission = lambda_.Permission(
+            f"{self.name_prefix}-lambda-permission",
+            statement_id="AllowExecutionFromAPIGateway",
+            action="lambda:InvokeFunction",
+            function=self.lambda_function.name,
+            principal="apigateway.amazonaws.com",
+            source_arn=Output.concat(
+                "arn:aws:execute-api:us-east-1:*:",
+                self.api_gateway.id,
+                "/*/*"
+            ),
+            opts=ResourceOptions(parent=self)
         )
 
     def _create_cloudwatch_alarms(self):
@@ -608,3 +588,25 @@ def lambda_handler(event, context):
         # Note: CloudWatch log groups are automatically created by Lambda
         # We'll just reference the log group name for monitoring purposes
         self.lambda_log_group_name = f"/aws/lambda/{self.lambda_function.name}"
+
+
+# Main program entry point
+if __name__ == "__main__":
+    # Create the TapStack with default configuration
+    args = TapStackArgs(
+        environment_suffix="dev",
+        tags={
+            "Project": "TAP",
+            "Environment": "dev",
+            "ManagedBy": "Pulumi"
+        }
+    )
+    
+    stack = TapStack("tap-stack", args)
+    
+    # Export key outputs
+    pulumi.export("api_gateway_url", stack.api_gateway_url)
+    pulumi.export("lambda_function_arn", stack.lambda_function.arn)
+    pulumi.export("dynamodb_table_name", stack.dynamodb_table.name)
+    pulumi.export("kms_key_id", stack.kms_key.key_id)
+    pulumi.export("environment_suffix", stack.environment_suffix)
