@@ -708,7 +708,7 @@ export class TapStack extends cdk.Stack {
         maxErrors: '0',
         taskParameters: {
           Operation: {
-            values: ['Install'],
+            Values: ['Install'],
           },
         },
       }
