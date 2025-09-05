@@ -22,5 +22,10 @@
     "VPC",
     "IAM",
     "S3"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
