@@ -1101,7 +1101,6 @@ resource "aws_route53_health_check" "alb" {
   request_interval                = 30
   cloudwatch_alarm_region         = var.primary_region
   cloudwatch_alarm_name           = aws_cloudwatch_metric_alarm.alb_health.alarm_name
-  insufficient_data_health_status = "Failure"
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb-health-check"
