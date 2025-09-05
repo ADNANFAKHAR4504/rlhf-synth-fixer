@@ -1,59 +1,55 @@
 import * as fs from "fs";
 import * as path from "path";
 
-const outputFile = path.resolve("cfn-outputs/flat-outputs.json");
+const outputsPath = path.resolve("cfn-outputs/flat-outputs.json");
+let outputs: Record<string, any> = {};
 
 const isNonEmptyString = (v: any) => typeof v === "string" && v.trim().length > 0;
-const isValidArn = (v: string) => /^arn:[^:]+:[^:]*:[^:]*:\*{0,3}:.*$/.test(v.trim()) || /^arn:[^:]+:[^:]*:[^:]*:[0-9]*:.*$/.test(v.trim());
+const isValidArn = (v: string) => /^arn:[^:]+:[a-z-]+:[^:]*:[0-9]*:.*$/.test(v) || /^arn:aws:s3:::.+/.test(v);
 const isValidVpcId = (v: string) => v.startsWith("vpc-");
 const isValidSubnetId = (v: string) => v.startsWith("subnet-");
 const isValidSGId = (v: string) => v.startsWith("sg-");
 const isValidIGWId = (v: string) => v.startsWith("igw-");
 const isValidNatId = (v: string) => v.startsWith("nat-");
-const isValidZoneId = (v: string) => v.startsWith("Z");
+const isValidAMIId = (v: string) => v.startsWith("ami-");
 const isValidHealthCheckId = (v: string) => /^[a-f0-9-]{36}$/.test(v);
+const isValidZoneId = (v: string) => v.startsWith("Z");
 const isValidDomainName = (v: string) => /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(v);
 const isValidBucketName = (v: string) => /^[a-z0-9.-]+$/.test(v);
-const isValidAMIId = (v: string) => v.startsWith("ami-");
 const isValidTargetGroupArn = (v: string) => v.includes(":targetgroup/");
 const parseArray = (v: any) => {
-  if (typeof v === "string") {
-    try {
-      const arr = JSON.parse(v);
-      return Array.isArray(arr) ? arr : v;
-    } catch {
-      return v;
-    }
+  if (typeof v === "string" && v.startsWith("[")) {
+    try { const arr = JSON.parse(v); return Array.isArray(arr) ? arr : v; } catch { return v; }
   }
   return v;
 };
 const skipIfMissing = (key: string, obj: any) => {
   if (!(key in obj)) {
-    // eslint-disable-next-line no-console
     console.warn(`Skipping tests for missing output: ${key}`);
     return true;
   }
   return false;
 };
 
-describe("Terraform flat outputs - integration validation", () => {
-  let outputs: Record<string, any>;
-
-  beforeAll(() => {
-    const data = fs.readFileSync(outputFile, "utf8");
-    const parsed = JSON.parse(data);
-    outputs = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      outputs[k] = parseArray(v);
+// Robust checker for non-empty value
+const isNonEmptyValue = (v: any) => {
+  if (typeof v === "string") {
+    if (v.trim().length === 0) return false;
+    // Handle stringified array
+    if (v.trim()[0] === "[") {
+      try {
+        const arr = JSON.parse(v);
+        return Array.isArray(arr) ? arr.length > 0 : true;
+      } catch { return true; }
     }
-  });
+    return true;
+  }
+  if (Array.isArray(v)) return v.length > 0;
+  return !!v;
+};
 
-  it("has sufficient keys (at least 30)", () => {
-    expect(Object.keys(outputs).length).toBeGreaterThan(30);
-  });
-
-  // --- SANITY/COVERAGE ---
-  const requiredFlatKeys = [
+describe("Terraform flat outputs - integration validation", () => {
+  let requiredFlatKeys = [
     "alb_health_alarm_name", "alb_security_group_id", "autoscaling_group_name", "domain_name",
     "ec2_instance_profile_name", "load_balancer_arn", "load_balancer_dns_name",
     "primary_ami_id", "primary_availability_zones", "primary_cpu_alarm_name",
@@ -67,14 +63,32 @@ describe("Terraform flat outputs - integration validation", () => {
     "secondary_s3_bucket_arn", "secondary_s3_bucket_name", "secondary_security_group_id",
     "secondary_vpc_cidr", "secondary_vpc_id", "sns_topic_arn", "target_group_arn"
   ];
-  it("all required outputs are present and non-empty", () => {
+
+  beforeAll(() => {
+    const data = fs.readFileSync(outputsPath, "utf8");
+    const parsed = JSON.parse(data);
+    outputs = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      outputs[k] = parseArray(v);
+    }
+  });
+
+  it("has sufficient keys (at least 30)", () => {
+    expect(Object.keys(outputs).length).toBeGreaterThan(30);
+  });
+
+  it("all required outputs are present and non-empty (robust)", () => {
     requiredFlatKeys.forEach(key => {
       expect(key in outputs).toBe(true);
-      expect(isNonEmptyString(outputs[key])).toBe(true);
+      if (!isNonEmptyValue(outputs[key])) {
+        // Log any failing output for fast debug
+        // eslint-disable-next-line no-console
+        console.log(`Output for key "${key}" is empty or invalid:`, outputs[key]);
+      }
+      expect(isNonEmptyValue(outputs[key])).toBe(true);
     });
   });
 
-  // --- ID/FORMAT VALIDATION ---
   it("validates VPC IDs", () => {
     ["primary_vpc_id", "secondary_vpc_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
@@ -114,15 +128,6 @@ describe("Terraform flat outputs - integration validation", () => {
     });
   });
 
-  it("validates Availability Zone arrays", () => {
-    ["primary_availability_zones", "secondary_availability_zones"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      const arr = parseArray(outputs[key]);
-      expect(Array.isArray(arr)).toBe(true);
-      arr.forEach((az: string) => expect(az).toMatch(/^us-[a-z0-9-]+[a-cf]$/));
-    });
-  });
-
   it("validates S3 bucket ARNs and names", () => {
     ["primary_s3_bucket_arn", "secondary_s3_bucket_arn"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
@@ -135,7 +140,11 @@ describe("Terraform flat outputs - integration validation", () => {
     });
   });
 
-  it("validates target group ARN", () => {
+  it("validates Target Group, LB, SNS, S3 Replication ARNs", () => {
+    ["load_balancer_arn", "target_group_arn", "s3_replication_role_arn", "sns_topic_arn"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(isValidArn(outputs[key])).toBe(true);
+    });
     if (!skipIfMissing("target_group_arn", outputs))
       expect(isValidTargetGroupArn(outputs["target_group_arn"])).toBe(true);
   });
@@ -143,7 +152,7 @@ describe("Terraform flat outputs - integration validation", () => {
   it("validates KMS key IDs", () => {
     ["primary_kms_key_id", "secondary_kms_key_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
-      expect(outputs[key]).toMatch(/^[a-f0-9-]{36}$/); // UUID format
+      expect(outputs[key]).toMatch(/^[a-f0-9-]{36}$/);
     });
   });
 
@@ -160,23 +169,6 @@ describe("Terraform flat outputs - integration validation", () => {
       expect(Array.isArray(arr)).toBe(true);
       arr.forEach((ns: string) => expect(ns).toMatch(/^ns-[0-9]+\.awsdns-[0-9]+\.(com|net|org|co\.uk)$/));
     }
-  });
-
-  it("validates DNS names", () => {
-    ["load_balancer_dns_name"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-      expect(isValidDomainName(outputs[key])).toBe(true);
-    });
-    if (!skipIfMissing("domain_name", outputs))
-      expect(isValidDomainName(outputs["domain_name"])).toBe(true);
-  });
-
-  it("validates ARNs", () => {
-    ["load_balancer_arn", "s3_replication_role_arn", "sns_topic_arn"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidArn(outputs[key])).toBe(true);
-    });
   });
 
   it("validates Alarm names are present and non-empty", () => {
@@ -196,19 +188,24 @@ describe("Terraform flat outputs - integration validation", () => {
       expect(isNonEmptyString(outputs["ec2_instance_profile_name"])).toBe(true);
   });
 
-  // --- SENSITIVE DATA SANITIZATION ---
-  it("does not expose passwords, secret values or sensitive plain text in outputs", () => {
-    const sensitivePatterns = [
-      /password/i,
-      /secret_value/i,
-      /secret_string/i,
-      /private_key/i,
-      /access_key/i,
-      /session_token/i,
-    ];
-    const violation = Object.keys(outputs).some((k) =>
-      sensitivePatterns.some((p) => p.test(k))
-    );
-    expect(violation).toBe(false);
+  it("validates AZ arrays", () => {
+    ["primary_availability_zones", "secondary_availability_zones"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      const arr = parseArray(outputs[key]);
+      expect(Array.isArray(arr)).toBe(true);
+      arr.forEach((az: string) => expect(az).toMatch(/^us-[a-z0-9-]+[a-cf]$/));
+    });
+  });
+
+  it("validates DNS/domain outputs", () => {
+    ["load_balancer_dns_name", "domain_name"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(isValidDomainName(outputs[key])).toBe(true);
+    });
+  });
+
+  it("does not expose sensitive fields in outputs", () => {
+    const sensitive = Object.keys(outputs).some(k => /(password|secret(_|)string|private|access_key|session_token)/i.test(k));
+    expect(sensitive).toBe(false);
   });
 });
