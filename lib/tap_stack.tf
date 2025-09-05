@@ -1,3 +1,10 @@
+# Variables
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming"
+  type        = string
+  default     = "dev"
+}
+
 # VPC
 resource "aws_vpc" "basic_vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -5,9 +12,9 @@ resource "aws_vpc" "basic_vpc" {
   enable_dns_support   = true
 
   tags = {
-    Name        = "basic-vpc"
+    Name        = "basic-vpc-${var.environment_suffix}"
     Project     = "basic-network"
-    Environment = "dev"
+    Environment = var.environment_suffix
   }
 }
 
@@ -16,9 +23,9 @@ resource "aws_internet_gateway" "basic_igw" {
   vpc_id = aws_vpc.basic_vpc.id
 
   tags = {
-    Name        = "basic-igw"
+    Name        = "basic-igw-${var.environment_suffix}"
     Project     = "basic-network"
-    Environment = "dev"
+    Environment = var.environment_suffix
   }
 }
 
@@ -30,9 +37,9 @@ resource "aws_subnet" "public_a" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "public-a"
+    Name        = "public-a-${var.environment_suffix}"
     Project     = "basic-network"
-    Environment = "dev"
+    Environment = var.environment_suffix
   }
 }
 
@@ -44,9 +51,9 @@ resource "aws_subnet" "public_b" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name        = "public-b"
+    Name        = "public-b-${var.environment_suffix}"
     Project     = "basic-network"
-    Environment = "dev"
+    Environment = var.environment_suffix
   }
 }
 
@@ -55,9 +62,9 @@ resource "aws_route_table" "public_rt" {
   vpc_id = aws_vpc.basic_vpc.id
 
   tags = {
-    Name        = "public-rt"
+    Name        = "public-rt-${var.environment_suffix}"
     Project     = "basic-network"
-    Environment = "dev"
+    Environment = var.environment_suffix
   }
 }
 

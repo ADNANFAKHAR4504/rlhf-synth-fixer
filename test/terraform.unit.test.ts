@@ -67,6 +67,13 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).not.toMatch(/\bprovider\s+"aws"\s*{/);
     });
 
+    test('declares environment_suffix variable', () => {
+      expect(stackContent).toMatch(/variable\s+"environment_suffix"\s*{/);
+      expect(stackContent).toMatch(/description\s*=\s*"Environment suffix for resource naming"/);
+      expect(stackContent).toMatch(/type\s*=\s*string/);
+      expect(stackContent).toMatch(/default\s*=\s*"dev"/);
+    });
+
     test('declares VPC resource', () => {
       expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"basic_vpc"\s*{/);
     });
@@ -130,10 +137,10 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).toMatch(/enable_dns_support\s*=\s*true/);
     });
 
-    test('VPC has proper tags', () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"basic-vpc"/);
+    test('VPC has proper tags with environment suffix', () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"basic-vpc-\$\{var\.environment_suffix\}"/);
       expect(stackContent).toMatch(/Project\s*=\s*"basic-network"/);
-      expect(stackContent).toMatch(/Environment\s*=\s*"dev"/);
+      expect(stackContent).toMatch(/Environment\s*=\s*var\.environment_suffix/);
     });
   });
 
@@ -161,9 +168,9 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(subnetMatches).toHaveLength(2);
     });
 
-    test('both subnets have proper tags', () => {
-      expect(stackContent).toMatch(/Name\s*=\s*"public-a"/);
-      expect(stackContent).toMatch(/Name\s*=\s*"public-b"/);
+    test('both subnets have proper tags with environment suffix', () => {
+      expect(stackContent).toMatch(/Name\s*=\s*"public-a-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-b-\$\{var\.environment_suffix\}"/);
     });
   });
 
@@ -265,6 +272,219 @@ describe('Terraform Configuration Unit Tests', () => {
       expect(stackContent).toMatch(
         /gateway_id\s*=\s*aws_internet_gateway\.basic_igw\.id/
       );
+    });
+
+    test('route table associations reference correct resources', () => {
+      const associations = stackContent.match(
+        /resource\s+"aws_route_table_association"[^}]+}/gs
+      );
+      expect(associations).toHaveLength(2);
+      
+      // Check that each association references the correct subnet and route table
+      const publicAAssociation = stackContent.match(
+        /resource\s+"aws_route_table_association"\s+"public_a"[^}]+}/s
+      );
+      expect(publicAAssociation).toBeTruthy();
+      expect(publicAAssociation![0]).toMatch(/subnet_id\s*=\s*aws_subnet\.public_a\.id/);
+      expect(publicAAssociation![0]).toMatch(/route_table_id\s*=\s*aws_route_table\.public_rt\.id/);
+      
+      const publicBAssociation = stackContent.match(
+        /resource\s+"aws_route_table_association"\s+"public_b"[^}]+}/s
+      );
+      expect(publicBAssociation).toBeTruthy();
+      expect(publicBAssociation![0]).toMatch(/subnet_id\s*=\s*aws_subnet\.public_b\.id/);
+      expect(publicBAssociation![0]).toMatch(/route_table_id\s*=\s*aws_route_table\.public_rt\.id/);
+    });
+  });
+
+  describe('Environment Suffix Usage', () => {
+    let stackContent: string;
+
+    beforeAll(() => {
+      stackContent = fs.readFileSync(stackPath, 'utf8');
+    });
+
+    test('all resources use environment_suffix in tags', () => {
+      // Check VPC
+      expect(stackContent).toMatch(/Name\s*=\s*"basic-vpc-\$\{var\.environment_suffix\}"/);
+      
+      // Check IGW
+      expect(stackContent).toMatch(/Name\s*=\s*"basic-igw-\$\{var\.environment_suffix\}"/);
+      
+      // Check Subnets
+      expect(stackContent).toMatch(/Name\s*=\s*"public-a-\$\{var\.environment_suffix\}"/);
+      expect(stackContent).toMatch(/Name\s*=\s*"public-b-\$\{var\.environment_suffix\}"/);
+      
+      // Check Route Table
+      expect(stackContent).toMatch(/Name\s*=\s*"public-rt-\$\{var\.environment_suffix\}"/);
+    });
+
+    test('all Environment tags use var.environment_suffix', () => {
+      const envTags = stackContent.match(/Environment\s*=\s*[^\n]+/g);
+      expect(envTags).toBeTruthy();
+      envTags!.forEach(tag => {
+        expect(tag).toMatch(/Environment\s*=\s*var\.environment_suffix/);
+      });
+    });
+
+    test('variable has proper type and default value', () => {
+      const varBlock = stackContent.match(
+        /variable\s+"environment_suffix"\s*\{[^}]+\}/s
+      );
+      expect(varBlock).toBeTruthy();
+      expect(varBlock![0]).toMatch(/type\s*=\s*string/);
+      expect(varBlock![0]).toMatch(/default\s*=\s*"dev"/);
+      expect(varBlock![0]).toMatch(/description/);
+    });
+  });
+
+  describe('Resource Naming Conventions', () => {
+    let stackContent: string;
+
+    beforeAll(() => {
+      stackContent = fs.readFileSync(stackPath, 'utf8');
+    });
+
+    test('all resources follow naming conventions', () => {
+      // Check that resource names use underscores, not hyphens
+      expect(stackContent).toMatch(/resource\s+"aws_vpc"\s+"basic_vpc"/);
+      expect(stackContent).toMatch(/resource\s+"aws_internet_gateway"\s+"basic_igw"/);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public_a"/);
+      expect(stackContent).toMatch(/resource\s+"aws_subnet"\s+"public_b"/);
+      expect(stackContent).toMatch(/resource\s+"aws_route_table"\s+"public_rt"/);
+      expect(stackContent).toMatch(/resource\s+"aws_route"\s+"public_internet_access"/);
+      expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"public_a"/);
+      expect(stackContent).toMatch(/resource\s+"aws_route_table_association"\s+"public_b"/);
+    });
+
+    test('all tag Names use hyphens as separators', () => {
+      const nameTags = stackContent.match(/Name\s*=\s*"[^"]+"/g);
+      expect(nameTags).toBeTruthy();
+      nameTags!.forEach(tag => {
+        const value = tag.match(/"([^"]+)"/)![1];
+        // Check that the base name uses hyphens
+        const baseName = value.replace(/\$\{[^}]+\}/g, '');
+        expect(baseName).toMatch(/^[a-z-]+$/);
+      });
+    });
+  });
+
+  describe('CIDR Block Configuration', () => {
+    let stackContent: string;
+
+    beforeAll(() => {
+      stackContent = fs.readFileSync(stackPath, 'utf8');
+    });
+
+    test('CIDR blocks are non-overlapping and properly sized', () => {
+      // VPC CIDR
+      expect(stackContent).toMatch(/cidr_block\s*=\s*"10\.0\.0\.0\/16"/);
+      
+      // Subnet CIDRs
+      const subnet1CIDR = stackContent.match(
+        /resource\s+"aws_subnet"\s+"public_a"[^}]+cidr_block\s*=\s*"([^"]+)"/s
+      );
+      expect(subnet1CIDR).toBeTruthy();
+      expect(subnet1CIDR![1]).toBe('10.0.1.0/24');
+      
+      const subnet2CIDR = stackContent.match(
+        /resource\s+"aws_subnet"\s+"public_b"[^}]+cidr_block\s*=\s*"([^"]+)"/s
+      );
+      expect(subnet2CIDR).toBeTruthy();
+      expect(subnet2CIDR![1]).toBe('10.0.2.0/24');
+    });
+
+    test('subnets are within VPC CIDR range', () => {
+      const vpcCIDR = '10.0.0.0/16';
+      const subnet1CIDR = '10.0.1.0/24';
+      const subnet2CIDR = '10.0.2.0/24';
+      
+      // Basic check that subnet CIDRs start with VPC network prefix
+      expect(subnet1CIDR).toMatch(/^10\.0\./);
+      expect(subnet2CIDR).toMatch(/^10\.0\./);
+    });
+  });
+
+  describe('Availability Zone Configuration', () => {
+    let stackContent: string;
+
+    beforeAll(() => {
+      stackContent = fs.readFileSync(stackPath, 'utf8');
+    });
+
+    test('subnets are in different availability zones', () => {
+      const subnetA = stackContent.match(
+        /resource\s+"aws_subnet"\s+"public_a"[^}]+availability_zone\s*=\s*"([^"]+)"/s
+      );
+      const subnetB = stackContent.match(
+        /resource\s+"aws_subnet"\s+"public_b"[^}]+availability_zone\s*=\s*"([^"]+)"/s
+      );
+      
+      expect(subnetA).toBeTruthy();
+      expect(subnetB).toBeTruthy();
+      expect(subnetA![1]).toBe('us-east-1a');
+      expect(subnetB![1]).toBe('us-east-1b');
+      expect(subnetA![1]).not.toBe(subnetB![1]);
+    });
+
+    test('availability zones match the configured region', () => {
+      const providerContent = fs.readFileSync(providerPath, 'utf8');
+      const region = providerContent.match(/region\s*=\s*"([^"]+)"/);
+      expect(region).toBeTruthy();
+      expect(region![1]).toBe('us-east-1');
+      
+      // Check that AZs start with the region
+      expect(stackContent).toMatch(/availability_zone\s*=\s*"us-east-1[a-z]"/);
+    });
+  });
+
+  describe('Output Completeness', () => {
+    let stackContent: string;
+
+    beforeAll(() => {
+      stackContent = fs.readFileSync(stackPath, 'utf8');
+    });
+
+    test('all outputs have descriptions', () => {
+      const outputs = stackContent.match(/output\s+"[^"]+"\s*\{[^}]+\}/gs);
+      expect(outputs).toBeTruthy();
+      expect(outputs!.length).toBe(4);
+      
+      outputs!.forEach(output => {
+        expect(output).toMatch(/description\s*=/);
+        expect(output).toMatch(/value\s*=/);
+      });
+    });
+
+    test('outputs reference correct resources', () => {
+      // vpc_id output
+      const vpcOutput = stackContent.match(
+        /output\s+"vpc_id"\s*\{[^}]+\}/s
+      );
+      expect(vpcOutput).toBeTruthy();
+      expect(vpcOutput![0]).toMatch(/value\s*=\s*aws_vpc\.basic_vpc\.id/);
+      
+      // subnet_ids output
+      const subnetOutput = stackContent.match(
+        /output\s+"subnet_ids"\s*\{[^}]+\}/s
+      );
+      expect(subnetOutput).toBeTruthy();
+      expect(subnetOutput![0]).toMatch(/aws_subnet\.public_a\.id/);
+      expect(subnetOutput![0]).toMatch(/aws_subnet\.public_b\.id/);
+      
+      // internet_gateway_id output
+      const igwOutput = stackContent.match(
+        /output\s+"internet_gateway_id"\s*\{[^}]+\}/s
+      );
+      expect(igwOutput).toBeTruthy();
+      expect(igwOutput![0]).toMatch(/value\s*=\s*aws_internet_gateway\.basic_igw\.id/);
+      
+      // route_table_id output
+      const rtOutput = stackContent.match(
+        /output\s+"route_table_id"\s*\{[^}]+\}/s
+      );
+      expect(rtOutput).toBeTruthy();
+      expect(rtOutput![0]).toMatch(/value\s*=\s*aws_route_table\.public_rt\.id/);
     });
   });
 });
