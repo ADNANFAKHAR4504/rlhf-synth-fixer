@@ -1,8 +1,9 @@
 terraform {
   required_version = ">= 1.0"
   
-  backend "local" {
-    path = "terraform.tfstate"
+  backend "s3" {
+    # Configuration will be provided via backend-config arguments
+    # bucket, key, region, encrypt, etc. will be set via CLI
   }
   
   required_providers {
