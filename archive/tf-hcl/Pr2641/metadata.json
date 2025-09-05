@@ -40,5 +40,10 @@
     "Route Table",
     "Security Group",
     "Random ID"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
