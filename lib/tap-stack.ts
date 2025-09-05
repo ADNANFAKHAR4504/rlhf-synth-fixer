@@ -83,7 +83,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
       role: ec2Role,
     });
 
