@@ -52,9 +52,9 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name:
-        Fn::Sub: ${AWS::StackName}-${Environment}-database-credentials
+        Fn::Sub: ${AWS::StackName}-${Environment}-${AWS::Region}-${AWS::AccountId}-db-creds
       Description:
-        Fn::Sub: "Database credentials for ${AWS::StackName} stack"
+        Fn::Sub: "Database credentials for ${AWS::StackName} stack in ${AWS::Region}"
       GenerateSecretString:
         SecretStringTemplate:
           Fn::Sub: '{"username": "${DBUsername}"}'
@@ -319,9 +319,9 @@ Resources:
         Fn::Sub: ${Environment}database
       Engine: mysql
       MasterUsername:
-        Fn::Sub: "{{resolve:secretsmanager:${DatabaseSecret}::username}}"
+        Fn::Sub: "{{resolve:secretsmanager:${AWS::StackName}-${Environment}-${AWS::Region}-${AWS::AccountId}-db-creds::username}}"
       MasterUserPassword:
-        Fn::Sub: "{{resolve:secretsmanager:${DatabaseSecret}::password}}"
+        Fn::Sub: "{{resolve:secretsmanager:${AWS::StackName}-${Environment}-${AWS::Region}-${AWS::AccountId}-db-creds::password}}"
       DBInstanceClass: db.t3.medium
       AllocatedStorage: "20"
       StorageType: gp2
