@@ -23,6 +23,7 @@ Parameters:
     Default: 10.0.0.0/16
     Description: CIDR block for the VPC
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: Must be a valid /16 - /28 CIDR (e.g., 10.0.0.0/16)
 
   PublicSubnetCidrs:
     Type: CommaDelimitedList
@@ -36,8 +37,10 @@ Parameters:
 
   AllowedSshCidr:
     Type: String
-    Description: CIDR block allowed to SSH to bastion host (e.g. your office IP/32)
-    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|3[0-2])$
+    Default: 203.0.113.0/32
+    Description: CIDR allowed to SSH to bastion (set to YOUR_PUBLIC_IP/32)
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(0|[1-9]|[1-2][0-9]|3[0-2]))$
+    ConstraintDescription: Must be a valid IPv4 CIDR (e.g., 198.51.100.7/32)
 
   BastionInstanceType:
     Type: String
@@ -65,10 +68,7 @@ Parameters:
     Description: Whether to require AutoDelete=true tag for EBS cleanup
 
 Resources:
-  # =============================================================================
-  # VPC AND NETWORKING
-  # =============================================================================
-
+  # ========================= VPC & NETWORKING =========================
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -264,10 +264,7 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
-  # =============================================================================
-  # KMS ENCRYPTION
-  # =============================================================================
-
+  # ========================= KMS =========================
   KmsKey:
     Type: AWS::KMS::Key
     Properties:
@@ -304,10 +301,7 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-key'
       TargetKeyId: !Ref KmsKey
 
-  # =============================================================================
-  # S3 BUCKETS (avoid hard-coded names to satisfy DNS naming rules)
-  # =============================================================================
-
+  # ========================= S3 (names auto-assigned to satisfy DNS rules) =========================
   S3AppBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -434,10 +428,7 @@ Resources:
             Action: 's3:PutObject'
             Resource: !Sub 'arn:aws:s3:::${S3LogsBucket}/app-access-logs/*'
 
-  # =============================================================================
-  # CLOUDTRAIL
-  # =============================================================================
-
+  # ========================= CloudTrail =========================
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Properties:
@@ -462,10 +453,7 @@ Resources:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: Owner, Value: !Ref Owner }
 
-  # =============================================================================
-  # IAM MANAGED POLICIES
-  # =============================================================================
-
+  # ========================= IAM Managed Policies =========================
   AppDataAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -539,10 +527,7 @@ Resources:
             Action: [ logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents ]
             Resource: '*'
 
-  # =============================================================================
-  # IAM ROLES / GROUPS / PROFILES
-  # =============================================================================
-
+  # ========================= IAM Roles / Group / Profiles =========================
   BastionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -618,10 +603,7 @@ Resources:
       InstanceProfileName: !Sub '${ProjectName}-PrivateInstanceProfile'
       Roles: [ !Ref PrivateInstanceRole ]
 
-  # =============================================================================
-  # SECURITY GROUPS
-  # =============================================================================
-
+  # ========================= Security Groups =========================
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -666,10 +648,7 @@ Resources:
         - { Key: Environment, Value: !Ref Environment }
         - { Key: Owner, Value: !Ref Owner }
 
-  # =============================================================================
-  # VPC ENDPOINTS
-  # =============================================================================
-
+  # ========================= VPC Endpoints =========================
   S3Endpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -744,14 +723,11 @@ Resources:
       SubnetIds: [ !Ref PrivateSubnet1, !Ref PrivateSubnet2 ]
       SecurityGroupIds: [ !Ref VpcEndpointSecurityGroup ]
 
-  # =============================================================================
-  # EC2 INSTANCES
-  # =============================================================================
-
+  # ========================= EC2 =========================
   BastionInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+      ImageId:  '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
       InstanceType: !Ref BastionInstanceType
       IamInstanceProfile: !Ref BastionInstanceProfile
       SecurityGroupIds: [ !Ref BastionSecurityGroup ]
@@ -763,11 +739,9 @@ Resources:
           yum install -y amazon-ssm-agent
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
-          # Harden SSH
           sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
           sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
           systemctl restart sshd
-          # Install CloudWatch agent
           yum install -y amazon-cloudwatch-agent
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-bastion' }
@@ -791,11 +765,9 @@ Resources:
             yum install -y amazon-ssm-agent amazon-cloudwatch-agent
             systemctl enable amazon-ssm-agent
             systemctl start amazon-ssm-agent
-            # Install AWS CLI v2
             curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-            unzip awscliv2.zip
+            unzip -q awscliv2.zip
             ./aws/install
-            # Test S3 access over TLS
             aws s3 ls s3://${S3AppBucket} || echo "S3 access test failed"
         TagSpecifications:
           - ResourceType: instance
@@ -832,15 +804,12 @@ Resources:
           Value: !Ref Owner
           PropagateAtLaunch: true
 
-  # =============================================================================
-  # EBS CLEANUP LAMBDA
-  # =============================================================================
-
+  # ========================= EBS Cleanup Lambda =========================
   EbsCleanupLambda:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub '${ProjectName}-ebs-cleanup'
-      Runtime: python3.9
+      Runtime: python3.12
       Handler: index.lambda_handler
       Role: !GetAtt EbsCleanupLambdaRole.Arn
       Timeout: 300
@@ -869,13 +838,11 @@ Resources:
               for page in page_iterator:
                   for volume in page.get('Volumes', []):
                       volume_id = volume['VolumeId']
-                      create_time = volume['CreateTime']  # already in UTC
+                      create_time = volume['CreateTime']  # UTC
 
-                      # Old enough?
                       if create_time > cutoff_time:
                           continue
 
-                      # Require AutoDelete=true tag if configured
                       if require_tag:
                           tags = {t['Key']: t['Value'] for t in volume.get('Tags', [])}
                           if tags.get('AutoDelete', '').lower() != 'true':
@@ -888,10 +855,7 @@ Resources:
                       except Exception as e:
                           print(f"Failed to delete volume {volume_id}: {str(e)}")
 
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps({'deleted_volumes': deleted_volumes, 'count': len(deleted_volumes)})
-              }
+              return {'statusCode': 200, 'body': json.dumps({'deleted_volumes': deleted_volumes, 'count': len(deleted_volumes)})}
       Tags:
         - { Key: Name, Value: !Sub '${ProjectName}-ebs-cleanup' }
         - { Key: Project, Value: !Ref ProjectName }
@@ -917,10 +881,7 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt EbsCleanupScheduleRule.Arn
 
-# =============================================================================
-# OUTPUTS
-# =============================================================================
-
+# ========================= Outputs =========================
 Outputs:
   VpcId:
     Description: ID of the created VPC
