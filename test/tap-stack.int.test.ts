@@ -31,11 +31,19 @@ import {
 import { GetTopicAttributesCommand, SNSClient } from '@aws-sdk/client-sns';
 import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
 import fs from 'fs';
+import path from 'path';
 
 // Read deployment outputs
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+let outputs: any;
+try {
+  const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+  console.log('Reading outputs from:', outputsPath);
+  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+  console.log('Loaded outputs:', outputs);
+} catch (error) {
+  console.error('Error reading outputs file:', error);
+  outputs = {};
+}
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix: string = process.env.ENVIRONMENT_SUFFIX || 'dev';
