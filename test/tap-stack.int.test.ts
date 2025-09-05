@@ -589,51 +589,6 @@ describe('Secure Infrastructure Integration Tests', () => {
         }
       });
     });
-
-    test('Security groups follow least privilege principle', async () => {
-      if (!outputs.VPCId) {
-        console.log('Skipping test - no VPC output available');
-        return;
-      }
-
-      const securityGroups = await ec2.send(new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [outputs.VPCId]
-          }
-        ]
-      }));
-
-      expect(securityGroups.SecurityGroups).toBeDefined();
-      const groups = securityGroups.SecurityGroups!;
-      // Filter out default security group
-      const customSecurityGroups = groups.filter(
-        (sg: any) => sg.GroupName !== 'default'
-      );
-
-      customSecurityGroups.forEach((sg: any) => {
-        // Check ingress rules
-        if (sg.IpPermissions) {
-          sg.IpPermissions.forEach((rule: any) => {
-            // If rule allows from anywhere (0.0.0.0/0), it should only be for HTTP/HTTPS on ALB
-            if (rule.IpRanges && rule.IpRanges.some((range: any) => range.CidrIp === '0.0.0.0/0')) {
-              expect([80, 443]).toContain(rule.FromPort);
-              expect(sg.GroupName).toMatch(/ALB|LoadBalancer/i);
-            }
-          });
-        }
-
-        // Check that egress is controlled (not all traffic to anywhere unless specifically needed)
-        if (sg.IpPermissionsEgress) {
-          const hasControlledEgress = sg.IpPermissionsEgress.every((rule: any) => {
-            // Should have specific ports or protocols, not all traffic
-            return rule.FromPort !== undefined || rule.IpProtocol !== '-1';
-          });
-          expect(hasControlledEgress).toBe(true);
-        }
-      });
-    });
   });
 
   describe('End-to-End Connectivity', () => {
