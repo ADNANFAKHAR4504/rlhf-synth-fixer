@@ -1672,9 +1672,6 @@ resource "aws_route53_health_check" "primary" {
   resource_path                 = "/"
   failure_threshold             = "5"
   request_interval              = "30"
-  cloudwatch_logs_region        = var.primary_region
-  cloudwatch_alarm_region       = var.primary_region
-  insufficient_data_health_status = "Failure"
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-health-check"
@@ -1690,9 +1687,6 @@ resource "aws_route53_health_check" "secondary" {
   resource_path                 = "/"
   failure_threshold             = "5"
   request_interval              = "30"
-  cloudwatch_logs_region        = var.secondary_region
-  cloudwatch_alarm_region       = var.secondary_region
-  insufficient_data_health_status = "Failure"
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-health-check"
