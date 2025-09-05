@@ -1091,7 +1091,7 @@ resource "aws_db_instance" "main" {
   publicly_accessible = false
   deletion_protection = var.enable_deletion_protection
 
-  skip_final_snapshot       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name_prefix}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   performance_insights_enabled = false
@@ -1139,22 +1139,22 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = var.enable_deletion_protection
 
-  # Access logs disabled to avoid S3 permission complexity
-  # access_logs {
-  #   bucket  = aws_s3_bucket.logs_bucket.id
-  #   prefix  = "alb-access-logs"
-  #   enabled = false
-  # }
+  # Access logs enabled for security compliance
+  access_logs {
+    bucket  = aws_s3_bucket.logs_bucket.id
+    prefix  = "alb-access-logs"
+    enabled = true
+  }
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
   })
 
-  # Removed dependencies for ALB access logging
-  # depends_on = [
-  #   aws_s3_bucket_policy.logs_bucket_policy,
-  #   aws_s3_bucket_public_access_block.logs_bucket
-  # ]
+  # Dependencies for ALB access logging
+  depends_on = [
+    aws_s3_bucket_policy.logs_bucket_policy,
+    aws_s3_bucket_public_access_block.logs_bucket
+  ]
 }
 
 # Self-signed certificate for HTTPS (for demo purposes)
@@ -1189,7 +1189,7 @@ resource "aws_acm_certificate" "main" {
   })
 }
 
-# S3 Bucket Policy for logs bucket (simplified - no ALB access logging)
+# S3 Bucket Policy for logs bucket (includes ALB access logging permissions)
 resource "aws_s3_bucket_policy" "logs_bucket_policy" {
   bucket = aws_s3_bucket.logs_bucket.id
 
@@ -1210,6 +1210,29 @@ resource "aws_s3_bucket_policy" "logs_bucket_policy" {
             "aws:SecureTransport" = "false"
           }
         }
+      },
+      {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs_bucket.arn}/alb-access-logs/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs_bucket.arn
       }
     ]
   })

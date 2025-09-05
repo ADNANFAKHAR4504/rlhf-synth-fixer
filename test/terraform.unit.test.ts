@@ -278,6 +278,11 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
       expect(terraformContent).toMatch(/backup_retention_period/);
       expect(terraformContent).toMatch(/monitoring_role_arn/);
     });
+
+    test("RDS has final snapshot protection enabled", () => {
+      expect(terraformContent).toMatch(/skip_final_snapshot\s*=\s*false/);
+      expect(terraformContent).toMatch(/final_snapshot_identifier\s*=.*-final-snapshot-/);
+    });
   });
 
   // Load balancer configuration
@@ -289,9 +294,11 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
       expect(terraformContent).toMatch(/internal\s*=\s*false/);
     });
 
-    test("ALB access logging is disabled for simplicity", () => {
-      // ALB access logging is commented out to avoid S3 permission complexity
-      expect(terraformContent).toMatch(/# Access logs disabled/);
+    test("ALB access logging is enabled for security compliance", () => {
+      // ALB access logging is enabled for security compliance
+      expect(terraformContent).toMatch(/# Access logs enabled for security compliance/);
+      expect(terraformContent).toMatch(/access_logs\s*\{/);
+      expect(terraformContent).toMatch(/enabled\s*=\s*true/);
     });
 
     test("creates target group with health checks", () => {
@@ -304,6 +311,19 @@ describe("Terraform Infrastructure - tap_stack.tf", () => {
       expect(terraformContent).toMatch(/resource\s+"aws_lb_listener"/);
       expect(terraformContent).toMatch(/protocol\s*=\s*"HTTP"/);
       expect(terraformContent).toMatch(/forward\s*\{/);
+    });
+
+    test("creates HTTPS listener with SSL certificate", () => {
+      expect(terraformContent).toMatch(/resource\s+"aws_lb_listener"\s+"app_https"/);
+      expect(terraformContent).toMatch(/protocol\s*=\s*"HTTPS"/);
+      expect(terraformContent).toMatch(/ssl_policy\s*=\s*"ELBSecurityPolicy-TLS-1-2-2017-01"/);
+      expect(terraformContent).toMatch(/certificate_arn\s*=\s*aws_acm_certificate\.main\.arn/);
+    });
+
+    test("HTTP listener redirects to HTTPS", () => {
+      expect(terraformContent).toMatch(/redirect\s*\{/);
+      expect(terraformContent).toMatch(/protocol\s*=\s*"HTTPS"/);
+      expect(terraformContent).toMatch(/status_code\s*=\s*"HTTP_301"/);
     });
   });
 

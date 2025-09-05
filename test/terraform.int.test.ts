@@ -888,7 +888,7 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
       }
     }, INTEGRATION_TIMEOUT);
 
-    test("ALB access logging is disabled for simplicity", async () => {
+    test("ALB access logging is enabled for security compliance", async () => {
       if (!outputs.alb_dns_name) {
         console.warn("ALB DNS name not found in outputs, skipping ALB access logging tests");
         return;
@@ -904,7 +904,7 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
       );
 
       if (alb) {
-        // Check that access logging is disabled (simplified deployment)
+        // Check that access logging is enabled for security compliance
         const attributesResponse = await withRetry(() =>
           clients.elbv2.send(new DescribeLoadBalancerAttributesCommand({
             LoadBalancerArn: alb.LoadBalancerArn
@@ -916,8 +916,15 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
             attr.Key === "access_logs.s3.enabled"
           );
 
-          // Access logs should be disabled (default is false)
-          expect(accessLogsEnabled?.Value).toBe("false");
+          // Access logs should be enabled for security
+          expect(accessLogsEnabled?.Value).toBe("true");
+          
+          const bucketAttr = attributesResponse.Attributes.find(attr =>
+            attr.Key === "access_logs.s3.bucket"
+          );
+          
+          // Should have the logs bucket configured
+          expect(bucketAttr?.Value).toContain("-logs-");
         }
       }
     }, INTEGRATION_TIMEOUT);
