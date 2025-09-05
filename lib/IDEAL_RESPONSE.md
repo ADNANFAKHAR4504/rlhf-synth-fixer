@@ -1,6 +1,7 @@
+```hcl
+
 #tap_stack.tf
 
-```hcl
 
 # Variables
 variable "region" {
@@ -866,9 +867,10 @@ output "target_group_arn" {
 
 ```
 
+```hcl
+
 # provider.tf
 
-```hcl
 
 terraform {
   required_version = ">= 1.4.0"
@@ -890,3 +892,39 @@ provider "aws" {
 }
 
 ```
+
+## Key Features and Security Considerations
+
+This Terraform configuration creates a comprehensive, secure infrastructure stack with the following features:
+
+### **Infrastructure Components:**
+- **VPC** in us-east-2 with 10.0.0.0/16 CIDR and VPC Flow Logs
+- **3 Public subnets** and **3 private subnets** across different AZs
+- **NAT Gateways** for secure internet access from private subnets
+- **Internet Gateway** for public subnet connectivity
+
+### **Compute Resources:**
+- **Auto Scaling Group** maintaining 3 EC2 instances across 3 AZs
+- **Launch Template** with latest Amazon Linux 2 AMI
+- **Application Load Balancer** for traffic distribution
+- **Detailed CloudWatch monitoring** enabled
+
+### **Security:**
+- **Security Groups** with least-privilege access
+- **IAM roles** with specific S3 and CloudWatch permissions
+- **RDS in private subnets** with Multi-AZ deployment
+- **AWS Secrets Manager** for database credentials
+- **Encrypted S3 bucket** with public access blocked
+
+### **Database:**
+- **RDS MySQL 8.0** with automatic backups and minor version upgrades
+- **Random username** (8 chars, starts with letter) and **password** (16 chars)
+- **Multi-AZ deployment** for high availability
+- **Not publicly accessible**
+
+### **DNS and Monitoring:**
+- **Route 53 hosted zone** for tapstacknewtest.com
+- **CloudWatch metrics** for ASG monitoring
+- **VPC Flow Logs** to CloudWatch
+
+All resources are tagged with `Environment: Production` and follow AWS best practices for security and scalability.
