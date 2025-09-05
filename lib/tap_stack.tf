@@ -1102,7 +1102,10 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 }
 
 # Application Load Balancer
-data "aws_elb_service_account" "main" {}
+# ELB service account ID for us-east-1
+locals {
+  elb_service_account = "127311923021"
+}
 
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-alb"
@@ -1116,7 +1119,7 @@ resource "aws_lb" "main" {
   access_logs {
     bucket  = aws_s3_bucket.logs_bucket.id
     prefix  = "alb-access-logs"
-    enabled = false
+    enabled = true
   }
 
   tags = merge(local.common_tags, {
@@ -1127,30 +1130,6 @@ resource "aws_lb" "main" {
     aws_s3_bucket_policy.logs_bucket_policy,
     aws_s3_bucket_public_access_block.logs_bucket
   ]
-}
-
-# Enable ALB access logging after ALB is created and S3 bucket policy is ready
-resource "null_resource" "enable_alb_logging" {
-  depends_on = [
-    aws_lb.main,
-    aws_s3_bucket_policy.logs_bucket_policy
-  ]
-
-  provisioner "local-exec" {
-    command = <<-EOF
-      aws elbv2 modify-load-balancer-attributes \
-        --load-balancer-arn ${aws_lb.main.arn} \
-        --attributes Key=access_logs.s3.enabled,Value=true \
-                    Key=access_logs.s3.bucket,Value=${aws_s3_bucket.logs_bucket.id} \
-                    Key=access_logs.s3.prefix,Value=alb-access-logs \
-        --region ${data.aws_region.current.id}
-    EOF
-  }
-
-  triggers = {
-    alb_arn     = aws_lb.main.arn
-    bucket_name = aws_s3_bucket.logs_bucket.id
-  }
 }
 
 # Self-signed certificate for HTTPS (for demo purposes)
@@ -1211,7 +1190,7 @@ resource "aws_s3_bucket_policy" "logs_bucket_policy" {
         Sid    = "AllowALBServiceAccount"
         Effect = "Allow"
         Principal = {
-          AWS = data.aws_elb_service_account.main.arn
+          AWS = "arn:aws:iam::${local.elb_service_account}:root"
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs_bucket.arn}/alb-access-logs/*"
@@ -1225,7 +1204,7 @@ resource "aws_s3_bucket_policy" "logs_bucket_policy" {
         Sid    = "AllowALBServiceAccountBucketAccess"
         Effect = "Allow"
         Principal = {
-          AWS = data.aws_elb_service_account.main.arn
+          AWS = "arn:aws:iam::${local.elb_service_account}:root"
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.logs_bucket.arn

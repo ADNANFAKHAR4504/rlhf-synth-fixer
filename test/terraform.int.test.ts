@@ -864,9 +864,7 @@ describe("Enterprise Security Framework - AWS Integration Tests", () => {
             attr.Key === "access_logs.s3.bucket"
           );
 
-          // Access logs are initially disabled during ALB creation, then enabled via null_resource
-          // In integration tests, this may show as false initially
-          expect(accessLogsEnabled?.Value).toMatch(/true|false/);
+          expect(accessLogsEnabled?.Value).toBe("true");
           expect(accessLogsBucket?.Value).toBeTruthy();
           expect(accessLogsBucket?.Value).toContain("security-framework");
         }
