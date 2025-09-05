@@ -16,10 +16,6 @@ const isValidDomainName = (v: string) => /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(v
 const isValidBucketName = (v: string) => /^[a-z0-9.-]+$/.test(v);
 const isValidAMIId = (v: string) => v.startsWith("ami-");
 const isValidTargetGroupArn = (v: string) => v.includes(":targetgroup/");
-const isValidLogGroupName = (v: string) => v.startsWith("/aws/");
-const isValidIP = (v: string) => /^([0-9]{1,3}\.){3}[0-9]{1,3}$/.test(v.trim());
-const isValidPort = (v: string) => !isNaN(Number(v)) && Number(v) > 0 && Number(v) < 65536;
-
 const parseArray = (v: any) => {
   if (typeof v === "string") {
     try {
@@ -31,8 +27,6 @@ const parseArray = (v: any) => {
   }
   return v;
 };
-
-// Util to skip if output is missing
 const skipIfMissing = (key: string, obj: any) => {
   if (!(key in obj)) {
     // eslint-disable-next-line no-console
@@ -58,203 +52,70 @@ describe("Terraform flat outputs - integration validation", () => {
     expect(Object.keys(outputs).length).toBeGreaterThan(30);
   });
 
-  // ========== String and Presence Validation ==========
-  it("validates organization and region keys", () => {
-    ["primary_region", "secondary_region"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
+  // --- SANITY/COVERAGE ---
+  const requiredFlatKeys = [
+    "alb_health_alarm_name", "alb_security_group_id", "autoscaling_group_name", "domain_name",
+    "ec2_instance_profile_name", "load_balancer_arn", "load_balancer_dns_name",
+    "primary_ami_id", "primary_availability_zones", "primary_cpu_alarm_name",
+    "primary_internet_gateway_id", "primary_kms_key_id", "primary_nat_gateway_id",
+    "primary_private_subnet_id", "primary_public_subnet_id", "primary_s3_bucket_arn",
+    "primary_s3_bucket_name", "primary_security_group_id", "primary_vpc_cidr",
+    "primary_vpc_id", "route53_health_check_id", "route53_zone_id", "route53_zone_name_servers",
+    "s3_replication_role_arn", "secondary_ami_id", "secondary_availability_zones",
+    "secondary_cpu_alarm_name", "secondary_internet_gateway_id", "secondary_kms_key_id",
+    "secondary_nat_gateway_id", "secondary_private_subnet_id", "secondary_public_subnet_id",
+    "secondary_s3_bucket_arn", "secondary_s3_bucket_name", "secondary_security_group_id",
+    "secondary_vpc_cidr", "secondary_vpc_id", "sns_topic_arn", "target_group_arn"
+  ];
+  it("all required outputs are present and non-empty", () => {
+    requiredFlatKeys.forEach(key => {
+      expect(key in outputs).toBe(true);
       expect(isNonEmptyString(outputs[key])).toBe(true);
-      expect(outputs[key]).toMatch(/^us-[a-z0-9-]+$/);
     });
   });
 
-  // ========== Resource Identifiers ==========
+  // --- ID/FORMAT VALIDATION ---
   it("validates VPC IDs", () => {
-    ["primary_vpc_id", "secondary_vpc_id"].forEach((key) => {
+    ["primary_vpc_id", "secondary_vpc_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
       expect(isValidVpcId(outputs[key])).toBe(true);
     });
   });
 
-  it("validates subnet IDs as arrays", () => {
-    [
-      "primary_public_subnet_ids",
-      "primary_private_subnet_ids",
-      "secondary_public_subnet_ids",
-      "secondary_private_subnet_ids",
-    ].forEach((key) => {
+  it("validates subnet IDs", () => {
+    ["primary_private_subnet_id", "primary_public_subnet_id", "secondary_private_subnet_id", "secondary_public_subnet_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
-      expect(Array.isArray(outputs[key])).toBe(true);
-      outputs[key].forEach((id: string) => expect(isValidSubnetId(id)).toBe(true));
+      expect(isValidSubnetId(outputs[key])).toBe(true);
     });
   });
 
   it("validates security group IDs", () => {
-    [
-      "primary_web_security_group_id",
-      "primary_bastion_security_group_id",
-      "primary_alb_security_group_id",
-      "primary_rds_security_group_id",
-      "secondary_web_security_group_id",
-      "secondary_bastion_security_group_id",
-      "secondary_alb_security_group_id",
-      "secondary_rds_security_group_id"
-    ].forEach((key) => {
+    ["alb_security_group_id", "primary_security_group_id", "secondary_security_group_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
       expect(isValidSGId(outputs[key])).toBe(true);
     });
   });
 
-  it("validates IGW and NAT gateway IDs", () => {
+  it("validates IGW and NAT Gateway IDs", () => {
     ["primary_internet_gateway_id", "secondary_internet_gateway_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
       expect(isValidIGWId(outputs[key])).toBe(true);
     });
-    ["primary_nat_gateway_ids", "secondary_nat_gateway_ids"].forEach(key => {
+    ["primary_nat_gateway_id", "secondary_nat_gateway_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
-      expect(Array.isArray(outputs[key])).toBe(true);
-      outputs[key].forEach((id: string) => expect(isValidNatId(id)).toBe(true));
+      expect(isValidNatId(outputs[key])).toBe(true);
     });
   });
 
-  // ========== AMI IDs ==========
-  it("validates AMI outputs", () => {
-    ["primary_ami_id", "secondary_ami_id"].forEach((key) => {
+  it("validates AMI IDs", () => {
+    ["primary_ami_id", "secondary_ami_id"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
       expect(isValidAMIId(outputs[key])).toBe(true);
     });
-    ["primary_ami_name", "secondary_ami_name"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-      expect(outputs[key]).toMatch(/amzn2-ami-hvm-/);
-    });
   });
 
-  // ========== DNS, Domain, Health Check ==========
-  it("validates application URLs and DNS names", () => {
-    [
-      "main_application_url",
-      "primary_application_url",
-      "secondary_application_url",
-      "www_application_url"
-    ].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-      expect(outputs[key]).toMatch(/^http/);
-    });
-    ["primary_alb_dns_name", "secondary_alb_dns_name"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-      expect(isValidDomainName(outputs[key])).toBe(true);
-    });
-  });
-
-  // ========== RDS Outputs ==========
-  it("validates RDS outputs and port", () => {
-    [
-      "primary_rds_instance_id",
-      "secondary_rds_instance_id"
-    ].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-    });
-    ["primary_rds_port", "secondary_rds_port"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidPort(outputs[key])).toBe(true);
-    });
-    ["primary_rds_endpoint", "secondary_rds_endpoint"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(outputs[key]).toMatch(/\.rds\.amazonaws\.com/);
-      expect(outputs[key]).toMatch(/:3306$/);
-    });
-  });
-
-  // ========== S3 Buckets ==========
-  it("validates S3 buckets and domains", () => {
-    ["primary_s3_bucket_id", "secondary_s3_bucket_id"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidBucketName(outputs[key])).toBe(true);
-    });
-    ["primary_s3_bucket_domain_name", "secondary_s3_bucket_domain_name"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(outputs[key]).toMatch(/\.s3\.amazonaws\.com$/);
-    });
-    ["primary_s3_bucket_arn", "secondary_s3_bucket_arn"].forEach(key => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidArn(outputs[key])).toBe(true);
-    });
-  });
-
-  // ========== Target Group ARNs ==========
-  it("validates ALB target group arns", () => {
-    ["primary_target_group_arn", "secondary_target_group_arn"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidTargetGroupArn(outputs[key])).toBe(true);
-    });
-  });
-
-  // ========== Autoscaling Groups ==========
-  it("validates autoscaling group outputs", () => {
-    ["primary_autoscaling_group_name", "secondary_autoscaling_group_name"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-      expect(outputs[key]).toMatch(/-asg$/);
-    });
-  });
-
-  // ========== IAM Role/Instance Profiles ==========
-  it("validates EC2 IAM role and instance profile outputs", () => {
-    ["ec2_iam_role_arn", "ec2_instance_profile_arn"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidArn(outputs[key])).toBe(true);
-    });
-    ["ec2_iam_role_name", "ec2_instance_profile_name"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-    });
-    if (!skipIfMissing("s3_replication_role_arn", outputs))
-      expect(isValidArn(outputs["s3_replication_role_arn"])).toBe(true);
-  });
-
-  // ========== CloudWatch Log Groups ==========
-  it("validates CloudWatch log group outputs and names", () => {
-    ["primary_cloudwatch_log_group_arn", "secondary_cloudwatch_log_group_arn"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidArn(outputs[key])).toBe(true);
-    });
-    ["primary_cloudwatch_log_group_name", "secondary_cloudwatch_log_group_name"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidLogGroupName(outputs[key])).toBe(true);
-    });
-  });
-
-  // ========== Dashboard URLs ==========
-  it("validates dashboard URLs", () => {
-    ["primary_cloudwatch_dashboard_url", "secondary_cloudwatch_dashboard_url"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(outputs[key]).toMatch(/^https:\/\/(us-|ap-|eu-|sa-|ca-|cn-)[a-z0-9-]+\.console\.aws\.amazon\.com\/cloudwatch\/home/);
-    });
-  });
-
-  // ========== SNS Topic ARNs ==========
-  it("validates SNS topic ARNs", () => {
-    ["primary_sns_alerts_topic_arn", "secondary_sns_alerts_topic_arn"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isValidArn(outputs[key])).toBe(true);
-      expect(outputs[key]).toMatch(/:tapstack-production-(primary|secondary)-alerts$/);
-    });
-  });
-
-  // ========== Miscellaneous outputs ==========
-  it("validates EC2 key pair names", () => {
-    ["primary_key_pair_name", "secondary_key_pair_name"].forEach((key) => {
-      if (skipIfMissing(key, outputs)) return;
-      expect(isNonEmptyString(outputs[key])).toBe(true);
-      expect(outputs[key]).toMatch(/-keypair$/);
-    });
-  });
-
-  it("validates availability zones arrays", () => {
-    ["primary_availability_zones", "secondary_availability_zones"].forEach((key) => {
+  it("validates Availability Zone arrays", () => {
+    ["primary_availability_zones", "secondary_availability_zones"].forEach(key => {
       if (skipIfMissing(key, outputs)) return;
       const arr = parseArray(outputs[key]);
       expect(Array.isArray(arr)).toBe(true);
@@ -262,7 +123,80 @@ describe("Terraform flat outputs - integration validation", () => {
     });
   });
 
-  // ========== Security: No secrets exposed directly ==========
+  it("validates S3 bucket ARNs and names", () => {
+    ["primary_s3_bucket_arn", "secondary_s3_bucket_arn"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(isValidArn(outputs[key])).toBe(true);
+      expect(outputs[key]).toMatch(/arn:aws:s3:::/);
+    });
+    ["primary_s3_bucket_name", "secondary_s3_bucket_name"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(isValidBucketName(outputs[key])).toBe(true);
+    });
+  });
+
+  it("validates target group ARN", () => {
+    if (!skipIfMissing("target_group_arn", outputs))
+      expect(isValidTargetGroupArn(outputs["target_group_arn"])).toBe(true);
+  });
+
+  it("validates KMS key IDs", () => {
+    ["primary_kms_key_id", "secondary_kms_key_id"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(outputs[key]).toMatch(/^[a-f0-9-]{36}$/); // UUID format
+    });
+  });
+
+  it("validates Route53 health check ID and zone ID", () => {
+    if (!skipIfMissing("route53_health_check_id", outputs))
+      expect(isValidHealthCheckId(outputs["route53_health_check_id"])).toBe(true);
+    if (!skipIfMissing("route53_zone_id", outputs))
+      expect(isValidZoneId(outputs["route53_zone_id"])).toBe(true);
+  });
+
+  it("validates Route53 name servers array", () => {
+    if (!skipIfMissing("route53_zone_name_servers", outputs)) {
+      const arr = parseArray(outputs["route53_zone_name_servers"]);
+      expect(Array.isArray(arr)).toBe(true);
+      arr.forEach((ns: string) => expect(ns).toMatch(/^ns-[0-9]+\.awsdns-[0-9]+\.(com|net|org|co\.uk)$/));
+    }
+  });
+
+  it("validates DNS names", () => {
+    ["load_balancer_dns_name"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(isNonEmptyString(outputs[key])).toBe(true);
+      expect(isValidDomainName(outputs[key])).toBe(true);
+    });
+    if (!skipIfMissing("domain_name", outputs))
+      expect(isValidDomainName(outputs["domain_name"])).toBe(true);
+  });
+
+  it("validates ARNs", () => {
+    ["load_balancer_arn", "s3_replication_role_arn", "sns_topic_arn"].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(isValidArn(outputs[key])).toBe(true);
+    });
+  });
+
+  it("validates Alarm names are present and non-empty", () => {
+    [
+      "alb_health_alarm_name", "primary_cpu_alarm_name", "secondary_cpu_alarm_name"
+    ].forEach(key => {
+      if (skipIfMissing(key, outputs)) return;
+      expect(isNonEmptyString(outputs[key])).toBe(true);
+      expect(outputs[key]).toMatch(/(cpu|alb)[-_]/);
+    });
+  });
+
+  it("validates EC2 ASG and IAM profile outputs are non-empty strings", () => {
+    if (!skipIfMissing("autoscaling_group_name", outputs))
+      expect(isNonEmptyString(outputs["autoscaling_group_name"])).toBe(true);
+    if (!skipIfMissing("ec2_instance_profile_name", outputs))
+      expect(isNonEmptyString(outputs["ec2_instance_profile_name"])).toBe(true);
+  });
+
+  // --- SENSITIVE DATA SANITIZATION ---
   it("does not expose passwords, secret values or sensitive plain text in outputs", () => {
     const sensitivePatterns = [
       /password/i,

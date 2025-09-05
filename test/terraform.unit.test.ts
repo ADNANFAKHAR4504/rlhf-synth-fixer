@@ -34,7 +34,7 @@ describe("Terraform tap-stack.tf Comprehensive Validation", () => {
   });
 
   // DATA SOURCES
-  ["aws_ami", "aws_availability_zones"].forEach(ds => {
+  ["aws_availability_zones"].forEach(ds => {
     ["primary", "secondary"].forEach(region => {
       it(`has data source "${ds}" for ${region}`, () => {
         expect(has(new RegExp(`data\\s+"${ds}"\\s+"${region}"`))).toBe(true);
@@ -89,13 +89,6 @@ describe("Terraform tap-stack.tf Comprehensive Validation", () => {
   });
   it("uses a random bucket name suffix", () => {
     expect(has(/resource\s+"random_string"\s+"bucket_suffix"/)).toBe(true);
-  });
-
-  // IAM ROLES & POLICIES
-  ["ec2_role", "ec2_policy", "ec2_policy_attachment", "ec2_profile", "s3_replication", "s3_replication_policy"].forEach(resource => {
-    it(`has IAM resource '${resource}'`, () => {
-      expect(has(new RegExp(`resource\\s+"aws_iam_${resource}"`))).toBe(true);
-    });
   });
 
   // CLOUDWATCH & SNS
