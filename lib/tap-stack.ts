@@ -4,9 +4,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
-// ? Import your stacks here
-// import { MyStack } from './my-stack';
-
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   region: string;
@@ -17,8 +14,6 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from props, context, or use 'dev' as default
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
@@ -26,15 +21,16 @@ export class TapStack extends cdk.Stack {
 
     const { region, amiSsmParameterName } = props;
 
-    // Default to Amazon Linux 2 AMI SSM parameter if not provided
     const ssmParameterName =
       amiSsmParameterName ||
       '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2';
 
-    // Create VPC with 2 AZs, 2 public subnets, 2 private subnets
+    // Create VPC with explicit configuration to avoid custom resource issues
     const vpc = new ec2.Vpc(this, 'MultiRegionVpc', {
       maxAzs: 2,
       natGateways: 2,
+      // Disable the restrictDefaultSecurityGroup to avoid the hanging custom resource
+      restrictDefaultSecurityGroup: false,
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -68,7 +64,7 @@ export class TapStack extends cdk.Stack {
       'Allow HTTP access from anywhere'
     );
 
-    // Create IAM role for EC2 instances with least-privilege access to SSM parameter
+    // Create IAM role for EC2 instances
     const ec2Role = new iam.Role(this, 'EC2InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'IAM role for EC2 instances in multi-region web app',
@@ -87,7 +83,7 @@ export class TapStack extends cdk.Stack {
       },
     });
 
-    new iam.InstanceProfile(this, 'EC2InstanceProfile', {
+    const instanceProfile = new iam.InstanceProfile(this, 'EC2InstanceProfile', {
       role: ec2Role,
     });
 
@@ -127,10 +123,11 @@ export class TapStack extends cdk.Stack {
       });
     });
 
-    // Tag all resources with Project=MultiRegionWebApp
+    // Tag all resources
     cdk.Tags.of(this).add('Project', 'MultiRegionWebApp');
+    cdk.Tags.of(this).add('Environment', environmentSuffix);
 
-    // Additional outputs for reference
+    // Additional outputs
     new cdk.CfnOutput(this, 'VpcId', {
       value: vpc.vpcId,
       description: `VPC ID for ${region}`,

@@ -17,8 +17,8 @@ Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 const regionList = ['us-east-1', 'us-west-2']; // Add more regions as needed
 regionList.forEach(region => {
-  new TapStack(app, `${stackName}-${region}`, {
-    stackName: `${stackName}-${region}`, // This ensures CloudFormation stack name includes the suffix
+  new TapStack(app, `${stackName}-multi-${region}`, {
+    stackName: `${stackName}-multi-${region}`, // This ensures CloudFormation stack name includes the suffix
     environmentSuffix: environmentSuffix,
     region: region,
     env: {
