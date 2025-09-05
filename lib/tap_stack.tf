@@ -446,24 +446,8 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   }
 }
 
-resource "aws_s3_bucket_policy" "frontend_public_read" {
-  bucket = aws_s3_bucket.frontend.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "PublicReadGetObject"
-        Effect    = "Allow"
-        Principal = "*"
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.frontend.arn}/*"
-      }
-    ]
-  })
-
-  depends_on = [aws_s3_bucket_public_access_block.frontend]
-}
+# Note: S3 bucket policy removed due to organization-level public access restrictions
+# Frontend content can be served via CloudFront or other CDN solutions
 
 # Sample index.html
 resource "aws_s3_object" "index" {
@@ -483,7 +467,7 @@ resource "aws_s3_object" "index" {
 
 resource "aws_key_pair" "main" {
   key_name_prefix = "${terraform.workspace}-key-"
-  public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7S5YPiPUvIcW1mX0vG5yGz5gGz0mG5zRkJ8fG0Qg8gG0B9x7Kx1Jx1J8x1J8x1J example@example.com"
+  public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDMgl0nlmVgd6lPH0xyU9J1XxKGHYO9KgqS5ZjCs3jv4H8MlCKYYRjV6oALCTJUt8wQOI8vZ7VZOB5Z9sD2EWHH8V3lO2Nq5vGt5iXe5Z9cH8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7a example@example.com"
 
   tags = {
     Name = "${terraform.workspace}-keypair"
