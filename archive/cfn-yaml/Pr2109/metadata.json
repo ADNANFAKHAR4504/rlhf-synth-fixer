@@ -38,5 +38,11 @@
     "AWS::Route53",
     "AWS::CloudTrail",
     "AWS::Logs"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
 }
