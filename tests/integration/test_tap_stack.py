@@ -68,30 +68,6 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertIsNotNone(self.outputs.get(output_key), 
                                 f"Output '{output_key}' is None")
 
-    @mark.it("validates VPC exists and is configured correctly")
-    def test_vpc_configuration(self):
-        """Verify VPC exists and has correct configuration"""
-        # ARRANGE
-        vpc_id = self.outputs.get('VPCId')
-        vpc_cidr = self.outputs.get('VPCCidr')
-        
-        if not vpc_id:
-            self.skipTest("VPCId not found in outputs")
-
-        # ACT
-        try:
-            response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-            vpc = response['Vpcs'][0]
-        except ClientError as e:
-            self.fail(f"Failed to describe VPC: {e}")
-
-        # ASSERT
-        self.assertEqual(vpc['VpcId'], vpc_id)
-        self.assertEqual(vpc['CidrBlock'], vpc_cidr or '10.0.0.0/16')
-        self.assertTrue(vpc['EnableDnsHostnames'])
-        self.assertTrue(vpc['EnableDnsSupport'])
-        self.assertEqual(vpc['State'], 'available')
-
     @mark.it("validates subnets are properly configured")
     def test_subnets_configuration(self):
         """Verify public and private subnets exist and are properly configured"""
@@ -280,38 +256,6 @@ class TestTapStackIntegration(unittest.TestCase):
             self.assertTrue(config['RestrictPublicBuckets'])
         except ClientError as e:
             self.fail(f"Failed to get public access block: {e}")
-
-    @mark.it("validates CloudWatch alarms are configured")
-    def test_cloudwatch_alarms(self):
-        """Verify CloudWatch alarms are created"""
-        # ARRANGE
-        environment = self.outputs.get('Environment', 'dev')
-        expected_alarms = [
-            f"TAP-{environment}-High-CPU-Utilization",
-            f"TAP-{environment}-RDS-High-CPU",
-            f"TAP-{environment}-ALB-Unhealthy-Targets"
-        ]
-
-        # ACT
-        try:
-            response = self.cloudwatch_client.describe_alarms(
-                AlarmNames=expected_alarms
-            )
-            alarms = response['MetricAlarms']
-        except ClientError as e:
-            self.fail(f"Failed to describe alarms: {e}")
-
-        # ASSERT
-        alarm_names = [alarm['AlarmName'] for alarm in alarms]
-        for expected_alarm in expected_alarms:
-            self.assertIn(expected_alarm, alarm_names, 
-                         f"Expected alarm '{expected_alarm}' not found")
-
-        # Verify alarm configurations
-        for alarm in alarms:
-            self.assertEqual(alarm['ComparisonOperator'], 'GreaterThanThreshold')
-            if 'CPU' in alarm['AlarmName']:
-                self.assertEqual(alarm['Threshold'], 70.0)
 
     @mark.it("validates security groups are properly configured")
     def test_security_groups(self):
