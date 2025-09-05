@@ -814,7 +814,7 @@ output "website_bucket_name" {
 
 output "website_url" {
   description = "URL of the static website"
-  value       = "http://${aws_s3_bucket.website.website_endpoint}"
+  value       = "http://${aws_s3_bucket_website_configuration.website.website_endpoint}"
 }
 
 output "web_instance_ids" {
