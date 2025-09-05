@@ -32,6 +32,12 @@
             "Default": "admin",
             "NoEcho": true,
             "Description": "Master username for RDS"
+        },
+        "DBPassword": {
+            "Type": "String",
+            "Default": "ChangeMe123!",
+            "NoEcho": true,
+            "Description": "Master password for RDS"
         }
     },
     "Mappings": {
@@ -42,6 +48,38 @@
         }
     },
     "Resources": {
+        "DBSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-db-password"
+                },
+                "Description": "RDS DB password stored securely in Secrets Manager",
+                "SecretString": {
+                    "Ref": "DBPassword"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -480,7 +518,7 @@
                     "Ref": "DBUsername"
                 },
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:ssm-secure:/app/${Environment}/db/password}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}::SecretString}}"
                 },
                 "VPCSecurityGroups": [
                     {
