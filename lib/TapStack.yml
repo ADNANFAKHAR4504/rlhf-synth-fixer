@@ -166,6 +166,7 @@ Resources:
   LogsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-logs-bucket-${AWS::AccountId}'
       BucketEncryption:
