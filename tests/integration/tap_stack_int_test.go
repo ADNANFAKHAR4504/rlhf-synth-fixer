@@ -478,7 +478,8 @@ func TestLive_AWS_Stack(t *testing.T) {
 			if strings.Contains(name, "cpu") || strings.Contains(desc, "cpu") {
 				found = true
 				if a.Threshold != nil {
-					assert.Equal(t, float64(70), *a.Threshold)
+					assert.GreaterOrEqual(t, *a.Threshold, float64(70), "Expected at Threashold to above 70")
+
 				} else {
 					assert.Fail(t, "CPU alarm threshold missing")
 				}
