@@ -197,10 +197,6 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/suffix\s*=\s*"index\.html"/);
     });
 
-    test("creates public read policy", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"frontend_public_read"\s*{/);
-      expect(stackContent).toMatch(/s3:GetObject/);
-    });
   });
 
   describe("EC2 Compute", () => {

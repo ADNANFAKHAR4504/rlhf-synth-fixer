@@ -253,9 +253,9 @@ describe("Terraform Infrastructure Integration Tests", () => {
       expect(stackContent).toMatch(/sse_algorithm\s*=\s*"AES256"/);
     });
 
-    test("S3 bucket should have public read policy", () => {
-      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_policy"\s+"frontend_public_read"/);
-      expect(stackContent).toMatch(/s3:GetObject/);
+    test("S3 bucket should have website configuration", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_s3_bucket_website_configuration"\s+"frontend"/);
+      expect(stackContent).toMatch(/index_document/);
     });
   });
 

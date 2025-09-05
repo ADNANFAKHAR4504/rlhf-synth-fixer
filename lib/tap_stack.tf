@@ -467,7 +467,7 @@ resource "aws_s3_object" "index" {
 
 resource "aws_key_pair" "main" {
   key_name_prefix = "${terraform.workspace}-key-"
-  public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDMgl0nlmVgd6lPH0xyU9J1XxKGHYO9KgqS5ZjCs3jv4H8MlCKYYRjV6oALCTJUt8wQOI8vZ7VZOB5Z9sD2EWHH8V3lO2Nq5vGt5iXe5Z9cH8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7aGv8T3q1Y7a example@example.com"
+  public_key      = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC4SgM2RvDwNeiQl/rC6BNBIoRzLLBX49Yoirt0mEqt/cL7JJPsj75V8Qwh2iJ6AyjaA9NcOx5r3E9J2uCHbvYzPGElQvQxeLLuYTLX69mMorIgEbk7begw7/rv5IWpyoUjHeJMaICVW+UwC+POMQmPC0KrqjJP++GNgmOEaERKW5cfMT50w9KERT+s6sB+DZ+npTpOOqIyJduk3yCPEGiTrel5oE0p1UqnIRzF2P90rtOgi5gAjtHMLWxR8tla6qf5uKgm1ND1csprXqt0SS8cMw99oevHIIWfwzvw0LK78ElQfXX9OWsQL7sTgHqkzgHYAkLHc+mNS6BGJ6GvfDEZ terraform@example.com"
 
   tags = {
     Name = "${terraform.workspace}-keypair"
