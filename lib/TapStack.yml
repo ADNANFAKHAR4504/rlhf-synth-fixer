@@ -165,8 +165,6 @@ Resources:
 
   LogsBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-logs-bucket-${AWS::AccountId}'
       BucketEncryption:
@@ -510,6 +508,29 @@ Resources:
   # ============================================================================
   # Multi-Region Disaster Recovery
   # ============================================================================
+  CrossRegionReplicaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${EnvironmentSuffix}-dr-replica-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Owner
+          Value: !Ref OwnerName
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: !Ref ProjectName
+
   CrossRegionBackupBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -527,7 +548,7 @@ Resources:
             Status: Enabled
             Prefix: 'disaster-recovery/'
             Destination:
-              Bucket: !Sub 'arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-dr-replica-${AWS::AccountId}'
+              Bucket: !GetAtt CrossRegionReplicaBucket.Arn
               StorageClass: STANDARD_IA
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -778,3 +799,8 @@ Outputs:
     Value: !Ref CrossRegionBackupBucket
     Export:
       Name: !Sub '${AWS::StackName}-CrossRegionBackupBucket'
+  CrossRegionReplicaBucket:
+    Description: 'Cross-region replica bucket for disaster recovery'
+    Value: !Ref CrossRegionReplicaBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CrossRegionReplicaBucket'
