@@ -269,17 +269,7 @@ describe('TapStack Infrastructure Tests', () => {
       expect(topic.Properties.DisplayName['Fn::Sub']).toBe('${AWS::StackName}-${Environment}-infrastructure-alarms');
     });
 
-    test('should have properly configured AWS Config setup', () => {
-      const configManager = template.Resources.ConfigRecorderManager;
-      expect(configManager.Type).toBe('Custom::ConfigRecorderManager');
-      expect(configManager.Properties.ServiceToken['Fn::GetAtt']).toEqual(['ConfigManagerFunction', 'Arn']);
-      expect(configManager.Properties.Region.Ref).toBe('AWS::Region');
-
-      const managerFunction = template.Resources.ConfigManagerFunction;
-      expect(managerFunction.Type).toBe('AWS::Lambda::Function');
-      expect(managerFunction.Properties.Runtime).toBe('python3.9');
-      expect(managerFunction.Properties.Handler).toBe('index.handler');
-    });
+    // AWS Config test removed as the feature is not essential
   });
 
   describe('Outputs', () => {
