@@ -1,8 +1,29 @@
 import { beforeAll, describe, expect, test } from '@jest/globals';
 import * as AWS from 'aws-sdk';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Configure AWS SDK
 AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
+
+// Read outputs from flat-outputs.json
+const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+let outputs = {};
+
+try {
+  if (fs.existsSync(outputsPath)) {
+    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+    // Set environment variables from outputs
+    Object.entries(outputs).forEach(([key, value]) => {
+      process.env[key.toUpperCase()] = value as string;
+    });
+    console.log('Loaded outputs from flat-outputs.json:', outputs);
+  } else {
+    console.warn('Warning: flat-outputs.json not found. Will try to get outputs from CloudFormation stack.');
+  }
+} catch (error) {
+  console.error('Error reading flat-outputs.json:', error);
+}
 
 // Initialize AWS clients
 const ec2 = new AWS.EC2();
