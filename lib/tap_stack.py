@@ -217,7 +217,7 @@ kms_key = aws.kms.Key(f"{app_name}-{environment}-kms-key",
 )
 
 kms_alias = aws.kms.Alias(f"{app_name}-{environment}-kms-alias",
-    name=f"alias/{app_name}-{environment}-key",
+    name=f"alias/{app_name}-{environment}-key-{unique_suffix}",
     target_key_id=kms_key.key_id
 )
 
