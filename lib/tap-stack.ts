@@ -464,14 +464,12 @@ export class TapStack extends cdk.Stack {
       this,
       `TapConfigBucket-${environmentSuffix}`,
       {
-        bucketName: `tap-config-logs-${environmentSuffix}-${this.account}`,
-        encryption: s3.BucketEncryption.KMS,
-        encryptionKey: kmsKey,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         versioned: true,
         enforceSSL: true,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
       }
     );
 
