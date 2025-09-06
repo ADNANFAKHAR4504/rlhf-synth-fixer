@@ -24,11 +24,37 @@
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID for VPC endpoint configuration"
+      "Description": "VPC ID for VPC endpoint configuration",
+      "Default": {
+        "Fn::Select": [
+          0,
+          {
+            "Fn::Split": [
+              ",",
+              {
+                "Fn::ImportValue": "DefaultVPCId"
+              }
+            ]
+          }
+        ]
+      }
     },
     "RouteTableId": {
       "Type": "String",
-      "Description": "Route Table ID for VPC endpoint configuration"
+      "Description": "Route Table ID for VPC endpoint configuration",
+      "Default": {
+        "Fn::Select": [
+          0,
+          {
+            "Fn::Split": [
+              ",",
+              {
+                "Fn::ImportValue": "DefaultRouteTableId"
+              }
+            ]
+          }
+        ]
+      }
     }
   },
   "Resources": {
@@ -100,7 +126,7 @@
                   ],
                   "Resource": {
                     "Fn::GetAtt": [
-                      "KMSKey",
+                      "EncryptionKey",
                       "Arn"
                     ]
                   }
@@ -151,7 +177,7 @@
               "Ref": "S3Bucket"
             },
             "KMS_KEY_ID": {
-              "Ref": "KMSKey"
+              "Ref": "EncryptionKey"
             }
           }
         },
@@ -312,7 +338,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${ProjectName}${Environment}${AWS::AccountId}"
+          "Fn::Sub": "${ProjectName}-${AWS::Region}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -324,7 +350,7 @@
                 "SSEAlgorithm": "aws:kms",
                 "KMSMasterKeyID": {
                   "Fn::GetAtt": [
-                    "KMSKey",
+                    "EncryptionKey",
                     "Arn"
                   ]
                 }
