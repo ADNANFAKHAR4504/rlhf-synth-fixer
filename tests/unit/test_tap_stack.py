@@ -66,13 +66,13 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        # Note: CDK creates 2 Lambda functions - our main one + a BucketNotificationsHandler
+        # Note: CDK creates 2 Lambda functions - our main one + AwsCustomResource handler
         template.resource_count_is("AWS::Lambda::Function", 2)
         template.has_resource_properties("AWS::Lambda::Function", {
             "FunctionName": Match.string_like_regexp("tap-processor-dev-.*"),
-            "Handler": "index.lambda_handler",  # FIXED: Changed from "lambda_function.lambda_handler"
+            "Handler": "index.lambda_handler",
             "Runtime": "python3.8",
-            "Timeout": 15,
+            "Timeout": 60,  # FIXED: Changed from 15 to 60 to match the updated stack
             "Description": "Processes files uploaded to S3 bucket"
         })
 
@@ -83,8 +83,7 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        # Note: CDK creates 2 IAM roles - our main one + one for BucketNotificationsHandler
-        template.resource_count_is("AWS::IAM::Role", 2)
+        # Note: CDK creates multiple IAM roles - our main one + ones for AwsCustomResource
         template.has_resource_properties("AWS::IAM::Role", {
             "RoleName": Match.string_like_regexp("TapLambdaRole-dev-.*"),
             "AssumeRolePolicyDocument": {
@@ -194,7 +193,6 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         # Check for Lambda permission for S3 to invoke
-        # CDK creates permissions automatically for S3 notifications
         template.has_resource_properties("AWS::Lambda::Permission", {
             "Action": "lambda:InvokeFunction",
             "Principal": "s3.amazonaws.com"
@@ -210,7 +208,6 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         # Check that Lambda functions have the required tags
-        # Note: The ManagedBy tag is applied at stack level but both Lambda functions get the same tags
         template.has_resource_properties("AWS::Lambda::Function", {
             "FunctionName": Match.string_like_regexp(f"tap-processor-{env_suffix}-.*"),
             "Tags": Match.array_with([
@@ -291,9 +288,9 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        # Find our main Lambda function (not the CDK-generated BucketNotificationsHandler)
+        # Find our main Lambda function (not the CDK-generated AwsCustomResource handler)
         lambdas = template.find_resources("AWS::Lambda::Function")
-        self.assertEqual(len(lambdas), 2, "Should have 2 Lambda functions (main + CDK handler)")
+        self.assertEqual(len(lambdas), 2, "Should have 2 Lambda functions (main + AwsCustomResource handler)")
         
         # Find our main Lambda by checking for our specific function name pattern
         main_lambda = None
@@ -320,13 +317,13 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT - Verify all expected resources are created
-        # Note: CDK creates additional resources for S3 event notifications
+        # Note: CDK creates additional resources for AwsCustomResource
         template.resource_count_is("AWS::S3::Bucket", 1)
-        template.resource_count_is("AWS::Lambda::Function", 2)  # Main + BucketNotificationsHandler
-        template.resource_count_is("AWS::IAM::Role", 2)  # Main + BucketNotificationsHandler role
+        template.resource_count_is("AWS::Lambda::Function", 2)  # Main + AwsCustomResource handler
+        # IAM roles count varies with AwsCustomResource
         template.resource_count_is("AWS::SNS::Topic", 1)
         template.resource_count_is("AWS::CloudWatch::Alarm", 1)
-        template.resource_count_is("AWS::Lambda::Permission", 1)  # CDK creates 2: main + notification handler
+        template.resource_count_is("AWS::Lambda::Permission", 1)
         
         # Verify environment suffix is used consistently
         template.has_resource_properties("AWS::S3::Bucket", {

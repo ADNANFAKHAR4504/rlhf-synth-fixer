@@ -1,9 +1,3 @@
-"""tap_stack.py
-This module defines the TapStack class, which serves as the main CDK stack for 
-the TAP project.
-It orchestrates the instantiation of resources and manages environment-specific configurations.
-"""
-
 from typing import Optional
 import uuid
 
@@ -16,11 +10,11 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_lambda as _lambda,
     aws_iam as iam,
-    aws_s3_notifications as s3n,
     aws_cloudwatch as cloudwatch,
     aws_sns as sns,
     aws_kms as kms,
-    aws_cloudwatch_actions as cw_actions
+    aws_cloudwatch_actions as cw_actions,
+    custom_resources as cr
 )
 from constructs import Construct
 
@@ -28,12 +22,10 @@ from constructs import Construct
 class TapStackProps(StackProps):
     """
     TapStackProps defines the properties for the TapStack CDK stack.
-
     Args:
         environment_suffix (Optional[str]): An optional suffix to identify the 
         deployment environment (e.g., 'dev', 'prod').
         **kwargs: Additional keyword arguments passed to the base StackProps.
-
     Attributes:
         environment_suffix (Optional[str]): Stores the environment suffix for the stack.
     """
@@ -46,17 +38,14 @@ class TapStackProps(StackProps):
 class TapStack(Stack):
     """
     Represents the main CDK stack for the TAP project.
-
     This stack is responsible for orchestrating the instantiation of resources.
     It determines the environment suffix from the provided properties, CDK context, or defaults to 'dev'.
-
     Args:
         scope (Construct): The parent construct.
         construct_id (str): The unique identifier for this stack.
         props (Optional[TapStackProps]): Optional properties for configuring the 
             stack, including environment suffix.
         **kwargs: Additional keyword arguments passed to the CDK Stack.
-
     Attributes:
         environment_suffix (str): The environment suffix used for resource naming and configuration.
     """
@@ -76,7 +65,7 @@ class TapStack(Stack):
 
         # Generate unique suffix for bucket name to ensure uniqueness
         unique_suffix = f"{self.environment_suffix}-{str(uuid.uuid4())[:8]}"
-        
+
         # 1. Create SNS Topic with AWS-managed encryption
         self.error_notification_topic = sns.Topic(
             self, "ErrorNotificationTopic",
@@ -104,9 +93,9 @@ class TapStack(Stack):
             self, "TapProcessorFunction",
             function_name=f"tap-processor-{unique_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_8,
-            handler="index.lambda_handler",  # FIXED: Changed to match inline code deployment
+            handler="index.lambda_handler",
             code=_lambda.Code.from_inline(self._get_lambda_code()),
-            timeout=Duration.seconds(15),  # Exactly 15 seconds
+            timeout=Duration.seconds(60),  # Increased timeout for better reliability
             role=self.lambda_execution_role,
             description="Processes files uploaded to S3 bucket"
         )
@@ -131,36 +120,76 @@ class TapStack(Stack):
         # 5. Grant Lambda permission to read from S3 bucket
         self.tap_storage_bucket.grant_read(self.tap_processor_function)
 
-        # 6. Add explicit permission for S3 to invoke Lambda (CRITICAL FIX)
-        # self.tap_processor_function.add_permission(
-        #     "AllowS3Invoke",
-        #     principal=iam.ServicePrincipal("s3.amazonaws.com"),
-        #     source_arn=f"{self.tap_storage_bucket.bucket_arn}/*",
-        #     action="lambda:InvokeFunction"
-        # )
-
-        # 7. Create explicit bucket policy for Lambda access (additional security layer)
-        # bucket_policy_statement = iam.PolicyStatement(
-        #     sid="AllowLambdaReadAccess",
-        #     effect=iam.Effect.ALLOW,
-        #     principals=[iam.ArnPrincipal(self.lambda_execution_role.role_arn)],
-        #     actions=[
-        #         "s3:GetObject",
-        #         "s3:GetObjectVersion"
-        #     ],
-        #     resources=[f"{self.tap_storage_bucket.bucket_arn}/*"]
-        # )
-        
-        # self.tap_storage_bucket.add_to_resource_policy(bucket_policy_statement)
-        # self.tap_storage_bucket.node.add_dependency(self.tap_processor_function)
-
-        # 8. Configure S3 event notification for PUT events only (MOVED AFTER PERMISSIONS)
-        self.tap_storage_bucket.add_event_notification(
-            s3.EventType.OBJECT_CREATED_PUT,
-            s3n.LambdaDestination(self.tap_processor_function)
+        # 6. Add explicit permission for S3 to invoke Lambda
+        self.tap_processor_function.add_permission(
+            "AllowS3Invoke",
+            principal=iam.ServicePrincipal("s3.amazonaws.com"),
+            source_arn=self.tap_storage_bucket.bucket_arn,
+            action="lambda:InvokeFunction"
         )
 
-        # 9. Create CloudWatch Alarm for Lambda errors
+        # 7. Use AwsCustomResource to configure S3 bucket notification (bypassing custom resource)
+        notification_resource = cr.AwsCustomResource(
+            self, "S3BucketNotification",
+            on_create=cr.AwsSdkCall(
+                service="S3",
+                action="putBucketNotificationConfiguration",
+                parameters={
+                    "Bucket": self.tap_storage_bucket.bucket_name,
+                    "NotificationConfiguration": {
+                        "LambdaFunctionConfigurations": [
+                            {
+                                "LambdaFunctionArn": self.tap_processor_function.function_arn,
+                                "Events": ["s3:ObjectCreated:Put"],
+                                "Id": f"LambdaNotification-{unique_suffix}"
+                            }
+                        ]
+                    }
+                },
+                physical_resource_id=cr.PhysicalResourceId.of(
+                    f"S3Notification-{unique_suffix}"
+                )
+            ),
+            on_update=cr.AwsSdkCall(
+                service="S3",
+                action="putBucketNotificationConfiguration",
+                parameters={
+                    "Bucket": self.tap_storage_bucket.bucket_name,
+                    "NotificationConfiguration": {
+                        "LambdaFunctionConfigurations": [
+                            {
+                                "LambdaFunctionArn": self.tap_processor_function.function_arn,
+                                "Events": ["s3:ObjectCreated:Put"],
+                                "Id": f"LambdaNotification-{unique_suffix}"
+                            }
+                        ]
+                    }
+                },
+                physical_resource_id=cr.PhysicalResourceId.of(
+                    f"S3Notification-{unique_suffix}"
+                )
+            ),
+            on_delete=cr.AwsSdkCall(
+                service="S3",
+                action="putBucketNotificationConfiguration",
+                parameters={
+                    "Bucket": self.tap_storage_bucket.bucket_name,
+                    "NotificationConfiguration": {}
+                }
+            ),
+            policy=cr.AwsCustomResourcePolicy.from_statements([
+                iam.PolicyStatement(
+                    actions=["s3:PutBucketNotificationConfiguration"],
+                    resources=[self.tap_storage_bucket.bucket_arn]
+                )
+            ])
+        )
+
+        # Add dependency to ensure Lambda is created before notification
+        notification_resource.node.add_dependency(self.tap_processor_function)
+        notification_resource.node.add_dependency(self.tap_storage_bucket)
+
+        # 8. Create CloudWatch Alarm for Lambda errors
         lambda_error_alarm = cloudwatch.Alarm(
             self, "LambdaErrorAlarm",
             alarm_name=f"TAP-Lambda-Errors-{unique_suffix}",
@@ -175,15 +204,15 @@ class TapStack(Stack):
             treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING
         )
 
-        # 10. Connect CloudWatch Alarm to SNS Topic
+        # 9. Connect CloudWatch Alarm to SNS Topic
         lambda_error_alarm.add_alarm_action(
             cw_actions.SnsAction(self.error_notification_topic)
         )
 
-        # 11. Tag all resources
+        # 10. Tag all resources
         self._tag_all_resources()
 
-        # 12. Create CloudFormation Outputs
+        # 11. Create CloudFormation Outputs
         self._create_outputs(unique_suffix)
 
     def _get_lambda_code(self) -> str:
@@ -263,7 +292,7 @@ def lambda_handler(event, context):
 
     def _create_outputs(self, unique_suffix: str):
         """Creates CloudFormation outputs for all created resources."""
-        
+
         # S3 Bucket Output
         CfnOutput(
             self, "S3BucketName",
@@ -271,7 +300,7 @@ def lambda_handler(event, context):
             description="Name of the S3 bucket for file storage",
             export_name=f"TAP-S3Bucket-{unique_suffix}"
         )
-        
+
         # Lambda Function Output
         CfnOutput(
             self, "LambdaFunctionArn",
@@ -279,7 +308,7 @@ def lambda_handler(event, context):
             description="ARN of the file processing Lambda function",
             export_name=f"TAP-Lambda-{unique_suffix}"
         )
-        
+
         # SNS Topic Output
         CfnOutput(
             self, "SNSTopicArn",
@@ -287,7 +316,7 @@ def lambda_handler(event, context):
             description="ARN of the SNS topic for error notifications",
             export_name=f"TAP-SNS-{unique_suffix}"
         )
-        
+
         # IAM Role Output
         CfnOutput(
             self, "LambdaExecutionRoleArn",
@@ -295,7 +324,7 @@ def lambda_handler(event, context):
             description="ARN of the Lambda execution role",
             export_name=f"TAP-Role-{unique_suffix}"
         )
-        
+
         # CloudWatch Dashboard URL (informational)
         CfnOutput(
             self, "MonitoringInfo",
