@@ -4,17 +4,24 @@
 variable "aws_region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-east-1"
+  default     = "eu-central-1"
+}
+
+variable "environment_suffix" {
+  description = "Environment suffix for resource naming to avoid conflicts"
+  type        = string
+  default     = null
 }
 
 # Local values for consistency and reusability
 locals {
-  bucket_name = "secure-data-bucket"
+  environment_suffix = var.environment_suffix != null ? var.environment_suffix : "dev"
+  bucket_name        = "secure-data-bucket-${local.environment_suffix}"
 
   # Common tags applied to all resources for governance and cost tracking
   common_tags = {
     Environment   = "production"
-    Owner        = "security-team"
+    Owner         = "security-team"
     SecurityLevel = "high"
   }
 }
@@ -106,7 +113,7 @@ resource "aws_s3_bucket_policy" "secure_data" {
 
 # Analytics Reader IAM Role - Read-only access to analytics data with TLS enforcement
 resource "aws_iam_role" "analytics_reader" {
-  name = "analytics-reader-role"
+  name = "analytics-reader-role-${local.environment_suffix}"
 
   # Trust policy: Only EC2 instances can assume this role
   assume_role_policy = jsonencode({
@@ -127,7 +134,7 @@ resource "aws_iam_role" "analytics_reader" {
 
 # Analytics Reader Policy - Least privilege access to analytics prefix only
 resource "aws_iam_role_policy" "analytics_reader" {
-  name = "analytics-reader-policy"
+  name = "analytics-reader-policy-${local.environment_suffix}"
   role = aws_iam_role.analytics_reader.id
 
   policy = jsonencode({
@@ -149,14 +156,14 @@ resource "aws_iam_role_policy" "analytics_reader" {
 
 # Instance profile for analytics reader role - Required for EC2 role assumption
 resource "aws_iam_instance_profile" "analytics_reader" {
-  name = "analytics-reader-profile"
+  name = "analytics-reader-profile-${local.environment_suffix}"
   role = aws_iam_role.analytics_reader.name
   tags = local.common_tags
 }
 
 # Uploader IAM Role - Write-only access to uploads data with encryption enforcement
 resource "aws_iam_role" "uploader" {
-  name = "uploader-role"
+  name = "uploader-role-${local.environment_suffix}"
 
   # Trust policy: Only EC2 instances can assume this role
   assume_role_policy = jsonencode({
@@ -177,7 +184,7 @@ resource "aws_iam_role" "uploader" {
 
 # Uploader Policy - Least privilege access to uploads prefix only with encryption requirement
 resource "aws_iam_role_policy" "uploader" {
-  name = "uploader-policy"
+  name = "uploader-policy-${local.environment_suffix}"
   role = aws_iam_role.uploader.id
 
   policy = jsonencode({
@@ -199,7 +206,7 @@ resource "aws_iam_role_policy" "uploader" {
 
 # Instance profile for uploader role - Required for EC2 role assumption
 resource "aws_iam_instance_profile" "uploader" {
-  name = "uploader-profile"
+  name = "uploader-profile-${local.environment_suffix}"
   role = aws_iam_role.uploader.name
   tags = local.common_tags
 }
