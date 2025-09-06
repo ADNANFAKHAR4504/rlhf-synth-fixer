@@ -221,7 +221,11 @@ class TestServerlessApplicationIntegration(unittest.TestCase):
             response = self.secretsmanager_client.describe_secret(SecretId=secret_arn)
             secret = response
             
-            self.assertEqual(secret['Name'], secret_arn.split(':')[-1])
+            # AWS Secrets Manager appends a random suffix to the secret name
+            # So we check that the name starts with our expected prefix
+            expected_name_prefix = "serverless-app-prod-secret-v2"
+            self.assertTrue(secret['Name'].startswith(expected_name_prefix), 
+                          f"Secret name {secret['Name']} should start with {expected_name_prefix}")
             self.assertIn('KmsKeyId', secret)
             
             secret_value_response = self.secretsmanager_client.get_secret_value(SecretId=secret_arn)
