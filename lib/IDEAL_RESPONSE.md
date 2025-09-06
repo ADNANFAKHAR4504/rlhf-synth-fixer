@@ -34,7 +34,7 @@ The infrastructure includes:
 - **Resource tagging**: All resources tagged with Environment=Production
 
 ### ✅ Deployment Requirements
-- **Region enforcement**: Code-level guard ensures us-west-1 deployment
+- **Region enforcement**: Code-level guard ensures us-east-1 deployment
 - **Environment isolation**: Resource names include environmentSuffix for uniqueness
 - **Clean teardown**: All resources configured for safe destruction
 - **Comprehensive testing**: 95%+ code coverage with unit and integration tests

@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
@@ -16,32 +16,32 @@ describe('TapStack', () => {
       environmentSuffix,
       env: {
         account: '123456789012',
-        region: 'us-west-1'
+        region: 'us-east-1'
       }
     });
     template = Template.fromStack(stack);
   });
 
   describe('Region Guard', () => {
-    test('should enforce us-west-1 region', () => {
+    test('should enforce us-east-1 region', () => {
       expect(() => {
         new TapStack(app, 'WrongRegionStack', {
           environmentSuffix: 'test',
           env: {
-            account: '123456789012', 
+            account: '123456789012',
             region: 'us-west-2'
           }
         });
-      }).toThrow('Stack must be deployed in us-west-1. Current region: us-west-2');
+      }).toThrow('Stack must be deployed in us-east-1. Current region: us-west-2');
     });
 
-    test('should allow us-west-1 region', () => {
+    test('should allow us-east-1 region', () => {
       expect(() => {
         new TapStack(app, 'CorrectRegionStack', {
           environmentSuffix: 'test',
           env: {
             account: '123456789012',
-            region: 'us-west-1'
+            region: 'us-east-1'
           }
         });
       }).not.toThrow();
@@ -66,9 +66,9 @@ describe('TapStack', () => {
         MapPublicIpOnLaunch: true,
         CidrBlock: '10.0.0.0/24'
       });
-      
+
       template.hasResourceProperties('AWS::EC2::Subnet', {
-        MapPublicIpOnLaunch: true, 
+        MapPublicIpOnLaunch: true,
         CidrBlock: '10.0.1.0/24'
       });
     });
@@ -114,7 +114,7 @@ describe('TapStack', () => {
   describe('EC2 Instances', () => {
     test('should create two EC2 instances with detailed monitoring', () => {
       template.resourceCountIs('AWS::EC2::Instance', 2);
-      
+
       template.hasResourceProperties('AWS::EC2::Instance', {
         InstanceType: 't3.micro',
         Monitoring: true
@@ -301,7 +301,7 @@ describe('TapStack', () => {
       const resources = template.findResources('AWS::EC2::VPC');
       const vpcLogicalId = Object.keys(resources)[0];
       const vpc = resources[vpcLogicalId];
-      
+
       expect(vpc.Properties.Tags).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -332,12 +332,12 @@ describe('TapStack', () => {
       const fallbackStack = new TapStack(fallbackApp, 'FallbackTestStack', {
         env: {
           account: '123456789012',
-          region: 'us-west-1'
+          region: 'us-east-1'
         }
         // No environmentSuffix provided to test fallback
       });
       const fallbackTemplate = Template.fromStack(fallbackStack);
-      
+
       // Check that resources are created with 'dev' suffix when environmentSuffix is not provided
       fallbackTemplate.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: Match.stringLikeRegexp('.*dev.*')
@@ -349,12 +349,12 @@ describe('TapStack', () => {
       const fallbackStack = new TapStack(fallbackApp, 'FallbackTestStack2', {
         env: {
           account: '123456789012',
-          region: 'us-west-1'
+          region: 'us-east-1'
         }
         // props is provided but environmentSuffix is undefined, testing the fallback
       });
       const fallbackTemplate = Template.fromStack(fallbackStack);
-      
+
       // Check that resources are created with 'dev' suffix when props is completely undefined
       fallbackTemplate.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: Match.stringLikeRegexp('.*dev.*')

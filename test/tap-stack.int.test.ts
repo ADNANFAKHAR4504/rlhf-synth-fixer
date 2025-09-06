@@ -1,10 +1,10 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
+import { DescribeInstancesCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeLoadBalancersCommand, ElasticLoadBalancingV2Client } from '@aws-sdk/client-elastic-load-balancing-v2';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import fs from 'fs';
-import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
-import { EC2Client, DescribeInstancesCommand, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
-import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 
 // Mock AWS SDK for testing environment without real AWS resources
 jest.mock('@aws-sdk/client-s3');
@@ -27,11 +27,11 @@ describe('Infrastructure Integration Tests', () => {
   let elbv2Client: ElasticLoadBalancingV2Client;
 
   beforeEach(() => {
-    s3Client = new S3Client({ region: 'us-west-1' });
-    ec2Client = new EC2Client({ region: 'us-west-1' });
-    rdsClient = new RDSClient({ region: 'us-west-1' });
-    iamClient = new IAMClient({ region: 'us-west-1' });
-    elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-west-1' });
+    s3Client = new S3Client({ region: 'us-east-1' });
+    ec2Client = new EC2Client({ region: 'us-east-1' });
+    rdsClient = new RDSClient({ region: 'us-east-1' });
+    iamClient = new IAMClient({ region: 'us-east-1' });
+    elbv2Client = new ElasticLoadBalancingV2Client({ region: 'us-east-1' });
   });
 
   describe('VPC and Networking', () => {
@@ -48,7 +48,7 @@ describe('Infrastructure Integration Tests', () => {
           }
         ]
       });
-      
+
       (ec2Client.send as jest.Mock).mockImplementation((command) => {
         if (command instanceof DescribeVpcsCommand) {
           return mockDescribeVpcs();
@@ -58,7 +58,7 @@ describe('Infrastructure Integration Tests', () => {
       const command = new DescribeVpcsCommand({
         VpcIds: [outputs.VpcId]
       });
-      
+
       const response = await ec2Client.send(command);
       const vpc = response.Vpcs![0];
 
@@ -79,7 +79,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('S3 Buckets', () => {
     test('should validate S3 bucket exists and is accessible', async () => {
       const mockHeadBucket = jest.fn().mockResolvedValue({});
-      
+
       (s3Client.send as jest.Mock).mockImplementation((command) => {
         if (command instanceof HeadBucketCommand) {
           return mockHeadBucket();
@@ -96,7 +96,7 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should validate bucket name follows naming convention', () => {
       expect(outputs.AppDataBucketName).toMatch(
-        new RegExp(`^tap-${environmentSuffix.toLowerCase()}-app-data-\\d+-us-west-1$`)
+        new RegExp(`^tap-${environmentSuffix.toLowerCase()}-app-data-\\d+-us-east-1$`)
       );
     });
   });
@@ -147,9 +147,9 @@ describe('Infrastructure Integration Tests', () => {
       });
 
       const response = await ec2Client.send(command);
-      
+
       expect(response.Reservations).toHaveLength(2);
-      
+
       const instance1 = response.Reservations![0].Instances![0];
       const instance2 = response.Reservations![1].Instances![0];
 
@@ -201,7 +201,7 @@ describe('Infrastructure Integration Tests', () => {
             Value: 'Production'
           }),
           expect.objectContaining({
-            Key: 'Name', 
+            Key: 'Name',
             Value: `tap-${environmentSuffix.toLowerCase()}-instance-1`
           })
         ])
@@ -287,7 +287,7 @@ describe('Infrastructure Integration Tests', () => {
 
     test('should validate load balancer DNS name format', () => {
       expect(outputs.LoadBalancerDnsName).toMatch(
-/^tap-[\w\-]+-alb-\d+\.us-west-1\.elb\.amazonaws\.com$/
+        /^tap-[\w\-]+-alb-\d+\.us-east-1\.elb\.amazonaws\.com$/
       );
     });
   });
@@ -362,11 +362,11 @@ describe('Infrastructure Integration Tests', () => {
       expect(outputs.AppDataBucketName).toMatch(
         new RegExp(`^tap-${environmentSuffix.toLowerCase()}-`)
       );
-      
+
       expect(outputs.RdsEndpoint).toMatch(
         new RegExp(`^tap-${environmentSuffix.toLowerCase()}-db\\.`)
       );
-      
+
       expect(outputs.LoadBalancerDnsName).toMatch(
         new RegExp(`^tap-${environmentSuffix.toLowerCase()}-alb-`)
       );
@@ -374,7 +374,7 @@ describe('Infrastructure Integration Tests', () => {
       expect(outputs.Ec2RoleArn).toContain(
         `tap-${environmentSuffix.toLowerCase()}-ec2-role`
       );
-      
+
       expect(outputs.LambdaRoleArn).toContain(
         `tap-${environmentSuffix.toLowerCase()}-lambda-role`
       );
@@ -384,12 +384,12 @@ describe('Infrastructure Integration Tests', () => {
       // In a real environment, this would test actual connectivity
       // between ALB -> EC2 instances -> RDS
       // For now, we verify the expected endpoints exist
-      
+
       expect(outputs.LoadBalancerDnsName).toBeTruthy();
       expect(outputs.RdsEndpoint).toBeTruthy();
       expect(outputs.Ec2Instance1Id).toBeTruthy();
       expect(outputs.Ec2Instance2Id).toBeTruthy();
-      
+
       // Verify endpoint formats
       expect(outputs.LoadBalancerDnsName).toMatch(/\.elb\.amazonaws\.com$/);
       expect(outputs.RdsEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
@@ -400,8 +400,8 @@ describe('Infrastructure Integration Tests', () => {
     test('should validate security configuration meets requirements', () => {
       // Validate that RDS endpoint indicates public accessibility
       // (In real deployment, this would be tested with actual network calls)
-      expect(outputs.RdsEndpoint).toMatch(/\.us-west-1\.rds\.amazonaws\.com$/);
-      
+      expect(outputs.RdsEndpoint).toMatch(/\.us-east-1\.rds\.amazonaws\.com$/);
+
       // Validate ALB is internet-facing
       expect(outputs.LoadBalancerDnsName).toMatch(/\.elb\.amazonaws\.com$/);
     });
