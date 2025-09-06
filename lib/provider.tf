@@ -11,7 +11,7 @@ terraform {
   }
 
   # Partial backend config: values are injected at `terraform init` time
-  backend "s3" {}
+  # backend "s3" {}
 }
 
 # Variables
@@ -24,6 +24,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name"
   type        = string
+  default     = "test"
   validation {
     condition     = contains(["dev", "test", "prod"], var.environment)
     error_message = "Environment must be one of: dev, test, prod."
@@ -33,25 +34,28 @@ variable "environment" {
 variable "assume_role_arn" {
   description = "ARN of the role to assume"
   type        = string
+  default     = "arn:aws:iam::123456789012:role/test-role"
 }
 
 variable "owner" {
   description = "Owner of the resources"
   type        = string
+  default     = "test-user"
 }
 
 variable "purpose" {
   description = "Purpose of the resources"
   type        = string
+  default     = "testing"
 }
 
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
 
-  assume_role {
-    role_arn = var.assume_role_arn
-  }
+  # assume_role {
+  #   role_arn = var.assume_role_arn
+  # }
 
   default_tags {
     tags = {
