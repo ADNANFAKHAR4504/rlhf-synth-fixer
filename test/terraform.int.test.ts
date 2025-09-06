@@ -32,7 +32,7 @@ describe('TAP Stack Integration Tests', () => {
         region: process.env.AWS_REGION || 'us-east-1',
         accountId: '',
         vpcId: process.env.TEST_VPC_ID || '',
-        approvedCidrs: ['10.0.0.0/8', '172.16.0.0/12'],
+        approvedCidrs: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
         namePrefix: ''
     };
 
@@ -494,6 +494,7 @@ describe('TAP Stack Integration Tests', () => {
             
             securityGroups = response.SecurityGroups!;
         });
+        
 
         it('should have created web security group with correct rules', async () => {
             if (securityGroups.length === 0) {
