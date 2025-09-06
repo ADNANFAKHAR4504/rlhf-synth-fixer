@@ -72,14 +72,13 @@ variable "tags_common" {
   default     = {}
 }
 
-# Provider configuration with AssumeRole
+# Provider configuration - Manual testing with direct credentials (no role assumption)
 provider "aws" {
   region = "us-east-1"
-
-  assume_role {
-    role_arn = "arn:aws:iam::${var.account_ids[var.environment]}:role/${var.assume_role_name}"
-  }
-
+  
+  # Role assumption completely disabled for manual testing
+  # For production use, uncomment and configure assume_role block
+  
   default_tags {
     tags = local.common_tags
   }
@@ -90,9 +89,10 @@ provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
 
-  assume_role {
-    role_arn = "arn:aws:iam::${var.account_ids[var.environment]}:role/${var.assume_role_name}"
-  }
+  # Using direct credentials - assume_role disabled for testing
+  # assume_role {
+  #   role_arn = "arn:aws:iam::${var.account_ids[var.environment]}:role/${var.assume_role_name}"
+  # }
 
   default_tags {
     tags = local.common_tags
