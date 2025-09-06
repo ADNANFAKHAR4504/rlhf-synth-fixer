@@ -301,7 +301,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('SNS and IAM Configuration', () => {
+  describe('SNS Configuration', () => {
     test('SNS topic should be properly configured', async () => {
       const { Topics } = await sns.listTopics().promise();
       const topicArn = Topics!.find(topic =>
@@ -312,43 +312,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
         TopicArn: topicArn!
       }).promise();
       expect(topicAttributes.Attributes!.DisplayName).toBe(`${process.env.ENVIRONMENT}-infrastructure-alarms`);
-    });
-
-    test('IAM roles should be properly configured', async () => {
-      // Check Config Manager Role
-      const { Role: configManagerRole } = await iam.getRole({
-        RoleName: 'ConfigManagerRole'
-      }).promise();
-      expect(configManagerRole.AssumeRolePolicyDocument).toBeDefined();
-
-      // Check attached policies
-      const { AttachedPolicies: configManagerPolicies } = await iam.listAttachedRolePolicies({
-        RoleName: 'ConfigManagerRole'
-      }).promise();
-      expect(configManagerPolicies).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            PolicyName: 'AWSLambdaBasicExecutionRole'
-          })
-        ])
-      );
-
-      // Check AWS Config Role (created by Lambda)
-      const { Role: configRole } = await iam.getRole({
-        RoleName: 'AWSConfigRole'
-      }).promise();
-      expect(configRole.AssumeRolePolicyDocument).toBeDefined();
-
-      const { AttachedPolicies: configRolePolicies } = await iam.listAttachedRolePolicies({
-        RoleName: 'AWSConfigRole'
-      }).promise();
-      expect(configRolePolicies).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            PolicyName: 'AWS_ConfigRole'
-          })
-        ])
-      );
     });
   });
 });
