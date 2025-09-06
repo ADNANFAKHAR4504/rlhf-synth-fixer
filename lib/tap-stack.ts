@@ -27,7 +27,7 @@ export class TapStack extends cdk.Stack {
     // Extract environment suffix for resource naming
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // CloudFormation Parameters - Constraint #9
+    // 'CloudFormation' Parameters - Constraint #9
     new cdk.CfnParameter(this, 'Region', {
       type: 'String',
       default: 'us-west-2',
