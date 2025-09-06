@@ -33,6 +33,11 @@ locals {
   bucket_arn = aws_s3_bucket.secure_bucket.arn
 }
 
+# Random ID for unique resource naming
+resource "random_id" "role_suffix" {
+  byte_length = 4
+}
+
 # S3 Bucket with security hardening
 resource "aws_s3_bucket" "secure_bucket" {
   bucket = var.bucket_name
@@ -81,7 +86,7 @@ data "aws_iam_policy_document" "secure_bucket_policy" {
       type        = "*"
       identifiers = ["*"]
     }
-    actions   = ["s3:*"]
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
     resources = ["${local.bucket_arn}/*", local.bucket_arn]
     condition {
       test     = "Bool"
@@ -125,7 +130,7 @@ data "aws_iam_policy_document" "secure_bucket_policy" {
 
 # Analytics Reader IAM Role
 resource "aws_iam_role" "analytics_reader_role" {
-  name               = "analytics-reader-role"
+  name               = "analytics-reader-role-${random_id.role_suffix.hex}"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role_policy.json
   tags               = local.common_tags
 }
@@ -153,14 +158,14 @@ data "aws_iam_policy_document" "analytics_reader_policy" {
 }
 
 resource "aws_iam_instance_profile" "analytics_reader_profile" {
-  name = "analytics-reader-profile"
+  name = "analytics-reader-profile-${random_id.role_suffix.hex}"
   role = aws_iam_role.analytics_reader_role.name
   tags = local.common_tags
 }
 
 # Uploader IAM Role
 resource "aws_iam_role" "uploader_role" {
-  name               = "uploader-role"
+  name               = "uploader-role-${random_id.role_suffix.hex}"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role_policy.json
   tags               = local.common_tags
 }
@@ -193,7 +198,7 @@ data "aws_iam_policy_document" "uploader_policy" {
 }
 
 resource "aws_iam_instance_profile" "uploader_profile" {
-  name = "uploader-profile"
+  name = "uploader-profile-${random_id.role_suffix.hex}"
   role = aws_iam_role.uploader_role.name
   tags = local.common_tags
 }
