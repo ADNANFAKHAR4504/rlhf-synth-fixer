@@ -24,6 +24,9 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
+    // Extract environment suffix for resource naming
+    const environmentSuffix = props?.environmentSuffix || 'dev';
+
     // 'CloudFormation' Parameters - Constraint #9
     new cdk.CfnParameter(this, 'Region', {
       type: 'String',
@@ -80,6 +83,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket for logs - Constraint #5 & #15
     const logsBucket = new s3.Bucket(this, 'LogsBucket', {
+      bucketName: `tap-${environmentSuffix}-logs-bucket-${this.account}`,
       versioned: true, // Versioned
       encryption: s3.BucketEncryption.S3_MANAGED, // AES-256
       lifecycleRules: [
@@ -100,6 +104,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket for static content
     const staticContentBucket = new s3.Bucket(this, 'StaticContentBucket', {
+      bucketName: `tap-${environmentSuffix}-static-content-bucket-${this.account}`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -146,6 +151,7 @@ export class TapStack extends cdk.Stack {
 
     // RDS MySQL Multi-AZ - Constraint #7
     const database = new rds.DatabaseInstance(this, 'Database', {
+      instanceIdentifier: `tap-${environmentSuffix}-database-instance`,
       engine: rds.DatabaseInstanceEngine.mysql({
         version: rds.MysqlEngineVersion.VER_8_0_39,
       }),
@@ -299,6 +305,7 @@ export class TapStack extends cdk.Stack {
       this,
       'ApplicationLoadBalancer',
       {
+        loadBalancerName: `tap-${environmentSuffix}-alb`,
         vpc,
         internetFacing: true,
         vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
