@@ -31,10 +31,16 @@ variable "environment" {
   }
 }
 
+variable "environment_suffix" {
+  description = "Suffix for resource names to ensure uniqueness across deployments"
+  type        = string
+  default     = ""
+}
+
 variable "assume_role_arn" {
   description = "ARN of the role to assume"
   type        = string
-  default     = "arn:aws:iam::123456789012:role/test-role"
+  default     = ""
 }
 
 variable "owner" {
@@ -53,16 +59,20 @@ variable "purpose" {
 provider "aws" {
   region = var.aws_region
 
-  # assume_role {
-  #   role_arn = var.assume_role_arn
-  # }
+  dynamic "assume_role" {
+    for_each = var.assume_role_arn != "" ? [1] : []
+    content {
+      role_arn = var.assume_role_arn
+    }
+  }
 
   default_tags {
     tags = {
-      Environment = var.environment
-      Owner       = var.owner
-      Purpose     = var.purpose
-      ManagedBy   = "Terraform"
+      Environment       = var.environment
+      EnvironmentSuffix = var.environment_suffix
+      Owner             = var.owner
+      Purpose           = var.purpose
+      ManagedBy         = "Terraform"
     }
   }
 }

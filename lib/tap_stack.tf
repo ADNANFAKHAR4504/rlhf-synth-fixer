@@ -50,12 +50,14 @@ data "aws_subnets" "private" {
 }
 
 locals {
-  name_prefix = "${var.environment}-tap"
+  suffix      = var.environment_suffix != "" ? "-${var.environment_suffix}" : ""
+  name_prefix = "${var.environment}-tap${local.suffix}"
   common_tags = {
-    Environment = var.environment
-    Owner       = var.owner
-    Purpose     = var.purpose
-    ManagedBy   = "Terraform"
+    Environment       = var.environment
+    EnvironmentSuffix = var.environment_suffix
+    Owner             = var.owner
+    Purpose           = var.purpose
+    ManagedBy         = "Terraform"
   }
 }
 
@@ -138,7 +140,7 @@ resource "aws_kms_alias" "main" {
 
 # S3 Logs Bucket
 resource "aws_s3_bucket" "logs" {
-  bucket = "${local.name_prefix}-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-logs-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-logs-bucket"
@@ -173,6 +175,21 @@ resource "aws_s3_bucket_public_access_block" "logs" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_ownership_controls" "logs" {
+  bucket = aws_s3_bucket.logs.id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_acl" "logs" {
+  depends_on = [aws_s3_bucket_ownership_controls.logs]
+
+  bucket = aws_s3_bucket.logs.id
+  acl    = "log-delivery-write"
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
 
@@ -196,7 +213,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
 
 # S3 Data Bucket
 resource "aws_s3_bucket" "data" {
-  bucket = "${local.name_prefix}-data-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-data-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.id}"
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-data-bucket"

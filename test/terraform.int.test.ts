@@ -75,8 +75,9 @@ describe('TAP Stack Integration Tests', () => {
 
         // Get Terraform outputs
         try {
+            // First try to get outputs from Terraform
             const outputJson = execSync('terraform output -json', { 
-                cwd: path.join(__dirname, '..'),
+                cwd: path.join(__dirname, '..', 'lib'),
                 encoding: 'utf8' 
             });
             const outputs = JSON.parse(outputJson);
@@ -97,8 +98,37 @@ describe('TAP Stack Integration Tests', () => {
                 resourceInfo.kmsKeyId = resourceInfo.kmsKeyArn.split('/')[1];
             }
         } catch (error) {
-            console.warn('Could not retrieve Terraform outputs:', (error as Error).message);
-            console.warn('Integration tests will be skipped. Please run `terraform apply` first to deploy the infrastructure.');
+            // Fallback to cfn-outputs file if available
+            try {
+                const cfnOutputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+                if (fs.existsSync(cfnOutputsPath)) {
+                    const cfnOutputs = JSON.parse(fs.readFileSync(cfnOutputsPath, 'utf8'));
+                    
+                    resourceInfo = {
+                        kmsKeyArn: cfnOutputs.kms_key_arn,
+                        logsBucketName: cfnOutputs.s3_logs_bucket_name,
+                        dataBucketName: cfnOutputs.s3_data_bucket_name,
+                        cloudtrailName: cfnOutputs.cloudtrail_name,
+                        distributionId: cfnOutputs.cloudfront_distribution_id,
+                        rdsInstanceId: cfnOutputs.rds_instance_endpoint?.split('.')[0],
+                        appRoleArn: cfnOutputs.iam_app_role_arn,
+                        adminRoleArn: cfnOutputs.iam_admin_role_arn,
+                        snsTopicArn: cfnOutputs.sns_topic_arn
+                    };
+                    
+                    if (resourceInfo.kmsKeyArn) {
+                        resourceInfo.kmsKeyId = resourceInfo.kmsKeyArn.split('/')[1];
+                    }
+                    
+                    console.log('Using cfn-outputs/flat-outputs.json for integration tests');
+                } else {
+                    console.warn('Could not retrieve Terraform outputs:', (error as Error).message);
+                    console.warn('Integration tests will be skipped. Please run `terraform apply` first to deploy the infrastructure.');
+                }
+            } catch (fallbackError) {
+                console.warn('Could not retrieve outputs from any source');
+                console.warn('Integration tests will be skipped.');
+            }
         }
     });
 
@@ -507,7 +537,7 @@ describe('TAP Stack Integration Tests', () => {
             
             // Verify restricted to approved CIDRs
             const cidrs = sshRule!.IpRanges?.map(range => range.CidrIp) || [];
-            expect(cidrs.every(cidr => testConfig.approvedCidrs.includes(cidr!))).toBe(true);
+            expect(cidrs.every(cidr => cidr && testConfig.approvedCidrs.includes(cidr))).toBe(true);
         });
 
         it('should have created database security group', async () => {

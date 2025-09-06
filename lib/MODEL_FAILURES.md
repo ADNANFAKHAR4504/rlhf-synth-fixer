@@ -1,13 +1,15 @@
+# Model Failures and Required Fixes
 
-Model Failures and Known Issues
+This document outlines the critical issues found in the original MODEL_RESPONSE.md infrastructure code and the fixes required to make it production-ready and deployable.
 
-Overview
-This document tracks known limitations, failure modes, and potential issues with the TAP stack infrastructure deployment.
+## Critical Issues Fixed
 
-Critical Failures
+### 1. Missing Environment Suffix Variable
+**Issue**: The original code lacked an `environment_suffix` variable, which is essential for multi-deployment scenarios to avoid resource name conflicts.
 
-1. KMS Key Policy Conflicts
-Issue: KMS key policies may conflict with existing account-level policies or cross-account access requirements.
+**Impact**: Multiple deployments to the same AWS account would fail due to naming conflicts.
+
+**Fix**: Added `environment_suffix` variable in provider.tf and incorporated it into the locals block for dynamic resource naming.
 
 Symptoms:
 - Access denied errors when accessing encrypted resources
