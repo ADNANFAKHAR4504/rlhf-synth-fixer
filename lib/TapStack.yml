@@ -163,11 +163,11 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !Sub '${ApplicationS3Bucket}/*'
+                Resource: !GetAtt ApplicationS3Bucket.Arn
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref ApplicationS3Bucket
+                Resource: !GetAtt ApplicationS3Bucket.Arn
         - PolicyName: KMSAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -239,14 +239,16 @@ Resources:
             Effect: Allow
             Principal: '*'
             Action: s3:GetObject
-            Resource: !Sub '${ApplicationS3Bucket}/*'
+            Resource: !Sub 'arn:aws:s3:::${ApplicationS3Bucket}/*'
+
           - Sid: DenyInsecureConnections
             Effect: Deny
             Principal: '*'
             Action: s3:*
             Resource:
-              - !Ref ApplicationS3Bucket
-              - !Sub '${ApplicationS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${ApplicationS3Bucket}/*'
+              - !Sub 'arn:aws:s3:::${ApplicationS3Bucket}'
+
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
@@ -321,12 +323,28 @@ Resources:
           KMS_KEY_ID: !Ref ApplicationKMSKey
       Code:
         ZipFile: |
-          const AWS = require('aws-sdk');
+          const { S3Client, ListBucketsCommand } = require("@aws-sdk/client-s3");
+          const {
+            DynamoDBClient,
+            GetItemCommand,
+            ScanCommand,
+            PutItemCommand,
+            UpdateItemCommand,
+            DeleteItemCommand,
+          } = require("@aws-sdk/client-dynamodb");
+          const { DynamoDBDocumentClient } = require("@aws-sdk/lib-dynamodb");
+          const {
+            KMSClient,
+            DecryptCommand,
+            EncryptCommand,
+            GenerateDataKeyCommand,
+          } = require("@aws-sdk/client-kms");
 
-          // Initialize AWS SDK clients
-          const dynamodb = new AWS.DynamoDB.DocumentClient();
-          const s3 = new AWS.S3();
-          const kms = new AWS.KMS();
+          // Initialize AWS SDK v3 clients
+          const s3 = new S3Client({ region: "us-east-1" });
+          const dynamoDbClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+          const ddbDocClient = DynamoDBDocumentClient.from(dynamoDbClient);
+          const kms = new KMSClient({ region: process.env.AWS_REGION });
 
           // Environment variables
           const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME;
@@ -334,187 +352,151 @@ Resources:
           const ENVIRONMENT = process.env.ENVIRONMENT;
           const KMS_KEY_ID = process.env.KMS_KEY_ID;
 
-          exports.handler = async (event, context) => {
-              console.log('Event received:', JSON.stringify(event, null, 2));
-              console.log('Environment:', ENVIRONMENT);
-              
-              const response = {
-                  statusCode: 200,
-                  headers: {
-                      'Content-Type': 'application/json',
-                      'Access-Control-Allow-Origin': '*',
-                      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-                  },
-                  body: ''
-              };
-              
-              try {
-                  const { httpMethod, pathParameters, queryStringParameters, body } = event;
-                  
-                  switch (httpMethod) {
-                      case 'GET':
-                          if (event.path === '/health') {
-                              response.body = JSON.stringify({
-                                  status: 'healthy',
-                                  timestamp: new Date().toISOString(),
-                                  environment: ENVIRONMENT,
-                                  version: '1.0.0'
-                              });
-                          } else if (pathParameters && pathParameters.id) {
-                              // Get item from DynamoDB
-                              const params = {
-                                  TableName: TABLE_NAME,
-                                  Key: {
-                                      pk: pathParameters.id,
-                                      sk: 'metadata'
-                                  }
-                              };
-                              
-                              const result = await dynamodb.get(params).promise();
-                              
-                              response.body = JSON.stringify({
-                                  success: true,
-                                  data: result.Item || null,
-                                  message: result.Item ? 'Item found' : 'Item not found'
-                              });
-                              
-                              if (!result.Item) {
-                                  response.statusCode = 404;
-                              }
-                          } else {
-                              // List items
-                              const params = {
-                                  TableName: TABLE_NAME,
-                                  Limit: 10
-                              };
-                              
-                              const result = await dynamodb.scan(params).promise();
-                              
-                              response.body = JSON.stringify({
-                                  success: true,
-                                  data: result.Items,
-                                  count: result.Count
-                              });
-                          }
-                          break;
-                          
-                      case 'POST':
-                          const postData = JSON.parse(body || '{}');
-                          const itemId = postData.id || Date.now().toString();
-                          
-                          // Store item in DynamoDB
-                          const putParams = {
-                              TableName: TABLE_NAME,
-                              Item: {
-                                  pk: itemId,
-                                  sk: 'metadata',
-                                  data: postData.data || {},
-                                  createdAt: new Date().toISOString(),
-                                  updatedAt: new Date().toISOString()
-                              }
-                          };
-                          
-                          await dynamodb.put(putParams).promise();
-                          
-                          response.statusCode = 201;
-                          response.body = JSON.stringify({
-                              success: true,
-                              message: 'Item created successfully',
-                              id: itemId
-                          });
-                          break;
-                          
-                      case 'PUT':
-                          if (!pathParameters || !pathParameters.id) {
-                              response.statusCode = 400;
-                              response.body = JSON.stringify({
-                                  success: false,
-                                  message: 'ID parameter is required'
-                              });
-                              break;
-                          }
-                          
-                          const putBodyData = JSON.parse(body || '{}');
-                          
-                          const updateParams = {
-                              TableName: TABLE_NAME,
-                              Key: {
-                                  pk: pathParameters.id,
-                                  sk: 'metadata'
-                              },
-                              UpdateExpression: 'SET #data = :data, updatedAt = :updatedAt',
-                              ExpressionAttributeNames: {
-                                  '#data': 'data'
-                              },
-                              ExpressionAttributeValues: {
-                                  ':data': putBodyData.data || {},
-                                  ':updatedAt': new Date().toISOString()
-                              },
-                              ReturnValues: 'ALL_NEW'
-                          };
-                          
-                          const updateResult = await dynamodb.update(updateParams).promise();
-                          
-                          response.body = JSON.stringify({
-                              success: true,
-                              message: 'Item updated successfully',
-                              data: updateResult.Attributes
-                          });
-                          break;
-                          
-                      case 'DELETE':
-                          if (!pathParameters || !pathParameters.id) {
-                              response.statusCode = 400;
-                              response.body = JSON.stringify({
-                                  success: false,
-                                  message: 'ID parameter is required'
-                              });
-                              break;
-                          }
-                          
-                          const deleteParams = {
-                              TableName: TABLE_NAME,
-                              Key: {
-                                  pk: pathParameters.id,
-                                  sk: 'metadata'
-                              }
-                          };
-                          
-                          await dynamodb.delete(deleteParams).promise();
-                          
-                          response.body = JSON.stringify({
-                              success: true,
-                              message: 'Item deleted successfully'
-                          });
-                          break;
-                          
-                      case 'OPTIONS':
-                          // Handle preflight requests
-                          response.body = JSON.stringify({ message: 'OK' });
-                          break;
-                          
-                      default:
-                          response.statusCode = 405;
-                          response.body = JSON.stringify({
-                              success: false,
-                              message: 'Method not allowed'
-                          });
+          exports.handler = async (event) => {
+            console.log("Event received:", JSON.stringify(event, null, 2));
+            console.log("Environment:", ENVIRONMENT);
+
+            const response = {
+              statusCode: 200,
+              headers: {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization",
+              },
+              body: "",
+            };
+
+            try {
+              const { httpMethod, pathParameters, body, rawPath } = event;
+
+              switch (httpMethod) {
+                case "GET":
+                  // Use endsWith to handle stage prefix (e.g., "/prod/health")
+                  if (rawPath.endsWith("/health")) {
+                    response.body = JSON.stringify({
+                      status: "healthy",
+                      timestamp: new Date().toISOString(),
+                      environment: ENVIRONMENT,
+                      version: "1.0.0",
+                    });
+                  } else if (pathParameters && pathParameters.id) {
+                    const getParams = {
+                      TableName: TABLE_NAME,
+                      Key: { pk: pathParameters.id, sk: "metadata" },
+                    };
+                    const { Item } = await ddbDocClient.send(new GetItemCommand(getParams));
+                    response.body = JSON.stringify({
+                      success: true,
+                      data: Item || null,
+                      message: Item ? "Item found" : "Item not found",
+                    });
+                    if (!Item) response.statusCode = 404;
+                  } else {
+                    const scanParams = { TableName: TABLE_NAME, Limit: 10 };
+                    const { Items, Count } = await ddbDocClient.send(new ScanCommand(scanParams));
+                    response.body = JSON.stringify({
+                      success: true,
+                      data: Items,
+                      count: Count,
+                    });
                   }
-                  
-              } catch (error) {
-                  console.error('Error:', error);
-                  
-                  response.statusCode = 500;
+                  break;
+
+                case "POST":
+                  const postData = JSON.parse(body || "{}");
+                  const itemId = postData.id || Date.now().toString();
+                  const putItem = {
+                    TableName: TABLE_NAME,
+                    Item: {
+                      pk: itemId,
+                      sk: "metadata",
+                      data: postData.data || {},
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    },
+                  };
+                  await ddbDocClient.send(new PutItemCommand(putItem));
+                  response.statusCode = 201;
                   response.body = JSON.stringify({
+                    success: true,
+                    message: "Item created successfully",
+                    id: itemId,
+                  });
+                  break;
+
+                case "PUT":
+                  if (!pathParameters || !pathParameters.id) {
+                    response.statusCode = 400;
+                    response.body = JSON.stringify({
                       success: false,
-                      message: 'Internal server error',
-                      error: error.message
+                      message: "ID parameter is required",
+                    });
+                    break;
+                  }
+                  const putBodyData = JSON.parse(body || "{}");
+                  const updateParams = {
+                    TableName: TABLE_NAME,
+                    Key: { pk: pathParameters.id, sk: "metadata" },
+                    UpdateExpression: "SET #data = :data, updatedAt = :updatedAt",
+                    ExpressionAttributeNames: { "#data": "data" },
+                    ExpressionAttributeValues: {
+                      ":data": putBodyData.data || {},
+                      ":updatedAt": new Date().toISOString(),
+                    },
+                    ReturnValues: "ALL_NEW",
+                  };
+                  const { Attributes } = await ddbDocClient.send(new UpdateItemCommand(updateParams));
+                  response.body = JSON.stringify({
+                    success: true,
+                    message: "Item updated successfully",
+                    data: Attributes,
+                  });
+                  break;
+
+                case "DELETE":
+                  if (!pathParameters || !pathParameters.id) {
+                    response.statusCode = 400;
+                    response.body = JSON.stringify({
+                      success: false,
+                      message: "ID parameter is required",
+                    });
+                    break;
+                  }
+                  const deleteParams = {
+                    TableName: TABLE_NAME,
+                    Key: { pk: pathParameters.id, sk: "metadata" },
+                  };
+                  await ddbDocClient.send(new DeleteItemCommand(deleteParams));
+                  response.body = JSON.stringify({
+                    success: true,
+                    message: "Item deleted successfully",
+                  });
+                  break;
+
+                case "OPTIONS":
+                  response.body = JSON.stringify({ message: "OK" });
+                  break;
+
+                default:
+                  response.statusCode = 405;
+                  response.body = JSON.stringify({
+                    success: false,
+                    message: "Method not allowed",
                   });
               }
-              
-              console.log('Response:', JSON.stringify(response, null, 2));
-              return response;
+            } catch (error) {
+              console.error("Error:", error);
+              response.statusCode = 500;
+              response.body = JSON.stringify({
+                success: false,
+                message: "Internal server error",
+                error: error.message,
+              });
+            }
+
+            console.log("Response:", JSON.stringify(response, null, 2));
+            return response;
           };
       Tags:
         - Key: Environment
@@ -584,7 +566,7 @@ Resources:
       FunctionName: !Ref ApplicationLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub '${ApplicationHttpApi}/*/*'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApplicationHttpApi}/*/*/*'
 
   # API Routes
   HealthRoute:
