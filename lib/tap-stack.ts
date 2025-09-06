@@ -98,7 +98,7 @@ export class TapStack extends cdk.Stack {
     this.createCloudTrail(environmentSuffix, securityBucket, kmsKey);
 
     // 6. Setup AWS Config
-    this.createConfigSetup(environmentSuffix, vpc, kmsKey);
+    this.createConfigSetup(environmentSuffix);
 
     // 7. Setup GuardDuty (only if it doesn't exist already)
     this.createGuardDuty(environmentSuffix, kmsKey);
@@ -455,11 +455,7 @@ export class TapStack extends cdk.Stack {
     // });
   }
 
-  private createConfigSetup(
-    environmentSuffix: string,
-    vpc: ec2.IVpc,
-    kmsKey: kms.Key
-  ): void {
+  private createConfigSetup(environmentSuffix: string): void {
     const configBucket = new s3.Bucket(
       this,
       `TapConfigBucket-${environmentSuffix}`,
