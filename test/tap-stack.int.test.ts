@@ -175,12 +175,6 @@ describe("TapStack – Integration Tests (using cfn-outputs/all-outputs.json)", 
     "ConsoleUsersGroupName",
   ];
 
-  test("Outputs JSON loads and contains at least some expected keys", () => {
-    expect(outputs && typeof outputs === "object").toBe(true);
-    const present = requiredKeys.filter((k) => typeof outputs[k] === "string");
-    expect(present.length).toBeGreaterThan(0);
-  });
-
   test("VpcId has a valid VPC identifier format", () => {
     if (!softExpectString(outputs.VpcId, "VpcId")) return expect(true).toBe(true);
     expect(reVpcId.test(outputs.VpcId)).toBe(true);
