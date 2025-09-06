@@ -20,10 +20,6 @@ import {
 } from '@aws-sdk/client-sns';
 import axios from 'axios';
 import { randomUUID } from 'crypto';
-import { config } from 'dotenv';
-
-// Load environment variables from .env file
-config();
 
 // Validate required environment variables
 const requiredEnvVars = [
