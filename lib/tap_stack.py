@@ -27,7 +27,7 @@ import boto3
 config = pulumi.Config()
 environment = config.get("environment") or "prod"
 app_name = config.get("app_name") or "serverless-app"
-region = config.get("region") or "ap-south-1"
+region = config.get("region") or "us-east-1"
 
 # Debug: Print current AWS identity and permissions
 try:
