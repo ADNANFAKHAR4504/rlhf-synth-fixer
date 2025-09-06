@@ -1,16 +1,12 @@
 {
-  "VPC_ID": "vpc-00000000000000000",
-  "PUBLIC_SUBNET_1_ID": "subnet-00000000000000001",
-  "PUBLIC_SUBNET_2_ID": "subnet-00000000000000002",
-  "PRIVATE_SUBNET_1_ID": "subnet-00000000000000003",
-  "PRIVATE_SUBNET_2_ID": "subnet-00000000000000004",
-  "RDS_ENDPOINT": "my-rds.cluster.region.rds.amazonaws.com",
-  "LOGGING_BUCKET_NAME": "my-app-pr2519-logging-123456789012-us-east-1",
-  "RDS_BACKUP_BUCKET_NAME": "my-app-pr2519-rds-backup-123456789012-us-east-1",
-  "KMS_KEY_ALIAS_EBS": "alias/my-app-pr2519-ebs",
-  "KMS_KEY_ALIAS_RDS": "alias/my-app-pr2519-rds",
-  "ENVIRONMENT": "pr2519",
-  "STACK_NAME": "TapStack-pr2519",
-  "REGION": "us-east-1",
-  "ACCOUNT_ID": "123456789012"
+  "VPCId": "vpc-0892982b4d60d82b1",
+  "PublicSubnet1Id": "subnet-05883b1ec27c6f11a",
+  "PublicSubnet2Id": "subnet-0aec91ed564a97094",
+  "PrivateSubnet1Id": "subnet-0e9198b5dc916b8ba",
+  "PrivateSubnet2Id": "subnet-09f3078dd78759cab",
+  "RDSEndpoint": "tapstackpr2519-rdsinstance-bre1rxgq7xj2.c43eiskmcd0s.us-east-1.rds.amazonaws.com",
+  "LoggingBucketName": "tapstackpr2519-loggingbucket-xxpluzyfzmb4",
+  "RDSBackupBucketName": "tapstackpr2519-rdsbackupbucket-fawilhzwsmev",
+  "KMSKeyAliasEBS": "6d04d16f-6ab6-48fd-bb7c-c5e2fb675099",
+  "KMSKeyAliasRDS": "277df8b2-8f8f-4384-9774-ea5d0197fac2"
 }

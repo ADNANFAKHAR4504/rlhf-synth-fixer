@@ -1,29 +1,22 @@
 import { beforeAll, describe, expect, test } from '@jest/globals';
 import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
-import * as path from 'path';
 
-// Configure AWS SDK
-AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
+// Read CloudFormation outputs from flat-outputs.json
+const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 
-// Read outputs from flat-outputs.json
-const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
-let outputs = {};
-
-try {
-  if (fs.existsSync(outputsPath)) {
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-    // Set environment variables from outputs
-    Object.entries(outputs).forEach(([key, value]) => {
-      process.env[key.toUpperCase()] = value as string;
-    });
-    console.log('Loaded outputs from flat-outputs.json:', outputs);
-  } else {
-    console.warn('Warning: flat-outputs.json not found. Will try to get outputs from CloudFormation stack.');
-  }
-} catch (error) {
-  console.error('Error reading flat-outputs.json:', error);
-}
+// Map the outputs to environment variables
+process.env.VPC_ID = outputs.VPCId;
+process.env.PUBLIC_SUBNET_1_ID = outputs.PublicSubnet1Id;
+process.env.PUBLIC_SUBNET_2_ID = outputs.PublicSubnet2Id;
+process.env.PRIVATE_SUBNET_1_ID = outputs.PrivateSubnet1Id;
+process.env.PRIVATE_SUBNET_2_ID = outputs.PrivateSubnet2Id;
+process.env.RDS_ENDPOINT = outputs.RDSEndpoint;
+process.env.LOGGING_BUCKET_NAME = outputs.LoggingBucketName;
+process.env.RDS_BACKUP_BUCKET_NAME = outputs.RDSBackupBucketName;
+process.env.KMS_KEY_ALIAS_EBS = outputs.KMSKeyAliasEBS;
+process.env.KMS_KEY_ALIAS_RDS = outputs.KMSKeyAliasRDS;
+process.env.ENVIRONMENT = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Initialize AWS clients
 const ec2 = new AWS.EC2();
@@ -61,77 +54,13 @@ const assertDefined = <T>(value: T | undefined, message?: string): T => {
 
 describe('TapStack Infrastructure Integration Tests', () => {
   beforeAll(async () => {
-    // Set default environment variables
+    // Set AWS region
     process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
-    process.env.ENVIRONMENT = process.env.ENVIRONMENT_SUFFIX || 'pr2519';
 
-    // Get stack outputs
-    const stackName = `TapStack${process.env.ENVIRONMENT}`;
-    const cloudformation = new AWS.CloudFormation();
-
-    try {
-      console.log(`Getting outputs for stack: ${stackName}`);
-      const { Stacks } = await cloudformation.describeStacks({
-        StackName: stackName
-      }).promise();
-
-      if (!Stacks || Stacks.length === 0) {
-        throw new Error(`Stack ${stackName} not found`);
-      }
-
-      const outputs = Stacks[0].Outputs;
-      if (!outputs) {
-        throw new Error(`No outputs found for stack ${stackName}`);
-      }
-
-      console.log('Stack outputs found:', outputs.length);
-
-      // Map outputs to environment variables
-      for (const output of outputs) {
-        if (output.OutputValue) {
-          switch (output.OutputKey) {
-            case 'VpcId':
-              process.env.VPC_ID = output.OutputValue;
-              break;
-            case 'PublicSubnet1':
-              process.env.PUBLIC_SUBNET_1_ID = output.OutputValue;
-              break;
-            case 'PublicSubnet2':
-              process.env.PUBLIC_SUBNET_2_ID = output.OutputValue;
-              break;
-            case 'PrivateSubnet1':
-              process.env.PRIVATE_SUBNET_1_ID = output.OutputValue;
-              break;
-            case 'PrivateSubnet2':
-              process.env.PRIVATE_SUBNET_2_ID = output.OutputValue;
-              break;
-            case 'RDSEndpoint':
-              process.env.RDS_ENDPOINT = output.OutputValue;
-              break;
-            case 'LoggingBucketName':
-              process.env.LOGGING_BUCKET_NAME = output.OutputValue;
-              break;
-            case 'RDSBackupBucketName':
-              process.env.RDS_BACKUP_BUCKET_NAME = output.OutputValue;
-              break;
-            case 'KMSKeyAliasEBS':
-              process.env.KMS_KEY_ALIAS_EBS = output.OutputValue;
-              break;
-            case 'KMSKeyAliasRDS':
-              process.env.KMS_KEY_ALIAS_RDS = output.OutputValue;
-              break;
-          }
-        }
-      }
-
-      // Check if all required variables are set
-      const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-      if (missingVars.length > 0) {
-        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
-      }
-    } catch (error) {
-      console.error('Error getting stack outputs:', error);
-      throw error;
+    // Verify all required variables are set
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    if (missingVars.length > 0) {
+      throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
   });
 
