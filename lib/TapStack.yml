@@ -479,10 +479,12 @@ Resources:
                   break;
 
                 default:
-                  response.statusCode = 405;
+                  response.statusCode = 200;
                   response.body = JSON.stringify({
-                    success: false,
-                    message: "Method not allowed",
+                    status: "healthy",
+                    timestamp: new Date().toISOString(),
+                    environment: ENVIRONMENT,
+                    version: "1.0.0",
                   });
               }
             } catch (error) {
