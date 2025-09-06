@@ -789,71 +789,73 @@ export class TapStack extends cdk.Stack {
         environment: {
           ENVIRONMENT: environmentSuffix,
         },
+        // ADD THIS LINE to fix the issue:
+        logRetention: logs.RetentionDays.ONE_YEAR,
         code: lambda.Code.fromInline(`
-import json
-import boto3
-import logging
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
-def handler(event, context):
-    """
-    Automated remediation function for security compliance violations
-    """
-    try:
-        # Parse the incoming event
-        detail = event.get('detail', {})
-        config_item = detail.get('configurationItem', {})
-        resource_type = config_item.get('resourceType')
-        resource_id = config_item.get('resourceId')
-        
-        logger.info(f"Processing remediation for {resource_type}: {resource_id}")
-        
-        if resource_type == 'AWS::S3::Bucket':
-            remediate_s3_bucket(resource_id)
-        elif resource_type == 'AWS::EC2::Instance':
-            remediate_ec2_instance(resource_id)
-        
-        return {
-            'statusCode': 200,
-            'body': json.dumps({
-                'message': f'Remediation completed for {resource_id}'
-            })
-        }
-    except Exception as e:
-        logger.error(f"Remediation failed: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': str(e)
-            })
-        }
-
-def remediate_s3_bucket(bucket_name):
-    """Remediate S3 bucket public access"""
-    s3 = boto3.client('s3')
-    
-    # Block public access
-    s3.put_public_access_block(
-        Bucket=bucket_name,
-        PublicAccessBlockConfiguration={
-            'BlockPublicAcls': True,
-            'IgnorePublicAcls': True,
-            'BlockPublicPolicy': True,
-            'RestrictPublicBuckets': True
-        }
-    )
-    logger.info(f"Blocked public access for bucket: {bucket_name}")
-
-def remediate_ec2_instance(instance_id):
-    """Remediate EC2 instance security issues"""
-    ec2 = boto3.client('ec2')
-    
-    # Enable detailed monitoring if not already enabled
-    ec2.monitor_instances(InstanceIds=[instance_id])
-    logger.info(f"Enabled detailed monitoring for instance: {instance_id}")
-`),
+  import json
+  import boto3
+  import logging
+  
+  logger = logging.getLogger()
+  logger.setLevel(logging.INFO)
+  
+  def handler(event, context):
+      """
+      Automated remediation function for security compliance violations
+      """
+      try:
+          # Parse the incoming event
+          detail = event.get('detail', {})
+          config_item = detail.get('configurationItem', {})
+          resource_type = config_item.get('resourceType')
+          resource_id = config_item.get('resourceId')
+          
+          logger.info(f"Processing remediation for {resource_type}: {resource_id}")
+          
+          if resource_type == 'AWS::S3::Bucket':
+              remediate_s3_bucket(resource_id)
+          elif resource_type == 'AWS::EC2::Instance':
+              remediate_ec2_instance(resource_id)
+          
+          return {
+              'statusCode': 200,
+              'body': json.dumps({
+                  'message': f'Remediation completed for {resource_id}'
+              })
+          }
+      except Exception as e:
+          logger.error(f"Remediation failed: {str(e)}")
+          return {
+              'statusCode': 500,
+              'body': json.dumps({
+                  'error': str(e)
+              })
+          }
+  
+  def remediate_s3_bucket(bucket_name):
+      """Remediate S3 bucket public access"""
+      s3 = boto3.client('s3')
+      
+      # Block public access
+      s3.put_public_access_block(
+          Bucket=bucket_name,
+          PublicAccessBlockConfiguration={
+              'BlockPublicAcls': True,
+              'IgnorePublicAcls': True,
+              'BlockPublicPolicy': True,
+              'RestrictPublicBuckets': True
+          }
+      )
+      logger.info(f"Blocked public access for bucket: {bucket_name}")
+  
+  def remediate_ec2_instance(instance_id):
+      """Remediate EC2 instance security issues"""
+      ec2 = boto3.client('ec2')
+      
+      # Enable detailed monitoring if not already enabled
+      ec2.monitor_instances(InstanceIds=[instance_id])
+      logger.info(f"Enabled detailed monitoring for instance: {instance_id}")
+  `),
       }
     );
 
