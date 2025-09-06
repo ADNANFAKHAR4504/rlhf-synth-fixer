@@ -4,7 +4,7 @@ You are a senior Terraform security engineer. Produce production-ready, valid HC
 OBJECTIVE
 Improve AWS security posture using Terraform with a narrow, high-impact scope: S3 bucket security and IAM role/policy hardening. Generate ONE file named `tap_stack.tf` that is complete and self-contained (variables, locals, resources, outputs). The repository already contains `provider.tf`; do NOT define the provider again. You MUST declare a variable `aws_region` in `tap_stack.tf` and rely on it for region-specific values (even though provider config is in another file).
 
-REQUIREMENTS
+REQUIREMENTS:
 S3 BUCKET ENCRYPTION & SETTINGS
 • Create at least one S3 bucket (e.g., “secure-data-bucket”) with:
 – Server-side encryption at rest using AES-256 (SSE-S3).
@@ -16,7 +16,7 @@ S3 BUCKET ENCRYPTION & SETTINGS
 ▸ (Lockdown) Denies `s3:PutEncryptionConfiguration` to prevent disabling encryption (allow exceptions only if justified in comments).
 • Avoid hardcoded ARNs; derive bucket ARNs from resource references.
 
-IAM LEAST PRIVILEGE (NO WILDCARDS)
+IAM LEAST PRIVILEGE (NO WILDCARDS):
 • Create two IAM roles with minimal trust and minimal permissions, no `"*"` in actions/resources unless strictly necessary and explicitly justified in comments:
 
 1. Analytics Reader Role
