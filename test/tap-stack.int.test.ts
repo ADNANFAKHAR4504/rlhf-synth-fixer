@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, test } from '@jest/globals';
 import * as AWS from 'aws-sdk';
 
-// Environment variables are set in GitHub Actions workflow
 // Type augmentations for better type safety
 declare global {
   namespace NodeJS {
@@ -36,7 +35,50 @@ const assertDefined = <T>(value: T | undefined, message?: string): T => {
   return value;
 };
 
-// Verify required environment variables
+// Function to get stack outputs
+const getStackOutputs = async (stackName: string): Promise<void> => {
+  const cloudformation = new AWS.CloudFormation();
+  const { Stacks } = await cloudformation.describeStacks({
+    StackName: stackName
+  }).promise();
+
+  if (!Stacks || Stacks.length === 0) {
+    throw new Error(`Stack ${stackName} not found`);
+  }
+
+  const outputs = Stacks[0].Outputs;
+  if (!outputs) {
+    throw new Error(`No outputs found for stack ${stackName}`);
+  }
+
+  // Map stack outputs to environment variables
+  const outputMap: { [key: string]: string } = {
+    'VpcId': 'VPC_ID',
+    'PublicSubnet1Id': 'PUBLIC_SUBNET_1_ID',
+    'PublicSubnet2Id': 'PUBLIC_SUBNET_2_ID',
+    'PrivateSubnet1Id': 'PRIVATE_SUBNET_1_ID',
+    'PrivateSubnet2Id': 'PRIVATE_SUBNET_2_ID',
+    'RDSEndpoint': 'RDS_ENDPOINT',
+    'LoggingBucketName': 'LOGGING_BUCKET_NAME',
+    'RDSBackupBucketName': 'RDS_BACKUP_BUCKET_NAME',
+    'KMSKeyAliasEBS': 'KMS_KEY_ALIAS_EBS',
+    'KMSKeyAliasRDS': 'KMS_KEY_ALIAS_RDS'
+  };
+
+  for (const output of outputs) {
+    const envVar = outputMap[output.OutputKey || ''];
+    if (envVar && output.OutputValue) {
+      process.env[envVar] = output.OutputValue;
+    }
+  }
+
+  // Set environment if not already set
+  if (!process.env.ENVIRONMENT) {
+    process.env.ENVIRONMENT = process.env.ENVIRONMENT_SUFFIX || 'pr2519';
+  }
+};
+
+// Required environment variables
 const requiredEnvVars = [
   'AWS_REGION',
   'ENVIRONMENT',
@@ -63,8 +105,16 @@ const sns = new AWS.SNS();
 const iam = new AWS.IAM();
 
 describe('TapStack Infrastructure Integration Tests', () => {
-  beforeAll(() => {
-    // Verify all required environment variables are set
+  beforeAll(async () => {
+    // Try to get stack outputs first
+    try {
+      const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr2519'}`;
+      await getStackOutputs(stackName);
+    } catch (error) {
+      console.warn('Failed to get stack outputs:', error);
+    }
+
+    // Verify required environment variables are set
     const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
     if (missingVars.length > 0) {
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
