@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291896",
+  "team": "5",
+  "startedAt": "2025-09-03T13:05:26.027Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "Monitoring Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS KMS",
+    "AWS CloudTrail",
+    "AWS CloudWatch",
+    "AWS S3",
+    "AWS IAM",
+    "AWS GuardDuty",
+    "AWS SNS",
+    "AWS VPC",
+    "AWS EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sadaf-jamal-au27",
+  "dockerS3Location": ""
+}
