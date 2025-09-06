@@ -413,7 +413,15 @@ Resources:
       DisplayName:
         Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
       TopicName:
-        Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
+        Fn::Join:
+          - "-"
+          - - Fn::Sub: ${AWS::StackName}-${Environment}-${AWS::Region}
+            - Fn::Select:
+                - 2
+                - Fn::Split:
+                    - "/"
+                    - Ref: "AWS::StackId"
+            - "alarms"
 
   # AWS Config
   ConfigRecorderManager:
