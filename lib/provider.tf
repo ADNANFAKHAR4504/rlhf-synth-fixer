@@ -75,10 +75,10 @@ variable "tags_common" {
 # Provider configuration - Manual testing with direct credentials (no role assumption)
 provider "aws" {
   region = "us-east-1"
-  
+
   # Role assumption completely disabled for manual testing
   # For production use, uncomment and configure assume_role block
-  
+
   default_tags {
     tags = local.common_tags
   }

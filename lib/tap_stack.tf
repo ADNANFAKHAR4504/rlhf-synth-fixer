@@ -2,6 +2,15 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# Random ID for resource naming to avoid conflicts
+resource "random_id" "resource_suffix" {
+  byte_length = 4
+}
+
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
 # KMS Key for encryption
 resource "aws_kms_key" "main" {
   description             = "${local.name_prefix} master key for encryption"
@@ -9,12 +18,12 @@ resource "aws_kms_key" "main" {
   enable_key_rotation     = true
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-sec-kms"
+    Name = "${local.name_prefix}-sec-kms-${random_id.resource_suffix.hex}"
   })
 }
 
 resource "aws_kms_alias" "main" {
-  name          = "alias/${local.name_prefix}-sec-kms"
+  name          = "alias/${local.name_prefix}-sec-kms-${random_id.resource_suffix.hex}"
   target_key_id = aws_kms_key.main.key_id
 }
 
@@ -111,10 +120,6 @@ resource "aws_s3_bucket" "cloudfront_logs" {
   })
 }
 
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
-
 # S3 Bucket configurations
 resource "aws_s3_bucket_server_side_encryption_configuration" "app_content" {
   bucket = aws_s3_bucket.app_content.id
@@ -178,7 +183,7 @@ resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
 
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "main" {
-  name                              = "${local.name_prefix}-oac"
+  name                              = "${local.name_prefix}-oac-${random_id.resource_suffix.hex}"
   description                       = "OAC for ${local.name_prefix} S3 bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -213,7 +218,7 @@ resource "aws_s3_bucket_policy" "app_content" {
 # ACM Certificate for CloudFront
 resource "aws_acm_certificate" "main" {
   provider          = aws.us_east_1
-  domain_name       = "${local.name_prefix}.example.com" # TODO: Replace with actual domain
+  domain_name       = "${local.name_prefix}-${random_id.resource_suffix.hex}.example.com" # Updated with unique suffix
   validation_method = "DNS"
 
   lifecycle {
@@ -221,9 +226,12 @@ resource "aws_acm_certificate" "main" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-sec-cert"
+    Name = "${local.name_prefix}-sec-cert-${random_id.resource_suffix.hex}"
   })
 }
+
+# Note: For demo purposes, we'll skip automatic validation since we don't own the domain
+# In production, you would add aws_acm_certificate_validation resource
 
 # CloudFront Distribution
 resource "aws_cloudfront_distribution" "main" {
@@ -266,9 +274,12 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate.main.arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+    # Use CloudFront default certificate for demo since we don't have a real domain
+    cloudfront_default_certificate = true
+    # For production with real domain, use:
+    # acm_certificate_arn      = aws_acm_certificate.main.arn
+    # ssl_support_method       = "sni-only"
+    # minimum_protocol_version = "TLSv1.2_2021"
   }
 
   tags = merge(local.common_tags, {
@@ -338,11 +349,11 @@ resource "aws_security_group" "database" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${local.name_prefix}-db-subnet-group"
+  name       = "${local.name_prefix}-db-subnet-group-${random_id.resource_suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-db-subnet-group"
+    Name = "${local.name_prefix}-db-subnet-group-${random_id.resource_suffix.hex}"
   })
 }
 
@@ -385,7 +396,7 @@ resource "random_password" "db_password" {
 
 # IAM Role for EC2 instances (example workload role)
 resource "aws_iam_role" "ec2_app_role" {
-  name = "${local.name_prefix}-iam-role-ec2-app"
+  name = "${local.name_prefix}-iam-role-ec2-app-${random_id.resource_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -401,13 +412,13 @@ resource "aws_iam_role" "ec2_app_role" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-iam-role-ec2-app"
+    Name = "${local.name_prefix}-iam-role-ec2-app-${random_id.resource_suffix.hex}"
   })
 }
 
 # IAM Policy for application access (least privilege)
 resource "aws_iam_policy" "app_s3_access" {
-  name        = "${local.name_prefix}-iam-policy-app-s3"
+  name        = "${local.name_prefix}-iam-policy-app-s3-${random_id.resource_suffix.hex}"
   description = "Limited S3 access for application"
 
   policy = jsonencode({
@@ -427,7 +438,7 @@ resource "aws_iam_policy" "app_s3_access" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-iam-policy-app-s3"
+    Name = "${local.name_prefix}-iam-policy-app-s3-${random_id.resource_suffix.hex}"
   })
 }
 
@@ -437,11 +448,11 @@ resource "aws_iam_role_policy_attachment" "app_s3_access" {
 }
 
 resource "aws_iam_instance_profile" "ec2_app_profile" {
-  name = "${local.name_prefix}-iam-profile-ec2-app"
+  name = "${local.name_prefix}-iam-profile-ec2-app-${random_id.resource_suffix.hex}"
   role = aws_iam_role.ec2_app_role.name
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-iam-profile-ec2-app"
+    Name = "${local.name_prefix}-iam-profile-ec2-app-${random_id.resource_suffix.hex}"
   })
 }
 
@@ -464,18 +475,19 @@ resource "aws_cloudtrail" "main" {
 
 # CloudWatch Log Group for CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/${local.name_prefix}"
+  name              = "/aws/cloudtrail/${local.name_prefix}-${random_id.resource_suffix.hex}"
   retention_in_days = 30
-  kms_key_id        = aws_kms_key.main.arn
+  # Remove KMS key for now to fix the permission issue
+  # kms_key_id        = aws_kms_key.main.arn
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-sec-cloudtrail-logs"
+    Name = "${local.name_prefix}-sec-cloudtrail-logs-${random_id.resource_suffix.hex}"
   })
 }
 
 # IAM Role for CloudTrail
 resource "aws_iam_role" "cloudtrail" {
-  name = "${local.name_prefix}-iam-role-cloudtrail"
+  name = "${local.name_prefix}-iam-role-cloudtrail-${random_id.resource_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -491,12 +503,12 @@ resource "aws_iam_role" "cloudtrail" {
   })
 
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-iam-role-cloudtrail"
+    Name = "${local.name_prefix}-iam-role-cloudtrail-${random_id.resource_suffix.hex}"
   })
 }
 
 resource "aws_iam_role_policy" "cloudtrail" {
-  name = "${local.name_prefix}-iam-policy-cloudtrail"
+  name = "${local.name_prefix}-iam-policy-cloudtrail-${random_id.resource_suffix.hex}"
   role = aws_iam_role.cloudtrail.id
 
   policy = jsonencode({
