@@ -37,48 +37,72 @@ const assertDefined = <T>(value: T | undefined, message?: string): T => {
 
 // Function to get stack outputs
 const getStackOutputs = async (stackName: string): Promise<void> => {
-  const cloudformation = new AWS.CloudFormation();
-  const { Stacks } = await cloudformation.describeStacks({
-    StackName: stackName
-  }).promise();
+  try {
+    // Configure AWS SDK with region
+    AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
 
-  if (!Stacks || Stacks.length === 0) {
-    throw new Error(`Stack ${stackName} not found`);
-  }
+    // Initialize CloudFormation client
+    const cloudformation = new AWS.CloudFormation();
+    console.log(`Fetching outputs for stack: ${stackName}`);
 
-  const outputs = Stacks[0].Outputs;
-  if (!outputs) {
-    throw new Error(`No outputs found for stack ${stackName}`);
-  }
+    // Get stack details
+    const { Stacks } = await cloudformation.describeStacks({
+      StackName: stackName
+    }).promise();
 
-  // Map stack outputs to environment variables
-  const outputMap: { [key: string]: string } = {
-    'VpcId': 'VPC_ID',
-    'PublicSubnet1Id': 'PUBLIC_SUBNET_1_ID',
-    'PublicSubnet2Id': 'PUBLIC_SUBNET_2_ID',
-    'PrivateSubnet1Id': 'PRIVATE_SUBNET_1_ID',
-    'PrivateSubnet2Id': 'PRIVATE_SUBNET_2_ID',
-    'RDSEndpoint': 'RDS_ENDPOINT',
-    'LoggingBucketName': 'LOGGING_BUCKET_NAME',
-    'RDSBackupBucketName': 'RDS_BACKUP_BUCKET_NAME',
-    'KMSKeyAliasEBS': 'KMS_KEY_ALIAS_EBS',
-    'KMSKeyAliasRDS': 'KMS_KEY_ALIAS_RDS'
-  };
-
-  for (const output of outputs) {
-    const envVar = outputMap[output.OutputKey || ''];
-    if (envVar && output.OutputValue) {
-      process.env[envVar] = output.OutputValue;
+    if (!Stacks || Stacks.length === 0) {
+      console.warn(`Stack ${stackName} not found`);
+      return;
     }
-  }
 
-  // Set environment if not already set
-  if (!process.env.ENVIRONMENT) {
-    process.env.ENVIRONMENT = process.env.ENVIRONMENT_SUFFIX || 'pr2519';
-  }
-};
+    const outputs = Stacks[0].Outputs;
+    if (!outputs) {
+      console.warn(`No outputs found for stack ${stackName}`);
+      return;
+    }
 
-// Required environment variables
+    console.log('Stack outputs retrieved successfully');
+
+    // Map CloudFormation outputs to environment variables
+    const outputToEnvMap: { [key: string]: string } = {
+      'VpcId': 'VPC_ID',
+      'PublicSubnet1': 'PUBLIC_SUBNET_1_ID',
+      'PublicSubnet2': 'PUBLIC_SUBNET_2_ID',
+      'PrivateSubnet1': 'PRIVATE_SUBNET_1_ID',
+      'PrivateSubnet2': 'PRIVATE_SUBNET_2_ID',
+      'RDSEndpoint': 'RDS_ENDPOINT',
+      'LoggingBucketName': 'LOGGING_BUCKET_NAME',
+      'RDSBackupBucketName': 'RDS_BACKUP_BUCKET_NAME',
+      'KMSKeyAliasEBS': 'KMS_KEY_ALIAS_EBS',
+      'KMSKeyAliasRDS': 'KMS_KEY_ALIAS_RDS'
+    };
+
+    // Set environment variables from stack outputs
+    for (const output of outputs) {
+      if (output.OutputKey && output.OutputValue) {
+        const envVar = outputToEnvMap[output.OutputKey];
+        if (envVar) {
+          process.env[envVar] = output.OutputValue;
+          console.log(`Set ${envVar}=${output.OutputValue}`);
+        }
+      }
+    }
+
+    // Set environment suffix if not already set
+    if (!process.env.ENVIRONMENT) {
+      process.env.ENVIRONMENT = process.env.ENVIRONMENT_SUFFIX || 'pr2519';
+      console.log(`Set ENVIRONMENT=${process.env.ENVIRONMENT}`);
+    }
+
+    // Print all available environment variables for debugging
+    console.log('\nAvailable environment variables:');
+    for (const key of requiredEnvVars) {
+      console.log(`${key}=${process.env[key] || 'not set'}`);
+    }
+  } catch (error) {
+    console.error('Error getting stack outputs:', error);
+  }
+};// Required environment variables
 const requiredEnvVars = [
   'AWS_REGION',
   'ENVIRONMENT',
@@ -107,16 +131,23 @@ const iam = new AWS.IAM();
 describe('TapStack Infrastructure Integration Tests', () => {
   beforeAll(async () => {
     // Try to get stack outputs first
-    try {
-      const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr2519'}`;
-      await getStackOutputs(stackName);
-    } catch (error) {
-      console.warn('Failed to get stack outputs:', error);
+    const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr2519'}`;
+    await getStackOutputs(stackName);
+
+    // If VPC_ID is not set, try alternate stack name formats
+    if (!process.env.VPC_ID) {
+      console.log('Trying alternate stack name formats...');
+      await getStackOutputs(`tap-stack-${process.env.ENVIRONMENT_SUFFIX || 'pr2519'}`);
+
+      if (!process.env.VPC_ID) {
+        await getStackOutputs(`tap-stack-pr2519`);
+      }
     }
 
     // Verify required environment variables are set
     const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
     if (missingVars.length > 0) {
+      console.error('Missing environment variables after attempting all stack name formats');
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
   });
