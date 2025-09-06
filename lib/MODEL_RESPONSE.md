@@ -14,7 +14,7 @@ Let me break down the requirements carefully:
      - Deny PutEncryptionConfiguration (lock encryption)
    - No hardcoded ARNs
 
-4. IAM roles (2) with least privilege:
+4. IAM roles (2) with least privileges:
    - Analytics Reader Role: EC2 trust, s3:GetObject only for analytics/* prefix, TLS enforced
    - Uploader Role: EC2 trust, s3:PutObject only for uploads/* prefix, SSE enforced
    - Both need instance profiles
