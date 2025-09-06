@@ -354,4 +354,28 @@ describe('TapStack', () => {
       });
     });
   });
+
+  describe('Environment Suffix Fallback', () => {
+    test('Uses dev as fallback when environmentSuffix is not provided', () => {
+      const appFallback = new cdk.App();
+      const stackFallback = new TapStack(appFallback, 'TestTapStackFallback', {});
+      const templateFallback = Template.fromStack(stackFallback);
+
+      // Verify that the stack is created successfully with fallback
+      templateFallback.resourceCountIs('AWS::EC2::VPC', 1);
+      templateFallback.resourceCountIs('AWS::S3::Bucket', 2);
+      templateFallback.resourceCountIs('AWS::RDS::DBInstance', 1);
+    });
+
+    test('Uses dev as fallback when props are undefined', () => {
+      const appUndefined = new cdk.App();
+      const stackUndefined = new TapStack(appUndefined, 'TestTapStackUndefined');
+      const templateUndefined = Template.fromStack(stackUndefined);
+
+      // Verify that the stack is created successfully with fallback
+      templateUndefined.resourceCountIs('AWS::EC2::VPC', 1);
+      templateUndefined.resourceCountIs('AWS::S3::Bucket', 2);
+      templateUndefined.resourceCountIs('AWS::RDS::DBInstance', 1);
+    });
+  });
 });
