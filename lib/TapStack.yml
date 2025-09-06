@@ -423,10 +423,6 @@ Resources:
                     - Ref: "AWS::StackId"
             - "alarms"
 
-
-
-                Resource: "*"
-
 Outputs:
   VPCId:
     Description: VPC ID
