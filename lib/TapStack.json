@@ -19,7 +19,16 @@
     },
     "NotificationEmail": {
       "Type": "String",
+      "Default": "admin@example.com",
       "Description": "Email address for SNS notifications"
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VPC ID for VPC endpoint configuration"
+    },
+    "RouteTableId": {
+      "Type": "String",
+      "Description": "Route Table ID for VPC endpoint configuration"
     }
   },
   "Resources": {
@@ -119,7 +128,7 @@
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "python3.8",
+        "Runtime": "python3.13",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -303,7 +312,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${ProjectName}-${Environment}-bucket-${AWS::AccountId}"
+          "Fn::Sub": "${ProjectName}${Environment}${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -433,20 +442,21 @@
         }
       }
     },
-    "VPCEndpoint": {
+    "S3VPCEndpoint": {
       "Type": "AWS::EC2::VPCEndpoint",
       "Properties": {
         "ServiceName": {
           "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
         },
         "VpcId": {
-          "Ref": "AWS::NoValue"
+          "Ref": "VpcId"
         },
         "RouteTableIds": [
           {
-            "Ref": "AWS::NoValue"
+            "Ref": "RouteTableId"
           }
         ],
+        "VpcEndpointType": "Gateway",
         "PolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
