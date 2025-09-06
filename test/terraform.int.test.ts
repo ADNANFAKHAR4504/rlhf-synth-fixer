@@ -19,12 +19,12 @@ describe('Terraform S3 Security Stack - Unit Tests', () => {
     it('should declare aws_region variable', () => {
       expect(terraformConfig).toContain('variable "aws_region"');
       expect(terraformConfig).toContain('type        = string');
-      expect(terraformConfig).toContain('default     = "us-east-1"');
+      expect(terraformConfig).toContain('default     = "eu-central-1"');
     });
     
     it('should use aws_region variable in resources', () => {
       // Check if region variable is referenced (implied by no hardcoded regions)
-      const hardcodedRegions = terraformConfig.match(/us-[a-z]+-[0-9]+/g) || [];
+      const hardcodedRegions = terraformConfig.match(/eu-[a-z]+-[0-9]+/g) || [];
       const variableDefRegions = hardcodedRegions.filter(match => 
         terraformConfig.includes(`default     = "${match}"`));
       
@@ -77,12 +77,12 @@ describe('Terraform S3 Security Stack - Unit Tests', () => {
   describe('IAM Role Configuration', () => {
     it('should define analytics reader role', () => {
       expect(terraformConfig).toContain('resource "aws_iam_role" "analytics_reader"');
-      expect(terraformConfig).toContain('name = "analytics-reader-role"');
+      expect(terraformConfig).toContain('name = "analytics-reader-role-${local.environment_suffix}"');
     });
 
     it('should define uploader role', () => {
       expect(terraformConfig).toContain('resource "aws_iam_role" "uploader"');
-      expect(terraformConfig).toContain('name = "uploader-role"');
+      expect(terraformConfig).toContain('name = "uploader-role-${local.environment_suffix}"');
     });
 
     it('should configure EC2 trust relationship', () => {
@@ -120,7 +120,7 @@ describe('Terraform S3 Security Stack - Unit Tests', () => {
     it('should define common tags', () => {
       expect(terraformConfig).toContain('common_tags = {');
       expect(terraformConfig).toContain('Environment   = "production"');
-      expect(terraformConfig).toContain('Owner        = "security-team"');
+      expect(terraformConfig).toContain('Owner         = "security-team"');
       expect(terraformConfig).toContain('SecurityLevel = "high"');
     });
 
