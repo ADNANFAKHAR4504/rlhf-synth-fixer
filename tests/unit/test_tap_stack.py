@@ -66,13 +66,13 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        # Note: CDK creates 2 Lambda functions - our main one + AwsCustomResource handler
+        # Note: CDK creates 2 Lambda functions - our main one + BucketNotificationsHandler
         template.resource_count_is("AWS::Lambda::Function", 2)
         template.has_resource_properties("AWS::Lambda::Function", {
             "FunctionName": Match.string_like_regexp("tap-processor-dev-.*"),
             "Handler": "index.lambda_handler",
             "Runtime": "python3.8",
-            "Timeout": 60,  # FIXED: Changed from 15 to 60 to match the updated stack
+            "Timeout": 15,  # Back to 15 seconds
             "Description": "Processes files uploaded to S3 bucket"
         })
 
@@ -83,7 +83,8 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        # Note: CDK creates multiple IAM roles - our main one + ones for AwsCustomResource
+        # Note: CDK creates 2 IAM roles - our main one + one for BucketNotificationsHandler
+        template.resource_count_is("AWS::IAM::Role", 2)
         template.has_resource_properties("AWS::IAM::Role", {
             "RoleName": Match.string_like_regexp("TapLambdaRole-dev-.*"),
             "AssumeRolePolicyDocument": {
@@ -174,7 +175,6 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         # Check for S3 access permissions (via grant_read)
-        # Since we removed the explicit bucket policy, we check that Lambda role has S3 permissions
         roles = template.find_resources("AWS::IAM::Role")
         lambda_role_found = False
         
@@ -288,9 +288,9 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        # Find our main Lambda function (not the CDK-generated AwsCustomResource handler)
+        # Find our main Lambda function (not the CDK-generated BucketNotificationsHandler)
         lambdas = template.find_resources("AWS::Lambda::Function")
-        self.assertEqual(len(lambdas), 2, "Should have 2 Lambda functions (main + AwsCustomResource handler)")
+        self.assertEqual(len(lambdas), 2, "Should have 2 Lambda functions (main + CDK handler)")
         
         # Find our main Lambda by checking for our specific function name pattern
         main_lambda = None
@@ -317,13 +317,13 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT - Verify all expected resources are created
-        # Note: CDK creates additional resources for AwsCustomResource
+        # Note: CDK creates additional resources for S3 event notifications
         template.resource_count_is("AWS::S3::Bucket", 1)
-        template.resource_count_is("AWS::Lambda::Function", 2)  # Main + AwsCustomResource handler
-        # IAM roles count varies with AwsCustomResource
+        template.resource_count_is("AWS::Lambda::Function", 2)  # Main + BucketNotificationsHandler
+        template.resource_count_is("AWS::IAM::Role", 2)  # Main + BucketNotificationsHandler role
         template.resource_count_is("AWS::SNS::Topic", 1)
         template.resource_count_is("AWS::CloudWatch::Alarm", 1)
-        template.resource_count_is("AWS::Lambda::Permission", 1)
+        template.resource_count_is("AWS::Lambda::Permission", 2)  # Main + notification handler
         
         # Verify environment suffix is used consistently
         template.has_resource_properties("AWS::S3::Bucket", {

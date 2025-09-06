@@ -10,11 +10,11 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_lambda as _lambda,
     aws_iam as iam,
+    aws_s3_notifications as s3n,
     aws_cloudwatch as cloudwatch,
     aws_sns as sns,
     aws_kms as kms,
-    aws_cloudwatch_actions as cw_actions,
-    custom_resources as cr
+    aws_cloudwatch_actions as cw_actions
 )
 from constructs import Construct
 
@@ -95,7 +95,7 @@ class TapStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_8,
             handler="index.lambda_handler",
             code=_lambda.Code.from_inline(self._get_lambda_code()),
-            timeout=Duration.seconds(60),  # Increased timeout for better reliability
+            timeout=Duration.seconds(15),  # Back to 15 seconds as per original spec
             role=self.lambda_execution_role,
             description="Processes files uploaded to S3 bucket"
         )
@@ -117,7 +117,7 @@ class TapStack(Stack):
             ]
         )
 
-        # 5. Grant Lambda permission to read from S3 bucket
+        # 5. Grant Lambda permission to read from S3 bucket (simplified)
         self.tap_storage_bucket.grant_read(self.tap_processor_function)
 
         # 6. Add explicit permission for S3 to invoke Lambda
@@ -128,66 +128,20 @@ class TapStack(Stack):
             action="lambda:InvokeFunction"
         )
 
-        # 7. Use AwsCustomResource to configure S3 bucket notification (bypassing custom resource)
-        notification_resource = cr.AwsCustomResource(
-            self, "S3BucketNotification",
-            on_create=cr.AwsSdkCall(
-                service="S3",
-                action="putBucketNotificationConfiguration",
-                parameters={
-                    "Bucket": self.tap_storage_bucket.bucket_name,
-                    "NotificationConfiguration": {
-                        "LambdaFunctionConfigurations": [
-                            {
-                                "LambdaFunctionArn": self.tap_processor_function.function_arn,
-                                "Events": ["s3:ObjectCreated:Put"],
-                                "Id": f"LambdaNotification-{unique_suffix}"
-                            }
-                        ]
-                    }
-                },
-                physical_resource_id=cr.PhysicalResourceId.of(
-                    f"S3Notification-{unique_suffix}"
-                )
-            ),
-            on_update=cr.AwsSdkCall(
-                service="S3",
-                action="putBucketNotificationConfiguration",
-                parameters={
-                    "Bucket": self.tap_storage_bucket.bucket_name,
-                    "NotificationConfiguration": {
-                        "LambdaFunctionConfigurations": [
-                            {
-                                "LambdaFunctionArn": self.tap_processor_function.function_arn,
-                                "Events": ["s3:ObjectCreated:Put"],
-                                "Id": f"LambdaNotification-{unique_suffix}"
-                            }
-                        ]
-                    }
-                },
-                physical_resource_id=cr.PhysicalResourceId.of(
-                    f"S3Notification-{unique_suffix}"
-                )
-            ),
-            on_delete=cr.AwsSdkCall(
-                service="S3",
-                action="putBucketNotificationConfiguration",
-                parameters={
-                    "Bucket": self.tap_storage_bucket.bucket_name,
-                    "NotificationConfiguration": {}
-                }
-            ),
-            policy=cr.AwsCustomResourcePolicy.from_statements([
-                iam.PolicyStatement(
-                    actions=["s3:PutBucketNotificationConfiguration"],
-                    resources=[self.tap_storage_bucket.bucket_arn]
-                )
-            ])
+        # 7. Configure S3 event notification (using standard CDK approach)
+        notification_destination = s3n.LambdaDestination(self.tap_processor_function)
+        
+        # Add dependency to ensure Lambda permission is created first
+        if hasattr(notification_destination, 'node'):
+            permission_node = self.tap_processor_function.node.find_child("AllowS3Invoke")
+            if permission_node:
+                notification_destination.node.add_dependency(permission_node)
+        
+        # Add the notification
+        self.tap_storage_bucket.add_event_notification(
+            s3.EventType.OBJECT_CREATED_PUT,
+            notification_destination
         )
-
-        # Add dependency to ensure Lambda is created before notification
-        notification_resource.node.add_dependency(self.tap_processor_function)
-        notification_resource.node.add_dependency(self.tap_storage_bucket)
 
         # 8. Create CloudWatch Alarm for Lambda errors
         lambda_error_alarm = cloudwatch.Alarm(
