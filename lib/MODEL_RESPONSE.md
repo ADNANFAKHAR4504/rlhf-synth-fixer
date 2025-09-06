@@ -12,12 +12,12 @@ Let me break down what the user is asking for:
 
 Let me structure this:
 
-**provider.tf:**
+provider.tf:
 - terraform block with required versions
 - aws_region variable
 - aws provider with default tags
 
-**tap_stack.tf:**
+tap_stack.tf:
 - Variables for aws_region, bucket_name, owner, security_level, vpc_id
 - Locals for tags and computed ARNs
 - S3 bucket with encryption, versioning, BPA
