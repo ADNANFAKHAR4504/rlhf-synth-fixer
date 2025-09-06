@@ -425,5 +425,87 @@ def handler(event, context):
       value: staticContentBucket.bucketName,
       description: 'S3 Static Content Bucket Name',
     });
+
+    // VPC and Networking Outputs
+    new cdk.CfnOutput(this, 'VPCId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnet1Id', {
+      value: vpc.publicSubnets[0].subnetId,
+      description: 'Public Subnet 1 ID',
+    });
+
+    new cdk.CfnOutput(this, 'PublicSubnet2Id', {
+      value: vpc.publicSubnets[1].subnetId,
+      description: 'Public Subnet 2 ID',
+    });
+
+    new cdk.CfnOutput(this, 'PrivateSubnet1Id', {
+      value: vpc.privateSubnets[0].subnetId,
+      description: 'Private Subnet 1 ID',
+    });
+
+    new cdk.CfnOutput(this, 'PrivateSubnet2Id', {
+      value: vpc.privateSubnets[1].subnetId,
+      description: 'Private Subnet 2 ID',
+    });
+
+    new cdk.CfnOutput(this, 'IsolatedSubnet1Id', {
+      value: vpc.isolatedSubnets[0].subnetId,
+      description: 'Isolated Subnet 1 ID',
+    });
+
+    new cdk.CfnOutput(this, 'IsolatedSubnet2Id', {
+      value: vpc.isolatedSubnets[1].subnetId,
+      description: 'Isolated Subnet 2 ID',
+    });
+
+    // Security Group Outputs
+    new cdk.CfnOutput(this, 'ALBSecurityGroupId', {
+      value: albSecurityGroup.securityGroupId,
+      description: 'ALB Security Group ID',
+    });
+
+    new cdk.CfnOutput(this, 'EC2SecurityGroupId', {
+      value: ec2SecurityGroup.securityGroupId,
+      description: 'EC2 Security Group ID',
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
+      value: dbSecurityGroup.securityGroupId,
+      description: 'Database Security Group ID',
+    });
+
+    // Database Secret Output
+    new cdk.CfnOutput(this, 'DatabaseSecretArn', {
+      value: dbSecret.secretArn,
+      description: 'Database Secret ARN',
+    });
+
+    // Launch Template Output
+    new cdk.CfnOutput(this, 'LaunchTemplateId', {
+      value: launchTemplate.launchTemplateId!,
+      description: 'Launch Template ID',
+    });
+
+    // Auto Scaling Group Output
+    new cdk.CfnOutput(this, 'AutoScalingGroupArn', {
+      value: autoScalingGroup.autoScalingGroupArn,
+      description: 'Auto Scaling Group ARN',
+    });
+
+    // Lambda Function Output
+    new cdk.CfnOutput(this, 'SnapshotLambdaFunctionArn', {
+      value: snapshotLambda.functionArn,
+      description: 'Snapshot Lambda Function ARN',
+    });
+
+    // IAM Role Output
+    new cdk.CfnOutput(this, 'EC2RoleArn', {
+      value: ec2Role.roleArn,
+      description: 'EC2 Instance Role ARN',
+    });
   }
 }
