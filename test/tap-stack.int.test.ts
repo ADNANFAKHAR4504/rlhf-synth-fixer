@@ -1,108 +1,20 @@
 import { beforeAll, describe, expect, test } from '@jest/globals';
 import * as AWS from 'aws-sdk';
 
-// Type augmentations for better type safety
-declare global {
-  namespace NodeJS {
-    interface ProcessEnv {
-      AWS_REGION: string;
-      ENVIRONMENT: string;
-      VPC_ID: string;
-      PUBLIC_SUBNET_1_ID: string;
-      PUBLIC_SUBNET_2_ID: string;
-      PRIVATE_SUBNET_1_ID: string;
-      PRIVATE_SUBNET_2_ID: string;
-      RDS_ENDPOINT: string;
-      LOGGING_BUCKET_NAME: string;
-      RDS_BACKUP_BUCKET_NAME: string;
-      KMS_KEY_ALIAS_EBS: string;
-      KMS_KEY_ALIAS_RDS: string;
-    }
-  }
+// Configure AWS SDK
+AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
 
-  namespace jest {
-    interface Matchers<R> {
-      toHaveSize(size: number): R;
-    }
-  }
-}
+// Initialize AWS clients
+const ec2 = new AWS.EC2();
+const rds = new AWS.RDS();
+const s3 = new AWS.S3();
+const kms = new AWS.KMS();
+const cloudwatch = new AWS.CloudWatch();
+const configService = new AWS.ConfigService();
+const sns = new AWS.SNS();
+const iam = new AWS.IAM();
 
-// Type assertions to handle AWS SDK v2 type issues
-const assertDefined = <T>(value: T | undefined, message?: string): T => {
-  if (value === undefined) {
-    throw new Error(message || 'Value must be defined');
-  }
-  return value;
-};
-
-// Function to get stack outputs
-const getStackOutputs = async (stackName: string): Promise<void> => {
-  try {
-    // Configure AWS SDK with region
-    AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
-
-    // Initialize CloudFormation client
-    const cloudformation = new AWS.CloudFormation();
-    console.log(`Fetching outputs for stack: ${stackName}`);
-
-    // Get stack details
-    const { Stacks } = await cloudformation.describeStacks({
-      StackName: stackName
-    }).promise();
-
-    if (!Stacks || Stacks.length === 0) {
-      console.warn(`Stack ${stackName} not found`);
-      return;
-    }
-
-    const outputs = Stacks[0].Outputs;
-    if (!outputs) {
-      console.warn(`No outputs found for stack ${stackName}`);
-      return;
-    }
-
-    console.log('Stack outputs retrieved successfully');
-
-    // Map CloudFormation outputs to environment variables
-    const outputToEnvMap: { [key: string]: string } = {
-      'VpcId': 'VPC_ID',
-      'PublicSubnet1': 'PUBLIC_SUBNET_1_ID',
-      'PublicSubnet2': 'PUBLIC_SUBNET_2_ID',
-      'PrivateSubnet1': 'PRIVATE_SUBNET_1_ID',
-      'PrivateSubnet2': 'PRIVATE_SUBNET_2_ID',
-      'RDSEndpoint': 'RDS_ENDPOINT',
-      'LoggingBucketName': 'LOGGING_BUCKET_NAME',
-      'RDSBackupBucketName': 'RDS_BACKUP_BUCKET_NAME',
-      'KMSKeyAliasEBS': 'KMS_KEY_ALIAS_EBS',
-      'KMSKeyAliasRDS': 'KMS_KEY_ALIAS_RDS'
-    };
-
-    // Set environment variables from stack outputs
-    for (const output of outputs) {
-      if (output.OutputKey && output.OutputValue) {
-        const envVar = outputToEnvMap[output.OutputKey];
-        if (envVar) {
-          process.env[envVar] = output.OutputValue;
-          console.log(`Set ${envVar}=${output.OutputValue}`);
-        }
-      }
-    }
-
-    // Set environment suffix if not already set
-    if (!process.env.ENVIRONMENT) {
-      process.env.ENVIRONMENT = process.env.ENVIRONMENT_SUFFIX || 'pr2519';
-      console.log(`Set ENVIRONMENT=${process.env.ENVIRONMENT}`);
-    }
-
-    // Print all available environment variables for debugging
-    console.log('\nAvailable environment variables:');
-    for (const key of requiredEnvVars) {
-      console.log(`${key}=${process.env[key] || 'not set'}`);
-    }
-  } catch (error) {
-    console.error('Error getting stack outputs:', error);
-  }
-};// Required environment variables
+// Required environment variables
 const requiredEnvVars = [
   'AWS_REGION',
   'ENVIRONMENT',
@@ -118,51 +30,102 @@ const requiredEnvVars = [
   'KMS_KEY_ALIAS_RDS'
 ];
 
-// Initialize AWS clients
-const ec2 = new AWS.EC2();
-const rds = new AWS.RDS();
-const s3 = new AWS.S3();
-const kms = new AWS.KMS();
-const cloudwatch = new AWS.CloudWatch();
-const configService = new AWS.ConfigService();
-const sns = new AWS.SNS();
-const iam = new AWS.IAM();
+// Type assertions to handle AWS SDK v2 type issues
+const assertDefined = <T>(value: T | undefined, message?: string): T => {
+  if (value === undefined) {
+    throw new Error(message || 'Value must be defined');
+  }
+  return value;
+};
 
 describe('TapStack Infrastructure Integration Tests', () => {
   beforeAll(async () => {
-    // Try to get stack outputs first
-    const stackName = `TapStack${process.env.ENVIRONMENT_SUFFIX || 'pr2519'}`;
-    await getStackOutputs(stackName);
+    // Set default environment variables
+    process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+    process.env.ENVIRONMENT = process.env.ENVIRONMENT_SUFFIX || 'pr2519';
 
-    // If VPC_ID is not set, try alternate stack name formats
-    if (!process.env.VPC_ID) {
-      console.log('Trying alternate stack name formats...');
-      await getStackOutputs(`tap-stack-${process.env.ENVIRONMENT_SUFFIX || 'pr2519'}`);
+    // Get stack outputs
+    const stackName = `TapStack${process.env.ENVIRONMENT}`;
+    const cloudformation = new AWS.CloudFormation();
 
-      if (!process.env.VPC_ID) {
-        await getStackOutputs(`tap-stack-pr2519`);
+    try {
+      console.log(`Getting outputs for stack: ${stackName}`);
+      const { Stacks } = await cloudformation.describeStacks({
+        StackName: stackName
+      }).promise();
+
+      if (!Stacks || Stacks.length === 0) {
+        throw new Error(`Stack ${stackName} not found`);
       }
-    }
 
-    // Verify required environment variables are set
-    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-    if (missingVars.length > 0) {
-      console.error('Missing environment variables after attempting all stack name formats');
-      throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+      const outputs = Stacks[0].Outputs;
+      if (!outputs) {
+        throw new Error(`No outputs found for stack ${stackName}`);
+      }
+
+      console.log('Stack outputs found:', outputs.length);
+
+      // Map outputs to environment variables
+      for (const output of outputs) {
+        if (output.OutputValue) {
+          switch (output.OutputKey) {
+            case 'VpcId':
+              process.env.VPC_ID = output.OutputValue;
+              break;
+            case 'PublicSubnet1':
+              process.env.PUBLIC_SUBNET_1_ID = output.OutputValue;
+              break;
+            case 'PublicSubnet2':
+              process.env.PUBLIC_SUBNET_2_ID = output.OutputValue;
+              break;
+            case 'PrivateSubnet1':
+              process.env.PRIVATE_SUBNET_1_ID = output.OutputValue;
+              break;
+            case 'PrivateSubnet2':
+              process.env.PRIVATE_SUBNET_2_ID = output.OutputValue;
+              break;
+            case 'RDSEndpoint':
+              process.env.RDS_ENDPOINT = output.OutputValue;
+              break;
+            case 'LoggingBucketName':
+              process.env.LOGGING_BUCKET_NAME = output.OutputValue;
+              break;
+            case 'RDSBackupBucketName':
+              process.env.RDS_BACKUP_BUCKET_NAME = output.OutputValue;
+              break;
+            case 'KMSKeyAliasEBS':
+              process.env.KMS_KEY_ALIAS_EBS = output.OutputValue;
+              break;
+            case 'KMSKeyAliasRDS':
+              process.env.KMS_KEY_ALIAS_RDS = output.OutputValue;
+              break;
+          }
+        }
+      }
+
+      // Check if all required variables are set
+      const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+      if (missingVars.length > 0) {
+        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+      }
+    } catch (error) {
+      console.error('Error getting stack outputs:', error);
+      throw error;
     }
   });
 
   describe('Network Infrastructure', () => {
     test('VPC should exist and have correct configuration', async () => {
+      const vpcId = assertDefined(process.env.VPC_ID, 'VPC_ID environment variable must be defined');
       const { Vpcs } = await ec2.describeVpcs({
-        VpcIds: [process.env.VPC_ID]
+        VpcIds: [vpcId]
       }).promise();
 
       expect(Vpcs).toBeDefined();
       expect(Vpcs?.length).toBe(1);
       const vpc = assertDefined(Vpcs?.[0], 'VPC not found');
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
-      // Type assertion for AWS SDK v2 properties
+
       const vpcAttrs = vpc as AWS.EC2.Vpc & {
         EnableDnsHostnames: boolean;
         EnableDnsSupport: boolean;
@@ -172,12 +135,17 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     test('Subnets should exist in different AZs', async () => {
+      const publicSubnet1 = assertDefined(process.env.PUBLIC_SUBNET_1_ID, 'PUBLIC_SUBNET_1_ID must be defined');
+      const publicSubnet2 = assertDefined(process.env.PUBLIC_SUBNET_2_ID, 'PUBLIC_SUBNET_2_ID must be defined');
+      const privateSubnet1 = assertDefined(process.env.PRIVATE_SUBNET_1_ID, 'PRIVATE_SUBNET_1_ID must be defined');
+      const privateSubnet2 = assertDefined(process.env.PRIVATE_SUBNET_2_ID, 'PRIVATE_SUBNET_2_ID must be defined');
+
       const { Subnets } = await ec2.describeSubnets({
         SubnetIds: [
-          process.env.PUBLIC_SUBNET_1_ID!,
-          process.env.PUBLIC_SUBNET_2_ID!,
-          process.env.PRIVATE_SUBNET_1_ID!,
-          process.env.PRIVATE_SUBNET_2_ID!
+          publicSubnet1,
+          publicSubnet2,
+          privateSubnet1,
+          privateSubnet2
         ]
       }).promise();
 
@@ -185,7 +153,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       // Verify public subnets
       const publicSubnets = assertDefined(Subnets, 'No subnets found').filter(subnet =>
-        [process.env.PUBLIC_SUBNET_1_ID, process.env.PUBLIC_SUBNET_2_ID].includes(assertDefined(subnet.SubnetId))
+        [publicSubnet1, publicSubnet2].includes(assertDefined(subnet.SubnetId))
       );
       expect(publicSubnets).toHaveLength(2);
       const publicAzs = new Set(publicSubnets.map(s => s.AvailabilityZone));
@@ -196,7 +164,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
       // Verify private subnets
       const privateSubnets = assertDefined(Subnets, 'No subnets found').filter(subnet =>
-        [process.env.PRIVATE_SUBNET_1_ID, process.env.PRIVATE_SUBNET_2_ID].includes(assertDefined(subnet.SubnetId))
+        [privateSubnet1, privateSubnet2].includes(assertDefined(subnet.SubnetId))
       );
       expect(privateSubnets).toHaveLength(2);
       const privateAzs = new Set(privateSubnets.map(s => s.AvailabilityZone));
@@ -210,16 +178,18 @@ describe('TapStack Infrastructure Integration Tests', () => {
   describe('Security Configuration', () => {
     test('KMS keys should be properly configured', async () => {
       // Test EBS KMS Key
+      const ebsKeyId = assertDefined(process.env.KMS_KEY_ALIAS_EBS, 'KMS_KEY_ALIAS_EBS must be defined');
       const ebsKeyAlias = await kms.describeKey({
-        KeyId: process.env.KMS_KEY_ALIAS_EBS
+        KeyId: ebsKeyId
       }).promise();
       const ebsKeyMeta = assertDefined(ebsKeyAlias.KeyMetadata, 'EBS key metadata not found');
       expect(ebsKeyMeta.Enabled).toBe(true);
       expect(ebsKeyMeta.KeyUsage).toBe('ENCRYPT_DECRYPT');
 
       // Test RDS KMS Key
+      const rdsKeyId = assertDefined(process.env.KMS_KEY_ALIAS_RDS, 'KMS_KEY_ALIAS_RDS must be defined');
       const rdsKeyAlias = await kms.describeKey({
-        KeyId: process.env.KMS_KEY_ALIAS_RDS
+        KeyId: rdsKeyId
       }).promise();
       const rdsKeyMeta = assertDefined(rdsKeyAlias.KeyMetadata, 'RDS key metadata not found');
       expect(rdsKeyMeta.Enabled).toBe(true);
@@ -227,11 +197,12 @@ describe('TapStack Infrastructure Integration Tests', () => {
     });
 
     test('Security groups should have correct rules', async () => {
+      const vpcId = assertDefined(process.env.VPC_ID, 'VPC_ID must be defined');
       const { SecurityGroups } = await ec2.describeSecurityGroups({
         Filters: [
           {
             Name: 'vpc-id',
-            Values: [process.env.VPC_ID]
+            Values: [vpcId]
           }
         ]
       }).promise();
@@ -275,17 +246,18 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('Database Infrastructure', () => {
     test('RDS instance should be properly configured', async () => {
+      const endpoint = assertDefined(process.env.RDS_ENDPOINT, 'RDS_ENDPOINT must be defined');
       const { DBInstances } = await rds.describeDBInstances({
         Filters: [
           {
             Name: 'endpoint',
-            Values: [process.env.RDS_ENDPOINT!]
+            Values: [endpoint]
           }
         ]
       }).promise();
 
       expect(DBInstances).toHaveLength(1);
-      const dbInstance = DBInstances![0];
+      const dbInstance = assertDefined(DBInstances?.[0], 'RDS instance not found');
 
       expect(dbInstance.Engine).toBe('mysql');
       expect(dbInstance.MultiAZ).toBe(true);
@@ -298,43 +270,45 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('Storage Configuration', () => {
     test('S3 buckets should have proper configuration', async () => {
-      // Test Logging Bucket
+      const loggingBucketName = assertDefined(process.env.LOGGING_BUCKET_NAME, 'LOGGING_BUCKET_NAME must be defined');
+      const backupBucketName = assertDefined(process.env.RDS_BACKUP_BUCKET_NAME, 'RDS_BACKUP_BUCKET_NAME must be defined');
+
       const loggingBucketEncryption = await s3.getBucketEncryption({
-        Bucket: process.env.LOGGING_BUCKET_NAME!
+        Bucket: loggingBucketName
       }).promise();
       expect(loggingBucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
 
       const loggingBucketVersioning = await s3.getBucketVersioning({
-        Bucket: process.env.LOGGING_BUCKET_NAME!
+        Bucket: loggingBucketName
       }).promise();
       expect(loggingBucketVersioning.Status).toBe('Enabled');
 
       // Test RDS Backup Bucket
       const backupBucketEncryption = await s3.getBucketEncryption({
-        Bucket: process.env.RDS_BACKUP_BUCKET_NAME!
+        Bucket: backupBucketName
       }).promise();
       expect(backupBucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
 
       const backupBucketLogging = await s3.getBucketLogging({
-        Bucket: process.env.RDS_BACKUP_BUCKET_NAME!
+        Bucket: backupBucketName
       }).promise();
       expect(backupBucketLogging.LoggingEnabled).toBeDefined();
-      expect(backupBucketLogging.LoggingEnabled!.TargetBucket).toBe(process.env.LOGGING_BUCKET_NAME);
+      expect(backupBucketLogging.LoggingEnabled?.TargetBucket).toBe(loggingBucketName);
     });
   });
 
   describe('Monitoring Configuration', () => {
     test('CloudWatch alarms should be properly set', async () => {
+      const environment = assertDefined(process.env.ENVIRONMENT, 'ENVIRONMENT must be defined');
       const { MetricAlarms } = await cloudwatch.describeAlarms({
-        AlarmNamePrefix: `${process.env.ENVIRONMENT}-`
+        AlarmNamePrefix: `${environment}-`
       }).promise();
 
-      const cpuAlarm = MetricAlarms!.find(alarm => alarm.MetricName === 'CPUUtilization');
-      expect(cpuAlarm).toBeDefined();
-      expect(cpuAlarm!.Namespace).toBe('AWS/RDS');
-      expect(cpuAlarm!.Period).toBe(300);
-      expect(cpuAlarm!.EvaluationPeriods).toBe(2);
-      expect(cpuAlarm!.Threshold).toBe(75);
+      const cpuAlarm = assertDefined(MetricAlarms?.find(alarm => alarm.MetricName === 'CPUUtilization'), 'CPU alarm not found');
+      expect(cpuAlarm.Namespace).toBe('AWS/RDS');
+      expect(cpuAlarm.Period).toBe(300);
+      expect(cpuAlarm.EvaluationPeriods).toBe(2);
+      expect(cpuAlarm.Threshold).toBe(75);
     });
 
     test('AWS Config should be recording', async () => {
@@ -355,17 +329,24 @@ describe('TapStack Infrastructure Integration Tests', () => {
 
   describe('High Availability', () => {
     test('Resources should be distributed across AZs', async () => {
+      const publicSubnet1 = assertDefined(process.env.PUBLIC_SUBNET_1_ID, 'PUBLIC_SUBNET_1_ID must be defined');
+      const publicSubnet2 = assertDefined(process.env.PUBLIC_SUBNET_2_ID, 'PUBLIC_SUBNET_2_ID must be defined');
+      const privateSubnet1 = assertDefined(process.env.PRIVATE_SUBNET_1_ID, 'PRIVATE_SUBNET_1_ID must be defined');
+      const privateSubnet2 = assertDefined(process.env.PRIVATE_SUBNET_2_ID, 'PRIVATE_SUBNET_2_ID must be defined');
+      const endpoint = assertDefined(process.env.RDS_ENDPOINT, 'RDS_ENDPOINT must be defined');
+
       // Get all AZs used by our subnets
       const { Subnets } = await ec2.describeSubnets({
         SubnetIds: [
-          process.env.PUBLIC_SUBNET_1_ID!,
-          process.env.PUBLIC_SUBNET_2_ID!,
-          process.env.PRIVATE_SUBNET_1_ID!,
-          process.env.PRIVATE_SUBNET_2_ID!
+          publicSubnet1,
+          publicSubnet2,
+          privateSubnet1,
+          privateSubnet2
         ]
       }).promise();
 
-      const azs = new Set(Subnets!.map(subnet => subnet.AvailabilityZone));
+      const subnetsFound = assertDefined(Subnets, 'No subnets found');
+      const azs = new Set(subnetsFound.map(subnet => assertDefined(subnet.AvailabilityZone)));
       expect(azs.size).toBeGreaterThanOrEqual(2);
 
       // Verify RDS Multi-AZ
@@ -373,26 +354,29 @@ describe('TapStack Infrastructure Integration Tests', () => {
         Filters: [
           {
             Name: 'endpoint',
-            Values: [process.env.RDS_ENDPOINT!]
+            Values: [endpoint]
           }
         ]
       }).promise();
 
-      expect(DBInstances![0].MultiAZ).toBe(true);
+      const rdsInstance = assertDefined(DBInstances?.[0], 'RDS instance not found');
+      expect(rdsInstance.MultiAZ).toBe(true);
     });
   });
 
   describe('SNS Configuration', () => {
     test('SNS topic should be properly configured', async () => {
+      const environment = assertDefined(process.env.ENVIRONMENT, 'ENVIRONMENT must be defined');
       const { Topics } = await sns.listTopics().promise();
-      const topicArn = Topics!.find(topic =>
-        topic.TopicArn!.includes(`${process.env.ENVIRONMENT}-infrastructure-alarms`))?.TopicArn;
-      expect(topicArn).toBeDefined();
+      const topicArn = assertDefined(
+        Topics?.find(topic => topic.TopicArn?.includes(`${environment}-infrastructure-alarms`))?.TopicArn,
+        'SNS topic not found'
+      );
 
       const topicAttributes = await sns.getTopicAttributes({
-        TopicArn: topicArn!
+        TopicArn: topicArn
       }).promise();
-      expect(topicAttributes.Attributes!.DisplayName).toBe(`${process.env.ENVIRONMENT}-infrastructure-alarms`);
+      expect(topicAttributes.Attributes?.DisplayName).toBe(`${environment}-infrastructure-alarms`);
     });
   });
 });
