@@ -23,25 +23,6 @@
       "Description": "Email address for notifications"
     }
   },
-  "Mappings": {
-    "EnvironmentMap": {
-      "dev": {
-        "NotificationEmail": "dev-notifications@example.com",
-        "VpcId": "vpc-12345678",
-        "RouteTableId": "rtb-12345678"
-      },
-      "staging": {
-        "NotificationEmail": "staging-notifications@example.com",
-        "VpcId": "vpc-87654321",
-        "RouteTableId": "rtb-87654321"
-      },
-      "prod": {
-        "NotificationEmail": "prod-notifications@example.com",
-        "VpcId": "vpc-11223344",
-        "RouteTableId": "rtb-11223344"
-      }
-    }
-  },
   "Resources": {
     "LambdaExecutionRole": {
       "Type": "AWS::IAM::Role",
@@ -126,7 +107,7 @@
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "python3.13",
+        "Runtime": "python3.8",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -481,59 +462,6 @@
           "Fn::GetAtt": [
             "CloudWatchEventRule",
             "Arn"
-          ]
-        }
-      }
-    },
-    "S3VPCEndpoint": {
-      "Type": "AWS::EC2::VPCEndpoint",
-      "Properties": {
-        "ServiceName": {
-          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
-        },
-        "VpcId": {
-          "Fn::FindInMap": [
-            "EnvironmentMap",
-            {
-              "Ref": "Environment"
-            },
-            "VpcId"
-          ]
-        },
-        "RouteTableIds": [
-          {
-            "Fn::FindInMap": [
-              "EnvironmentMap",
-              {
-                "Ref": "Environment"
-              },
-              "RouteTableId"
-            ]
-          }
-        ],
-        "VpcEndpointType": "Gateway",
-        "PolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": "*",
-              "Action": [
-                "s3:GetObject",
-                "s3:PutObject"
-              ],
-              "Resource": [
-                {
-                  "Fn::GetAtt": [
-                    "S3Bucket",
-                    "Arn"
-                  ]
-                },
-                {
-                  "Fn::Sub": "${S3Bucket.Arn}/*"
-                }
-              ]
-            }
           ]
         }
       }
