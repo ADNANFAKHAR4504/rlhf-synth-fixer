@@ -107,7 +107,7 @@
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "python3.8",
+        "Runtime": "python3.13",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [

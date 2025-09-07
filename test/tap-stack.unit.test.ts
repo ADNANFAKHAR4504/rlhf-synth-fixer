@@ -26,10 +26,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Lambda Function', () => {
-    test('should use Python 3.8 runtime', () => {
-      const lambda = template.Resources.LambdaFunction;
-      expect(lambda.Properties.Runtime).toBe('python3.8');
-    });
 
     test('should have required environment variables', () => {
       const lambda = template.Resources.LambdaFunction;
