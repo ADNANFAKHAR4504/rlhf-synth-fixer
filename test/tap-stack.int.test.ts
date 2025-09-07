@@ -169,7 +169,13 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
 
     test('should handle CORS headers', async () => {
-      const response = await axios.options(config.API_GATEWAY_ENDPOINT as string);
+      const response = await axios.options(config.API_GATEWAY_ENDPOINT as string, {
+        headers: {
+          'Origin': 'http://localhost:3000',
+          'Access-Control-Request-Method': 'GET,POST,PUT,DELETE',
+          'Access-Control-Request-Headers': 'Content-Type,Authorization'
+        }
+      });
 
       expect(response.headers['access-control-allow-origin']).toBe('*');
       expect(response.headers['access-control-allow-methods']).toBeDefined();
@@ -220,14 +226,29 @@ describe('TapStack Integration Tests', () => {
         Payload: Buffer.from(JSON.stringify(lambdaPayload))
       }));
 
-      // 3. Check DynamoDB for processed data
-      const result = await dynamoDb.send(new GetItemCommand({
+      // 3. Check DynamoDB for processed data with retries
+      const maxRetries = 5;
+      const retryDelay = 2000; // 2 seconds
+      let result = await dynamoDb.send(new GetItemCommand({
         TableName: config.DYNAMODB_TABLE_NAME,
         Key: {
           PK: { S: `FILE#${fileName}` },
           SK: { S: 'METADATA' }
         }
       }));
+
+      // Retry if item not found
+      for (let i = 0; i < maxRetries - 1 && !result.Item; i++) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+        result = await dynamoDb.send(new GetItemCommand({
+          TableName: config.DYNAMODB_TABLE_NAME,
+          Key: {
+            PK: { S: `FILE#${fileName}` },
+            SK: { S: 'METADATA' }
+          }
+        }));
+      }
 
       expect(result.Item).toBeDefined();
       expect(JSON.parse(result.Item?.data.S || '{}')).toMatchObject({
@@ -251,6 +272,6 @@ describe('TapStack Integration Tests', () => {
           }
         }))
       ]);
-    }, 60000);
+    }, 90000); // Increased timeout for retries
   });
 });
