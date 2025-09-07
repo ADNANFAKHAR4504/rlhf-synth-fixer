@@ -29,10 +29,6 @@ Parameters:
     Type: String
     Default: tapstackuser
     Description: Database master username
-  DBPasswordParameter:
-    Type: String
-    Default: /tapstack/db/password
-    Description: SSM Parameter Store path for database password (SecureString stored outside of this stack)
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, 'Production']
@@ -310,7 +306,7 @@ Resources:
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
-      # Avoid circular deps: no explicit 5432 egress to RDS SG (stateful SG allows return traffic).
+      # Avoid circular deps: no explicit egress to RDS SG (stateful SG allows return traffic).
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
@@ -506,6 +502,24 @@ Resources:
           Value: App
 
   # ------------------------
+  # Secrets Manager: DB master password (self-contained)
+  # ------------------------
+  DBMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'tapstack-${EnvironmentName}-db-master-secret'
+      Description: RDS master user password for TapStack
+      GenerateSecretString:
+        PasswordLength: 32
+        ExcludePunctuation: true
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Project
+          Value: TapStack
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ------------------------
   # Application Load Balancer & Target Group
   # ------------------------
   ApplicationLoadBalancer:
@@ -514,7 +528,7 @@ Resources:
       Name: !Sub '${EnvironmentName}-ALB'
       Scheme: internet-facing
       Type: application
-      # NOTE: With the single public + single private subnet constraint, we attach to both to satisfy minimum subnet count.
+      # NOTE: With a single public + single private subnet constraint, we attach to both to satisfy minimum subnet count.
       Subnets:
         - !Ref PublicSubnet
         - !Ref PrivateSubnet
@@ -602,7 +616,6 @@ Resources:
                   - ssm:GetParametersByPath
                 Resource:
                   - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tapstack/${EnvironmentName}/*'
-                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${DBPasswordParameter}'
         - PolicyName: S3Access
           PolicyDocument:
             Version: '2012-10-17'
@@ -658,7 +671,8 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}'
+        # Remove unnecessary Fn::Sub to avoid W1020
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref AppInstanceType
         IamInstanceProfile:
           Arn: !GetAtt InstanceProfile.Arn
@@ -852,7 +866,7 @@ Resources:
       EngineVersion: !Ref DBEngineVersion
       DBName: !Ref DBName
       MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Sub '{{resolve:ssm-secure:${DBPasswordParameter}:1}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString}}'
       AllocatedStorage: 20
       StorageType: gp2
       StorageEncrypted: true
@@ -939,11 +953,6 @@ Resources:
       Type: String
       Value: !GetAtt RDSInstance.Endpoint.Address
       Description: RDS endpoint hostname
-      Tags:
-        Project: TapStack
-        Owner: DevOps
-        Environment: !Ref EnvironmentName
-        CostCenter: App
 
   SSMDbPortParameter:
     Type: AWS::SSM::Parameter
@@ -952,11 +961,6 @@ Resources:
       Type: String
       Value: !GetAtt RDSInstance.Endpoint.Port
       Description: RDS endpoint port
-      Tags:
-        Project: TapStack
-        Owner: DevOps
-        Environment: !Ref EnvironmentName
-        CostCenter: App
 
   SSMDbNameParameter:
     Type: AWS::SSM::Parameter
@@ -965,11 +969,6 @@ Resources:
       Type: String
       Value: !Ref DBName
       Description: RDS database name
-      Tags:
-        Project: TapStack
-        Owner: DevOps
-        Environment: !Ref EnvironmentName
-        CostCenter: App
 
   SSMDbUserParameter:
     Type: AWS::SSM::Parameter
@@ -978,11 +977,6 @@ Resources:
       Type: String
       Value: !Ref DBUsername
       Description: RDS database user (non-secret)
-      Tags:
-        Project: TapStack
-        Owner: DevOps
-        Environment: !Ref EnvironmentName
-        CostCenter: App
 
   SSMDynamoTableParameter:
     Type: AWS::SSM::Parameter
@@ -991,11 +985,6 @@ Resources:
       Type: String
       Value: !Ref DynamoDBTable
       Description: DynamoDB table name for the application
-      Tags:
-        Project: TapStack
-        Owner: DevOps
-        Environment: !Ref EnvironmentName
-        CostCenter: App
 
   SSMLogsBucketParameter:
     Type: AWS::SSM::Parameter
@@ -1004,11 +993,6 @@ Resources:
       Type: String
       Value: !Ref S3LogsBucket
       Description: S3 logs bucket name for the application
-      Tags:
-        Project: TapStack
-        Owner: DevOps
-        Environment: !Ref EnvironmentName
-        CostCenter: App
 
 Outputs:
   # Core Networking
