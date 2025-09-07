@@ -89,19 +89,6 @@
                       "Fn::Sub": "${S3Bucket.Arn}/*"
                     }
                   ]
-                },
-                {
-                  "Effect": "Allow",
-                  "Action": [
-                    "kms:Decrypt",
-                    "kms:GenerateDataKey"
-                  ],
-                  "Resource": {
-                    "Fn::GetAtt": [
-                      "EncryptionKey",
-                      "Arn"
-                    ]
-                  }
                 }
               ]
             }
@@ -111,14 +98,12 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
             "Key": "Project",
-            "Value": {
-              "Ref": "ProjectName"
-            }
+            "Value": "tapstack"
           }
         ]
       }
@@ -154,14 +139,12 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
             "Key": "Project",
-            "Value": {
-              "Ref": "ProjectName"
-            }
+            "Value": "tapstack"
           }
         ]
       }
@@ -281,24 +264,18 @@
           "WriteCapacityUnits": 5
         },
         "SSESpecification": {
-          "SSEEnabled": true,
-          "SSEType": "KMS",
-          "KMSMasterKeyId": {
-            "Ref": "KMSKey"
-          }
+          "SSEEnabled": true
         },
         "Tags": [
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
             "Key": "Project",
-            "Value": {
-              "Ref": "ProjectName"
-            }
+            "Value": "tapstack"
           }
         ]
       }
@@ -316,13 +293,7 @@
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": {
-                  "Fn::GetAtt": [
-                    "EncryptionKey",
-                    "Arn"
-                  ]
-                }
+                "SSEAlgorithm": "AES256"
               }
             }
           ]
@@ -337,14 +308,12 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "Environment"
+              "Ref": "EnvironmentSuffix"
             }
           },
           {
             "Key": "Project",
-            "Value": {
-              "Ref": "ProjectName"
-            }
+            "Value": "tapstack"
           }
         ]
       }
@@ -354,15 +323,7 @@
       "Properties": {
         "TopicName": {
           "Fn::Sub": "tapstack-notifications-${EnvironmentSuffix}"
-        },
-        "TopicTags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "EnvironmentSuffix"
-            }
-          }
-        ]
+        }
       }
     },
     "SNSTopicPolicy": {
