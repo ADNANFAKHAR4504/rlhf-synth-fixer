@@ -284,9 +284,9 @@
           "WriteCapacityUnits": 5
         },
         "SSESpecification": {
-          "SSEEnabled": true,
+          "Enabled": true,
           "SSEType": "KMS",
-          "KmsMasterKeyId": {
+          "KMSMasterKeyId": {
             "Ref": "KMSKey"
           }
         },
