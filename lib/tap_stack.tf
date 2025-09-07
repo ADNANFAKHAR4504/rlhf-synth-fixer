@@ -256,7 +256,7 @@ data "aws_iam_policy_document" "secrets_policy" {
 
 # IAM Role for EC2
 resource "aws_iam_role" "ec2_role" {
-  name               = "${local.name_prefix}-ec2-role"
+  name               = "${local.name_prefix}-ec2-role-${random_id.secret_suffix.hex}"
   assume_role_policy = data.aws_iam_policy_document.ec2_trust_policy.json
 
   tags = {
@@ -266,7 +266,7 @@ resource "aws_iam_role" "ec2_role" {
 
 # IAM Policy
 resource "aws_iam_policy" "secrets_policy" {
-  name        = "${local.name_prefix}-secrets-policy"
+  name        = "${local.name_prefix}-secrets-policy-${random_id.secret_suffix.hex}"
   description = "Policy for EC2 to access specific Secrets Manager secret"
   policy      = data.aws_iam_policy_document.secrets_policy.json
 
@@ -283,7 +283,7 @@ resource "aws_iam_role_policy_attachment" "secrets_attachment" {
 
 # Instance Profile
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "${local.name_prefix}-ec2-profile"
+  name = "${local.name_prefix}-ec2-profile-${random_id.secret_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 
   tags = {
