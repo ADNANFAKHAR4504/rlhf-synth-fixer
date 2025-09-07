@@ -5,6 +5,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as elbv2targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -78,11 +79,15 @@ export class TapStack extends cdk.Stack {
     });
 
     // Security group for bastion host - restricted to allowed IP ranges only
-    const bastionSecurityGroup = new ec2.SecurityGroup(this, 'BastionSecurityGroup', {
-      vpc,
-      description: 'Security group for bastion host with IP whitelist',
-      allowAllOutbound: false, // Explicit outbound rules for security
-    });
+    const bastionSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'BastionSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for bastion host with IP whitelist',
+        allowAllOutbound: false, // Explicit outbound rules for security
+      }
+    );
 
     // Allow SSH access only from whitelisted IP ranges
     props.allowedIpRanges.forEach((cidr, index) => {
@@ -105,15 +110,20 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'Minimal role for bastion host operations',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // Session Manager access
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // Session Manager access
       ],
     });
 
     // Bastion host in public subnet for secure access to private resources
-    const bastionHost = new ec2.Instance(this, 'BastionHost', {
+    new ec2.Instance(this, 'BastionHost', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(), // Latest AMI for security patches
       securityGroup: bastionSecurityGroup,
       role: bastionRole,
@@ -169,20 +179,24 @@ export class TapStack extends cdk.Stack {
       port: 443,
       protocol: elbv2.ApplicationProtocol.HTTPS,
       certificates: [elbv2.ListenerCertificate.fromArn(props.certArn)],
-      sslPolicy: elbv2.SslPolicy.TLS13_1_2_2021_06, // Latest TLS policy for security
+      sslPolicy: elbv2.SslPolicy.RECOMMENDED, // Latest recommended TLS policy for security
     });
 
     // Target group for application instances
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'AppTargetGroup', {
-      vpc,
-      port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      healthCheck: {
-        path: '/health',
-        healthyHttpCodes: '200',
-        interval: cdk.Duration.seconds(30),
-      },
-    });
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'AppTargetGroup',
+      {
+        vpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        healthCheck: {
+          path: '/health',
+          healthyHttpCodes: '200',
+          interval: cdk.Duration.seconds(30),
+        },
+      }
+    );
 
     httpsListener.addTargetGroups('DefaultTargets', {
       targetGroups: [targetGroup],
@@ -255,7 +269,7 @@ export class TapStack extends cdk.Stack {
     });
 
     // S3 bucket for logs with KMS encryption
-    const logsBucket = new s3.Bucket(this, 'SecureLogsBucket', {
+    new s3.Bucket(this, 'SecureLogsBucket', {
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: kmsKey,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -275,10 +289,12 @@ export class TapStack extends cdk.Stack {
     });
 
     // IAM role for API Gateway logging
-    const apiGatewayRole = new iam.Role(this, 'ApiGatewayRole', {
+    new iam.Role(this, 'ApiGatewayRole', {
       assumedBy: new iam.ServicePrincipal('apigateway.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonAPIGatewayPushToCloudWatchLogs'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+        ),
       ],
     });
 
@@ -288,7 +304,9 @@ export class TapStack extends cdk.Stack {
       description: 'Production API with comprehensive logging and security',
       deployOptions: {
         stageName: 'prod',
-        accessLogDestination: new apigateway.LogGroupLogDestination(apiLogGroup),
+        accessLogDestination: new apigateway.LogGroupLogDestination(
+          apiLogGroup
+        ),
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
@@ -297,6 +315,36 @@ export class TapStack extends cdk.Stack {
       cloudWatchRole: true,
       cloudWatchRoleRemovalPolicy: cdk.RemovalPolicy.RETAIN,
     });
+
+    // Add a health check endpoint to the API Gateway
+    const healthResource = api.root.addResource('health');
+    healthResource.addMethod(
+      'GET',
+      new apigateway.MockIntegration({
+        integrationResponses: [
+          {
+            statusCode: '200',
+            responseTemplates: {
+              'application/json':
+                '{"status": "healthy", "timestamp": "$context.requestTime"}',
+            },
+          },
+        ],
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+      }),
+      {
+        methodResponses: [
+          {
+            statusCode: '200',
+            responseModels: {
+              'application/json': apigateway.Model.EMPTY_MODEL,
+            },
+          },
+        ],
+      }
+    );
 
     // SNS topic for security alerts with KMS encryption
     const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
@@ -348,88 +396,109 @@ export class TapStack extends cdk.Stack {
     });
 
     // Grant Config service access to the bucket
-    configBucket.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AWSConfigBucketPermissionsCheck',
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal('config.amazonaws.com')],
-      actions: ['s3:GetBucketAcl', 's3:ListBucket'],
-      resources: [configBucket.bucketArn],
-    }));
+    configBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSConfigBucketPermissionsCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('config.amazonaws.com')],
+        actions: ['s3:GetBucketAcl', 's3:ListBucket'],
+        resources: [configBucket.bucketArn],
+      })
+    );
 
-    configBucket.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AWSConfigBucketExistenceCheck',
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal('config.amazonaws.com')],
-      actions: ['s3:GetBucketLocation'],
-      resources: [configBucket.bucketArn],
-    }));
+    configBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSConfigBucketExistenceCheck',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('config.amazonaws.com')],
+        actions: ['s3:GetBucketLocation'],
+        resources: [configBucket.bucketArn],
+      })
+    );
 
-    configBucket.addToResourcePolicy(new iam.PolicyStatement({
-      sid: 'AWSConfigBucketDelivery',
-      effect: iam.Effect.ALLOW,
-      principals: [new iam.ServicePrincipal('config.amazonaws.com')],
-      actions: ['s3:PutObject'],
-      resources: [`${configBucket.bucketArn}/*`],
-      conditions: {
-        StringEquals: {
-          's3:x-amz-server-side-encryption': 'aws:kms',
+    configBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AWSConfigBucketDelivery',
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('config.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${configBucket.bucketArn}/*`],
+        conditions: {
+          StringEquals: {
+            's3:x-amz-server-side-encryption': 'aws:kms',
+          },
         },
-      },
-    }));
+      })
+    );
 
     // AWS Config configuration recorder
-    const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
-      name: 'production-config-recorder',
-      roleArn: configRole.roleArn,
-      recordingGroup: {
-        allSupported: true, // Record all supported resource types
-        includeGlobalResourceTypes: true,
-        resourceTypes: [],
-      },
-    });
+    const configRecorder = new config.CfnConfigurationRecorder(
+      this,
+      'ConfigRecorder',
+      {
+        name: 'production-config-recorder',
+        roleArn: configRole.roleArn,
+        recordingGroup: {
+          allSupported: true, // Record all supported resource types
+          includeGlobalResourceTypes: true,
+          resourceTypes: [],
+        },
+      }
+    );
 
     // AWS Config delivery channel
-    const configDeliveryChannel = new config.CfnDeliveryChannel(this, 'ConfigDeliveryChannel', {
-      name: 'production-delivery-channel',
-      s3BucketName: configBucket.bucketName,
-      s3KeyPrefix: 'config/',
-      configSnapshotDeliveryProperties: {
-        deliveryFrequency: 'TwentyFour_Hours',
-      },
-    });
+    const configDeliveryChannel = new config.CfnDeliveryChannel(
+      this,
+      'ConfigDeliveryChannel',
+      {
+        name: 'production-delivery-channel',
+        s3BucketName: configBucket.bucketName,
+        s3KeyPrefix: 'config/',
+        configSnapshotDeliveryProperties: {
+          deliveryFrequency: 'TwentyFour_Hours',
+        },
+      }
+    );
 
     // Ensure delivery channel depends on recorder
     configDeliveryChannel.addDependency(configRecorder);
 
     // AWS Config rules for compliance monitoring
-    new config.CfnConfigRule(this, 'S3BucketServerSideEncryptionEnabled', {
-      configRuleName: 's3-bucket-server-side-encryption-enabled',
-      description: 'Checks that S3 buckets have server-side encryption enabled',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
-      },
-      dependsOn: [configRecorder],
-    });
+    const s3EncryptionRule = new config.CfnConfigRule(
+      this,
+      'S3BucketServerSideEncryptionEnabled',
+      {
+        configRuleName: 's3-bucket-server-side-encryption-enabled',
+        description:
+          'Checks that S3 buckets have server-side encryption enabled',
+        source: {
+          owner: 'AWS',
+          sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
+        },
+      }
+    );
+    s3EncryptionRule.addDependency(configRecorder);
 
-    new config.CfnConfigRule(this, 'RootUserMfaEnabled', {
+    const rootMfaRule = new config.CfnConfigRule(this, 'RootUserMfaEnabled', {
       configRuleName: 'root-user-mfa-enabled',
       description: 'Checks whether MFA is enabled for root user',
       source: {
         owner: 'AWS',
         sourceIdentifier: 'ROOT_USER_MFA_ENABLED',
       },
-      dependsOn: [configRecorder],
     });
+    rootMfaRule.addDependency(configRecorder);
 
     // Enable GuardDuty for continuous security monitoring
-    const guardDutyDetector = new guardduty.CfnDetector(this, 'GuardDutyDetector', {
+    new guardduty.CfnDetector(this, 'GuardDutyDetector', {
       enable: true,
       findingPublishingFrequency: 'FIFTEEN_MINUTES', // Frequent updates for security
       dataSources: {
         s3Logs: { enable: true },
         kubernetes: { auditLogs: { enable: true } },
-        malwareProtection: { scanEc2InstanceWithFindings: { ebsVolumes: true } },
+        malwareProtection: {
+          scanEc2InstanceWithFindings: { ebsVolumes: true },
+        },
       },
     });
 
@@ -437,7 +506,9 @@ export class TapStack extends cdk.Stack {
     const appRole = new iam.Role(this, 'AppInstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // Session Manager
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // Session Manager
       ],
     });
 
@@ -448,7 +519,10 @@ export class TapStack extends cdk.Stack {
     const appInstance = new ec2.Instance(this, 'AppInstance', {
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED }, // No public IP
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.SMALL),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.SMALL
+      ),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup: appSecurityGroup,
       role: appRole,
@@ -456,7 +530,9 @@ export class TapStack extends cdk.Stack {
     });
 
     // Add instance to target group
-    targetGroup.addTarget(new targets.InstanceIdTarget(appInstance.instanceId));
+    targetGroup.addTarget(
+      new elbv2targets.InstanceIdTarget(appInstance.instanceId)
+    );
 
     // Enable AWS Shield Advanced protection for ALB (DDoS protection)
     new shield.CfnProtection(this, 'AlbShieldProtection', {
