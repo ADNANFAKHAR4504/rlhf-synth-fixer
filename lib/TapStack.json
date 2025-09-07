@@ -286,7 +286,7 @@
         "SSESpecification": {
           "SSEEnabled": true,
           "SSEType": "KMS",
-          "KMSMasterKeyID": {
+          "KmsMasterKeyId": {
             "Ref": "KMSKey"
           }
         },
@@ -355,7 +355,7 @@
         "TopicName": {
           "Fn::Sub": "tapstack-notifications-${Environment}"
         },
-        "KmsMasterKeyID": {
+        "KmsMasterKeyId": {
           "Ref": "KMSKey"
         }
       }
