@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348841",
+  "team": "3",
+  "startedAt": "2025-09-04T15:45:33.148Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Network Configuration",
+    "Security Configuration",
+    "Database Management",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ELB",
+    "ALB",
+    "RDS",
+    "S3",
+    "IAM",
+    "AutoScaling",
+    "CloudWatch",
+    "SecretsManager",
+    "SSM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sreeni-ops",
+  "dockerS3Location": ""
+}
