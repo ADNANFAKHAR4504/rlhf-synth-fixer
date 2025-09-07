@@ -11,6 +11,7 @@ import {
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client
 } from '@aws-sdk/client-s3';
@@ -216,6 +217,17 @@ describe('TapStack Integration Tests', () => {
       }));
 
       // 2. Invoke Lambda to process the file
+      // Wait a bit for S3 consistency
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Verify the file exists in S3 before triggering Lambda
+      const s3HeadResponse = await s3.send(new HeadObjectCommand({
+        Bucket: config.S3_BUCKET_NAME,
+        Key: fileName
+      }));
+
+      console.log('S3 file metadata:', s3HeadResponse);
+
       // Create S3 event payload that matches the actual S3 event format
       const lambdaPayload = {
         Records: [{
@@ -224,15 +236,29 @@ describe('TapStack Integration Tests', () => {
           awsRegion: config.AWS_REGION,
           eventTime: new Date().toISOString(),
           eventName: 'ObjectCreated:Put',
+          eventSourceARN: `arn:aws:s3:::${config.S3_BUCKET_NAME}`,
           s3: {
+            s3SchemaVersion: '1.0',
             bucket: {
-              name: config.S3_BUCKET_NAME
+              name: config.S3_BUCKET_NAME,
+              arn: `arn:aws:s3:::${config.S3_BUCKET_NAME}`,
+              ownerIdentity: {
+                principalId: 'EXAMPLE'
+              }
             },
             object: {
               key: fileName,
               size: Buffer.from(JSON.stringify(testData)).length,
-              eTag: 'test-etag'
+              eTag: s3HeadResponse.ETag?.replace(/"/g, '') || 'test-etag',
+              sequencer: Date.now().toString()
             }
+          },
+          requestParameters: {
+            sourceIPAddress: '127.0.0.1'
+          },
+          responseElements: {
+            'x-amz-request-id': 'EXAMPLE123456789',
+            'x-amz-id-2': 'EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH'
           }
         }]
       };
@@ -245,14 +271,24 @@ describe('TapStack Integration Tests', () => {
         Payload: Buffer.from(JSON.stringify(lambdaPayload))
       }));
 
+      const responsePayload = lambdaResponse.Payload ? Buffer.from(lambdaResponse.Payload).toString() : undefined;
       console.log('Lambda response:', {
         StatusCode: lambdaResponse.StatusCode,
         FunctionError: lambdaResponse.FunctionError,
-        Response: lambdaResponse.Payload ? Buffer.from(lambdaResponse.Payload).toString() : undefined
+        Response: responsePayload
       });
 
       if (lambdaResponse.FunctionError) {
         throw new Error(`Lambda invocation failed: ${lambdaResponse.FunctionError}`);
+      }
+
+      // Parse and check the response for errors
+      if (responsePayload) {
+        const parsedResponse = JSON.parse(responsePayload);
+        if (parsedResponse.errorMessage || parsedResponse.errorType) {
+          console.error('Lambda execution error:', parsedResponse);
+          throw new Error(`Lambda execution failed: ${parsedResponse.errorMessage}`);
+        }
       }
 
       // 3. Check DynamoDB for processed data with retries
@@ -286,16 +322,20 @@ describe('TapStack Integration Tests', () => {
       console.log('Final DynamoDB Item:', JSON.stringify(result.Item, null, 2));
       expect(result.Item).toBeDefined();
 
-      // Try both potential attribute names that the Lambda might use
-      const itemData = result.Item?.data?.S || result.Item?.Data?.S || '{}';
+      // Try all potential attribute names that the Lambda might use
+      const itemData = result.Item?.data?.S || result.Item?.Data?.S || result.Item?.content?.S || result.Item?.Content?.S || '{}';
       console.log('Item Data:', itemData);
 
-      expect(JSON.parse(itemData)).toMatchObject({
+      // Log the full DynamoDB response for debugging
+      console.log('Full DynamoDB Response:', JSON.stringify(result, null, 2));
+
+      const parsedData = JSON.parse(itemData);
+      console.log('Parsed Item Data:', parsedData);
+
+      expect(parsedData).toMatchObject({
         fileName,
         processed: true
-      });
-
-      // Cleanup
+      });      // Cleanup
       await Promise.all([
         // Delete S3 file
         s3.send(new DeleteObjectCommand({
