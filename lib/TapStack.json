@@ -25,36 +25,11 @@
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
       "Description": "VPC ID for VPC endpoint configuration",
-      "Default": {
-        "Fn::Select": [
-          0,
-          {
-            "Fn::Split": [
-              ",",
-              {
-                "Fn::ImportValue": "DefaultVPCId"
-              }
-            ]
-          }
-        ]
-      }
+      "ConstraintDescription": "Must be a valid VPC ID"
     },
     "RouteTableId": {
       "Type": "String",
-      "Description": "Route Table ID for VPC endpoint configuration",
-      "Default": {
-        "Fn::Select": [
-          0,
-          {
-            "Fn::Split": [
-              ",",
-              {
-                "Fn::ImportValue": "DefaultRouteTableId"
-              }
-            ]
-          }
-        ]
-      }
+      "Description": "Route Table ID for VPC endpoint configuration"
     }
   },
   "Resources": {
@@ -338,7 +313,20 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${ProjectName}-${AWS::Region}-${AWS::AccountId}"
+          "Fn::Join": [
+            "",
+            [
+              {
+                "Ref": "ProjectName"
+              },
+              {
+                "Ref": "Environment"
+              },
+              {
+                "Ref": "AWS::AccountId"
+              }
+            ]
+          ]
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
