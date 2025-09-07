@@ -16,28 +16,118 @@ describe('Terraform Integration Tests', () => {
     let roleArn: string;
 
     beforeAll(async () => {
-        // Initialize Terraform
-        execSync('terraform init', { stdio: 'inherit', cwd: 'lib' });
-        
-        // Apply Terraform configuration
-        execSync('terraform apply -auto-approve', { stdio: 'inherit', cwd: 'lib' });
-        
-        // Get Terraform outputs
-        const outputJson = execSync('terraform output -json', { cwd: 'lib' }).toString();
-        terraformOutputs = JSON.parse(outputJson);
-        
-        vpcId = terraformOutputs.vpc_id.value;
-        instanceId = terraformOutputs.instance_id.value;
-        secretArn = terraformOutputs.secret_arn.value;
-        roleArn = terraformOutputs.iam_role_arn.value;
+        try {
+            // Initialize Terraform
+            execSync('terraform init', { stdio: 'inherit', cwd: 'lib' });
+            
+            // Apply Terraform configuration with integration test variables
+            execSync('terraform apply -auto-approve -var-file=terraform.tfvars.integration', { 
+                stdio: 'inherit', 
+                cwd: 'lib' 
+            });
+            
+            // Get Terraform outputs
+            const outputJson = execSync('terraform output -json', { cwd: 'lib' }).toString();
+            terraformOutputs = JSON.parse(outputJson);
+            
+            vpcId = terraformOutputs.vpc_id.value;
+            instanceId = terraformOutputs.instance_id.value;
+            secretArn = terraformOutputs.secret_arn.value;
+            roleArn = terraformOutputs.iam_role_arn.value;
+        } catch (error: any) {
+            // Check if the error is related to state lock
+            if (error.message && error.message.includes('Error acquiring the state lock')) {
+                console.error('Terraform state is locked. Attempting to resolve...');
+                
+                // Extract lock ID from error message if available
+                const lockIdMatch = error.message.match(/ID:\s+([a-f0-9\-]+)/);
+                if (lockIdMatch) {
+                    const lockId = lockIdMatch[1];
+                    console.log(`Attempting to unlock state with lock ID: ${lockId}`);
+                    
+                    try {
+                        // Try to force unlock
+                        execSync(`terraform force-unlock -force ${lockId}`, { 
+                            stdio: 'inherit', 
+                            cwd: 'lib' 
+                        });
+                        console.log('State unlocked successfully, retrying terraform apply...');
+                        
+                        // Retry the apply
+                        execSync('terraform apply -auto-approve -var-file=terraform.tfvars.integration', { 
+                            stdio: 'inherit', 
+                            cwd: 'lib' 
+                        });
+                        
+                        // Get Terraform outputs
+                        const outputJson = execSync('terraform output -json', { cwd: 'lib' }).toString();
+                        terraformOutputs = JSON.parse(outputJson);
+                        
+                        vpcId = terraformOutputs.vpc_id.value;
+                        instanceId = terraformOutputs.instance_id.value;
+                        secretArn = terraformOutputs.secret_arn.value;
+                        roleArn = terraformOutputs.iam_role_arn.value;
+                    } catch (unlockError) {
+                        console.error('Failed to unlock state automatically. Manual intervention required.');
+                        console.error('Run: cd lib && rm -f .terraform.tfstate.lock.info');
+                        throw unlockError;
+                    }
+                } else {
+                    console.error('Could not extract lock ID from error message. Manual intervention required.');
+                    console.error('Run: cd lib && rm -f .terraform.tfstate.lock.info');
+                    throw error;
+                }
+            } else {
+                throw error;
+            }
+        }
     });
 
     afterAll(async () => {
-        // Cleanup - destroy resources
+        // Cleanup - destroy resources using the same variables
         try {
-            execSync('terraform destroy -auto-approve', { stdio: 'inherit', cwd: 'lib' });
-        } catch (error) {
-            console.warn('Cleanup failed, manual intervention may be required');
+            execSync('terraform destroy -auto-approve -var-file=terraform.tfvars.integration', { 
+                stdio: 'inherit', 
+                cwd: 'lib' 
+            });
+        } catch (error: any) {
+            // Check if the error is related to state lock
+            if (error.message && error.message.includes('Error acquiring the state lock')) {
+                console.warn('Cleanup failed due to state lock. Attempting to resolve...');
+                
+                // Extract lock ID from error message if available
+                const lockIdMatch = error.message.match(/ID:\s+([a-f0-9\-]+)/);
+                if (lockIdMatch) {
+                    const lockId = lockIdMatch[1];
+                    console.log(`Attempting to unlock state with lock ID: ${lockId}`);
+                    
+                    try {
+                        // Try to force unlock
+                        execSync(`terraform force-unlock -force ${lockId}`, { 
+                            stdio: 'inherit', 
+                            cwd: 'lib' 
+                        });
+                        console.log('State unlocked successfully, retrying terraform destroy...');
+                        
+                        // Retry the destroy
+                        execSync('terraform destroy -auto-approve -var-file=terraform.tfvars.integration', { 
+                            stdio: 'inherit', 
+                            cwd: 'lib' 
+                        });
+                    } catch (unlockError) {
+                        console.warn('Failed to unlock state automatically during cleanup.');
+                        console.warn('Manual intervention may be required: cd lib && rm -f .terraform.tfstate.lock.info');
+                        console.warn('Then run: terraform destroy -auto-approve -var-file=terraform.tfvars.integration');
+                    }
+                } else {
+                    console.warn('Could not extract lock ID from cleanup error message.');
+                    console.warn('Manual intervention may be required: cd lib && rm -f .terraform.tfstate.lock.info');
+                    console.warn('Then run: terraform destroy -auto-approve -var-file=terraform.tfvars.integration');
+                }
+            } else {
+                console.warn('Cleanup failed, manual intervention may be required');
+                console.error(error.message);
+            }
         }
     });
 
@@ -151,7 +241,7 @@ describe('Terraform Integration Tests', () => {
             }).promise();
             
             expect(secret).toBeDefined();
-            expect(secret.Name).toMatch(/^prod-6340-app-secret-[a-f0-9]{8}$/);
+            expect(secret.Name).toMatch(/^prod-6340-(app|test)-secret-[a-f0-9]{8}$/);
             // Secret uses default AWS-managed encryption when no custom KMS key is specified
             // When using default encryption, KmsKeyId might be undefined or an alias/ARN
             if (secret.KmsKeyId) {

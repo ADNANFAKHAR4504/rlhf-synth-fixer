@@ -1,8 +1,25 @@
 # Additional variables
 variable "approved_cidrs" {
-  description = "Approved CIDR blocks for public access"
+  description = "Approved CIDR blocks for public access - restricted for production security"
   type        = list(string)
-  default     = ["10.0.0.0/8"]
+  # More restrictive CIDR blocks for production
+  # Consider using your organization's specific IP ranges
+  default     = [
+    "172.16.0.0/12",    # Private network range (RFC 1918)
+    "192.168.0.0/16"    # Private network range (RFC 1918)
+  ]
+  
+  validation {
+    condition = length(var.approved_cidrs) > 0
+    error_message = "At least one CIDR block must be specified for approved access."
+  }
+  
+  validation {
+    condition = alltrue([
+      for cidr in var.approved_cidrs : can(cidrhost(cidr, 0))
+    ])
+    error_message = "All approved_cidrs must be valid CIDR blocks."
+  }
 }
 
 variable "secret_name" {
