@@ -17,8 +17,25 @@ describe('Terraform Integration Tests', () => {
 
     beforeAll(async () => {
         try {
+            // First, validate AWS credentials and connectivity
+            console.log('Validating AWS credentials...');
+            
+            // Test AWS connectivity using the AWS SDK
+            try {
+                const sts = new AWS.STS({ region });
+                const identity = await sts.getCallerIdentity().promise();
+                console.log(`AWS credentials validated. Account: ${identity.Account}, User/Role: ${identity.Arn}`);
+            } catch (awsError: any) {
+                console.error('AWS credential validation failed:', awsError.message);
+                throw new Error(`AWS credentials not properly configured: ${awsError.message}. Please check AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION environment variables.`);
+            }
+
+            console.log('Initializing Terraform...');
+            
             // Initialize Terraform
             execSync('terraform init', { stdio: 'inherit', cwd: 'lib' });
+            
+            console.log('Applying Terraform configuration...');
             
             // Apply Terraform configuration with integration test variables
             execSync('terraform apply -auto-approve -var-file=terraform.tfvars.integration', { 
@@ -34,6 +51,8 @@ describe('Terraform Integration Tests', () => {
             instanceId = terraformOutputs.instance_id.value;
             secretArn = terraformOutputs.secret_arn.value;
             roleArn = terraformOutputs.iam_role_arn.value;
+            
+            console.log('Infrastructure deployed successfully');
         } catch (error: any) {
             // Check if the error is related to state lock
             if (error.message && error.message.includes('Error acquiring the state lock')) {
@@ -77,7 +96,14 @@ describe('Terraform Integration Tests', () => {
                     console.error('Run: cd lib && rm -f .terraform.tfstate.lock.info');
                     throw error;
                 }
+            } else if (error.message && error.message.includes('No valid credential sources found')) {
+                throw new Error('AWS credentials not configured. Please set AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_DEFAULT_REGION environment variables.');
+            } else if (error.message && error.message.includes('The security token included in the request is invalid')) {
+                throw new Error('AWS credentials are invalid or expired. Please check your AWS credentials.');
+            } else if (error.message && error.message.includes('Unable to locate credentials')) {
+                throw new Error('AWS credentials not found. Please configure AWS credentials using environment variables or AWS CLI.');
             } else {
+                console.error('Terraform setup failed:', error.message);
                 throw error;
             }
         }
