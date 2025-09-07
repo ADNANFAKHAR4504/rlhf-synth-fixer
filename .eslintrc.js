@@ -45,6 +45,7 @@ module.exports = {
           'jest.config.js',
           '**/*.config.js',
           '**/*.config.ts',
+          '@types/**'
         ],
         optionalDependencies: false,
         peerDependencies: false,

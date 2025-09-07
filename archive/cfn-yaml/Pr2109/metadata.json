@@ -1,0 +1,48 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292009",
+  "team": "2",
+  "startedAt": "2025-08-23T12:37:22.698Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Compliance Implementation",
+    "Infrastructure Security",
+    "Multi-Region Deployment",
+    "Database Management",
+    "Network Configuration",
+    "Monitoring Setup",
+    "Deployment Strategies",
+    "Serverless Architecture",
+    "High Availability"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS::CloudFormation",
+    "AWS::EC2",
+    "AWS::RDS",
+    "AWS::S3",
+    "AWS::KMS",
+    "AWS::IAM",
+    "AWS::VPC",
+    "AWS::ElasticLoadBalancingV2",
+    "AWS::AutoScaling",
+    "AWS::Lambda",
+    "AWS::CodeDeploy",
+    "AWS::CloudWatch",
+    "AWS::SNS",
+    "AWS::SSM",
+    "AWS::Route53",
+    "AWS::CloudTrail",
+    "AWS::Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Mikiazerihun",
+  "dockerS3Location": ""
+}
