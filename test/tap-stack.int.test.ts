@@ -5,8 +5,8 @@
  * - Loads cfn-outputs/all-outputs.json from process.cwd()
  * - Robustly discovers outputs across multiple common shapes:
  *   * Plain outputs object      -> { VpcId: "...", AlbArn: "...", ... }
- *   * describe-stacks shape     -> { Stacks: [{ Outputs: [{ OutputKey, OutputValue }, ...] }, ...] }
- *   * top-level Outputs array   -> { Outputs: [{ OutputKey, OutputValue }, ...] }
+ *   * describe-stacks shape     -> { Stacks: [{ Outputs: [{ OutputKey, OutputValue }...] }] }
+ *   * top-level Outputs array   -> { Outputs: [{ OutputKey, OutputValue }...] }
  *   * CDK outputs               -> { "StackName": { VpcId: "...", AlbArn: "...", ... } }
  *   * list-exports shape        -> { Exports: [{ Name: "Production-VpcId", Value: "vpc-..." }, ...] }
  * - Validates IDs/ARNs/DNS names, and environment alignment (positive + edge cases)
@@ -99,11 +99,7 @@ function exportsArrayToBags(arr: any[]): OutputsMap[] {
   const bags: OutputsMap[] = [];
   for (const env of envs) {
     const bag = byEnv[env];
-    // Only include if there is a reasonable number of keys discovered
     if (Object.keys(bag).length >= 5) {
-      // Re-hydrate environment-sensitive outputs we test later:
-      // CloudWatchDashboardName should already match `${Env}-TapStack-Dashboard`
-      // SsmParameterPathPrefix should match `/tapstack/${Env}` (but if missing, try to infer)
       if (!bag.SsmParameterPathPrefix && typeof bag.LogGroupName === 'string') {
         const m = bag.LogGroupName.match(/^\/tapstack\/([^/]+)/);
         if (m && (m[1] === 'Production' || m[1] === 'Staging')) {
@@ -143,24 +139,21 @@ function collectOutputsObjects(root: any): OutputsMap[] {
     if (seen.has(n)) return;
     seen.add(n);
 
-    // Array handling
     if (Array.isArray(n)) {
-      // Check if it's an Outputs array [{ OutputKey, OutputValue }, ...]
+      // Outputs array?
       if (n.length > 0 && n.every((e) => isPlainObject(e) && 'OutputKey' in e && 'OutputValue' in e)) {
         const bag = outputsArrayToBag(n);
         considerCandidate(bag);
       }
-      // Check if it's an Exports array [{ Name, Value }, ...]
+      // Exports array?
       if (n.length > 0 && n.every((e) => isPlainObject(e) && 'Name' in e && 'Value' in e)) {
         const bags = exportsArrayToBags(n);
         for (const b of bags) considerCandidate(b);
       }
-      // Recurse
       for (const item of n) walk(item);
       return;
     }
 
-    // Object handling
     if (isPlainObject(n)) {
       // Direct candidate?
       considerCandidate(n);
@@ -171,7 +164,7 @@ function collectOutputsObjects(root: any): OutputsMap[] {
         const bag = outputsArrayToBag((n as any).Outputs);
         considerCandidate(bag);
       }
-      // 2) { Stacks: [ { Outputs: [...] }, ...] }
+      // 2) { Stacks: [{ Outputs: [...] }, ...] }
       if (Array.isArray((n as any).Stacks)) {
         for (const s of (n as any).Stacks) {
           if (isPlainObject(s) && Array.isArray(s.Outputs)) {
@@ -180,14 +173,13 @@ function collectOutputsObjects(root: any): OutputsMap[] {
           }
         }
       }
-      // 3) CDK outputs shape: { "StackName": { ...outputs } }
+      // 3) CDK style: { "StackName": { outputs } }
       const values = Object.values(n);
       const cdkCandidates = values.filter(
         (v) => isPlainObject(v) && Object.keys(v).some((k) => expectedOutputKeys.has(k))
       ) as OutputsMap[];
       for (const c of cdkCandidates) considerCandidate(c);
 
-      // Recurse into nested objects
       for (const v of Object.values(n)) walk(v);
     }
   }
@@ -216,14 +208,14 @@ const reVpcId = /^vpc-[0-9a-f]+$/i;
 const reSubnetId = /^subnet-[0-9a-f]+$/i;
 const reSgId = /^sg-[0-9a-f]+$/i;
 const reLtId = /^lt-[0-9a-f]+$/i;
-const reArn = /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:.+/i; // generic
+const reArn = /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:.+/i; // generic (with account id)
 const reAlbArn = /^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d{12}:loadbalancer\/.+/i;
 const reTgArn = /^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d{12}:targetgroup\/.+/i;
 const reListenerArn = /^arn:aws:elasticloadbalancing:[a-z0-9-]+:\d{12}:listener\/.+/i;
 const reDdbArn = /^arn:aws:dynamodb:[a-z0-9-]+:\d{12}:table\/.+/i;
-const reS3Arn = /^arn:aws:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+const reS3Arn = /^arn:aws:s3:::[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/; // S3 ARNs have no account segment
 const reBucketName = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
-const reAlbDns = /^[a-z0-9-]+\.([a-z0-9-]+)\.elb\.amazonaws\.com(\.cn)?$/i; // ALB DNS
+const reAlbDns = /^[A-Za-z0-9-]+\.([a-z0-9-]+)\.elb\.amazonaws\.com(\.cn)?$/i; // allow case in label
 const reDbSubnetGroupName = /^[A-Za-z0-9-_.]+$/;
 const reAsgName = /^[A-Za-z0-9-_.]+$/;
 const reCwDashboardName = /^(Production|Staging)-TapStack-Dashboard$/;
@@ -236,9 +228,8 @@ const fileExists: boolean = fs.existsSync(OUTPUT_FILE);
 const parsedJson: any | null = safeLoadJson(OUTPUT_FILE);
 let outputsSets: OutputsMap[] = parsedJson ? collectOutputsObjects(parsedJson) : [];
 
-// Fallback: if no outputs sets found but Exports array exists somewhere
+// Fallback: try Exports arrays explicitly if nothing found
 if (outputsSets.length === 0 && parsedJson) {
-  // Try to discover Exports arrays explicitly one more time
   const fallbackBags: OutputsMap[] = [];
   const seen = new Set<any>();
   (function walk(n: any) {
@@ -270,8 +261,6 @@ describe('TapStack - Integration (cfn-outputs/all-outputs.json)', () => {
   });
 
   test('01 - discovered at least one outputs set (from Outputs, Stacks, plain object, CDK, or Exports)', () => {
-    // If this fails, your all-outputs.json does not contain recognizable outputs.
-    // Consider exporting describe-stacks Outputs or list-exports to this file.
     expect(outputsSets.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -302,7 +291,8 @@ describe('TapStack - Integration (cfn-outputs/all-outputs.json)', () => {
 
         expect(typeof out.AlbDnsName).toBe('string');
         expect(out.AlbDnsName.toLowerCase()).toContain('elb.amazonaws.com');
-        expect(out.AlbDnsName).toBe(out.AlbDnsName.toLowerCase()); // DNS lowercased
+        // Allow uppercase letters in the first label (e.g., "Production-ALB-...")
+        expect(out.AlbDnsName).toMatch(reAlbDns);
 
         expect(typeof out.AlbSecurityGroupId).toBe('string');
         expect(out.AlbSecurityGroupId).toMatch(reSgId);
@@ -350,18 +340,16 @@ describe('TapStack - Integration (cfn-outputs/all-outputs.json)', () => {
         expect(typeof out.DynamoTableName).toBe('string');
         expect(out.DynamoTableName.length).toBeGreaterThan(0);
         expect(out.DynamoTableArn).toMatch(reDdbArn);
-        expect(out.DynamoTableArn).toContain(`table/${out.DynamoTableName}`);
       });
 
       test('09 - S3 logs and access-logs bucket outputs are valid and distinct', () => {
         expect(typeof out.S3LogsBucketName).toBe('string');
         expect(out.S3LogsBucketName).toMatch(reBucketName);
-        expect(out.S3LogsBucketName).toBe(out.S3LogsBucketName.toLowerCase());
 
         expect(typeof out.S3AccessLogsBucketName).toBe('string');
         expect(out.S3AccessLogsBucketName).toMatch(reBucketName);
-        expect(out.S3AccessLogsBucketName).toBe(out.S3AccessLogsBucketName.toLowerCase());
 
+        // Use S3-specific ARN regex (no account id in ARN)
         expect(out.S3LogsBucketArn).toMatch(reS3Arn);
         expect(out.S3LogsBucketArn).toContain(`:${out.S3LogsBucketName}`);
 
@@ -402,13 +390,14 @@ describe('TapStack - Integration (cfn-outputs/all-outputs.json)', () => {
         }
       });
 
-      test('14 - ALB/Dynamo/RDS/S3 ARNs conform to arn:aws:* format', () => {
+      test('14 - ALB/Dynamo/RDS ARNs conform to arn:aws:* format; S3 ARNs conform to arn:aws:s3:::*', () => {
         expect(out.AlbArn).toMatch(reArn);
         expect(out.TargetGroupArn).toMatch(reArn);
         expect(out.HttpListenerArn).toMatch(reArn);
         expect(out.DynamoTableArn).toMatch(reArn);
-        expect(out.S3LogsBucketArn).toMatch(reArn);
-        expect(out.S3AccessLogsBucketArn).toMatch(reArn);
+        // S3 ARNs validated separately (no account id)
+        expect(out.S3LogsBucketArn).toMatch(reS3Arn);
+        expect(out.S3AccessLogsBucketArn).toMatch(reS3Arn);
       });
 
       test('15 - ALB DNS does not include scheme, only hostname', () => {
@@ -440,11 +429,18 @@ describe('TapStack - Integration (cfn-outputs/all-outputs.json)', () => {
         expect(['Production', 'Staging']).toContain(envFromSsm);
       });
 
-      test('19 - DynamoDB ARN includes table name exactly', () => {
-        expect(
-          out.DynamoTableArn.endsWith(`/table/${out.DynamoTableName}`) ||
-          out.DynamoTableArn.includes(`/table/${out.DynamoTableName}`)
-        ).toBe(true);
+      test('19 - DynamoDB ARN includes a "table/<name>" segment and matches provided table name when present', () => {
+        const arn: string = String(out.DynamoTableArn || '');
+        // Must contain /table/<name>
+        const m = arn.match(/:table\/([^/]+)$/);
+        expect(m).not.toBeNull();
+        const nameFromArn = m ? m[1] : '';
+        expect(nameFromArn.length).toBeGreaterThan(0);
+
+        // If DynamoTableName provided, assert equivalence; else we already validated non-empty
+        if (out.DynamoTableName) {
+          expect(nameFromArn).toBe(String(out.DynamoTableName));
+        }
       });
 
       test('20 - RDS endpoint host appears to be a DNS hostname (contains at least two dots)', () => {
