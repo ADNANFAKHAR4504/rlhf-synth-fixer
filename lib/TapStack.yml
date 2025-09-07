@@ -7,6 +7,7 @@ Parameters:
     AllowedValues:
       - Production
       - Staging
+    Default: Production
     Description: Environment name for this deployment
   AppInstanceType:
     Type: String
@@ -513,7 +514,7 @@ Resources:
       Name: !Sub '${EnvironmentName}-ALB'
       Scheme: internet-facing
       Type: application
-      # NOTE: ALB typically requires 2 public subnets. This follows the provided constraints.
+      # NOTE: With the single public + single private subnet constraint, we attach to both to satisfy minimum subnet count.
       Subnets:
         - !Ref PublicSubnet
         - !Ref PrivateSubnet
