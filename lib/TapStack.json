@@ -9,6 +9,7 @@
         "staging",
         "prod"
       ],
+      "Default": "dev",
       "Description": "Environment for deployment"
     },
     "ProjectName": {
@@ -18,6 +19,7 @@
     },
     "NotificationEmail": {
       "Type": "String",
+      "Default": "dev-notifications@example.com",
       "Description": "Email address for notifications"
     }
   },
@@ -109,12 +111,14 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           },
           {
             "Key": "Project",
-            "Value": "tapstack"
+            "Value": {
+              "Ref": "ProjectName"
+            }
           }
         ]
       }
@@ -122,7 +126,7 @@
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "python3.8",
+        "Runtime": "python3.13",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -282,7 +286,7 @@
         "SSESpecification": {
           "SSEEnabled": true,
           "SSEType": "KMS",
-          "KMSMasterKeyId": {
+          "KMSMasterKeyID": {
             "Ref": "KMSKey"
           }
         },
@@ -290,12 +294,14 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           },
           {
             "Key": "Project",
-            "Value": "tapstack"
+            "Value": {
+              "Ref": "ProjectName"
+            }
           }
         ]
       }
@@ -314,7 +320,7 @@
             {
               "ServerSideEncryptionByDefault": {
                 "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyId": {
+                "KMSMasterKeyID": {
                   "Ref": "KMSKey"
                 }
               }
@@ -331,12 +337,14 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           },
           {
             "Key": "Project",
-            "Value": "tapstack"
+            "Value": {
+              "Ref": "ProjectName"
+            }
           }
         ]
       }
@@ -347,7 +355,7 @@
         "TopicName": {
           "Fn::Sub": "tapstack-notifications-${Environment}"
         },
-        "KmsMasterKeyId": {
+        "KmsMasterKeyID": {
           "Ref": "KMSKey"
         }
       }
@@ -497,7 +505,7 @@
             "Fn::FindInMap": [
               "EnvironmentMap",
               {
-                "Ref": "EnvironmentSuffix"
+                "Ref": "Environment"
               },
               "RouteTableId"
             ]
