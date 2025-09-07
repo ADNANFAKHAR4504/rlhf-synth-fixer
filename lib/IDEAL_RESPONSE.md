@@ -41,16 +41,21 @@ import { Tags } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
+
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
+const repositoryName = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
-Tags.of(app).add('Repository', process.env.REPOSITORY || 'unknown');
-Tags.of(app).add('Author', process.env.COMMIT_AUTHOR || 'unknown');
+Tags.of(app).add('Repository', repositoryName);
+Tags.of(app).add('Author', commitAuthor);
 
 new TapStack(app, stackName, {
-  stackName: stackName,
-  environmentSuffix: environmentSuffix,
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION,
@@ -236,41 +241,12 @@ new cdk.CfnOutput(this, 'ApiGatewayUrl', {
 });
 ```
 
-## 🧪 Quality Assurance
+## 🏗️ Implementation Quality
 
-### Test Coverage: 100%
+### Code Standards
 
-- **34 comprehensive unit tests** covering all infrastructure components
-- **100% statement coverage**
-- **100% branch coverage**
-- **100% function coverage**
-- **100% line coverage**
-
-### Testing Strategy
-
-```typescript
-describe('TapStack', () => {
-  test('should create all required AWS resources', () => {
-    // Comprehensive infrastructure validation
-    template.hasResourceProperties('AWS::Lambda::Function', {
-      /* ... */
-    });
-    template.hasResourceProperties('AWS::ApiGateway::RestApi', {
-      /* ... */
-    });
-    template.hasResourceProperties('AWS::DynamoDB::Table', {
-      /* ... */
-    });
-    // ... all resources tested
-  });
-});
-```
-
-### Code Quality
-
-- **ESLint**: Zero linting errors
-- **TypeScript**: Strict compilation with no errors
-- **CDK Synthesis**: Clean CloudFormation template generation
+- **ESLint**: Clean code standards
+- **TypeScript**: Strict compilation
 - **Security**: All resources follow AWS security best practices
 
 ## 🚀 Deployment Instructions
@@ -293,7 +269,6 @@ cdk deploy -c region=us-west-2
 
 - **Resources Created**: 15+ AWS resources
 - **Lines of Code**: ~350 TypeScript (infrastructure)
-- **Test Coverage**: 100% across all metrics
 - **Security**: Least privilege IAM, encryption at rest everywhere
 - **Observability**: Comprehensive logging and monitoring
 - **Reliability**: Dead letter queues, retry logic, throttling
