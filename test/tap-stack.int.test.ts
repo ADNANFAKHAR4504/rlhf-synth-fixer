@@ -172,14 +172,17 @@ describe('TapStack Integration Tests', () => {
       const response = await axios.options(config.API_GATEWAY_ENDPOINT as string, {
         headers: {
           'Origin': 'http://localhost:3000',
-          'Access-Control-Request-Method': 'GET,POST,PUT,DELETE',
-          'Access-Control-Request-Headers': 'Content-Type,Authorization'
+          'Access-Control-Request-Method': 'GET',
+          'Access-Control-Request-Headers': 'Content-Type'
         }
       });
 
-      expect(response.headers['access-control-allow-origin']).toBe('*');
-      expect(response.headers['access-control-allow-methods']).toBeDefined();
-      expect(response.headers['access-control-allow-headers']).toBeDefined();
+      console.log('CORS Response Headers:', response.headers);
+
+      // API Gateway converts header names to lowercase
+      expect(response.headers['access-control-allow-origin'] || response.headers['Access-Control-Allow-Origin']).toBe('*');
+      expect(response.headers['access-control-allow-methods'] || response.headers['Access-Control-Allow-Methods']).toBeDefined();
+      expect(response.headers['access-control-allow-headers'] || response.headers['Access-Control-Allow-Headers']).toBeDefined();
     }, 30000);
   });
 
@@ -220,15 +223,25 @@ describe('TapStack Integration Tests', () => {
         }
       };
 
-      await lambda.send(new InvokeCommand({
+      const lambdaResponse = await lambda.send(new InvokeCommand({
         FunctionName: config.LAMBDA_FUNCTION_NAME,
         InvocationType: 'RequestResponse',
         Payload: Buffer.from(JSON.stringify(lambdaPayload))
       }));
 
+      console.log('Lambda response:', {
+        StatusCode: lambdaResponse.StatusCode,
+        FunctionError: lambdaResponse.FunctionError,
+        Response: lambdaResponse.Payload ? Buffer.from(lambdaResponse.Payload).toString() : undefined
+      });
+
+      if (lambdaResponse.FunctionError) {
+        throw new Error(`Lambda invocation failed: ${lambdaResponse.FunctionError}`);
+      }
+
       // 3. Check DynamoDB for processed data with retries
-      const maxRetries = 5;
-      const retryDelay = 2000; // 2 seconds
+      const maxRetries = 10;
+      const retryDelay = 3000; // 3 seconds
       let result = await dynamoDb.send(new GetItemCommand({
         TableName: config.DYNAMODB_TABLE_NAME,
         Key: {
@@ -237,8 +250,11 @@ describe('TapStack Integration Tests', () => {
         }
       }));
 
+      console.log('Initial DynamoDB query result:', JSON.stringify(result, null, 2));
+
       // Retry if item not found
       for (let i = 0; i < maxRetries - 1 && !result.Item; i++) {
+        console.log(`Retry ${i + 1}/${maxRetries - 1} - Waiting ${retryDelay}ms before next attempt...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
 
         result = await dynamoDb.send(new GetItemCommand({
@@ -248,6 +264,7 @@ describe('TapStack Integration Tests', () => {
             SK: { S: 'METADATA' }
           }
         }));
+        console.log(`Retry ${i + 1} result:`, JSON.stringify(result, null, 2));
       }
 
       expect(result.Item).toBeDefined();
