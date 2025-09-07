@@ -19,8 +19,13 @@ Parameters:
     Description: RDS instance class
   DBEngineVersion:
     Type: String
-    Default: '14.9'
-    Description: PostgreSQL engine version (use a broadly available one)
+    Default: auto
+    AllowedValues:
+      - auto
+      - 14.11
+      - 15.6
+      - 16.3
+    Description: 'PostgreSQL engine version. Use "auto" to let AWS select a valid version for the region.'
   DBName:
     Type: String
     Default: tapstackdb
@@ -32,6 +37,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentName, 'Production']
+  UseAutoDBVersion: !Equals [!Ref DBEngineVersion, 'auto']
 
 Mappings:
   ALBAccountMap:
@@ -512,7 +518,7 @@ Resources:
       GenerateSecretString:
         PasswordLength: 32
         ExcludePunctuation: true
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '"@/\\'
       Tags:
         - Key: Project
           Value: TapStack
@@ -671,7 +677,7 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        # Remove unnecessary Fn::Sub to avoid W1020
+        # Use direct dynamic reference (no Fn::Sub) to avoid W1020
         ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref AppInstanceType
         IamInstanceProfile:
@@ -863,7 +869,8 @@ Resources:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-tapstack-db'
       DBInstanceClass: !Ref DBInstanceClass
       Engine: postgres
-      EngineVersion: !Ref DBEngineVersion
+      EngineVersion: !If [UseAutoDBVersion, !Ref 'AWS::NoValue', !Ref DBEngineVersion]
+      AutoMinorVersionUpgrade: true
       DBName: !Ref DBName
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString}}'
