@@ -17,11 +17,20 @@ beforeAll(() => {
   describe('Terraform Configuration Validation', () => {
     test('should have valid Terraform configuration', () => {
       try {
+        // Initialize Terraform providers first
+        execSync('terraform init -backend=false', { 
+          encoding: 'utf8',
+          cwd: terraformDir,
+          stdio: 'pipe'
+        });
+        
+        // Then validate
         execSync('terraform validate', { 
           encoding: 'utf8',
           cwd: terraformDir,
           stdio: 'pipe'
         });
+        
         expect(true).toBe(true);
       } catch (error) {
         throw new Error(`Terraform validation failed: ${error}`);
