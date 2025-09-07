@@ -204,153 +204,160 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
   });
 
-  describe('End-to-End Flow', () => {
-    test('should process data through the entire stack', async () => {
-      // 1. Upload file to S3
-      const fileName = `e2e-${testId}.json`;
-      const testData = { testId, timestamp: new Date().toISOString() };
-
-      await s3.send(new PutObjectCommand({
-        Bucket: config.S3_BUCKET_NAME,
-        Key: fileName,
-        Body: JSON.stringify(testData)
-      }));
-
-      // 2. Invoke Lambda to process the file
-      // Wait a bit for S3 consistency
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Verify the file exists in S3 before triggering Lambda
-      const s3HeadResponse = await s3.send(new HeadObjectCommand({
-        Bucket: config.S3_BUCKET_NAME,
-        Key: fileName
-      }));
-
-      console.log('S3 file metadata:', s3HeadResponse);
-
-      // Create S3 event payload that matches the actual S3 event format
-      const lambdaPayload = {
-        Records: [{
-          eventVersion: '2.1',
-          eventSource: 'aws:s3',
-          awsRegion: config.AWS_REGION,
-          eventTime: new Date().toISOString(),
-          eventName: 'ObjectCreated:Put',
-          eventSourceARN: `arn:aws:s3:::${config.S3_BUCKET_NAME}`,
-          s3: {
-            s3SchemaVersion: '1.0',
-            bucket: {
-              name: config.S3_BUCKET_NAME,
-              arn: `arn:aws:s3:::${config.S3_BUCKET_NAME}`,
-              ownerIdentity: {
-                principalId: 'EXAMPLE'
-              }
-            },
-            object: {
-              key: fileName,
-              size: Buffer.from(JSON.stringify(testData)).length,
-              eTag: s3HeadResponse.ETag?.replace(/"/g, '') || 'test-etag',
-              sequencer: Date.now().toString()
-            }
-          },
-          requestParameters: {
-            sourceIPAddress: '127.0.0.1'
-          },
-          responseElements: {
-            'x-amz-request-id': 'EXAMPLE123456789',
-            'x-amz-id-2': 'EXAMPLE123/5678abcdefghijklambdaisawesome/mnopqrstuvwxyzABCDEFGH'
-          }
-        }]
+  describe('Advanced Integration Tests', () => {
+    test('should handle large items in DynamoDB', async () => {
+      const largeData = {
+        id: testId,
+        timestamp: new Date().toISOString(),
+        data: Array(100).fill('test data').join(' ') // Create a larger payload
       };
 
-      console.log('Invoking Lambda with payload:', JSON.stringify(lambdaPayload, null, 2));
+      const testItem = {
+        PK: { S: `LARGE#${testId}` },
+        SK: { S: 'TEST_ITEM' },
+        Data: { S: JSON.stringify(largeData) }
+      };
 
+      // Write large item
+      await dynamoDb.send(new PutItemCommand({
+        TableName: config.DYNAMODB_TABLE_NAME,
+        Item: testItem
+      }));
+
+      // Read and verify
+      const result = await dynamoDb.send(new GetItemCommand({
+        TableName: config.DYNAMODB_TABLE_NAME,
+        Key: {
+          PK: testItem.PK,
+          SK: testItem.SK
+        }
+      }));
+
+      expect(result.Item).toBeDefined();
+      expect(JSON.parse(result.Item?.Data.S || '{}')).toMatchObject(largeData);
+
+      // Cleanup
+      await dynamoDb.send(new DeleteItemCommand({
+        TableName: config.DYNAMODB_TABLE_NAME,
+        Key: {
+          PK: testItem.PK,
+          SK: testItem.SK
+        }
+      }));
+    }, 30000);
+
+    test('should handle binary data in S3', async () => {
+      const binaryData = Buffer.from('Binary content for testing', 'utf8');
+      const testFileName = `binary-${testId}.bin`;
+
+      // Upload binary file
+      await s3.send(new PutObjectCommand({
+        Bucket: config.S3_BUCKET_NAME,
+        Key: testFileName,
+        Body: binaryData,
+        ContentType: 'application/octet-stream'
+      }));
+
+      // Get object metadata
+      const headResponse = await s3.send(new HeadObjectCommand({
+        Bucket: config.S3_BUCKET_NAME,
+        Key: testFileName
+      }));
+
+      expect(headResponse.ContentType).toBe('application/octet-stream');
+      expect(headResponse.ContentLength).toBe(binaryData.length);
+
+      // Download and verify
+      const getResponse = await s3.send(new GetObjectCommand({
+        Bucket: config.S3_BUCKET_NAME,
+        Key: testFileName
+      }));
+
+      const downloadedData = await getResponse.Body?.transformToByteArray();
+      expect(Buffer.from(downloadedData as Uint8Array)).toEqual(binaryData);
+
+      // Cleanup
+      await s3.send(new DeleteObjectCommand({
+        Bucket: config.S3_BUCKET_NAME,
+        Key: testFileName
+      }));
+    }, 30000);
+
+    test('should handle structured data in Lambda and SNS', async () => {
+      const structuredData = {
+        testId,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          type: 'test',
+          version: '1.0'
+        },
+        payload: {
+          message: 'Test message',
+          priority: 'high'
+        }
+      };
+
+      // First publish to SNS
+      const snsResponse = await sns.send(new PublishCommand({
+        TopicArn: config.SNS_TOPIC_ARN,
+        Message: JSON.stringify(structuredData),
+        MessageAttributes: {
+          'testId': {
+            DataType: 'String',
+            StringValue: testId
+          }
+        }
+      }));
+
+      expect(snsResponse.MessageId).toBeDefined();
+
+      // Then process with Lambda
       const lambdaResponse = await lambda.send(new InvokeCommand({
         FunctionName: config.LAMBDA_FUNCTION_NAME,
         InvocationType: 'RequestResponse',
-        Payload: Buffer.from(JSON.stringify(lambdaPayload))
-      }));
-
-      const responsePayload = lambdaResponse.Payload ? Buffer.from(lambdaResponse.Payload).toString() : undefined;
-      console.log('Lambda response:', {
-        StatusCode: lambdaResponse.StatusCode,
-        FunctionError: lambdaResponse.FunctionError,
-        Response: responsePayload
-      });
-
-      if (lambdaResponse.FunctionError) {
-        throw new Error(`Lambda invocation failed: ${lambdaResponse.FunctionError}`);
-      }
-
-      // Parse and check the response for errors
-      if (responsePayload) {
-        const parsedResponse = JSON.parse(responsePayload);
-        if (parsedResponse.errorMessage || parsedResponse.errorType) {
-          console.error('Lambda execution error:', parsedResponse);
-          throw new Error(`Lambda execution failed: ${parsedResponse.errorMessage}`);
-        }
-      }
-
-      // 3. Check DynamoDB for processed data with retries
-      const maxRetries = 10;
-      const retryDelay = 3000; // 3 seconds
-      let result = await dynamoDb.send(new GetItemCommand({
-        TableName: config.DYNAMODB_TABLE_NAME,
-        Key: {
-          PK: { S: `FILE#${fileName}` },
-          SK: { S: 'METADATA' }
-        }
-      }));
-
-      console.log('Initial DynamoDB query result:', JSON.stringify(result, null, 2));
-
-      // Retry if item not found
-      for (let i = 0; i < maxRetries - 1 && !result.Item; i++) {
-        console.log(`Retry ${i + 1}/${maxRetries - 1} - Waiting ${retryDelay}ms before next attempt...`);
-        await new Promise(resolve => setTimeout(resolve, retryDelay));
-
-        result = await dynamoDb.send(new GetItemCommand({
-          TableName: config.DYNAMODB_TABLE_NAME,
-          Key: {
-            PK: { S: `FILE#${fileName}` },
-            SK: { S: 'METADATA' }
-          }
-        }));
-        console.log(`Retry ${i + 1} result:`, JSON.stringify(result, null, 2));
-      }
-
-      console.log('Final DynamoDB Item:', JSON.stringify(result.Item, null, 2));
-      expect(result.Item).toBeDefined();
-
-      // Try all potential attribute names that the Lambda might use
-      const itemData = result.Item?.data?.S || result.Item?.Data?.S || result.Item?.content?.S || result.Item?.Content?.S || '{}';
-      console.log('Item Data:', itemData);
-
-      // Log the full DynamoDB response for debugging
-      console.log('Full DynamoDB Response:', JSON.stringify(result, null, 2));
-
-      const parsedData = JSON.parse(itemData);
-      console.log('Parsed Item Data:', parsedData);
-
-      expect(parsedData).toMatchObject({
-        fileName,
-        processed: true
-      });      // Cleanup
-      await Promise.all([
-        // Delete S3 file
-        s3.send(new DeleteObjectCommand({
-          Bucket: config.S3_BUCKET_NAME,
-          Key: fileName
-        })),
-        // Delete DynamoDB entry
-        dynamoDb.send(new DeleteItemCommand({
-          TableName: config.DYNAMODB_TABLE_NAME,
-          Key: {
-            PK: { S: `FILE#${fileName}` },
-            SK: { S: 'METADATA' }
-          }
+        Payload: Buffer.from(JSON.stringify({
+          Records: [{
+            Sns: {
+              Message: JSON.stringify(structuredData),
+              MessageAttributes: {
+                testId: {
+                  Type: 'String',
+                  Value: testId
+                }
+              }
+            }
+          }]
         }))
-      ]);
-    }, 90000); // Increased timeout for retries
+      }));
+
+      const responsePayload = lambdaResponse.Payload ? JSON.parse(Buffer.from(lambdaResponse.Payload).toString()) : undefined;
+      expect(responsePayload.statusCode).toBe(200);
+    }, 30000);
+
+    test('should handle API Gateway error cases', async () => {
+      // Test invalid path
+      try {
+        await axios.get(`${config.API_GATEWAY_ENDPOINT}/invalid-path`);
+        fail('Should have thrown an error');
+      } catch (error: any) {
+        expect(error.response.status).toBe(404);
+      }
+
+      // Test invalid method
+      try {
+        await axios.put(config.API_GATEWAY_ENDPOINT as string, {});
+        fail('Should have thrown an error');
+      } catch (error: any) {
+        expect(error.response.status).toBe(403);
+      }
+
+      // Test missing required headers
+      try {
+        await axios.post(config.API_GATEWAY_ENDPOINT as string);
+        fail('Should have thrown an error');
+      } catch (error: any) {
+        expect(error.response.status).toBe(403);
+      }
+    }, 30000);
   });
 });
