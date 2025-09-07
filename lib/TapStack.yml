@@ -534,7 +534,6 @@ Resources:
       Name: !Sub '${EnvironmentName}-ALB'
       Scheme: internet-facing
       Type: application
-      # NOTE: With a single public + single private subnet constraint, we attach to both to satisfy minimum subnet count.
       Subnets:
         - !Ref PublicSubnet
         - !Ref PrivateSubnet
@@ -677,7 +676,6 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        # Use direct dynamic reference (no Fn::Sub) to avoid W1020
         ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
         InstanceType: !Ref AppInstanceType
         IamInstanceProfile:
@@ -760,19 +758,6 @@ Resources:
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config -m ec2 \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-      TagSpecifications:
-        - ResourceType: instance
-          Tags:
-            - Key: Name
-              Value: !Sub '${EnvironmentName}-AppInstance'
-            - Key: Project
-              Value: TapStack
-            - Key: Owner
-              Value: DevOps
-            - Key: Environment
-              Value: !Ref EnvironmentName
-            - Key: CostCenter
-              Value: App
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
