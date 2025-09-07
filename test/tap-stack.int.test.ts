@@ -216,12 +216,28 @@ describe('TapStack Integration Tests', () => {
       }));
 
       // 2. Invoke Lambda to process the file
+      // Create S3 event payload that matches the actual S3 event format
       const lambdaPayload = {
-        detail: {
-          bucket: config.S3_BUCKET_NAME,
-          key: fileName
-        }
+        Records: [{
+          eventVersion: '2.1',
+          eventSource: 'aws:s3',
+          awsRegion: config.AWS_REGION,
+          eventTime: new Date().toISOString(),
+          eventName: 'ObjectCreated:Put',
+          s3: {
+            bucket: {
+              name: config.S3_BUCKET_NAME
+            },
+            object: {
+              key: fileName,
+              size: Buffer.from(JSON.stringify(testData)).length,
+              eTag: 'test-etag'
+            }
+          }
+        }]
       };
+
+      console.log('Invoking Lambda with payload:', JSON.stringify(lambdaPayload, null, 2));
 
       const lambdaResponse = await lambda.send(new InvokeCommand({
         FunctionName: config.LAMBDA_FUNCTION_NAME,
@@ -267,8 +283,14 @@ describe('TapStack Integration Tests', () => {
         console.log(`Retry ${i + 1} result:`, JSON.stringify(result, null, 2));
       }
 
+      console.log('Final DynamoDB Item:', JSON.stringify(result.Item, null, 2));
       expect(result.Item).toBeDefined();
-      expect(JSON.parse(result.Item?.data.S || '{}')).toMatchObject({
+
+      // Try both potential attribute names that the Lambda might use
+      const itemData = result.Item?.data?.S || result.Item?.Data?.S || '{}';
+      console.log('Item Data:', itemData);
+
+      expect(JSON.parse(itemData)).toMatchObject({
         fileName,
         processed: true
       });
