@@ -2,12 +2,23 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Secure serverless infrastructure with Lambda, API Gateway, DynamoDB, S3, and monitoring components",
   "Parameters": {
-    "EnvironmentSuffix": {
+    "Environment": {
       "Type": "String",
-      "Default": "dev",
-      "Description": "Environment suffix for resource naming",
-      "AllowedPattern": "^[a-z][a-z0-9]*$",
-      "ConstraintDescription": "Must begin with a lowercase letter and contain only lowercase letters and numbers"
+      "AllowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "Description": "Environment for deployment"
+    },
+    "ProjectName": {
+      "Type": "String",
+      "Default": "tapstack",
+      "Description": "Name of the project"
+    },
+    "NotificationEmail": {
+      "Type": "String",
+      "Description": "Email address for notifications"
     }
   },
   "Mappings": {
@@ -111,7 +122,7 @@
     "LambdaFunction": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "python3.13",
+        "Runtime": "python3.8",
         "Handler": "index.handler",
         "Role": {
           "Fn::GetAtt": [
@@ -125,13 +136,16 @@
         "Environment": {
           "Variables": {
             "ENVIRONMENT": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             },
             "DYNAMODB_TABLE": {
               "Ref": "DynamoDBTable"
             },
             "S3_BUCKET": {
               "Ref": "S3Bucket"
+            },
+            "KMS_KEY_ID": {
+              "Ref": "KMSKey"
             }
           }
         },
@@ -139,12 +153,14 @@
           {
             "Key": "Environment",
             "Value": {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             }
           },
           {
             "Key": "Project",
-            "Value": "tapstack"
+            "Value": {
+              "Ref": "ProjectName"
+            }
           }
         ]
       }
@@ -153,7 +169,7 @@
       "Type": "AWS::ApiGatewayV2::Api",
       "Properties": {
         "Name": {
-          "Fn::Sub": "tapstack-api-${EnvironmentSuffix}"
+          "Fn::Sub": "tapstack-api-${Environment}"
         },
         "ProtocolType": "HTTP",
         "CorsConfiguration": {
@@ -236,7 +252,7 @@
       "Type": "AWS::DynamoDB::Table",
       "Properties": {
         "TableName": {
-          "Fn::Sub": "tapstack-table-${EnvironmentSuffix}"
+          "Fn::Sub": "tapstack-table-${Environment}"
         },
         "AttributeDefinitions": [
           {
@@ -264,7 +280,11 @@
           "WriteCapacityUnits": 5
         },
         "SSESpecification": {
-          "SSEEnabled": true
+          "SSEEnabled": true,
+          "SSEType": "KMS",
+          "KMSMasterKeyId": {
+            "Ref": "KMSKey"
+          }
         },
         "Tags": [
           {
@@ -284,7 +304,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "tapstack-${EnvironmentSuffix}-${AWS::AccountId}"
+          "Fn::Sub": "tapstack-${Environment}-${AWS::AccountId}"
         },
         "VersioningConfiguration": {
           "Status": "Enabled"
@@ -293,7 +313,10 @@
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "AES256"
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyId": {
+                  "Ref": "KMSKey"
+                }
               }
             }
           ]
@@ -322,7 +345,10 @@
       "Type": "AWS::SNS::Topic",
       "Properties": {
         "TopicName": {
-          "Fn::Sub": "tapstack-notifications-${EnvironmentSuffix}"
+          "Fn::Sub": "tapstack-notifications-${Environment}"
+        },
+        "KmsMasterKeyId": {
+          "Ref": "KMSKey"
         }
       }
     },
@@ -361,13 +387,55 @@
         },
         "Protocol": "email",
         "Endpoint": {
-          "Fn::FindInMap": [
-            "EnvironmentMap",
+          "Ref": "NotificationEmail"
+        }
+      }
+    },
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": "KMS key for encrypting resources",
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
             {
-              "Ref": "EnvironmentSuffix"
-            },
-            "NotificationEmail"
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            }
           ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/tapstack-${Environment}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
         }
       }
     },
@@ -375,7 +443,7 @@
       "Type": "AWS::Events::Rule",
       "Properties": {
         "Name": {
-          "Fn::Sub": "tapstack-schedule-${EnvironmentSuffix}"
+          "Fn::Sub": "tapstack-schedule-${Environment}"
         },
         "Description": "Schedule for Lambda function",
         "ScheduleExpression": "rate(24 hours)",
@@ -419,7 +487,7 @@
           "Fn::FindInMap": [
             "EnvironmentMap",
             {
-              "Ref": "EnvironmentSuffix"
+              "Ref": "Environment"
             },
             "VpcId"
           ]
