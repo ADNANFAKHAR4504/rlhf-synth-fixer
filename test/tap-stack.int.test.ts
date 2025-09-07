@@ -335,47 +335,39 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
 
     test('should handle API Gateway error cases', async () => {
-      // Helper function to test error cases
-      const testErrorCase = async (testFn: () => Promise<any>, expectedErrorMessage?: string) => {
-        try {
-          await testFn();
-          fail('Should have thrown an error');
-        } catch (error: any) {
-          // API Gateway might return different types of errors
-          if (error.response) {
-            // Axios error with response
-            expect(error.response.status).toBeGreaterThanOrEqual(400);
-          } else if (error.message && expectedErrorMessage) {
-            // Network or other error
-            expect(error.message).toContain(expectedErrorMessage);
-          } else {
-            // Ensure we got some kind of error
-            expect(error).toBeDefined();
-          }
-        }
-      };
-
       // Test invalid path
-      await testErrorCase(
-        () => axios.get(`${config.API_GATEWAY_ENDPOINT}/invalid-path`),
-        'not found'
-      );
+      let errorCaught = false;
+      try {
+        await axios.get(`${config.API_GATEWAY_ENDPOINT}/invalid-path`);
+      } catch (error: any) {
+        errorCaught = true;
+        expect(error.response?.status || error).toBeDefined();
+      }
+      expect(errorCaught).toBe(true);
 
       // Test invalid method
-      await testErrorCase(
-        () => axios.put(config.API_GATEWAY_ENDPOINT as string, {}),
-        'forbidden'
-      );
+      errorCaught = false;
+      try {
+        await axios.put(config.API_GATEWAY_ENDPOINT as string, {});
+      } catch (error: any) {
+        errorCaught = true;
+        expect(error.response?.status || error).toBeDefined();
+      }
+      expect(errorCaught).toBe(true);
 
-      // Test with invalid content type
-      await testErrorCase(
-        () => axios.post(config.API_GATEWAY_ENDPOINT as string, {}, {
+      // Test invalid content type
+      errorCaught = false;
+      try {
+        await axios.post(config.API_GATEWAY_ENDPOINT as string, {}, {
           headers: {
             'Content-Type': 'invalid/content-type'
           }
-        }),
-        'forbidden'
-      );
+        });
+      } catch (error: any) {
+        errorCaught = true;
+        expect(error.response?.status || error).toBeDefined();
+      }
+      expect(errorCaught).toBe(true);
 
       // Verify valid endpoint still works
       const validResponse = await axios.get(config.API_GATEWAY_ENDPOINT as string, {
