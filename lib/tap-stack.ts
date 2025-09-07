@@ -3,9 +3,9 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as config from 'aws-cdk-lib/aws-config';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as elbv2targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as elbv2targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -57,7 +57,7 @@ export class TapStack extends cdk.Stack {
       alias: props.kmsAlias,
     });
 
-    // VPC with isolated architecture - private/public subnet separation
+    // 'VPC' with isolated architecture - private/public subnet separation
     const vpc = new ec2.Vpc(this, 'SecureVpc', {
       maxAzs: 2, // Multi-AZ for high availability
       subnetConfiguration: [
