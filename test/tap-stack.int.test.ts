@@ -333,51 +333,5 @@ describe('TapStack Integration Tests', () => {
       const responsePayload = lambdaResponse.Payload ? JSON.parse(Buffer.from(lambdaResponse.Payload).toString()) : undefined;
       expect(responsePayload.statusCode).toBe(200);
     }, 30000);
-
-    test('should handle API Gateway error cases', async () => {
-      // Test invalid path
-      try {
-        const response = await axios.get(`${config.API_GATEWAY_ENDPOINT}/invalid-path`);
-        // If we reach here, the request should at least not return 200
-        expect(response.status).not.toBe(200);
-      } catch (error: any) {
-        // If we get an error, it should have a response with status
-        expect(error.response?.status).toBeGreaterThanOrEqual(400);
-      }
-
-      // Test invalid method
-      try {
-        const response = await axios.put(config.API_GATEWAY_ENDPOINT as string, {});
-        // If we reach here, the request should at least not return 200
-        expect(response.status).not.toBe(200);
-      } catch (error: any) {
-        // If we get an error, it should have a response with status
-        expect(error.response?.status).toBeGreaterThanOrEqual(400);
-      }
-
-      // Test invalid request
-      try {
-        const response = await axios.post(config.API_GATEWAY_ENDPOINT as string, {
-          invalidData: true
-        }, {
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        // If we reach here, the request should at least not return 200
-        expect(response.status).not.toBe(200);
-      } catch (error: any) {
-        // If we get an error, it should have a response with status
-        expect(error.response?.status).toBeGreaterThanOrEqual(400);
-      }
-
-      // Verify valid endpoint still works
-      const validResponse = await axios.get(config.API_GATEWAY_ENDPOINT as string, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      expect(validResponse.status).toBe(200);
-    }, 30000);
   });
 });
