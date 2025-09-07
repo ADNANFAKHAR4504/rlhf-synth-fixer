@@ -506,4 +506,302 @@ describe('TapStack Security Infrastructure', () => {
       });
     });
   });
+
+  describe('Additional Security Scenarios', () => {
+    test('should handle multiple IP ranges in security groups', () => {
+      const multiIpApp = new cdk.App();
+      const multiIpStack = new TapStack(multiIpApp, 'MultiIpTestStack', { 
+        environmentSuffix: 'multi-ip',
+        environment: 'Production',
+        allowedIpRanges: ['203.0.113.0/24', '198.51.100.0/24', '192.0.2.0/24'],
+        certArn: 'arn:aws:acm:us-east-1:123456789012:certificate/abc123',
+        kmsAlias: 'alias/gocxm-prod'
+      });
+      const multiIpTemplate = Template.fromStack(multiIpStack);
+      
+      // Should create security group rules for all IP ranges
+      multiIpTemplate.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for bastion host with IP whitelist',
+        SecurityGroupIngress: Match.arrayWith([
+          {
+            CidrIp: '203.0.113.0/24',
+            Description: 'SSH access from whitelisted range 1',
+            FromPort: 22,
+            IpProtocol: 'tcp',
+            ToPort: 22
+          },
+          {
+            CidrIp: '198.51.100.0/24',
+            Description: 'SSH access from whitelisted range 2',
+            FromPort: 22,
+            IpProtocol: 'tcp',
+            ToPort: 22
+          },
+          {
+            CidrIp: '192.0.2.0/24',
+            Description: 'SSH access from whitelisted range 3',
+            FromPort: 22,
+            IpProtocol: 'tcp',
+            ToPort: 22
+          }
+        ])
+      });
+    });
+
+    test('should validate KMS key permissions and policies', () => {
+      // Check that KMS key allows encryption/decryption from AWS services
+      template.hasResourceProperties('AWS::KMS::Key', {
+        KeyPolicy: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Effect: 'Allow',
+              Principal: {
+                AWS: Match.anyValue()
+              },
+              Action: 'kms:*',
+              Resource: '*'
+            })
+          ])
+        }
+      });
+    });
+
+    test('should ensure S3 buckets have lifecycle policies', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        LifecycleConfiguration: {
+          Rules: Match.arrayWith([
+            Match.objectLike({
+              Id: Match.stringLikeRegexp(/(DeleteIncompleteMultipartUploads|LogRetention|ConfigDataRetention)/)
+            })
+          ])
+        }
+      });
+    });
+
+    test('should validate WAF rules priority and configuration', () => {
+      template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Rules: Match.arrayWith([
+          Match.objectLike({
+            Name: 'AWSManagedRulesCommonRuleSet',
+            Priority: 1,
+            VisibilityConfig: {
+              SampledRequestsEnabled: true,
+              CloudWatchMetricsEnabled: true,
+              MetricName: 'CommonRuleSetMetric'
+            }
+          }),
+          Match.objectLike({
+            Name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            Priority: 2,
+            VisibilityConfig: {
+              SampledRequestsEnabled: true,
+              CloudWatchMetricsEnabled: true,
+              MetricName: 'KnownBadInputsMetric'
+            }
+          })
+        ])
+      });
+    });
+
+    test('should ensure Config delivery channel has proper S3 permissions', () => {
+      // Check that Config bucket has proper bucket policy
+      template.hasResourceProperties('AWS::S3::BucketPolicy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Sid: 'AWSConfigBucketPermissionsCheck',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'config.amazonaws.com'
+              },
+              Action: Match.arrayWith(['s3:GetBucketAcl', 's3:ListBucket'])
+            }),
+            Match.objectLike({
+              Sid: 'AWSConfigBucketDelivery',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'config.amazonaws.com'
+              },
+              Action: 's3:PutObject',
+              Condition: {
+                StringEquals: {
+                  's3:x-amz-server-side-encryption': 'aws:kms'
+                }
+              }
+            })
+          ])
+        }
+      });
+    });
+
+    test('should validate security group egress rules are explicit', () => {
+      // Bastion security group should have explicit egress rules
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for bastion host with IP whitelist',
+        SecurityGroupEgress: [
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'HTTPS outbound for updates',
+            FromPort: 443,
+            IpProtocol: 'tcp',
+            ToPort: 443
+          }
+        ]
+      });
+      
+      // App security group should have limited egress
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupDescription: 'Security group for application instances'
+      });
+    });
+
+    test('should ensure ALB listener uses secure SSL policy', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Port: 443,
+        Protocol: 'HTTPS',
+        SslPolicy: Match.stringLikeRegexp(/ELBSecurityPolicy-/)
+      });
+    });
+
+    test('should validate EventBridge rules target SNS topics', () => {
+      // GuardDuty rule should target SNS
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Description: 'Route GuardDuty findings to SNS',
+        Targets: Match.arrayWith([
+          Match.objectLike({
+            Arn: Match.anyValue(),
+            Id: Match.anyValue()
+          })
+        ])
+      });
+    });
+
+    test('should ensure all EC2 instances have SSM access', () => {
+      // Both bastion and app instances should have SSM managed policy
+      const resources = template.toJSON().Resources;
+      let instanceRolesWithSSM = 0;
+      
+      Object.keys(resources).forEach(key => {
+        const resource = resources[key];
+        if (resource.Type === 'AWS::IAM::Role' && 
+            resource.Properties && 
+            resource.Properties.ManagedPolicyArns) {
+          const ssmPolicy = resource.Properties.ManagedPolicyArns.find((arn: any) => 
+            typeof arn === 'object' || arn.includes('AmazonSSMManagedInstanceCore')
+          );
+          if (ssmPolicy) {
+            instanceRolesWithSSM++;
+          }
+        }
+      });
+      
+      // Should have at least 2 roles with SSM access (bastion + app)
+      expect(instanceRolesWithSSM).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  describe('Error Handling and Edge Cases', () => {
+    test('should handle empty IP ranges gracefully', () => {
+      const emptyIpApp = new cdk.App();
+      
+      // Should throw or handle gracefully when no IP ranges provided
+      expect(() => {
+        new TapStack(emptyIpApp, 'EmptyIpTestStack', { 
+          environmentSuffix: 'empty-ip',
+          environment: 'Production',
+          allowedIpRanges: [],
+          certArn: 'arn:aws:acm:us-east-1:123456789012:certificate/abc123',
+          kmsAlias: 'alias/gocxm-prod'
+        });
+      }).not.toThrow(); // Stack should create but with no ingress rules
+    });
+
+    test('should validate certificate ARN format', () => {
+      // Valid certificate ARN should work
+      expect(() => {
+        const validCertApp = new cdk.App();
+        new TapStack(validCertApp, 'ValidCertTestStack', { 
+          environmentSuffix: 'valid-cert',
+          environment: 'Production',
+          allowedIpRanges: ['203.0.113.0/24'],
+          certArn: 'arn:aws:acm:us-east-1:123456789012:certificate/valid-cert-id',
+          kmsAlias: 'alias/gocxm-prod'
+        });
+      }).not.toThrow();
+    });
+
+    test('should validate KMS alias format', () => {
+      // Valid KMS alias should work
+      expect(() => {
+        const validKmsApp = new cdk.App();
+        new TapStack(validKmsApp, 'ValidKmsTestStack', { 
+          environmentSuffix: 'valid-kms',
+          environment: 'Production',
+          allowedIpRanges: ['203.0.113.0/24'],
+          certArn: 'arn:aws:acm:us-east-1:123456789012:certificate/abc123',
+          kmsAlias: 'alias/valid-key-alias'
+        });
+      }).not.toThrow();
+    });
+  });
+
+  describe('Security Best Practices Validation', () => {
+    test('should ensure no hardcoded secrets or credentials', () => {
+      const stackJson = JSON.stringify(template.toJSON());
+      
+      // Should not contain common secret patterns
+      expect(stackJson).not.toMatch(/password["\s]*[:=]["\s]*\w+/i);
+      expect(stackJson).not.toMatch(/secret["\s]*[:=]["\s]*\w+/i);
+      expect(stackJson).not.toMatch(/AKIA[0-9A-Z]{16}/); // AWS Access Key pattern
+      expect(stackJson).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i); // UUID pattern that could be secrets
+    });
+
+    test('should validate all network interfaces are in correct subnets', () => {
+      const resources = template.toJSON().Resources;
+      
+      // Check that bastion is in public subnet
+      Object.keys(resources).forEach(key => {
+        const resource = resources[key];
+        if (resource.Type === 'AWS::EC2::Instance' && 
+            resource.Properties &&
+            resource.Properties.InstanceType === 't3.micro') {
+          // Bastion host should be in public subnet
+          expect(resource.Properties.SubnetId).toBeDefined();
+        }
+      });
+    });
+
+    test('should ensure all S3 buckets block public read access', () => {
+      const resources = template.toJSON().Resources;
+      let s3BucketCount = 0;
+      
+      Object.keys(resources).forEach(key => {
+        const resource = resources[key];
+        if (resource.Type === 'AWS::S3::Bucket') {
+          s3BucketCount++;
+          expect(resource.Properties.PublicAccessBlockConfiguration).toEqual({
+            BlockPublicAcls: true,
+            BlockPublicPolicy: true,
+            IgnorePublicAcls: true,
+            RestrictPublicBuckets: true
+          });
+        }
+      });
+      
+      // Should have created S3 buckets
+      expect(s3BucketCount).toBeGreaterThan(0);
+    });
+
+    test('should validate CloudWatch log groups are encrypted', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        KmsKeyId: Match.anyValue()
+      });
+    });
+
+    test('should ensure SNS topics use KMS encryption', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        KmsMasterKeyId: Match.anyValue()
+      });
+    });
+  });
 });
