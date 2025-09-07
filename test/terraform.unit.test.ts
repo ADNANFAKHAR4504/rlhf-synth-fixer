@@ -15,11 +15,20 @@ describe('Terraform Unit Tests', () => {
   describe('Terraform Configuration Validation', () => {
     test('should have valid Terraform syntax', () => {
       try {
+        // Initialize Terraform providers first
+        execSync('terraform init -backend=false', { 
+          encoding: 'utf8',
+          cwd: terraformDir,
+          stdio: 'pipe'
+        });
+        
+        // Then validate
         execSync('terraform validate', { 
           encoding: 'utf8',
           cwd: terraformDir,
-          stdio: 'pipe' // Suppress output to avoid parsing issues
+          stdio: 'pipe'
         });
+        
         // If we get here without throwing, validation passed
         expect(true).toBe(true);
       } catch (error) {
