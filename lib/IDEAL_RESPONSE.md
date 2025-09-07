@@ -1,6 +1,6 @@
 # Ideal Response Documentation
 
-## Overview
+## Overview:
 This document describes the ideal Terraform configuration for a secure S3 bucket with least-privilege IAM roles, meeting enterprise security standards and AWS best practices.
 
 ## Architecture Summary
