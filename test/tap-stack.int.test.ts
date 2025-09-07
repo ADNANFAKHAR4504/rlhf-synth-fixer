@@ -21,19 +21,46 @@ import {
 import axios from 'axios';
 import { randomUUID } from 'crypto';
 
-// Validate required environment variables
-const requiredEnvVars = [
-  'AWS_REGION',
-  'API_GATEWAY_ENDPOINT',
-  'DYNAMODB_TABLE_NAME',
-  'S3_BUCKET_NAME',
-  'LAMBDA_FUNCTION_NAME',
-  'SNS_TOPIC_ARN'
-];
+// Read CloudFormation outputs
+import fs from 'fs';
+import path from 'path';
 
-requiredEnvVars.forEach(envVar => {
-  if (!process.env[envVar]) {
-    throw new Error(`Missing required environment variable: ${envVar}`);
+const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
+
+// Define interface for CloudFormation outputs
+interface CloudFormationOutputs {
+  ApiEndpoint?: string;
+  DynamoDBTableName?: string;
+  S3BucketName?: string;
+  LambdaArn?: string;
+  SNSTopicArn?: string;
+}
+
+let outputs: CloudFormationOutputs = {};
+
+if (fs.existsSync(outputsPath)) {
+  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+} else {
+  console.warn('Warning: flat-outputs.json not found, using environment variables.');
+}
+
+// Get environment suffix from environment variable (set by CI/CD pipeline)
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr2827';
+
+// Environment configuration - first try outputs, then environment variables, then construct from suffix
+const config = {
+  AWS_REGION: process.env.AWS_REGION || 'us-east-1',
+  API_GATEWAY_ENDPOINT: outputs.ApiEndpoint || process.env.API_GATEWAY_ENDPOINT,
+  DYNAMODB_TABLE_NAME: outputs.DynamoDBTableName || process.env.DYNAMODB_TABLE_NAME || `tapstack-table-${environmentSuffix}`,
+  S3_BUCKET_NAME: outputs.S3BucketName || process.env.S3_BUCKET_NAME || `tapstack-${environmentSuffix}-${process.env.AWS_ACCOUNT_ID || ''}`,
+  LAMBDA_FUNCTION_NAME: outputs.LambdaArn?.split(':').pop() || process.env.LAMBDA_FUNCTION_NAME || `tap-${environmentSuffix}-LambdaFunction`,
+  SNS_TOPIC_ARN: outputs.SNSTopicArn || process.env.SNS_TOPIC_ARN || `arn:aws:sns:${process.env.AWS_REGION || 'us-east-1'}:${process.env.AWS_ACCOUNT_ID || ''}:tapstack-notifications-${environmentSuffix}`
+};
+
+// Validate configuration
+Object.entries(config).forEach(([key, value]) => {
+  if (!value) {
+    throw new Error(`Missing required configuration: ${key}. Ensure CloudFormation outputs exist or environment variable is set.`);
   }
 });
 
