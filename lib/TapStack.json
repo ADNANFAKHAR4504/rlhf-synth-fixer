@@ -28,514 +28,513 @@
         "RouteTableId": "rtb-11223344"
       }
     }
-  }
-},
-"Resources": {
-  "LambdaExecutionRole": {
-    "Type": "AWS::IAM::Role",
-    "Properties": {
-      "AssumeRolePolicyDocument": {
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Principal": {
-              "Service": "lambda.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-          }
-        ]
-      },
-      "ManagedPolicyArns": [
-        "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-      ],
-      "Policies": [
-        {
-          "PolicyName": "LambdaCustomPolicy",
-          "PolicyDocument": {
-            "Version": "2012-10-17",
-            "Statement": [
-              {
-                "Effect": "Allow",
-                "Action": [
-                  "dynamodb:GetItem",
-                  "dynamodb:PutItem",
-                  "dynamodb:UpdateItem",
-                  "dynamodb:DeleteItem",
-                  "dynamodb:Query",
-                  "dynamodb:Scan"
-                ],
-                "Resource": {
-                  "Fn::GetAtt": [
-                    "DynamoDBTable",
-                    "Arn"
-                  ]
-                }
+  },
+  "Resources": {
+    "LambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
               },
-              {
-                "Effect": "Allow",
-                "Action": [
-                  "s3:GetObject",
-                  "s3:PutObject",
-                  "s3:ListBucket"
-                ],
-                "Resource": [
-                  {
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "LambdaCustomPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan"
+                  ],
+                  "Resource": {
                     "Fn::GetAtt": [
-                      "S3Bucket",
+                      "DynamoDBTable",
                       "Arn"
                     ]
-                  },
-                  {
-                    "Fn::Sub": "${S3Bucket.Arn}/*"
                   }
-                ]
-              },
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "S3Bucket",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${S3Bucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt",
+                    "kms:GenerateDataKey"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "EncryptionKey",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "LambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Runtime": "python3.13",
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaExecutionRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "def handler(event, context):\n    return {'statusCode': 200, 'body': 'Hello from Lambda!'}"
+        },
+        "Environment": {
+          "Variables": {
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentSuffix"
+            },
+            "DYNAMODB_TABLE": {
+              "Ref": "DynamoDBTable"
+            },
+            "S3_BUCKET": {
+              "Ref": "S3Bucket"
+            }
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "ApiGateway": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "tapstack-api-${EnvironmentSuffix}"
+        },
+        "ProtocolType": "HTTP",
+        "CorsConfiguration": {
+          "AllowHeaders": [
+            "*"
+          ],
+          "AllowMethods": [
+            "GET",
+            "POST",
+            "PUT",
+            "DELETE"
+          ],
+          "AllowOrigins": [
+            "*"
+          ],
+          "MaxAge": 300
+        }
+      }
+    },
+    "ApiGatewayStage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "ApiGateway"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true
+      }
+    },
+    "ApiGatewayIntegration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "ApiGateway"
+        },
+        "IntegrationType": "AWS_PROXY",
+        "IntegrationUri": {
+          "Fn::GetAtt": [
+            "LambdaFunction",
+            "Arn"
+          ]
+        },
+        "PayloadFormatVersion": "2.0"
+      }
+    },
+    "ApiGatewayRoute": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "ApiGateway"
+        },
+        "RouteKey": "ANY /{proxy+}",
+        "Target": {
+          "Fn::Join": [
+            "/",
+            [
+              "integrations",
               {
-                "Effect": "Allow",
-                "Action": [
-                  "kms:Decrypt",
-                  "kms:GenerateDataKey"
-                ],
-                "Resource": {
+                "Ref": "ApiGatewayIntegration"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "LambdaApiPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "LambdaFunction"
+        },
+        "Principal": "apigateway.amazonaws.com",
+        "SourceArn": {
+          "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
+        }
+      }
+    },
+    "DynamoDBTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "tapstack-table-${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "PK",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "SK",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "PK",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "SK",
+            "KeyType": "RANGE"
+          }
+        ],
+        "BillingMode": "PROVISIONED",
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS",
+          "KMSMasterKeyId": {
+            "Ref": "KMSKey"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
+        ]
+      }
+    },
+    "S3Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "tapstack-${EnvironmentSuffix}-${AWS::AccountId}"
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": {
                   "Fn::GetAtt": [
                     "EncryptionKey",
                     "Arn"
                   ]
                 }
               }
-            ]
-          }
-        }
-      ],
-      "Tags": [
-        {
-          "Key": "Environment",
-          "Value": {
-            "Ref": "Environment"
-          }
-        },
-        {
-          "Key": "Project",
-          "Value": {
-            "Ref": "ProjectName"
-          }
-        }
-      ]
-    }
-  },
-  "LambdaFunction": {
-    "Type": "AWS::Lambda::Function",
-    "Properties": {
-      "Runtime": "python3.13",
-      "Handler": "index.handler",
-      "Role": {
-        "Fn::GetAtt": [
-          "LambdaExecutionRole",
-          "Arn"
-        ]
-      },
-      "Code": {
-        "ZipFile": "def handler(event, context):\n    return {'statusCode': 200, 'body': 'Hello from Lambda!'}"
-      },
-      "Environment": {
-        "Variables": {
-          "ENVIRONMENT": {
-            "Ref": "EnvironmentSuffix"
-          },
-          "DYNAMODB_TABLE": {
-            "Ref": "DynamoDBTable"
-          },
-          "S3_BUCKET": {
-            "Ref": "S3Bucket"
-          }
-        }
-      },
-      "Tags": [
-        {
-          "Key": "Environment",
-          "Value": {
-            "Ref": "Environment"
-          }
-        },
-        {
-          "Key": "Project",
-          "Value": {
-            "Ref": "ProjectName"
-          }
-        }
-      ]
-    }
-  },
-  "ApiGateway": {
-    "Type": "AWS::ApiGatewayV2::Api",
-    "Properties": {
-      "Name": {
-        "Fn::Sub": "tapstack-api-${EnvironmentSuffix}"
-      },
-      "ProtocolType": "HTTP",
-      "CorsConfiguration": {
-        "AllowHeaders": [
-          "*"
-        ],
-        "AllowMethods": [
-          "GET",
-          "POST",
-          "PUT",
-          "DELETE"
-        ],
-        "AllowOrigins": [
-          "*"
-        ],
-        "MaxAge": 300
-      }
-    }
-  },
-  "ApiGatewayStage": {
-    "Type": "AWS::ApiGatewayV2::Stage",
-    "Properties": {
-      "ApiId": {
-        "Ref": "ApiGateway"
-      },
-      "StageName": "$default",
-      "AutoDeploy": true
-    }
-  },
-  "ApiGatewayIntegration": {
-    "Type": "AWS::ApiGatewayV2::Integration",
-    "Properties": {
-      "ApiId": {
-        "Ref": "ApiGateway"
-      },
-      "IntegrationType": "AWS_PROXY",
-      "IntegrationUri": {
-        "Fn::GetAtt": [
-          "LambdaFunction",
-          "Arn"
-        ]
-      },
-      "PayloadFormatVersion": "2.0"
-    }
-  },
-  "ApiGatewayRoute": {
-    "Type": "AWS::ApiGatewayV2::Route",
-    "Properties": {
-      "ApiId": {
-        "Ref": "ApiGateway"
-      },
-      "RouteKey": "ANY /{proxy+}",
-      "Target": {
-        "Fn::Join": [
-          "/",
-          [
-            "integrations",
-            {
-              "Ref": "ApiGatewayIntegration"
             }
           ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "Environment"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          }
         ]
       }
-    }
-  },
-  "LambdaApiPermission": {
-    "Type": "AWS::Lambda::Permission",
-    "Properties": {
-      "Action": "lambda:InvokeFunction",
-      "FunctionName": {
-        "Ref": "LambdaFunction"
-      },
-      "Principal": "apigateway.amazonaws.com",
-      "SourceArn": {
-        "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*"
-      }
-    }
-  },
-  "DynamoDBTable": {
-    "Type": "AWS::DynamoDB::Table",
-    "Properties": {
-      "TableName": {
-        "Fn::Sub": "tapstack-table-${EnvironmentSuffix}"
-      },
-      "AttributeDefinitions": [
-        {
-          "AttributeName": "PK",
-          "AttributeType": "S"
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "tapstack-notifications-${EnvironmentSuffix}"
         },
-        {
-          "AttributeName": "SK",
-          "AttributeType": "S"
-        }
-      ],
-      "KeySchema": [
-        {
-          "AttributeName": "PK",
-          "KeyType": "HASH"
-        },
-        {
-          "AttributeName": "SK",
-          "KeyType": "RANGE"
-        }
-      ],
-      "BillingMode": "PROVISIONED",
-      "ProvisionedThroughput": {
-        "ReadCapacityUnits": 5,
-        "WriteCapacityUnits": 5
-      },
-      "SSESpecification": {
-        "SSEEnabled": true,
-        "SSEType": "KMS",
-        "KMSMasterKeyId": {
-          "Ref": "KMSKey"
-        }
-      },
-      "Tags": [
-        {
-          "Key": "Environment",
-          "Value": {
-            "Ref": "Environment"
-          }
-        },
-        {
-          "Key": "Project",
-          "Value": {
-            "Ref": "ProjectName"
-          }
-        }
-      ]
-    }
-  },
-  "S3Bucket": {
-    "Type": "AWS::S3::Bucket",
-    "Properties": {
-      "BucketName": {
-        "Fn::Sub": "tapstack-${EnvironmentSuffix}-${AWS::AccountId}"
-      },
-      "VersioningConfiguration": {
-        "Status": "Enabled"
-      },
-      "BucketEncryption": {
-        "ServerSideEncryptionConfiguration": [
+        "TopicTags": [
           {
-            "ServerSideEncryptionByDefault": {
-              "SSEAlgorithm": "aws:kms",
-              "KMSMasterKeyID": {
-                "Fn::GetAtt": [
-                  "EncryptionKey",
-                  "Arn"
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          }
+        ]
+      }
+    },
+    "SNSTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "cloudwatch.amazonaws.com"
                 ]
+              },
+              "Action": "SNS:Publish",
+              "Resource": {
+                "Ref": "SNSTopic"
               }
             }
-          }
-        ]
-      },
-      "PublicAccessBlockConfiguration": {
-        "BlockPublicAcls": true,
-        "BlockPublicPolicy": true,
-        "IgnorePublicAcls": true,
-        "RestrictPublicBuckets": true
-      },
-      "Tags": [
-        {
-          "Key": "Environment",
-          "Value": {
-            "Ref": "Environment"
-          }
-        },
-        {
-          "Key": "Project",
-          "Value": {
-            "Ref": "ProjectName"
-          }
+          ]
         }
-      ]
-    }
-  },
-  "SNSTopic": {
-    "Type": "AWS::SNS::Topic",
-    "Properties": {
-      "TopicName": {
-        "Fn::Sub": "tapstack-notifications-${EnvironmentSuffix}"
-      },
-      "TopicTags": [
-        {
-          "Key": "Environment",
-          "Value": {
-            "Ref": "EnvironmentSuffix"
-          }
-        }
-      ]
-    }
-  },
-  "SNSTopicPolicy": {
-    "Type": "AWS::SNS::TopicPolicy",
-    "Properties": {
-      "Topics": [
-        {
+      }
+    },
+    "SNSSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "TopicArn": {
           "Ref": "SNSTopic"
-        }
-      ],
-      "PolicyDocument": {
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Principal": {
-              "Service": [
-                "cloudwatch.amazonaws.com"
-              ]
-            },
-            "Action": "SNS:Publish",
-            "Resource": {
-              "Ref": "SNSTopic"
-            }
-          }
-        ]
-      }
-    }
-  },
-  "SNSSubscription": {
-    "Type": "AWS::SNS::Subscription",
-    "Properties": {
-      "TopicArn": {
-        "Ref": "SNSTopic"
-      },
-      "Protocol": "email",
-      "Endpoint": {
-        "Fn::FindInMap": [
-          "EnvironmentMap",
-          {
-            "Ref": "EnvironmentSuffix"
-          },
-          "NotificationEmail"
-        ]
-      }
-    }
-  },
-  "CloudWatchEventRule": {
-    "Type": "AWS::Events::Rule",
-    "Properties": {
-      "Name": {
-        "Fn::Sub": "tapstack-schedule-${EnvironmentSuffix}"
-      },
-      "Description": "Schedule for Lambda function",
-      "ScheduleExpression": "rate(24 hours)",
-      "State": "ENABLED",
-      "Targets": [
-        {
-          "Id": "LambdaTarget",
-          "Arn": {
-            "Fn::GetAtt": [
-              "LambdaFunction",
-              "Arn"
-            ]
-          }
-        }
-      ]
-    }
-  },
-  "LambdaEventPermission": {
-    "Type": "AWS::Lambda::Permission",
-    "Properties": {
-      "Action": "lambda:InvokeFunction",
-      "FunctionName": {
-        "Ref": "LambdaFunction"
-      },
-      "Principal": "events.amazonaws.com",
-      "SourceArn": {
-        "Fn::GetAtt": [
-          "CloudWatchEventRule",
-          "Arn"
-        ]
-      }
-    }
-  },
-  "S3VPCEndpoint": {
-    "Type": "AWS::EC2::VPCEndpoint",
-    "Properties": {
-      "ServiceName": {
-        "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
-      },
-      "VpcId": {
-        "Fn::FindInMap": [
-          "EnvironmentMap",
-          {
-            "Ref": "EnvironmentSuffix"
-          },
-          "VpcId"
-        ]
-      },
-      "RouteTableIds": [
-        {
+        },
+        "Protocol": "email",
+        "Endpoint": {
           "Fn::FindInMap": [
             "EnvironmentMap",
             {
               "Ref": "EnvironmentSuffix"
             },
-            "RouteTableId"
+            "NotificationEmail"
           ]
         }
-      ],
-      "VpcEndpointType": "Gateway",
-      "PolicyDocument": {
-        "Version": "2012-10-17",
-        "Statement": [
+      }
+    },
+    "CloudWatchEventRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "tapstack-schedule-${EnvironmentSuffix}"
+        },
+        "Description": "Schedule for Lambda function",
+        "ScheduleExpression": "rate(24 hours)",
+        "State": "ENABLED",
+        "Targets": [
           {
-            "Effect": "Allow",
-            "Principal": "*",
-            "Action": [
-              "s3:GetObject",
-              "s3:PutObject"
-            ],
-            "Resource": [
-              {
-                "Fn::GetAtt": [
-                  "S3Bucket",
-                  "Arn"
-                ]
-              },
-              {
-                "Fn::Sub": "${S3Bucket.Arn}/*"
-              }
-            ]
+            "Id": "LambdaTarget",
+            "Arn": {
+              "Fn::GetAtt": [
+                "LambdaFunction",
+                "Arn"
+              ]
+            }
           }
         ]
       }
+    },
+    "LambdaEventPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "LambdaFunction"
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "CloudWatchEventRule",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "S3VPCEndpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "ServiceName": {
+          "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+        },
+        "VpcId": {
+          "Fn::FindInMap": [
+            "EnvironmentMap",
+            {
+              "Ref": "EnvironmentSuffix"
+            },
+            "VpcId"
+          ]
+        },
+        "RouteTableIds": [
+          {
+            "Fn::FindInMap": [
+              "EnvironmentMap",
+              {
+                "Ref": "EnvironmentSuffix"
+              },
+              "RouteTableId"
+            ]
+          }
+        ],
+        "VpcEndpointType": "Gateway",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "S3Bucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${S3Bucket.Arn}/*"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "ApiEndpoint": {
+      "Description": "API Gateway endpoint URL",
+      "Value": {
+        "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/"
+      }
+    },
+    "LambdaArn": {
+      "Description": "ARN of the Lambda function",
+      "Value": {
+        "Fn::GetAtt": [
+          "LambdaFunction",
+          "Arn"
+        ]
+      }
+    },
+    "DynamoDBTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "DynamoDBTable"
+      }
+    },
+    "S3BucketName": {
+      "Description": "Name of the S3 bucket",
+      "Value": {
+        "Ref": "S3Bucket"
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "ARN of the SNS topic",
+      "Value": {
+        "Ref": "SNSTopic"
+      }
     }
   }
-},
-"Outputs": {
-  "ApiEndpoint": {
-    "Description": "API Gateway endpoint URL",
-    "Value": {
-      "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/"
-    }
-  },
-  "LambdaArn": {
-    "Description": "ARN of the Lambda function",
-    "Value": {
-      "Fn::GetAtt": [
-        "LambdaFunction",
-        "Arn"
-      ]
-    }
-  },
-  "DynamoDBTableName": {
-    "Description": "Name of the DynamoDB table",
-    "Value": {
-      "Ref": "DynamoDBTable"
-    }
-  },
-  "S3BucketName": {
-    "Description": "Name of the S3 bucket",
-    "Value": {
-      "Ref": "S3Bucket"
-    }
-  },
-  "SNSTopicArn": {
-    "Description": "ARN of the SNS topic",
-    "Value": {
-      "Ref": "SNSTopic"
-    }
-  }
-}
 }
