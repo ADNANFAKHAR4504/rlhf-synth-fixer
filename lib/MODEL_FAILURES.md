@@ -50,7 +50,7 @@
 - Import conflicts
 - Resource drift detection
 
-### 8. Variable Validation Problems:
+### 8. Variable Validation Problem:
 - Missing required variables
 - Invalid variable types
 - Sensitive data exposure
