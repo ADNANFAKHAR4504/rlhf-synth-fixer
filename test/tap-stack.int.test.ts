@@ -65,10 +65,10 @@ Object.entries(config).forEach(([key, value]) => {
 });
 
 // Initialize AWS clients
-const dynamoDb = new DynamoDBClient({ region: process.env.AWS_REGION });
-const s3 = new S3Client({ region: process.env.AWS_REGION });
-const lambda = new LambdaClient({ region: process.env.AWS_REGION });
-const sns = new SNSClient({ region: process.env.AWS_REGION });
+const dynamoDb = new DynamoDBClient({ region: config.AWS_REGION });
+const s3 = new S3Client({ region: config.AWS_REGION });
+const lambda = new LambdaClient({ region: config.AWS_REGION });
+const sns = new SNSClient({ region: config.AWS_REGION });
 
 describe('TapStack Integration Tests', () => {
   const testId = randomUUID();
@@ -83,13 +83,13 @@ describe('TapStack Integration Tests', () => {
     test('should successfully write and read from DynamoDB', async () => {
       // Write item
       await dynamoDb.send(new PutItemCommand({
-        TableName: process.env.DYNAMODB_TABLE_NAME,
+        TableName: config.DYNAMODB_TABLE_NAME,
         Item: testItem
       }));
 
       // Read item
       const result = await dynamoDb.send(new GetItemCommand({
-        TableName: process.env.DYNAMODB_TABLE_NAME,
+        TableName: config.DYNAMODB_TABLE_NAME,
         Key: {
           PK: testItem.PK,
           SK: testItem.SK
@@ -101,7 +101,7 @@ describe('TapStack Integration Tests', () => {
 
       // Cleanup
       await dynamoDb.send(new DeleteItemCommand({
-        TableName: process.env.DYNAMODB_TABLE_NAME,
+        TableName: config.DYNAMODB_TABLE_NAME,
         Key: {
           PK: testItem.PK,
           SK: testItem.SK
@@ -117,14 +117,14 @@ describe('TapStack Integration Tests', () => {
     test('should successfully upload and download from S3', async () => {
       // Upload file
       await s3.send(new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
+        Bucket: config.S3_BUCKET_NAME,
         Key: testFileName,
         Body: testContent
       }));
 
       // Download file
       const result = await s3.send(new GetObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
+        Bucket: config.S3_BUCKET_NAME,
         Key: testFileName
       }));
 
@@ -133,7 +133,7 @@ describe('TapStack Integration Tests', () => {
 
       // Cleanup
       await s3.send(new DeleteObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
+        Bucket: config.S3_BUCKET_NAME,
         Key: testFileName
       }));
     }, 30000);
@@ -147,7 +147,7 @@ describe('TapStack Integration Tests', () => {
       };
 
       const response = await lambda.send(new InvokeCommand({
-        FunctionName: process.env.LAMBDA_FUNCTION_NAME,
+        FunctionName: config.LAMBDA_FUNCTION_NAME,
         InvocationType: 'RequestResponse',
         Payload: Buffer.from(JSON.stringify(testPayload))
       }));
@@ -159,7 +159,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('API Gateway Integration', () => {
     test('should successfully call API endpoint', async () => {
-      const response = await axios.get(process.env.API_GATEWAY_ENDPOINT as string, {
+      const response = await axios.get(config.API_GATEWAY_ENDPOINT as string, {
         headers: {
           'Content-Type': 'application/json'
         }
@@ -169,7 +169,7 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
 
     test('should handle CORS headers', async () => {
-      const response = await axios.options(process.env.API_GATEWAY_ENDPOINT as string);
+      const response = await axios.options(config.API_GATEWAY_ENDPOINT as string);
 
       expect(response.headers['access-control-allow-origin']).toBe('*');
       expect(response.headers['access-control-allow-methods']).toBeDefined();
@@ -186,7 +186,7 @@ describe('TapStack Integration Tests', () => {
       };
 
       const response = await sns.send(new PublishCommand({
-        TopicArn: process.env.SNS_TOPIC_ARN,
+        TopicArn: config.SNS_TOPIC_ARN,
         Message: JSON.stringify(testMessage)
       }));
 
@@ -201,7 +201,7 @@ describe('TapStack Integration Tests', () => {
       const testData = { testId, timestamp: new Date().toISOString() };
 
       await s3.send(new PutObjectCommand({
-        Bucket: process.env.S3_BUCKET_NAME,
+        Bucket: config.S3_BUCKET_NAME,
         Key: fileName,
         Body: JSON.stringify(testData)
       }));
@@ -209,20 +209,20 @@ describe('TapStack Integration Tests', () => {
       // 2. Invoke Lambda to process the file
       const lambdaPayload = {
         detail: {
-          bucket: process.env.S3_BUCKET_NAME,
+          bucket: config.S3_BUCKET_NAME,
           key: fileName
         }
       };
 
       await lambda.send(new InvokeCommand({
-        FunctionName: process.env.LAMBDA_FUNCTION_NAME,
+        FunctionName: config.LAMBDA_FUNCTION_NAME,
         InvocationType: 'RequestResponse',
         Payload: Buffer.from(JSON.stringify(lambdaPayload))
       }));
 
       // 3. Check DynamoDB for processed data
       const result = await dynamoDb.send(new GetItemCommand({
-        TableName: process.env.DYNAMODB_TABLE_NAME,
+        TableName: config.DYNAMODB_TABLE_NAME,
         Key: {
           PK: { S: `FILE#${fileName}` },
           SK: { S: 'METADATA' }
@@ -239,12 +239,12 @@ describe('TapStack Integration Tests', () => {
       await Promise.all([
         // Delete S3 file
         s3.send(new DeleteObjectCommand({
-          Bucket: process.env.S3_BUCKET_NAME,
+          Bucket: config.S3_BUCKET_NAME,
           Key: fileName
         })),
         // Delete DynamoDB entry
         dynamoDb.send(new DeleteItemCommand({
-          TableName: process.env.DYNAMODB_TABLE_NAME,
+          TableName: config.DYNAMODB_TABLE_NAME,
           Key: {
             PK: { S: `FILE#${fileName}` },
             SK: { S: 'METADATA' }
