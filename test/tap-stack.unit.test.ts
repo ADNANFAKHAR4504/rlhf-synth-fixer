@@ -461,11 +461,9 @@ describe('TapStack CloudFormation Template - Unit Tests', () => {
       expect(template.Resources.CloudTrailTrail.Type).toBe('AWS::CloudTrail::Trail');
     });
 
-    test('should have AWS Config resources', () => {
-      expect(template.Resources.ConfigRecorder).toBeDefined();
-      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
-      expect(template.Resources.ConfigRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
-      expect(template.Resources.ConfigDeliveryChannel.Type).toBe('AWS::Config::DeliveryChannel');
+    test('should not create AWS Config recorder or delivery channel', () => {
+      expect(template.Resources.ConfigRecorder).toBeUndefined();
+      expect(template.Resources.ConfigDeliveryChannel).toBeUndefined();
     });
 
     test('should have CloudWatch dashboard', () => {
