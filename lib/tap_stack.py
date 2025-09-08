@@ -45,6 +45,20 @@ def create_s3_bucket(environment_suffix: str, tags: dict) -> s3.Bucket:
         opts=ResourceOptions(protect=False)
     )
     
+    # Add CORS configuration
+    s3.BucketCorsConfiguration(
+        f"bucket-cors-{environment_suffix}",
+        bucket=bucket.id,
+        cors_rules=[s3.BucketCorsConfigurationCorsRuleArgs(
+            allowed_headers=["*"],
+            allowed_methods=["GET", "PUT", "POST", "DELETE", "HEAD"],
+            allowed_origins=["*"],
+            expose_headers=["ETag"],
+            max_age_seconds=3000
+        )],
+        opts=ResourceOptions(protect=False)
+    )
+    
     return bucket
 
 

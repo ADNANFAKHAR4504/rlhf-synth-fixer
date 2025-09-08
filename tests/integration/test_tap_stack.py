@@ -262,7 +262,12 @@ class TestServerlessInfrastructureLiveIntegration(unittest.TestCase):
             
             # Test table configuration
             self.assertEqual(table['TableStatus'], 'ACTIVE')
-            self.assertEqual(table['BillingModeSummary']['BillingMode'], 'PROVISIONED')
+            # Check billing mode if available
+            if 'BillingModeSummary' in table:
+                self.assertEqual(table['BillingModeSummary']['BillingMode'], 'PROVISIONED')
+            else:
+                # For provisioned tables, billing mode might not be in summary
+                self.assertIn('ProvisionedThroughput', table)
             
             # Test capacity settings
             provisioned_throughput = table['ProvisionedThroughput']
@@ -474,7 +479,9 @@ class TestServerlessInfrastructureLiveIntegration(unittest.TestCase):
             role = role_response['Role']
             
             # Test trust policy
-            trust_policy = json.loads(role['AssumeRolePolicyDocument'])
+            trust_policy = role['AssumeRolePolicyDocument']
+            if isinstance(trust_policy, str):
+                trust_policy = json.loads(trust_policy)
             statements = trust_policy.get('Statement', [])
             
             lambda_trust_found = False
@@ -569,7 +576,7 @@ class TestServerlessInfrastructureLiveIntegration(unittest.TestCase):
                 TableName=table_name,
                 KeyConditionExpression='id = :id',
                 ExpressionAttributeValues={
-                    ':id': f"{bucket_name}/{test_key}"
+                    ':id': {'S': f"{bucket_name}/{test_key}"}
                 }
             )
             
