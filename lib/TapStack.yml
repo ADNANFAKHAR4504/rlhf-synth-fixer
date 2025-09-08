@@ -14,7 +14,7 @@ Parameters:
     Description: 'Cloudtrail name for the account'
 
   AmiID:
-    Type: String
+    Type: AWS::EC2::Image::Id
     Description: 'AMI ID for ec2'
     Default: 'ami-0c02fb55956c7d316'
 
