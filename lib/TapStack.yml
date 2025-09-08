@@ -1,13 +1,19 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
   TapStack - Secure and Scalable AWS Production Infrastructure
-  Refactored to auto-create and use Secrets Manager secret for RDS credentials.
+  Final version: Dynamic AMI lookup via SSM, Secrets Manager integration for RDS,
+  cfn-lint compliant in us-east-1.
 
 Parameters:
   SSHCidrBlock:
     Type: String
     Default: 203.0.113.0/24
     Description: CIDR block allowed for SSH access.
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Description: SSM path for latest Amazon Linux 2 AMI.
 
 Resources:
 
@@ -223,7 +229,7 @@ Resources:
           Value: Prod
 
   # -------------------------------
-  # RDS Encrypted DB with Dynamic Reference
+  # RDS Encrypted DB
   # -------------------------------
   MyDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -254,14 +260,14 @@ Resources:
           Value: Prod
 
   # -------------------------------
-  # Auto Scaling Group
+  # Auto Scaling Group with Dynamic AMI
   # -------------------------------
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
       LaunchTemplateData:
         InstanceType: t3.micro
-        ImageId: ami-0c55b159cbfafe1f0 # Amazon Linux 2 (us-east-1)
+        ImageId: !Ref LatestAmiId
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         Monitoring:

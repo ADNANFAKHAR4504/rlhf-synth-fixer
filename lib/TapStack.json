@@ -1,11 +1,16 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack - Secure and Scalable AWS Production Infrastructure Refactored to auto-create and use Secrets Manager secret for RDS credentials.\n",
+    "Description": "TapStack - Secure and Scalable AWS Production Infrastructure Final version: Dynamic AMI lookup via SSM, Secrets Manager integration for RDS, cfn-lint compliant in us-east-1.\n",
     "Parameters": {
         "SSHCidrBlock": {
             "Type": "String",
             "Default": "203.0.113.0/24",
             "Description": "CIDR block allowed for SSH access."
+        },
+        "LatestAmiId": {
+            "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+            "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2",
+            "Description": "SSM path for latest Amazon Linux 2 AMI."
         }
     },
     "Resources": {
@@ -432,7 +437,9 @@
             "Properties": {
                 "LaunchTemplateData": {
                     "InstanceType": "t3.micro",
-                    "ImageId": "ami-0c55b159cbfafe1f0",
+                    "ImageId": {
+                        "Ref": "LatestAmiId"
+                    },
                     "IamInstanceProfile": {
                         "Arn": {
                             "Fn::GetAtt": [
