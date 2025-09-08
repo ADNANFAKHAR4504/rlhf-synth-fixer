@@ -585,10 +585,11 @@ class TestServerlessInfrastructureLiveIntegration(unittest.TestCase):
             
             # Verify metadata content
             metadata = items[0]
-            self.assertEqual(metadata['bucket_name'], bucket_name)
-            self.assertEqual(metadata['object_key'], test_key)
-            self.assertEqual(metadata['content_type'], 'text/plain')
-            self.assertGreater(int(metadata['content_length']), 0)
+            # DynamoDB returns attributes in format {'S': 'value'} for strings
+            self.assertEqual(metadata['bucket_name']['S'], bucket_name)
+            self.assertEqual(metadata['object_key']['S'], test_key)
+            self.assertEqual(metadata['content_type']['S'], 'text/plain')
+            self.assertGreater(int(metadata['content_length']['N']), 0)
             
             print(f"End-to-end functionality validated successfully")
             
