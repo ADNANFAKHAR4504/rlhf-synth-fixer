@@ -753,6 +753,8 @@ resource "aws_lb_listener" "main" {
 # ============================================================================
 
 # Launch Template
+
+# Replace the entire aws_launch_template.main resource with this corrected version:
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-lt"
   image_id      = data.aws_ami.amazon_linux.id
@@ -764,24 +766,8 @@ resource "aws_launch_template" "main" {
     name = aws_iam_instance_profile.ec2_profile.name
   }
 
-  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    rds_endpoint = aws_db_instance.main.endpoint
-    s3_bucket    = aws_s3_bucket.static_content.bucket
-  }))
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = merge(local.common_tags, {
-      Name = "${var.project_name}-instance"
-    })
-  }
-
-  tags = local.common_tags
-}
-
-# User data script (inline)
-locals {
-  user_data = <<-EOF
+  # Use inline user data instead of templatefile
+  user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
     yum install -y httpd
@@ -801,22 +787,10 @@ locals {
     echo "<h1>TAP Stack Instance - $(hostname -f)</h1>" > /var/www/html/index.html
     echo "<p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>" >> /var/www/html/index.html
     echo "<p>Availability Zone: $(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)</p>" >> /var/www/html/index.html
+    echo "<p>RDS Endpoint: ${aws_db_instance.main.endpoint}</p>" >> /var/www/html/index.html
+    echo "<p>S3 Bucket: ${aws_s3_bucket.static_content.bucket}</p>" >> /var/www/html/index.html
   EOF
-}
-
-# Update Launch Template with inline user data
-resource "aws_launch_template" "main_updated" {
-  name_prefix   = "${var.project_name}-lt"
-  image_id      = data.aws_ami.amazon_linux.id
-  instance_type = var.instance_type
-
-  vpc_security_group_ids = [aws_security_group.ec2.id]
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
-  }
-
-  user_data = base64encode(local.user_data)
+  )
 
   tag_specifications {
     resource_type = "instance"
@@ -827,7 +801,6 @@ resource "aws_launch_template" "main_updated" {
 
   tags = local.common_tags
 }
-
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
   name                = "${var.project_name}-asg"
@@ -841,7 +814,7 @@ resource "aws_autoscaling_group" "main" {
   desired_capacity = var.desired_capacity
 
   launch_template {
-    id      = aws_launch_template.main_updated.id
+id      = aws_launch_template.main.id
     version = "$Latest"
   }
 
@@ -1324,7 +1297,7 @@ output "autoscaling_group_arn" {
 
 output "launch_template_id" {
   description = "ID of the launch template"
-  value       = aws_launch_template.main_updated.id
+  value       = aws_launch_template.main.id
 }
 
 output "ami_id" {
@@ -1528,12 +1501,12 @@ output "listener_arn" {
 
 output "launch_template_arn" {
   description = "ARN of the launch template"
-  value       = aws_launch_template.main_updated.arn
+  value       = aws_launch_template.main.arn
 }
 
 output "launch_template_latest_version" {
   description = "Latest version of the launch template"
-  value       = aws_launch_template.main_updated.latest_version
+  value       = aws_launch_template.main.latest_version
 }
 
 output "autoscaling_group_min_size" {

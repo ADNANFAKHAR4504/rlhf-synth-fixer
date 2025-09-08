@@ -12,4 +12,23 @@ can you provide the code snippet to fix this issue -
 Error: Terraform exited with code 1.
 All deployment attempts failed. Check for state lock issues.
 
+
+│ Error: Invalid function argument
+│ 
+│   on tap_stack.tf line 767, in resource "aws_launch_template" "main":
+│  767:   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+│  768:     rds_endpoint = aws_db_instance.main.endpoint
+│  769:     s3_bucket    = aws_s3_bucket.static_content.bucket
+│  770:   }))
+│     ├────────────────
+│     │ while calling templatefile(path, vars)
+│     │ path.module is "."
+│ 
+│ Invalid value for "path" parameter: no file exists at "./user_data.sh";
+│ this function works only with files that are distributed as part of the
+│ configuration source code, so if this file will be created by a resource in
+│ this configuration you must instead obtain this result from an attribute of
+│ that resource.
+
+
 ```
