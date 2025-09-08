@@ -271,16 +271,16 @@ describe('TapStack Security Infrastructure', () => {
       });
     });
 
-    test('should enable GuardDuty detector with comprehensive data sources', () => {
-      template.hasResourceProperties('AWS::GuardDuty::Detector', {
-        Enable: true,
-        FindingPublishingFrequency: 'FIFTEEN_MINUTES',
-        DataSources: {
-          S3Logs: { Enable: true },
-          Kubernetes: { AuditLogs: { Enable: true } },
-          MalwareProtection: {
-            ScanEc2InstanceWithFindings: { EbsVolumes: true }
-          }
+    test('should be configured for GuardDuty findings processing without detector creation', () => {
+      // GuardDuty detector should not be created (account-level resource)
+      template.resourceCountIs('AWS::GuardDuty::Detector', 0);
+      
+      // But EventBridge should be configured to process GuardDuty findings
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Description: 'Route GuardDuty findings to SNS',
+        EventPattern: {
+          source: ['aws.guardduty'],
+          'detail-type': ['GuardDuty Finding']
         }
       });
     });

@@ -6,7 +6,6 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as elbv2targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
-import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -489,18 +488,11 @@ export class TapStack extends cdk.Stack {
     });
     rootMfaRule.addDependency(configRecorder);
 
-    // Enable GuardDuty for continuous security monitoring
-    new guardduty.CfnDetector(this, 'GuardDutyDetector', {
-      enable: true,
-      findingPublishingFrequency: 'FIFTEEN_MINUTES', // Frequent updates for security
-      dataSources: {
-        s3Logs: { enable: true },
-        kubernetes: { auditLogs: { enable: true } },
-        malwareProtection: {
-          scanEc2InstanceWithFindings: { ebsVolumes: true },
-        },
-      },
-    });
+    // GuardDuty for continuous security monitoring
+    // Note: GuardDuty detector is an account-level resource (one per account per region).
+    // If a detector already exists in the account, deployment will proceed without creating a new one.
+    // Ensure GuardDuty is enabled in the AWS account before deploying this stack.
+    // The EventBridge rules above will capture GuardDuty findings from the existing detector.
 
     // Application instances in private subnets - no public IPs
     const appRole = new iam.Role(this, 'AppInstanceRole', {
