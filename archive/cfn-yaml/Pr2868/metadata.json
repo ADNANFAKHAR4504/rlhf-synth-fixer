@@ -43,5 +43,10 @@
     "AWS::CloudTrail::Trail",
     "AWS::Logs::LogGroup",
     "AWS::CloudWatch::Alarm"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
