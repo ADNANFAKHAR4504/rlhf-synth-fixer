@@ -105,12 +105,10 @@ describe('TapStack CloudFormation Template', () => {
       roles.forEach(roleKey => {
         const role = template.Resources[roleKey];
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-        // At least one of these should be defined for each role
-        expect(
-          role.Properties.Policies || 
-          role.Properties.ManagedPolicyArns || 
-          role.Properties.PolicyDocument
-        ).toBeTruthy();
+        // Check that role has either inline policies or managed policy ARNs
+        const hasInlinePolicies = role.Properties.Policies && Array.isArray(role.Properties.Policies) && role.Properties.Policies.length > 0;
+        const hasManagedPolicies = role.Properties.ManagedPolicyArns && Array.isArray(role.Properties.ManagedPolicyArns) && role.Properties.ManagedPolicyArns.length > 0;
+        expect(hasInlinePolicies || hasManagedPolicies).toBe(true);
       });
     });
 
