@@ -6,7 +6,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/semantic-release]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
