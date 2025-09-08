@@ -1808,3 +1808,4 @@ output "total_s3_buckets_created" {
 output "total_cloudwatch_alarms_created" {
   description = "Total number of CloudWatch alarms created"
   value       = 3
+}
