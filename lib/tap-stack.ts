@@ -455,87 +455,87 @@ export class TapStack extends cdk.Stack {
     // });
   }
 
+  // private createConfigSetup(environmentSuffix: string): void {
+  //   const configBucket = new s3.Bucket(
+  //     this,
+  //     `TapConfigBucket-${environmentSuffix}`,
+  //     {
+  //       removalPolicy: cdk.RemovalPolicy.DESTROY,
+  //       autoDeleteObjects: true,
+  //       encryption: s3.BucketEncryption.S3_MANAGED,
+  //       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+  //       versioned: true,
+  //       enforceSSL: true,
+  //     }
+  //   );
+
+  //   const configRole = new iam.Role(
+  //     this,
+  //     `TapConfigRole-${environmentSuffix}`,
+  //     {
+  //       roleName: `tap-config-role-${environmentSuffix}`,
+  //       assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
+  //       inlinePolicies: {
+  //         ConfigDeliveryPermissions: new iam.PolicyDocument({
+  //           statements: [
+  //             new iam.PolicyStatement({
+  //               effect: iam.Effect.ALLOW,
+  //               actions: [
+  //                 's3:GetBucketAcl',
+  //                 's3:ListBucket',
+  //                 's3:GetBucketLocation',
+  //               ],
+  //               resources: [configBucket.bucketArn],
+  //             }),
+  //             new iam.PolicyStatement({
+  //               effect: iam.Effect.ALLOW,
+  //               actions: ['s3:PutObject'],
+  //               resources: [`${configBucket.bucketArn}/*`],
+  //               conditions: {
+  //                 StringEquals: {
+  //                   's3:x-amz-acl': 'bucket-owner-full-control',
+  //                 },
+  //               },
+  //             }),
+  //           ],
+  //         }),
+  //       },
+  //     }
+  //   );
+
+  //   const configRecorder = new config.CfnConfigurationRecorder(
+  //     this,
+  //     `TapConfigRecorder-${environmentSuffix}`,
+  //     {
+  //       name: `tap-config-recorder-${environmentSuffix}`,
+  //       roleArn: configRole.roleArn,
+  //       recordingGroup: {
+  //         allSupported: true,
+  //         includeGlobalResourceTypes: true,
+  //       },
+  //     }
+  //   );
+
+  //   const deliveryChannel = new config.CfnDeliveryChannel(
+  //     this,
+  //     `TapConfigDelivery-${environmentSuffix}`,
+  //     {
+  //       name: `tap-config-delivery-${environmentSuffix}`,
+  //       s3BucketName: configBucket.bucketName,
+  //       s3KeyPrefix: 'config/',
+  //     }
+  //   );
+  //   deliveryChannel.addDependency(configRecorder);
+
+  //   // ✅ Ensure config rules wait for delivery channel
+  //   this.createConfigRules(environmentSuffix, deliveryChannel);
+  // }
   private createConfigSetup(environmentSuffix: string): void {
-    const configBucket = new s3.Bucket(
-      this,
-      `TapConfigBucket-${environmentSuffix}`,
-      {
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        autoDeleteObjects: true,
-        encryption: s3.BucketEncryption.S3_MANAGED,
-        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-        versioned: true,
-        enforceSSL: true,
-      }
-    );
-
-    const configRole = new iam.Role(
-      this,
-      `TapConfigRole-${environmentSuffix}`,
-      {
-        roleName: `tap-config-role-${environmentSuffix}`,
-        assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
-        inlinePolicies: {
-          ConfigDeliveryPermissions: new iam.PolicyDocument({
-            statements: [
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: [
-                  's3:GetBucketAcl',
-                  's3:ListBucket',
-                  's3:GetBucketLocation',
-                ],
-                resources: [configBucket.bucketArn],
-              }),
-              new iam.PolicyStatement({
-                effect: iam.Effect.ALLOW,
-                actions: ['s3:PutObject'],
-                resources: [`${configBucket.bucketArn}/*`],
-                conditions: {
-                  StringEquals: {
-                    's3:x-amz-acl': 'bucket-owner-full-control',
-                  },
-                },
-              }),
-            ],
-          }),
-        },
-      }
-    );
-
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      `TapConfigRecorder-${environmentSuffix}`,
-      {
-        name: `tap-config-recorder-${environmentSuffix}`,
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true,
-          includeGlobalResourceTypes: true,
-        },
-      }
-    );
-
-    const deliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      `TapConfigDelivery-${environmentSuffix}`,
-      {
-        name: `tap-config-delivery-${environmentSuffix}`,
-        s3BucketName: configBucket.bucketName,
-        s3KeyPrefix: 'config/',
-      }
-    );
-    deliveryChannel.addDependency(configRecorder);
-
-    // ✅ Ensure config rules wait for delivery channel
-    this.createConfigRules(environmentSuffix, deliveryChannel);
+    // Just attach rules to the existing recorder
+    this.createConfigRules(environmentSuffix);
   }
-
-  private createConfigRules(
-    environmentSuffix: string,
-    dependency: cdk.CfnResource
-  ): void {
-    const rule1 = new config.ManagedRule(
+  private createConfigRules(environmentSuffix: string): void {
+    new config.ManagedRule(
       this,
       `TapS3PublicReadProhibited-${environmentSuffix}`,
       {
@@ -544,19 +544,13 @@ export class TapStack extends cdk.Stack {
           config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
       }
     );
-    rule1.node.addDependency(dependency);
 
-    const rule2 = new config.ManagedRule(
-      this,
-      `TapRootAccessKeyCheck-${environmentSuffix}`,
-      {
-        configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
-        identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
-      }
-    );
-    rule2.node.addDependency(dependency);
+    new config.ManagedRule(this, `TapRootAccessKeyCheck-${environmentSuffix}`, {
+      configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
+      identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
+    });
 
-    const rule3 = new config.ManagedRule(
+    new config.ManagedRule(
       this,
       `TapMfaEnabledForIamConsole-${environmentSuffix}`,
       {
@@ -565,8 +559,44 @@ export class TapStack extends cdk.Stack {
           config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
       }
     );
-    rule3.node.addDependency(dependency);
   }
+
+  // private createConfigRules(
+  //   environmentSuffix: string,
+  //   dependency: cdk.CfnResource
+  // ): void {
+  //   const rule1 = new config.ManagedRule(
+  //     this,
+  //     `TapS3PublicReadProhibited-${environmentSuffix}`,
+  //     {
+  //       configRuleName: `tap-s3-bucket-public-read-prohibited-${environmentSuffix}`,
+  //       identifier:
+  //         config.ManagedRuleIdentifiers.S3_BUCKET_PUBLIC_READ_PROHIBITED,
+  //     }
+  //   );
+  //   rule1.node.addDependency(dependency);
+
+  //   const rule2 = new config.ManagedRule(
+  //     this,
+  //     `TapRootAccessKeyCheck-${environmentSuffix}`,
+  //     {
+  //       configRuleName: `tap-root-access-key-check-${environmentSuffix}`,
+  //       identifier: config.ManagedRuleIdentifiers.IAM_ROOT_ACCESS_KEY_CHECK,
+  //     }
+  //   );
+  //   rule2.node.addDependency(dependency);
+
+  //   const rule3 = new config.ManagedRule(
+  //     this,
+  //     `TapMfaEnabledForIamConsole-${environmentSuffix}`,
+  //     {
+  //       configRuleName: `tap-mfa-enabled-for-iam-console-access-${environmentSuffix}`,
+  //       identifier:
+  //         config.ManagedRuleIdentifiers.MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS,
+  //     }
+  //   );
+  //   rule3.node.addDependency(dependency);
+  // }
 
   private createGuardDuty(environmentSuffix: string, kmsKey: kms.Key): void {
     // Check if GuardDuty detector already exists - if it does, we'll skip creation
