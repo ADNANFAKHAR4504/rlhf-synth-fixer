@@ -81,7 +81,7 @@ export class TapStack extends cdk.Stack {
             resources: ['*'],
             conditions: {
               ArnEquals: {
-                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/apigateway/production`,
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/apigateway/production-${environmentSuffix}`,
               },
             },
           }),
