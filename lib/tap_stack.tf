@@ -65,7 +65,7 @@ locals {
 
   # Availability zones
   primary_azs   = ["${var.primary_region}a", "${var.primary_region}b", "${var.primary_region}c"]
-  secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}c"]
+  secondary_azs = ["${var.secondary_region}a", "${var.secondary_region}c","${var.secondary_region}b"]
 
   # Subnet CIDR blocks for primary region
   primary_public_subnets  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
