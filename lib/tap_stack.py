@@ -183,7 +183,7 @@ class TapStack(cdk.Stack):
                 "dynamodb:PutItem",
                 "dynamodb:GetItem",
                 "dynamodb:UpdateItem",
-                "dynamodb:DeleteItem",
+                "dynamodb:DeleteItem",RDS
                 "dynamodb:Query",
                 "dynamodb:Scan",
             ],
@@ -224,7 +224,7 @@ class TapStack(cdk.Stack):
             self,
             f"TapDatabase{self.environment_suffix}",
             engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0_35
+                version=rds.MysqlEngineVersion.VER_8_0
             ),
             instance_type=ec2.InstanceType.of(
                 ec2.InstanceClass.BURSTABLE3,
