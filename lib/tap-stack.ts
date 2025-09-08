@@ -252,7 +252,7 @@ export class TapStack extends cdk.Stack {
         resources: [`${bucket.bucketArn}/*`],
         conditions: {
           StringNotEquals: {
-            's3:x-amz-server-side-encoding': 'aws:kms',
+            's3:x-amz-server-side-encryption': 'aws:kms',
           },
         },
       })

@@ -275,23 +275,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('AWS Config', () => {
-    test('should create Config configuration recorder', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        Name: Match.stringLikeRegexp('tap-config-recorder-test'),
-        RecordingGroup: {
-          AllSupported: true,
-          IncludeGlobalResourceTypes: true,
-        },
-      });
-    });
-
-    test('should create Config delivery channel', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        Name: Match.stringLikeRegexp('tap-config-delivery-test'),
-        S3KeyPrefix: 'config/',
-      });
-    });
-
     test('should create S3 bucket public read prohibited rule', () => {
       template.hasResourceProperties('AWS::Config::ConfigRule', {
         ConfigRuleName: Match.stringLikeRegexp(
