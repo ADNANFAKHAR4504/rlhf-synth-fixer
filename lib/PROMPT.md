@@ -15,20 +15,6 @@ Create a complete CDK-TS project for serverless web app.
 - **API Gateway:** REST `/api` GET, CORS enabled
 - **Security:** Proper SGs, RDS secrets in Secrets Manager
 
-## Project Structure
-```
-my-serverless-app/
-├── bin/my-serverless-app.ts
-├── lib/
-│   ├── my-serverless-app-stack.ts
-│   └── lambda/
-│       ├── handler.py
-│       └── requirements.txt
-├── package.json
-├── cdk.json
-└── tsconfig.json
-```
-
 ## Lambda Code
 - Connect to RDS via Secrets Manager
 - Return `{status: "success"}`
