@@ -1,5 +1,4 @@
 ``` hcl
-
 # tap_stack.tf - Complete Infrastructure as Code Configuration
 
 # =============================================================================
@@ -2395,7 +2394,6 @@ output "availability_zones_secondary" {
 ```
 
 ```hcl
-
 # provider.tf
 
 terraform {
