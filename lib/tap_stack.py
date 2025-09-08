@@ -204,7 +204,7 @@ class TapStack(cdk.Stack):
 
     def _create_api_gateway(self):
         """Create API Gateway for file uploads"""
-        api = apigateway.RestApi(
+        self.api = apigateway.RestApi(
             self, "FileUploadApi",
             rest_api_name="Serverless File Upload API",
             description="API for file uploads and product management",
@@ -223,12 +223,13 @@ class TapStack(cdk.Stack):
         lambda_integration = apigateway.LambdaIntegration(self.lambda_function)
 
         # Create /upload resource
-        upload_resource = api.root.add_resource("upload")
+        upload_resource = self.api.root.add_resource("upload")
         upload_resource.add_method("POST", lambda_integration)
 
     def _create_outputs(self):
         """Create CloudFormation outputs"""
-        CfnOutput(self, "ApiGatewayUrl", value=self.lambda_function.function_arn)
+        CfnOutput(self, "ApiGatewayUrl", value=self.api.url)
+        CfnOutput(self, "LambdaFunArn", value=self.lambda_function.function_arn)
         CfnOutput(self, "S3BucketName", value=self.s3_bucket.bucket_name)
         CfnOutput(self, "DynamoDBTableName", value=self.dynamodb_table.table_name)
         CfnOutput(self, "KMSKeyId", value=self.kms_key.key_id)
