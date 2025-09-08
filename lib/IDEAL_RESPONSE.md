@@ -366,7 +366,7 @@ Resources:
   ProductionEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: 'ami-0c02fb55956c7d316'  # Amazon Linux 2 AMI in us-west-2
+      ImageId: 'ami-0bbc328167dee8f3c'  # Amazon Linux 2023 AMI in us-west-2
       InstanceType: 't3.micro'
       KeyName: !Ref EC2KeyPair
       SecurityGroupIds:
@@ -410,7 +410,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       DBInstanceIdentifier: 'production-database'
-      DBInstanceClass: 'db.t3.micro'
+      DBInstanceClass: 'db.t3.small'
       Engine: 'mysql'
       EngineVersion: '8.0.43'
       MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}'
@@ -426,7 +426,7 @@ Resources:
       PubliclyAccessible: false
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
-      EnablePerformanceInsights: true
+      EnablePerformanceInsights: false
       Tags:
         - Key: Environment
           Value: Production
