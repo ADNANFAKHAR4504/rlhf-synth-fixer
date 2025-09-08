@@ -62,6 +62,7 @@ export class SecureVpcConstruct extends Construct {
   public readonly publicSubnets: Subnet[];
   public readonly privateSubnets: Subnet[];
   public readonly internetGateway: InternetGateway;
+  public readonly flowLogsRole: IamRole;
 
   constructor(scope: Construct, id: string, config: SecureInfraConfig) {
     super(scope, id);
@@ -89,6 +90,33 @@ export class SecureVpcConstruct extends Construct {
       tags: {
         Name: `${config.companyName}-${config.environment}-igw`,
       },
+    });
+
+    // Create flow logs role ONCE outside the loop
+    this.flowLogsRole = new IamRole(this, 'flow-logs-role', {
+      name: `${config.companyName}-${config.environment}-flow-logs-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: {
+        Name: `${config.companyName}-${config.environment}-flow-logs-role`,
+        Purpose: 'VPC Flow Logs CloudWatch delivery',
+      },
+    });
+
+    new IamRolePolicyAttachment(this, 'flow-logs-policy', {
+      role: this.flowLogsRole.name,
+      policyArn:
+        'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
     });
 
     // Create public and private subnets
@@ -349,7 +377,7 @@ export class IamConstruct extends Construct {
 
     new IamRolePolicyAttachment(this, 'config-service-policy', {
       role: this.configRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole', // Add AWS_ prefix
     });
   }
 }
@@ -462,9 +490,10 @@ export class LambdaConstruct extends Construct {
     this.lambdaFunction = new LambdaFunction(this, 'main-lambda', {
       functionName: `${config.companyName}-${config.environment}-function`,
       runtime: 'python3.9',
-      handler: 'index.handler',
+      handler: 'lambda_function.handler',
       role: role.arn,
-      filename: 'lambda.zip',
+      s3Bucket: 'lambda-ts-12345',
+      s3Key: 'lambda.zip',
       sourceCodeHash: 'placeholder-hash',
       vpcConfig: {
         subnetIds: subnets.map(subnet => subnet.id),
@@ -518,24 +547,29 @@ export class ApiGatewayConstruct extends Construct {
       pathPart: 'secure',
     });
 
-    new ApiGatewayMethod(this, 'api-method', {
+    const apiMethod = new ApiGatewayMethod(this, 'api-method', {
       restApiId: this.api.id,
       resourceId: apiResource.id,
       httpMethod: 'POST',
       authorization: 'NONE',
     });
 
-    new ApiGatewayIntegration(this, 'lambda-integration', {
-      restApiId: this.api.id,
-      resourceId: apiResource.id,
-      httpMethod: 'POST',
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: lambdaFunction.invokeArn,
-    });
+    // Create only ONE integration
+    const apiIntegration = new ApiGatewayIntegration(
+      this,
+      'lambda-integration',
+      {
+        restApiId: this.api.id,
+        resourceId: apiResource.id,
+        httpMethod: 'POST',
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: lambdaFunction.invokeArn,
+      }
+    );
 
     this.deployment = new ApiGatewayDeployment(this, 'api-deployment', {
-      dependsOn: [apiResource],
+      dependsOn: [apiIntegration, apiMethod], // Depend on both method and integration
       restApiId: this.api.id,
     });
 
@@ -637,6 +671,7 @@ export class VpcFlowLogsConstruct extends Construct {
     scope: Construct,
     id: string,
     vpc: Vpc,
+    flowLogsRole: IamRole, // Add this parameter
     config: SecureInfraConfig
   ) {
     super(scope, id);
@@ -650,12 +685,13 @@ export class VpcFlowLogsConstruct extends Construct {
       },
     });
 
-    // Fixed: Removed resourceType property and used vpcId directly
+    // Fixed: Use correct property name
     this.flowLogs = new FlowLog(this, 'vpc-flow-logs-config', {
       vpcId: vpc.id,
       trafficType: 'ALL',
       logDestination: this.logGroup.arn,
       logDestinationType: 'cloud-watch-logs',
+      iamRoleArn: flowLogsRole.arn, // Use iamRoleArn instead of deliverLogsPermissionArn
       tags: {
         Name: `${config.companyName}-${config.environment}-flow-logs`,
         Purpose: 'Network security monitoring',
@@ -735,14 +771,15 @@ export class ShieldConstruct extends Construct {
   constructor(
     scope: Construct,
     id: string,
-    resourceArn: string,
+    api: ApiGatewayRestApi, // Accept the API object, not a string
     config: SecureInfraConfig
   ) {
     super(scope, id);
 
+    // Shield protection for the API Gateway (not the stage)
     this.shieldProtection = new ShieldProtection(this, 'shield-protection', {
       name: `${config.companyName}-${config.environment}-shield`,
-      resourceArn: resourceArn,
+      resourceArn: `arn:aws:apigateway:${config.region}::/restapis/${api.id}`,
       tags: {
         Name: `${config.companyName}-${config.environment}-shield`,
         Purpose: 'DDoS protection for public services',

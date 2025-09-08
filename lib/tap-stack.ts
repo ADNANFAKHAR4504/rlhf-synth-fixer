@@ -182,10 +182,12 @@ export class TapStack extends TerraformStack {
     // );
 
     // 10. Enable VPC Flow Logs for network monitoring
+    // Update the flow logs instantiation
     const flowLogs = new VpcFlowLogsConstruct(
       this,
       'flow-logs',
       vpcConstruct.vpc,
+      vpcConstruct.flowLogsRole, // Pass the flow logs role
       config
     );
 
@@ -201,7 +203,7 @@ export class TapStack extends TerraformStack {
     const shield = new ShieldConstruct(
       this,
       'shield',
-      `arn:aws:apigateway:${config.region}::/restapis/${apiGateway.api.id}/stages/${config.environment}`,
+      apiGateway.api, // Pass the API object, not a string
       config
     );
 
