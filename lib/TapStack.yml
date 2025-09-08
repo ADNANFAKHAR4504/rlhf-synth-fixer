@@ -24,6 +24,7 @@ Parameters:
     
   DestinationBucketName:
     Type: String
+    Default: my-dr-destination-bucket
     Description: >
       Name of the destination bucket in us-west-2. 
       This bucket must be created before deploying this template.
@@ -44,6 +45,7 @@ Parameters:
 
   NotificationEmail:
     Type: String
+    Default: admin@example.com
     Description: Email address for replication notifications and alerts
     
 Conditions:
@@ -86,12 +88,6 @@ Resources:
                 StorageClass: STANDARD_IA
             # Delete non-current versions after 1 year
             NoncurrentVersionExpirationInDays: 365
-      # Enable S3 notifications for replication monitoring
-      NotificationConfiguration:
-        CloudWatchConfigurations:
-          - Event: s3:Replication:*
-            CloudWatchConfiguration:
-              LogGroupName: !Ref ReplicationLogGroup
       # Replication configuration with RTC for 15-minute sync
       ReplicationConfiguration:
         Role: !GetAtt ReplicationRole.Arn
@@ -154,11 +150,11 @@ Resources:
                   - s3:GetObjectVersion
                   - s3:GetObjectVersionAcl
                   - s3:GetObjectVersionTagging
-                Resource: !Sub "${SourceBucket}/*"
+                Resource: !Sub "arn:aws:s3:::${ProjectName}-source-${Environment}-${AWS::AccountId}/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
-                Resource: !Ref SourceBucket
+                Resource: !Sub "arn:aws:s3:::${ProjectName}-source-${Environment}-${AWS::AccountId}"
               # Permissions to write to destination bucket
               - Effect: Allow
                 Action:
