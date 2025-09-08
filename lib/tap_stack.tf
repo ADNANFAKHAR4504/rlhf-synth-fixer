@@ -2389,29 +2389,3 @@ output "availability_zones_secondary" {
   description = "Availability zones used in secondary region"
   value       = local.secondary_azs
 }
-
-# Network Summary Outputs
-output "primary_vpc_summary" {
-  description = "Summary of primary VPC configuration"
-  value = {
-    vpc_id                = aws_vpc.primary_vpc.id
-    vpc_cidr              = aws_vpc.primary_vpc.cidr_block
-    public_subnet_count   = length(aws_subnet.primary_public_subnets)
-    private_subnet_count  = length(aws_subnet.primary_private_subnets)
-    nat_gateway_count     = length(aws_nat_gateway.primary_nat_gateways)
-    availability_zones    = local.primary_azs
-  }
-}
-
-output "secondary_vpc_summary" {
-  description = "Summary of secondary VPC configuration"
-  value = {
-    vpc_id                = aws_vpc.secondary_vpc.id
-    vpc_cidr              = aws_vpc.secondary_vpc.cidr_block
-    public_subnet_count   = length(aws_subnet.secondary_public_subnets)
-    private_subnet_count  = length(aws_subnet.secondary_private_subnets)
-    nat_gateway_count     = length(aws_nat_gateway.secondary_nat_gateways)
-    availability_zones    = local.secondary_azs
-  }
-}
-
