@@ -286,7 +286,7 @@ def lambda_handler(event, context):
     return lambda_func
 
 
-def create_s3_lambda_permission(environment_suffix: str, bucket_name: str, lambda_arn: str) -> lambda_.Permission:
+def create_s3_lambda_permission(environment_suffix: str, bucket_name, lambda_arn) -> lambda_.Permission:
     """Create permission for S3 to invoke Lambda function."""
     
     permission = lambda_.Permission(
@@ -295,14 +295,14 @@ def create_s3_lambda_permission(environment_suffix: str, bucket_name: str, lambd
         action="lambda:InvokeFunction",
         function=lambda_arn,
         principal="s3.amazonaws.com",
-        source_arn=f"arn:aws:s3:::{bucket_name}",
+        source_arn=bucket_name.apply(lambda name: f"arn:aws:s3:::{name}"),
         opts=ResourceOptions(protect=False)
     )
     
     return permission
 
 
-def create_s3_notification(environment_suffix: str, bucket_name: str, lambda_arn: str) -> s3.BucketNotification:
+def create_s3_notification(environment_suffix: str, bucket_name, lambda_arn) -> s3.BucketNotification:
     """Create S3 bucket notification to trigger Lambda on object creation."""
     
     notification = s3.BucketNotification(
@@ -320,7 +320,7 @@ def create_s3_notification(environment_suffix: str, bucket_name: str, lambda_arn
     return notification
 
 
-def create_cloudwatch_alarms(environment_suffix: str, lambda_name: str, tags: dict):
+def create_cloudwatch_alarms(environment_suffix: str, lambda_name, tags: dict):
     """Create CloudWatch alarms for Lambda function monitoring."""
     
     # Alarm for Lambda errors
