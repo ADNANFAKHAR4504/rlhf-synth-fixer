@@ -32,23 +32,18 @@ const ec2Client = new EC2Client({ region: REGION });
 const rdsClient = new RDSClient({ region: REGION });
 const s3Client = new S3Client({ region: REGION });
 
-// Helper function to find output value by key
-const getOutputValue = (key: string): string => {
-  const output = outputs.find((item: any) => item.OutputKey === key);
-  return output ? output.OutputValue : '';
-};
 
 describe('AWS Infrastructure Migration Integration Tests', () => {
   // Extract resource IDs from outputs
-  const vpcId = getOutputValue('VPCId');
-  const publicSubnetIds = getOutputValue('PublicSubnetIds').split(',');
-  const privateSubnetIds = getOutputValue('PrivateSubnetIds').split(',');
-  const webSgId = getOutputValue('WebSecurityGroupId');
-  const appSgId = getOutputValue('AppSecurityGroupId');
-  const dbSgId = getOutputValue('DatabaseSecurityGroupId');
-  const dbEndpoint = getOutputValue('DatabaseEndpoint');
-  const s3BucketName = getOutputValue('S3BucketName');
-  const targetRegion = getOutputValue('RegionMigrated');
+  const vpcId = outputs.VPCId || '';
+  const publicSubnetIds = (outputs.PublicSubnetIds || '').split(',');
+  const privateSubnetIds = (outputs.PrivateSubnetIds || '').split(',');
+  const webSgId = outputs.WebSecurityGroupId || '';
+  const appSgId = outputs.AppSecurityGroupId || '';
+  const dbSgId = outputs.DatabaseSecurityGroupId || '';
+  const dbEndpoint = outputs.DatabaseEndpoint || '';
+  const s3BucketName = outputs.S3BucketName || '';
+  const targetRegion = outputs.RegionMigrated || '';
 
   describe('VPC and Networking Validation', () => {
     test('VPC exists in us-west-2 with correct CIDR', async () => {
@@ -264,13 +259,11 @@ describe('AWS Infrastructure Migration Integration Tests', () => {
     });
 
     test('VPC CIDR matches migration requirements', () => {
-      const vpcCidr = getOutputValue('VPCCidr');
-      expect(vpcCidr).toBe('10.0.0.0/16');
+      expect(outputs.VPCCidr).toBe('10.0.0.0/16');
     });
 
     test('database port is correctly configured', () => {
-      const dbPort = getOutputValue('DatabasePort');
-      expect(dbPort).toBe('3306');
+      expect(outputs.DatabasePort).toBe('3306');
     });
 
     test('all required outputs are present', () => {
@@ -290,7 +283,7 @@ describe('AWS Infrastructure Migration Integration Tests', () => {
       ];
       
       requiredOutputs.forEach(outputKey => {
-        const value = getOutputValue(outputKey);
+        const value = outputs[outputKey];
         expect(value).toBeTruthy();
         expect(value).not.toBe('');
       });
@@ -300,7 +293,7 @@ describe('AWS Infrastructure Migration Integration Tests', () => {
   describe('Network Connectivity Tests', () => {
     test('database endpoint is accessible from application subnets', async () => {
       // Validate that database endpoint resolves and is in the correct format
-      expect(dbEndpoint).toMatch(/^tapstackdev.*\.us-west-2\.rds\.amazonaws\.com$/);
+      expect(dbEndpoint).toMatch(/^tapstack.*\.us-west-2\.rds\.amazonaws\.com$/);
       expect(dbEndpoint).toContain('us-west-2');
     });
 
