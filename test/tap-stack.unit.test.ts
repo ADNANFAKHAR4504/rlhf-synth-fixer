@@ -224,7 +224,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('EC2 instance should have correct properties', () => {
       const instance = template.Resources.ProductionEC2Instance;
-      expect(instance.Properties.ImageId).toBe('ami-0c02fb55956c7d316');
+      expect(instance.Properties.ImageId).toBe('ami-0bbc328167dee8f3c');
       expect(instance.Properties.InstanceType).toBe('t3.micro');
       expect(instance.Properties.KeyName).toEqual({ Ref: 'EC2KeyPair' });
     });
