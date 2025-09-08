@@ -1096,19 +1096,9 @@ Resources:
         - { Key: Owner, Value: !Ref Owner }
         - { Key: CostCenter, Value: !Ref CostCenter }
 
-  # ---------------------- AWS Config (Recorder + Delivery) ----------------------
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${ProjectName}-config-delivery-channel'
-      S3BucketName: !Ref ConfigLogsBucket
-      S3KeyPrefix: 'config'
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
+  # ---------------------- AWS Config (Recorder + Delivery + Starter) ----------------------
   ConfigConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
-    DependsOn: ConfigDeliveryChannel
     Properties:
       Name: !Sub '${ProjectName}-config-recorder'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -1116,7 +1106,17 @@ Resources:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
-  # --- Custom resource to START the recorder before rules are created ---
+  ConfigDeliveryChannel:
+    Type: AWS::Config::DeliveryChannel
+    DependsOn: ConfigConfigurationRecorder
+    Properties:
+      Name: !Sub '${ProjectName}-config-delivery-channel'
+      S3BucketName: !Ref ConfigLogsBucket
+      S3KeyPrefix: 'config'
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: TwentyFour_Hours
+
+  # --- Custom resource to START the recorder after both exist ---
   ConfigStarterRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1160,9 +1160,9 @@ Resources:
       Timeout: 60
       Code:
         ZipFile: |
-          import json, urllib.request, boto3, sys
+          import json, urllib.request, boto3
           config = boto3.client('config')
-          def send(event, context, status, data):
+          def send(event, status, data):
               resp = {
                   'Status': status,
                   'Reason': 'See CloudWatch Logs for details',
@@ -1178,21 +1178,20 @@ Resources:
               try:
                   name = event['ResourceProperties']['RecorderName']
                   if event['RequestType'] in ('Create','Update'):
-                      # ensure recorder exists, then start it
                       recs = config.describe_configuration_recorders()['ConfigurationRecorders']
                       names = [r['name'] for r in recs]
                       if name not in names:
                           raise Exception(f"Recorder {name} not found")
                       config.start_configuration_recorder(ConfigurationRecorderName=name)
-                      send(event, context, 'SUCCESS', {'Recorder':'STARTED'})
+                      send(event, 'SUCCESS', {'Recorder':'STARTED'})
                   elif event['RequestType'] == 'Delete':
                       try:
                           config.stop_configuration_recorder(ConfigurationRecorderName=name)
                       except Exception:
                           pass
-                      send(event, context, 'SUCCESS', {'Recorder':'STOPPED'})
+                      send(event, 'SUCCESS', {'Recorder':'STOPPED'})
               except Exception as e:
-                  send(event, context, 'FAILED', {'Error': str(e)})
+                  send(event, 'FAILED', {'Error': str(e)})
                   raise
       Tags:
         - { Key: Project, Value: !Ref ProjectName }
@@ -1204,6 +1203,7 @@ Resources:
     Type: Custom::StartConfigRecorder
     DependsOn:
       - ConfigConfigurationRecorder
+      - ConfigDeliveryChannel
     Properties:
       ServiceToken: !GetAtt ConfigStarterFunction.Arn
       RecorderName: !Sub '${ProjectName}-config-recorder'
