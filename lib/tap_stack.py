@@ -309,9 +309,14 @@ class TapStack(cdk.Stack):
         self.cpu_alarm = cloudwatch.Alarm(
             self,
             f"HighCpuAlarm{self.environment_suffix}",
-            metric=self.auto_scaling_group.metric_cpu_utilization(
+            metric=cloudwatch.Metric(
+                namespace="AWS/AutoScaling",
+                metric_name="CPUUtilization",
+                dimensions_map={
+                    "AutoScalingGroupName": self.auto_scaling_group.auto_scaling_group_name
+                },
+                statistic="Average",
                 period=Duration.minutes(5),
-                statistic=cloudwatch.Stats.AVERAGE,
             ),
             threshold=70,
             evaluation_periods=2,
