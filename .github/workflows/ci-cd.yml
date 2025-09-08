@@ -866,7 +866,7 @@ jobs:
   semantic-release:
     name: Semantic Release
     runs-on: ubuntu-24.04
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/semantic-release'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     permissions:
       contents: write
       issues: write
