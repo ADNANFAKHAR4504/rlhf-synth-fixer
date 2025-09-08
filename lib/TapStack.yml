@@ -592,7 +592,6 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub '${ProjectName}-alb'
       Scheme: internet-facing
       Type: application
       Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
@@ -606,7 +605,6 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub '${ProjectName}-tg'
       Port: !Ref AppPort
       Protocol: HTTP
       VpcId: !Ref TapStackVPC
@@ -791,7 +789,7 @@ Resources:
               VolumeSize: 8
               VolumeType: gp3
               Encrypted: true
-              KmsKeyId: !Ref TapStackKMSKey
+              # No KmsKeyId here; EC2 will use the default EBS KMS key automatically
         MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
         UserData:
           Fn::Base64: !Sub |
