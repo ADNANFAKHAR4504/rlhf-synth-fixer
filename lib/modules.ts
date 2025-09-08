@@ -663,7 +663,7 @@ export class LambdaModule extends Construct {
         functionName: 'production-data-processor',
         role: this.iamRole.arn,
         handler: 'lambda_function.handler',
-        s3Bucket: 'lambda-ts-12345',
+        s3Bucket: 'lambda-ts-12345-us-west-2',
         s3Key: 'lambda.zip',
         runtime: 'python3.9',
         timeout: 30,
