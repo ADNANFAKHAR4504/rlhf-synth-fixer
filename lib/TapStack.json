@@ -5,14 +5,20 @@
     "ApplicationName": {
       "Type": "String",
       "Default": "my-app",
+      "MinLength": 3,
+      "MaxLength": 50,
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+      "ConstraintDescription": "ApplicationName must be 3-50 characters, start with letter, contain only letters, numbers, and hyphens",
       "Description": "Name of the application"
     },
     "EnvironmentSuffix": {
       "Type": "String",
       "Default": "dev",
-      "Description": "Environment suffix for stack name and resources",
+      "MinLength": 2,
+      "MaxLength": 20,
       "AllowedPattern": "^[a-zA-Z0-9-]+$",
-      "ConstraintDescription": "EnvironmentSuffix must contain only letters, numbers, and hyphens"
+      "ConstraintDescription": "EnvironmentSuffix must be 2-20 characters and contain only letters, numbers, and hyphens",
+      "Description": "Environment suffix for stack name and resources"
     },
     "PipelineArtifactBucketName": {
       "Type": "String",
@@ -37,6 +43,8 @@
     "GitRepository": {
       "Type": "String",
       "Default": "https://github.com/example/example-repo",
+      "AllowedPattern": "^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$",
+      "ConstraintDescription": "GitRepository must be a valid GitHub HTTPS URL",
       "Description": "Git repository URL"
     },
     "GitBranch": {
@@ -47,12 +55,32 @@
     "ServiceDesiredCount": {
       "Type": "Number",
       "Default": 0,
-      "Description": "Desired count for ECS service on stack create (set 0 if image not available at create time)"
+      "MinValue": 0,
+      "MaxValue": 100,
+      "Description": "Desired count for ECS service on stack create (0-100, set 0 if image not available at create time)"
     },
     "GitHubTokenSecretArn": {
       "Type": "String",
       "Default": "",
       "Description": "Full ARN of the AWS Secrets Manager secret containing the GitHub OAuth token. If empty, the stack will create a placeholder secret (you must populate it after deployment)."
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedValues": ["dev", "staging", "prod"],
+      "Description": "Environment type for resource sizing optimization"
+    },
+    "ECSTaskCpu": {
+      "Type": "Number",
+      "Default": 256,
+      "AllowedValues": [256, 512, 1024, 2048, 4096],
+      "Description": "CPU units for ECS task (256=0.25vCPU, 512=0.5vCPU, 1024=1vCPU, 2048=2vCPU, 4096=4vCPU)"
+    },
+    "ECSTaskMemory": {
+      "Type": "Number", 
+      "Default": 512,
+      "AllowedValues": [512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192],
+      "Description": "Memory (MB) for ECS task - must be compatible with CPU value"
     }
   },
   "Conditions": {
@@ -100,6 +128,22 @@
           "Ref": "GitHubTokenSecretArn"
         },
         ""
+      ]
+    },
+    "IsProductionEnvironment": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "prod"
+      ]
+    },
+    "IsDevelopmentEnvironment": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "dev"
       ]
     }
   },
@@ -167,7 +211,19 @@
         "LogGroupName": {
           "Fn::Sub": "/ecs/${ApplicationName}"
         },
-        "RetentionInDays": 30
+        "RetentionInDays": {
+          "Fn::If": [
+            "IsProductionEnvironment",
+            90,
+            {
+              "Fn::If": [
+                "IsDevelopmentEnvironment",
+                7,
+                30
+              ]
+            }
+          ]
+        }
       }
     },
     "DefaultVPC": {
@@ -789,8 +845,12 @@
         "RequiresCompatibilities": [
           "FARGATE"
         ],
-        "Cpu": 256,
-        "Memory": 512,
+        "Cpu": {
+          "Ref": "ECSTaskCpu"
+        },
+        "Memory": {
+          "Ref": "ECSTaskMemory"
+        },
         "ExecutionRoleArn": {
           "Fn::GetAtt": [
             "ECSTaskExecutionRole",
@@ -1134,6 +1194,145 @@
                 }
               ]
             }
+          }
+        ]
+      }
+    },
+    "PipelineFailureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-pipeline-failures"
+        },
+        "AlarmDescription": "Pipeline failure alarm",
+        "MetricName": "PipelineExecutionFailure",
+        "Namespace": "AWS/CodePipeline",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "PipelineName",
+            "Value": {
+              "Ref": "CodePipeline"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Fn::If": [
+              "CreateSNSTopic",
+              {
+                "Ref": "SNSOperationsTopic"
+              },
+              {
+                "Ref": "SNSOperationsTopicNameOrArn"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "ECSServiceCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-ecs-high-cpu"
+        },
+        "AlarmDescription": "ECS service high CPU utilization",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ECS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Ref": "ECSService"
+            }
+          },
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::If": [
+                "CreateECSCluster",
+                {
+                  "Ref": "ECSCluster"
+                },
+                {
+                  "Ref": "ECSClusterName"
+                }
+              ]
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Fn::If": [
+              "CreateSNSTopic",
+              {
+                "Ref": "SNSOperationsTopic"
+              },
+              {
+                "Ref": "SNSOperationsTopicNameOrArn"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "ECSServiceMemoryAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-ecs-high-memory"
+        },
+        "AlarmDescription": "ECS service high memory utilization",
+        "MetricName": "MemoryUtilization",
+        "Namespace": "AWS/ECS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Ref": "ECSService"
+            }
+          },
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::If": [
+                "CreateECSCluster",
+                {
+                  "Ref": "ECSCluster"
+                },
+                {
+                  "Ref": "ECSClusterName"
+                }
+              ]
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Fn::If": [
+              "CreateSNSTopic",
+              {
+                "Ref": "SNSOperationsTopic"
+              },
+              {
+                "Ref": "SNSOperationsTopicNameOrArn"
+              }
+            ]
           }
         ]
       }

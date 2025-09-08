@@ -14,9 +14,36 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(true).toBe(true);
+  describe('Core Pipeline Components', () => {
+    test('should have CodePipeline resource', () => {
+      const pipeline = template.Resources?.CodePipeline;
+      expect(pipeline).toBeDefined();
+      expect(pipeline.Type).toBe('AWS::CodePipeline::Pipeline');
+      expect(pipeline.Properties.RoleArn).toBeDefined();
+      expect(pipeline.Properties.ArtifactStore).toBeDefined();
+      expect(pipeline.Properties.Stages).toBeDefined();
+      expect(Array.isArray(pipeline.Properties.Stages)).toBe(true);
+      expect(pipeline.Properties.Stages.length).toBeGreaterThanOrEqual(4); // Source, Test, Build, Deploy
+    });
+
+    test('should have ECS Cluster resource', () => {
+      const cluster = template.Resources?.ECSCluster;
+      expect(cluster).toBeDefined();
+      expect(cluster.Type).toBe('AWS::ECS::Cluster');
+    });
+
+    test('should have ECS Service resource', () => {
+      const service = template.Resources?.ECSService;
+      expect(service).toBeDefined();
+      expect(service.Type).toBe('AWS::ECS::Service');
+      expect(service.Properties.Cluster).toBeDefined();
+      expect(service.Properties.TaskDefinition).toBeDefined();
+    });
+
+    test('should have ECR repository resource', () => {
+      const repo = template.Resources?.ECRRepository;
+      expect(repo).toBeDefined();
+      expect(repo.Type).toBe('AWS::ECR::Repository');
     });
   });
 
@@ -69,56 +96,40 @@ describe('TapStack CloudFormation Template', () => {
       expect(resourceCount).toBeGreaterThanOrEqual(1);
     });
 
-    test('If TurnAroundPromptTable exists it should be a properly formed DynamoDB table', () => {
-      const table = template.Resources?.TurnAroundPromptTable;
-      if (!table) {
-        // If the template doesn't define the expected table, just confirm that the template has resources
-        expect(Object.keys(template.Resources).length).toBeGreaterThanOrEqual(1);
-        return;
-      }
+    test('should have IAM roles with proper policies', () => {
+      const roles = Object.keys(template.Resources).filter(key => 
+        template.Resources[key].Type === 'AWS::IAM::Role'
+      );
+      expect(roles.length).toBeGreaterThanOrEqual(2); // At least Pipeline and CodeBuild roles
+      
+      roles.forEach(roleKey => {
+        const role = template.Resources[roleKey];
+        expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+        expect(role.Properties.Policies || role.Properties.ManagedPolicyArns).toBeDefined();
+      });
+    });
 
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('should have S3 bucket for artifacts with proper security', () => {
+      const bucket = template.Resources?.S3ArtifactBucket;
+      expect(bucket).toBeDefined();
+      expect(bucket.Type).toBe('AWS::S3::Bucket');
+      
+      if (bucket.Properties.PublicAccessBlockConfiguration) {
+        const config = bucket.Properties.PublicAccessBlockConfiguration;
+        expect(config.BlockPublicAcls).toBe(true);
+        expect(config.BlockPublicPolicy).toBe(true);
+        expect(config.IgnorePublicAcls).toBe(true);
+        expect(config.RestrictPublicBuckets).toBe(true);
+      }
+    });
 
-      // Deletion policies are optional; if present they must be either 'Delete' or 'Retain' or 'Snapshot'
-      if (table.DeletionPolicy) {
-        expect(['Delete', 'Retain', 'Snapshot']).toContain(table.DeletionPolicy);
-      }
-      if (table.UpdateReplacePolicy) {
-        expect(['Delete', 'Retain', 'Snapshot']).toContain(table.UpdateReplacePolicy);
-      }
-
-      const properties = table.Properties;
-      expect(properties).toBeDefined();
-
-      // TableName should be Fn::Sub format containing EnvironmentSuffix or a valid string
-      if (properties.TableName) {
-        const tn = properties.TableName;
-        // allow either a string or Fn::Sub
-        const isFnSub = typeof tn === 'object' && tn['Fn::Sub'];
-        const isString = typeof tn === 'string';
-        expect(isFnSub || isString).toBeTruthy();
-      }
-
-      // BillingMode optional but if present should be PAY_PER_REQUEST or PROVISIONED
-      if (properties.BillingMode) {
-        expect(['PAY_PER_REQUEST', 'PROVISIONED']).toContain(properties.BillingMode);
-      }
-
-      // Basic checks for key schema / attribute definitions if present
-      if (properties.AttributeDefinitions) {
-        expect(Array.isArray(properties.AttributeDefinitions)).toBeTruthy();
-        properties.AttributeDefinitions.forEach((attr: any) => {
-          expect(attr.AttributeName).toBeDefined();
-          expect(['S', 'N', 'B']).toContain(attr.AttributeType);
-        });
-      }
-      if (properties.KeySchema) {
-        expect(Array.isArray(properties.KeySchema)).toBeTruthy();
-        properties.KeySchema.forEach((ks: any) => {
-          expect(ks.AttributeName).toBeDefined();
-          expect(['HASH', 'RANGE']).toContain(ks.KeyType);
-        });
-      }
+    test('should have VPC with proper network configuration', () => {
+      const vpc = template.Resources?.VPC;
+      expect(vpc).toBeDefined();
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toBeDefined();
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+      expect(vpc.Properties.EnableDnsSupport).toBe(true);
     });
   });
 
