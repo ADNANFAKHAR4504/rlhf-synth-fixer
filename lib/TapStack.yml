@@ -136,6 +136,7 @@ Conditions:
   CreateGuardDuty: !Equals [!Ref EnableGuardDuty, 'true']
 
 Resources:
+  # ---------------------- KMS ----------------------
   TapStackKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -194,6 +195,7 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-kms'
       TargetKeyId: !Ref TapStackKMSKey
 
+  # ---------------------- S3 Buckets ----------------------
   AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -439,6 +441,7 @@ Resources:
               Bool:
                 aws:SecureTransport: false
 
+  # ---------------------- VPC & Networking ----------------------
   TapStackVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -680,6 +683,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable2
       SubnetId: !Ref PrivateSubnet2
 
+  # ---------------------- VPC Endpoints ----------------------
   VpcEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -798,6 +802,7 @@ Resources:
       SecurityGroupIds:
         - !Ref VpcEndpointSecurityGroup
 
+  # ---------------------- Security Groups ----------------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -889,6 +894,7 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # ---------------------- ALB ----------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -945,6 +951,7 @@ Resources:
       Port: 80
       Protocol: HTTP
 
+  # ---------------------- WAFv2 ----------------------
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -964,7 +971,7 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: 'common-rule-set'
+            MetricName: 'CommonRuleSetMetric'
         - Name: 'AWSManagedRulesKnownBadInputsRuleSet'
           Priority: 2
           OverrideAction:
@@ -976,7 +983,7 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: 'known-bad-inputs'
+            MetricName: 'KnownBadInputsMetric'
         - Name: 'AWSManagedRulesAmazonIpReputationList'
           Priority: 3
           OverrideAction:
@@ -988,7 +995,7 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: 'ip-reputation'
+            MetricName: 'IpReputationMetric'
         - Name: 'AWSManagedRulesAnonymousIpList'
           Priority: 4
           OverrideAction:
@@ -1000,11 +1007,11 @@ Resources:
           VisibilityConfig:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
-            MetricName: 'anonymous-ip'
+            MetricName: 'AnonymousIpMetric'
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub '${ProjectName}-webacl'
+        MetricName: !Sub '${ProjectName}WebACL'
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -1022,6 +1029,7 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
+  # ---------------------- IAM ----------------------
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1208,6 +1216,7 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # ---------------------- EC2 LT & ASG ----------------------
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -1334,6 +1343,7 @@ Resources:
           Value: !Ref CostCenter
           PropagateAtLaunch: true
 
+  # ---------------------- Lambda ----------------------
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -1394,6 +1404,7 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # ---------------------- CloudWatch Log Groups ----------------------
   EC2LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -1426,6 +1437,7 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # ---------------------- CloudTrail ----------------------
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: TrailLogsBucketPolicy
@@ -1453,6 +1465,7 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
+  # ---------------------- AWS Config ----------------------
   ConfigConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
@@ -1469,8 +1482,9 @@ Resources:
       S3BucketName: !Ref ConfigLogsBucket
       S3KeyPrefix: 'config'
       ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: Daily
+        DeliveryFrequency: TwentyFour_Hours
 
+  # Config Rules
   S3BucketPublicReadProhibitedRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
@@ -1507,6 +1521,7 @@ Resources:
         Owner: AWS
         SourceIdentifier: INCOMING_SSH_DISABLED
 
+  # Optional remediation sample
   S3PublicReadRemediationConfiguration:
     Type: AWS::Config::RemediationConfiguration
     Properties:
@@ -1521,6 +1536,7 @@ Resources:
       Automatic: false
       MaximumAutomaticAttempts: 1
 
+  # ---------------------- GuardDuty ----------------------
   GuardDutyDetector:
     Condition: CreateGuardDuty
     Type: AWS::GuardDuty::Detector
