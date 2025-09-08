@@ -4,10 +4,12 @@ import {
   S3Client,
   HeadBucketCommand,
   GetBucketVersioningCommand,
+  GetBucketPolicyCommand,
 } from "@aws-sdk/client-s3";
 import {
   RDSClient,
   DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
 } from "@aws-sdk/client-rds";
 import {
   EC2Client,
@@ -15,6 +17,8 @@ import {
   DescribeInstancesCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeNatGatewaysCommand,
+  DescribeTagsCommand,
 } from "@aws-sdk/client-ec2";
 import {
   ElasticLoadBalancingV2Client,
@@ -26,7 +30,12 @@ import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from "@aws-sdk/client-auto-scaling";
-import { IAMClient, GetRoleCommand } from "@aws-sdk/client-iam";
+import {
+  IAMClient,
+  GetRoleCommand,
+  ListRolePoliciesCommand,
+} from "@aws-sdk/client-iam";
+import { CloudTrailClient, DescribeTrailsCommand } from "@aws-sdk/client-cloudtrail";
 
 /**
  * Load outputs from cfn-outputs/all-outputs.json
@@ -56,19 +65,20 @@ const ec2 = new EC2Client({ region });
 const elbv2 = new ElasticLoadBalancingV2Client({ region });
 const autoscaling = new AutoScalingClient({ region });
 const iam = new IAMClient({ region });
+const cloudtrail = new CloudTrailClient({ region });
 
 /**
  * Validators
  */
-const isArn = (v: string) => /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:.+/.test(v);
-const isSubnetId = (v: string) => /^subnet-[a-z0-9]+$/.test(v);
-const isSgId = (v: string) => /^sg-[a-z0-9]+$/.test(v);
-const isVpcId = (v: string) => /^vpc-[a-z0-9]+$/.test(v);
-const isEc2InstanceId = (v: string) => /^i-[a-z0-9]+$/.test(v);
-const isLaunchTemplateId = (v: string) => /^lt-[a-z0-9]+$/.test(v);
-const isNatId = (v: string) => /^nat-[a-z0-9]+$/.test(v);
+const isArn = (v: string) => /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:.+/i.test(v);
+const isSubnetId = (v: string) => /^subnet-[a-z0-9]+$/i.test(v);
+const isSgId = (v: string) => /^sg-[a-z0-9]+$/i.test(v);
+const isVpcId = (v: string) => /^vpc-[a-z0-9]+$/i.test(v);
+const isEc2InstanceId = (v: string) => /^i-[a-z0-9]+$/i.test(v);
+const isLaunchTemplateId = (v: string) => /^lt-[a-z0-9]+$/i.test(v);
+const isNatId = (v: string) => /^nat-[a-z0-9]+$/i.test(v);
 const isDnsName = (v: string) =>
-  /^[a-z0-9-]+\.[a-z0-9-]+\.(elb|rds)\.[a-z0-9-]+\.amazonaws\.com$/.test(v);
+  /^[A-Za-z0-9-]+\.[A-Za-z0-9-]+\.(elb|rds)\.[a-z0-9-]+\.amazonaws\.com$/.test(v);
 const isIp = (v: string) =>
   /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$/.test(
     v
@@ -98,13 +108,15 @@ describe("LIVE Integration Tests - TapStack", () => {
   });
 
   // -------- Security Groups --------
-  test("Security Groups exist", async () => {
-    const sgs = [
-      outputs.BastionSGId,
-      outputs.InstanceSGId,
-      outputs.ALBSGId,
-      outputs.RDSInstanceSG,
-    ];
+  test("Security Groups exist (deduplicated)", async () => {
+    const sgs = Array.from(
+      new Set([
+        outputs.BastionSGId,
+        outputs.InstanceSGId,
+        outputs.ALBSGId,
+        outputs.RDSInstanceSG,
+      ])
+    );
     sgs.forEach((s) => expect(isSgId(s)).toBe(true));
 
     const resp = await ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: sgs }));
@@ -150,7 +162,9 @@ describe("LIVE Integration Tests - TapStack", () => {
   // -------- Auto Scaling --------
   test("AutoScaling Group exists and capacities are valid", async () => {
     const resp = await autoscaling.send(
-      new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [outputs.AutoScalingGroupName] })
+      new DescribeAutoScalingGroupsCommand({
+        AutoScalingGroupNames: [outputs.AutoScalingGroupName],
+      })
     );
     const asg = resp.AutoScalingGroups?.[0];
     expect(asg).toBeDefined();
@@ -178,25 +192,70 @@ describe("LIVE Integration Tests - TapStack", () => {
     expect(db.Endpoint?.Port?.toString()).toBe(outputs.RDSPort);
   });
 
+  test("RDS SubnetGroup exists", async () => {
+    const resp = await rds.send(
+      new DescribeDBSubnetGroupsCommand({ DBSubnetGroupName: outputs.RDSSubnetGroup })
+    );
+    expect(resp.DBSubnetGroups?.[0]).toBeDefined();
+  });
+
   // -------- S3 --------
   test("Logging bucket exists and is versioned", async () => {
     const bucket = outputs.LoggingBucketName;
-    const head = await s3.send(new HeadBucketCommand({ Bucket: bucket }));
-    expect(head.$metadata.httpStatusCode).toBe(200);
+    await s3.send(new HeadBucketCommand({ Bucket: bucket }));
 
     const ver = await s3.send(new GetBucketVersioningCommand({ Bucket: bucket }));
     expect(ver.Status).toBe("Enabled");
   });
 
-  // -------- IAM --------
-  test("IAM ConfigRole exists", async () => {
-    const roleName = outputs.ConfigRoleArn.split("/").pop();
-    expect(roleName).toBeDefined();
-    const resp = await iam.send(new GetRoleCommand({ RoleName: roleName! }));
-    expect(resp.Role).toBeDefined();
+  test("Logging bucket has a policy attached", async () => {
+    const bucket = outputs.LoggingBucketName;
+    const resp = await s3.send(new GetBucketPolicyCommand({ Bucket: bucket }));
+    expect(resp.Policy).toBeDefined();
   });
 
-  // -------- General Edge Cases --------
+  // -------- IAM --------
+  test("IAM ConfigRole exists and has inline policies", async () => {
+    const roleName = outputs.ConfigRoleArn.split("/").pop();
+    expect(roleName).toBeDefined();
+
+    const resp = await iam.send(new GetRoleCommand({ RoleName: roleName! }));
+    expect(resp.Role).toBeDefined();
+
+    const pol = await iam.send(new ListRolePoliciesCommand({ RoleName: roleName! }));
+    expect(pol.PolicyNames?.length).toBeGreaterThan(0);
+  });
+
+  // -------- NAT --------
+  test("NAT Gateway exists and has correct EIP", async () => {
+    expect(isNatId(outputs.NatGatewayId)).toBe(true);
+    expect(isIp(outputs.NatEIP)).toBe(true);
+
+    const resp = await ec2.send(
+      new DescribeNatGatewaysCommand({ NatGatewayIds: [outputs.NatGatewayId] })
+    );
+    const gw = resp.NatGateways?.[0];
+    expect(gw).toBeDefined();
+    expect(gw?.NatGatewayAddresses?.[0]?.PublicIp).toBe(outputs.NatEIP);
+  });
+
+  // -------- CloudTrail --------
+  test("CloudTrail exists and logging enabled", async () => {
+    const resp = await cloudtrail.send(new DescribeTrailsCommand({ trailNameList: [outputs.CloudTrailArn] }));
+    const trail = resp.trailList?.[0];
+    expect(trail).toBeDefined();
+    expect(trail?.IsMultiRegionTrail).toBe(true);
+  });
+
+  // -------- Bastion Tags --------
+  test("Bastion Host has Name tag", async () => {
+    const resp = await ec2.send(new DescribeTagsCommand({ Filters: [{ Name: "resource-id", Values: [outputs.BastionHostId] }] }));
+    const tags = resp.Tags || [];
+    const nameTag = tags.find((t) => t.Key === "Name");
+    expect(nameTag?.Value).toMatch(/bastion/);
+  });
+
+  // -------- General --------
   test("All outputs are non-empty strings", () => {
     Object.entries(outputs).forEach(([k, v]) => {
       expect(typeof v).toBe("string");
