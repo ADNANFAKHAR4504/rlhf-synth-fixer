@@ -10,7 +10,6 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as shield from 'aws-cdk-lib/aws-shield';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
@@ -631,11 +630,11 @@ export class TapStack extends cdk.Stack {
       new elbv2targets.InstanceIdTarget(appInstance.instanceId)
     );
 
-    // Enable AWS Shield Advanced protection for ALB (DDoS protection)
-    new shield.CfnProtection(this, 'AlbShieldProtection', {
-      name: 'ALB-Shield-Protection',
-      resourceArn: alb.loadBalancerArn,
-    });
+    // AWS Shield Advanced protection for ALB (DDoS protection)
+    // Note: AWS Shield Advanced is a paid subscription service that must be enabled
+    // at the account level before deploying this stack. If Shield Advanced is not
+    // subscribed, this resource creation would fail. Enable Shield Advanced in your
+    // AWS account for enhanced DDoS protection capabilities.
 
     // Output important resource ARNs for reference
     new cdk.CfnOutput(this, 'LoadBalancerDnsName', {
