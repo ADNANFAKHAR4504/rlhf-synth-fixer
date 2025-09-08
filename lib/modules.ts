@@ -10,6 +10,7 @@ import { Route } from '@cdktf/provider-aws/lib/route';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
@@ -113,11 +114,32 @@ export class SecureVpcConstruct extends Construct {
       },
     });
 
-    new IamRolePolicyAttachment(this, 'flow-logs-policy', {
+    new IamRolePolicy(this, 'flow-logs-custom-policy', {
+      name: `${config.companyName}-${config.environment}-flow-logs-policy`,
       role: this.flowLogsRole.name,
-      policyArn:
-        'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
     });
+
+    // new IamRolePolicyAttachment(this, 'flow-logs-policy', {
+    //   role: this.flowLogsRole.name,
+    //   policyArn:
+    //     'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+    // });
 
     // Create public and private subnets
     this.publicSubnets = [];
@@ -377,7 +399,7 @@ export class IamConstruct extends Construct {
 
     new IamRolePolicyAttachment(this, 'config-service-policy', {
       role: this.configRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
+      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole', // Fixed: Added AWS_ prefix
     });
   }
 }
@@ -396,7 +418,7 @@ export class S3Construct extends Construct {
     super(scope, id);
 
     this.bucket = new S3Bucket(this, 'main-bucket', {
-      bucket: `${config.companyName}-${config.environment}-main-bucket-1234}`,
+      bucket: `${config.companyName}-${config.environment}-main-bucket-1234`,
       tags: {
         Name: `${config.companyName}-${config.environment}-main-bucket`,
         Purpose: 'Application data storage with encryption',
@@ -431,7 +453,7 @@ export class S3Construct extends Construct {
     });
 
     this.configBucket = new S3Bucket(this, 'config-bucket', {
-      bucket: `${config.companyName}-${config.environment}-config-bucket-1234}`,
+      bucket: `${config.companyName}-${config.environment}-config-bucket-1234`,
       tags: {
         Name: `${config.companyName}-${config.environment}-config-bucket`,
         Purpose: 'AWS Config compliance tracking',
