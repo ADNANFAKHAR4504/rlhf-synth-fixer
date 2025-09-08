@@ -1,9 +1,0 @@
-{
-  "platform": "pulumi",
-  "language": "go",
-  "complexity": "medium",
-  "turn_type": "single",
-  "po_id": "310030",
-  "team": "6",
-  "startedAt": "2025-08-26T11:25:50.889Z"
-}
