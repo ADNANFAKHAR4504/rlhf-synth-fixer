@@ -48,7 +48,7 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Environment', commonTags.Environment);
     cdk.Tags.of(this).add('Security', commonTags.Security);
 
-    // Create KMS key for encryption of all sensitive data
+    // Create 'KMS' key for encryption of all sensitive data
     const kmsKey = new kms.Key(this, 'ProductionKmsKey', {
       description: 'KMS key for production environment encryption',
       enableKeyRotation: true, // Security best practice - automatic key rotation
