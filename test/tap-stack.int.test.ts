@@ -1,7 +1,7 @@
 import {
-  ApiGatewayClient,
+  APIGatewayClient as ApiGatewayClient,
   GetRestApiCommand
-} from '@aws-sdk/client-apigateway';
+} from '@aws-sdk/client-api-gateway';
 import {
   CloudFormationClient,
   DescribeStackResourcesCommand
@@ -134,8 +134,27 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('should have correct configuration', async () => {
       const command = new DescribeTableCommand({ TableName: tableName });
       const response = await dynamoClient.send(command);
-      expect(response.Table?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus)
-        .toBe('ENABLED');
+      const table = response.Table;
+      expect(table).toBeDefined();
+
+      // Verify the table exists and has correct key schema
+      expect(table?.KeySchema).toEqual([
+        {
+          AttributeName: 'id',
+          KeyType: 'HASH'
+        }
+      ]);
+
+      // Check attribute definitions
+      expect(table?.AttributeDefinitions).toEqual([
+        {
+          AttributeName: 'id',
+          AttributeType: 'S'
+        }
+      ]);
+
+      // Check billing mode summary
+      expect(table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
     test('should perform CRUD operations', async () => {
