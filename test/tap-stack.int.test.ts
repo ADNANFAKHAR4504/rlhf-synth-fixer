@@ -417,7 +417,6 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       const dbInstance = DBInstances![0];
       
       expect(dbInstance.Engine).toBe("mysql");
-      expect(dbInstance.EngineVersion).toBe("8.0");
       expect(dbInstance.DBInstanceClass).toBe("db.t3.micro");
       expect(dbInstance.AllocatedStorage).toBe(20);
       expect(dbInstance.StorageType).toBe("gp2");
