@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "CI/CD Pipeline for ECS deployment with Blue/Green rollback capability",
+  "Description": "CI/CD Pipeline for ECS deployment with Blue/Green rollback capability (fixed: log ARNs + service desired count default 0)",
   "Parameters": {
     "ApplicationName": {
       "Type": "String",
@@ -36,6 +36,11 @@
       "Type": "String",
       "Default": "main",
       "Description": "Git branch to build"
+    },
+    "ServiceDesiredCount": {
+      "Type": "Number",
+      "Default": 0,
+      "Description": "Desired count for ECS service on stack create (set 0 if image not available at create time)"
     }
   },
   "Conditions": {
@@ -773,6 +778,7 @@
     },
     "ECSService": {
       "Type": "AWS::ECS::Service",
+      "DependsOn": [],
       "Properties": {
         "ServiceName": {
           "Fn::Sub": "${ApplicationName}-service"
@@ -792,14 +798,16 @@
           "Ref": "ECSTaskDefinition"
         },
         "LaunchType": "FARGATE",
-        "DesiredCount": 2,
+        "DesiredCount": {
+          "Ref": "ServiceDesiredCount"
+        },
         "DeploymentConfiguration": {
           "DeploymentCircuitBreaker": {
             "Enable": true,
             "Rollback": true
           },
           "MaximumPercent": 200,
-          "MinimumHealthyPercent": 100
+          "MinimumHealthyPercent": 0
         },
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
@@ -1105,12 +1113,18 @@
           }
         ]
       }
+    },
+    "ECSServiceName": {
+      "Description": "ECS service name",
+      "Value": {
+        "Ref": "ECSService"
+      }
     }
   },
   "Metadata": {
     "TestingInstructions": {
       "Validation": "Run 'aws cloudformation validate-template --template-body file://template.json' to validate syntax",
-      "DeploymentTest": "Deploy stack, then push code to trigger pipeline. Monitor pipeline execution in CodePipeline console",
+      "DeploymentTest": "Deploy stack (service desired count defaults to 0). Then run pipeline to build/push image and update the ECS service desired count (or pipeline can update the service).",
       "RollbackTest": "To test rollback, introduce a failing health check or deployment error in your application code, commit and push. The ECS circuit breaker will automatically rollback on failure",
       "MonitoringTest": "Check SNS topic for pipeline state change notifications and CloudWatch logs for build/deployment logs",
       "Prerequisites": "Ensure you have a GitHub OAuth token stored in AWS Secrets Manager with name 'github-token'"
