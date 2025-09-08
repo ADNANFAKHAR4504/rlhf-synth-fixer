@@ -377,7 +377,7 @@ export class TapStack extends cdk.Stack {
     const configRole = new iam.Role(this, 'ConfigServiceRole', {
       assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWS_ConfigRole'),
       ],
     });
 
