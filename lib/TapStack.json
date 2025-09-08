@@ -96,7 +96,7 @@
       "Condition": "CreateArtifactBucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "${ApplicationName}-pipeline-artifacts-${AWS::AccountId}-${AWS::Region}"
+          "Fn::Sub": "${ApplicationName}-pipeline-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
         },
         "PublicAccessBlockConfiguration": {
           "BlockPublicAcls": true,
@@ -123,7 +123,7 @@
       "Condition": "CreateECSCluster",
       "Properties": {
         "ClusterName": {
-          "Fn::Sub": "${ApplicationName}-cluster"
+          "Fn::Sub": "${ApplicationName}-cluster-${EnvironmentSuffix}"
         },
         "CapacityProviders": [
           "FARGATE"
@@ -167,7 +167,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ApplicationName}-vpc"
+              "Fn::Sub": "${ApplicationName}-vpc-${EnvironmentSuffix}"
             }
           }
         ]
@@ -217,7 +217,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ApplicationName}-public-subnet-1"
+              "Fn::Sub": "${ApplicationName}-public-subnet-1-${EnvironmentSuffix}"
             }
           }
         ]
@@ -243,7 +243,7 @@
           {
             "Key": "Name",
             "Value": {
-              "Fn::Sub": "${ApplicationName}-public-subnet-2"
+              "Fn::Sub": "${ApplicationName}-public-subnet-2-${EnvironmentSuffix}"
             }
           }
         ]
@@ -788,7 +788,7 @@
       "DependsOn": [],
       "Properties": {
         "ServiceName": {
-          "Fn::Sub": "${ApplicationName}-service"
+          "Fn::Sub": "${ApplicationName}-service-${EnvironmentSuffix}"
         },
         "Cluster": {
           "Fn::If": [
@@ -1129,6 +1129,72 @@
     }
   },
   "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "General Configuration"
+          },
+          "Parameters": [
+            "ApplicationName",
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Pipeline Configuration"
+          },
+          "Parameters": [
+            "PipelineArtifactBucketName",
+            "SNSOperationsTopicNameOrArn"
+          ]
+        },
+        {
+          "Label": {
+            "default": "ECS Configuration"
+          },
+          "Parameters": [
+            "ECSClusterName",
+            "ServiceDesiredCount"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Source Control"
+          },
+          "Parameters": [
+            "GitRepository",
+            "GitBranch"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "ApplicationName": {
+          "default": "Application Name"
+        },
+        "EnvironmentSuffix": {
+          "default": "Environment Suffix"
+        },
+        "PipelineArtifactBucketName": {
+          "default": "Pipeline Artifact Bucket Name"
+        },
+        "SNSOperationsTopicNameOrArn": {
+          "default": "SNS Topic Name or ARN"
+        },
+        "ECSClusterName": {
+          "default": "ECS Cluster Name"
+        },
+        "ServiceDesiredCount": {
+          "default": "ECS Service Desired Count"
+        },
+        "GitRepository": {
+          "default": "Git Repository URL"
+        },
+        "GitBranch": {
+          "default": "Git Branch"
+        }
+      }
+    },
     "TestingInstructions": {
       "Validation": "Run 'aws cloudformation validate-template --template-body file://template.json' to validate syntax",
       "DeploymentTest": "Deploy stack (service desired count defaults to 0). Then run pipeline to build/push image and update the ECS service desired count (or pipeline can update the service).",
