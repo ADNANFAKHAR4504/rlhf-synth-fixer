@@ -227,7 +227,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket with proper configuration
     const s3Bucket = new s3.Bucket(this, 'ApplicationBucket', {
-      bucketName: `nova-app-bucket-${this.region}-${this.account}-1757338868443}`,
+      bucketName: `nova-app-bucket-${this.region}-${this.account}-1757338868443`,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
