@@ -361,7 +361,7 @@ Resources:
   ProductionEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: 'ami-0c02fb55956c7d316'  # Amazon Linux 2 AMI in us-west-2
+      ImageId: 'ami-0c2d3e23eb9b4a0d0'  # Amazon Linux 2023 AMI in us-west-2
       InstanceType: 't3.micro'
       KeyName: !Ref EC2KeyPair
       SecurityGroupIds:
@@ -421,7 +421,7 @@ Resources:
       PubliclyAccessible: false
       MonitoringInterval: 60
       MonitoringRoleArn: !GetAtt RDSMonitoringRole.Arn
-      EnablePerformanceInsights: true
+      EnablePerformanceInsights: false
       Tags:
         - Key: Environment
           Value: Production
