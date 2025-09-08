@@ -116,7 +116,7 @@ export class SecureVpcConstruct extends Construct {
     new IamRolePolicyAttachment(this, 'flow-logs-policy', {
       role: this.flowLogsRole.name,
       policyArn:
-        'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+        'arn:aws:iam::aws:policy/service-role/VPCFlowLogsServiceRolePolicy',
     });
 
     // Create public and private subnets
@@ -766,24 +766,34 @@ export class MonitoringConstruct extends Construct {
 
 // AWS Shield Module - DDoS protection
 export class ShieldConstruct extends Construct {
-  public readonly shieldProtection: ShieldProtection;
+  public readonly shieldProtection?: ShieldProtection;
 
   constructor(
     scope: Construct,
-    id: string,
-    api: ApiGatewayRestApi, // Accept the API object, not a string
-    config: SecureInfraConfig
+    id: string
+    // api: ApiGatewayRestApi,
+    // config: SecureInfraConfig
   ) {
     super(scope, id);
 
-    // Shield protection for the API Gateway (not the stage)
-    this.shieldProtection = new ShieldProtection(this, 'shield-protection', {
-      name: `${config.companyName}-${config.environment}-shield`,
-      resourceArn: `arn:aws:apigateway:${config.region}::/restapis/${api.id}`,
-      tags: {
-        Name: `${config.companyName}-${config.environment}-shield`,
-        Purpose: 'DDoS protection for public services',
-      },
-    });
+    // Note: Shield Advanced only protects certain resource types:
+    // - CloudFront distributions
+    // - Route 53 hosted zones
+    // - Elastic Load Balancers
+    // - EC2 Elastic IP addresses
+
+    // For API Gateway protection, you would typically:
+    // 1. Put CloudFront in front of API Gateway
+    // 2. Protect the CloudFront distribution with Shield
+
+    // Example (if you have a CloudFront distribution):
+    // this.shieldProtection = new ShieldProtection(this, 'shield-protection', {
+    //   name: `${config.companyName}-${config.environment}-shield`,
+    //   resourceArn: `arn:aws:cloudfront::${accountId}:distribution/${cloudfrontId}`,
+    //   tags: {
+    //     Name: `${config.companyName}-${config.environment}-shield`,
+    //     Purpose: 'DDoS protection for CloudFront distribution',
+    //   },
+    // });
   }
 }

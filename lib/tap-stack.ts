@@ -200,11 +200,11 @@ export class TapStack extends TerraformStack {
     );
 
     // 12. Enable AWS Shield protection for API Gateway
-    const shield = new ShieldConstruct(
+    new ShieldConstruct(
       this,
-      'shield',
-      apiGateway.api, // Pass the API object, not a string
-      config
+      'shield'
+      // apiGateway.api, // Pass the API object, not a string
+      // config
     );
 
     // Define outputs for important resource identifiers
@@ -304,10 +304,6 @@ export class TapStack extends TerraformStack {
     //   description: 'Name of the AWS Config recorder'
     // });
 
-    new TerraformOutput(this, 'shield_protection_id', {
-      value: shield.shieldProtection.id,
-      description: 'ID of the AWS Shield protection',
-    });
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
   }
