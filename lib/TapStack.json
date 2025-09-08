@@ -321,7 +321,7 @@
           "Fn::Sub": "${ApplicationName}/github-token-${EnvironmentSuffix}"
         },
         "Description": "Placeholder GitHub OAuth token for CodePipeline. Populate secret value after deploy if created by stack.",
-        "SecretString": ""
+        "SecretString": "{\"token\":\"CHANGE_ME\"}"
       }
     },
     "CodePipelineServiceRole": {
