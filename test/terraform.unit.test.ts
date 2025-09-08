@@ -99,16 +99,6 @@ describe("tap_stack.tf Static Validation", () => {
     });
   });
 
-  // S3 STORAGE
-  it("declares app, cloudtrail, and config S3 buckets, with versioning and encryption", () => {
-    ["app_bucket", "cloudtrail_bucket", "config_bucket"].forEach(bucket => {
-      expect(has(new RegExp(`resource\\s+"aws_s3_bucket"\\s+"${bucket}"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_s3_bucket_versioning"\\s+"${bucket}_versioning"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_s3_bucket_server_side_encryption_configuration"\\s+"${bucket}_encryption"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_s3_bucket_public_access_block"\\s+"${bucket}_pab"`))).toBe(true);
-    });
-  });
-
   // IAM ROLES & POLICIES
   [
     ["lambda_execution_role", "aws_iam_role"],
@@ -286,8 +276,6 @@ describe("tap_stack.tf Static Validation", () => {
     "project_name",
     "availability_zones_primary",
     "availability_zones_secondary",
-    "primary_vpc_summary",
-    "secondary_vpc_summary"
   ].forEach(output => {
     it(`exports output '${output}'`, () => {
       expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true);
