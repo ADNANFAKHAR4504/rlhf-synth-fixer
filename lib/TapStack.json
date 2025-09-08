@@ -592,7 +592,7 @@
     "ProductionEC2Instance": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
-        "ImageId": "ami-0c02fb55956c7d316",
+        "ImageId": "ami-0bbc328167dee8f3c",
         "InstanceType": "t3.micro",
         "KeyName": {
           "Ref": "EC2KeyPair"
