@@ -26,5 +26,11 @@
     "VPC",
     "SNS",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
 }
