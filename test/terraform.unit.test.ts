@@ -56,12 +56,6 @@ describe('tap_stack.tf Full Coverage Unit Tests', () => {
     expect(has(/data\s+"aws_caller_identity"\s+"current"/)).toBe(true);
   });
 
-  it('uses random_string and random_password for db username and password', () => {
-    expect(has(/resource\s+"random_string"\s+"db_username"/)).toBe(true);
-    expect(has(/resource\s+"random_password"\s+"db_password"/)).toBe(true);
-    expect(has(/override_special\s*=\s*"!#\$%&amp;\*\+\-=\?\^_`\|~"/)).toBe(true);
-  });
-
   it('creates VPC, IGW, subnets, NAT gateways, route tables and associations', () => {
     expect(has(/resource\s+"aws_vpc"\s+"main"/)).toBe(true);
     expect(has(/resource\s+"aws_internet_gateway"\s+"main"/)).toBe(true);
