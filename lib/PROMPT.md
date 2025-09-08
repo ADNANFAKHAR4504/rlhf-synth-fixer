@@ -1,14 +1,14 @@
 ### Purpose
-Create a secure, production-ready AWS CDK v2 TypeScript stack deployable to `us-east-1` that adheres to strict security and compliance requirements.
+Create a secure, production-ready AWS CDK v2 TypeScript stack deployable to `us-west-2` that adheres to strict security and compliance requirements.
 
 ### Inputs
 - environment: Production
 - allowedIpRanges: ["203.0.113.0/24"]   # CIDRs for HTTPS/SSH access
-- certArn: "arn:aws:acm:us-east-1:123456789012:certificate/abc123"
+- certArn: "arn:aws:acm:us-west-2:123456789012:certificate/abc123"
 - kmsAlias: "alias/gocxm-prod"
 
 ### Constraints
-- Region: us-east-1
+- Region: us-west-2
 - All resources tagged: Environment=Production, Security=High
 - IAM roles: least privilege only
 - All sensitive data encrypted with AWS KMS
@@ -33,7 +33,7 @@ Concise, production-ready, and security-first.
 All code must include comments explaining security rationale.
 
 ### Validation Checklist
-- [ ] Stack deployed in `us-east-1`
+- [ ] Stack deployed in `us-west-2`
 - [ ] All resources tagged correctly
 - [ ] IAM policies least privilege
 - [ ] KMS key created and used (S3, Config, etc.)

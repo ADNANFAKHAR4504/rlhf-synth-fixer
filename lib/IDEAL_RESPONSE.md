@@ -4,7 +4,7 @@ A comprehensive security-first infrastructure implementation that adheres to str
 
 ## Architecture Overview
 
-This solution implements a multi-layered security architecture in AWS using CDK v2 with TypeScript, targeting the `us-east-1` region. The infrastructure is designed with defense-in-depth principles and follows AWS security best practices.
+This solution implements a multi-layered security architecture in AWS using CDK v2 with TypeScript, targeting the `us-west-2` region. The infrastructure is designed with defense-in-depth principles and follows AWS security best practices.
 
 ### Core Security Components
 
@@ -339,7 +339,7 @@ export class TapStack extends cdk.Stack {
    ```bash
    export ENVIRONMENT_SUFFIX="prod"
    export CDK_DEFAULT_ACCOUNT="123456789012"
-   export CDK_DEFAULT_REGION="us-east-1"
+   export CDK_DEFAULT_REGION="us-west-2"
    ```
 
 3. **Deployment**:
@@ -352,7 +352,7 @@ export class TapStack extends cdk.Stack {
 
 ## Security Validation Checklist
 
-- [x] Stack targets `us-east-1` region
+- [x] Stack targets `us-west-2` region
 - [x] All resources tagged: Environment=Production, Security=High
 - [x] IAM policies follow least privilege principle
 - [x] KMS encryption for all sensitive data
