@@ -16,6 +16,55 @@
         ]
       }
     },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "VPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "VPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
@@ -31,12 +80,28 @@
             }
           ]
         },
+        "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Environment",
             "Value": "Production"
+          },
+          {
+            "Key": "Name",
+            "Value": "Public Subnet 1"
           }
         ]
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
     "PublicSubnet2": {
@@ -54,12 +119,28 @@
             }
           ]
         },
+        "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Environment",
             "Value": "Production"
+          },
+          {
+            "Key": "Name",
+            "Value": "Public Subnet 2"
           }
         ]
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
       }
     },
     "ALBSecurityGroup": {
