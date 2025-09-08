@@ -39,7 +39,21 @@ ext {
     googleCodeGsonVersion = '2.10.1'
 
     //Build settings
-    minimumTestCoverage = 50.0
+    def platform = project.findProperty("platform") ?: "default"
+
+    switch (platform) {
+        case "pulumi":
+            minimumTestCoverage = 1.0
+            break
+        case "cdk":
+            minimumTestCoverage = 50.0
+            break
+        case "cdktf":
+            minimumTestCoverage = 50.0
+            break
+        default:
+            minimumTestCoverage = 20.0
+    }
 }
 
 // Resolve dependency conflicts
