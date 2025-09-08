@@ -1,7 +1,7 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
   TapStack - Secure and Scalable AWS Production Infrastructure
-  Refactored to use Secrets Manager dynamic references for sensitive data.
+  Refactored to auto-create and use Secrets Manager secret for RDS credentials.
 
 Parameters:
   SSHCidrBlock:
@@ -206,7 +206,24 @@ Resources:
           Value: Prod
 
   # -------------------------------
-  # RDS Encrypted DB with Secrets Manager
+  # Secrets Manager for RDS
+  # -------------------------------
+  RDSMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: myapp/rds/master
+      Description: RDS master credentials for TapStack
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"admin"}'
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Environment
+          Value: Prod
+
+  # -------------------------------
+  # RDS Encrypted DB with Dynamic Reference
   # -------------------------------
   MyDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -222,8 +239,8 @@ Resources:
       Engine: mysql
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
-      MasterUsername: admin
-      MasterUserPassword: '{{resolve:secretsmanager:myapp/rds/master:SecretString:password}}'
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSMasterSecret, ':SecretString:username}}']]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSMasterSecret, ':SecretString:password}}']]
       DBSubnetGroupName: !Ref MyDBSubnetGroup
       StorageEncrypted: true
       KmsKeyId: alias/aws/rds
@@ -280,3 +297,6 @@ Outputs:
   RDSInstanceEndpoint:
     Description: RDS Endpoint
     Value: !GetAtt MyDB.Endpoint.Address
+  RDSSecretName:
+    Description: Name of the RDS secret in Secrets Manager
+    Value: !Ref RDSMasterSecret
