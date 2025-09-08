@@ -48,6 +48,11 @@
       "Type": "Number",
       "Default": 0,
       "Description": "Desired count for ECS service on stack create (set 0 if image not available at create time)"
+    },
+    "GitHubTokenSecretName": {
+      "Type": "String",
+      "Default": "github-token",
+      "Description": "Name of the AWS Secrets Manager secret containing the GitHub OAuth token. Must exist before stack deploy."
     }
   },
   "Conditions": {
@@ -923,7 +928,9 @@
                   "Branch": {
                     "Ref": "GitBranch"
                   },
-                  "OAuthToken": "{{resolve:secretsmanager:github-token}}"
+                  "OAuthToken": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${GitHubTokenSecretName}}}"
+                  }
                 },
                 "OutputArtifacts": [
                   {
@@ -1200,7 +1207,7 @@
       "DeploymentTest": "Deploy stack (service desired count defaults to 0). Then run pipeline to build/push image and update the ECS service desired count (or pipeline can update the service).",
       "RollbackTest": "To test rollback, introduce a failing health check or deployment error in your application code, commit and push. The ECS circuit breaker will automatically rollback on failure",
       "MonitoringTest": "Check SNS topic for pipeline state change notifications and CloudWatch logs for build/deployment logs",
-      "Prerequisites": "Ensure you have a GitHub OAuth token stored in AWS Secrets Manager with name 'github-token'"
+      "Prerequisites": "Ensure you have a GitHub OAuth token stored in AWS Secrets Manager with name matching the GitHubTokenSecretName parameter (default: 'github-token')"
     }
   }
 }
