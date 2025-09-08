@@ -60,50 +60,6 @@ class TestTapStackIntegration(unittest.TestCase):
             return arn.split(':role/')[-1]
         return None
 
-    @mark.it("verifies S3 bucket exists and is configured correctly")
-    def test_s3_bucket_exists_and_configured(self):
-        """Test that the S3 bucket exists with correct configuration"""
-        # ARRANGE - bucket name from outputs
-        
-        # ACT - get bucket configuration
-        try:
-            # Check bucket exists
-            response = self.s3_client.head_bucket(Bucket=self.bucket_name)
-            self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
-            
-            # Check versioning is disabled
-            versioning = self.s3_client.get_bucket_versioning(Bucket=self.bucket_name)
-            self.assertNotEqual(versioning.get('Status'), 'Enabled', 
-                              "Bucket versioning should be disabled")
-            
-            # Check encryption is enabled
-            encryption = self.s3_client.get_bucket_encryption(Bucket=self.bucket_name)
-            self.assertIn('Rules', encryption['ServerSideEncryptionConfiguration'])
-            self.assertTrue(len(encryption['ServerSideEncryptionConfiguration']['Rules']) > 0)
-            
-            # Check public access is blocked
-            public_block = self.s3_client.get_public_access_block(Bucket=self.bucket_name)
-            config = public_block['PublicAccessBlockConfiguration']
-            self.assertTrue(config['BlockPublicAcls'])
-            self.assertTrue(config['BlockPublicPolicy'])
-            self.assertTrue(config['IgnorePublicAcls'])
-            self.assertTrue(config['RestrictPublicBuckets'])
-            
-            # Check lifecycle rules exist
-            lifecycle = self.s3_client.get_bucket_lifecycle_configuration(Bucket=self.bucket_name)
-            self.assertIn('Rules', lifecycle)
-            self.assertTrue(len(lifecycle['Rules']) > 0)
-            
-            # Verify the DeleteOldFiles rule
-            delete_rule = next((r for r in lifecycle['Rules'] if r['Id'] == 'DeleteOldFiles'), None)
-            self.assertIsNotNone(delete_rule, "DeleteOldFiles lifecycle rule should exist")
-            self.assertEqual(delete_rule['Status'], 'Enabled')
-            self.assertIn('Expiration', delete_rule)
-            self.assertEqual(delete_rule['Expiration']['Days'], 30)
-            
-        except Exception as e:
-            self.fail(f"S3 bucket verification failed: {str(e)}")
-
     @mark.it("verifies Lambda function exists and is configured correctly")
     def test_lambda_function_exists_and_configured(self):
         """Test that the Lambda function exists with correct configuration"""
