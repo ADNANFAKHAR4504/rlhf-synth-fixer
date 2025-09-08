@@ -201,7 +201,7 @@ describe('AWS Infrastructure Migration Integration Tests', () => {
       const response = await rdsClient.send(command);
       
       const subnetGroup = response.DBSubnetGroups!.find(sg => 
-        sg.DBSubnetGroupName?.includes('databasesubnetgroup')
+        sg.DBSubnetGroupName?.includes('databasesubnetgroup') && sg.VpcId === vpcId
       );
       
       expect(subnetGroup).toBeDefined();
