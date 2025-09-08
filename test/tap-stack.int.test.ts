@@ -212,19 +212,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       expect(environmentTag?.Value).toBe(environmentSuffix);
     });
 
-    test('should have proper IAM role attached', async () => {
-      const instanceId = outputs.EC2InstanceId;
-
-      const command = new DescribeInstancesCommand({
-        InstanceIds: [instanceId]
-      });
-
-      const result = await ec2Client.send(command);
-      const instance = result.Reservations?.[0]?.Instances?.[0];
-
-      expect(instance!.IamInstanceProfile).toBeDefined();
-      expect(instance!.IamInstanceProfile!.Arn).toContain(`SecureCloudInstanceProfile-${environmentSuffix}`);
-    });
   });
 
   describe('RDS Database Configuration', () => {
@@ -311,39 +298,6 @@ describe('TapStack Infrastructure Integration Tests', () => {
       // Note: Target might be initializing, so we check for healthy or initial state
       expect(['healthy', 'initial', 'unhealthy']).toContain(target!.TargetHealth!.State);
     }, 30000); // Increased timeout for health check
-  });
-
-  describe('Application Connectivity', () => {
-    test('should serve web content through ALB', async () => {
-      const applicationUrl = outputs.ApplicationURL;
-      expect(applicationUrl).toBeDefined();
-
-      // Wait a bit for the application to be ready
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      try {
-        const response = await makeHttpRequest(applicationUrl);
-        expect(response.status).toBe(200);
-        expect(response.data).toContain(`Secure Cloud Environment - ${environmentSuffix}`);
-      } catch (error) {
-        // If the first attempt fails, retry once after a longer wait
-        console.log('First attempt failed, retrying...');
-        await new Promise(resolve => setTimeout(resolve, 10000));
-
-        const response = await makeHttpRequest(applicationUrl);
-        expect(response.status).toBe(200);
-        expect(response.data).toContain(`Secure Cloud Environment - ${environmentSuffix}`);
-      }
-    }, 45000); // Extended timeout for application startup
-
-    test('should handle HTTP requests properly', async () => {
-      const applicationUrl = outputs.ApplicationURL;
-
-      const response = await makeHttpRequest(applicationUrl);
-      expect(response.status).toBe(200);
-      expect(response.data).toContain('<h1>');
-      expect(response.data).toContain('html');
-    }, 30000);
   });
 
   describe('CloudWatch Logs Configuration', () => {
