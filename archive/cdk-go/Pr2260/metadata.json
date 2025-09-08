@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "310052",
+  "team": "6",
+  "startedAt": "2025-08-26T09:23:20.383Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "IaC Optimization",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Elastic Load Balancing v2 (ALB)",
+    "Auto Scaling",
+    "CloudWatch"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
+}
