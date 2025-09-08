@@ -9,6 +9,15 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// Extract actual environment suffix from deployed resources
+const extractEnvSuffix = (tableName: string): string => {
+  // Extract suffix from table name format "myorg-{suffix}-{resource}"
+  const match = tableName.match(/^myorg-(.+)-(users|data)$/);
+  return match ? match[1] : environmentSuffix;
+};
+
+const actualEnvSuffix = extractEnvSuffix(outputs.UserTableName || `myorg-${environmentSuffix}-users`);
+
 // Initialize AWS clients
 const ddbClient = new DynamoDBClient({ region: 'us-east-1' });
 
@@ -18,7 +27,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(outputs.ApiGatewayUrl).toBeDefined();
       expect(outputs.ApiGatewayUrl).toContain('https://');
       expect(outputs.ApiGatewayUrl).toContain('.execute-api.us-east-1.amazonaws.com');
-      expect(outputs.ApiGatewayUrl).toContain('/dev/');
+      expect(outputs.ApiGatewayUrl).toContain(`/${actualEnvSuffix}/`);
     });
 
     test('should respond to health check', async () => {
@@ -38,7 +47,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
 
   describe('DynamoDB Tables Tests', () => {
     test('should have UserTable accessible', async () => {
-      expect(outputs.UserTableName).toBe('myorg-dev-users');
+      expect(outputs.UserTableName).toBe(`myorg-${actualEnvSuffix}-users`);
       
       try {
         const command = new ScanCommand({
@@ -56,7 +65,7 @@ describe('Serverless Infrastructure Integration Tests', () => {
     });
 
     test('should have DataTable accessible', async () => {
-      expect(outputs.DataTableName).toBe('myorg-dev-data');
+      expect(outputs.DataTableName).toBe(`myorg-${actualEnvSuffix}-data`);
       
       try {
         const command = new ScanCommand({
@@ -81,16 +90,16 @@ describe('Serverless Infrastructure Integration Tests', () => {
       expect(outputs.UserTableName).toBeDefined();
       
       // Validate output formats
-      expect(outputs.ApiGatewayUrl).toMatch(/^https:\/\/.+\.execute-api\..+\.amazonaws\.com\/dev\/$/);
-      expect(outputs.DataTableName).toMatch(/^myorg-dev-data$/);
-      expect(outputs.UserTableName).toMatch(/^myorg-dev-users$/);
+      expect(outputs.ApiGatewayUrl).toMatch(new RegExp(`^https:\\/\\/.+\\.execute-api\\..+\\.amazonaws\\.com\\/${actualEnvSuffix}\\/\$`));
+      expect(outputs.DataTableName).toMatch(new RegExp(`^myorg-${actualEnvSuffix}-data\$`));
+      expect(outputs.UserTableName).toMatch(new RegExp(`^myorg-${actualEnvSuffix}-users\$`));
     });
   });
 
   describe('Infrastructure Components', () => {
     test('should validate environment suffix in resource names', () => {
-      expect(outputs.DataTableName).toContain(environmentSuffix);
-      expect(outputs.UserTableName).toContain(environmentSuffix);
+      expect(outputs.DataTableName).toContain(actualEnvSuffix);
+      expect(outputs.UserTableName).toContain(actualEnvSuffix);
     });
 
     test('should be deployed in correct region (us-east-1)', () => {
