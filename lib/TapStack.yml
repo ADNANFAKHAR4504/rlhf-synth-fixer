@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'TapStack - Secure baseline infrastructure with KMS, VPC, ALB, WAF, EC2, Lambda, CloudTrail, Config, and GuardDuty (us-east-1)'
+Description: 'TapStack - Secure baseline infrastructure with KMS, VPC, ALB, WAF, EC2, Lambda, CloudTrail, and optional GuardDuty (us-east-1)'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -108,11 +108,6 @@ Resources:
             Effect: Allow
             Principal: { Service: !Sub 'logs.${AWS::Region}.amazonaws.com' }
             Action: ['kms:Encrypt','kms:Decrypt','kms:ReEncrypt*','kms:GenerateDataKey*','kms:DescribeKey']
-            Resource: '*'
-          - Sid: AllowConfig
-            Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: ['kms:GenerateDataKey*','kms:DescribeKey']
             Resource: '*'
       Tags:
         - { Key: Project, Value: !Ref ProjectName }
@@ -235,64 +230,6 @@ Resources:
               StringEquals:
                 s3:x-amz-acl: 'bucket-owner-full-control'
                 aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-trail'
-
-  ConfigLogsBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub '${ProjectName}-config-logs-${AWS::AccountId}-${AWS::Region}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref TapStackKMSKey
-            BucketKeyEnabled: true
-      VersioningConfiguration: { Status: Enabled }
-      OwnershipControls:
-        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
-      Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
-
-  ConfigLogsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ConfigLogsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: 'DenyInsecureConnections'
-            Effect: Deny
-            Principal: '*'
-            Action: 's3:*'
-            Resource:
-              - !GetAtt ConfigLogsBucket.Arn
-              - !Sub '${ConfigLogsBucket.Arn}/*'
-            Condition:
-              Bool: { aws:SecureTransport: false }
-          - Sid: 'AWSConfigBucketPermissionsCheck'
-            Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: 's3:GetBucketAcl'
-            Resource: !GetAtt ConfigLogsBucket.Arn
-          - Sid: 'AWSConfigBucketExistenceCheck'
-            Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: 's3:ListBucket'
-            Resource: !GetAtt ConfigLogsBucket.Arn
-          - Sid: 'AWSConfigBucketDelivery'
-            Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: 's3:PutObject'
-            Resource: !Sub '${ConfigLogsBucket.Arn}/*'
-            Condition:
-              StringEquals: { s3:x-amz-acl: 'bucket-owner-full-control' }
 
   LambdaArtifactsBucket:
     Type: AWS::S3::Bucket
@@ -547,8 +484,6 @@ Resources:
             Resource:
               - !GetAtt TrailLogsBucket.Arn
               - !Sub '${TrailLogsBucket.Arn}/*'
-              - !GetAtt ConfigLogsBucket.Arn
-              - !Sub '${ConfigLogsBucket.Arn}/*'
               - !GetAtt LambdaArtifactsBucket.Arn
               - !Sub '${LambdaArtifactsBucket.Arn}/*'
               - !GetAtt AccessLogsBucket.Arn
@@ -840,65 +775,6 @@ Resources:
         - { Key: Owner, Value: !Ref Owner }
         - { Key: CostCenter, Value: !Ref CostCenter }
 
-  # Role for AWS Config Remediations (SSM Automation)
-  ConfigRemediationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-config-remediation-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: ssm.amazonaws.com }
-            Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyName: 'allow-s3-public-access-block'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 's3:GetBucketPublicAccessBlock'
-                  - 's3:PutBucketPublicAccessBlock'
-                  - 's3:GetAccountPublicAccessBlock'
-                  - 's3:PutAccountPublicAccessBlock'
-                Resource: '*'
-      Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
-
-  # ✅ Least-privilege inline policy for AWS Config
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-config-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - { Effect: Allow, Principal: { Service: config.amazonaws.com }, Action: 'sts:AssumeRole' }
-      Policies:
-        - PolicyName: 'config-s3-delivery'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - { Effect: Allow, Action: ['s3:GetBucketAcl','s3:ListBucket'], Resource: !GetAtt ConfigLogsBucket.Arn }
-              - Effect: Allow
-                Action: ['s3:PutObject']
-                Resource: !Sub '${ConfigLogsBucket.Arn}/*'
-                Condition: { StringEquals: { s3:x-amz-acl: 'bucket-owner-full-control' } }
-        - PolicyName: 'config-kms-access'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - { Effect: Allow, Action: ['kms:GenerateDataKey','kms:DescribeKey'], Resource: !GetAtt TapStackKMSKey.Arn }
-      Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
-
   # ---------------------- EC2 LT & ASG ----------------------
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -1096,194 +972,7 @@ Resources:
         - { Key: Owner, Value: !Ref Owner }
         - { Key: CostCenter, Value: !Ref CostCenter }
 
-  # ---------------------- AWS Config (DeliveryChannel first, then Recorder, then Starter) ----------------------
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub '${ProjectName}-config-delivery-channel'
-      S3BucketName: !Ref ConfigLogsBucket
-      S3KeyPrefix: 'config'
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
-  ConfigConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    DependsOn: ConfigDeliveryChannel
-    Properties:
-      Name: !Sub '${ProjectName}-config-recorder'
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  # --- Custom resource to START the recorder after both exist ---
-  ConfigStarterRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub '${ProjectName}-config-starter-role'
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal: { Service: lambda.amazonaws.com }
-            Action: 'sts:AssumeRole'
-      Policies:
-        - PolicyName: 'config-start-stop'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'config:StartConfigurationRecorder'
-                  - 'config:StopConfigurationRecorder'
-                  - 'config:DescribeConfigurationRecorders'
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
-      Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
-
-  ConfigStarterFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub '${ProjectName}-config-starter'
-      Runtime: python3.11
-      Handler: index.handler
-      Role: !GetAtt ConfigStarterRole.Arn
-      Timeout: 60
-      Code:
-        ZipFile: |
-          import json, urllib.request, boto3
-          config = boto3.client('config')
-          def send(event, status, data):
-              resp = {
-                  'Status': status,
-                  'Reason': 'See CloudWatch Logs for details',
-                  'PhysicalResourceId': event.get('PhysicalResourceId', 'ConfigStarter'),
-                  'StackId': event['StackId'],
-                  'RequestId': event['RequestId'],
-                  'LogicalResourceId': event['LogicalResourceId'],
-                  'Data': data or {}
-              }
-              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(resp).encode(), headers={'content-type':'application/json'})
-              urllib.request.urlopen(req)
-          def handler(event, context):
-              try:
-                  name = event['ResourceProperties']['RecorderName']
-                  if event['RequestType'] in ('Create','Update'):
-                      recs = config.describe_configuration_recorders()['ConfigurationRecorders']
-                      names = [r['name'] for r in recs]
-                      if name not in names:
-                          raise Exception(f"Recorder {name} not found")
-                      config.start_configuration_recorder(ConfigurationRecorderName=name)
-                      send(event, 'SUCCESS', {'Recorder':'STARTED'})
-                  elif event['RequestType'] == 'Delete':
-                      try:
-                          config.stop_configuration_recorder(ConfigurationRecorderName=name)
-                      except Exception:
-                          pass
-                      send(event, 'SUCCESS', {'Recorder':'STOPPED'})
-              except Exception as e:
-                  send(event, 'FAILED', {'Error': str(e)})
-                  raise
-      Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
-
-  ConfigRecorderStarter:
-    Type: Custom::StartConfigRecorder
-    DependsOn:
-      - ConfigConfigurationRecorder
-      - ConfigDeliveryChannel
-    Properties:
-      ServiceToken: !GetAtt ConfigStarterFunction.Arn
-      RecorderName: !Sub '${ProjectName}-config-recorder'
-
-  # ---------------------- AWS Config Rules & Remediations ----------------------
-  S3BucketPublicReadProhibitedRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorderStarter
-    Properties:
-      ConfigRuleName: 's3-bucket-public-read-prohibited'
-      Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED }
-
-  S3BucketPublicWriteProhibitedRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorderStarter
-    Properties:
-      ConfigRuleName: 's3-bucket-public-write-prohibited'
-      Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED }
-
-  CloudTrailEnabledRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorderStarter
-    Properties:
-      ConfigRuleName: 'cloudtrail-enabled'
-      Source: { Owner: AWS, SourceIdentifier: CLOUD_TRAIL_ENABLED }
-
-  RestrictedSSHRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorderStarter
-    Properties:
-      ConfigRuleName: 'incoming-ssh-disabled'
-      Source: { Owner: AWS, SourceIdentifier: INCOMING_SSH_DISABLED }
-
-  S3PublicReadRemediationConfiguration:
-    Type: AWS::Config::RemediationConfiguration
-    Properties:
-      ConfigRuleName: !Ref S3BucketPublicReadProhibitedRule
-      TargetType: SSM_DOCUMENT
-      TargetId: 'AWSConfigRemediation-ConfigureS3BucketPublicAccessBlock'
-      Parameters:
-        AutomationAssumeRole:
-          StaticValue:
-            Values: [!GetAtt ConfigRemediationRole.Arn]
-        BucketName:
-          ResourceValue: { Value: RESOURCE_ID }
-        BlockPublicAcls:
-          StaticValue: { Values: ['true'] }
-        BlockPublicPolicy:
-          StaticValue: { Values: ['true'] }
-        IgnorePublicAcls:
-          StaticValue: { Values: ['true'] }
-        RestrictPublicBuckets:
-          StaticValue: { Values: ['true'] }
-      Automatic: false
-      MaximumAutomaticAttempts: 1
-
-  S3PublicWriteRemediationConfiguration:
-    Type: AWS::Config::RemediationConfiguration
-    Properties:
-      ConfigRuleName: !Ref S3BucketPublicWriteProhibitedRule
-      TargetType: SSM_DOCUMENT
-      TargetId: 'AWSConfigRemediation-ConfigureS3BucketPublicAccessBlock'
-      Parameters:
-        AutomationAssumeRole:
-          StaticValue:
-            Values: [!GetAtt ConfigRemediationRole.Arn]
-        BucketName:
-          ResourceValue: { Value: RESOURCE_ID }
-        BlockPublicAcls:
-          StaticValue: { Values: ['true'] }
-        BlockPublicPolicy:
-          StaticValue: { Values: ['true'] }
-        IgnorePublicAcls:
-          StaticValue: { Values: ['true'] }
-        RestrictPublicBuckets:
-          StaticValue: { Values: ['true'] }
-      Automatic: false
-      MaximumAutomaticAttempts: 1
-
-  # ---------------------- GuardDuty ----------------------
+  # ---------------------- GuardDuty (optional) ----------------------
   GuardDutyDetector:
     Condition: CreateGuardDuty
     Type: AWS::GuardDuty::Detector
@@ -1361,19 +1050,6 @@ Outputs:
     Description: 'CloudTrail CloudWatch Log Group ARN'
     Value: !GetAtt CloudTrailLogGroup.Arn
     Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-trail-loggroup-arn' }
-  ConfigRecorderName:
-    Description: 'Config recorder name'
-    Value: !Ref ConfigConfigurationRecorder
-    Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-config-recorder' }
-  ConfigDeliveryChannelName:
-    Description: 'Config delivery channel name'
-    Value: !Ref ConfigDeliveryChannel
-    Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-config-delivery-channel' }
-  GuardDutyDetectorId:
-    Condition: CreateGuardDuty
-    Description: 'GuardDuty detector ID'
-    Value: !Ref GuardDutyDetector
-    Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-guardduty-detector' }
   KmsKeyArn:
     Description: 'KMS key ARN'
     Value: !GetAtt TapStackKMSKey.Arn
@@ -1386,10 +1062,6 @@ Outputs:
     Description: 'CloudTrail logs bucket name'
     Value: !Ref TrailLogsBucket
     Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-trail-logs-bucket' }
-  ConfigLogsBucketName:
-    Description: 'AWS Config logs bucket name'
-    Value: !Ref ConfigLogsBucket
-    Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-config-logs-bucket' }
   LambdaArtifactsBucketName:
     Description: 'Lambda artifacts bucket name'
     Value: !Ref LambdaArtifactsBucket
