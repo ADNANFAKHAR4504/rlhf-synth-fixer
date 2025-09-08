@@ -59,15 +59,9 @@ export class TapStack extends TerraformStack {
 
     const allowedSshCidr = new TerraformVariable(this, 'allowed_ssh_cidr', {
       type: 'string',
+      default: '203.0.113.0/24',
       description:
         'Company IP range allowed for SSH access (e.g., 203.0.113.0/24)',
-      validation: [
-        {
-          condition: 'can(cidrhost(var.allowed_ssh_cidr, 0))',
-          errorMessage:
-            'The allowed_ssh_cidr value must be a valid CIDR block.',
-        },
-      ],
     });
 
     const dbUsername = new TerraformVariable(this, 'db_username', {
