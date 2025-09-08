@@ -385,7 +385,7 @@ export class TapStack extends cdk.Stack {
 
     // CloudWatch log group for API Gateway with KMS encryption
     const apiLogGroup = new logs.LogGroup(this, 'ApiGatewayLogGroup', {
-      logGroupName: '/aws/apigateway/production',
+      logGroupName: `/aws/apigateway/production-${environmentSuffix}`,
       retention: logs.RetentionDays.THREE_MONTHS, // 90-day retention
       encryptionKey: kmsKey, // Encrypt logs with KMS
     });
