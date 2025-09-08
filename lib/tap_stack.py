@@ -287,15 +287,13 @@ class TapStack(cdk.Stack):
             max_capacity=5,
             desired_capacity=2,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
-            health_check=autoscaling.HealthCheck.ec2(grace=Duration.minutes(5)),
+            health_checks=[autoscaling.HealthCheck.ec2(grace=Duration.minutes(5))],
         )
 
         # Create scaling policy based on CPU utilization
         self.scaling_policy = self.auto_scaling_group.scale_on_cpu_utilization(
             f"CpuScalingPolicy{self.environment_suffix}",
             target_utilization_percent=70,
-            scale_in_cooldown=Duration.minutes(5),
-            scale_out_cooldown=Duration.minutes(3),
         )
 
     def _create_monitoring(self):
