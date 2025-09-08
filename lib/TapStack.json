@@ -462,10 +462,32 @@
                   ],
                   "Resource": [
                     {
-                      "Fn::Sub": "${CodeBuildLogGroup}:*"
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Fn::GetAtt": [
+                              "CodeBuildLogGroup",
+                              "Arn"
+                            ]
+                          },
+                          ":*"
+                        ]
+                      ]
                     },
                     {
-                      "Fn::Sub": "${CodeBuildTestLogGroup}:*"
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Fn::GetAtt": [
+                              "CodeBuildTestLogGroup",
+                              "Arn"
+                            ]
+                          },
+                          ":*"
+                        ]
+                      ]
                     }
                   ]
                 },
@@ -551,7 +573,18 @@
                     "logs:PutLogEvents"
                   ],
                   "Resource": {
-                    "Fn::Sub": "${ECSLogGroup}:*"
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Fn::GetAtt": [
+                            "ECSLogGroup",
+                            "Arn"
+                          ]
+                        },
+                        ":*"
+                      ]
+                    ]
                   }
                 }
               ]
