@@ -502,14 +502,104 @@
                 "Ref": "MyAppVPC"
             }
         },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            }
+        },
+        "PublicRouteTableId": {
+            "Description": "Public Route Table ID",
+            "Value": {
+                "Ref": "PublicRouteTable"
+            }
+        },
+        "PublicSecurityGroupId": {
+            "Description": "Public Security Group ID",
+            "Value": {
+                "Ref": "PublicSG"
+            }
+        },
+        "PrivateSecurityGroupId": {
+            "Description": "Private Security Group ID",
+            "Value": {
+                "Ref": "PrivateSG"
+            }
+        },
+        "EC2RoleName": {
+            "Description": "IAM Role Name",
+            "Value": {
+                "Ref": "EC2Role"
+            }
+        },
+        "EC2RoleArn": {
+            "Description": "IAM Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2Role",
+                    "Arn"
+                ]
+            }
+        },
+        "EC2InstanceProfileName": {
+            "Description": "IAM Instance Profile Name",
+            "Value": {
+                "Ref": "EC2InstanceProfile"
+            }
+        },
         "LogsBucketName": {
-            "Description": "Logs S3 bucket",
+            "Description": "Logs S3 bucket name",
             "Value": {
                 "Ref": "LogsBucket"
             }
         },
+        "LogsBucketArn": {
+            "Description": "Logs S3 bucket ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LogsBucket",
+                    "Arn"
+                ]
+            }
+        },
+        "RDSSecretName": {
+            "Description": "RDS secret name",
+            "Value": {
+                "Ref": "RDSMasterSecret"
+            }
+        },
+        "RDSInstanceId": {
+            "Description": "RDS Instance ID",
+            "Value": {
+                "Ref": "MyDB"
+            }
+        },
         "RDSInstanceEndpoint": {
-            "Description": "RDS Endpoint",
+            "Description": "RDS Endpoint Address",
             "Value": {
                 "Fn::GetAtt": [
                     "MyDB",
@@ -517,10 +607,46 @@
                 ]
             }
         },
-        "RDSSecretName": {
-            "Description": "Name of the RDS secret in Secrets Manager",
+        "RDSInstancePort": {
+            "Description": "RDS Endpoint Port",
             "Value": {
-                "Ref": "RDSMasterSecret"
+                "Fn::GetAtt": [
+                    "MyDB",
+                    "Endpoint.Port"
+                ]
+            }
+        },
+        "RDSSubnetGroup": {
+            "Description": "RDS Subnet Group",
+            "Value": {
+                "Ref": "MyDBSubnetGroup"
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "EC2 Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            }
+        },
+        "LaunchTemplateLatestVersion": {
+            "Description": "EC2 Launch Template Latest Version",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LaunchTemplate",
+                    "LatestVersionNumber"
+                ]
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            }
+        },
+        "LatestAmiParameter": {
+            "Description": "SSM Parameter used for Latest Amazon Linux 2 AMI",
+            "Value": {
+                "Ref": "LatestAmiId"
             }
         }
     }
