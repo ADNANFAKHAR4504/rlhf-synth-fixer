@@ -4,14 +4,29 @@ Description: 'TapStack - Secure baseline infrastructure with KMS, VPC, ALB, WAF,
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
-      - Label: { default: "Project Configuration" }
-        Parameters: [ProjectName, EnvironmentName, Owner, CostCenter]
-      - Label: { default: "Network Configuration" }
-        Parameters: [AllowedIngressCIDRForAlbHttp]
-      - Label: { default: "Compute Configuration" }
-        Parameters: [InstanceType, MinCapacity, MaxCapacity, AppPort]
-      - Label: { default: "Logging Configuration" }
-        Parameters: [LogRetentionDays]
+      - Label:
+          default: "Project Configuration"
+        Parameters:
+          - ProjectName
+          - EnvironmentName
+          - Owner
+          - CostCenter
+      - Label:
+          default: "Network Configuration"
+        Parameters:
+          - AllowedIngressCIDRForAlbHttp
+      - Label:
+          default: "Compute Configuration"
+        Parameters:
+          - InstanceType
+          - MinCapacity
+          - MaxCapacity
+          - AppPort
+      - Label:
+          default: "Logging Configuration"
+        Parameters:
+          - LogRetentionDays
+          - EnableGuardDuty
 
 Parameters:
   ProjectName:
@@ -20,54 +35,95 @@ Parameters:
     Description: 'Lowercase project name used in resource names (must be DNS-safe for S3 buckets)'
     AllowedPattern: '^[a-z0-9][a-z0-9-]*$'
     MaxLength: 32
+
   EnvironmentName:
     Type: String
     Default: 'dev'
     Description: 'Environment name'
-    AllowedValues: ['dev', 'staging', 'prod']
+    AllowedValues:
+      - 'dev'
+      - 'staging'
+      - 'prod'
+
   Owner:
     Type: String
     Default: 'devops'
     Description: 'Resource owner for tagging'
     MaxLength: 64
+
   CostCenter:
     Type: String
     Default: 'engineering'
     Description: 'Cost center for billing'
     MaxLength: 64
+
   AllowedIngressCIDRForAlbHttp:
     Type: String
     Default: '0.0.0.0/0'
     Description: 'CIDR block allowed to access ALB HTTP port'
     AllowedPattern: '^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$'
+
   InstanceType:
     Type: String
     Default: 't3.micro'
     Description: 'EC2 instance type'
-    AllowedValues: ['t3.micro', 't3.small', 't3.medium', 't3.large']
+    AllowedValues:
+      - 't3.micro'
+      - 't3.small'
+      - 't3.medium'
+      - 't3.large'
+
   MinCapacity:
     Type: Number
     Default: 1
     Description: 'Minimum number of EC2 instances'
     MinValue: 1
     MaxValue: 10
+
   MaxCapacity:
     Type: Number
     Default: 2
     Description: 'Maximum number of EC2 instances'
     MinValue: 1
     MaxValue: 10
+
   AppPort:
     Type: Number
     Default: 8080
     Description: 'Application port for EC2 instances'
     MinValue: 1024
     MaxValue: 65535
+
   LogRetentionDays:
     Type: Number
     Default: 30
     Description: 'CloudWatch log retention in days'
-    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    AllowedValues:
+      - 1
+      - 3
+      - 5
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 120
+      - 150
+      - 180
+      - 365
+      - 400
+      - 545
+      - 731
+      - 1827
+      - 3653
+
+  EnableGuardDuty:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Create a GuardDuty detector in this region (one per account/region). Set to true only if no detector exists.'
 
 Mappings:
   AZMapping:
@@ -77,9 +133,9 @@ Mappings:
 
 Conditions:
   IsProd: !Equals [!Ref EnvironmentName, 'prod']
+  CreateGuardDuty: !Equals [!Ref EnableGuardDuty, 'true']
 
 Resources:
-  # ---------------------- KMS ----------------------
   TapStackKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -90,29 +146,47 @@ Resources:
         Statement:
           - Sid: EnableIAMUserPermissions
             Effect: Allow
-            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
           - Sid: AllowCloudTrail
             Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
-            Action: [kms:GenerateDataKey*, kms:DescribeKey, kms:Decrypt]
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+              - 'kms:Decrypt'
             Resource: '*'
           - Sid: AllowCloudWatchLogs
             Effect: Allow
-            Principal: { Service: !Sub 'logs.${AWS::Region}.amazonaws.com' }
-            Action: [kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey]
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
             Resource: '*'
           - Sid: AllowConfig
             Effect: Allow
-            Principal: { Service: config.amazonaws.com }
-            Action: [kms:GenerateDataKey*, kms:DescribeKey]
+            Principal:
+              Service: config.amazonaws.com
+            Action:
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
             Resource: '*'
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   TapStackKMSKeyAlias:
     Type: AWS::KMS::Alias
@@ -120,7 +194,6 @@ Resources:
       AliasName: !Sub 'alias/${ProjectName}-kms'
       TargetKeyId: !Ref TapStackKMSKey
 
-  # ---------------------- S3 Buckets ----------------------
   AccessLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -136,20 +209,26 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref TapStackKMSKey
             BucketKeyEnabled: true
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       OwnershipControls:
-        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       LifecycleConfiguration:
         Rules:
-          - Id: delete-old-access-logs
+          - Id: 'delete-old-access-logs'
             Status: Enabled
             ExpirationInDays: !If [IsProd, 2557, 90]
             NoncurrentVersionExpirationInDays: 30
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   TrailLogsBucket:
     Type: AWS::S3::Bucket
@@ -166,28 +245,37 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref TapStackKMSKey
             BucketKeyEnabled: true
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       OwnershipControls:
-        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       LoggingConfiguration:
         DestinationBucketName: !Ref AccessLogsBucket
         LogFilePrefix: 'trail-logs-access/'
       LifecycleConfiguration:
         Rules:
-          - Id: transition-and-delete-logs
+          - Id: 'transition-and-delete-logs'
             Status: Enabled
             Transitions:
-              - { TransitionInDays: 30, StorageClass: STANDARD_IA }
-              - { TransitionInDays: 90, StorageClass: GLACIER }
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
             ExpirationInDays: !If [IsProd, 2557, 365]
             NoncurrentVersionTransitions:
-              - { TransitionInDays: 30, StorageClass: STANDARD_IA }
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
             NoncurrentVersionExpirationInDays: 365
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   TrailLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -196,37 +284,43 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyInsecureConnections
+          - Sid: 'DenyInsecureConnections'
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
               - !GetAtt TrailLogsBucket.Arn
               - !Sub '${TrailLogsBucket.Arn}/*'
-            Condition: { Bool: { 'aws:SecureTransport': false } }
-          - Sid: DenyUnEncryptedObjectUploads
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+          - Sid: 'DenyUnEncryptedObjectUploads'
             Effect: Deny
             Principal: '*'
             Action: 's3:PutObject'
             Resource: !Sub '${TrailLogsBucket.Arn}/*'
-            Condition: { StringNotEquals: { 's3:x-amz-server-side-encryption': 'aws:kms' } }
-          - Sid: AWSCloudTrailAclCheck
+            Condition:
+              StringNotEquals:
+                s3:x-amz-server-side-encryption: 'aws:kms'
+          - Sid: 'AWSCloudTrailAclCheck'
             Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
+            Principal:
+              Service: cloudtrail.amazonaws.com
             Action: 's3:GetBucketAcl'
             Resource: !GetAtt TrailLogsBucket.Arn
             Condition:
               StringEquals:
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-trail'
-          - Sid: AWSCloudTrailWrite
+                aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-trail'
+          - Sid: 'AWSCloudTrailWrite'
             Effect: Allow
-            Principal: { Service: cloudtrail.amazonaws.com }
+            Principal:
+              Service: cloudtrail.amazonaws.com
             Action: 's3:PutObject'
             Resource: !Sub '${TrailLogsBucket.Arn}/cloudtrail-logs/AWSLogs/${AWS::AccountId}/*'
             Condition:
               StringEquals:
-                's3:x-amz-acl': 'bucket-owner-full-control'
-                'AWS:SourceArn': !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-trail'
+                s3:x-amz-acl: 'bucket-owner-full-control'
+                aws:SourceArn: !Sub 'arn:aws:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/${ProjectName}-trail'
 
   ConfigLogsBucket:
     Type: AWS::S3::Bucket
@@ -243,14 +337,20 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref TapStackKMSKey
             BucketKeyEnabled: true
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       OwnershipControls:
-        Rules: [{ ObjectOwnership: BucketOwnerPreferred }]
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   ConfigLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -259,30 +359,37 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyInsecureConnections
+          - Sid: 'DenyInsecureConnections'
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
               - !GetAtt ConfigLogsBucket.Arn
               - !Sub '${ConfigLogsBucket.Arn}/*'
-            Condition: { Bool: { 'aws:SecureTransport': false } }
-          - Sid: AWSConfigBucketPermissionsCheck
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+          - Sid: 'AWSConfigBucketPermissionsCheck'
             Effect: Allow
-            Principal: { Service: config.amazonaws.com }
+            Principal:
+              Service: config.amazonaws.com
             Action: 's3:GetBucketAcl'
             Resource: !GetAtt ConfigLogsBucket.Arn
-          - Sid: AWSConfigBucketExistenceCheck
+          - Sid: 'AWSConfigBucketExistenceCheck'
             Effect: Allow
-            Principal: { Service: config.amazonaws.com }
+            Principal:
+              Service: config.amazonaws.com
             Action: 's3:ListBucket'
             Resource: !GetAtt ConfigLogsBucket.Arn
-          - Sid: AWSConfigBucketDelivery
+          - Sid: 'AWSConfigBucketDelivery'
             Effect: Allow
-            Principal: { Service: config.amazonaws.com }
+            Principal:
+              Service: config.amazonaws.com
             Action: 's3:PutObject'
             Resource: !Sub '${ConfigLogsBucket.Arn}/*'
-            Condition: { StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' } }
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: 'bucket-owner-full-control'
 
   LambdaArtifactsBucket:
     Type: AWS::S3::Bucket
@@ -299,14 +406,20 @@ Resources:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref TapStackKMSKey
             BucketKeyEnabled: true
-      VersioningConfiguration: { Status: Enabled }
+      VersioningConfiguration:
+        Status: Enabled
       OwnershipControls:
-        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   LambdaArtifactsBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -315,16 +428,17 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyInsecureConnections
+          - Sid: 'DenyInsecureConnections'
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
               - !GetAtt LambdaArtifactsBucket.Arn
               - !Sub '${LambdaArtifactsBucket.Arn}/*'
-            Condition: { Bool: { 'aws:SecureTransport': false } }
+            Condition:
+              Bool:
+                aws:SecureTransport: false
 
-  # ---------------------- VPC & Networking ----------------------
   TapStackVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -332,21 +446,31 @@ Resources:
       EnableDnsHostnames: true
       EnableDnsSupport: true
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-vpc' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-igw' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-igw'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   InternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -362,11 +486,16 @@ Resources:
       CidrBlock: '10.0.1.0/24'
       MapPublicIpOnLaunch: true
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-1' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-public-subnet-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -376,11 +505,16 @@ Resources:
       CidrBlock: '10.0.2.0/24'
       MapPublicIpOnLaunch: true
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-public-subnet-2' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-public-subnet-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -389,11 +523,16 @@ Resources:
       AvailabilityZone: !FindInMap [AZMapping, !Ref 'AWS::Region', AZ1]
       CidrBlock: '10.0.10.0/24'
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-1' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-subnet-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -402,11 +541,16 @@ Resources:
       AvailabilityZone: !FindInMap [AZMapping, !Ref 'AWS::Region', AZ2]
       CidrBlock: '10.0.11.0/24'
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-private-subnet-2' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-subnet-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   NatGateway1EIP:
     Type: AWS::EC2::EIP
@@ -414,11 +558,16 @@ Resources:
     Properties:
       Domain: vpc
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-nat-eip-1' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-nat-eip-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
@@ -426,22 +575,32 @@ Resources:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-nat-gateway-1' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-nat-gateway-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TapStackVPC
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-public-rt' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-public-rt'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   DefaultPublicRoute:
     Type: AWS::EC2::Route
@@ -453,22 +612,31 @@ Resources:
 
   PublicSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: { RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref PublicSubnet1 }
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
 
   PublicSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: { RouteTableId: !Ref PublicRouteTable, SubnetId: !Ref PublicSubnet2 }
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TapStackVPC
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-private-rt-1' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-rt-1'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
@@ -479,18 +647,25 @@ Resources:
 
   PrivateSubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: { RouteTableId: !Ref PrivateRouteTable1, SubnetId: !Ref PrivateSubnet1 }
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable1
+      SubnetId: !Ref PrivateSubnet1
 
   PrivateRouteTable2:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref TapStackVPC
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-private-rt-2' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-rt-2'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
@@ -501,24 +676,36 @@ Resources:
 
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties: { RouteTableId: !Ref PrivateRouteTable2, SubnetId: !Ref PrivateSubnet2 }
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable2
+      SubnetId: !Ref PrivateSubnet2
 
-  # ---------------------- VPC Endpoints ----------------------
   VpcEndpointSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for VPC interface endpoints
+      GroupDescription: 'Security group for VPC interface endpoints'
       VpcId: !Ref TapStackVPC
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: '10.0.0.0/16', Description: 'HTTPS from VPC CIDR' }
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '10.0.0.0/16'
+          Description: 'HTTPS from VPC CIDR'
       SecurityGroupEgress:
-        - { IpProtocol: -1, CidrIp: '0.0.0.0/0', Description: 'All outbound' }
+        - IpProtocol: -1
+          CidrIp: '0.0.0.0/0'
+          Description: 'All outbound'
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-vpc-endpoint-sg' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-endpoint-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   S3GatewayEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -526,13 +713,16 @@ Resources:
       VpcId: !Ref TapStackVPC
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
       VpcEndpointType: Gateway
-      RouteTableIds: [!Ref PrivateRouteTable1, !Ref PrivateRouteTable2]
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal: '*'
-            Action: ['s3:*']
+            Action:
+              - 's3:*'
             Resource:
               - !GetAtt TrailLogsBucket.Arn
               - !Sub '${TrailLogsBucket.Arn}/*'
@@ -550,8 +740,11 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.kms'
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref VpcEndpointSecurityGroup]
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
 
   LogsInterfaceEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -560,8 +753,11 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref VpcEndpointSecurityGroup]
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
 
   SsmInterfaceEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -570,8 +766,11 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref VpcEndpointSecurityGroup]
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
 
   SsmMessagesInterfaceEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -580,8 +779,11 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref VpcEndpointSecurityGroup]
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
 
   Ec2MessagesInterfaceEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -590,73 +792,123 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
-      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      SecurityGroupIds: [!Ref VpcEndpointSecurityGroup]
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
 
-  # ---------------------- Security Groups ----------------------
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for Application Load Balancer
+      GroupDescription: 'Security group for Application Load Balancer'
       VpcId: !Ref TapStackVPC
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: !Ref AllowedIngressCIDRForAlbHttp, Description: 'HTTP access from allowed CIDR' }
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowedIngressCIDRForAlbHttp
+          Description: 'HTTP access from allowed CIDR'
       SecurityGroupEgress:
-        - { IpProtocol: tcp, FromPort: !Ref AppPort, ToPort: !Ref AppPort, CidrIp: '10.0.0.0/16', Description: 'App port to targets in VPC' }
+        - IpProtocol: tcp
+          FromPort: !Ref AppPort
+          ToPort: !Ref AppPort
+          CidrIp: '10.0.0.0/16'
+          Description: 'App port to targets in VPC'
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-alb-sg' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-alb-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   EC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for EC2 instances (no SSH)
+      GroupDescription: 'Security group for EC2 instances (no SSH)'
       VpcId: !Ref TapStackVPC
-      # Breaks any SG-to-SG cycle: allow only VPC CIDR on app port
       SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: !Ref AppPort, ToPort: !Ref AppPort, CidrIp: '10.0.0.0/16', Description: 'App port from VPC' }
+        - IpProtocol: tcp
+          FromPort: !Ref AppPort
+          ToPort: !Ref AppPort
+          CidrIp: '10.0.0.0/16'
+          Description: 'App port from VPC'
       SecurityGroupEgress:
-        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0', Description: 'HTTPS to internet for updates' }
-        - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0', Description: 'HTTP to internet for updates' }
-        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, DestinationSecurityGroupId: !Ref VpcEndpointSecurityGroup, Description: 'HTTPS to VPC endpoints' }
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTPS to internet for updates'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: '0.0.0.0/0'
+          Description: 'HTTP to internet for updates'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationSecurityGroupId: !Ref VpcEndpointSecurityGroup
+          Description: 'HTTPS to VPC endpoints'
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-ec2-sg' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-ec2-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for Lambda functions
+      GroupDescription: 'Security group for Lambda functions'
       VpcId: !Ref TapStackVPC
       SecurityGroupEgress:
-        - { IpProtocol: tcp, FromPort: 443, ToPort: 443, DestinationSecurityGroupId: !Ref VpcEndpointSecurityGroup, Description: 'HTTPS to VPC endpoints' }
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationSecurityGroupId: !Ref VpcEndpointSecurityGroup
+          Description: 'HTTPS to VPC endpoints'
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-lambda-sg' }
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Name
+          Value: !Sub '${ProjectName}-lambda-sg'
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
-  # ---------------------- ALB ----------------------
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: !Sub '${ProjectName}-alb'
       Scheme: internet-facing
       Type: application
-      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
-      SecurityGroups: [!Ref ALBSecurityGroup]
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -674,56 +926,94 @@ Resources:
       UnhealthyThresholdCount: 3
       TargetType: instance
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   ALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      DefaultActions: [{ Type: forward, TargetGroupArn: !Ref ALBTargetGroup }]
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
 
-  # ---------------------- WAFv2 ----------------------
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name: !Sub '${ProjectName}-webacl'
       Scope: REGIONAL
-      DefaultAction: { Allow: {} }
+      DefaultAction:
+        Allow: {}
       Rules:
-        - Name: AWSManagedRulesCommonRuleSet
+        - Name: 'AWSManagedRulesCommonRuleSet'
           Priority: 1
-          OverrideAction: { None: {} }
-          Statement: { ManagedRuleGroupStatement: { VendorName: AWS, Name: AWSManagedRulesCommonRuleSet } }
-          VisibilityConfig: { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: common-rule-set }
-        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'common-rule-set'
+        - Name: 'AWSManagedRulesKnownBadInputsRuleSet'
           Priority: 2
-          OverrideAction: { None: {} }
-          Statement: { ManagedRuleGroupStatement: { VendorName: AWS, Name: AWSManagedRulesKnownBadInputsRuleSet } }
-          VisibilityConfig: { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: known-bad-inputs }
-        - Name: AWSManagedRulesAmazonIpReputationList
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'known-bad-inputs'
+        - Name: 'AWSManagedRulesAmazonIpReputationList'
           Priority: 3
-          OverrideAction: { None: {} }
-          Statement: { ManagedRuleGroupStatement: { VendorName: AWS, Name: AWSManagedRulesAmazonIpReputationList } }
-          VisibilityConfig: { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: ip-reputation }
-        - Name: AWSManagedRulesAnonymousIpList
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'ip-reputation'
+        - Name: 'AWSManagedRulesAnonymousIpList'
           Priority: 4
-          OverrideAction: { None: {} }
-          Statement: { ManagedRuleGroupStatement: { VendorName: AWS, Name: AWSManagedRulesAnonymousIpList } }
-          VisibilityConfig: { SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: anonymous-ip }
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAnonymousIpList
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: 'anonymous-ip'
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
         MetricName: !Sub '${ProjectName}-webacl'
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   WebACLAssociation:
     Type: AWS::WAFv2::WebACLAssociation
@@ -732,7 +1022,6 @@ Resources:
       ResourceArn: !Ref ApplicationLoadBalancer
       WebACLArn: !GetAtt WebACL.Arn
 
-  # ---------------------- IAM ----------------------
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -740,37 +1029,60 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - { Effect: Allow, Principal: { Service: ec2.amazonaws.com }, Action: 'sts:AssumeRole' }
-      ManagedPolicyArns: ['arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore']
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Policies:
-        - PolicyName: ec2-cw-logs
+        - PolicyName: 'ec2-cw-logs'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: ['logs:CreateLogGroup','logs:CreateLogStream','logs:PutLogEvents','logs:DescribeLogGroups','logs:DescribeLogStreams']
-                Resource: [!Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${ProjectName}*']
-        - PolicyName: ec2-s3-artifacts-read
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${ProjectName}*'
+        - PolicyName: 'ec2-s3-artifacts-read'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - { Effect: Allow, Action: ['s3:GetObject'], Resource: !Sub '${LambdaArtifactsBucket.Arn}/ec2/*' }
-        - PolicyName: ec2-kms-access
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource:
+                  - !Sub '${LambdaArtifactsBucket.Arn}/ec2/*'
+        - PolicyName: 'ec2-kms-access'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - { Effect: Allow, Action: ['kms:Decrypt','kms:GenerateDataKey'], Resource: !GetAtt TapStackKMSKey.Arn }
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt TapStackKMSKey.Arn
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       InstanceProfileName: !Sub '${ProjectName}-ec2-profile'
-      Roles: [!Ref EC2InstanceRole]
+      Roles:
+        - !Ref EC2InstanceRole
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
@@ -779,24 +1091,42 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - { Effect: Allow, Principal: { Service: lambda.amazonaws.com }, Action: 'sts:AssumeRole' }
-      ManagedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole']
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
       Policies:
-        - PolicyName: lambda-cw-logs
+        - PolicyName: 'lambda-cw-logs'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - { Effect: Allow, Action: ['logs:CreateLogGroup','logs:CreateLogStream','logs:PutLogEvents'], Resource: [!Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}*'] }
-        - PolicyName: lambda-kms-access
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}*'
+        - PolicyName: 'lambda-kms-access'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - { Effect: Allow, Action: ['kms:Decrypt','kms:GenerateDataKey'], Resource: !GetAtt TapStackKMSKey.Arn }
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: !GetAtt TapStackKMSKey.Arn
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   CloudTrailLogsRole:
     Type: AWS::IAM::Role
@@ -805,18 +1135,29 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - { Effect: Allow, Principal: { Service: cloudtrail.amazonaws.com }, Action: 'sts:AssumeRole' }
+          - Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 'sts:AssumeRole'
       Policies:
-        - PolicyName: cloudtrail-to-cw-logs
+        - PolicyName: 'cloudtrail-to-cw-logs'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - { Effect: Allow, Action: ['logs:CreateLogStream','logs:PutLogEvents'], Resource: !GetAtt CloudTrailLogGroup.Arn }
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: !GetAtt CloudTrailLogGroup.Arn
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   ConfigRole:
     Type: AWS::IAM::Role
@@ -825,27 +1166,48 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - { Effect: Allow, Principal: { Service: config.amazonaws.com }, Action: 'sts:AssumeRole' }
-      ManagedPolicyArns: ['arn:aws:iam::aws:policy/service-role/ConfigRole']
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/ConfigRole'
       Policies:
-        - PolicyName: config-s3-delivery
+        - PolicyName: 'config-s3-delivery'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - { Effect: Allow, Action: ['s3:GetBucketAcl','s3:ListBucket'], Resource: !GetAtt ConfigLogsBucket.Arn }
-              - { Effect: Allow, Action: ['s3:PutObject'], Resource: !Sub '${ConfigLogsBucket.Arn}/*', Condition: { StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' } } }
-        - PolicyName: config-kms-access
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                Resource: !GetAtt ConfigLogsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: !Sub '${ConfigLogsBucket.Arn}/*'
+                Condition:
+                  StringEquals:
+                    s3:x-amz-acl: 'bucket-owner-full-control'
+        - PolicyName: 'config-kms-access'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - { Effect: Allow, Action: ['kms:GenerateDataKey','kms:DescribeKey'], Resource: !GetAtt TapStackKMSKey.Arn }
+              - Effect: Allow
+                Action:
+                  - 'kms:GenerateDataKey'
+                  - 'kms:DescribeKey'
+                Resource: !GetAtt TapStackKMSKey.Arn
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
-  # ---------------------- EC2 LT & ASG ----------------------
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -853,8 +1215,10 @@ Resources:
       LaunchTemplateData:
         ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
         InstanceType: !Ref InstanceType
-        IamInstanceProfile: { Arn: !GetAtt EC2InstanceProfile.Arn }
-        SecurityGroupIds: [!Ref EC2SecurityGroup]
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref EC2SecurityGroup
         BlockDeviceMappings:
           - DeviceName: '/dev/xvda'
             Ebs:
@@ -862,7 +1226,9 @@ Resources:
               VolumeType: gp3
               Encrypted: true
               KmsKeyId: !Ref TapStackKMSKey
-        MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
+        MetadataOptions:
+          HttpTokens: required
+          HttpEndpoint: enabled
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
@@ -903,21 +1269,36 @@ Resources:
             systemctl enable tapstack-app
             systemctl start tapstack-app
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-            { "logs": { "logs_collected": { "files": { "collect_list": [
-              { "file_path": "/var/log/messages",
-                "log_group_name": "/aws/ec2/${ProjectName}",
-                "log_stream_name": "{instance_id}/system" }
-            ]}}}}
+            {
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/messages",
+                        "log_group_name": "/aws/ec2/${ProjectName}",
+                        "log_stream_name": "{instance_id}/system"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
             EOF
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
         TagSpecifications:
           - ResourceType: instance
             Tags:
-              - { Key: Name, Value: !Sub '${ProjectName}-instance' }
-              - { Key: Project, Value: !Ref ProjectName }
-              - { Key: Environment, Value: !Ref EnvironmentName }
-              - { Key: Owner, Value: !Ref Owner }
-              - { Key: CostCenter, Value: !Ref CostCenter }
+              - Key: Name
+                Value: !Sub '${ProjectName}-instance'
+              - Key: Project
+                Value: !Ref ProjectName
+              - Key: Environment
+                Value: !Ref EnvironmentName
+              - Key: Owner
+                Value: !Ref Owner
+              - Key: CostCenter
+                Value: !Ref CostCenter
 
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -929,18 +1310,30 @@ Resources:
       MinSize: !Ref MinCapacity
       MaxSize: !Ref MaxCapacity
       DesiredCapacity: !Ref MinCapacity
-      VPCZoneIdentifier: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
-      TargetGroupARNs: [!Ref ALBTargetGroup]
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      TargetGroupARNs:
+        - !Ref ALBTargetGroup
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       Tags:
-        - { Key: Name, Value: !Sub '${ProjectName}-asg', PropagateAtLaunch: false }
-        - { Key: Project, Value: !Ref ProjectName, PropagateAtLaunch: true }
-        - { Key: Environment, Value: !Ref EnvironmentName, PropagateAtLaunch: true }
-        - { Key: Owner, Value: !Ref Owner, PropagateAtLaunch: true }
-        - { Key: CostCenter, Value: !Ref CostCenter, PropagateAtLaunch: true }
+        - Key: Name
+          Value: !Sub '${ProjectName}-asg'
+          PropagateAtLaunch: false
+        - Key: Project
+          Value: !Ref ProjectName
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+        - Key: Owner
+          Value: !Ref Owner
+          PropagateAtLaunch: true
+        - Key: CostCenter
+          Value: !Ref CostCenter
+          PropagateAtLaunch: true
 
-  # ---------------------- Lambda ----------------------
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -948,10 +1341,14 @@ Resources:
       RetentionInDays: !Ref LogRetentionDays
       KmsKeyId: !GetAtt TapStackKMSKey.Arn
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -962,8 +1359,11 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Timeout: 30
       VpcConfig:
-        SecurityGroupIds: [!Ref LambdaSecurityGroup]
-        SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
       Environment:
         Variables:
           PROJECT_NAME: !Ref ProjectName
@@ -977,16 +1377,23 @@ Resources:
           logger.setLevel(logging.INFO)
           def lambda_handler(event, context):
               logger.info("event: %s", json.dumps(event))
-              return {"statusCode": 200, "body": json.dumps({
-                  "message": f"Hello from {os.environ.get('PROJECT_NAME')} Lambda",
-                  "environment": os.environ.get('ENVIRONMENT') }) }
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps({
+                      "message": f"Hello from {os.environ.get('PROJECT_NAME')} Lambda",
+                      "environment": os.environ.get('ENVIRONMENT')
+                  })
+              }
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
-  # ---------------------- CloudWatch Log Groups ----------------------
   EC2LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -994,10 +1401,14 @@ Resources:
       RetentionInDays: !Ref LogRetentionDays
       KmsKeyId: !GetAtt TapStackKMSKey.Arn
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
@@ -1006,12 +1417,15 @@ Resources:
       RetentionInDays: !If [IsProd, 365, !Ref LogRetentionDays]
       KmsKeyId: !GetAtt TapStackKMSKey.Arn
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
-  # ---------------------- CloudTrail ----------------------
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     DependsOn: TrailLogsBucketPolicy
@@ -1023,24 +1437,30 @@ Resources:
       IsMultiRegionTrail: true
       EnableLogFileValidation: true
       EventSelectors:
-        - { ReadWriteType: All, IncludeManagementEvents: true }
+        - ReadWriteType: All
+          IncludeManagementEvents: true
       CloudWatchLogsLogGroupArn: !GetAtt CloudTrailLogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailLogsRole.Arn
       KMSKeyId: !Ref TapStackKMSKey
       IsLogging: true
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
-  # ---------------------- AWS Config ----------------------
   ConfigConfigurationRecorder:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name: !Sub '${ProjectName}-config-recorder'
       RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup: { AllSupported: true, IncludeGlobalResourceTypes: true }
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
@@ -1048,87 +1468,247 @@ Resources:
       Name: !Sub '${ProjectName}-config-delivery-channel'
       S3BucketName: !Ref ConfigLogsBucket
       S3KeyPrefix: 'config'
-      ConfigSnapshotDeliveryProperties: { DeliveryFrequency: Daily }
+      ConfigSnapshotDeliveryProperties:
+        DeliveryFrequency: Daily
 
   S3BucketPublicReadProhibitedRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: s3-bucket-public-read-prohibited
-      Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED }
+      ConfigRuleName: 's3-bucket-public-read-prohibited'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
 
   S3BucketPublicWriteProhibitedRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: s3-bucket-public-write-prohibited
-      Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED }
+      ConfigRuleName: 's3-bucket-public-write-prohibited'
+      Source:
+        Owner: AWS
+        SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED
 
   CloudTrailEnabledRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: cloudtrail-enabled
-      Source: { Owner: AWS, SourceIdentifier: CLOUD_TRAIL_ENABLED }
+      ConfigRuleName: 'cloudtrail-enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: CLOUD_TRAIL_ENABLED
 
   RestrictedSSHRule:
     Type: AWS::Config::ConfigRule
     DependsOn: ConfigConfigurationRecorder
     Properties:
-      ConfigRuleName: incoming-ssh-disabled
-      Source: { Owner: AWS, SourceIdentifier: INCOMING_SSH_DISABLED }
+      ConfigRuleName: 'incoming-ssh-disabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: INCOMING_SSH_DISABLED
 
   S3PublicReadRemediationConfiguration:
     Type: AWS::Config::RemediationConfiguration
     Properties:
       ConfigRuleName: !Ref S3BucketPublicReadProhibitedRule
       TargetType: SSM_DOCUMENT
-      TargetId: AWSConfigRemediation-RemoveS3BucketPublicReadAccess
+      TargetId: 'AWSConfigRemediation-RemoveS3BucketPublicReadAccess'
       Parameters:
-        AutomationAssumeRole: { StaticValue: !GetAtt ConfigRole.Arn }
-        S3BucketName: { ResourceValue: RESOURCE_ID }
+        AutomationAssumeRole:
+          StaticValue: !GetAtt ConfigRole.Arn
+        S3BucketName:
+          ResourceValue: RESOURCE_ID
       Automatic: false
       MaximumAutomaticAttempts: 1
 
-  # ---------------------- GuardDuty ----------------------
   GuardDutyDetector:
+    Condition: CreateGuardDuty
     Type: AWS::GuardDuty::Detector
     Properties:
       Enable: true
       FindingPublishingFrequency: FIFTEEN_MINUTES
       Tags:
-        - { Key: Project, Value: !Ref ProjectName }
-        - { Key: Environment, Value: !Ref EnvironmentName }
-        - { Key: Owner, Value: !Ref Owner }
-        - { Key: CostCenter, Value: !Ref CostCenter }
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: CostCenter
+          Value: !Ref CostCenter
 
 Outputs:
-  VPCId: { Description: VPC ID, Value: !Ref TapStackVPC, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-vpc-id' } }
-  PublicSubnetIds: { Description: Public subnet IDs, Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]], Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-public-subnet-ids' } }
-  PrivateSubnetIds: { Description: Private subnet IDs, Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]], Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-private-subnet-ids' } }
-  AlbArn: { Description: Application Load Balancer ARN, Value: !Ref ApplicationLoadBalancer, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-alb-arn' } }
-  AlbDnsName: { Description: Application Load Balancer DNS Name, Value: !GetAtt ApplicationLoadBalancer.DNSName, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-alb-dns' } }
-  AlbSecurityGroupId: { Description: ALB Security Group ID, Value: !Ref ALBSecurityGroup, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-alb-sg-id' } }
-  TargetGroupArn: { Description: Target Group ARN, Value: !Ref ALBTargetGroup, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-tg-arn' } }
-  WebAclArn: { Description: WAF Web ACL ARN, Value: !GetAtt WebACL.Arn, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-webacl-arn' } }
-  Ec2AutoScalingGroupName: { Description: Auto Scaling Group Name, Value: !Ref AutoScalingGroup, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-asg-name' } }
-  Ec2InstanceProfileArn: { Description: EC2 Instance Profile ARN, Value: !GetAtt EC2InstanceProfile.Arn, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-ec2-profile-arn' } }
-  LambdaFunctionName: { Description: Lambda function name, Value: !Ref LambdaFunction, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-name' } }
-  LambdaFunctionArn: { Description: Lambda function ARN, Value: !GetAtt LambdaFunction.Arn, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-arn' } }
-  LambdaLogGroupName: { Description: Lambda log group name, Value: !Ref LambdaLogGroup, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-loggroup' } }
-  TrailName: { Description: CloudTrail name, Value: !Ref CloudTrail, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-trail-name' } }
-  TrailArn: { Description: CloudTrail ARN, Value: !GetAtt CloudTrail.Arn, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-trail-arn' } }
-  CloudTrailLogGroupArn: { Description: CloudTrail CloudWatch Log Group ARN, Value: !GetAtt CloudTrailLogGroup.Arn, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-trail-loggroup-arn' } }
-  ConfigRecorderName: { Description: Config recorder name, Value: !Ref ConfigConfigurationRecorder, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-config-recorder' } }
-  ConfigDeliveryChannelName: { Description: Config delivery channel name, Value: !Ref ConfigDeliveryChannel, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-config-delivery-channel' } }
-  GuardDutyDetectorId: { Description: GuardDuty detector ID, Value: !Ref GuardDutyDetector, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-guardduty-detector' } }
-  KmsKeyArn: { Description: KMS key ARN, Value: !GetAtt TapStackKMSKey.Arn, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-kms-arn' } }
-  AccessLogsBucketName: { Description: Access logs bucket name, Value: !Ref AccessLogsBucket, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-access-logs-bucket' } }
-  TrailLogsBucketName: { Description: CloudTrail logs bucket name, Value: !Ref TrailLogsBucket, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-trail-logs-bucket' } }
-  ConfigLogsBucketName: { Description: AWS Config logs bucket name, Value: !Ref ConfigLogsBucket, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-config-logs-bucket' } }
-  LambdaArtifactsBucketName: { Description: Lambda artifacts bucket name, Value: !Ref LambdaArtifactsBucket, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-artifacts-bucket' } }
-  S3GatewayEndpointId: { Description: S3 Gateway Endpoint ID, Value: !Ref S3GatewayEndpoint, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-s3' } }
-  KmsInterfaceEndpointId: { Description: KMS Interface Endpoint ID, Value: !Ref KmsInterfaceEndpoint, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-kms' } }
-  LogsInterfaceEndpointId: { Description: Logs Interface Endpoint ID, Value: !Ref LogsInterfaceEndpoint, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-logs' } }
-  SsmInterfaceEndpointId: { Description: SSM Interface Endpoint ID, Value: !Ref SsmInterfaceEndpoint, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-ssm' } }
-  Ec2MessagesInterfaceEndpointId: { Description: EC2 Messages Interface Endpoint ID, Value: !Ref Ec2MessagesInterfaceEndpoint, Export: { Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-ec2messages' } }
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref TapStackVPC
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-vpc-id'
+
+  PublicSubnetIds:
+    Description: 'Public subnet IDs'
+    Value: !Join [',', [!Ref PublicSubnet1, !Ref PublicSubnet2]]
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-public-subnet-ids'
+
+  PrivateSubnetIds:
+    Description: 'Private subnet IDs'
+    Value: !Join [',', [!Ref PrivateSubnet1, !Ref PrivateSubnet2]]
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-private-subnet-ids'
+
+  AlbArn:
+    Description: 'Application Load Balancer ARN'
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-alb-arn'
+
+  AlbDnsName:
+    Description: 'Application Load Balancer DNS Name'
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-alb-dns'
+
+  AlbSecurityGroupId:
+    Description: 'ALB Security Group ID'
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-alb-sg-id'
+
+  TargetGroupArn:
+    Description: 'Target Group ARN'
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-tg-arn'
+
+  WebAclArn:
+    Description: 'WAF Web ACL ARN'
+    Value: !GetAtt WebACL.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-webacl-arn'
+
+  Ec2AutoScalingGroupName:
+    Description: 'Auto Scaling Group Name'
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-asg-name'
+
+  Ec2InstanceProfileArn:
+    Description: 'EC2 Instance Profile ARN'
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-ec2-profile-arn'
+
+  LambdaFunctionName:
+    Description: 'Lambda function name'
+    Value: !Ref LambdaFunction
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-name'
+
+  LambdaFunctionArn:
+    Description: 'Lambda function ARN'
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-arn'
+
+  LambdaLogGroupName:
+    Description: 'Lambda log group name'
+    Value: !Ref LambdaLogGroup
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-loggroup'
+
+  TrailName:
+    Description: 'CloudTrail name'
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-trail-name'
+
+  TrailArn:
+    Description: 'CloudTrail ARN'
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-trail-arn'
+
+  CloudTrailLogGroupArn:
+    Description: 'CloudTrail CloudWatch Log Group ARN'
+    Value: !GetAtt CloudTrailLogGroup.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-trail-loggroup-arn'
+
+  ConfigRecorderName:
+    Description: 'Config recorder name'
+    Value: !Ref ConfigConfigurationRecorder
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-config-recorder'
+
+  ConfigDeliveryChannelName:
+    Description: 'Config delivery channel name'
+    Value: !Ref ConfigDeliveryChannel
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-config-delivery-channel'
+
+  GuardDutyDetectorId:
+    Condition: CreateGuardDuty
+    Description: 'GuardDuty detector ID'
+    Value: !Ref GuardDutyDetector
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-guardduty-detector'
+
+  KmsKeyArn:
+    Description: 'KMS key ARN'
+    Value: !GetAtt TapStackKMSKey.Arn
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-kms-arn'
+
+  AccessLogsBucketName:
+    Description: 'Access logs bucket name'
+    Value: !Ref AccessLogsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-access-logs-bucket'
+
+  TrailLogsBucketName:
+    Description: 'CloudTrail logs bucket name'
+    Value: !Ref TrailLogsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-trail-logs-bucket'
+
+  ConfigLogsBucketName:
+    Description: 'AWS Config logs bucket name'
+    Value: !Ref ConfigLogsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-config-logs-bucket'
+
+  LambdaArtifactsBucketName:
+    Description: 'Lambda artifacts bucket name'
+    Value: !Ref LambdaArtifactsBucket
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-lambda-artifacts-bucket'
+
+  S3GatewayEndpointId:
+    Description: 'S3 Gateway Endpoint ID'
+    Value: !Ref S3GatewayEndpoint
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-s3'
+
+  KmsInterfaceEndpointId:
+    Description: 'KMS Interface Endpoint ID'
+    Value: !Ref KmsInterfaceEndpoint
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-kms'
+
+  LogsInterfaceEndpointId:
+    Description: 'Logs Interface Endpoint ID'
+    Value: !Ref LogsInterfaceEndpoint
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-logs'
+
+  SsmInterfaceEndpointId:
+    Description: 'SSM Interface Endpoint ID'
+    Value: !Ref SsmInterfaceEndpoint
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-ssm'
+
+  Ec2MessagesInterfaceEndpointId:
+    Description: 'EC2 Messages Interface Endpoint ID'
+    Value: !Ref Ec2MessagesInterfaceEndpoint
+    Export:
+      Name: !Sub '${ProjectName}-${EnvironmentName}-vpce-ec2messages'
