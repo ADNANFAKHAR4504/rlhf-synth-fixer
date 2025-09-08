@@ -56,7 +56,7 @@ export class TapStack extends cdk.Stack {
       alias: props.kmsAlias,
     });
 
-    // VPC with isolated architecture - private/public subnet separation
+    // 'VPC' with isolated architecture - private/public subnet separation
     const vpc = new ec2.Vpc(this, 'SecureVpc', {
       maxAzs: 2, // Multi-AZ for high availability
       subnetConfiguration: [
