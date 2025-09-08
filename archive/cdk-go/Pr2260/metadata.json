@@ -25,5 +25,11 @@
     "Elastic Load Balancing v2 (ALB)",
     "Auto Scaling",
     "CloudWatch"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
 }
