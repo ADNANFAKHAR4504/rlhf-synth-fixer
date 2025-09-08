@@ -7,6 +7,13 @@
       "Default": "my-app",
       "Description": "Name of the application"
     },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for stack name and resources",
+      "AllowedPattern": "^[a-zA-Z0-9-]+$",
+      "ConstraintDescription": "EnvironmentSuffix must contain only letters, numbers, and hyphens"
+    },
     "PipelineArtifactBucketName": {
       "Type": "String",
       "Default": "",
