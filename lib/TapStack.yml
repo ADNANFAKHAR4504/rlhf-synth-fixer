@@ -400,7 +400,7 @@ Resources:
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref AmiID ami-0c02fb55956c7d316  # Update per region
+      ImageId: !Ref AmiID 
       InstanceType: t3.micro
       SubnetId: !Ref PublicSubnet
       SecurityGroupIds: [!Ref BastionSecurityGroup]
