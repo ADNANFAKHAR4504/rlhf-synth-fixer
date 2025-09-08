@@ -9,7 +9,7 @@
   "subtask": "Security and Compliance Implementation",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Security Configuration", 
+    "Security Configuration",
     "Database Management",
     "Network Configuration",
     "Access Control",
@@ -19,12 +19,18 @@
   "aws_services": [
     "KMS",
     "S3",
-    "CloudTrail", 
+    "CloudTrail",
     "IAM",
     "VPC",
     "EC2",
     "RDS",
     "SecurityGroup",
     "SecretsManager"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
