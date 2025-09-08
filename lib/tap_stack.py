@@ -289,13 +289,21 @@ def lambda_handler(event, context):
 def create_s3_lambda_permission(environment_suffix: str, bucket_name, lambda_arn) -> lambda_.Permission:
     """Create permission for S3 to invoke Lambda function."""
     
+    # Handle both string and Pulumi Output types
+    if hasattr(bucket_name, 'apply'):
+        # It's a Pulumi Output
+        source_arn = bucket_name.apply(lambda name: f"arn:aws:s3:::{name}")
+    else:
+        # It's a regular string
+        source_arn = f"arn:aws:s3:::{bucket_name}"
+    
     permission = lambda_.Permission(
         f"s3-lambda-permission-{environment_suffix}",
         statement_id="AllowExecutionFromS3Bucket",
         action="lambda:InvokeFunction",
         function=lambda_arn,
         principal="s3.amazonaws.com",
-        source_arn=bucket_name.apply(lambda name: f"arn:aws:s3:::{name}"),
+        source_arn=source_arn,
         opts=ResourceOptions(protect=False)
     )
     
