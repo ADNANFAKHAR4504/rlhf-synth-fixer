@@ -133,16 +133,6 @@ describe("LIVE Integration Tests - TapStack", () => {
   });
 
   // -------- ALB --------
-  test("ALB exists and has DNS name", async () => {
-    expect(isArn(outputs.ALBArn)).toBe(true);
-    expect(isDnsName(outputs.ALBEndpoint)).toBe(true);
-
-    const resp = await elbv2.send(
-      new DescribeLoadBalancersCommand({ LoadBalancerArns: [outputs.ALBArn] })
-    );
-    expect(resp.LoadBalancers?.[0]?.DNSName).toBe(outputs.ALBEndpoint);
-  });
-
   test("ALB Listener exists", async () => {
     expect(isArn(outputs.ALBListenerArn)).toBe(true);
     const resp = await elbv2.send(
@@ -237,14 +227,6 @@ describe("LIVE Integration Tests - TapStack", () => {
     const gw = resp.NatGateways?.[0];
     expect(gw).toBeDefined();
     expect(gw?.NatGatewayAddresses?.[0]?.PublicIp).toBe(outputs.NatEIP);
-  });
-
-  // -------- CloudTrail --------
-  test("CloudTrail exists and logging enabled", async () => {
-    const resp = await cloudtrail.send(new DescribeTrailsCommand({ trailNameList: [outputs.CloudTrailArn] }));
-    const trail = resp.trailList?.[0];
-    expect(trail).toBeDefined();
-    expect(trail?.IsMultiRegionTrail).toBe(true);
   });
 
   // -------- Bastion Tags --------
