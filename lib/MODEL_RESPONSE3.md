@@ -1,3 +1,27 @@
+### Reasoning Trace
+---
+
+The error is clear - the CloudFormation template requires the `CAPABILITY_NAMED_IAM` capability because it creates IAM roles with explicit names (using the `RoleName` property). 
+
+This is a deployment issue, not a template issue. The user needs to add the `--capabilities CAPABILITY_NAMED_IAM` parameter when deploying the CloudFormation stack.
+
+However, since the user is asking me to fix the issue, I can modify the template to not use explicit role names, which would remove the need for the CAPABILITY_NAMED_IAM capability. But that would change the behavior - the roles would get auto-generated names instead of predictable ones.
+
+Actually, looking at the original requirements, the user asked for logical names that include the ApplicationName parameter, which I did provide. The issue is just that they need to deploy with the right capabilities.
+
+But to be helpful, I should either:
+1. Provide the template without explicit role names (removing CAPABILITY_NAMED_IAM requirement)
+2. Or keep the template as-is and just mention they need to deploy with --capabilities CAPABILITY_NAMED_IAM
+
+I think option 1 is better since it makes the deployment smoother and the logical names in CloudFormation will still be meaningful even if the physical names are auto-generated.
+
+Let me remove all the `RoleName` properties from the IAM roles to eliminate the CAPABILITY_NAMED_IAM requirement.
+### Answer 
+---
+
+The error indicates that the template requires `CAPABILITY_NAMED_IAM` because it creates IAM roles with explicit names. I'll fix this by removing the explicit role names, which will allow CloudFormation to auto-generate them and eliminate the capability requirement:
+
+```json
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "CI/CD Pipeline for ECS deployment with Blue/Green rollback capability",
@@ -1084,3 +1108,4 @@
     }
   }
 }
+```
