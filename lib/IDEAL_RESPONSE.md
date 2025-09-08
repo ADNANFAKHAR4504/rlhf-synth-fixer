@@ -1,6 +1,6 @@
 # AWS CloudFormation Template:  Secure production infrastructure
 
-Here's the complete CloudFormation template that sets up a robust VPC environment in the `us-west-2` region with high availability, internet connectivity, and proper IAM roles:
+Here's the complete CloudFormation template that sets up a Secure production infrastructure for enterprise application in the `us-west-2` region with high availability, internet connectivity, and proper IAM roles:
 
 ```yaml
 AWSTemplateFormatVersion: '2010-09-09'
