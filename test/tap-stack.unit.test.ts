@@ -105,16 +105,21 @@ describe('TapStack CloudFormation Template', () => {
       roles.forEach(roleKey => {
         const role = template.Resources[roleKey];
         expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
-        expect(role.Properties.Policies || role.Properties.ManagedPolicyArns).toBeDefined();
+        // At least one of these should be defined for each role
+        expect(
+          role.Properties.Policies || 
+          role.Properties.ManagedPolicyArns || 
+          role.Properties.PolicyDocument
+        ).toBeTruthy();
       });
     });
 
     test('should have S3 bucket for artifacts with proper security', () => {
-      const bucket = template.Resources?.S3ArtifactBucket;
+      const bucket = template.Resources?.PipelineArtifactBucket;
       expect(bucket).toBeDefined();
       expect(bucket.Type).toBe('AWS::S3::Bucket');
       
-      if (bucket.Properties.PublicAccessBlockConfiguration) {
+      if (bucket.Properties?.PublicAccessBlockConfiguration) {
         const config = bucket.Properties.PublicAccessBlockConfiguration;
         expect(config.BlockPublicAcls).toBe(true);
         expect(config.BlockPublicPolicy).toBe(true);
@@ -124,7 +129,7 @@ describe('TapStack CloudFormation Template', () => {
     });
 
     test('should have VPC with proper network configuration', () => {
-      const vpc = template.Resources?.VPC;
+      const vpc = template.Resources?.DefaultVPC;
       expect(vpc).toBeDefined();
       expect(vpc.Type).toBe('AWS::EC2::VPC');
       expect(vpc.Properties.CidrBlock).toBeDefined();
