@@ -1334,25 +1334,7 @@ Resources:
   # AWS CONFIG RESOURCES
   # ================================
 
-  # AWS Config Configuration Recorder
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub "${ProjectName}-config-recorder-${Environment}"
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
-  # AWS Config Delivery Channel
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub "${ProjectName}-config-delivery-${Environment}"
-      S3BucketName: !Ref ConfigS3Bucket
-      S3KeyPrefix: config-logs/
-      SnsTopicARN: !Ref ConfigSNSTopic
-    DependsOn: ConfigRecorder
+  # Note: Recorder and DeliveryChannel are intentionally not created by this stack
 
   # SNS Topic for Config notifications
   ConfigSNSTopic:
@@ -1496,16 +1478,11 @@ Outputs:
       Name: !Sub "${ProjectName}-s3-encryption-key-arn-${Environment}"
 
   CloudTrailTrailName:
+    Condition: CreateCloudTrail
     Description: "Name of the CloudTrail trail"
-    Value: !If [CreateCloudTrail, !Ref CloudTrailTrail, ""]
+    Value: !Ref CloudTrailTrail
     Export:
       Name: !Sub "${ProjectName}-cloudtrail-name-${Environment}"
-
-  ConfigRecorderName:
-    Description: "Name of the AWS Config recorder"
-    Value: !Ref ConfigRecorder
-    Export:
-      Name: !Sub "${ProjectName}-config-recorder-name-${Environment}"
 
   SecurityDashboardName:
     Description: "Name of the CloudWatch security dashboard"

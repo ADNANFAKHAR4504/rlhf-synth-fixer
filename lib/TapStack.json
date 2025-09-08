@@ -2609,15 +2609,10 @@
       }
     },
     "CloudTrailTrailName": {
+      "Condition": "CreateCloudTrail",
       "Description": "Name of the CloudTrail trail",
       "Value": {
-        "Fn::If": [
-          "CreateCloudTrail",
-          {
-            "Ref": "CloudTrailTrail"
-          },
-          ""
-        ]
+        "Ref": "CloudTrailTrail"
       },
       "Export": {
         "Name": {

@@ -1477,8 +1477,9 @@ Outputs:
       Name: !Sub "${ProjectName}-s3-encryption-key-arn-${Environment}"
 
   CloudTrailTrailName:
+    Condition: CreateCloudTrail
     Description: "Name of the CloudTrail trail"
-    Value: !If [CreateCloudTrail, !Ref CloudTrailTrail, ""]
+    Value: !Ref CloudTrailTrail
     Export:
       Name: !Sub "${ProjectName}-cloudtrail-name-${Environment}"
 
