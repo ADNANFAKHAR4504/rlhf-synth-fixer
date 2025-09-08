@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "CI/CD Pipeline for ECS deployment with Blue/Green rollback capability (fixed: log ARNs + service desired count default 0)",
+  "Description": "CI/CD Pipeline for ECS deployment with Blue/Green rollback capability (fixed: supports existing GitHub secret ARN or creates a secret fallback; pipeline role granted permission to read secret)",
   "Parameters": {
     "ApplicationName": {
       "Type": "String",
@@ -49,10 +49,10 @@
       "Default": 0,
       "Description": "Desired count for ECS service on stack create (set 0 if image not available at create time)"
     },
-    "GitHubTokenSecretName": {
+    "GitHubTokenSecretArn": {
       "Type": "String",
-      "Default": "github-token",
-      "Description": "Name of the AWS Secrets Manager secret containing the GitHub OAuth token. Must exist before stack deploy."
+      "Default": "",
+      "Description": "Full ARN of the AWS Secrets Manager secret containing the GitHub OAuth token. If empty, the stack will create a placeholder secret (you must populate it after deployment)."
     }
   },
   "Conditions": {
@@ -90,6 +90,14 @@
       "Fn::Equals": [
         {
           "Ref": "ECSClusterName"
+        },
+        ""
+      ]
+    },
+    "CreateGitHubSecret": {
+      "Fn::Equals": [
+        {
+          "Ref": "GitHubTokenSecretArn"
         },
         ""
       ]
@@ -305,6 +313,17 @@
         }
       }
     },
+    "GitHubOAuthSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Condition": "CreateGitHubSecret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}/github-token-${EnvironmentSuffix}"
+        },
+        "Description": "Placeholder GitHub OAuth token for CodePipeline. Populate secret value after deploy if created by stack.",
+        "SecretString": ""
+      }
+    },
     "CodePipelineServiceRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -439,6 +458,32 @@
                       },
                       {
                         "Ref": "SNSOperationsTopicNameOrArn"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": {
+                    "Fn::If": [
+                      "CreateGitHubSecret",
+                      {
+                        "Fn::Join": [
+                          "",
+                          [
+                            {
+                              "Ref": "GitHubOAuthSecret"
+                            },
+                            "*"
+                          ]
+                        ]
+                      },
+                      {
+                        "Fn::Sub": "${GitHubTokenSecretArn}*"
                       }
                     ]
                   }
@@ -929,7 +974,22 @@
                     "Ref": "GitBranch"
                   },
                   "OAuthToken": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${GitHubTokenSecretName}}}"
+                    "Fn::Sub": [
+                      "{{resolve:secretsmanager:${SecretArn}:SecretString::}}",
+                      {
+                        "SecretArn": {
+                          "Fn::If": [
+                            "CreateGitHubSecret",
+                            {
+                              "Ref": "GitHubOAuthSecret"
+                            },
+                            {
+                              "Ref": "GitHubTokenSecretArn"
+                            }
+                          ]
+                        }
+                      }
+                    ]
                   }
                 },
                 "OutputArtifacts": [
@@ -1133,6 +1193,20 @@
       "Value": {
         "Ref": "ECSService"
       }
+    },
+    "UsedGitHubSecretArn": {
+      "Description": "ARN of the GitHub token secret used by the pipeline (either existing ARN param or the secret created by the stack).",
+      "Value": {
+        "Fn::If": [
+          "CreateGitHubSecret",
+          {
+            "Ref": "GitHubOAuthSecret"
+          },
+          {
+            "Ref": "GitHubTokenSecretArn"
+          }
+        ]
+      }
     }
   },
   "Metadata": {
@@ -1153,7 +1227,8 @@
           },
           "Parameters": [
             "PipelineArtifactBucketName",
-            "SNSOperationsTopicNameOrArn"
+            "SNSOperationsTopicNameOrArn",
+            "GitHubTokenSecretArn"
           ]
         },
         {
@@ -1199,15 +1274,18 @@
         },
         "GitBranch": {
           "default": "Git Branch"
+        },
+        "GitHubTokenSecretArn": {
+          "default": "GitHub Token Secret ARN (leave empty to create a placeholder secret)"
         }
       }
     },
     "TestingInstructions": {
       "Validation": "Run 'aws cloudformation validate-template --template-body file://template.json' to validate syntax",
-      "DeploymentTest": "Deploy stack (service desired count defaults to 0). Then run pipeline to build/push image and update the ECS service desired count (or pipeline can update the service).",
+      "DeploymentTest": "Deploy stack (service desired count defaults to 0). If you left GitHubTokenSecretArn empty the stack created a placeholder secret; populate it in Secrets Manager with your GitHub token (plain string) under the secret's SecretString value. Then start the pipeline.",
       "RollbackTest": "To test rollback, introduce a failing health check or deployment error in your application code, commit and push. The ECS circuit breaker will automatically rollback on failure",
       "MonitoringTest": "Check SNS topic for pipeline state change notifications and CloudWatch logs for build/deployment logs",
-      "Prerequisites": "Ensure you have a GitHub OAuth token stored in AWS Secrets Manager with name matching the GitHubTokenSecretName parameter (default: 'github-token')"
+      "Prerequisites": "Either provide the full Secrets Manager secret ARN in the GitHubTokenSecretArn parameter, or populate the created secret's value after deployment. Secret must be in the same account & region as the stack."
     }
   }
 }
