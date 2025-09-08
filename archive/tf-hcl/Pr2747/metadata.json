@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "349407",
+  "team": "5",
+  "startedAt": "2025-09-04T16:46:21.432Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Serverless Architecture",
+    "KMS Encryption",
+    "WAF Configuration",
+    "CloudWatch Logs",
+    "Multi-Region Deployment"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "KMS",
+    "WAF",
+    "CloudFront",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Akorede28",
+  "dockerS3Location": ""
+}

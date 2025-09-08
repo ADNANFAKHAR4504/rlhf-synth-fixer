@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "292062",
+  "team": "5",
+  "startedAt": "2025-08-22T15:24:17.318Z",
+  "subtask": "General Infrastructure Provisioning",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Network Configuration",
+    "Resource Scaling",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "S3",
+    "RDS",
+    "KMS",
+    "CloudWatch",
+    "CloudFront",
+    "Route53",
+    "IAM",
+    "Secrets Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "AmbitiousSam",
+  "dockerS3Location": ""
+}

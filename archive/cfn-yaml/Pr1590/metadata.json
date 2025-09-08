@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "291473",
+  "team": "6",
+  "startedAt": "2025-08-18T10:57:07.549Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Database Management",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "Network Configuration"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "SecretsManager",
+    "DynamoDB",
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "EC2",
+    "RDS",
+    "IAM",
+    "CloudFormation",
+    "VPC"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "OMO-NOSA",
+  "dockerS3Location": ""
+}

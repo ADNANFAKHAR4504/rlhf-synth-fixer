@@ -1,0 +1,55 @@
+{
+  "po_id": "trainr963",
+  "team": "synth",
+  "platform": "cdktf",
+  "language": "go",
+  "region": "us-east-1",
+  "task_description": "Set up a serverless infrastructure on AWS with multiple services interacting seamlessly, including Lambda functions, API Gateway, DynamoDB, and proper security configurations within a VPC.",
+  "requirements": [
+    "API Gateway endpoints triggering Lambda functions",
+    "CloudWatch logging with 30-day retention",
+    "IAM roles with minimal permissions",
+    "DynamoDB with on-demand capacity for session management",
+    "VPC deployment with multiple subnets",
+    "S3 buckets with encryption and HTTPS-only access",
+    "X-Ray tracing for Lambda functions",
+    "CloudWatch alarms for error monitoring",
+    "AWS Parameter Store for sensitive data",
+    "Consistent naming convention"
+  ],
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Network Configuration",
+    "Access Control"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon API Gateway",
+    "Amazon DynamoDB",
+    "Amazon S3",
+    "Amazon VPC",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS X-Ray",
+    "AWS Systems Manager Parameter Store",
+    "Amazon NAT Gateway",
+    "Amazon Internet Gateway",
+    "Amazon Elastic IP"
+  ],
+  "created_at": "2025-08-25",
+  "status": "in_progress",
+  "startedAt": "2025-08-25T07:51:45.706Z",
+  "complexity": "expert",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

@@ -26,18 +26,24 @@ elif [ "$PLATFORM" = "cdktf" ]; then
   fi
   # .gen should be restored via cache/artifacts; generate only if missing
 
-  ensure_gen() {
-    if [ ! -d ".gen" ]; then
-      echo "❌ .gen not found; generating..."
-      npx --yes cdktf get
-    fi
-    if [ ! -d ".gen/aws" ]; then
-      echo "❌ .gen/aws missing after cdktf get"
-      echo "Contents of .gen:"; ls -la .gen || true
-      exit 1
-    fi
-  }
-  ensure_gen
+  case "$LANGUAGE" in
+    py|go|ts)
+      if [ ! -d ".gen" ]; then
+        echo "❌ No .gen directory found; generating..."
+        npx --yes cdktf get
+      fi
+      if [ -d ".gen/aws" ] || [ -d ".gen/providers/aws" ]; then
+        echo "✅ Found other language CDKTF generated provider directory in .gen"
+      else
+        echo "❌ No generated provider directory found after cdktf get."
+        echo "Contents of project root:"; ls -la || true
+        exit 1
+      fi
+      ;;
+    *)
+      echo "ℹ️ Skipping ensure_gen for LANGUAGE=$LANGUAGE"
+      ;;
+  esac
   # Go modules are prepared during build; avoid extra operations here
 
   npm run cdktf:synth

@@ -1,0 +1,15 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291982",
+  "team": "1",
+  "startedAt": "2025-08-24T16:52:17.792Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "blacree",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "java",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "291980",
+  "team": "3",
+  "startedAt": "2025-08-25T08:13:44.994Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Encryption Management",
+    "Compliance Monitoring",
+    "Network Configuration",
+    "General Infrastructure Tooling QA",
+    "Live Testing Support",
+    "Stack Output Management",
+    "Production Deployment",
+    "Error Resolution"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "KMS",
+    "IAM",
+    "VPC",
+    "EC2",
+    "Lambda",
+    "RDS",
+    "S3",
+    "CloudTrail",
+    "AWS Config"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
+}
