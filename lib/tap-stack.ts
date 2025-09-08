@@ -54,6 +54,81 @@ export class TapStack extends cdk.Stack {
       description: 'KMS key for production environment encryption',
       enableKeyRotation: true, // Security best practice - automatic key rotation
       alias: props.kmsAlias,
+      policy: new iam.PolicyDocument({
+        statements: [
+          // Allow root account full access
+          new iam.PolicyStatement({
+            sid: 'Enable IAM User Permissions',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.AccountRootPrincipal()],
+            actions: ['kms:*'],
+            resources: ['*'],
+          }),
+          // Allow CloudWatch Logs service to use the key
+          new iam.PolicyStatement({
+            sid: 'Allow CloudWatch Logs',
+            effect: iam.Effect.ALLOW,
+            principals: [
+              new iam.ServicePrincipal(`logs.${this.region}.amazonaws.com`),
+            ],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+            conditions: {
+              ArnEquals: {
+                'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/apigateway/production`,
+              },
+            },
+          }),
+          // Allow Config service to use the key for S3 bucket encryption
+          new iam.PolicyStatement({
+            sid: 'Allow AWS Config',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('config.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          // Allow SNS service to use the key
+          new iam.PolicyStatement({
+            sid: 'Allow SNS',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('sns.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+          // Allow S3 service to use the key
+          new iam.PolicyStatement({
+            sid: 'Allow S3',
+            effect: iam.Effect.ALLOW,
+            principals: [new iam.ServicePrincipal('s3.amazonaws.com')],
+            actions: [
+              'kms:Encrypt',
+              'kms:Decrypt',
+              'kms:ReEncrypt*',
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+            ],
+            resources: ['*'],
+          }),
+        ],
+      }),
     });
 
     // 'VPC' with isolated architecture - private/public subnet separation
@@ -377,7 +452,9 @@ export class TapStack extends cdk.Stack {
     const configRole = new iam.Role(this, 'ConfigServiceRole', {
       assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWS_ConfigRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWS_ConfigRole'
+        ),
       ],
     });
 
