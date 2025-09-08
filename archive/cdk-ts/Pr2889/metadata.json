@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "349786",
+  "team": "5",
+  "startedAt": "2025-09-08T13:39:39.319Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "IaC Optimization"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "Application Load Balancer",
+    "Route 53",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "barun-turing",
+  "dockerS3Location": ""
+}
