@@ -1,0 +1,518 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  TapStack - Secure, Scalable, and Compliant AWS Infrastructure
+  Production-grade stack with VPC, EC2 AutoScaling, ALB, RDS, CloudTrail,
+  S3, IAM, Config Role, Logging, and SSM-enabled Bastion Host.
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [development, staging, production]
+    Description: Environment type for tagging and resource naming
+
+  ProjectName:
+    Type: String
+    Default: TapStack
+    Description: Project name for tagging
+
+  Owner:
+    Type: String
+    Default: SAARZ
+    Description: Owner tag for resources
+
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    Description: EC2 instance type for ASG
+
+  DBUsername:
+    Type: String
+    Default: dbmaster
+    NoEcho: true
+    Description: Master username for RDS
+
+  DBPassword:
+    Type: String
+    Default: ChangeMe123!
+    NoEcho: true
+    Description: Master password for RDS
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0c94855ba95c71c99 # Amazon Linux 2 AMI (update as needed)
+
+Resources:
+
+  #########################################
+  # Secret in Secrets Manager (JSON format)
+  #########################################
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-db-password"
+      Description: RDS DB password stored securely in Secrets Manager
+      SecretString: !Sub |
+        {
+          "password": "${DBPassword}"
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Owner
+          Value: !Ref Owner
+
+  #########################################
+  # Networking (VPC, Subnets, IGW, NAT)
+  #########################################
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-vpc"
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Project
+          Value: !Ref ProjectName
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-public-subnet-1"
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-public-subnet-2"
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-private-subnet-1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.12.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-private-subnet-2"
+
+  NatEIP1:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIP1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+
+  #########################################
+  # Security Groups
+  #########################################
+  BastionSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bastion host SG (SSM-only, no ingress)
+      VpcId: !Ref VPC
+
+  InstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Web server SG
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSG
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSG
+
+  ALBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB SG
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  #########################################
+  # IAM Role for EC2
+  #########################################
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: EC2S3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ["s3:GetObject"]
+                Resource: "*"
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [!Ref EC2Role]
+
+  #########################################
+  # Bastion Host (SSM only)
+  #########################################
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds: [!Ref BastionSG]
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub "${ProjectName}-${Environment}-bastion"
+
+  #########################################
+  # Application Load Balancer
+  #########################################
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${ProjectName}-${Environment}-alb"
+      Subnets: [!Ref PublicSubnet1, !Ref PublicSubnet2]
+      SecurityGroups: [!Ref ALBSG]
+      Scheme: internet-facing
+      Type: application
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VPC
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      HealthCheckPath: /
+
+  #########################################
+  # AutoScaling Group for EC2
+  #########################################
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+        SecurityGroupIds: [!Ref InstanceSG]
+        IamInstanceProfile:
+          Arn: !GetAtt EC2InstanceProfile.Arn
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 3
+      MaxSize: 6
+      DesiredCapacity: 3
+      TargetGroupARNs: [!Ref ALBTargetGroup]
+
+  #########################################
+  # RDS (Multi-AZ, Encrypted, password from Secrets Manager JSON key)
+  #########################################
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: postgres
+      DBInstanceClass: db.t3.medium
+      AllocatedStorage: 20
+      MultiAZ: true
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBSecret}::password}}"
+      VPCSecurityGroups: [!Ref InstanceSG]
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      StorageEncrypted: true
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds: [!Ref PrivateSubnet1, !Ref PrivateSubnet2]
+
+  #########################################
+  # S3 Bucket (Logging, Versioning, Encrypted + Policy for CloudTrail)
+  #########################################
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+      VersioningConfiguration:
+        Status: Enabled
+
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}"
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${LoggingBucket}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+
+  #########################################
+  # CloudTrail
+  #########################################
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn: LoggingBucketPolicy
+    Properties:
+      S3BucketName: !Ref LoggingBucket
+      IsLogging: true
+      IncludeGlobalServiceEvents: true
+      IsMultiRegionTrail: true
+
+  #########################################
+  # AWS Config Role (recorder and delivery channel removed)
+  #########################################
+  ConfigRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: AWSConfigInlinePermissions
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetBucketAcl
+                Resource: !Sub "arn:aws:s3:::${LoggingBucket}/*"
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ec2:Describe*
+                  - rds:Describe*
+                  - iam:GetAccountAuthorizationDetails
+                  - iam:GetAccountSummary
+                  - iam:List*
+                Resource: "*"
+
+Outputs:
+  #########################################
+  # Networking Outputs
+  #########################################
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub "${ProjectName}-${Environment}-VpcId"
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+
+  NatGatewayId:
+    Description: NAT Gateway ID
+    Value: !Ref NatGateway1
+  NatEIP:
+    Description: NAT Gateway Elastic IP
+    Value: !Ref NatEIP1
+
+  #########################################
+  # Security Groups
+  #########################################
+  BastionSGId:
+    Description: Bastion Host Security Group
+    Value: !Ref BastionSG
+  InstanceSGId:
+    Description: Instance Security Group
+    Value: !Ref InstanceSG
+  ALBSGId:
+    Description: ALB Security Group
+    Value: !Ref ALBSG
+
+  #########################################
+  # Bastion Host
+  #########################################
+  BastionHostId:
+    Description: Bastion Host Instance ID
+    Value: !Ref BastionHost
+
+  #########################################
+  # ALB Outputs
+  #########################################
+  ALBArn:
+    Description: ALB ARN
+    Value: !Ref ALB
+  ALBEndpoint:
+    Description: DNS Name of ALB
+    Value: !GetAtt ALB.DNSName
+  ALBTargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref ALBTargetGroup
+  ALBListenerArn:
+    Description: ALB Listener ARN
+    Value: !Ref ALBListener
+
+  #########################################
+  # AutoScaling Outputs
+  #########################################
+  AutoScalingGroupName:
+    Description: Name of AutoScaling Group
+    Value: !Ref AutoScalingGroup
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+  LaunchTemplateVersion:
+    Description: Launch Template Latest Version
+    Value: !GetAtt LaunchTemplate.LatestVersionNumber
+
+  #########################################
+  # RDS Outputs
+  #########################################
+  RDSEndpoint:
+    Description: Endpoint of RDS
+    Value: !GetAtt RDSInstance.Endpoint.Address
+  RDSPort:
+    Description: RDS Port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+  RDSInstanceId:
+    Description: RDS Instance Identifier
+    Value: !Ref RDSInstance
+  RDSSubnetGroup:
+    Description: RDS Subnet Group
+    Value: !Ref DBSubnetGroup
+  RDSInstanceSG:
+    Description: Security Group for RDS
+    Value: !Ref InstanceSG
+
+  #########################################
+  # S3 Logging Bucket Outputs
+  #########################################
+  LoggingBucketName:
+    Description: S3 Logging Bucket Name
+    Value: !Ref LoggingBucket
+  LoggingBucketArn:
+    Description: S3 Logging Bucket ARN
+    Value: !GetAtt LoggingBucket.Arn
+
+  #########################################
+  # CloudTrail Outputs
+  #########################################
+  CloudTrailArn:
+    Description: CloudTrail ARN
+    Value: !Ref CloudTrail
+
+  #########################################
+  # IAM / Config Role
+  #########################################
+  ConfigRoleArn:
+    Description: IAM Role ARN for AWS Config
+    Value: !GetAtt ConfigRole.Arn
+  EC2InstanceProfileArn:
+    Description: EC2 Instance Profile ARN
+    Value: !GetAtt EC2InstanceProfile.Arn
+
