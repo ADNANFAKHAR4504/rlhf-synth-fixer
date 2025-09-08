@@ -183,7 +183,7 @@ class TapStack(cdk.Stack):
                 "dynamodb:PutItem",
                 "dynamodb:GetItem",
                 "dynamodb:UpdateItem",
-                "dynamodb:DeleteItem",RDS
+                "dynamodb:DeleteItem",
                 "dynamodb:Query",
                 "dynamodb:Scan",
             ],
