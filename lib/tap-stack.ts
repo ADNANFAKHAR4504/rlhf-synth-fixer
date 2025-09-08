@@ -22,7 +22,7 @@ interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   environment: string;
   allowedIpRanges: string[];
-  certArn: string;
+  certArn?: string; // Make certificate ARN optional
   kmsAlias: string;
 }
 
@@ -248,13 +248,16 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
     });
 
-    // HTTPS listener with provided certificate
-    const httpsListener = alb.addListener('HttpsListener', {
-      port: 443,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificates: [elbv2.ListenerCertificate.fromArn(props.certArn)],
-      sslPolicy: elbv2.SslPolicy.RECOMMENDED, // Latest recommended TLS policy for security
-    });
+    // HTTPS listener with certificate (if provided)
+    let httpsListener: elbv2.ApplicationListener | undefined;
+    if (props.certArn) {
+      httpsListener = alb.addListener('HttpsListener', {
+        port: 443,
+        protocol: elbv2.ApplicationProtocol.HTTPS,
+        certificates: [elbv2.ListenerCertificate.fromArn(props.certArn)],
+        sslPolicy: elbv2.SslPolicy.RECOMMENDED, // Latest recommended TLS policy for security
+      });
+    }
 
     // Target group for application instances
     const targetGroup = new elbv2.ApplicationTargetGroup(
@@ -272,9 +275,34 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    httpsListener.addTargetGroups('DefaultTargets', {
-      targetGroups: [targetGroup],
+    // Add target groups to HTTPS listener if it exists
+    if (httpsListener) {
+      httpsListener.addTargetGroups('DefaultTargets', {
+        targetGroups: [targetGroup],
+      });
+    }
+
+    // HTTP listener for redirection or direct access (depending on certificate availability)
+    const httpListener = alb.addListener('HttpListener', {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
     });
+
+    if (props.certArn) {
+      // Redirect HTTP to HTTPS if certificate is available
+      httpListener.addAction('HttpsRedirect', {
+        action: elbv2.ListenerAction.redirect({
+          protocol: 'HTTPS',
+          port: '443',
+          permanent: true,
+        }),
+      });
+    } else {
+      // Add target groups directly to HTTP listener if no certificate
+      httpListener.addTargetGroups('DefaultTargets', {
+        targetGroups: [targetGroup],
+      });
+    }
 
     // WAF v2 for application protection against common web exploits
     const webAcl = new wafv2.CfnWebACL(this, 'ProductionWebAcl', {

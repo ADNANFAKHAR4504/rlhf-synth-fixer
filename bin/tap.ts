@@ -21,7 +21,7 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   environment: 'Production',
   allowedIpRanges: ['203.0.113.0/24'],
-  certArn: 'arn:aws:acm:us-east-1:123456789012:certificate/abc123',
+  certArn: process.env.CERT_ARN, // Use environment variable for certificate ARN
   kmsAlias: 'alias/gocxm-prod',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
