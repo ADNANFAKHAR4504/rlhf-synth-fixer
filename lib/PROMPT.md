@@ -1,97 +1,141 @@
-Generate a single CloudFormation template named “TapStack.yml” (YAML syntax) for us-east-1 that provisions a brand-new, secure baseline stack. Do not reference or import any pre-existing resources—create everything needed in this file. The stack must adhere to least-privilege and security-by-default practices, and it must pass both `aws cloudformation validate-template` and `cfn-lint` for us-east-1.
+Generate a single CloudFormation template named **TapStack.yml** (YAML syntax) for **us-east-1** that provisions a brand-new, secure baseline stack. Don’t reference or import any existing resources—create everything needed right in this file. The stack must follow least-privilege and security-by-default practices, and it must pass both `aws cloudformation validate-template` and `cfn-lint` for **us-east-1**.
 
-What to build (modules/resources to create from scratch)
+### What to build (all from scratch)
 
-* KMS
+**KMS**
 
-  * A customer-managed KMS key for general data-at-rest encryption (alias like alias/tapstack-kms), with a least-privilege key policy that allows: the account root, CloudTrail, CloudWatch Logs, and required services/roles in this stack. Enable key rotation.
-* S3 (all new buckets; block public access)
+* One customer-managed KMS key for general data-at-rest encryption (`alias/tapstack-kms`).
+* Least-privilege key policy that permits: the account root, CloudTrail, CloudWatch Logs, and the roles/services defined in this stack.
+* Enable automatic key rotation.
 
-  * Central “trail-logs” bucket for CloudTrail (SSE-KMS with the KMS key). Bucket policy: deny non-TLS (`aws:SecureTransport=false`), deny unencrypted puts, allow CloudTrail service principal per sample AWS policy. Enable object ownership = BucketOwnerEnforced, versioning, lifecycle to transition noncurrent versions and expire old logs, and server access logging to a separate dedicated “access-logs” bucket.
-  * “config-logs” bucket for AWS Config (SSE-KMS, block public access, versioning, TLS-only bucket policy).
-  * “lambda-artifacts” bucket for packaging code (SSE-KMS, block public access, TLS-only policy). If you add sample Lambda code inline, still keep this bucket for future updates.
-* Networking
+**S3 (all new buckets, public access blocked)**
 
-  * New VPC (10.0.0.0/16) with two public and two private subnets across distinct AZs. IGW attached. One NAT Gateway (cost-aware) in a public subnet, with private route tables egressing via NAT; public route tables to IGW.
-  * VPC endpoints (Interface/Gateway as appropriate) for S3, KMS, CloudWatch Logs, SSM, and EC2 messages so private resources can reach AWS services over TLS without public internet. Restrictive endpoint policies (least-privilege).
-* Security Groups (minimally permissive)
+* **trail-logs** bucket for CloudTrail (SSE-KMS with the KMS key). Bucket policy: deny non-TLS (`aws:SecureTransport = false`), deny unencrypted `PutObject`, and allow the CloudTrail service principal as per AWS guidance.
 
-  * ALB SG: allow inbound TCP/80 from 0.0.0.0/0 only; egress 443/80 as needed. (No TLS listener—see “Exclusions” below.)
-  * EC2 SG: allow inbound only from the ALB SG on app port (e.g., 8080). No SSH from the internet. Egress restricted to required destinations (443 to AWS endpoints, DB if added later).
-  * Lambda SG (if placed in VPC): similar minimal egress, no inbound.
-* Application Load Balancer (HTTP-only for now)
+  * Settings: Object Ownership = BucketOwnerEnforced (or BucketOwnerPreferred for access logging), Versioning enabled, Lifecycle to transition noncurrent versions and expire old logs, and **server access logging** that writes to a separate **access-logs** bucket.
+* **access-logs** bucket dedicated for server access logs (SSE-KMS, block public, versioning, TLS-only policy).
+* **lambda-artifacts** bucket for packaging code (SSE-KMS, block public, TLS-only policy). Even if function code is inline, keep this bucket for future updates.
 
-  * New ALB in public subnets with a single HTTP:80 listener forwarding to a target group for EC2 instances in private subnets. Health checks enabled. No ACM/HTTPS here by requirement.
-* WAF (WAFv2)
+**Networking**
 
-  * New `AWS::WAFv2::WebACL` (REGIONAL) with AWS Managed rule groups enabled (e.g., `AWSManagedRulesCommonRuleSet`, `AWSManagedRulesKnownBadInputsRuleSet`, `AWSManagedRulesAmazonIpReputationList`, and `AWSManagedRulesAnonymousIpList`). Associate it with the ALB via a `WebACLAssociation`.
-* EC2 (private, managed via SSM; no SSH)
+* New VPC `10.0.0.0/16` with two public and two private subnets across distinct AZs. Attach an IGW.
+* One cost-aware NAT Gateway in a public subnet; private route tables egress via NAT; public route tables route to IGW.
+* VPC endpoints so private resources reach AWS services over TLS without the public internet:
 
-  * Launch template + Auto Scaling group (min=1, max=2) in private subnets. User data should simply start a basic HTTP app on port 8080 for health checks. Do not expose SSH/22. Use SSM Agent (Session Manager) for access. No key pair.
-  * Instance profile/role with least-privilege (CloudWatch logs write, SSM core, optional read to a specific S3 prefix in the artifacts bucket).
-* Lambda (example function)
+  * **Gateway:** S3
+  * **Interface:** KMS, CloudWatch Logs, SSM, and EC2 Messages
+  * Use tight endpoint policies (allow only what this stack needs).
 
-  * One minimal Lambda function (Node.js or Python) demonstrating least-privilege IAM and KMS-encrypted environment variables, optional VPC attachment, and logging to a dedicated CloudWatch log group with retention. Package can be inline (ZipFile) and/or uploaded to the artifacts bucket; either is fine but keep the bucket in the template.
-* CloudTrail
+**Security Groups (minimal and specific)**
 
-  * Organization-agnostic, multi-region trail writing to the trail-logs bucket (SSE-KMS with the created key) and to a CloudWatch Logs log group (SSE-KMS via service-managed encryption; retention configured). Include the CloudTrail service role and the bucket policy statements required by AWS. Enable log file validation.
-* AWS Config
+* **ALB SG:** allow inbound TCP/80 from `0.0.0.0/0`; egress only what’s needed to reach targets (app port inside VPC) and standard web egress as required.
+* **EC2 SG:** inbound **only** from the ALB SG on the app port (e.g., 8080). No SSH from the internet. Egress limited to required destinations (HTTPS to AWS endpoints, etc.).
+* **Lambda SG:** no inbound; minimal egress (e.g., HTTPS to interface endpoints).
 
-  * Configuration Recorder, Delivery Channel to the config-logs bucket, and an IAM role for Config. Add a few foundational managed rules (e.g., s3-bucket-public-read-prohibited, s3-bucket-public-write-prohibited, cloudtrail-enabled, iam-password-policy, restricted-ssh) and show sample Remediation (SSM Doc) wiring for at least one rule.
-* GuardDuty
+**Application Load Balancer (HTTP-only)**
 
-  * Enable a `AWS::GuardDuty::Detector` with auto-enable set to true where supported; no cross-account needed here.
-* CloudWatch
+* New ALB in public subnets with a single HTTP:80 listener forwarding to a Target Group for EC2 instances in private subnets.
+* Health checks enabled on the application path/port.
+* **No ACM/HTTPS** here (intentionally excluded).
 
-  * Log groups (with retention) for ALB access logs (if using Kinesis Firehose skip; otherwise keep S3), EC2 app logs via the agent (simple), Lambda logs (managed by Lambda but set retention explicitly).
-* IAM (least-privilege everywhere)
+**WAF (WAFv2)**
 
-  * Roles: `EC2InstanceRole`, `LambdaExecutionRole`, `CloudTrailLogsRole`, `ConfigRole`, and any roles for Firehose/Logging if added. Each role should have tight inline policies; prefer AWS managed policies only where appropriate (e.g., `AmazonSSMManagedInstanceCore`), with additional inline statements limited to the specific resources in this stack (S3 bucket ARNs, log groups, KMS key).
-* Tagging
+* A regional `AWS::WAFv2::WebACL` with AWS Managed rule groups enabled:
 
-  * Apply consistent tags (Project=TapStack, Environment, Owner, CostCenter) on all taggable resources.
+  * `AWSManagedRulesCommonRuleSet`
+  * `AWSManagedRulesKnownBadInputsRuleSet`
+  * `AWSManagedRulesAmazonIpReputationList`
+  * `AWSManagedRulesAnonymousIpList`
+* Associate the Web ACL to the ALB with `WebACLAssociation`.
 
-Encryption and in-transit expectations
+**EC2 (private, managed via SSM; no SSH)**
 
-* At rest: Use SSE-KMS with the created key for S3 buckets; enable KMS where supported (EBS volumes for EC2, if created by the launch template, should be encrypted by default). Enable KMS rotation.
-* In transit: Enforce TLS to buckets via bucket policies (`aws:SecureTransport`). VPC endpoints use TLS. SSM/EC2 messages use TLS. (Front-end HTTPS is intentionally deferred; see Exclusions.)
+* Launch Template + Auto Scaling Group (min=1, max=2) in the private subnets.
+* User data starts a basic HTTP app on **port 8080** for health checks.
+* Don’t open SSH/22 and don’t attach a key pair. Access is via SSM (Session Manager).
+* EBS volumes encrypted (leave `KmsKeyId` unset so default EBS encryption is used safely).
+* Instance profile/role with least-privilege:
 
-Template structure and ergonomics
+  * `AmazonSSMManagedInstanceCore`
+  * Minimal CloudWatch Logs write for the specific log group
+  * Optional read to a **specific prefix** in the artifacts bucket (not the whole bucket)
 
-* Use standard sections: AWSTemplateFormatVersion, Description, Metadata, Parameters, Mappings, Conditions, Resources, Outputs.
-* Parameters: include EnvironmentName, ProjectName, AllowedIngressCIDRForAlbHttp (default 0.0.0.0/0), InstanceType, Min/Max capacity, AppPort, LogRetentionDays, and any toggles you deem helpful. Validate inputs with AllowedPattern/AllowedValues where sensible.
-* Mappings: for AZ selection or AMI lookup if you don’t use SSM Parameter Store for the latest Amazon Linux 2023 AMI.
-* Conditions: example—`IsProd` to tune retention and ASG sizes.
-* Naming: use `Fn::Sub` consistently; keep S3 bucket names lowercase with only allowed characters.
-* Do not include deprecated or region-unsupported resource types.
+**Lambda (example function)**
 
-Outputs (make them truly useful)
+* One small function (Python or Node.js) showing:
 
-* VPCId, PublicSubnetIds, PrivateSubnetIds
-* AlbArn, AlbDnsName, AlbSecurityGroupId, TargetGroupArn
-* WebAclArn
-* Ec2AutoScalingGroupName, Ec2InstanceProfileArn
-* LambdaFunctionName, LambdaFunctionArn, LambdaLogGroupName
-* TrailName, TrailArn, CloudTrailLogGroupArn
-* ConfigRecorderName, ConfigDeliveryChannelName
-* GuardDutyDetectorId
-* KmsKeyArn
-* Buckets and ARNs for: trail-logs, config-logs, access-logs, lambda-artifacts
-* VpcEndpointIds (at least S3/KMS/Logs/SSM/EC2Messages)
+  * Least-privilege execution role
+  * KMS-encrypted environment variables
+  * Optional VPC attachment (to the private subnets via the Lambda SG)
+  * Writes to a dedicated CloudWatch log group with explicit retention
 
-Validation and quality bars
+**CloudTrail**
 
-* Must be a single YAML file named TapStack.yml.
-* Must create all resources from scratch; no imports to existing KMS keys, buckets, trails, etc.
-* Must pass `aws cloudformation validate-template` and `cfn-lint` in us-east-1.
-* Least-privilege IAM and KMS key policies. No wildcard “\*” on actions or resources unless there is a strong, documented reason (e.g., service-required statements), and then scope by Condition where possible.
-* No hardcoded account IDs except where strictly required by service principals (use `!Sub arn:aws:iam::${AWS::AccountId}:…` style).
-* Reasonable defaults so the stack can launch without edits.
+* Organization-agnostic, multi-region trail writing to the **trail-logs** bucket (SSE-KMS with the created key) **and** to a CloudWatch Logs log group (retention set).
+* Include the CloudTrail service role and bucket policy statements required by AWS.
+* Enable log file validation.
 
-Exclusions (important)
+**GuardDuty**
 
-* Do not add or reference any SSL/TLS certificates (no ACM), and do not create HTTPS listeners. Keep the ALB HTTP-only for now and ensure the rest of the stack still enforces encryption in transit where applicable (S3, endpoints, service calls).
+* Enable a `AWS::GuardDuty::Detector` in this account/region (no cross-account).
+* Make it easy to toggle on/off at deploy time (e.g., a parameter).
 
-Deliverable
+**CloudWatch**
 
-* Output only the complete TapStack.yml content—no commentary—ready to deploy.
+* Log groups (with retention) for:
+
+  * EC2 app logs (collected by the CloudWatch agent)
+  * Lambda logs (retention managed explicitly)
+  * CloudTrail logs (for the trail’s CloudWatch integration)
+
+**IAM (least-privilege everywhere)**
+
+* Roles to create:
+
+  * `EC2InstanceRole`
+  * `LambdaExecutionRole`
+  * `CloudTrailLogsRole`
+  * Any small helper roles needed for logging
+* Favor AWS managed policies only where appropriate (e.g., SSM core). Inline policies must scope to resources in this stack (specific S3 ARNs, log groups, and the KMS key). Avoid wildcards unless a service requires them, and then constrain with conditions.
+
+**Tagging**
+
+* Apply consistent tags on all taggable resources:
+
+  * `Project=TapStack`, plus `Environment`, `Owner`, and `CostCenter`.
+
+### Encryption & in-transit expectations
+
+* **At rest:** Use SSE-KMS (the created key) for S3 buckets; EBS volumes encrypted by default. Enable KMS rotation.
+* **In transit:** Enforce TLS to buckets via `aws:SecureTransport` bucket policies. VPC endpoints use TLS. SSM/EC2 Messages use TLS. (Front-end HTTPS is intentionally deferred; see Exclusions.)
+
+### Template structure & ergonomics
+
+* Sections: `AWSTemplateFormatVersion`, `Description`, `Metadata`, `Parameters`, `Mappings`, `Conditions`, `Resources`, `Outputs`.
+* **Parameters:** `EnvironmentName`, `ProjectName`, `AllowedIngressCIDRForAlbHttp` (default `0.0.0.0/0`), `InstanceType`, `MinCapacity`, `MaxCapacity`, `AppPort`, `LogRetentionDays`, and a toggle for GuardDuty. Validate inputs with `AllowedPattern`/`AllowedValues`.
+* **Mappings:** e.g., AZ mapping (or rely on SSM Param for the latest AL2023 AMI).
+* **Conditions:** e.g., `IsProd` to tweak retention or lifecycle.
+* **Naming:** Use `Fn::Sub` consistently; keep S3 bucket names lowercase and DNS-safe.
+* **No deprecated or region-unsupported resource types.**
+
+### Outputs (make them useful)
+
+* `VPCId`, `PublicSubnetIds`, `PrivateSubnetIds`
+* `AlbArn`, `AlbDnsName`, `AlbSecurityGroupId`, `TargetGroupArn`
+* `WebAclArn`
+* `Ec2AutoScalingGroupName`, `Ec2InstanceProfileArn`
+* `LambdaFunctionName`, `LambdaFunctionArn`, `LambdaLogGroupName`
+* `TrailName`, `TrailArn`, `CloudTrailLogGroupArn`
+* `GuardDutyDetectorId` (if enabled)
+* `KmsKeyArn`
+* Bucket names/ARNs for: **trail-logs**, **access-logs**, **lambda-artifacts**
+* VPC Endpoint IDs (at least S3/KMS/Logs/SSM/EC2Messages)
+
+### Validation & quality bars
+
+* Must be a single YAML file named **TapStack.yml**.
+* Must create all resources from scratch (no imports to existing KMS keys, buckets, trails, etc.).
+* Must pass `aws cloudformation validate-template` and `cfn-lint` in **us-east-1**.
+* Keep IAM and KMS key policies tight. No `*` on actions/resources unless strictly required, and then constrain with conditions.
+* Provide sane defaults so the stack launches without edits.
+
