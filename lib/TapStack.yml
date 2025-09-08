@@ -840,7 +840,36 @@ Resources:
         - { Key: Owner, Value: !Ref Owner }
         - { Key: CostCenter, Value: !Ref CostCenter }
 
-  # ✅ Fixed: remove non-attachable managed policy; keep least-privilege inline S3/KMS permissions
+  # Role for AWS Config Remediations (SSM Automation)
+  ConfigRemediationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-config-remediation-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ssm.amazonaws.com }
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'allow-s3-public-access-block'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketPublicAccessBlock'
+                  - 's3:PutBucketPublicAccessBlock'
+                  - 's3:GetAccountPublicAccessBlock'
+                  - 's3:PutAccountPublicAccessBlock'
+                Resource: '*'
+      Tags:
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: Environment, Value: !Ref EnvironmentName }
+        - { Key: Owner, Value: !Ref Owner }
+        - { Key: CostCenter, Value: !Ref CostCenter }
+
+  # ✅ Fixed: managed-policy removed; least-privilege inline policy for Config
   ConfigRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1088,44 +1117,73 @@ Resources:
 
   S3BucketPublicReadProhibitedRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
     Properties:
       ConfigRuleName: 's3-bucket-public-read-prohibited'
       Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED }
 
   S3BucketPublicWriteProhibitedRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
     Properties:
       ConfigRuleName: 's3-bucket-public-write-prohibited'
       Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_PUBLIC_WRITE_PROHIBITED }
 
   CloudTrailEnabledRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
     Properties:
       ConfigRuleName: 'cloudtrail-enabled'
       Source: { Owner: AWS, SourceIdentifier: CLOUD_TRAIL_ENABLED }
 
   RestrictedSSHRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigConfigurationRecorder
     Properties:
       ConfigRuleName: 'incoming-ssh-disabled'
       Source: { Owner: AWS, SourceIdentifier: INCOMING_SSH_DISABLED }
 
+  # ✅ Fixed remediation for public READ
   S3PublicReadRemediationConfiguration:
     Type: AWS::Config::RemediationConfiguration
     Properties:
       ConfigRuleName: !Ref S3BucketPublicReadProhibitedRule
       TargetType: SSM_DOCUMENT
-      TargetId: 'AWSConfigRemediation-RemoveS3BucketPublicReadAccess'
+      TargetId: 'AWSConfigRemediation-ConfigureS3BucketPublicAccessBlock'
       Parameters:
         AutomationAssumeRole:
           StaticValue:
-            Values: [!GetAtt ConfigRole.Arn]
-        S3BucketName:
+            Values: [!GetAtt ConfigRemediationRole.Arn]
+        BucketName:
           ResourceValue: { Value: RESOURCE_ID }
+        BlockPublicAcls:
+          StaticValue: { Values: ['true'] }
+        BlockPublicPolicy:
+          StaticValue: { Values: ['true'] }
+        IgnorePublicAcls:
+          StaticValue: { Values: ['true'] }
+        RestrictPublicBuckets:
+          StaticValue: { Values: ['true'] }
+      Automatic: false
+      MaximumAutomaticAttempts: 1
+
+  # ✅ Matching remediation for public WRITE
+  S3PublicWriteRemediationConfiguration:
+    Type: AWS::Config::RemediationConfiguration
+    Properties:
+      ConfigRuleName: !Ref S3BucketPublicWriteProhibitedRule
+      TargetType: SSM_DOCUMENT
+      TargetId: 'AWSConfigRemediation-ConfigureS3BucketPublicAccessBlock'
+      Parameters:
+        AutomationAssumeRole:
+          StaticValue:
+            Values: [!GetAtt ConfigRemediationRole.Arn]
+        BucketName:
+          ResourceValue: { Value: RESOURCE_ID }
+        BlockPublicAcls:
+          StaticValue: { Values: ['true'] }
+        BlockPublicPolicy:
+          StaticValue: { Values: ['true'] }
+        IgnorePublicAcls:
+          StaticValue: { Values: ['true'] }
+        RestrictPublicBuckets:
+          StaticValue: { Values: ['true'] }
       Automatic: false
       MaximumAutomaticAttempts: 1
 
