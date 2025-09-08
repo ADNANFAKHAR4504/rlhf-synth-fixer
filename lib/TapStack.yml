@@ -1096,25 +1096,25 @@ Resources:
         - { Key: Owner, Value: !Ref Owner }
         - { Key: CostCenter, Value: !Ref CostCenter }
 
-  # ---------------------- AWS Config (Recorder + Delivery + Starter) ----------------------
-  ConfigConfigurationRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub '${ProjectName}-config-recorder'
-      RoleARN: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-
+  # ---------------------- AWS Config (DeliveryChannel first, then Recorder, then Starter) ----------------------
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
-    DependsOn: ConfigConfigurationRecorder
     Properties:
       Name: !Sub '${ProjectName}-config-delivery-channel'
       S3BucketName: !Ref ConfigLogsBucket
       S3KeyPrefix: 'config'
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
+
+  ConfigConfigurationRecorder:
+    Type: AWS::Config::ConfigurationRecorder
+    DependsOn: ConfigDeliveryChannel
+    Properties:
+      Name: !Sub '${ProjectName}-config-recorder'
+      RoleARN: !GetAtt ConfigRole.Arn
+      RecordingGroup:
+        AllSupported: true
+        IncludeGlobalResourceTypes: true
 
   # --- Custom resource to START the recorder after both exist ---
   ConfigStarterRole:
