@@ -1,13 +1,10 @@
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 const region = process.env.REGION || 'us-east-1';
 const dynamoClient = new DynamoDBClient({ region });
 const s3Client = new S3Client({ region });
-const snsClient = new SNSClient({ region });
 const ssmClient = new SSMClient({ region });
 
 interface ProcessedData {
@@ -17,9 +14,7 @@ interface ProcessedData {
   processed: boolean;
 }
 
-export const handler = async (
-  event: APIGatewayProxyEvent
-): Promise<APIGatewayProxyResult> => {
+export const handler = async (event: any): Promise<any> => {
   const headers = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -32,23 +27,19 @@ export const handler = async (
     console.log('Processing request:', JSON.stringify(event, null, 2));
 
     // Get configuration from Parameter Store
-    const [tableNameParam, bucketNameParam, snsTopicParam] = await Promise.all([
+    const [tableNameParam, bucketNameParam] = await Promise.all([
       ssmClient.send(
         new GetParameterCommand({ Name: process.env.TABLE_NAME_PARAM! })
       ),
       ssmClient.send(
         new GetParameterCommand({ Name: process.env.BUCKET_NAME_PARAM! })
       ),
-      ssmClient.send(
-        new GetParameterCommand({ Name: process.env.SNS_TOPIC_PARAM! })
-      ),
     ]);
 
     const tableName = tableNameParam.Parameter?.Value;
     const bucketName = bucketNameParam.Parameter?.Value;
-    const snsTopicArn = snsTopicParam.Parameter?.Value;
 
-    if (!tableName || !bucketName || !snsTopicArn) {
+    if (!tableName || !bucketName) {
       throw new Error('Missing required configuration parameters');
     }
 
@@ -94,35 +85,6 @@ export const handler = async (
     );
 
     console.log('Data stored in S3 with key:', s3Key);
-
-    // Publish notification to SNS
-    const snsMessage = {
-      action: 'data_processed',
-      id: processedData.id,
-      timestamp: processedData.timestamp,
-      s3Key,
-      tableName,
-    };
-
-    await snsClient.send(
-      new PublishCommand({
-        TopicArn: snsTopicArn,
-        Message: JSON.stringify(snsMessage),
-        Subject: `TAP: Data processed for ID ${processedData.id}`,
-        MessageAttributes: {
-          action: {
-            DataType: 'String',
-            StringValue: 'data_processed',
-          },
-          id: {
-            DataType: 'String',
-            StringValue: processedData.id,
-          },
-        },
-      })
-    );
-
-    console.log('Notification sent to SNS');
 
     // Return success response
     return {
