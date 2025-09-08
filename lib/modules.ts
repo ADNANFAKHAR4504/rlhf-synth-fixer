@@ -116,7 +116,7 @@ export class SecureVpcConstruct extends Construct {
     new IamRolePolicyAttachment(this, 'flow-logs-policy', {
       role: this.flowLogsRole.name,
       policyArn:
-        'arn:aws:iam::aws:policy/service-role/VPCFlowLogsServiceRolePolicy',
+        'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
     });
 
     // Create public and private subnets
@@ -377,7 +377,7 @@ export class IamConstruct extends Construct {
 
     new IamRolePolicyAttachment(this, 'config-service-policy', {
       role: this.configRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole', // Add AWS_ prefix
+      policyArn: 'arn:aws:iam::aws:policy/service-role/ConfigRole',
     });
   }
 }
@@ -396,7 +396,7 @@ export class S3Construct extends Construct {
     super(scope, id);
 
     this.bucket = new S3Bucket(this, 'main-bucket', {
-      bucket: `${config.companyName}-${config.environment}-main-bucket-${Math.random().toString(36).substring(7)}`,
+      bucket: `${config.companyName}-${config.environment}-main-bucket-1234}`,
       tags: {
         Name: `${config.companyName}-${config.environment}-main-bucket`,
         Purpose: 'Application data storage with encryption',
@@ -431,7 +431,7 @@ export class S3Construct extends Construct {
     });
 
     this.configBucket = new S3Bucket(this, 'config-bucket', {
-      bucket: `${config.companyName}-${config.environment}-config-bucket-${Math.random().toString(36).substring(7)}`,
+      bucket: `${config.companyName}-${config.environment}-config-bucket-1234}`,
       tags: {
         Name: `${config.companyName}-${config.environment}-config-bucket`,
         Purpose: 'AWS Config compliance tracking',
