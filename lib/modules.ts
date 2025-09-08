@@ -556,26 +556,6 @@ export class ApiGatewayConstruct extends Construct {
       defaultAction: {
         allow: {},
       },
-      rule: [
-        {
-          name: 'RateLimitRule',
-          priority: 1,
-          action: {
-            block: {},
-          },
-          statement: {
-            rateBasedStatement: {
-              limit: 10000,
-              aggregateKeyType: 'IP',
-            },
-          },
-          visibilityConfig: {
-            sampledRequestsEnabled: true,
-            cloudwatchMetricsEnabled: true,
-            metricName: 'RateLimitRule',
-          },
-        },
-      ],
       visibilityConfig: {
         sampledRequestsEnabled: true,
         cloudwatchMetricsEnabled: true,
