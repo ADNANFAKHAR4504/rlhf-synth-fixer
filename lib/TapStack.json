@@ -114,13 +114,10 @@
     "MicroserviceLambda": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "nodejs18.x",
+        "Runtime": "nodejs22.x",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": [
-            "LambdaExecutionRole",
-            "Arn"
-          ]
+          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/lambda-execution-role"
         },
         "Code": {
           "ZipFile": "exports.handler = async (event) => { return { statusCode: 200, body: 'Hello from Lambda!' }; }"
@@ -170,9 +167,32 @@
             "Ref": "ALBSecurityGroup"
           }
         ],
-        "Subnets": {
-          "Ref": "PublicSubnets"
+        "Subnets": [
+          {
+            "Ref": "PublicSubnet1"
+          },
+          {
+            "Ref": "PublicSubnet2"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "DefaultTargetGroup": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "Port": 80,
+        "Protocol": "HTTP",
+        "VpcId": {
+          "Ref": "VPC"
         },
+        "HealthCheckPath": "/",
+        "HealthCheckProtocol": "HTTP",
         "Tags": [
           {
             "Key": "Environment",
@@ -192,7 +212,7 @@
         "Certificates": [
           {
             "CertificateArn": {
-              "Ref": "CertificateArn"
+              "Fn::Sub": "arn:aws:acm:${AWS::Region}:${AWS::AccountId}:certificate/example-cert"
             }
           }
         ],
@@ -210,10 +230,7 @@
       "Type": "AWS::CodePipeline::Pipeline",
       "Properties": {
         "RoleArn": {
-          "Fn::GetAtt": [
-            "CodePipelineServiceRole",
-            "Arn"
-          ]
+          "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/codepipeline-service-role"
         },
         "ArtifactStore": {
           "Type": "S3",
@@ -234,9 +251,7 @@
                   "Provider": "CodeCommit"
                 },
                 "Configuration": {
-                  "RepositoryName": {
-                    "Ref": "RepositoryName"
-                  },
+                  "RepositoryName": "microservices-app",
                   "BranchName": "main"
                 },
                 "OutputArtifacts": [
@@ -259,9 +274,7 @@
                   "Provider": "CodeBuild"
                 },
                 "Configuration": {
-                  "ProjectName": {
-                    "Ref": "CodeBuildProject"
-                  }
+                  "ProjectName": "microservices-build"
                 },
                 "InputArtifacts": [
                   {
@@ -288,12 +301,8 @@
                   "Provider": "CodeDeploy"
                 },
                 "Configuration": {
-                  "ApplicationName": {
-                    "Ref": "CodeDeployApplication"
-                  },
-                  "DeploymentGroupName": {
-                    "Ref": "CodeDeployDeploymentGroup"
-                  }
+                  "ApplicationName": "microservices-app",
+                  "DeploymentGroupName": "prod-deployment-group"
                 },
                 "InputArtifacts": [
                   {
