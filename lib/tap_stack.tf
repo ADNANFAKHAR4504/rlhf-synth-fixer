@@ -1126,7 +1126,7 @@ resource "aws_db_instance" "primary_rds" {
   # Updates and monitoring
   auto_minor_version_upgrade = true
   monitoring_interval        = 60
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Deletion protection
   skip_final_snapshot       = true
@@ -1187,7 +1187,7 @@ resource "aws_db_instance" "secondary_rds" {
   # Updates and monitoring
   auto_minor_version_upgrade = true
   monitoring_interval        = 60
-  enabled_cloudwatch_logs_exports = ["error", "general", "slow_query"]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Deletion protection
   skip_final_snapshot       = true
@@ -1335,6 +1335,7 @@ resource "aws_lambda_permission" "api_gateway_lambda" {
 }
 
 # API Gateway deployment
+# API Gateway deployment - CORRECTED
 resource "aws_api_gateway_deployment" "app_deployment" {
   provider = aws.us_east_2
   depends_on = [
@@ -1343,7 +1344,6 @@ resource "aws_api_gateway_deployment" "app_deployment" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.app_api.id
-  stage_name  = var.environment
 
   triggers = {
     redeployment = sha1(jsonencode([
@@ -1356,6 +1356,20 @@ resource "aws_api_gateway_deployment" "app_deployment" {
   lifecycle {
     create_before_destroy = true
   }
+}
+
+# API Gateway Stage - NEW RESOURCE
+resource "aws_api_gateway_stage" "app_stage" {
+  provider      = aws.us_east_2
+  deployment_id = aws_api_gateway_deployment.app_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.app_api.id
+  stage_name    = var.environment
+
+  xray_tracing_enabled = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.primary_prefix}-api-stage"
+  })
 }
 
 # =============================================================================
@@ -1440,7 +1454,7 @@ resource "aws_wafv2_web_acl" "app_waf" {
 # WAF association with API Gateway
 resource "aws_wafv2_web_acl_association" "app_waf_association" {
   provider     = aws.us_east_2
-  resource_arn = aws_api_gateway_deployment.app_deployment.execution_arn
+  resource_arn = aws_api_gateway_stage.app_stage.arn
   web_acl_arn  = aws_wafv2_web_acl.app_waf.arn
 }
 
@@ -1683,7 +1697,7 @@ resource "aws_config_delivery_channel" "app_config_delivery_channel" {
   s3_bucket_name     = aws_s3_bucket.config_bucket.bucket
   s3_key_prefix      = "config"
   snapshot_delivery_properties {
-    delivery_frequency = "Daily"
+    delivery_frequency = "TwentyFour_Hours"
   }
   depends_on = [aws_config_configuration_recorder.app_config_recorder]
 }
@@ -2145,9 +2159,21 @@ output "api_gateway_execution_arn" {
   value       = aws_api_gateway_rest_api.app_api.execution_arn
 }
 
+# API Gateway Outputs - UPDATED
 output "api_gateway_invoke_url" {
   description = "Invoke URL of the API Gateway deployment"
-  value       = "https://${aws_api_gateway_rest_api.app_api.id}.execute-api.${var.primary_region}.amazonaws.com/${var.environment}"
+  value       = "https://${aws_api_gateway_rest_api.app_api.id}.execute-api.${var.primary_region}.amazonaws.com/${aws_api_gateway_stage.app_stage.stage_name}"
+}
+
+# Add new stage outputs
+output "api_gateway_stage_name" {
+  description = "Name of the API Gateway stage"
+  value       = aws_api_gateway_stage.app_stage.stage_name
+}
+
+output "api_gateway_stage_arn" {
+  description = "ARN of the API Gateway stage"
+  value       = aws_api_gateway_stage.app_stage.arn
 }
 
 output "api_gateway_resource_id" {
