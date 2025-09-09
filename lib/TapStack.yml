@@ -1,59 +1,59 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure web application environment with WAF, threat monitoring, and encrypted logging'
+Description: Secure web application environment with WAF, Firehose→S3 logging, threat monitoring Lambda, and KMS encryption
 
 Parameters:
   Environment:
     Type: String
     Default: 'prod'
-    Description: 'Environment name'
+    Description: Environment name
   Owner:
     Type: String
     Default: 'PlatformTeam'
-    Description: 'Owner tag value'
+    Description: Owner tag value
   VpcCidr:
     Type: String
     Default: '10.0.0.0/16'
-    Description: 'VPC CIDR block'
+    Description: VPC CIDR block
   PublicSubnetACidr:
     Type: String
     Default: '10.0.1.0/24'
-    Description: 'Public subnet A CIDR'
+    Description: Public subnet A CIDR
   PublicSubnetBCidr:
     Type: String
     Default: '10.0.2.0/24'
-    Description: 'Public subnet B CIDR'
+    Description: Public subnet B CIDR
   PublicSubnetCCidr:
     Type: String
     Default: '10.0.3.0/24'
-    Description: 'Public subnet C CIDR'
+    Description: Public subnet C CIDR
   PrivateSubnetACidr:
     Type: String
     Default: '10.0.11.0/24'
-    Description: 'Private subnet A CIDR'
+    Description: Private subnet A CIDR
   PrivateSubnetBCidr:
     Type: String
     Default: '10.0.12.0/24'
-    Description: 'Private subnet B CIDR'
+    Description: Private subnet B CIDR
   PrivateSubnetCCidr:
     Type: String
     Default: '10.0.13.0/24'
-    Description: 'Private subnet C CIDR'
+    Description: Private subnet C CIDR
   AzA:
     Type: String
     Default: 'us-east-1a'
-    Description: 'Availability Zone A'
+    Description: Availability Zone A
   AzB:
     Type: String
     Default: 'us-east-1b'
-    Description: 'Availability Zone B'
+    Description: Availability Zone B
   AzC:
     Type: String
     Default: 'us-east-1c'
-    Description: 'Availability Zone C'
+    Description: Availability Zone C
   AlertEmail:
     Type: String
     Default: ''
-    Description: 'Email for threat alerts (optional)'
+    Description: Email for threat alerts (optional)
 
 Conditions:
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
@@ -67,7 +67,7 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub 'VPC-${AWS::StackName}-${Environment}'
+          Value: !Sub 'VPC-ProdVPC-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -78,7 +78,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub 'IGW-${AWS::StackName}-${Environment}'
+          Value: !Sub 'EC2-IGW-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -99,7 +99,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-PublicA-${Environment}'
+          Value: !Sub 'EC2-PublicA-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -114,7 +114,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-PublicB-${Environment}'
+          Value: !Sub 'EC2-PublicB-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -129,7 +129,7 @@ Resources:
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-PublicC-${Environment}'
+          Value: !Sub 'EC2-PublicC-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -143,7 +143,7 @@ Resources:
       AvailabilityZone: !Ref AzA
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-PrivateA-${Environment}'
+          Value: !Sub 'EC2-PrivateA-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -157,7 +157,7 @@ Resources:
       AvailabilityZone: !Ref AzB
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-PrivateB-${Environment}'
+          Value: !Sub 'EC2-PrivateB-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -171,7 +171,7 @@ Resources:
       AvailabilityZone: !Ref AzC
       Tags:
         - Key: Name
-          Value: !Sub 'Subnet-PrivateC-${Environment}'
+          Value: !Sub 'EC2-PrivateC-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -184,7 +184,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'EIP-NatA-${Environment}'
+          Value: !Sub 'EC2-EIP-NatA-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -197,7 +197,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'EIP-NatB-${Environment}'
+          Value: !Sub 'EC2-EIP-NatB-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -210,7 +210,7 @@ Resources:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'EIP-NatC-${Environment}'
+          Value: !Sub 'EC2-EIP-NatC-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -223,7 +223,7 @@ Resources:
       SubnetId: !Ref PublicSubnetA
       Tags:
         - Key: Name
-          Value: !Sub 'NAT-GatewayA-${Environment}'
+          Value: !Sub 'EC2-NAT-A-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -236,7 +236,7 @@ Resources:
       SubnetId: !Ref PublicSubnetB
       Tags:
         - Key: Name
-          Value: !Sub 'NAT-GatewayB-${Environment}'
+          Value: !Sub 'EC2-NAT-B-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -249,7 +249,7 @@ Resources:
       SubnetId: !Ref PublicSubnetC
       Tags:
         - Key: Name
-          Value: !Sub 'NAT-GatewayC-${Environment}'
+          Value: !Sub 'EC2-NAT-C-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -261,7 +261,7 @@ Resources:
       VpcId: !Ref ProdVPC
       Tags:
         - Key: Name
-          Value: !Sub 'RouteTable-Public-${Environment}'
+          Value: !Sub 'EC2-RT-Public-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -299,7 +299,7 @@ Resources:
       VpcId: !Ref ProdVPC
       Tags:
         - Key: Name
-          Value: !Sub 'RouteTable-PrivateA-${Environment}'
+          Value: !Sub 'EC2-RT-PrivateA-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -311,7 +311,7 @@ Resources:
       VpcId: !Ref ProdVPC
       Tags:
         - Key: Name
-          Value: !Sub 'RouteTable-PrivateB-${Environment}'
+          Value: !Sub 'EC2-RT-PrivateB-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -323,7 +323,7 @@ Resources:
       VpcId: !Ref ProdVPC
       Tags:
         - Key: Name
-          Value: !Sub 'RouteTable-PrivateC-${Environment}'
+          Value: !Sub 'EC2-RT-PrivateC-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -350,28 +350,10 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGatewayC
 
-  PrivateSubnetARouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnetA
-      RouteTableId: !Ref PrivateRouteTableA
-
-  PrivateSubnetBRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnetB
-      RouteTableId: !Ref PrivateRouteTableB
-
-  PrivateSubnetCRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnetC
-      RouteTableId: !Ref PrivateRouteTableC
-
   ALBSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for Application Load Balancer'
+      GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref ProdVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -383,7 +365,7 @@ Resources:
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
-          Value: !Sub 'SG-ALB-${Environment}'
+          Value: !Sub 'EC2-SG-ALB-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -392,7 +374,7 @@ Resources:
   AppSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for application instances'
+      GroupDescription: Security group for application instances
       VpcId: !Ref ProdVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -404,7 +386,7 @@ Resources:
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
-          Value: !Sub 'SG-App-${Environment}'
+          Value: !Sub 'EC2-SG-App-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -413,14 +395,14 @@ Resources:
   LambdaSG:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: 'Security group for Lambda function'
+      GroupDescription: Security group for Lambda function
       VpcId: !Ref ProdVPC
       SecurityGroupEgress:
         - IpProtocol: '-1'
           CidrIp: '0.0.0.0/0'
       Tags:
         - Key: Name
-          Value: !Sub 'SG-Lambda-${Environment}'
+          Value: !Sub 'EC2-SG-Lambda-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -429,7 +411,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'ALB-Main-${Environment}'
+      Name: !Sub 'ELB-ALB-${Environment}'
       Scheme: internet-facing
       Type: application
       Subnets:
@@ -440,7 +422,7 @@ Resources:
         - !Ref ALBSG
       Tags:
         - Key: Name
-          Value: !Sub 'ALB-Main-${Environment}'
+          Value: !Sub 'ELB-ALB-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -449,15 +431,16 @@ Resources:
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'TG-Main-${Environment}'
+      Name: !Sub 'ELB-TG-${Environment}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref ProdVPC
       HealthCheckPath: '/'
       HealthCheckProtocol: HTTP
+      TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub 'TG-Main-${Environment}'
+          Value: !Sub 'ELB-TG-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -476,7 +459,7 @@ Resources:
   WebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
-      Name: !Sub 'WebACL-Main-${Environment}'
+      Name: !Sub 'WAF-WebACL-${Environment}'
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -520,10 +503,10 @@ Resources:
       VisibilityConfig:
         SampledRequestsEnabled: true
         CloudWatchMetricsEnabled: true
-        MetricName: !Sub 'WebACL-Main-${Environment}'
+        MetricName: !Sub 'WAF-WebACL-${Environment}'
       Tags:
         - Key: Name
-          Value: !Sub 'WebACL-Main-${Environment}'
+          Value: !Sub 'WAF-WebACL-${Environment}'
         - Key: Owner
           Value: !Ref Owner
         - Key: Environment
@@ -538,34 +521,15 @@ Resources:
   LogsKmsKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS Key for WAF logs encryption - ${Environment}'
+      Description: !Sub 'KMS key for WAF logs encryption - ${Environment}'
       KeyPolicy:
+        Version: '2012-10-17'
         Statement:
-          - Sid: Enable IAM User Permissions
+          - Sid: EnableIAMPermissions
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
-            Resource: '*'
-          - Sid: Allow S3 Service
-            Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: '*'
-            Condition:
-              StringEquals:
-                kms:EncryptionContext:aws:s3:arn: !Sub '${WafLogsBucket}/*'
-          - Sid: Allow Lambda and LogsReadRole
-            Effect: Allow
-            Principal:
-              AWS:
-                - !GetAtt ThreatMonitoringLambdaRole.Arn
-                - !GetAtt LogsReadRole.Arn
-            Action:
-              - kms:Decrypt
             Resource: '*'
       Tags:
         - Key: Name
@@ -584,16 +548,17 @@ Resources:
   SnsKmsKey:
     Type: AWS::KMS::Key
     Properties:
-      Description: !Sub 'KMS Key for SNS topic encryption - ${Environment}'
+      Description: !Sub 'KMS key for SNS topic encryption - ${Environment}'
       KeyPolicy:
+        Version: '2012-10-17'
         Statement:
-          - Sid: Enable IAM User Permissions
+          - Sid: EnableIAMPermissions
             Effect: Allow
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'kms:*'
             Resource: '*'
-          - Sid: Allow SNS Service
+          - Sid: AllowSNSServiceUse
             Effect: Allow
             Principal:
               Service: sns.amazonaws.com
@@ -601,14 +566,9 @@ Resources:
               - kms:Decrypt
               - kms:GenerateDataKey
             Resource: '*'
-          - Sid: Allow Lambda
-            Effect: Allow
-            Principal:
-              AWS: !GetAtt ThreatMonitoringLambdaRole.Arn
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: '*'
+            Condition:
+              StringEquals:
+                AWS:SourceAccount: !Sub '${AWS::AccountId}'
       Tags:
         - Key: Name
           Value: !Sub 'KMS-SNS-${Environment}'
@@ -626,22 +586,23 @@ Resources:
   WafLogsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'waflogs-${AWS::StackName}-${Environment}-${AWS::AccountId}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
+          - BucketKeyEnabled: true
+            ServerSideEncryptionByDefault:
               SSEAlgorithm: aws:kms
               KMSMasterKeyID: !Ref LogsKmsKey
-            BucketKeyEnabled: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
       NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt ThreatMonitoringLambda.Arn
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
       Tags:
         - Key: Name
           Value: !Sub 'S3-WafLogs-${Environment}'
@@ -655,23 +616,27 @@ Resources:
     Properties:
       Bucket: !Ref WafLogsBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
-          - Sid: DenyInsecureConnections
+          - Sid: DenyInsecureTransport
             Effect: Deny
             Principal: '*'
             Action: 's3:*'
             Resource:
-              - !Sub '${WafLogsBucket}/*'
-              - !Ref WafLogsBucket
+              - !Sub 'arn:aws:s3:::${WafLogsBucket}'
+              - !Sub 'arn:aws:s3:::${WafLogsBucket}/*'
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
-          - Sid: AllowWAFLogDelivery
+          - Sid: AllowFirehoseWrite
             Effect: Allow
             Principal:
-              Service: wafv2.amazonaws.com
-            Action: 's3:PutObject'
-            Resource: !Sub '${WafLogsBucket}/*'
+              AWS: !GetAtt FirehoseRole.Arn
+            Action:
+              - s3:PutObject
+              - s3:AbortMultipartUpload
+            Resource:
+              - !Sub 'arn:aws:s3:::${WafLogsBucket}/*'
           - Sid: AllowLogsReadRole
             Effect: Allow
             Principal:
@@ -680,15 +645,93 @@ Resources:
               - s3:GetObject
               - s3:ListBucket
             Resource:
-              - !Sub '${WafLogsBucket}/*'
-              - !Ref WafLogsBucket
+              - !Sub 'arn:aws:s3:::${WafLogsBucket}'
+              - !Sub 'arn:aws:s3:::${WafLogsBucket}/*'
+
+  FirehoseLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/kinesisfirehose/waf-logs-${Environment}'
+      RetentionInDays: 14
+      Tags:
+        - Key: Name
+          Value: !Sub 'Logs-Firehose-${Environment}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref Environment
+
+  FirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'Role-Firehose-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: firehose.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FirehoseToS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:PutObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${WafLogsBucket}'
+                  - !Sub 'arn:aws:s3:::${WafLogsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - logs:PutLogEvents
+                  - logs:CreateLogStream
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kinesisfirehose/waf-logs-${Environment}:*'
+              - Effect: Allow
+                Action:
+                  - kms:Encrypt
+                  - kms:GenerateDataKey
+                Resource: !GetAtt LogsKmsKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub 'Role-Firehose-${Environment}'
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Environment
+          Value: !Ref Environment
+
+  WafLogsDeliveryStream:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamName: !Sub 'KDF-WafLogs-${Environment}'
+      DeliveryStreamType: DirectPut
+      ExtendedS3DestinationConfiguration:
+        BucketARN: !Sub 'arn:aws:s3:::${WafLogsBucket}'
+        RoleARN: !GetAtt FirehoseRole.Arn
+        BufferingHints:
+          IntervalInSeconds: 300
+          SizeInMBs: 5
+        CompressionFormat: GZIP
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Ref FirehoseLogGroup
+          LogStreamName: 'delivery'
+        EncryptionConfiguration:
+          KMSEncryptionConfig:
+            AWSKMSKeyARN: !GetAtt LogsKmsKey.Arn
 
   WAFLoggingConfiguration:
     Type: AWS::WAFv2::LoggingConfiguration
     Properties:
       ResourceArn: !GetAtt WebACL.Arn
       LogDestinationConfigs:
-        - !Sub '${WafLogsBucket}'
+        - !GetAtt WafLogsDeliveryStream.Arn
 
   ThreatAlertTopic:
     Type: AWS::SNS::Topic
@@ -732,13 +775,14 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub '${WafLogsBucket}/*'
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${WafLogsBucket}'
+                  - !Sub 'arn:aws:s3:::${WafLogsBucket}/*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
-                Resource: 
-                  - !GetAtt LogsKmsKey.Arn
-                  - !GetAtt SnsKmsKey.Arn
+                Resource: !GetAtt LogsKmsKey.Arn
               - Effect: Allow
                 Action:
                   - sns:Publish
@@ -780,70 +824,79 @@ Resources:
           import boto3
           import os
           from collections import defaultdict
+          from urllib.parse import unquote_plus
 
           s3 = boto3.client('s3')
           sns = boto3.client('sns')
 
-          def lambda_handler(event, context):
+          def _process_object(bucket, key):
               threat_count = 0
               blocked_ips = defaultdict(int)
               rule_matches = defaultdict(int)
-              
-              for record in event['Records']:
-                  bucket = record['s3']['bucket']['name']
-                  key = record['s3']['object']['key']
-                  
-                  try:
-                      response = s3.get_object(Bucket=bucket, Key=key)
-                      content = response['Body'].read().decode('utf-8')
-                      
-                      for line in content.strip().split('\n'):
-                          if not line:
-                              continue
-                          
-                          log_entry = json.loads(line)
-                          action = log_entry.get('action', '')
-                          
-                          if action == 'BLOCK':
-                              threat_count += 1
-                              client_ip = log_entry.get('httpRequest', {}).get('clientIP', 'unknown')
-                              blocked_ips[client_ip] += 1
-                              
-                              for rule_group in log_entry.get('ruleGroupList', []):
-                                  for rule in rule_group.get('terminatingRule', {}):
-                                      if 'ruleId' in rule:
-                                          rule_matches[rule['ruleId']] += 1
-                              
-                              labels = log_entry.get('labels', [])
-                              for label in labels:
-                                  label_name = label.get('name', '')
-                                  if any(threat in label_name.lower() for threat in ['bot', 'sqli', 'xss', 'malicious']):
-                                      rule_matches[label_name] += 1
-                  
-                  except Exception as e:
-                      print(f"Error processing {key}: {str(e)}")
+
+              resp = s3.get_object(Bucket=bucket, Key=key)
+              body = resp['Body'].read().decode('utf-8', errors='ignore')
+
+              for line in body.splitlines():
+                  line = line.strip()
+                  if not line:
                       continue
-              
+                  try:
+                      entry = json.loads(line)
+                  except Exception:
+                      continue
+
+                  action = entry.get('action', '')
+                  if action == 'BLOCK':
+                      threat_count += 1
+                      client_ip = entry.get('httpRequest', {}).get('clientIP', 'unknown')
+                      blocked_ips[client_ip] += 1
+
+                      for rg in entry.get('ruleGroupList', []):
+                          term = rg.get('terminatingRule') or {}
+                          rid = term.get('ruleId')
+                          if rid:
+                              rule_matches[rid] += 1
+
+                      for label in entry.get('labels', []):
+                          name = (label or {}).get('name', '')
+                          if any(t in name.lower() for t in ['bot', 'sqli', 'xss', 'malicious']):
+                              rule_matches[name] += 1
+
               if threat_count > 0:
                   top_ips = sorted(blocked_ips.items(), key=lambda x: x[1], reverse=True)[:5]
                   top_rules = sorted(rule_matches.items(), key=lambda x: x[1], reverse=True)[:5]
-                  
-                  message = f"WAF Threat Alert\n\n"
-                  message += f"Total blocked requests: {threat_count}\n\n"
-                  message += f"Top offending IPs:\n"
-                  for ip, count in top_ips:
-                      message += f"  {ip}: {count} requests\n"
-                  message += f"\nTop triggered rules:\n"
-                  for rule, count in top_rules:
-                      message += f"  {rule}: {count} matches\n"
-                  
-                  sns.publish(
-                      TopicArn=os.environ['SNS_TOPIC_ARN'],
-                      Subject='WAF Security Alert',
-                      Message=message
-                  )
-              
-              return {'statusCode': 200, 'body': json.dumps(f'Processed {threat_count} threats')}
+
+                  msg = []
+                  msg.append('WAF Threat Alert')
+                  msg.append(f'Total blocked requests: {threat_count}')
+                  if top_ips:
+                      msg.append('Top offending IPs:')
+                      for ip, c in top_ips:
+                          msg.append(f'  {ip}: {c}')
+                  if top_rules:
+                      msg.append('Top triggered rules:')
+                      for r, c in top_rules:
+                          msg.append(f'  {r}: {c}')
+                  sns.publish(TopicArn=os.environ['SNS_TOPIC_ARN'],
+                              Subject='WAF Security Alert',
+                              Message='\n'.join(msg))
+
+          def lambda_handler(event, context):
+              if 'detail' in event and event.get('source') == 'aws.s3':
+                  detail = event['detail']
+                  bucket = detail.get('bucket', {}).get('name')
+                  key = detail.get('object', {}).get('key')
+                  if bucket and key:
+                      _process_object(bucket, unquote_plus(key))
+                  return {'statusCode': 200, 'body': 'OK'}
+
+              for rec in event.get('Records', []):
+                  if rec.get('eventSource') == 'aws:s3':
+                      bucket = rec['s3']['bucket']['name']
+                      key = rec['s3']['object']['key']
+                      _process_object(bucket, unquote_plus(key))
+              return {'statusCode': 200, 'body': 'OK'}
       Tags:
         - Key: Name
           Value: !Sub 'Lambda-ThreatMonitor-${Environment}'
@@ -852,13 +905,31 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
-  LambdaInvokePermission:
+  S3ObjectCreatedRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'EVT-S3ObjectCreated-${Environment}'
+      State: ENABLED
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref WafLogsBucket
+      Targets:
+        - Id: Target0
+          Arn: !GetAtt ThreatMonitoringLambda.Arn
+
+  LambdaInvokeFromEventsPermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref ThreatMonitoringLambda
       Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceArn: !Sub '${WafLogsBucket}'
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3ObjectCreatedRule.Arn
 
   LogsReadRole:
     Type: AWS::IAM::Role
@@ -881,8 +952,8 @@ Resources:
                   - s3:GetObject
                   - s3:ListBucket
                 Resource:
-                  - !Ref WafLogsBucket
-                  - !Sub '${WafLogsBucket}/*'
+                  - !Sub 'arn:aws:s3:::${WafLogsBucket}'
+                  - !Sub 'arn:aws:s3:::${WafLogsBucket}/*'
               - Effect: Allow
                 Action:
                   - kms:Decrypt
@@ -897,85 +968,85 @@ Resources:
 
 Outputs:
   VPCId:
-    Description: 'VPC ID'
+    Description: VPC ID
     Value: !Ref ProdVPC
     Export:
       Name: !Sub '${AWS::StackName}-VPCId'
 
   PublicSubnetIds:
-    Description: 'Public Subnet IDs'
+    Description: Public Subnet IDs
     Value: !Join [',', [!Ref PublicSubnetA, !Ref PublicSubnetB, !Ref PublicSubnetC]]
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnetIds'
 
   PrivateSubnetIds:
-    Description: 'Private Subnet IDs'
+    Description: Private Subnet IDs
     Value: !Join [',', [!Ref PrivateSubnetA, !Ref PrivateSubnetB, !Ref PrivateSubnetC]]
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnetIds'
 
   LoadBalancerArn:
-    Description: 'Application Load Balancer ARN'
+    Description: Application Load Balancer ARN
     Value: !Ref ApplicationLoadBalancer
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancerArn'
 
   LoadBalancerDNSName:
-    Description: 'Application Load Balancer DNS Name'
+    Description: Application Load Balancer DNS Name
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-LoadBalancerDNSName'
 
   TargetGroupArn:
-    Description: 'Target Group ARN'
+    Description: Target Group ARN
     Value: !Ref TargetGroup
     Export:
       Name: !Sub '${AWS::StackName}-TargetGroupArn'
 
   WebACLArn:
-    Description: 'WAF WebACL ARN'
+    Description: WAF WebACL ARN
     Value: !GetAtt WebACL.Arn
     Export:
       Name: !Sub '${AWS::StackName}-WebACLArn'
 
   WafLogsBucketName:
-    Description: 'WAF Logs Bucket Name'
+    Description: WAF Logs Bucket Name
     Value: !Ref WafLogsBucket
     Export:
       Name: !Sub '${AWS::StackName}-WafLogsBucketName'
 
   WafLogsBucketArn:
-    Description: 'WAF Logs Bucket ARN'
-    Value: !Sub '${WafLogsBucket}'
+    Description: WAF Logs Bucket ARN
+    Value: !Sub 'arn:aws:s3:::${WafLogsBucket}'
     Export:
       Name: !Sub '${AWS::StackName}-WafLogsBucketArn'
 
   LogsKmsKeyArn:
-    Description: 'Logs KMS Key ARN'
+    Description: Logs KMS Key ARN
     Value: !GetAtt LogsKmsKey.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LogsKmsKeyArn'
 
   SnsTopicArn:
-    Description: 'SNS Topic ARN'
+    Description: SNS Topic ARN
     Value: !Ref ThreatAlertTopic
     Export:
       Name: !Sub '${AWS::StackName}-SnsTopicArn'
 
   ThreatLambdaArn:
-    Description: 'Threat Monitoring Lambda ARN'
+    Description: Threat Monitoring Lambda ARN
     Value: !GetAtt ThreatMonitoringLambda.Arn
     Export:
       Name: !Sub '${AWS::StackName}-ThreatLambdaArn'
 
   LogsReadRoleArn:
-    Description: 'Logs Read Role ARN'
+    Description: Logs Read Role ARN
     Value: !GetAtt LogsReadRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-LogsReadRoleArn'
 
-  AppSecurityGroupId:
-    Description: 'Application Security Group ID'
-    Value: !Ref AppSG
+  FirehoseStreamArn:
+    Description: Kinesis Data Firehose Delivery Stream ARN
+    Value: !GetAtt WafLogsDeliveryStream.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-AppSecurityGroupId'
+      Name: !Sub '${AWS::StackName}-FirehoseStreamArn'
