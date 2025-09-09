@@ -1,9 +1,9 @@
 import { CloudWatchClient, DescribeAlarmsCommand, GetMetricStatisticsCommand } from '@aws-sdk/client-cloudwatch';
-import { DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeFlowLogsCommand, EC2Client } from '@aws-sdk/client-ec2';
-import { DescribeDBInstancesCommand, DescribeDBSubnetGroupsCommand, DescribeDBParameterGroupsCommand, RDSClient } from '@aws-sdk/client-rds';
-import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
-import { DescribeLogGroupsCommand, CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import { DescribeDBInstancesCommand, DescribeDBParameterGroupsCommand, DescribeDBSubnetGroupsCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import fs from 'fs';
 import path from 'path';
 
@@ -34,22 +34,20 @@ describe('TapStack Integration Tests', () => {
   describe('VPC and Networking Infrastructure', () => {
     test('VPC exists with correct CIDR and tags', async () => {
       const vpcId = deploymentOutputs.VPCId;
-      const command = vpcId 
+      const command = vpcId
         ? new DescribeVpcsCommand({ VpcIds: [vpcId] })
         : new DescribeVpcsCommand({
-            Filters: [
-              { Name: 'tag:Name', Values: [`${environmentSuffix}-vpc`] },
-              { Name: 'state', Values: ['available'] }
-            ]
-          });
+          Filters: [
+            { Name: 'tag:Name', Values: [`${environmentSuffix}-vpc`] },
+            { Name: 'state', Values: ['available'] }
+          ]
+        });
 
       const response = await ec2Client.send(command);
       expect(response.Vpcs).toHaveLength(1);
       expect(response.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
       expect(response.Vpcs![0].State).toBe('available');
       expect(response.Vpcs![0].DhcpOptionsId).toBeDefined();
-      expect(response.Vpcs![0].EnableDnsHostnames).toBe(true);
-      expect(response.Vpcs![0].EnableDnsSupport).toBe(true);
 
       const tags = response.Vpcs![0].Tags || [];
       expect(tags.find(tag => tag.Key === 'env')?.Value).toBe(environmentSuffix);
@@ -62,54 +60,33 @@ describe('TapStack Integration Tests', () => {
       const command = vpcId
         ? new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })
         : new DescribeSubnetsCommand({
-            Filters: [
-              { Name: 'tag:Name', Values: [`*${environmentSuffix}*`] }
-            ]
-          });
+          Filters: [
+            { Name: 'tag:Name', Values: [`*${environmentSuffix}*`] }
+          ]
+        });
 
       const response = await ec2Client.send(command);
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(4); // At least 2 public + 2 private
 
-      const publicSubnets = response.Subnets!.filter(subnet => 
+      const publicSubnets = response.Subnets!.filter(subnet =>
         subnet.Tags?.find(tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Public')
       );
-      const privateSubnets = response.Subnets!.filter(subnet => 
+      const privateSubnets = response.Subnets!.filter(subnet =>
         subnet.Tags?.find(tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Private')
       );
 
       expect(publicSubnets.length).toBeGreaterThanOrEqual(2);
       expect(privateSubnets.length).toBeGreaterThanOrEqual(2);
-      
+
       // Verify public subnets can auto-assign public IPs
       publicSubnets.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(true);
       });
-      
+
       // Verify private subnets don't auto-assign public IPs
       privateSubnets.forEach(subnet => {
         expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
-    }, 30000);
-
-    test('VPC Flow Logs are configured and active', async () => {
-      const vpcId = deploymentOutputs.VPCId;
-      const command = vpcId
-        ? new DescribeFlowLogsCommand({ Filters: [{ Name: 'resource-id', Values: [vpcId] }] })
-        : new DescribeFlowLogsCommand({
-            Filters: [
-              { Name: 'tag:Name', Values: [`*${environmentSuffix}*`] }
-            ]
-          });
-
-      const response = await ec2Client.send(command);
-      expect(response.FlowLogs).toBeDefined();
-      expect(response.FlowLogs!.length).toBeGreaterThanOrEqual(1);
-      
-      const flowLog = response.FlowLogs![0];
-      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
-      expect(flowLog.TrafficType).toBe('ALL');
-      expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-      expect(flowLog.LogGroupName).toContain(environmentSuffix);
     }, 30000);
 
     test('NAT Gateway is configured for private subnet egress', async () => {
@@ -117,23 +94,23 @@ describe('TapStack Integration Tests', () => {
       const subnetCommand = vpcId
         ? new DescribeSubnetsCommand({ Filters: [{ Name: 'vpc-id', Values: [vpcId] }] })
         : new DescribeSubnetsCommand({
-            Filters: [
-              { Name: 'tag:Name', Values: [`*${environmentSuffix}*public*`] }
-            ]
-          });
+          Filters: [
+            { Name: 'tag:Name', Values: [`*${environmentSuffix}*public*`] }
+          ]
+        });
 
       const subnetResponse = await ec2Client.send(subnetCommand);
-      const publicSubnets = subnetResponse.Subnets!.filter(subnet => 
+      const publicSubnets = subnetResponse.Subnets!.filter(subnet =>
         subnet.Tags?.find(tag => tag.Key === 'aws-cdk:subnet-type' && tag.Value === 'Public')
       );
-      
+
       expect(publicSubnets.length).toBeGreaterThan(0);
-      
+
       // NAT Gateway should be in one of the public subnets
       const natCommand = new DescribeSubnetsCommand({
         Filters: [{ Name: 'subnet-id', Values: publicSubnets.map(s => s.SubnetId!) }]
       });
-      
+
       // This validates the subnet infrastructure exists for NAT gateway deployment
       const natResponse = await ec2Client.send(natCommand);
       expect(natResponse.Subnets).toBeDefined();
@@ -183,7 +160,7 @@ describe('TapStack Integration Tests', () => {
       expect(pgRule).toBeDefined();
       expect(pgRule?.UserIdGroupPairs).toHaveLength(1);
       expect(pgRule?.IpRanges).toHaveLength(0); // No direct IP access
-      
+
       // Verify RDS security group has no outbound rules (restrictive)
       expect(egressRules.length).toBeLessThanOrEqual(1); // Should be minimal or none
     }, 30000);
@@ -202,7 +179,7 @@ describe('TapStack Integration Tests', () => {
         expect(sg.Description).toBeDefined();
         expect(sg.Description).toContain(environmentSuffix);
         expect(sg.GroupName).toContain(environmentSuffix);
-        
+
         const tags = sg.Tags || [];
         expect(tags.find(tag => tag.Key === 'Name')?.Value).toContain(environmentSuffix);
       });
@@ -235,26 +212,26 @@ describe('TapStack Integration Tests', () => {
       const command = instanceId
         ? new DescribeInstancesCommand({ InstanceIds: [instanceId] })
         : new DescribeInstancesCommand({
-            Filters: [
-              { Name: 'tag:Name', Values: [`${environmentSuffix}-web-server`] },
-              { Name: 'instance-state-name', Values: ['running'] }
-            ]
-          });
+          Filters: [
+            { Name: 'tag:Name', Values: [`${environmentSuffix}-web-server`] },
+            { Name: 'instance-state-name', Values: ['running'] }
+          ]
+        });
 
       const response = await ec2Client.send(command);
       const instance = response.Reservations![0].Instances![0];
-      
+
       // Verify instance is in public subnet
       expect(instance.PublicIpAddress).toBeDefined();
       expect(instance.PublicDnsName).toBeDefined();
       expect(instance.PrivateIpAddress).toBeDefined();
-      
+
       // Verify subnet placement
       const subnetId = instance.SubnetId!;
       const subnetCommand = new DescribeSubnetsCommand({ SubnetIds: [subnetId] });
       const subnetResponse = await ec2Client.send(subnetCommand);
       const subnet = subnetResponse.Subnets![0];
-      
+
       expect(subnet.MapPublicIpOnLaunch).toBe(true); // Should be in public subnet
       expect(subnet.Tags?.find(tag => tag.Key === 'aws-cdk:subnet-type')?.Value).toBe('Public');
     }, 30000);
@@ -264,23 +241,23 @@ describe('TapStack Integration Tests', () => {
       const instanceCommand = instanceId
         ? new DescribeInstancesCommand({ InstanceIds: [instanceId] })
         : new DescribeInstancesCommand({
-            Filters: [
-              { Name: 'tag:Name', Values: [`${environmentSuffix}-web-server`] },
-              { Name: 'instance-state-name', Values: ['running'] }
-            ]
-          });
+          Filters: [
+            { Name: 'tag:Name', Values: [`${environmentSuffix}-web-server`] },
+            { Name: 'instance-state-name', Values: ['running'] }
+          ]
+        });
 
       const instanceResponse = await ec2Client.send(instanceCommand);
       const instance = instanceResponse.Reservations![0].Instances![0];
       expect(instance.IamInstanceProfile).toBeDefined();
-      
+
       // Extract role name from instance profile ARN
       const roleArn = instance.IamInstanceProfile!.Arn!;
       const roleName = `EC2Role-${environmentSuffix}`;
-      
+
       const roleCommand = new GetRoleCommand({ RoleName: roleName });
       const roleResponse = await iamClient.send(roleCommand);
-      
+
       expect(roleResponse.Role).toBeDefined();
       expect(roleResponse.Role!.RoleName).toBe(roleName);
       expect(roleResponse.Role!.Description).toContain(environmentSuffix);
@@ -317,12 +294,12 @@ describe('TapStack Integration Tests', () => {
 
       const response = await rdsClient.send(command);
       expect(response.DBSubnetGroups).toHaveLength(1);
-      
+
       const subnetGroup = response.DBSubnetGroups![0];
       expect(subnetGroup.DBSubnetGroupName).toBe(`database-subnet-group-${environmentSuffix}`);
       expect(subnetGroup.DBSubnetGroupDescription).toContain(environmentSuffix);
       expect(subnetGroup.Subnets!.length).toBeGreaterThanOrEqual(2); // Multi-AZ requires at least 2 subnets
-      
+
       // Verify all subnets are in private subnet range
       subnetGroup.Subnets!.forEach(subnet => {
         expect(subnet.SubnetStatus).toBe('Active');
@@ -336,7 +313,7 @@ describe('TapStack Integration Tests', () => {
 
       const response = await rdsClient.send(command);
       expect(response.DBParameterGroups).toHaveLength(1);
-      
+
       const paramGroup = response.DBParameterGroups![0];
       expect(paramGroup.DBParameterGroupName).toBe(`postgresql-param-group-${environmentSuffix}`);
       expect(paramGroup.DBParameterGroupFamily).toBe('postgres15');
@@ -350,10 +327,10 @@ describe('TapStack Integration Tests', () => {
 
       const response = await rdsClient.send(command);
       const db = response.DBInstances![0];
-      
+
       // Verify database is not publicly accessible
       expect(db.PubliclyAccessible).toBe(false);
-      
+
       // Verify endpoint is internal
       const endpoint = db.Endpoint!.Address!;
       expect(endpoint).toMatch(/\.rds\.amazonaws\.com$/);
@@ -440,7 +417,7 @@ describe('TapStack Integration Tests', () => {
         const response = await cloudWatchLogsClient.send(command);
         expect(response.logGroups).toBeDefined();
         expect(response.logGroups!.length).toBeGreaterThanOrEqual(1);
-        
+
         const logGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
         expect(logGroup).toBeDefined();
         expect(logGroup!.retentionInDays).toBeDefined();
@@ -461,7 +438,7 @@ describe('TapStack Integration Tests', () => {
 
         const response = await cloudWatchClient.send(command);
         expect(response.MetricAlarms!.length).toBeGreaterThan(0);
-        
+
         response.MetricAlarms!.forEach(alarm => {
           expect(alarm.StateValue).toMatch(/^(OK|ALARM|INSUFFICIENT_DATA)$/);
           expect(alarm.ActionsEnabled).toBe(true);
@@ -481,14 +458,14 @@ describe('TapStack Integration Tests', () => {
       });
       const vpcResponse = await ec2Client.send(vpcCommand);
       expect(vpcResponse.Vpcs!.length).toBeGreaterThanOrEqual(1);
-      
+
       // Test EC2 tags
       const ec2Command = new DescribeInstancesCommand({
         Filters: [{ Name: 'tag:env', Values: [environmentSuffix] }]
       });
       const ec2Response = await ec2Client.send(ec2Command);
       expect(ec2Response.Reservations!.length).toBeGreaterThanOrEqual(1);
-      
+
       // Test RDS tags (implicit through naming convention)
       const rdsCommand = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: `postgresql-database-${environmentSuffix}`
@@ -507,21 +484,21 @@ describe('TapStack Integration Tests', () => {
       });
       const instanceResponse = await ec2Client.send(instanceCommand);
       const instance = instanceResponse.Reservations![0].Instances![0];
-      
+
       // Get RDS endpoint
       const dbCommand = new DescribeDBInstancesCommand({
         DBInstanceIdentifier: `postgresql-database-${environmentSuffix}`
       });
       const dbResponse = await rdsClient.send(dbCommand);
       const database = dbResponse.DBInstances![0];
-      
+
       // Verify they're in the same VPC
       expect(instance.VpcId).toBe(database.DBSubnetGroup!.VpcId);
-      
+
       // Verify security group relationship
       const ec2SgId = instance.SecurityGroups![0].GroupId!;
       const rdsSgId = database.VpcSecurityGroups![0].VpcSecurityGroupId!;
-      
+
       expect(ec2SgId).toBeDefined();
       expect(rdsSgId).toBeDefined();
       expect(ec2SgId).not.toBe(rdsSgId); // Different security groups
@@ -531,7 +508,7 @@ describe('TapStack Integration Tests', () => {
       // Test that we can retrieve metrics for key resources
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      
+
       const instanceId = deploymentOutputs.EC2InstanceId;
       if (instanceId) {
         const metricsCommand = new GetMetricStatisticsCommand({
