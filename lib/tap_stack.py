@@ -332,17 +332,21 @@ class TapStack(cdk.Stack):
     def create_secure_parameters(self):
         """Create hierarchical secure parameters in Parameter Store"""
         
+        # Generate unique suffix for naming
+        import hashlib
+        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
+        
         # Database connection parameters
         self.db_password_param = ssm.StringParameter(
             self, "DBPasswordParam",
-            parameter_name="/app/prod/db/password",
+            parameter_name=f"/tap/{unique_suffix}/prod/db/password",
             description="Database password for production environment",
             string_value="app_user",  # Should be generated/rotated
         )
         
         self.db_username_param = ssm.StringParameter(
             self, "DBUsernameParam", 
-            parameter_name="/app/prod/db/username",
+            parameter_name=f"/tap/{unique_suffix}/prod/db/username",
             description="Database username for production environment",
             string_value="app_user",
         )
@@ -350,7 +354,7 @@ class TapStack(cdk.Stack):
         # Application configuration
         self.api_key_param = ssm.StringParameter(
             self, "APIKeyParam",
-            parameter_name="/app/prod/api/key",
+            parameter_name=f"/tap/{unique_suffix}/prod/api/key",
             description="External API key for production environment",
             string_value="secret-api-key-value",  # Should be generated
         )
@@ -358,7 +362,7 @@ class TapStack(cdk.Stack):
         # JWT secret
         self.jwt_secret_param = ssm.StringParameter(
             self, "JWTSecretParam",
-            parameter_name="/app/prod/auth/jwt-secret", 
+            parameter_name=f"/tap/{unique_suffix}/prod/auth/jwt-secret", 
             description="JWT signing secret for production environment",
             string_value="super-secret-jwt-key",  # Should be generated
         )
