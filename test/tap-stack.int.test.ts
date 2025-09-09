@@ -151,13 +151,13 @@ describe('Secure AWS Infrastructure Integration Tests (Mocked)', () => {
     test('Security groups should restrict traffic to port 443 only', async () => {
       const sgResponse = await mockAWSClient.send({ constructor: { name: 'DescribeSecurityGroupsCommand' } });
 
-      const webSecurityGroup = sgResponse.SecurityGroups?.find(sg =>
+      const webSecurityGroup = sgResponse.SecurityGroups?.find((sg: any) =>
         sg.GroupName?.includes('web-sg')
       );
 
       expect(webSecurityGroup).toBeDefined();
 
-      const httpsRule = webSecurityGroup?.IpPermissions?.find(rule =>
+      const httpsRule = webSecurityGroup?.IpPermissions?.find((rule: any) =>
         rule.FromPort === 443 && rule.ToPort === 443 && rule.IpProtocol === 'tcp'
       );
 
@@ -217,12 +217,12 @@ describe('Secure AWS Infrastructure Integration Tests (Mocked)', () => {
 
       expect(alarmsResponse.MetricAlarms).toHaveLength(2);
 
-      const unauthorizedAlarm = alarmsResponse.MetricAlarms?.find(alarm =>
+      const unauthorizedAlarm = alarmsResponse.MetricAlarms?.find((alarm: any) =>
         alarm.AlarmName?.includes('unauthorized-api-calls')
       );
       expect(unauthorizedAlarm?.MetricName).toBe('4XXError');
 
-      const errorRateAlarm = alarmsResponse.MetricAlarms?.find(alarm =>
+      const errorRateAlarm = alarmsResponse.MetricAlarms?.find((alarm: any) =>
         alarm.AlarmName?.includes('high-error-rate')
       );
       expect(errorRateAlarm?.MetricName).toBe('5XXError');
