@@ -537,7 +537,8 @@ export class TapStack extends cdk.Stack {
     // AWS Config configuration recorder
     // Note: AWS Config allows only one configuration recorder per region per account.
     // We make this optional via context parameter to handle existing recorders gracefully.
-    const createConfigRecorder = this.node.tryGetContext('createConfigRecorder') === 'true';
+    const createConfigRecorder =
+      this.node.tryGetContext('createConfigRecorder') === 'true';
 
     let configRecorder: config.CfnConfigurationRecorder | undefined;
     let configDeliveryChannel: config.CfnDeliveryChannel | undefined;
