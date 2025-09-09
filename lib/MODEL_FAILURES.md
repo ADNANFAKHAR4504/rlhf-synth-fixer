@@ -1,5 +1,3 @@
-## Model failures (derived from corrections in `IDEAL_RESPONSE.md` vs `MODEL_RESPONSE.md`)
-
 - **Incorrect Lambda permission SourceArn**: Used a non-ARN value for API Gateway permission.
   - Model:
 ```yaml
@@ -78,5 +76,3 @@ BucketName: !Sub "${ApplicationName}-${Environment}-website-${AWS::AccountId}"
 - **Missing `EnvironmentSuffix` parameter and output**: Ideal template introduces `EnvironmentSuffix` for safer namespacing and exports; model omitted it.
 
 - **Minor: Unused SDK code in inline Lambda**: Model's inline code imports `aws-sdk`/`DocumentClient` without using it; ideal removes unused code.
-
-Insert here the model's failures
