@@ -273,7 +273,7 @@ describe('Enterprise Security Infrastructure - Comprehensive Unit Tests (72 Test
     test('should have Config service role', () => {
       expect(tapStackContent).toMatch(/resource\s+"aws_iam_role"\s+"config"/);
       expect(tapStackContent).toMatch(/Service\s*=\s*"config\.amazonaws\.com"/);
-      expect(tapStackContent).toMatch(/ConfigRole/);
+      expect(tapStackContent).toMatch(/AWS_ConfigServiceRole/);
     });
 
     test('should have API Gateway CloudWatch role', () => {

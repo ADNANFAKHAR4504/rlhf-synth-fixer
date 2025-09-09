@@ -235,6 +235,12 @@ variable "maintenance_window" {
   default     = "sun:04:00-sun:05:00"
 }
 
+variable "enable_config" {
+  description = "Enable AWS Config (may conflict if already exists)"
+  type        = bool
+  default     = false
+}
+
 ########################################
 # Locals
 ########################################
@@ -243,7 +249,7 @@ locals {
   # Use environment_suffix if provided, otherwise generate one
   suffix = var.environment_suffix != "" ? var.environment_suffix : random_id.suffix.hex
 
-  name_prefix = "${var.environment}-${var.project_name}"
+  name_prefix = "${var.environment}-nova"
 
   base_tags = {
     Project            = var.project_name
@@ -429,6 +435,26 @@ resource "aws_kms_key" "master_key" {
           "kms:ReEncrypt*"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudWatchLogsAccess"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:DescribeKey",
+          "kms:Encrypt",
+          "kms:GenerateDataKey*",
+          "kms:ReEncrypt*"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
       }
     ]
   })
@@ -965,7 +991,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 ########################################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb-${local.suffix}"
+  name               = "${var.environment}-alb-${local.suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -986,7 +1012,7 @@ resource "aws_lb" "main" {
 
 # ALB target group
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-app-tg-${local.suffix}"
+  name     = "${var.environment}-tg-${local.suffix}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -1305,7 +1331,7 @@ resource "aws_cloudwatch_log_group" "application" {
 
 resource "aws_cloudwatch_log_group" "waf_logs" {
   count             = var.enable_waf_logging ? 1 : 0
-  name              = "/aws/wafv2/${local.name_prefix}-${local.suffix}"
+  name              = "aws-waf-logs-${var.environment}-${local.suffix}"
   retention_in_days = local.current_config.log_retention
 
   tags = merge(local.common_tags, {
@@ -1321,14 +1347,17 @@ resource "aws_cloudtrail" "main" {
   name           = "${local.name_prefix}-cloudtrail-${local.suffix}"
   s3_bucket_name = aws_s3_bucket.cloudtrail_logs.id
 
-  event_selector {
-    read_write_type                  = "All"
-    include_management_events        = true
-    exclude_management_event_sources = []
+  advanced_event_selector {
+    name = "Log all S3 data events"
 
-    data_resource {
-      type   = "AWS::S3::Object"
-      values = ["arn:aws:s3:::*/*"]
+    field_selector {
+      field  = "eventCategory"
+      equals = ["Data"]
+    }
+
+    field_selector {
+      field  = "resources.type"
+      equals = ["AWS::S3::Object"]
     }
   }
 
@@ -1387,8 +1416,9 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 ########################################
 
 resource "aws_config_configuration_recorder" "main" {
+  count    = var.enable_config ? 1 : 0
   name     = "${local.name_prefix}-config-recorder-${local.suffix}"
-  role_arn = aws_iam_role.config.arn
+  role_arn = aws_iam_role.config[0].arn
 
   recording_group {
     all_supported                 = true
@@ -1397,12 +1427,14 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
+  count          = var.enable_config ? 1 : 0
   name           = "${local.name_prefix}-config-delivery-channel-${local.suffix}"
-  s3_bucket_name = aws_s3_bucket.config_bucket.bucket
+  s3_bucket_name = aws_s3_bucket.config_bucket[0].bucket
 }
 
 # Config S3 bucket
 resource "aws_s3_bucket" "config_bucket" {
+  count  = var.enable_config ? 1 : 0
   bucket = "${var.s3_bucket_prefix}-config-${local.suffix}"
 
   tags = merge(local.common_tags, {
@@ -1411,7 +1443,8 @@ resource "aws_s3_bucket" "config_bucket" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket" {
-  bucket = aws_s3_bucket.config_bucket.id
+  count  = var.enable_config ? 1 : 0
+  bucket = aws_s3_bucket.config_bucket[0].id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -1422,7 +1455,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket" {
 }
 
 resource "aws_s3_bucket_public_access_block" "config_bucket" {
-  bucket = aws_s3_bucket.config_bucket.id
+  count  = var.enable_config ? 1 : 0
+  bucket = aws_s3_bucket.config_bucket[0].id
 
   block_public_acls       = true
   block_public_policy     = true
@@ -1432,7 +1466,8 @@ resource "aws_s3_bucket_public_access_block" "config_bucket" {
 
 # Config bucket policy
 resource "aws_s3_bucket_policy" "config_bucket" {
-  bucket = aws_s3_bucket.config_bucket.id
+  count  = var.enable_config ? 1 : 0
+  bucket = aws_s3_bucket.config_bucket[0].id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1443,7 +1478,7 @@ resource "aws_s3_bucket_policy" "config_bucket" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.config_bucket.arn
+        Resource = aws_s3_bucket.config_bucket[0].arn
         Condition = {
           StringEquals = {
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -1456,7 +1491,7 @@ resource "aws_s3_bucket_policy" "config_bucket" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.config_bucket.arn}/*"
+        Resource = "${aws_s3_bucket.config_bucket[0].arn}/*"
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"      = "bucket-owner-full-control"
@@ -1470,7 +1505,7 @@ resource "aws_s3_bucket_policy" "config_bucket" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:ListBucket"
-        Resource = aws_s3_bucket.config_bucket.arn
+        Resource = aws_s3_bucket.config_bucket[0].arn
         Condition = {
           StringEquals = {
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
@@ -1483,7 +1518,8 @@ resource "aws_s3_bucket_policy" "config_bucket" {
 
 # Config IAM role
 resource "aws_iam_role" "config" {
-  name = "${local.name_prefix}-config-role-${local.suffix}"
+  count = var.enable_config ? 1 : 0
+  name  = "${local.name_prefix}-config-role-${local.suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1504,8 +1540,9 @@ resource "aws_iam_role" "config" {
 }
 
 resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  count      = var.enable_config ? 1 : 0
+  role       = aws_iam_role.config[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRole"
 }
 
 ########################################
@@ -1888,7 +1925,7 @@ output "cloudtrail_arn" {
 
 output "config_recorder_name" {
   description = "Name of Config recorder for compliance monitoring"
-  value       = aws_config_configuration_recorder.main.name
+  value       = var.enable_config ? aws_config_configuration_recorder.main[0].name : "Config disabled"
 }
 
 output "sns_alerts_topic_arn" {

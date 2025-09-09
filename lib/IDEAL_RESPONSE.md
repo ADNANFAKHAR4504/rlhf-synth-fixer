@@ -8,7 +8,7 @@ This document contains the complete, corrected Terraform implementation for Proj
 
 Complete Terraform provider configuration with partial S3 backend for enterprise deployment.
 
-### 2. tap_stack.tf (1982 lines)
+### 2. tap_stack.tf (2018 lines)
 
 Comprehensive infrastructure code including all security controls, variables, resources, and outputs.
 
@@ -302,6 +302,12 @@ variable "maintenance_window" {
   default     = "sun:04:00-sun:05:00"
 }
 
+variable "enable_config" {
+  description = "Enable AWS Config (may conflict if already exists)"
+  type        = bool
+  default     = false
+}
+
 ########################################
 # Locals
 ########################################
@@ -310,7 +316,7 @@ locals {
   # Use environment_suffix if provided, otherwise generate one
   suffix = var.environment_suffix != "" ? var.environment_suffix : random_id.suffix.hex
 
-  name_prefix = "${var.environment}-${var.project_name}"
+  name_prefix = "${var.environment}-nova"
 
   base_tags = {
     Project            = var.project_name
@@ -1032,7 +1038,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 ########################################
 
 resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-alb-${local.suffix}"
+  name               = "${var.environment}-alb-${local.suffix}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -1053,7 +1059,7 @@ resource "aws_lb" "main" {
 
 # ALB target group
 resource "aws_lb_target_group" "app" {
-  name     = "${local.name_prefix}-app-tg-${local.suffix}"
+  name     = "${var.environment}-tg-${local.suffix}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
