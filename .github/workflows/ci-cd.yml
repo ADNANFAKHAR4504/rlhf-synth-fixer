@@ -744,13 +744,15 @@ jobs:
             METADATA_SUBTASK=$(jq -r '.subtask | ascii_downcase' metadata.json)
             METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels | join(", ")' metadata.json)
 
+            METADATA_AUTHOR=$(jq -r '.author' metadata.json)
+
             # Truncate subject_labels to 100 characters if needed
             if [ ${#METADATA_SUBJECT_LABELS} -gt 100 ]; then
               METADATA_SUBJECT_LABELS="${METADATA_SUBJECT_LABELS:0:97}..." # 97 chars + "..." = 100
             fi
 
             COMMIT_SUBJECT="feat(${METADATA_PLATFORM}): ${METADATA_PO_ID} ${METADATA_SUBTASK}"
-            COMMIT_BODY="${METADATA_SUBJECT_LABELS}"
+            COMMIT_BODY="${METADATA_SUBJECT_LABELS}\nAuthor: ${METADATA_AUTHOR}"
 
             git add -A
             git commit -m "${COMMIT_SUBJECT}" -m "${COMMIT_BODY}" -m "[skip-jobs]"
