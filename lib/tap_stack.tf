@@ -932,7 +932,7 @@ resource "aws_db_subnet_group" "main" {
 }
 
 # RDS instance with encryption and Multi-AZ
-resource "aws_db_instance" "main" {
+resource "aws_db_instance" "main_v2" {
   identifier     = "${local.name_prefix}-database-v2-${local.suffix}"
   engine         = var.db_engine
   engine_version = var.db_engine_version
@@ -1771,7 +1771,7 @@ resource "aws_cloudwatch_metric_alarm" "db_high_cpu" {
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
-    DBInstanceIdentifier = aws_db_instance.main.id
+    DBInstanceIdentifier = aws_db_instance.main_v2.id
   }
 
   tags = merge(local.common_tags, {
@@ -1876,23 +1876,23 @@ output "ssl_certificate_arn" {
 
 output "rds_endpoint" {
   description = "RDS instance endpoint for secure database connections"
-  value       = aws_db_instance.main.endpoint
+  value       = aws_db_instance.main_v2.endpoint
   sensitive   = true
 }
 
 output "rds_port" {
   description = "RDS instance port for database connectivity"
-  value       = aws_db_instance.main.port
+  value       = aws_db_instance.main_v2.port
 }
 
 output "database_encrypted" {
   description = "Database encryption status for compliance verification"
-  value       = aws_db_instance.main.storage_encrypted
+  value       = aws_db_instance.main_v2.storage_encrypted
 }
 
 output "database_multi_az" {
   description = "Database Multi-AZ status for high availability verification"
-  value       = aws_db_instance.main.multi_az
+  value       = aws_db_instance.main_v2.multi_az
 }
 
 output "app_data_bucket_name" {
@@ -1994,7 +1994,7 @@ output "security_compliance_summary" {
   description = "Summary of implemented security controls for audit purposes"
   value = {
     encryption_at_rest = {
-      rds_encrypted    = aws_db_instance.main.storage_encrypted
+      rds_encrypted    = aws_db_instance.main_v2.storage_encrypted
       s3_encrypted     = "AES256/KMS enabled on all buckets"
       ebs_encrypted    = "KMS encryption enabled on launch template"
       kms_key_rotation = aws_kms_key.master_key.enable_key_rotation
@@ -2021,7 +2021,7 @@ output "security_compliance_summary" {
     }
 
     high_availability = {
-      multi_az_database = aws_db_instance.main.multi_az
+      multi_az_database = aws_db_instance.main_v2.multi_az
       auto_scaling      = "Enabled with health checks"
       load_balancer     = "Application Load Balancer with SSL"
       backup_retention  = "${local.current_config.backup_retention} days"

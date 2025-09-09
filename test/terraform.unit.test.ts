@@ -298,7 +298,7 @@ describe('Enterprise Security Infrastructure - Comprehensive Unit Tests (72 Test
   // ========================================
   describe('RDS Configuration Tests', () => {
     test('should have RDS instance with MySQL 8.0.42', () => {
-      expect(tapStackContent).toMatch(/resource\s+"aws_db_instance"\s+"main"/);
+      expect(tapStackContent).toMatch(/resource\s+"aws_db_instance"\s+"main_v2"/);
       expect(tapStackContent).toMatch(/engine\s*=\s*var\.db_engine/);
       expect(tapStackContent).toMatch(/engine_version\s*=\s*var\.db_engine_version/);
     });
