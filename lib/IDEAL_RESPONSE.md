@@ -558,7 +558,6 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet--${random_id.unique_suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
-
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-db-subnet--${random_id.unique_suffix.hex}"
   })
