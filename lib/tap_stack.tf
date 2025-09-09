@@ -933,12 +933,21 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS instance with encryption and Multi-AZ
 resource "aws_db_instance" "main" {
-  identifier     = "${local.name_prefix}-database-${local.suffix}"
+  identifier     = "${local.name_prefix}-database-v2-${local.suffix}"
   engine         = var.db_engine
   engine_version = var.db_engine_version
   instance_class = local.current_config.db_instance_class
 
   depends_on = [aws_db_subnet_group.main]
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [
+      # Ignore changes that would trigger replacement in production
+      identifier,
+      engine_version,
+    ]
+  }
 
   allocated_storage     = var.db_allocated_storage
   max_allocated_storage = var.db_allocated_storage * 2
@@ -1152,6 +1161,10 @@ resource "aws_launch_template" "app" {
     http_put_response_hop_limit = 1
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-template-${local.suffix}"
   })
@@ -1193,6 +1206,11 @@ resource "aws_autoscaling_group" "app" {
       value               = tag.value
       propagate_at_launch = true
     }
+  }
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes        = [desired_capacity]
   }
 }
 
