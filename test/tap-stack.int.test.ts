@@ -108,7 +108,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
     test('should have correct configuration', async () => {
       const command = new GetFunctionCommand({ FunctionName: functionName });
       const response = await lambdaClient.send(command);
-      expect(response.Configuration?.Runtime).toBe('nodejs18.x');
+      expect(response.Configuration?.Runtime).toBe('nodejs22.x');
       expect(response.Configuration?.Handler).toBe('index.handler');
     });
 
