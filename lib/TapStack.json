@@ -1,6 +1,48 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Production-grade CI/CD pipeline infrastructure for microservices architecture",
+  "Parameters": {
+    "EnableHttps": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable HTTPS Listener"
+    },
+    "CertificateArn": {
+      "Type": "String",
+      "Description": "ARN of an existing ACM certificate. Required if EnableHttps is true.",
+      "Default": ""
+    }
+  },
+  "Conditions": {
+    "CreateHttpsListener": {
+      "Fn::And": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "EnableHttps"
+            },
+            "true"
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                {
+                  "Ref": "CertificateArn"
+                },
+                ""
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
   "Resources": {
     "VPC": {
       "Type": "AWS::EC2::VPC",
@@ -282,22 +324,6 @@
         ]
       }
     },
-    "Certificate": {
-      "Type": "AWS::CertificateManager::Certificate",
-      "Properties": {
-        "DomainName": "example.com",
-        "ValidationMethod": "DNS",
-        "SubjectAlternativeNames": [
-          "*.example.com"
-        ],
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          }
-        ]
-      }
-    },
     "HttpListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
@@ -318,6 +344,7 @@
     },
     "HttpsListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Condition": "CreateHttpsListener",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
@@ -327,7 +354,7 @@
         "Certificates": [
           {
             "CertificateArn": {
-              "Ref": "Certificate"
+              "Ref": "CertificateArn"
             }
           }
         ],
