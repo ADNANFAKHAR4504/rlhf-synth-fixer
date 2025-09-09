@@ -53,6 +53,7 @@ describe('TapStack', () => {
     });
   });
 
+
   describe('VPC and Networking', () => {
     test('should create VPC with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
@@ -112,6 +113,33 @@ describe('TapStack', () => {
         ResourceType: 'VPC',
         TrafficType: 'ALL'
       });
+    });
+
+    test('should create internet gateway', () => {
+      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+    });
+
+    test('should create route tables for each subnet type', () => {
+      // Should have route tables for public, private, and isolated subnets
+      template.resourceCountIs('AWS::EC2::RouteTable', 6); // 2 AZs × 3 subnet types
+    });
+
+    test('should create routes to internet gateway for public subnets', () => {
+      template.hasResourceProperties('AWS::EC2::Route', {
+        DestinationCidrBlock: '0.0.0.0/0',
+        GatewayId: Match.anyValue()
+      });
+    });
+
+    test('should create routes to NAT gateways for private subnets', () => {
+      template.hasResourceProperties('AWS::EC2::Route', {
+        DestinationCidrBlock: '0.0.0.0/0',
+        NatGatewayId: Match.anyValue()
+      });
+    });
+
+    test('should create elastic IPs for NAT gateways', () => {
+      template.resourceCountIs('AWS::EC2::EIP', 2);
     });
   });
 
@@ -180,7 +208,6 @@ describe('TapStack', () => {
   });
 
   describe('IAM Roles and Policies', () => {
-
     test('should create instance profile for EC2 role', () => {
       template.hasResourceProperties('AWS::IAM::InstanceProfile', {
         InstanceProfileName: `EC2InstanceProfile-${environmentSuffix}`
@@ -193,7 +220,7 @@ describe('TapStack', () => {
     test('should create access logs bucket with lifecycle rules', () => {
       // Find buckets with access logs naming pattern
       const buckets = template.findResources('AWS::S3::Bucket');
-      const accessLogsBucket = Object.values(buckets).find(bucket => {
+      const accessLogsBucket: any = Object.values(buckets).find(bucket => {
         const bucketName = bucket.Properties.BucketName;
         if (bucketName && typeof bucketName === 'object' && bucketName['Fn::Join']) {
           const joinArray = bucketName['Fn::Join'][1];
@@ -205,12 +232,22 @@ describe('TapStack', () => {
       });
 
       expect(accessLogsBucket).toBeDefined();
+      expect(accessLogsBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(accessLogsBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+      expect(accessLogsBucket.Properties.LifecycleConfiguration.Rules).toContainEqual({
+        Id: 'DeleteOldAccessLogs',
+        Status: 'Enabled',
+        ExpirationInDays: 365,
+        NoncurrentVersionExpiration: {
+          NoncurrentDays: 30
+        }
+      });
     });
 
     // FIXED: Assets bucket test
     test('should create assets bucket with KMS encryption', () => {
       const buckets = template.findResources('AWS::S3::Bucket');
-      const assetsBucket = Object.values(buckets).find(bucket => {
+      const assetsBucket: any = Object.values(buckets).find(bucket => {
         const bucketName = bucket.Properties.BucketName;
         if (bucketName && typeof bucketName === 'object' && bucketName['Fn::Join']) {
           const joinArray = bucketName['Fn::Join'][1];
@@ -222,8 +259,8 @@ describe('TapStack', () => {
       });
 
       expect(assetsBucket).toBeDefined();
-      expect(assetsBucket?.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
-      expect(assetsBucket?.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
+      expect(assetsBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toBe('aws:kms');
+      expect(assetsBucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.KMSMasterKeyID).toBeDefined();
     });
 
     // FIXED: CloudTrail bucket test
@@ -633,6 +670,67 @@ describe('TapStack', () => {
         DBInstanceIdentifier: `webapp-database-${environmentSuffix}`
       });
     });
+
+    test('should create resources with proper tags', () => {
+      const resources = template.findResources('AWS::EC2::VPC');
+      const vpc = Object.values(resources)[0];
+      const tags = vpc.Properties.Tags || [];
+
+      expect(tags).toContainEqual({
+        Key: 'Name',
+        Value: `WebAppVPC-${environmentSuffix}`
+      });
+    });
   });
 
+  describe('Error Handling and Edge Cases', () => {
+    test('should handle different environment suffixes', () => {
+      // This test verifies the template can handle the environment suffix properly
+      expect(environmentSuffix).toBeDefined();
+      expect(typeof environmentSuffix).toBe('string');
+    });
+
+    test('should create resources with proper resource counts', () => {
+      // Verify expected resource counts
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 3); // ALB, EC2, RDS
+      template.resourceCountIs('AWS::IAM::Role', 5); // EC2, VPC Flow Logs, Config, Lambda, Enhanced Monitoring
+      template.resourceCountIs('AWS::S3::Bucket', 5); // Access logs, Assets, CloudTrail, Config, VPC Flow Logs
+      template.resourceCountIs('AWS::CloudWatch::Alarm', 3); // CPU, DB connections, Response time
+      template.resourceCountIs('AWS::Config::ConfigRule', 3); // S3 read, S3 write, RDS encrypted
+    });
+
+    test('should validate template syntax', () => {
+      // This test ensures the template is syntactically valid
+      const templateJson = template.toJSON();
+      expect(templateJson).toBeDefined();
+      expect(templateJson.Resources).toBeDefined();
+      expect(Object.keys(templateJson.Resources).length).toBeGreaterThan(0);
+    });
+
+    test('should have proper dependencies between resources', () => {
+      // Verify that dependent resources are properly linked
+      const targetGroups = template.findResources('AWS::ElasticLoadBalancingV2::TargetGroup');
+      const targetGroup = Object.values(targetGroups)[0];
+      expect(targetGroup.Properties.VpcId).toBeDefined();
+
+      const asgResources = template.findResources('AWS::AutoScaling::AutoScalingGroup');
+      const asg = Object.values(asgResources)[0];
+      expect(asg.Properties.VPCZoneIdentifier).toBeDefined();
+    });
+
+    test('should create proper S3 bucket policies', () => {
+      const bucketPolicies = template.findResources('AWS::S3::BucketPolicy');
+      expect(Object.keys(bucketPolicies).length).toBeGreaterThan(0);
+    });
+
+    test('should handle missing environment suffix gracefully', () => {
+      const app = new cdk.App();
+      const stack = new TapStack(app, 'NoSuffixStack', {
+        environmentSuffix: '',
+        env: { account: '123456789012', region: 'us-east-1' }
+      });
+      const t = Template.fromStack(stack);
+      expect(t.toJSON().Resources).toBeDefined();
+    });
+  });
 });
