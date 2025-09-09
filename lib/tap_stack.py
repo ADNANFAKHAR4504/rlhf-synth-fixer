@@ -1,7 +1,7 @@
 # lib/tap_stack.py
 """
 TapStack: secure baseline stack for web apps (VPC, ALB, ASG, RDS, S3, API, Lambda).
-CDK v2 compatible.
+CDK v2 compatible, no deprecated APIs, synths with or without ACM cert ARN.
 """
 
 from __future__ import annotations
@@ -123,12 +123,12 @@ class TapStack(Stack):
 
     def create_security_groups(self) -> None:
         """Least-privilege SGs."""
-        # ALB: 443 from internet
+        # ALB: 443 from internet (and possibly 80 if no cert; see app tier)
         self.alb_sg = ec2.SecurityGroup(
             self,
             "ALBSecurityGroup",
             vpc=self.vpc,
-            description="ALB SG (443 only)",
+            description="ALB SG",
             security_group_name=f"tap-alb-sg-{self.env_name}",
         )
         self.alb_sg.add_ingress_rule(
@@ -202,7 +202,6 @@ class TapStack(Stack):
         self.logging_bucket = s3.Bucket(
             self,
             "LoggingBucket",
-            # bucket_name omitted (CloudFormation generates a compliant name)
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -216,7 +215,6 @@ class TapStack(Stack):
         self.data_bucket = s3.Bucket(
             self,
             "DataBucket",
-            # bucket_name omitted (CloudFormation generates a compliant name)
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -226,7 +224,7 @@ class TapStack(Stack):
             server_access_logs_prefix="data-bucket-logs/",
         )
 
-        # TLS-only bucket policies (defense-in-depth)
+        # TLS-only bucket policies
         for b in (self.logging_bucket, self.data_bucket):
             b.add_to_resource_policy(
                 iam.PolicyStatement(
@@ -467,7 +465,7 @@ class TapStack(Stack):
         Tags.of(self.bastion).add("Name", f"tap-bastion-{self.env_name}")
 
     def create_application_tier(self) -> None:
-        """ALB (HTTPS) + ASG (private)."""
+        """ALB (HTTPS if cert provided; otherwise HTTP with 503 notice) + ASG (private)."""
         self.alb = elbv2.ApplicationLoadBalancer(
             self,
             "ApplicationLoadBalancer",
@@ -523,42 +521,52 @@ class TapStack(Stack):
             min_capacity=1,
             max_capacity=3,
             desired_capacity=2,
-            health_check=autoscaling.HealthCheck.elb(grace=Duration.minutes(5)),
+            # No deprecated healthCheck usage; ALB target group health checks are defined below.
         )
 
-        # HTTPS listener
-        if not self.acm_cert_arn:
-            raise ValueError(
-                "acm_cert_arn is required to expose HTTPS only on the ALB. "
-                "Provide -c acm_cert_arn=<arn>."
+        # Listener(s)
+        if self.acm_cert_arn:
+            certificate = acm.Certificate.from_certificate_arn(self, "AlbCert", self.acm_cert_arn)
+            https_listener = self.alb.add_listener(
+                "HTTPSListener",
+                port=443,
+                protocol=elbv2.ApplicationProtocol.HTTPS,
+                certificates=[certificate],
+                ssl_policy=elbv2.SslPolicy.TLS12_EXT,
+                open=True,
             )
-
-        certificate = acm.Certificate.from_certificate_arn(self, "AlbCert", self.acm_cert_arn)
-
-        https_listener = self.alb.add_listener(
-            "HTTPSListener",
-            port=443,
-            protocol=elbv2.ApplicationProtocol.HTTPS,
-            certificates=[certificate],
-            ssl_policy=elbv2.SslPolicy.TLS12_EXT,
-            open=True,
-        )
-
-        https_listener.add_targets(
-            "AppFleet",
-            port=8080,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            targets=[self.asg],
-            health_check=elbv2.HealthCheck(
-                enabled=True,
-                healthy_http_codes="200",
-                interval=Duration.seconds(30),
-                path="/",
-                port="8080",
-                timeout=Duration.seconds(5),
-                unhealthy_threshold_count=5,
-            ),
-        )
+            https_listener.add_targets(
+                "AppFleet",
+                port=8080,
+                protocol=elbv2.ApplicationProtocol.HTTP,
+                targets=[self.asg],
+                health_check=elbv2.HealthCheck(
+                    enabled=True,
+                    healthy_http_codes="200",
+                    interval=Duration.seconds(30),
+                    path="/",
+                    port="8080",
+                    timeout=Duration.seconds(5),
+                    unhealthy_threshold_count=5,
+                ),
+            )
+        else:
+            # Synth/deploy fallback without certificate:
+            # Expose port 80 with a fixed 503 response instructing to provide a cert.
+            http_listener = self.alb.add_listener(
+                "HTTPListener",
+                port=80,
+                protocol=elbv2.ApplicationProtocol.HTTP,
+                open=True,
+            )
+            http_listener.add_action(
+                "NoTLSConfigured",
+                action=elbv2.ListenerAction.fixed_response(
+                    status_code=503,
+                    content_type="text/plain",
+                    message_body="ALB requires TLS certificate. Re-deploy stack with -c acm_cert_arn=<arn>.",
+                ),
+            )
 
     def create_lambda_function(self) -> None:
         """Lambda in VPC with least-privilege role."""
@@ -571,6 +579,14 @@ def lambda_handler(event, context):
             "environment": os.environ.get("ENV_NAME", "unknown")
         })
     }"""
+
+        # Use dedicated LogGroup (no deprecated 'log_retention')
+        lg = logs.LogGroup(
+            self,
+            "ApiFunctionLogs",
+            retention=logs.RetentionDays.ONE_WEEK,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
 
         self.lambda_function = lambda_.Function(
             self,
@@ -586,7 +602,7 @@ def lambda_handler(event, context):
             memory_size=self.lambda_memory_mb,
             timeout=Duration.seconds(30),
             environment={"ENV_NAME": self.env_name, "DATA_BUCKET": self.data_bucket.bucket_name},
-            log_retention=logs.RetentionDays.ONE_WEEK,
+            log_group=lg,
         )
 
     def create_api_gateway(self) -> None:
