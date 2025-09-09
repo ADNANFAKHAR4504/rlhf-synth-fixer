@@ -82,7 +82,7 @@ class TestTapStackInfrastructure(unittest.TestCase):
              patch('pulumi_aws.get_availability_zones') as mock_get_azs:
             
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b'])
             
             # Mock all the resource creation methods to prevent actual AWS calls
             with patch.object(tap_stack.TapStack, '_create_vpc_and_networking'), \
@@ -209,7 +209,7 @@ class TestTapStackResourceConfiguration(unittest.TestCase):
              patch('pulumi_aws.get_availability_zones') as mock_get_azs:
             
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b'])
             
             # Mock all the resource creation methods to prevent actual AWS calls
             with patch.object(tap_stack.TapStack, '_create_vpc_and_networking') as mock_vpc, \
@@ -246,7 +246,7 @@ class TestTapStackResourceConfiguration(unittest.TestCase):
                 mock_register.return_value = None
                 
                 stack = tap_stack.TapStack('test-stack', args)
-                self.assertEqual(stack.region, 'us-east-1')
+                self.assertEqual(stack.region, 'us-west-1')
 
     def test_ami_configuration(self):
         """Test that AMI configuration is properly set."""
@@ -258,7 +258,7 @@ class TestTapStackResourceConfiguration(unittest.TestCase):
              patch('pulumi_aws.get_availability_zones') as mock_get_azs:
             
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b'])
             
             # Mock all the resource creation methods to prevent actual AWS calls
             with patch.object(tap_stack.TapStack, '_create_vpc_and_networking') as mock_vpc, \
@@ -350,7 +350,7 @@ class TestTapStackResourceConfiguration(unittest.TestCase):
              patch('pulumi_aws.get_availability_zones') as mock_get_azs:
             
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b'])
             
             # Mock all the resource creation methods
             with patch.object(tap_stack.TapStack, '_create_vpc_and_networking') as mock_vpc, \
@@ -460,7 +460,7 @@ class TestTapStackCoverage(unittest.TestCase):
             
             # Configure mocks
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b'])
             
             # Set up mock return values for the resources
             mock_vpc.return_value = None
@@ -500,7 +500,7 @@ class TestTapStackCoverage(unittest.TestCase):
             
             # Verify stack properties
             self.assertEqual(stack.environment_suffix, 'test')
-            self.assertEqual(stack.region, 'us-east-1')
+            self.assertEqual(stack.region, 'us-west-1')
             self.assertIn('Environment', stack.tags)
 
     def test_method_signatures(self):
@@ -572,7 +572,7 @@ class TestTapStackValidation(unittest.TestCase):
         self.assertEqual(args.tags['Project'], 'iac-test-automations')
 
     def test_region_consistency(self):
-        """Test that region is consistently set to us-east-1."""
+        """Test that region is consistently set to us-west-1."""
         args = tap_stack.TapStackArgs()
         
         with patch('pulumi.ComponentResource.__init__', return_value=None), \
@@ -580,7 +580,7 @@ class TestTapStackValidation(unittest.TestCase):
              patch('pulumi_aws.get_availability_zones') as mock_get_azs:
             
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b'])
             
             # Mock all the resource creation methods to prevent actual AWS calls
             with patch.object(tap_stack.TapStack, '_create_vpc_and_networking') as mock_vpc, \
@@ -617,7 +617,7 @@ class TestTapStackValidation(unittest.TestCase):
                 mock_register.return_value = None
                 
                 stack = tap_stack.TapStack('test-stack', args)
-                self.assertEqual(stack.region, 'us-east-1')
+                self.assertEqual(stack.region, 'us-west-1')
 
     def test_ami_filter_validation(self):
         """Test that AMI filter is properly configured."""
@@ -628,7 +628,7 @@ class TestTapStackValidation(unittest.TestCase):
              patch('pulumi_aws.get_availability_zones') as mock_get_azs:
             
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b'])
             
             # Mock all the resource creation methods to prevent actual AWS calls
             with patch.object(tap_stack.TapStack, '_create_vpc_and_networking') as mock_vpc, \
@@ -682,7 +682,7 @@ class TestTapStackValidation(unittest.TestCase):
              patch('pulumi_aws.get_availability_zones') as mock_get_azs:
             
             mock_get_ami.return_value = MagicMock(id='ami-12345678')
-            mock_get_azs.return_value = MagicMock(names=['us-east-1a', 'us-east-1b', 'us-east-1c'])
+            mock_get_azs.return_value = MagicMock(names=['us-west-1a', 'us-west-1b', 'us-west-1c'])
             
             # Mock all the resource creation methods to prevent actual AWS calls
             with patch.object(tap_stack.TapStack, '_create_vpc_and_networking') as mock_vpc, \

@@ -108,7 +108,7 @@ def get_stack_outputs() -> Dict:
     return {}
 
 
-def create_aws_session(region: str = 'us-east-1') -> Session:
+def create_aws_session(region: str = 'us-west-1') -> Session:
     """Create AWS session with proper configuration"""
     try:
         # Configure AWS session with retry settings
@@ -127,7 +127,7 @@ def create_aws_session(region: str = 'us-east-1') -> Session:
         raise
 
 
-def create_aws_clients(region: str = 'us-east-1') -> Dict:
+def create_aws_clients(region: str = 'us-west-1') -> Dict:
     """Create AWS clients for testing"""
     try:
         session = create_aws_session(region)
@@ -160,7 +160,7 @@ class TestAWSInfrastructureLiveIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up class-level test environment."""
-        cls.region = os.getenv('AWS_REGION', 'us-east-1')
+        cls.region = os.getenv('AWS_REGION', 'us-west-1')
         cls.stack_outputs = get_stack_outputs()
         
         # Check if we have valid outputs
@@ -494,7 +494,7 @@ class TestAWSInfrastructureLiveIntegration(unittest.TestCase):
             response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
             
             # Verify we're in the correct region
-            self.assertEqual(self.region, 'us-east-1')
+            self.assertEqual(self.region, 'us-west-1')
             
             print(f"Region compliance validated successfully")
             

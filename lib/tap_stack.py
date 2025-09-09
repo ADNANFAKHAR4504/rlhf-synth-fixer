@@ -42,7 +42,7 @@ class TapStack(pulumi.ComponentResource):
 
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
-        self.region = 'us-east-1'
+        self.region = 'us-west-1'
         
         # Get latest Amazon Linux 2 AMI
         self.ami = ec2.get_ami(
@@ -132,22 +132,6 @@ class TapStack(pulumi.ComponentResource):
             )
             self.private_subnets.append(private_subnet)
             
-            # NAT Gateway for each AZ
-            nat_eip = ec2.Eip(
-                f"nat-eip-{i+1}-{self.environment_suffix}",
-                domain="vpc",
-                tags={**self.tags, "Name": f"nat-eip-{i+1}-{self.environment_suffix}"},
-                opts=ResourceOptions(parent=self)
-            )
-            
-            nat_gateway = ec2.NatGateway(
-                f"nat-gateway-{i+1}-{self.environment_suffix}",
-                allocation_id=nat_eip.id,
-                subnet_id=public_subnet.id,
-                tags={**self.tags, "Name": f"nat-gateway-{i+1}-{self.environment_suffix}"},
-                opts=ResourceOptions(parent=self)
-            )
-            
             # Public route table
             public_rt = ec2.RouteTable(
                 f"public-rt-{i+1}-{self.environment_suffix}",
@@ -171,8 +155,26 @@ class TapStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self)
             )
             self.public_route_tables.append(public_rt)
-            
-            # Private route table
+        
+        # Create single NAT Gateway (to avoid AWS limit of 100 NAT gateways)
+        # Use the first public subnet for the NAT Gateway
+        nat_eip = ec2.Eip(
+            f"nat-eip-{self.environment_suffix}",
+            domain="vpc",
+            tags={**self.tags, "Name": f"nat-eip-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+        
+        self.nat_gateway = ec2.NatGateway(
+            f"nat-gateway-{self.environment_suffix}",
+            allocation_id=nat_eip.id,
+            subnet_id=self.public_subnets[0].id,  # Use first public subnet
+            tags={**self.tags, "Name": f"nat-gateway-{self.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # Create private route tables that all use the single NAT Gateway
+        for i, private_subnet in enumerate(self.private_subnets):
             private_rt = ec2.RouteTable(
                 f"private-rt-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
@@ -184,7 +186,7 @@ class TapStack(pulumi.ComponentResource):
                 f"private-route-{i+1}-{self.environment_suffix}",
                 route_table_id=private_rt.id,
                 destination_cidr_block="0.0.0.0/0",
-                nat_gateway_id=nat_gateway.id,
+                nat_gateway_id=self.nat_gateway.id,  # All private subnets use same NAT Gateway
                 opts=ResourceOptions(parent=self)
             )
             
@@ -861,18 +863,19 @@ def lambda_handler(event, context):
         # as the LoadBalancerLogsArgs is not available in the current AWS provider version
         pass
 
-# Create the TapStack instance
-import os
-from pulumi import Config
+# Create the TapStack instance only when run as main module
+if __name__ == "__main__":
+    import os
+    from pulumi import Config
 
-# Initialize Pulumi configuration
-config = Config()
+    # Initialize Pulumi configuration
+    config = Config()
 
-# Get environment suffix from config or fallback to 'dev'
-environment_suffix = config.get('env') or 'dev'
+    # Get environment suffix from config or fallback to 'dev'
+    environment_suffix = config.get('env') or 'dev'
 
-# Create the TapStack
-stack = TapStack(
-    name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
-)
+    # Create the TapStack
+    stack = TapStack(
+        name="pulumi-infra",
+        args=TapStackArgs(environment_suffix=environment_suffix),
+    )
