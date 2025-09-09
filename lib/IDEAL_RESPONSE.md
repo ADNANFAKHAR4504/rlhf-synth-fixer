@@ -1,4 +1,4 @@
-```python
+``````python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
 the TAP (Test Automation Platform) project.
@@ -1372,10 +1372,14 @@ def lambda_handler(event, context):
     def create_config_delivery_channel(self):
         """Create AWS Config delivery channel"""
         
+        # Generate unique suffix for naming
+        import hashlib
+        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
+        
         # Create S3 bucket for Config
         config_bucket = s3.Bucket(
             self, "ConfigBucket",
-            bucket_name=f"aws-config-{self.account}-{self.region}",
+            bucket_name=f"tap-aws-config-{self.account}-{unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.logs_kms_key,
             versioned=True,
