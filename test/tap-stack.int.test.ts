@@ -34,7 +34,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
 
-const STACK_NAME = 'TapStack'; // Your CloudFormation stack name
+const STACK_NAME = process.env.STACK_NAME || 'TapStack-dev'; // Your CloudFormation stack name
 const REGION = 'us-east-1';    // Your AWS region
 
 // Initialize AWS clients
