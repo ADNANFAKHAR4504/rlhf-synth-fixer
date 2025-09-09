@@ -1,7 +1,0 @@
-config:
-  aws:region: us-east-1
-  tap-system:environment: production
-  tap-system:project-name: tap-system
-  tap-system:notification-email: admin@example.com
-  # Environment variable to skip CloudTrail creation in us-east-1 due to maximum trails limit
-  # This will be handled by the cloudtrail_config.py module

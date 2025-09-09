@@ -1,5 +1,0 @@
-name: TapStack
-runtime: nodejs
-description: Secure AWS infrastructure with Pulumi TypeScript
-config:
-  aws:region: us-east-1

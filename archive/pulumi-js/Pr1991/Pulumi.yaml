@@ -1,5 +1,0 @@
-name: TapStack
-runtime:
-  name: nodejs
-description: AWS Serverless Infrastructure with Pulumi JavaScript
-main: index.mjs

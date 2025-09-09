@@ -1,9 +1,0 @@
-variable "create_vpcs" { type = bool }
-variable "ec2_instance_type" { type = string }
-variable "ec2_key_pair_name" { type = string }
-variable "primary_subnet_id" { type = string }
-variable "secondary_subnet_id" { type = string }
-variable "primary_security_group_id" { type = string }
-variable "secondary_security_group_id" { type = string }
-variable "primary_kms_key_arn" { type = string }
-variable "secondary_kms_key_arn" { type = string }

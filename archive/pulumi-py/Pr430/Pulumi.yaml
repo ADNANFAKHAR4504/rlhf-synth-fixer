@@ -1,5 +1,0 @@
-name: TapStack
-runtime:
-  name: python
-description: Pulumi infrastructure for TAP
-main: lib/tap_stack.py
