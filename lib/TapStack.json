@@ -2,7 +2,14 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "TAP Stack - Task Assignment Platform CloudFormation Template",
   "Metadata": {
-    "AWS::CloudFormation::Interface": {}
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {"default": "Environment Configuration"},
+          "Parameters": ["EnvironmentSuffix"]
+        }
+      ]
+    }
   },
   "Parameters": {
     "EnvironmentSuffix": {
@@ -35,7 +42,20 @@
           }
         ],
         "BillingMode": "PAY_PER_REQUEST",
-        "DeletionProtectionEnabled": false
+        "DeletionProtectionEnabled": false,
+        "SSESpecification": {
+          "SSEEnabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "Project",
+            "Value": "TAP"
+          }
+        ]
       }
     }
   },
