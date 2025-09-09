@@ -39,7 +39,6 @@ class TestTapStack(unittest.TestCase):
         self.sns_client = boto3.client('sns')
         self.cloudwatch_client = boto3.client('cloudwatch')
         self.cloudtrail_client = boto3.client('cloudtrail')
-        self.guardduty_client = boto3.client('guardduty')
         self.logs_client = boto3.client('logs')
 
     # ===================== KMS TESTS =====================

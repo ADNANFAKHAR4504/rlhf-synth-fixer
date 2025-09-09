@@ -31,13 +31,9 @@ from aws_cdk import (
     aws_events as events,
     aws_events_targets as targets,
     aws_cloudtrail as cloudtrail,
-    aws_guardduty as guardduty,
     aws_config as config
 )
 from constructs import Construct
-
-# Configuration constants
-REGION = "us-west-2"
 
 COMMON_TAGS = {
     "Environment": "prod",
@@ -161,7 +157,7 @@ class TapStack(cdk.Stack):
         
         # ===================== COMPLIANCE STACK RESOURCES =====================
         self.enable_cloudtrail()
-        self.enable_guardduty()
+        # GuardDuty removed - detector already exists in account
         # self.setup_config_rules()
         self.setup_compliance_reporting()
         self.setup_custom_monitoring()
@@ -1343,30 +1339,6 @@ def lambda_handler(event, context):
             management_events=cloudtrail.ReadWriteType.ALL
         )
 
-    def enable_guardduty(self):
-        """Enable AWS GuardDuty for threat detection (NIST SI-4)"""
-        
-        self.guardduty_detector = guardduty.CfnDetector(
-            self, "GuardDutyDetector",
-            enable=True,
-            finding_publishing_frequency="FIFTEEN_MINUTES",
-            data_sources=guardduty.CfnDetector.CFNDataSourceConfigurationsProperty(
-                s3_logs=guardduty.CfnDetector.CFNS3LogsConfigurationProperty(
-                    enable=True
-                ),
-                kubernetes=guardduty.CfnDetector.CFNKubernetesConfigurationProperty(
-                    audit_logs=guardduty.CfnDetector.CFNKubernetesAuditLogsConfigurationProperty(
-                        enable=True
-                    )
-                ),
-                malware_protection=guardduty.CfnDetector.CFNMalwareProtectionConfigurationProperty(
-                    scan_ec2_instance_with_findings=guardduty.CfnDetector.CFNScanEc2InstanceWithFindingsConfigurationProperty(
-                        ebs_volumes=True
-                    )
-                )
-            )
-        )
-
     def create_config_recorder(self):
         """Create AWS Config configuration recorder"""
         
@@ -1486,11 +1458,11 @@ def lambda_handler(event, context):
                         height=4
                     ),
                     cloudwatch.SingleValueWidget(
-                        title="GuardDuty Findings (24h)",
+                        title="CloudTrail Active",
                         metrics=[
                             cloudwatch.Metric(
-                                namespace="AWS/GuardDuty",
-                                metric_name="FindingCount",
+                                namespace="AWS/CloudTrail",
+                                metric_name="EventCount",
                                 statistic="Sum"
                             )
                         ],
@@ -1570,8 +1542,6 @@ def lambda_handler(event, context):
                  description="CloudTrail ARN")
         CfnOutput(self, "CloudTrailBucketName", value=self.cloudtrail_bucket.bucket_name,
                  description="CloudTrail S3 Bucket Name")
-        CfnOutput(self, "GuardDutyDetectorId", value=self.guardduty_detector.ref,
-                 description="GuardDuty Detector ID")
         CfnOutput(self, "ComplianceDashboardUrl",
                  value=f"https://console.aws.amazon.com/cloudwatch/home?region={self.region}#dashboards:name={self.compliance_dashboard.dashboard_name}",
                  description="NIST Compliance Dashboard URL")
