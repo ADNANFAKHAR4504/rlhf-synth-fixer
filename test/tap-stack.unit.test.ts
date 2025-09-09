@@ -42,19 +42,19 @@ describe('TapStack', () => {
 
     test('should create CloudWatch Dashboard', () => {
       template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
-        DashboardName: 'TAP-dev-Dashboard'
+        DashboardName: `TAP-${environmentSuffix}-Dashboard`
       });
     });
 
     test('should create security groups with proper naming', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupName: 'web-us-east-1-alb-sg-dev'
+        GroupName: `web-us-east-1-alb-sg-${environmentSuffix}`
       });
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupName: 'app-us-east-1-ec2-sg-dev'
+        GroupName: `app-us-east-1-ec2-sg-${environmentSuffix}`
       });
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupName: 'db-us-east-1-rds-sg-dev'
+        GroupName: `db-us-east-1-rds-sg-${environmentSuffix}`
       });
     });
   });
