@@ -1,0 +1,41 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348871",
+  "team": "4",
+  "startedAt": "2025-09-05T13:56:51.410Z",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Security Configuration",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "Route53",
+    "ELB",
+    "Auto Scaling",
+    "KMS",
+    "SNS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "EIP"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
