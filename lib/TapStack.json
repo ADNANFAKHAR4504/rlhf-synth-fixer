@@ -282,8 +282,43 @@
         ]
       }
     },
+    "Certificate": {
+      "Type": "AWS::CertificateManager::Certificate",
+      "Properties": {
+        "DomainName": "example.com",
+        "ValidationMethod": "DNS",
+        "SubjectAlternativeNames": [
+          "*.example.com"
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          }
+        ]
+      }
+    },
+    "HttpListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "ApplicationLoadBalancer"
+        },
+        "Port": 80,
+        "Protocol": "HTTP",
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "DefaultTargetGroup"
+            }
+          }
+        ]
+      }
+    },
     "HttpsListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "DependsOn": "Certificate",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
@@ -293,7 +328,7 @@
         "Certificates": [
           {
             "CertificateArn": {
-              "Fn::Sub": "arn:aws:acm:${AWS::Region}:${AWS::AccountId}:certificate/example-cert"
+              "Ref": "Certificate"
             }
           }
         ],
@@ -304,7 +339,8 @@
               "Ref": "DefaultTargetGroup"
             }
           }
-        ]
+        ],
+        "SslPolicy": "ELBSecurityPolicy-TLS13-1-2-2021-06"
       }
     },
     "CodePipelineServiceRole": {

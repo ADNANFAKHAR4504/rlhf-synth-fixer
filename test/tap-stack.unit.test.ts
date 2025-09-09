@@ -26,19 +26,37 @@ describe('TapStack Unit Tests', () => {
 
     test('should create public subnets in different AZs', () => {
       template.resourceCountIs('AWS::EC2::Subnet', 2);
+
+      // Test Public Subnet 1
       template.hasResourceProperties('AWS::EC2::Subnet', {
         CidrBlock: '10.0.1.0/24',
-        Tags: [{
-          Key: 'Environment',
-          Value: 'Production'
-        }]
+        MapPublicIpOnLaunch: true,
+        Tags: [
+          {
+            Key: 'Environment',
+            Value: 'Production'
+          },
+          {
+            Key: 'Name',
+            Value: 'Public Subnet 1'
+          }
+        ]
       });
+
+      // Test Public Subnet 2
       template.hasResourceProperties('AWS::EC2::Subnet', {
         CidrBlock: '10.0.2.0/24',
-        Tags: [{
-          Key: 'Environment',
-          Value: 'Production'
-        }]
+        MapPublicIpOnLaunch: true,
+        Tags: [
+          {
+            Key: 'Environment',
+            Value: 'Production'
+          },
+          {
+            Key: 'Name',
+            Value: 'Public Subnet 2'
+          }
+        ]
       });
     });
 
