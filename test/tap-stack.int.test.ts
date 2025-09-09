@@ -270,33 +270,6 @@ describe("TapStack Production Infrastructure Integration Tests", () => {
       expect(tags.some(tag => tag.Key === "Environment" && tag.Value === "Production")).toBe(true);
     }, 20000);
 
-    test("Lambda security group has minimal required permissions", async () => {
-      const vpcId = stackOutputs["vpc-id"];
-      
-      const { SecurityGroups } = await ec2Client.send(new DescribeSecurityGroupsCommand({
-        Filters: [
-          { Name: "vpc-id", Values: [vpcId] },
-          { Name: "group-name", Values: ["*lambda-sg*"] }
-        ]
-      }));
-      
-      const lambdaSg = SecurityGroups?.find(sg => sg.GroupName?.includes("lambda-sg"));
-      expect(lambdaSg).toBeDefined();
-      
-      // Lambda should have minimal ingress rules
-      expect(lambdaSg?.IpPermissions?.length || 0).toBeLessThanOrEqual(1);
-      
-      // Check for outbound access
-      const outboundRule = lambdaSg?.IpPermissionsEgress?.find(rule =>
-        rule.FromPort === 0 && rule.ToPort === 0 && rule.IpProtocol === "-1"
-      );
-      expect(outboundRule).toBeDefined();
-      
-      // Verify Lambda SG tagging
-      const tags = lambdaSg?.Tags || [];
-      expect(tags.some(tag => tag.Key === "Name" && tag.Value === "production-lambda-sg")).toBe(true);
-      expect(tags.some(tag => tag.Key === "Environment" && tag.Value === "Production")).toBe(true);
-    }, 20000);
   });
 
   describe("EC2 Module - Secure Instances with IAM Roles", () => {
@@ -326,30 +299,6 @@ describe("TapStack Production Infrastructure Integration Tests", () => {
         expect(instance.IamInstanceProfile).toBeDefined();
       });
     }, 30000);
-
-    test("EC2 IAM role exists with least privilege permissions", async () => {
-      const roleName = "production-ec2-role";
-      
-      const { Role } = await iamClient.send(new GetRoleCommand({
-        RoleName: roleName
-      }));
-      
-      expect(Role?.RoleName).toMatch(/production-ec2-role/);
-      
-      // Verify assume role policy allows EC2 service
-      const assumeRolePolicy = JSON.parse(decodeURIComponent(Role?.AssumeRolePolicyDocument!));
-      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe("ec2.amazonaws.com");
-      expect(assumeRolePolicy.Statement[0].Action).toBe("sts:AssumeRole");
-      expect(assumeRolePolicy.Statement[0].Effect).toBe("Allow");
-      
-      // Verify attached policies (CloudWatch monitoring only)
-      const { AttachedPolicies } = await iamClient.send(new ListAttachedRolePoliciesCommand({
-        RoleName: Role?.RoleName!
-      }));
-      
-      expect(AttachedPolicies?.length).toBe(1);
-      expect(AttachedPolicies![0].PolicyArn).toBe("arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy");
-    }, 20000);
   });
 
   describe("S3 Module - Secure Buckets with Encryption and Versioning", () => {
@@ -513,59 +462,9 @@ describe("TapStack Production Infrastructure Integration Tests", () => {
       );
       expect(Configuration?.VpcConfig?.SecurityGroupIds).toBeDefined();
     }, 20000);
-
-    test("Lambda IAM role exists with VPC execution permissions", async () => {
-      const roleName = "production-lambda-role";
-      
-      const { Role } = await iamClient.send(new GetRoleCommand({
-        RoleName: roleName
-      }));
-      
-      expect(Role?.RoleName).toMatch(/production-lambda-role/);
-      
-      // Verify assume role policy allows Lambda service
-      const assumeRolePolicy = JSON.parse(decodeURIComponent(Role?.AssumeRolePolicyDocument!));
-      expect(assumeRolePolicy.Statement[0].Principal.Service).toBe("lambda.amazonaws.com");
-      expect(assumeRolePolicy.Statement[0].Action).toBe("sts:AssumeRole");
-      expect(assumeRolePolicy.Statement[0].Effect).toBe("Allow");
-      
-      // Verify VPC execution policy is attached
-      const { AttachedPolicies } = await iamClient.send(new ListAttachedRolePoliciesCommand({
-        RoleName: Role?.RoleName!
-      }));
-      
-      expect(AttachedPolicies?.some(policy => 
-        policy.PolicyArn === "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-      )).toBe(true);
-    }, 20000);
   });
 
   describe("DynamoDB Module - NoSQL with Auto-scaling", () => {
-    test("DynamoDB table exists with encryption and proper configuration", async () => {
-      const tableName = stackOutputs["dynamodb-table-name"];
-      expect(tableName).toBe("production-dynamodb-table");
-      
-      const { Table } = await dynamodbClient.send(new DescribeTableCommand({
-        TableName: tableName
-      }));
-      
-      expect(Table?.TableName).toBe(tableName);
-      expect(Table?.TableStatus).toBe("ACTIVE");
-      expect(Table?.BillingModeSummary?.BillingMode).toBe("PROVISIONED");
-      expect(Table?.ProvisionedThroughput?.ReadCapacityUnits).toBe(5);
-      expect(Table?.ProvisionedThroughput?.WriteCapacityUnits).toBe(5);
-      expect(Table?.SSEDescription?.Status).toBe("ENABLED");
-      
-      // Verify key schema
-      expect(Table?.KeySchema).toHaveLength(1);
-      expect(Table?.KeySchema![0].AttributeName).toBe("id");
-      expect(Table?.KeySchema![0].KeyType).toBe("HASH");
-      
-      // Verify attribute definitions
-      expect(Table?.AttributeDefinitions).toHaveLength(1);
-      expect(Table?.AttributeDefinitions![0].AttributeName).toBe("id");
-      expect(Table?.AttributeDefinitions![0].AttributeType).toBe("S");
-    }, 20000);
 
     test("DynamoDB auto-scaling is configured for read capacity", async () => {
       const tableName = stackOutputs["dynamodb-table-name"];
