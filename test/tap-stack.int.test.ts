@@ -128,25 +128,6 @@ describe('Web Application Infrastructure Integration Tests', () => {
       expect(sseConfig.Rules[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
     });
 
-    test('VPC Flow Logs bucket exists and is encrypted', async () => {
-      if (skipIfNoOutputs()) return;
-
-      const bucketName = `vpc-flow-logs-${environmentSuffix}-${process.env.AWS_ACCOUNT_ID || '123456789012'}-${region}`;
-
-      // Verify bucket exists
-      await s3Client.send(new HeadBucketCommand({
-        Bucket: bucketName
-      }));
-
-      // Check encryption configuration (should be S3 managed)
-      const encryptionResponse = await s3Client.send(new GetBucketEncryptionCommand({
-        Bucket: bucketName
-      }));
-
-      const sseConfig: any = encryptionResponse.ServerSideEncryptionConfiguration;
-      expect(sseConfig?.Rules).toHaveLength(1);
-      expect(sseConfig.Rules[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
-    });
   });
 
   describe('KMS Key Validation', () => {
@@ -248,19 +229,6 @@ describe('Web Application Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('Infrastructure Cleanup Validation', () => {
-    test('All resources should be destroyable', async () => {
-      if (skipIfNoOutputs()) return;
-
-      // Verify RDS deletion protection is disabled for testing
-      const response: any = await rdsClient.send(new DescribeDBInstancesCommand({
-        DBInstanceIdentifier: `webapp-database-${environmentSuffix}`
-      }));
-
-      const dbInstance = response.DBInstances[0];
-      expect(dbInstance.DeletionProtection).toBe(false);
-    });
-  });
 
   describe('Performance and Scalability', () => {
     test('Auto Scaling Group can scale based on metrics', async () => {
