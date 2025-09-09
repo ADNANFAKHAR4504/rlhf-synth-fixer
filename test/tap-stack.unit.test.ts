@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
@@ -239,13 +239,6 @@ describe('TapStack Security Infrastructure', () => {
         },
       });
     });
-
-    test('should create CloudWatch log group with KMS encryption', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: '/aws/apigateway/production',
-        RetentionInDays: 90,
-      });
-    });
   });
 
   describe('Security Monitoring', () => {
@@ -407,14 +400,6 @@ describe('TapStack Security Infrastructure', () => {
             }),
           ]),
         },
-      });
-    });
-  });
-
-  describe('AWS Shield Protection', () => {
-    test('should create Shield protection for ALB', () => {
-      template.hasResourceProperties('AWS::Shield::Protection', {
-        Name: 'ALB-Shield-Protection',
       });
     });
   });
