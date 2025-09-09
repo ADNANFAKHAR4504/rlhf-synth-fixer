@@ -382,16 +382,26 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        template.has_resource("AWS::SSM::PatchBaseline", {
-            "Properties": {
-                "Name": "SecureApplicationPatchBaseline",
-                "OperatingSystem": "AMAZON_LINUX_2"
-            }
-        })
+        # Check that patch baseline exists
+        patch_baselines = template.find_resources("AWS::SSM::PatchBaseline")
+        self.assertEqual(len(patch_baselines), 1, "Should have exactly one patch baseline")
+        
+        # Verify patch baseline properties
+        for baseline_id, baseline_props in patch_baselines.items():
+            if "Properties" in baseline_props:
+                props = baseline_props["Properties"]
+                # Check that it has the correct operating system
+                self.assertEqual(props.get("OperatingSystem"), "AMAZON_LINUX_2")
+                # Check that name starts with expected prefix
+                name = props.get("Name", "")
+                self.assertTrue(name.startswith("tap-patch-baseline-"), 
+                              f"Patch baseline name should start with 'tap-patch-baseline-', got: {name}")
+                # Check description
+                self.assertEqual(props.get("Description"), "Patch baseline for secure application servers")
 
+        # Also check for maintenance window
         template.has_resource("AWS::SSM::MaintenanceWindow", {
             "Properties": {
-                "Name": "ProductionMaintenanceWindow",
                 "Duration": 4,
                 "Cutoff": 1
             }

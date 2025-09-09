@@ -852,13 +852,17 @@ def lambda_handler(event, context):
     def setup_automated_patching(self):
         """Configure AWS Systems Manager Patch Manager for automated patching"""
         
+        # Generate unique suffix for naming
+        import hashlib
+        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
+        
         # Create maintenance role first
         self.maintenance_role = self.create_maintenance_role()
         
         # Create patch baseline for Amazon Linux
         self.patch_baseline = ssm.CfnPatchBaseline(
             self, "PatchBaseline",
-            name="SecureApplicationPatchBaseline",
+            name=f"tap-patch-baseline-{unique_suffix}",
             description="Patch baseline for secure application servers",
             operating_system="AMAZON_LINUX_2",
             patch_groups=["Production"],
@@ -883,7 +887,7 @@ def lambda_handler(event, context):
         # Create maintenance window
         self.maintenance_window = ssm.CfnMaintenanceWindow(
             self, "MaintenanceWindow",
-            name="ProductionMaintenanceWindow", 
+            name=f"tap-maintenance-window-{unique_suffix}", 
             description="Maintenance window for production servers",
             duration=4,
             cutoff=1,
