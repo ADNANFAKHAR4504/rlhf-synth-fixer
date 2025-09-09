@@ -1,218 +1,167 @@
-import * as fs from 'fs';
-import * as path from 'path';
+// tap-stack-integration.test.ts
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3';
+import { DescribeInstancesCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import fs from 'fs';
 
-// Mock AWS SDK clients for integration tests that would use real deployment outputs
-const mockOutputsPath = path.join(
-  __dirname,
-  '..',
-  'cfn-outputs',
-  'flat-outputs.json'
-);
+// Get environment suffix from environment variable
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-describe('TapStack Integration Tests', () => {
-  let outputs: any = {};
+// Load outputs from CloudFormation
+let outputs: any = {};
 
+try {
+  outputs = JSON.parse(fs.readFileSync('cfn-outputs.json', 'utf8'));
+} catch (error) {
+  console.warn('cfn-outputs.json not found, using environment variables');
+  // Fallback to environment variables
+  outputs = {
+    SecurityKmsKeyId: process.env.KMS_KEY_ID,
+    SecurityBucketName: process.env.S3_BUCKET_NAME,
+    EC2InstanceId: process.env.EC2_INSTANCE_ID,
+    RDSEndpoint: process.env.RDS_ENDPOINT,
+    VPCId: process.env.VPC_ID,
+    EC2RoleArn: process.env.EC2_ROLE_ARN,
+    RemediationFunctionArn: process.env.LAMBDA_FUNCTION_ARN,
+  };
+}
+
+const KMS_KEY_ID = outputs.SecurityKmsKeyId;
+const S3_BUCKET_NAME = outputs.SecurityBucketName;
+const EC2_INSTANCE_ID = outputs.EC2InstanceId;
+const RDS_ENDPOINT = outputs.RDSEndpoint;
+const VPC_ID = outputs.VPCId;
+const LAMBDA_FUNCTION_ARN = outputs.RemediationFunctionArn;
+
+// Initialize AWS clients
+const region = process.env.AWS_REGION || 'us-east-1';
+const kmsClient = new KMSClient({ region });
+const s3Client = new S3Client({ region });
+const ec2Client = new EC2Client({ region });
+const rdsClient = new RDSClient({ region });
+
+describe('TapStack Infrastructure Integration Tests', () => {
   beforeAll(() => {
-    // In a real deployment, these would come from cfn-outputs/flat-outputs.json
-    // For testing purposes, we'll mock the expected outputs
-    if (fs.existsSync(mockOutputsPath)) {
-      const outputsContent = fs.readFileSync(mockOutputsPath, 'utf-8');
-      outputs = JSON.parse(outputsContent);
-    } else {
-      // Mock outputs for testing when deployment hasn't happened yet
-      outputs = {
-        SecurityKmsKeyId: 'arn:aws:kms:us-east-1:123456789012:key/mock-key-id',
-        SecurityBucketName: 'tap-security-logs-pr2759-123456789012',
-        EC2InstanceId: 'i-0123456789abcdef0',
-        RDSEndpoint:
-          'tap-rds-postgres-pr2759.cluster-abc123.us-east-1.rds.amazonaws.com',
-        VPCId: 'vpc-abc12345',
-      };
-    }
-  });
-
-  describe('Stack Outputs Validation', () => {
-    test('should have KMS key output', () => {
-      expect(outputs.SecurityKmsKeyId).toBeDefined();
-      expect(outputs.SecurityKmsKeyId).toMatch(/arn:aws:kms/);
-    });
-
-    test('should have security bucket output', () => {
-      expect(outputs.SecurityBucketName).toBeDefined();
-      expect(outputs.SecurityBucketName).toMatch(/tap-security-logs/);
-    });
-
-    test('should have EC2 instance output', () => {
-      expect(outputs.EC2InstanceId).toBeDefined();
-      expect(outputs.EC2InstanceId).toMatch(/^i-[0-9a-f]+$/);
-    });
-
-    test('should have RDS endpoint output', () => {
-      expect(outputs.RDSEndpoint).toBeDefined();
-      expect(outputs.RDSEndpoint).toContain('rds.amazonaws.com');
-    });
-
-    test('should have VPC ID output', () => {
-      expect(outputs.VPCId).toBeDefined();
-      expect(outputs.VPCId).toMatch(/^vpc-[0-9a-f]+$/);
+    console.log('Testing TapStack infrastructure with configuration:', {
+      environmentSuffix,
+      kmsKeyId: KMS_KEY_ID,
+      s3BucketName: S3_BUCKET_NAME,
+      ec2InstanceId: EC2_INSTANCE_ID,
+      rdsEndpoint: RDS_ENDPOINT,
+      vpcId: VPC_ID,
+      lambdaFunctionArn: LAMBDA_FUNCTION_ARN,
+      region,
     });
   });
 
-  describe('Security Configuration Validation', () => {
-    test('KMS key should be in correct region', () => {
-      if (outputs.SecurityKmsKeyId) {
-        expect(outputs.SecurityKmsKeyId).toContain('us-east-1');
-      }
-    });
+  describe('KMS Key Validation', () => {
+    test('should be able to describe the KMS key', async () => {
+      const keyResponse = await kmsClient.send(
+        new DescribeKeyCommand({
+          KeyId: KMS_KEY_ID,
+        })
+      );
 
-    test('S3 bucket should follow naming convention', () => {
-      if (outputs.SecurityBucketName) {
-        expect(outputs.SecurityBucketName).toMatch(
-          /^tap-security-logs-[a-z0-9]+-\d+$/
-        );
-      }
-    });
+      expect(keyResponse.KeyMetadata).toBeDefined();
+      expect(keyResponse.KeyMetadata?.KeyId).toBe(KMS_KEY_ID);
+      expect(keyResponse.KeyMetadata?.Enabled).toBe(true);
+      expect(keyResponse.KeyMetadata?.KeyState).toBe('Enabled');
+    }, 15000);
+  });
 
-    test('RDS endpoint should be PostgreSQL', () => {
-      if (outputs.RDSEndpoint) {
-        // PostgreSQL RDS endpoints contain the cluster/instance identifier
-        expect(outputs.RDSEndpoint).toContain('tap-rds-postgres');
-      }
+  describe('S3 Bucket Validation', () => {
+    test('should be able to list objects in S3 bucket', async () => {
+      const listResponse = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: S3_BUCKET_NAME,
+          MaxKeys: 1,
+        })
+      );
+
+      expect(listResponse).toBeDefined();
+      // Bucket should exist and be accessible
+      expect(listResponse.Name).toBe(S3_BUCKET_NAME);
+    }, 15000);
+
+    test('S3 bucket name should contain environment suffix', () => {
+      expect(S3_BUCKET_NAME).toContain(environmentSuffix);
     });
   });
 
-  describe('Network Configuration Validation', () => {
-    test('VPC should be configured', () => {
-      expect(outputs.VPCId).toBeDefined();
-      // In production, VPC should either be the existing one or a newly created one
-      expect(outputs.VPCId).toBeTruthy();
-    });
+  describe('EC2 Instance Validation', () => {
+    test('should be able to describe EC2 instance', async () => {
+      const instancesResponse = await ec2Client.send(
+        new DescribeInstancesCommand({
+          InstanceIds: [EC2_INSTANCE_ID],
+        })
+      );
 
-    test('EC2 instance should be created', () => {
-      expect(outputs.EC2InstanceId).toBeDefined();
-      expect(outputs.EC2InstanceId).toBeTruthy();
+      expect(instancesResponse.Reservations).toBeDefined();
+      expect(instancesResponse.Reservations?.length).toBe(1);
+      expect(instancesResponse.Reservations?.[0].Instances?.length).toBe(1);
+
+      const instance = instancesResponse.Reservations?.[0].Instances?.[0];
+      expect(instance?.InstanceId).toBe(EC2_INSTANCE_ID);
+      expect(instance?.State?.Name).toBe('running');
+    }, 20000);
+  });
+
+  describe('RDS Instance Validation', () => {
+    test('should be able to describe RDS instance', async () => {
+      const dbIdentifier = `tap-rds-postgres-${environmentSuffix}`;
+      const dbResponse = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        })
+      );
+
+      expect(dbResponse.DBInstances).toBeDefined();
+      expect(dbResponse.DBInstances?.length).toBe(1);
+
+      const dbInstance = dbResponse.DBInstances?.[0];
+      expect(dbInstance?.DBInstanceIdentifier).toBe(dbIdentifier);
+      expect(dbInstance?.DBInstanceStatus).toBe('available');
+      expect(dbInstance?.Endpoint?.Address).toBe(RDS_ENDPOINT);
+    }, 30000);
+  });
+
+  describe('Resource Naming Convention', () => {
+    test('all resources should use correct environment suffix', () => {
+      expect(S3_BUCKET_NAME).toContain(environmentSuffix);
+      expect(LAMBDA_FUNCTION_ARN).toContain(environmentSuffix);
     });
   });
 
-  describe('Database Configuration Validation', () => {
-    test('RDS endpoint should be accessible format', () => {
-      if (outputs.RDSEndpoint) {
-        // Check endpoint format
-        const endpointParts = outputs.RDSEndpoint.split('.');
-        expect(endpointParts.length).toBeGreaterThanOrEqual(5);
-        expect(endpointParts).toContain('rds');
-        expect(endpointParts).toContain('amazonaws');
-        expect(endpointParts).toContain('com');
-      }
-    });
+  describe('Connectivity Tests', () => {
+    test('S3 bucket should be accessible', async () => {
+      const response = await s3Client.send(
+        new ListObjectsV2Command({
+          Bucket: S3_BUCKET_NAME,
+          MaxKeys: 1,
+        })
+      );
+      expect(response).toBeDefined();
+    }, 15000);
+
+    test('KMS key should be accessible', async () => {
+      const response = await kmsClient.send(
+        new DescribeKeyCommand({
+          KeyId: KMS_KEY_ID,
+        })
+      );
+      expect(response.KeyMetadata).toBeDefined();
+    }, 15000);
   });
 
-  describe('Compliance Validation', () => {
-    test('all critical resources should have outputs', () => {
-      const criticalOutputs = [
-        'SecurityKmsKeyId',
-        'SecurityBucketName',
-        'EC2InstanceId',
-        'RDSEndpoint',
-        'VPCId',
-      ];
-
-      criticalOutputs.forEach(outputKey => {
-        expect(outputs[outputKey]).toBeDefined();
-        expect(outputs[outputKey]).not.toBe('');
-        expect(outputs[outputKey]).not.toBeNull();
-      });
-    });
-
-    test('resource names should include environment suffix', () => {
-      // When deployed with ENVIRONMENT_SUFFIX, resources should include it
-      const suffix = process.env.ENVIRONMENT_SUFFIX || 'pr2759'; // Default to pr2759 for testing
-
-      if (outputs.SecurityBucketName) {
-        // Check if any reasonable suffix is present (dev, pr*, test, etc.)
-        const hasValidSuffix =
-          outputs.SecurityBucketName.includes(suffix) ||
-          outputs.SecurityBucketName.includes('dev') ||
-          outputs.SecurityBucketName.includes('test') ||
-          outputs.SecurityBucketName.includes('pr');
-        expect(hasValidSuffix).toBe(true);
-      }
-
-      if (outputs.RDSEndpoint) {
-        const hasValidSuffix =
-          outputs.RDSEndpoint.includes(suffix) ||
-          outputs.RDSEndpoint.includes('dev') ||
-          outputs.RDSEndpoint.includes('test') ||
-          outputs.RDSEndpoint.includes('pr');
-        expect(hasValidSuffix).toBe(true);
-      }
-    });
-  });
-
-  describe('Security Best Practices Validation', () => {
-    test('KMS key ARN should be valid', () => {
-      if (
-        outputs.SecurityKmsKeyId &&
-        outputs.SecurityKmsKeyId.startsWith('arn:')
-      ) {
-        const arnParts = outputs.SecurityKmsKeyId.split(':');
-        expect(arnParts[0]).toBe('arn');
-        expect(arnParts[1]).toBe('aws');
-        expect(arnParts[2]).toBe('kms');
-        expect(arnParts[3]).toBeTruthy(); // Region
-        expect(arnParts[4]).toBeTruthy(); // Account ID
-      }
-    });
-
-    test('S3 bucket name should not contain uppercase or special characters', () => {
-      if (outputs.SecurityBucketName) {
-        expect(outputs.SecurityBucketName).toMatch(/^[a-z0-9.-]+$/);
-        expect(outputs.SecurityBucketName).not.toMatch(/[A-Z]/);
-      }
-    });
-  });
-
-  describe('Connectivity Validation', () => {
-    test('EC2 to RDS connectivity should be possible', () => {
-      // Both resources should exist for connectivity
-      expect(outputs.EC2InstanceId).toBeDefined();
-      expect(outputs.RDSEndpoint).toBeDefined();
-
-      // In a real scenario, we would test actual connectivity
-      // For now, we verify the outputs exist
-    });
-
-    test('all resources should be in same region', () => {
-      const region = 'us-east-1';
-
-      if (outputs.SecurityKmsKeyId && outputs.SecurityKmsKeyId.includes(':')) {
-        expect(outputs.SecurityKmsKeyId).toContain(region);
-      }
-
-      if (outputs.RDSEndpoint) {
-        expect(outputs.RDSEndpoint).toContain(region);
-      }
-    });
-  });
-
-  describe('Tagging Validation', () => {
-    test('outputs should be properly formatted', () => {
-      // All outputs should be strings
-      Object.values(outputs).forEach(value => {
-        expect(typeof value).toBe('string');
-        expect(value).toBeTruthy();
-      });
-    });
-  });
-
-  describe('High Availability Validation', () => {
-    test('RDS should be multi-AZ based on endpoint format', () => {
-      if (outputs.RDSEndpoint) {
-        // Multi-AZ RDS instances have specific endpoint patterns
-        // The endpoint should be reachable and properly formatted
-        expect(outputs.RDSEndpoint).toBeDefined();
-        expect(outputs.RDSEndpoint.split('.').length).toBeGreaterThanOrEqual(5);
-      }
+  describe('Configuration Validation', () => {
+    test('should have all required outputs configured', () => {
+      expect(KMS_KEY_ID).toBeTruthy();
+      expect(S3_BUCKET_NAME).toBeTruthy();
+      expect(EC2_INSTANCE_ID).toBeTruthy();
+      expect(RDS_ENDPOINT).toBeTruthy();
+      expect(VPC_ID).toBeTruthy();
+      expect(LAMBDA_FUNCTION_ARN).toBeTruthy();
     });
   });
 });
