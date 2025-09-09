@@ -339,8 +339,9 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
+        # CloudTrail now uses a unique suffix in the name to avoid conflicts
         template.has_resource_properties("AWS::CloudTrail::Trail", {
-            "TrailName": "ComplianceAuditTrail",
+            "TrailName": Match.string_like_regexp("ComplianceAuditTrail-.*"),
             "IsMultiRegionTrail": True,
             "EnableLogFileValidation": True,
             "IncludeGlobalServiceEvents": True

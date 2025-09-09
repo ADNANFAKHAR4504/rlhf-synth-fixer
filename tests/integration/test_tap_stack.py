@@ -405,8 +405,11 @@ class TestTapStack(unittest.TestCase):
         """Test CloudTrail is enabled with security best practices"""
         # ARRANGE
         self.assertIn('CloudTrailArn', self.outputs, "CloudTrailArn not found in stack outputs")
+        self.assertIn('CloudTrailBucketName', self.outputs, "CloudTrailBucketName not found in stack outputs")
+        
         trail_arn = self.outputs['CloudTrailArn']
         trail_name = trail_arn.split('/')[-1]
+        bucket_name = self.outputs['CloudTrailBucketName']
         
         # ACT
         trail = self.cloudtrail_client.describe_trails(trailNameList=[trail_name])
@@ -414,6 +417,14 @@ class TestTapStack(unittest.TestCase):
         # ASSERT
         self.assertEqual(len(trail['trailList']), 1)
         trail_config = trail['trailList'][0]
+        
+        # Check trail name has unique suffix
+        self.assertTrue(trail_name.startswith('ComplianceAuditTrail-'), 
+                       f"Trail name {trail_name} should start with 'ComplianceAuditTrail-'")
+        
+        # Check bucket name has unique suffix  
+        self.assertTrue(bucket_name.startswith('tap-cloudtrail-logs-'),
+                       f"Bucket name {bucket_name} should start with 'tap-cloudtrail-logs-'")
         
         # Check multi-region
         self.assertTrue(trail_config['IsMultiRegionTrail'])

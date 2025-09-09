@@ -1,4 +1,4 @@
-``````python
+```python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
 the TAP (Test Automation Platform) project.
@@ -34,6 +34,9 @@ from aws_cdk import (
     aws_config as config
 )
 from constructs import Construct
+
+# Configuration constants
+REGION = "us-west-2"
 
 COMMON_TAGS = {
     "Environment": "prod",
@@ -1295,10 +1298,14 @@ def lambda_handler(event, context):
     def enable_cloudtrail(self):
         """Enable AWS CloudTrail for audit logging (NIST AU-2, AU-12)"""
         
+        # Generate unique suffix for naming
+        import hashlib
+        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
+        
         # Create S3 bucket for CloudTrail logs
         self.cloudtrail_bucket = s3.Bucket(
             self, "CloudTrailBucket",
-            bucket_name=f"cloudtrail-logs-{self.account}-{self.region}",
+            bucket_name=f"tap-cloudtrail-logs-{self.account}-{unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.logs_kms_key,
             versioned=True,
@@ -1330,7 +1337,7 @@ def lambda_handler(event, context):
         # Create CloudTrail
         self.trail = cloudtrail.Trail(
             self, "ComplianceTrail",
-            trail_name="ComplianceAuditTrail",
+            trail_name=f"ComplianceAuditTrail-{unique_suffix}",
             bucket=self.cloudtrail_bucket,
             include_global_service_events=True,
             is_multi_region_trail=True,
