@@ -25,7 +25,7 @@ export class TapStack extends cdk.Stack {
     const commonTags = {
       env: environmentSuffix,
       project: `${environmentSuffix}-infrastructure`,
-      managedBy: 'cdk'
+      managedBy: 'cdk',
     };
 
     // ========================================
@@ -61,36 +61,47 @@ export class TapStack extends cdk.Stack {
     });
 
     // VPC Flow Logs for monitoring
-    const vpcFlowLogRole = new iam.Role(this, `VPCFlowLogRole-${environmentSuffix}`, {
-      roleName: `VPCFlowLogRole-${environmentSuffix}`,
-      assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
-      inlinePolicies: {
-        FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: [
-                'logs:CreateLogGroup',
-                'logs:CreateLogStream',
-                'logs:PutLogEvents',
-                'logs:DescribeLogGroups',
-                'logs:DescribeLogStreams'
-              ],
-              resources: ['*']
-            })
-          ]
-        })
+    const vpcFlowLogRole = new iam.Role(
+      this,
+      `VPCFlowLogRole-${environmentSuffix}`,
+      {
+        roleName: `VPCFlowLogRole-${environmentSuffix}`,
+        assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
+        inlinePolicies: {
+          FlowLogsDeliveryRolePolicy: new iam.PolicyDocument({
+            statements: [
+              new iam.PolicyStatement({
+                effect: iam.Effect.ALLOW,
+                actions: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                resources: ['*'],
+              }),
+            ],
+          }),
+        },
       }
-    });
+    );
 
-    const vpcFlowLogGroup = new logs.LogGroup(this, `VPCFlowLogGroup-${environmentSuffix}`, {
-      logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-    });
+    const vpcFlowLogGroup = new logs.LogGroup(
+      this,
+      `VPCFlowLogGroup-${environmentSuffix}`,
+      {
+        logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
+        retention: logs.RetentionDays.ONE_MONTH,
+      }
+    );
 
     new ec2.FlowLog(this, `VPCFlowLog-${environmentSuffix}`, {
       resourceType: ec2.FlowLogResourceType.fromVpc(vpc),
-      destination: ec2.FlowLogDestination.toCloudWatchLogs(vpcFlowLogGroup, vpcFlowLogRole),
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(
+        vpcFlowLogGroup,
+        vpcFlowLogRole
+      ),
       trafficType: ec2.FlowLogTrafficType.ALL,
     });
 
@@ -99,12 +110,16 @@ export class TapStack extends cdk.Stack {
     // ========================================
 
     // Security Group for EC2 instance
-    const ec2SecurityGroup = new ec2.SecurityGroup(this, `EC2SecurityGroup-${environmentSuffix}`, {
-      securityGroupName: `EC2SecurityGroup-${environmentSuffix}`,
-      vpc,
-      description: `Security group for ${environmentSuffix} EC2 instance`,
-      allowAllOutbound: true,
-    });
+    const ec2SecurityGroup = new ec2.SecurityGroup(
+      this,
+      `EC2SecurityGroup-${environmentSuffix}`,
+      {
+        securityGroupName: `EC2SecurityGroup-${environmentSuffix}`,
+        vpc,
+        description: `Security group for ${environmentSuffix} EC2 instance`,
+        allowAllOutbound: true,
+      }
+    );
 
     // Restrict SSH access to specific IP range (replace with your IP range)
     const allowedSshCidr = '203.0.113.0/24'; // Replace with your actual IP range
@@ -128,12 +143,16 @@ export class TapStack extends cdk.Stack {
     );
 
     // Security Group for RDS
-    const rdsSecurityGroup = new ec2.SecurityGroup(this, `RDSSecurityGroup-${environmentSuffix}`, {
-      securityGroupName: `RDSSecurityGroup-${environmentSuffix}`,
-      vpc,
-      description: `Security group for ${environmentSuffix} RDS instance`,
-      allowAllOutbound: false,
-    });
+    const rdsSecurityGroup = new ec2.SecurityGroup(
+      this,
+      `RDSSecurityGroup-${environmentSuffix}`,
+      {
+        securityGroupName: `RDSSecurityGroup-${environmentSuffix}`,
+        vpc,
+        description: `Security group for ${environmentSuffix} RDS instance`,
+        allowAllOutbound: false,
+      }
+    );
 
     // Allow PostgreSQL access only from EC2 security group
     rdsSecurityGroup.addIngressRule(
@@ -156,8 +175,12 @@ export class TapStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: `IAM role for ${environmentSuffix} EC2 instance`,
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchAgentServerPolicy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'), // For Systems Manager
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'CloudWatchAgentServerPolicy'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ), // For Systems Manager
       ],
     });
 
@@ -168,13 +191,15 @@ export class TapStack extends cdk.Stack {
         'secretsmanager:GetSecretValue',
         'secretsmanager:DescribeSecret',
       ],
-      resources: [`arn:aws:secretsmanager:${this.region}:${this.account}:secret:rds-postgres-${environmentSuffix}-*`],
+      resources: [
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:rds-postgres-${environmentSuffix}-*`,
+      ],
     });
 
     ec2Role.addToPolicy(secretsPolicy);
 
     // Instance profile for EC2
-    const instanceProfile = new iam.InstanceProfile(this, `EC2InstanceProfile-${environmentSuffix}`, {
+    new iam.InstanceProfile(this, `EC2InstanceProfile-${environmentSuffix}`, {
       instanceProfileName: `EC2InstanceProfile-${environmentSuffix}`,
       role: ec2Role,
     });
@@ -184,79 +209,101 @@ export class TapStack extends cdk.Stack {
     // ========================================
 
     // Generate secure credentials for RDS
-    const databaseCredentials = new secretsmanager.Secret(this, `RDSCredentials-${environmentSuffix}`, {
-      secretName: `rds-postgres-${environmentSuffix}`,
-      description: `Credentials for ${environmentSuffix} PostgreSQL database`,
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'postgres' }),
-        generateStringKey: 'password',
-        excludeCharacters: '"@/\\\'',
-        includeSpace: false,
-        passwordLength: 32,
-      },
-    });
+    const databaseCredentials = new secretsmanager.Secret(
+      this,
+      `RDSCredentials-${environmentSuffix}`,
+      {
+        secretName: `rds-postgres-${environmentSuffix}`,
+        description: `Credentials for ${environmentSuffix} PostgreSQL database`,
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({ username: 'postgres' }),
+          generateStringKey: 'password',
+          excludeCharacters: '"@/\\\'',
+          includeSpace: false,
+          passwordLength: 32,
+        },
+      }
+    );
 
-    cdk.Tags.of(databaseCredentials).add('Name', `${environmentSuffix}-rds-credentials`);
+    cdk.Tags.of(databaseCredentials).add(
+      'Name',
+      `${environmentSuffix}-rds-credentials`
+    );
 
     // ========================================
     // 5. RDS DATABASE
     // ========================================
 
     // Subnet group for RDS in private subnets
-    const dbSubnetGroup = new rds.SubnetGroup(this, `DatabaseSubnetGroup-${environmentSuffix}`, {
-      subnetGroupName: `database-subnet-group-${environmentSuffix}`,
-      vpc,
-      description: `Subnet group for ${environmentSuffix} PostgreSQL database`,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-    });
+    const dbSubnetGroup = new rds.SubnetGroup(
+      this,
+      `DatabaseSubnetGroup-${environmentSuffix}`,
+      {
+        subnetGroupName: `database-subnet-group-${environmentSuffix}`,
+        vpc,
+        description: `Subnet group for ${environmentSuffix} PostgreSQL database`,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      }
+    );
 
     // Parameter group for PostgreSQL optimization
-    const parameterGroup = new rds.ParameterGroup(this, `PostgreSQLParameterGroup-${environmentSuffix}`, {
-      name: `postgresql-param-group-${environmentSuffix}`,
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15,
-      }),
-      description: `Parameter group for ${environmentSuffix} PostgreSQL`,
-      parameters: {
-        'log_statement': 'all',
-        'log_min_duration_statement': '1000', // Log queries taking more than 1 second
-        'log_connections': '1',
-        'log_disconnections': '1',
-        'log_duration': '1',
-      },
-    });
+    const parameterGroup = new rds.ParameterGroup(
+      this,
+      `PostgreSQLParameterGroup-${environmentSuffix}`,
+      {
+        name: `postgresql-param-group-${environmentSuffix}`,
+        engine: rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_15,
+        }),
+        description: `Parameter group for ${environmentSuffix} PostgreSQL`,
+        parameters: {
+          log_statement: 'all',
+          log_min_duration_statement: '1000', // Log queries taking more than 1 second
+          log_connections: '1',
+          log_disconnections: '1',
+          log_duration: '1',
+        },
+      }
+    );
 
     // RDS instance with proper engine reference
-    const database = new rds.DatabaseInstance(this, `PostgreSQLDatabase-${environmentSuffix}`, {
-      instanceIdentifier: `postgresql-database-${environmentSuffix}`,
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_15,
-      }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
-      subnetGroup: dbSubnetGroup,
-      securityGroups: [rdsSecurityGroup],
-      credentials: rds.Credentials.fromSecret(databaseCredentials),
-      multiAz: true, // High availability
-      storageEncrypted: true,
-      monitoringInterval: cdk.Duration.seconds(60),
-      enablePerformanceInsights: true,
-      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-      parameterGroup,
-      backupRetention: cdk.Duration.days(7),
-      deletionProtection: true,
-      databaseName: `${environmentSuffix}db`,
-      allocatedStorage: 20,
-      maxAllocatedStorage: 100,
-      allowMajorVersionUpgrade: false,
-      autoMinorVersionUpgrade: true,
-      cloudwatchLogsExports: ['postgresql'], // Enable CloudWatch logging
-    });
+    const database = new rds.DatabaseInstance(
+      this,
+      `PostgreSQLDatabase-${environmentSuffix}`,
+      {
+        instanceIdentifier: `postgresql-database-${environmentSuffix}`,
+        engine: rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_15,
+        }),
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.M5,
+          ec2.InstanceSize.LARGE
+        ),
+        vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+        subnetGroup: dbSubnetGroup,
+        securityGroups: [rdsSecurityGroup],
+        credentials: rds.Credentials.fromSecret(databaseCredentials),
+        multiAz: true, // High availability
+        storageEncrypted: true,
+        monitoringInterval: cdk.Duration.seconds(60),
+        enablePerformanceInsights: true,
+        performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+        parameterGroup,
+        backupRetention: cdk.Duration.days(7),
+        deletionProtection: true,
+        databaseName: `${environmentSuffix}db`,
+        allocatedStorage: 20,
+        maxAllocatedStorage: 100,
+        allowMajorVersionUpgrade: false,
+        autoMinorVersionUpgrade: true,
+        cloudwatchLogsExports: ['postgresql'], // Enable CloudWatch logging
+      }
+    );
 
     // Apply tags to database
     cdk.Tags.of(database).add('Name', `${environmentSuffix}-postgresql`);
@@ -268,7 +315,6 @@ export class TapStack extends cdk.Stack {
     // Latest Amazon Linux 2023 AMI
     const ami = ec2.MachineImage.latestAmazonLinux2023();
 
-
     // User data script for EC2 initialization
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
@@ -277,50 +323,59 @@ export class TapStack extends cdk.Stack {
 
       // Configure CloudWatch agent
       'cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << EOF',
-      JSON.stringify({
-        agent: {
-          metrics_collection_interval: 60,
-          run_as_user: "cwagent"
-        },
-        logs: {
-          logs_collected: {
-            files: {
-              collect_list: [
-                {
-                  file_path: "/var/log/messages",
-                  log_group_name: `/aws/ec2/${environmentSuffix}/messages`,
-                  log_stream_name: "{instance_id}",
-                  timezone: "UTC"
-                },
-                {
-                  file_path: "/var/log/secure",
-                  log_group_name: `/aws/ec2/${environmentSuffix}/secure`,
-                  log_stream_name: "{instance_id}",
-                  timezone: "UTC"
-                }
-              ]
-            }
-          }
-        },
-        metrics: {
-          namespace: "CWAgent",
-          metrics_collected: {
-            cpu: {
-              measurement: ["cpu_usage_idle", "cpu_usage_iowait", "cpu_usage_user", "cpu_usage_system"],
-              metrics_collection_interval: 60
+      JSON.stringify(
+        {
+          agent: {
+            metrics_collection_interval: 60,
+            run_as_user: 'cwagent',
+          },
+          logs: {
+            logs_collected: {
+              files: {
+                collect_list: [
+                  {
+                    file_path: '/var/log/messages',
+                    log_group_name: `/aws/ec2/${environmentSuffix}/messages`,
+                    log_stream_name: '{instance_id}',
+                    timezone: 'UTC',
+                  },
+                  {
+                    file_path: '/var/log/secure',
+                    log_group_name: `/aws/ec2/${environmentSuffix}/secure`,
+                    log_stream_name: '{instance_id}',
+                    timezone: 'UTC',
+                  },
+                ],
+              },
             },
-            disk: {
-              measurement: ["used_percent"],
-              metrics_collection_interval: 60,
-              resources: ["*"]
+          },
+          metrics: {
+            namespace: 'CWAgent',
+            metrics_collected: {
+              cpu: {
+                measurement: [
+                  'cpu_usage_idle',
+                  'cpu_usage_iowait',
+                  'cpu_usage_user',
+                  'cpu_usage_system',
+                ],
+                metrics_collection_interval: 60,
+              },
+              disk: {
+                measurement: ['used_percent'],
+                metrics_collection_interval: 60,
+                resources: ['*'],
+              },
+              mem: {
+                measurement: ['mem_used_percent'],
+                metrics_collection_interval: 60,
+              },
             },
-            mem: {
-              measurement: ["mem_used_percent"],
-              metrics_collection_interval: 60
-            }
-          }
-        }
-      }, null, 2),
+          },
+        },
+        null,
+        2
+      ),
       'EOF',
 
       // Start CloudWatch agent
@@ -328,23 +383,30 @@ export class TapStack extends cdk.Stack {
 
       // Configure SSH key usage logging
       'echo "LogLevel INFO" >> /etc/ssh/sshd_config',
-      'systemctl restart sshd',
+      'systemctl restart sshd'
     );
 
     // EC2 instance
-    const ec2Instance = new ec2.Instance(this, `ProductionEC2-${environmentSuffix}`, {
-      vpc,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
-      },
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
-      machineImage: ami,
-      securityGroup: ec2SecurityGroup,
-      role: ec2Role,
-      userData,
-      detailedMonitoring: true, // Enable detailed monitoring
-      userDataCausesReplacement: true,
-    });
+    const ec2Instance = new ec2.Instance(
+      this,
+      `ProductionEC2-${environmentSuffix}`,
+      {
+        vpc,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MICRO
+        ),
+        machineImage: ami,
+        securityGroup: ec2SecurityGroup,
+        role: ec2Role,
+        userData,
+        detailedMonitoring: true, // Enable detailed monitoring
+        userDataCausesReplacement: true,
+      }
+    );
 
     // Apply tags to EC2 instance
     cdk.Tags.of(ec2Instance).add('Name', `${environmentSuffix}-web-server`);
@@ -354,12 +416,12 @@ export class TapStack extends cdk.Stack {
     // ========================================
 
     // Log groups for centralized logging
-    const ec2LogGroupMessages = new logs.LogGroup(this, `EC2LogGroupMessages-${environmentSuffix}`, {
+    new logs.LogGroup(this, `EC2LogGroupMessages-${environmentSuffix}`, {
       logGroupName: `/aws/ec2/${environmentSuffix}/messages`,
       retention: logs.RetentionDays.ONE_MONTH,
     });
 
-    const ec2LogGroupSecure = new logs.LogGroup(this, `EC2LogGroupSecure-${environmentSuffix}`, {
+    new logs.LogGroup(this, `EC2LogGroupSecure-${environmentSuffix}`, {
       logGroupName: `/aws/ec2/${environmentSuffix}/secure`,
       retention: logs.RetentionDays.THREE_MONTHS, // Keep security logs longer
     });
@@ -484,14 +546,18 @@ export class TapStack extends cdk.Stack {
       period: cdk.Duration.minutes(5),
     });
 
-    new cloudwatch.Alarm(this, `RDSHighWriteLatencyAlarm-${environmentSuffix}`, {
-      metric: rdsWriteLatencyMetric,
-      threshold: 0.2, // 200ms
-      evaluationPeriods: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      alarmDescription: `${environmentSuffix} RDS instance high write latency`,
-      alarmName: `${environmentSuffix}-rds-high-write-latency`,
-    });
+    new cloudwatch.Alarm(
+      this,
+      `RDSHighWriteLatencyAlarm-${environmentSuffix}`,
+      {
+        metric: rdsWriteLatencyMetric,
+        threshold: 0.2, // 200ms
+        evaluationPeriods: 2,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        alarmDescription: `${environmentSuffix} RDS instance high write latency`,
+        alarmName: `${environmentSuffix}-rds-high-write-latency`,
+      }
+    );
 
     // ========================================
     // 8. APPLY COMMON TAGS TO ALL RESOURCES
