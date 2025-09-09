@@ -318,7 +318,6 @@
     },
     "HttpsListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "DependsOn": "Certificate",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
