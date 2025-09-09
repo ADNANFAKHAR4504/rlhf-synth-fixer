@@ -1,6 +1,0 @@
-- Switched ALB to HTTP-only baseline to remove external ACM dependency and simplify initial deployments. Previously required `acmCertificateArn` context which blocked synth/deploy without a cert.
-- Made resources deletion-friendly for non-prod: S3 buckets now `DESTROY` with `autoDeleteObjects: true`; RDS `deletionProtection: false` and `DESTROY` to avoid manual teardown; DynamoDB `DESTROY`.
-- Enforced region validation to `us-east-1` to match requirements and avoid accidental cross-region deploys.
-- Removed any SSH open-to-world configurations; ensured bastion uses SSM and has no port 22 ingress.
-- Added CloudFormation outputs for key resources to support integration tests and CI consumption.
-- Fixed CloudWatch CPU alarm to use explicit metric wiring compatible with current CDK versions.

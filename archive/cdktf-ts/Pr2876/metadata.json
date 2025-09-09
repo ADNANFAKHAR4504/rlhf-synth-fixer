@@ -1,0 +1,41 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350008",
+  "team": "3",
+  "startedAt": "2025-09-08T13:14:36.010Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Resource Scaling",
+    "Monitoring Setup",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "CloudFront",
+    "Lambda",
+    "CloudWatch",
+    "DynamoDB",
+    "KMS",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Application Auto Scaling"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}

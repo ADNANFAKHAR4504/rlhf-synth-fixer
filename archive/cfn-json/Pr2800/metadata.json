@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348872",
+  "team": "3",
+  "startedAt": "2025-09-05T15:10:48.097Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 2,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Route53",
+    "CloudFront",
+    "WAF",
+    "Lambda",
+    "S3",
+    "SNS",
+    "GuardDuty",
+    "Config",
+    "IAM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sreeni-ops",
+  "dockerS3Location": ""
+}

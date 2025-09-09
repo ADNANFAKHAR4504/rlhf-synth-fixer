@@ -1,4 +1,0 @@
-name: TapStack
-runtime:
-  name: go
-description: Secure S3 Bucket Infrastructure with Enterprise Security

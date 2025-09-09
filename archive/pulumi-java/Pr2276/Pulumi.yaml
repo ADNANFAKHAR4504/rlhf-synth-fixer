@@ -1,0 +1,30 @@
+name: TapStack
+runtime: java
+description: Java-based infrastructure as code for TAP using Pulumi
+config:
+  TapStack:primaryRegion: us-east-1
+  TapStack:secondaryRegion: us-west-2
+
+  # Network Configuration
+  TapStack:vpcCidrBlock: 10.0.0.0/16
+  TapStack:publicSubnetPrimaryCidr: 10.0.1.0/24
+  TapStack:publicSubnetSecondaryCidr: 10.0.2.0/24
+  TapStack:privateSubnetPrimaryCidr: 10.0.3.0/24
+  TapStack:privateSubnetSecondaryCidr: 10.0.4.0/24
+
+  # EC2 Configuration
+  TapStack:instanceType: t3.micro
+  TapStack:amiName: amzn2-ami-hvm-*
+  TapStack:amiOwner: amazon
+
+  # S3 Configuration
+  TapStack:bucketNamePrefix: web-hosting-static
+  TapStack:websiteIndexDocument: index.html
+  TapStack:websiteErrorDocument: error.html
+
+  # Tagging
+  TapStack:environment: Development
+  TapStack:projectName: WebHosting
+
+  # State Management
+  TapStack:stateBucketName: pulumi-state-web-hosting

@@ -1,0 +1,15 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348828",
+  "team": "6",
+  "startedAt": "2025-08-29T12:11:37.446Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}

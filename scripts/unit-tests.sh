@@ -28,7 +28,7 @@ if [ "$LANGUAGE" = "java" ]; then
 
       chmod +x ./gradlew
 
-      ./gradlew test jacocoTestReport --build-cache --no-daemon
+      ./gradlew test jacocoTestReport --build-cache --no-daemon -Pplatform="$PLATFORM"
 
       echo "📊 Checking for generated coverage reports..."
         if [ -d "build/reports/jacoco" ]; then

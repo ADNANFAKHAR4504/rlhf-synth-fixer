@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "310030",
+  "team": "6",
+  "startedAt": "2025-08-26T11:25:50.889Z",
+  "subtask": "Network Infrastructure Design",
+  "subject_labels": [
+    "Network Configuration",
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "Network ACLs",
+    "Route Tables",
+    "Subnets",
+    "Elastic IP",
+    "VPC Flow Logs",
+    "CloudWatch",
+    "IAM",
+    "DHCP Options"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
+}
