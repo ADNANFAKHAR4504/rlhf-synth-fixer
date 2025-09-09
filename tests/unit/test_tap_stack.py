@@ -1,4 +1,5 @@
 # tests/unit/test_tap_stack.py
+import json
 import unittest
 
 import aws_cdk as cdk
@@ -7,7 +8,7 @@ from lib.tap_stack import TapStack, TapStackProps
 
 
 ACCOUNT = "123456789012"
-REGION = "us-east-1"
+REGION = "us-west-2"  # <<< changed
 ENV = cdk.Environment(account=ACCOUNT, region=REGION)
 
 
@@ -15,7 +16,7 @@ def _new_app():
     # Provide a cert arn so the ALB is HTTPS-only during tests
     return cdk.App(
         context={
-            "acm_cert_arn": f"arn:aws:acm:{REGION}:{ACCOUNT}:certificate/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "acm_cert_arn": f"arn:aws:acm:{REGION}:{ACCOUNT}:certificate/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",  # <<< region in ARN updated
             "owner": "PlatformTeam",
         }
     )
@@ -31,20 +32,15 @@ class TestTapStack(unittest.TestCase):
         props = TapStackProps(environment_suffix=env_suffix) if env_suffix else None
         return TapStack(self.app, f"TapStack-{env_suffix or 'dev'}", props, env=ENV)
 
-    # --- S3 ---
-
     def test_s3_buckets_properties_and_logging(self):
         stack = self._mk_stack("testenv")
         template = Template.from_stack(stack)
 
-        # We create exactly two buckets (logs + data)
         template.resource_count_is("AWS::S3::Bucket", 2)
 
-        # Data bucket must have Server Access Logging configured to the logs bucket
         template.has_resource_properties(
             "AWS::S3::Bucket",
             {
-                # BucketName is auto-generated, so we DON'T assert on it.
                 "VersioningConfiguration": {"Status": "Enabled"},
                 "PublicAccessBlockConfiguration": {
                     "BlockPublicAcls": True,
@@ -59,8 +55,6 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
-        # The logging bucket must NOT itself have a LoggingConfiguration
-        # (we match another S3::Bucket with logging absent)
         template.has_resource_properties(
             "AWS::S3::Bucket",
             {
@@ -75,7 +69,6 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
-        # TLS-only bucket policies on both buckets
         template.resource_count_is("AWS::S3::BucketPolicy", 2)
         template.has_resource_properties(
             "AWS::S3::BucketPolicy",
@@ -95,36 +88,28 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
-    # --- VPC Endpoints ---
-
     def test_vpc_endpoints_exist_for_s3_dynamodb_and_ssm_family(self):
         stack = self._mk_stack("testenv")
         template = Template.from_stack(stack)
 
-        # Gateway endpoints
-        template.has_resource_properties(
-            "AWS::EC2::VPCEndpoint",
-            {"ServiceName": Match.string_like_regexp(r".*s3.*"), "VpcEndpointType": "Gateway"},
+        gw_eps = template.find_resources(
+            "AWS::EC2::VPCEndpoint", {"VpcEndpointType": "Gateway"}
         )
-        template.has_resource_properties(
-            "AWS::EC2::VPCEndpoint",
-            {"ServiceName": Match.string_like_regexp(r".*dynamodb.*"), "VpcEndpointType": "Gateway"},
-        )
-        # Interface endpoints
-        template.has_resource_properties(
-            "AWS::EC2::VPCEndpoint",
-            {"ServiceName": Match.string_like_regexp(r".*ssm.*"), "VpcEndpointType": "Interface"},
-        )
-        template.has_resource_properties(
-            "AWS::EC2::VPCEndpoint",
-            {"ServiceName": Match.string_like_regexp(r".*ssmmessages.*"), "VpcEndpointType": "Interface"},
-        )
-        template.has_resource_properties(
-            "AWS::EC2::VPCEndpoint",
-            {"ServiceName": Match.string_like_regexp(r".*ec2messages.*"), "VpcEndpointType": "Interface"},
+        if_eps = template.find_resources(
+            "AWS::EC2::VPCEndpoint", {"VpcEndpointType": "Interface"}
         )
 
-    # --- RDS ---
+        self.assertGreaterEqual(len(gw_eps), 2, "Expected >=2 Gateway endpoints (S3, DynamoDB)")
+        self.assertGreaterEqual(len(if_eps), 3, "Expected >=3 Interface endpoints (SSM, SSMMessages, EC2Messages)")
+
+        gw_service_json = [json.dumps(res.get("Properties", {}).get("ServiceName")) for res in gw_eps.values()]
+        self.assertTrue(any("s3" in s for s in gw_service_json), "No S3 gateway endpoint found")
+        self.assertTrue(any("dynamodb" in s for s in gw_service_json), "No DynamoDB gateway endpoint found")
+
+        if_service_json = [json.dumps(res.get("Properties", {}).get("ServiceName")) for res in if_eps.values()]
+        self.assertTrue(any("ssm" in s for s in if_service_json), "No SSM interface endpoint found")
+        self.assertTrue(any("ssmmessages" in s for s in if_service_json), "No SSMMessages interface endpoint found")
+        self.assertTrue(any("ec2messages" in s for s in if_service_json), "No EC2Messages interface endpoint found")
 
     def test_rds_is_encrypted_and_private(self):
         stack = self._mk_stack("qa")
@@ -142,13 +127,10 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
-    # --- Lambda ---
-
     def test_lambda_runs_in_vpc_and_has_memory(self):
         stack = self._mk_stack("stage")
         template = Template.from_stack(stack)
 
-        # DO NOT assert count (custom-resource Lambdas may exist in some stacks)
         template.has_resource_properties(
             "AWS::Lambda::Function",
             {
@@ -163,8 +145,6 @@ class TestTapStack(unittest.TestCase):
                 ),
             },
         )
-
-    # --- ALB / Listener / TG ---
 
     def test_alb_https_listener_only(self):
         stack = self._mk_stack("prod")
@@ -186,8 +166,6 @@ class TestTapStack(unittest.TestCase):
                 "Matcher": {"HttpCode": "200"},
             },
         )
-
-    # --- Tags ---
 
     def test_global_tags_present_on_vpc(self):
         stack = self._mk_stack("devx")
