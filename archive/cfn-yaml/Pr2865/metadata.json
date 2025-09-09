@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348924",
+  "team": "2",
+  "startedAt": "2025-09-04T18:18:58.347Z",
+  "subtask": "Database and Storage Setup",
+  "subject_labels": [
+    "Database Management",
+    "Security Configuration",
+    "Monitoring Setup",
+    "Resource Scaling",
+    "Access Control",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "S3",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "DynamoDB",
+    "VPC",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}
