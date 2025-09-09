@@ -1,8 +1,3 @@
-# MODEL_FAILURES.md
-
-This report documents issues in `lib/MODEL_RESPONSE.md` relative to the target design in `lib/IDEAL_RESPONSE.md`. Items are grouped by severity and mapped to concrete gaps or errors that would break validation, deployment, or tests.
-
-## Critical breaks and missing capabilities
 - **Missing parameters and conditions**:
   - Parameters absent: `CloudWatchRetentionInDays`, `NumberOfAZs`, `EnableCloudTrail`.
   - Conditions absent: `CreateAz2`, `CreateCloudTrail`.
