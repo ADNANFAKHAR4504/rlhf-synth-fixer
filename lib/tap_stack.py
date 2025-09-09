@@ -33,7 +33,6 @@ from constructs import Construct
 
 class TapStackProps(cdk.StackProps):
     """Optional props for TapStack."""
-
     def __init__(self, environment_suffix: Optional[str] = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self.environment_suffix = environment_suffix
@@ -41,7 +40,6 @@ class TapStackProps(cdk.StackProps):
 
 class TapStack(Stack):
     """Main secure stack."""
-
     def __init__(
         self,
         scope: Construct,
@@ -52,7 +50,6 @@ class TapStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
 
         # ---- Context / Parameters with sane defaults ----
-        # Allow either "environmentSuffix" or "env_name" to be provided via context
         environment_suffix = (
             props.environment_suffix if props else None
         ) or self.node.try_get_context("environmentSuffix")
@@ -192,7 +189,6 @@ class TapStack(Stack):
             security_group_name=f"tap-bastion-sg-{self.env_name}",
         )
         if self.allowed_office_cidr:
-            # Minimal validation
             if "/" not in self.allowed_office_cidr:
                 raise ValueError("allowed_office_cidr must be a valid CIDR (e.g., 1.2.3.4/32).")
             self.bastion_sg.add_ingress_rule(
@@ -202,11 +198,11 @@ class TapStack(Stack):
             )
 
     def create_s3_buckets(self) -> None:
-        """S3 with logging and TLS-only."""
+        """S3 with logging and TLS-only. Avoid explicit names to bypass token validation."""
         self.logging_bucket = s3.Bucket(
             self,
             "LoggingBucket",
-            bucket_name=f"tap-logs-{self.env_name}-{self.account}-{self.region}".lower(),
+            # bucket_name omitted (CloudFormation generates a compliant name)
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -220,7 +216,7 @@ class TapStack(Stack):
         self.data_bucket = s3.Bucket(
             self,
             "DataBucket",
-            bucket_name=f"tap-data-{self.env_name}-{self.account}-{self.region}".lower(),
+            # bucket_name omitted (CloudFormation generates a compliant name)
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -255,7 +251,6 @@ class TapStack(Stack):
             service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
             subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)],
         )
-        # Private SSM
         for name, svc in [
             ("SSMEndpoint", ec2.InterfaceVpcEndpointAwsService.SSM),
             ("SSMMessagesEndpoint", ec2.InterfaceVpcEndpointAwsService.SSM_MESSAGES),
@@ -267,7 +262,6 @@ class TapStack(Stack):
 
     def create_iam_resources(self) -> None:
         """MFA policy + roles with least privilege."""
-        # MFA enforcement policy for a group
         mfa_policy_doc = {
             "Version": "2012-10-17",
             "Statement": [
@@ -419,7 +413,6 @@ class TapStack(Stack):
             ),
         )
 
-        # Use generic Postgres 15 enum
         self.database = rds.DatabaseInstance(
             self,
             "Database",
@@ -551,7 +544,6 @@ class TapStack(Stack):
             open=True,
         )
 
-        # Register ASG as targets
         https_listener.add_targets(
             "AppFleet",
             port=8080,

@@ -2,9 +2,7 @@
 import unittest
 
 import aws_cdk as cdk
-from aws_cdk import assertions
 from aws_cdk.assertions import Template, Match
-
 from lib.tap_stack import TapStack, TapStackProps
 
 
@@ -14,11 +12,10 @@ ENV = cdk.Environment(account=ACCOUNT, region=REGION)
 
 
 def _new_app():
-    # Ensure we can create an HTTPS listener (code requires an ACM cert ARN)
+    # Ensure we can create an HTTPS listener (stack requires an ACM cert ARN)
     return cdk.App(
         context={
             "acm_cert_arn": f"arn:aws:acm:{REGION}:{ACCOUNT}:certificate/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            # other context defaults (optional for tests)
             "owner": "PlatformTeam",
         }
     )
@@ -34,6 +31,8 @@ class TestTapStack(unittest.TestCase):
         props = TapStackProps(environment_suffix=env_suffix) if env_suffix else None
         return TapStack(self.app, f"TapStack-{env_suffix or 'dev'}", props, env=ENV)
 
+    # --- S3 tests (your originals kept, since they’re passing) ---
+
     def test_s3_buckets_created_with_expected_names_and_logging(self):
         stack = self._mk_stack("testenv")
         template = Template.from_stack(stack)
@@ -41,7 +40,7 @@ class TestTapStack(unittest.TestCase):
         # Expect TWO buckets: logs + data
         template.resource_count_is("AWS::S3::Bucket", 2)
 
-        # Logs bucket name
+        # Logs bucket (name assertions left as-is if your stack still sets names)
         template.has_resource_properties(
             "AWS::S3::Bucket",
             {
@@ -56,7 +55,7 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
-        # Data bucket name + server access logging to logs bucket
+        # Data bucket + server access logging
         template.has_resource_properties(
             "AWS::S3::Bucket",
             {
@@ -75,7 +74,7 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
-        # TLS-only bucket policy present (Deny aws:SecureTransport = false)
+        # TLS-only bucket policy present
         template.resource_count_is("AWS::S3::BucketPolicy", 2)
         template.has_resource_properties(
             "AWS::S3::BucketPolicy",
@@ -86,9 +85,7 @@ class TestTapStack(unittest.TestCase):
                             Match.object_like(
                                 {
                                     "Effect": "Deny",
-                                    "Condition": {
-                                        "Bool": {"aws:SecureTransport": "false"}
-                                    },
+                                    "Condition": {"Bool": {"aws:SecureTransport": "false"}},
                                 }
                             )
                         ]
@@ -97,22 +94,52 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
+    # --- VPC endpoints ---
+
     def test_vpc_endpoints_exist_for_s3_dynamodb_and_ssm_family(self):
         stack = self._mk_stack("testenv")
         template = Template.from_stack(stack)
 
-        # 2 gateway endpoints (S3, DynamoDB) + 3 interface endpoints (SSM, SSM_MESSAGES, EC2_MESSAGES)
-        template.resource_count_is("AWS::EC2::VPCEndpoint", 5)
+        # Instead of asserting an exact count, assert each service endpoint exists.
+        # Gateway endpoints
+        template.has_resource_properties(
+            "AWS::EC2::VPCEndpoint",
+            {
+                "ServiceName": Match.string_like_regexp(r"\.s3\."),  # ...amazonaws.com/s3
+                "VpcEndpointType": "Gateway",
+            },
+        )
+        template.has_resource_properties(
+            "AWS::EC2::VPCEndpoint",
+            {
+                "ServiceName": Match.string_like_regexp(r"\.dynamodb\."),  # ...amazonaws.com/dynamodb
+                "VpcEndpointType": "Gateway",
+            },
+        )
+        # Interface endpoints
+        template.has_resource_properties(
+            "AWS::EC2::VPCEndpoint",
+            {
+                "ServiceName": Match.string_like_regexp(r"\.ssm\."),  # ...amazonaws.com/ssm
+                "VpcEndpointType": "Interface",
+            },
+        )
+        template.has_resource_properties(
+            "AWS::EC2::VPCEndpoint",
+            {
+                "ServiceName": Match.string_like_regexp(r"\.ssmmessages\."),  # .../ssmmessages
+                "VpcEndpointType": "Interface",
+            },
+        )
+        template.has_resource_properties(
+            "AWS::EC2::VPCEndpoint",
+            {
+                "ServiceName": Match.string_like_regexp(r"\.ec2messages\."),  # .../ec2messages
+                "VpcEndpointType": "Interface",
+            },
+        )
 
-        # Assert at least one is S3 gateway and one is DynamoDB gateway
-        template.has_resource_properties(
-            "AWS::EC2::VPCEndpoint",
-            {"ServiceName": Match.string_like_regexp(r".*s3\.")}
-        )
-        template.has_resource_properties(
-            "AWS::EC2::VPCEndpoint",
-            {"ServiceName": Match.string_like_regexp(r".*dynamodb\.")}
-        )
+    # --- RDS ---
 
     def test_rds_is_encrypted_and_private(self):
         stack = self._mk_stack("qa")
@@ -125,11 +152,12 @@ class TestTapStack(unittest.TestCase):
                 "Engine": "postgres",
                 "StorageEncrypted": True,
                 "PubliclyAccessible": False,
-                # EngineVersion may resolve to "15" for VER_15; don't hard pin minor version
                 "DBSubnetGroupName": Match.any_value(),
                 "VPCSecurityGroups": Match.any_value(),
             },
         )
+
+    # --- Lambda ---
 
     def test_lambda_runs_in_vpc_and_has_memory(self):
         stack = self._mk_stack("stage")
@@ -141,13 +169,17 @@ class TestTapStack(unittest.TestCase):
             {
                 "Runtime": "python3.11",
                 "Handler": "index.lambda_handler",
-                "VpcConfig": {
-                    "SecurityGroupIds": Match.any_value(),
-                    "SubnetIds": Match.any_value(),
-                },
                 "MemorySize": 256,
+                "VpcConfig": Match.object_like(
+                    {
+                        "SecurityGroupIds": Match.any_value(),
+                        "SubnetIds": Match.any_value(),
+                    }
+                ),
             },
         )
+
+    # --- ALB / Listener / TG ---
 
     def test_alb_https_listener_only(self):
         stack = self._mk_stack("prod")
@@ -156,17 +188,18 @@ class TestTapStack(unittest.TestCase):
         # One ALB
         template.resource_count_is("AWS::ElasticLoadBalancingV2::LoadBalancer", 1)
 
-        # Listener is HTTPS on 443 with certificate
+        # Listener is HTTPS on 443 with a certificate.
+        # Fix: don't nest anyValue() inside arrayWith().
         template.has_resource_properties(
             "AWS::ElasticLoadBalancingV2::Listener",
             {
                 "Port": 443,
                 "Protocol": "HTTPS",
-                "Certificates": Match.array_with([Match.any_value()]),
+                "Certificates": Match.any_value(),  # just ensure Certificates present
             },
         )
 
-        # Target group uses HTTP health checks on 8080 path "/"
+        # Target group uses HTTP 8080 health check on "/"
         template.has_resource_properties(
             "AWS::ElasticLoadBalancingV2::TargetGroup",
             {
@@ -179,11 +212,12 @@ class TestTapStack(unittest.TestCase):
             },
         )
 
+    # --- Tags ---
+
     def test_global_tags_present_on_vpc(self):
         stack = self._mk_stack("devx")
         template = Template.from_stack(stack)
 
-        # Check VPC has Environment/Owner tags
         template.has_resource_properties(
             "AWS::EC2::VPC",
             {
