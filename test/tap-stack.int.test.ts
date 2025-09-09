@@ -415,16 +415,18 @@ describe('Infrastructure Integration Tests', () => {
       }, 15000);
 
       test('should verify CloudWatch alarms exist and are configured', async () => {
-        // List all alarms and check if our specific alarm exists
-        const command = new DescribeAlarmsCommand({});
+        // Directly query the specific alarm by name
+        const alarmName = `web-${region}-alb-high-error-rate-${environmentSuffix}`;
+        const command = new DescribeAlarmsCommand({
+          AlarmNames: [alarmName]
+        });
         const response = await cloudWatchClient.send(command);
         
         expect(response.MetricAlarms).toBeDefined();
+        expect(response.MetricAlarms!.length).toBe(1);
         
-        // Find our specific alarm
-        const errorAlarm = response.MetricAlarms!.find(alarm => 
-          alarm.AlarmName === `web-${region}-alb-high-error-rate-${environmentSuffix}`
-        );
+        // Get the specific alarm directly
+        const errorAlarm = response.MetricAlarms![0];
         expect(errorAlarm).toBeDefined();
         
         // Verify the error alarm configuration
