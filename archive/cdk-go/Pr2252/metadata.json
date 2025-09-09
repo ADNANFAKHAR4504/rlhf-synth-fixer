@@ -1,0 +1,15 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "310051",
+  "team": "6",
+  "startedAt": "2025-08-26T05:42:10.475Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajendra-s-aws",
+  "dockerS3Location": ""
+}
