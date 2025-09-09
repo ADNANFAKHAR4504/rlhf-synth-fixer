@@ -93,8 +93,9 @@ describe('TAP Stack Integration Tests', () => {
       expect(response.Table!.ProvisionedThroughput!.ReadCapacityUnits).toBeGreaterThanOrEqual(5);
       expect(response.Table!.ProvisionedThroughput!.WriteCapacityUnits).toBeGreaterThanOrEqual(5);
       // TTL might be in progress, so check if it exists
-      if (response.Table!.TimeToLiveSpecification) {
-        expect(response.Table!.TimeToLiveSpecification.AttributeName).toBe('ttl');
+      const table = response.Table as any;
+      if (table.TimeToLiveSpecification) {
+        expect(table.TimeToLiveSpecification.AttributeName).toBe('ttl');
       }
     });
 
@@ -236,10 +237,12 @@ describe('TAP Stack Integration Tests', () => {
       );
       
       expect(usagePlan).toBeDefined();
-      expect(usagePlan.throttle?.rateLimit).toBe(1000);
-      expect(usagePlan.throttle?.burstLimit).toBe(2000);
-      expect(usagePlan.quota?.limit).toBe(10000);
-      expect(usagePlan.quota?.period).toBe('DAY');
+      if (usagePlan) {
+        expect(usagePlan.throttle?.rateLimit).toBe(1000);
+        expect(usagePlan.throttle?.burstLimit).toBe(2000);
+        expect(usagePlan.quota?.limit).toBe(10000);
+        expect(usagePlan.quota?.period).toBe('DAY');
+      }
     });
   });
 
