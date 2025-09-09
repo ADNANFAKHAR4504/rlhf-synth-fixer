@@ -12,7 +12,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 let outputs: any = {};
 
 try {
-  outputs = JSON.parse(fs.readFileSync('cfn-outputs.json', 'utf8'));
+  outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 } catch (error) {
   console.warn('cfn-outputs.json not found, using environment variables');
   // Fallback to environment variables
