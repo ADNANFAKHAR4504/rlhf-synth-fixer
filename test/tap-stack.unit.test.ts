@@ -309,10 +309,10 @@ describe('TapStack', () => {
       const outputs = template.toJSON().Outputs;
       expect(Object.keys(outputs)).toEqual(
         expect.arrayContaining([
-          expect.stringMatching(/TapApiEndpoint.*dev/),
-          expect.stringMatching(/TapApiKeyId.*dev/),
-          expect.stringMatching(/TapDynamoTableName.*dev/),
-          expect.stringMatching(/TapLambdaFunctionName.*dev/)
+          expect.stringMatching(new RegExp(`TapApiEndpoint.*${environmentSuffix}`)),
+          expect.stringMatching(new RegExp(`TapApiKeyId.*${environmentSuffix}`)),
+          expect.stringMatching(new RegExp(`TapDynamoTableName.*${environmentSuffix}`)),
+          expect.stringMatching(new RegExp(`TapLambdaFunctionName.*${environmentSuffix}`))
         ])
       );
     });
