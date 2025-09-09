@@ -25,14 +25,16 @@ const awsRegion = process.env.AWS_REGION || 'us-west-2';
 
 // Helper function to check if error should be handled gracefully in test environment
 const isTestEnvironmentError = (error: any): boolean => {
-  return error.code === 'CredentialsError' ||
-         error.code === 'NoSuchBucket' ||
-         error.code === 'AccessDenied' ||
-         error.code === 'LoadBalancerNotFound' ||
-         error.code === 'ValidationError' ||
-         error.code === 'InvalidParameter' ||
-         error.code === 'NotFound' ||
-         error.code === 'NotFoundException';
+  return (
+    error.code === 'CredentialsError' ||
+    error.code === 'NoSuchBucket' ||
+    error.code === 'AccessDenied' ||
+    error.code === 'LoadBalancerNotFound' ||
+    error.code === 'ValidationError' ||
+    error.code === 'InvalidParameter' ||
+    error.code === 'NotFound' ||
+    error.code === 'NotFoundException'
+  );
 };
 
 // AWS SDK clients
@@ -302,7 +304,7 @@ describe('Security Infrastructure Integration Tests', () => {
       if (skipTests) return;
 
       const stackName = `TapStack${environmentSuffix}`;
-      
+
       try {
         const response = await cloudformation
           .describeStacks({
@@ -398,7 +400,9 @@ describe('Security Infrastructure Integration Tests', () => {
           console.warn(`KMS key test skipped: ${error.message}`);
           // If this is a test environment error, validate key ID format
           if (isTestEnvironmentError(error)) {
-            expect(keyId).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
+            expect(keyId).toMatch(
+              /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+            );
             return;
           }
           throw error;
