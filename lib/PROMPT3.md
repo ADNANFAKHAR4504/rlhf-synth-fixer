@@ -2,7 +2,7 @@
 
 Hey team! So I just reviewed the updated model response that was supposed to fix all our deployment issues from PROMPT2.md. Good news and bad news - they did address many of the original problems, but we've got some fresh deployment blockers that are going to bite us when we try to actually deploy this thing.
 
-## 🚨 Critical New Deployment Issues
+## Critical New Deployment Issues
 
 ### 1. **Template File References Still Broken**
 
@@ -123,7 +123,7 @@ default_action {
 
 **What This Means**: Config delivery channel creation might fail due to insufficient S3 permissions.
 
-## 🔧 What Still Needs Fixing
+## What Still Needs Fixing
 
 ### Immediate Blockers:
 1. **Create the actual template files** - Write the user_data.sh and bastion_user_data.sh files
@@ -143,13 +143,13 @@ default_action {
 2. **Improve resource ordering** - Optimize dependency chains
 3. **Add more monitoring** - Enhanced CloudWatch alarms
 
-## 🎯 The Real Issue Here
+## The Real Issue Here
 
 Look, the architectural approach is solid, and they did fix most of the original dependency issues. But this is a perfect example of why infrastructure code needs to be tested in a real environment, not just validated syntactically.
 
 These aren't obvious "Terraform validate" errors - these are the subtle issues you only discover when you actually try to deploy to AWS and see what breaks. The S3 notification config, KMS principal format, and ALB listener syntax issues are exactly the kind of things that look right but fail at runtime.
 
-## 🚀 My Recommendation
+## My Recommendation
 
 1. **Start with the template files** - Create minimal working user data scripts
 2. **Deploy incrementally** - Test each module separately before combining  

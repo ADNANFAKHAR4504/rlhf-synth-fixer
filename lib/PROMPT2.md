@@ -2,7 +2,7 @@
 
 Hey team! I've been reviewing the model response for our multi-tier web application infrastructure, and I've identified several critical issues that will cause deployment failures. We need to address these before we can successfully deploy this infrastructure to production.
 
-## 🚨 Critical Deployment Errors Identified
+## Critical Deployment Errors Identified
 
 ### 1. **Circular Dependencies and Missing Outputs**
 
@@ -112,7 +112,7 @@ Hey team! I've been reviewing the model response for our multi-tier web applicat
 
 **Impact**: Logs stored in plaintext, compliance violation.
 
-## 🔧 What We Need to Fix ASAP
+## What We Need to Fix ASAP
 
 ### High Priority (Blocking Deployment):
 
@@ -135,7 +135,7 @@ Hey team! I've been reviewing the model response for our multi-tier web applicat
 2. **SSL/TLS Configuration**: Add proper certificate management
 3. **Enhanced Monitoring**: Add more comprehensive CloudWatch alarms
 
-## 🎯 Recommended Next Steps
+## Recommended Next Steps
 
 1. **Start with Module Structure**: Fix the outputs and variable declarations first
 2. **Test Each Module Individually**: Deploy modules in isolation to catch issues early  
