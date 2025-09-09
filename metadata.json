@@ -1,9 +1,0 @@
-{
-  "platform": "cdktf",
-  "language": "go",
-  "complexity": "hard",
-  "turn_type": "multi",
-  "po_id": "291610-GO",
-  "team": "3",
-  "startedAt": "2025-08-27T09:57:29.267Z"
-}
