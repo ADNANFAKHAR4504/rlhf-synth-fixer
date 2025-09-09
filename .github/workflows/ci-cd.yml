@@ -6,7 +6,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, feature/semantic-release]
+    branches: [main]
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
@@ -738,8 +738,22 @@ jobs:
           if git diff --quiet && git diff --cached --quiet; then
             echo "No changes to commit - no folders found to archive"
           else
+            # Extract metadata for commit message
+            METADATA_PLATFORM=$(jq -r '.platform' metadata.json)
+            METADATA_PO_ID=$(jq -r '.po_id' metadata.json)
+            METADATA_SUBTASK=$(jq -r '.subtask | ascii_downcase' metadata.json)
+            METADATA_SUBJECT_LABELS=$(jq -r '.subject_labels | join(", ")' metadata.json)
+
+            # Truncate subject_labels to 100 characters if needed
+            if [ ${#METADATA_SUBJECT_LABELS} -gt 100 ]; then
+              METADATA_SUBJECT_LABELS="${METADATA_SUBJECT_LABELS:0:97}..." # 97 chars + "..." = 100
+            fi
+
+            COMMIT_SUBJECT="feat(${METADATA_PLATFORM}): ${METADATA_PO_ID} ${METADATA_SUBTASK}"
+            COMMIT_BODY="${METADATA_SUBJECT_LABELS}"
+
             git add -A
-            git commit -m "Archive build artifacts for PR ${{ github.event.number }} [skip-jobs]"
+            git commit -m "${COMMIT_SUBJECT}" -m "${COMMIT_BODY}" -m "[skip-jobs]"
             git push origin HEAD
             echo "Archive committed to current branch"
           fi
@@ -866,8 +880,7 @@ jobs:
   semantic-release:
     name: Semantic Release
     runs-on: ubuntu-24.04
-    # if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
       issues: write
