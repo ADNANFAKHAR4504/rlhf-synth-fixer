@@ -49,7 +49,7 @@ const pipelineClient = new CodePipelineClient({ region: REGION });
 // Helper function to get physical resource ID
 async function getResourceId(logicalId: string): Promise<string> {
   const command = new DescribeStackResourcesCommand({
-    StackName: STACK_NAME
+    StackName: `${STACK_NAME}-pr2879`
   });
   const response = await cfnClient.send(command);
   const resource = response.StackResources?.find(r => r.LogicalResourceId === logicalId);
