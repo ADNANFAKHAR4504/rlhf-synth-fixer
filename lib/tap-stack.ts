@@ -234,7 +234,7 @@ export class TapStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15,
       }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
       vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -245,11 +245,11 @@ export class TapStack extends cdk.Stack {
       multiAz: true, // High availability
       storageEncrypted: true,
       monitoringInterval: cdk.Duration.seconds(60),
-      enablePerformanceInsights: false,
-      //performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      enablePerformanceInsights: true,
+      performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
       parameterGroup,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: false,
+      deletionProtection: true,
       databaseName: `${environmentSuffix}db`,
       allocatedStorage: 20,
       maxAllocatedStorage: 100,
