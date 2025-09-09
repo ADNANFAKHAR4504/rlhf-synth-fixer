@@ -166,16 +166,27 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         template.resource_count_is("AWS::SSM::Parameter", 4)
-        template.has_resource("AWS::SSM::Parameter", {
-            "Properties": {
-                "Name": "/app/prod/db/password"
-            }
-        })
-        template.has_resource("AWS::SSM::Parameter", {
-            "Properties": {
-                "Name": "/app/prod/api/key"
-            }
-        })
+        
+        # Check that parameters exist with the correct pattern
+        parameters = template.find_resources("AWS::SSM::Parameter")
+        param_names = []
+        
+        for param_id, param_props in parameters.items():
+            if "Properties" in param_props and "Name" in param_props["Properties"]:
+                param_names.append(param_props["Properties"]["Name"])
+        
+        # Check that we have the expected parameters (they now include unique suffix)
+        # The names should contain the expected paths
+        expected_paths = [
+            "/prod/db/password",
+            "/prod/db/username", 
+            "/prod/api/key",
+            "/prod/auth/jwt-secret"
+        ]
+        
+        for expected_path in expected_paths:
+            found = any(expected_path in name for name in param_names)
+            self.assertTrue(found, f"Parameter with path containing '{expected_path}' not found. Found: {param_names}")
 
     @mark.it("creates VPC with three-tier architecture")
     def test_creates_vpc_with_three_tiers(self):

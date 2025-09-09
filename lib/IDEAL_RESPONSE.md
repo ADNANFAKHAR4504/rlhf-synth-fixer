@@ -1,4 +1,4 @@
-```python
+``````python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
 the TAP (Test Automation Platform) project.
@@ -7,6 +7,7 @@ manages environment-specific configurations.
 """
 
 from typing import Optional
+import time
 
 import aws_cdk as cdk
 from aws_cdk import (
@@ -115,6 +116,7 @@ class TapStack(cdk.Stack):
 
     Attributes:
         environment_suffix (str): The environment suffix used for resource naming and configuration.
+        unique_suffix (str): Timestamp-based unique suffix for resource naming.
     """
 
     def __init__(
@@ -127,6 +129,9 @@ class TapStack(cdk.Stack):
         environment_suffix = (
             props.environment_suffix if props else None
         ) or self.node.try_get_context('environmentSuffix') or 'dev'
+
+        # Generate unique suffix using timestamp
+        self.unique_suffix = str(int(time.time()))[-8:]  # Use last 8 digits of timestamp
 
         # Create separate stacks for each resource type
         # Create the DynamoDB stack as a nested stack
@@ -336,14 +341,14 @@ class TapStack(cdk.Stack):
         # Database connection parameters
         self.db_password_param = ssm.StringParameter(
             self, "DBPasswordParam",
-            parameter_name="/app/prod/db/password",
+            parameter_name=f"/tap/{self.unique_suffix}/prod/db/password",
             description="Database password for production environment",
             string_value="app_user",  # Should be generated/rotated
         )
         
         self.db_username_param = ssm.StringParameter(
             self, "DBUsernameParam", 
-            parameter_name="/app/prod/db/username",
+            parameter_name=f"/tap/{self.unique_suffix}/prod/db/username",
             description="Database username for production environment",
             string_value="app_user",
         )
@@ -351,7 +356,7 @@ class TapStack(cdk.Stack):
         # Application configuration
         self.api_key_param = ssm.StringParameter(
             self, "APIKeyParam",
-            parameter_name="/app/prod/api/key",
+            parameter_name=f"/tap/{self.unique_suffix}/prod/api/key",
             description="External API key for production environment",
             string_value="secret-api-key-value",  # Should be generated
         )
@@ -359,7 +364,7 @@ class TapStack(cdk.Stack):
         # JWT secret
         self.jwt_secret_param = ssm.StringParameter(
             self, "JWTSecretParam",
-            parameter_name="/app/prod/auth/jwt-secret", 
+            parameter_name=f"/tap/{self.unique_suffix}/prod/auth/jwt-secret", 
             description="JWT signing secret for production environment",
             string_value="super-secret-jwt-key",  # Should be generated
         )
@@ -486,14 +491,10 @@ class TapStack(cdk.Stack):
     def enable_vpc_flow_logs(self):
         """Enable VPC Flow Logs for network monitoring"""
         
-        # Generate unique suffix for naming
-        import hashlib
-        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
-        
-        # Create CloudWatch Log Group for VPC Flow Logs with completely different naming pattern
+        # Create CloudWatch Log Group for VPC Flow Logs with timestamp-based naming
         self.flow_logs_group = logs.LogGroup(
             self, "VPCFlowLogsGroup",
-            log_group_name=f"/tap/network/vpc-flow-logs-{self.account}-{unique_suffix}",
+            log_group_name=f"/tap/network/vpc-flow-logs-{self.account}-{self.unique_suffix}",
             retention=logs.RetentionDays.ONE_YEAR,
             encryption_key=self.logs_kms_key
         )
@@ -567,14 +568,10 @@ class TapStack(cdk.Stack):
     def create_secure_s3_bucket(self):
         """Create S3 bucket with all security best practices"""
         
-        # Generate unique suffix for bucket names
-        import hashlib
-        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
-        
         # Create access logs bucket first
         self.access_logs_bucket = s3.Bucket(
             self, "AccessLogsBucket",
-            bucket_name=f"tap-access-logs-{self.account}-{unique_suffix}",
+            bucket_name=f"tap-access-logs-{self.account}-{self.unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.app_kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -590,7 +587,7 @@ class TapStack(cdk.Stack):
         
         self.secure_bucket = s3.Bucket(
             self, "SecureApplicationBucket",
-            bucket_name=f"tap-secure-app-{self.account}-{unique_suffix}",
+            bucket_name=f"tap-secure-app-{self.account}-{self.unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.app_kms_key,
             versioned=True,
@@ -624,14 +621,10 @@ class TapStack(cdk.Stack):
     def create_lambda_functions(self):
         """Create secure Lambda functions with proper configuration"""
         
-        # Generate unique suffix for naming
-        import hashlib
-        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
-        
         # Create log group first for Lambda
         self.security_lambda_log_group = logs.LogGroup(
             self, f"security-processorLogGroup",
-            log_group_name=f"/aws/lambda/security-processor-{unique_suffix}",
+            log_group_name=f"/aws/lambda/security-processor-{self.unique_suffix}",
             retention=logs.RetentionDays.ONE_YEAR,
             encryption_key=self.lambda_kms_key
         )
@@ -639,7 +632,7 @@ class TapStack(cdk.Stack):
         # Security processing Lambda
         self.security_lambda = lambda_.Function(
             self, f"security-processorFunction",
-            function_name=f"security-processor-{unique_suffix}",
+            function_name=f"security-processor-{self.unique_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="lambda_function.lambda_handler",
             code=lambda_.Code.from_inline("""
@@ -853,17 +846,13 @@ def lambda_handler(event, context):
     def setup_automated_patching(self):
         """Configure AWS Systems Manager Patch Manager for automated patching"""
         
-        # Generate unique suffix for naming
-        import hashlib
-        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
-        
         # Create maintenance role first
         self.maintenance_role = self.create_maintenance_role()
         
         # Create patch baseline for Amazon Linux
         self.patch_baseline = ssm.CfnPatchBaseline(
             self, "PatchBaseline",
-            name=f"tap-patch-baseline-{unique_suffix}",
+            name=f"tap-patch-baseline-{self.unique_suffix}",
             description="Patch baseline for secure application servers",
             operating_system="AMAZON_LINUX_2",
             patch_groups=["Production"],
@@ -888,7 +877,7 @@ def lambda_handler(event, context):
         # Create maintenance window
         self.maintenance_window = ssm.CfnMaintenanceWindow(
             self, "MaintenanceWindow",
-            name=f"tap-maintenance-window-{unique_suffix}", 
+            name=f"tap-maintenance-window-{self.unique_suffix}", 
             description="Maintenance window for production servers",
             duration=4,
             cutoff=1,
@@ -1314,14 +1303,10 @@ def lambda_handler(event, context):
     def enable_cloudtrail(self):
         """Enable AWS CloudTrail for audit logging (NIST AU-2, AU-12)"""
         
-        # Generate unique suffix for naming
-        import hashlib
-        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
-        
         # Create S3 bucket for CloudTrail logs
         self.cloudtrail_bucket = s3.Bucket(
             self, "CloudTrailBucket",
-            bucket_name=f"tap-cloudtrail-logs-{self.account}-{unique_suffix}",
+            bucket_name=f"tap-cloudtrail-logs-{self.account}-{self.unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.logs_kms_key,
             versioned=True,
@@ -1353,7 +1338,7 @@ def lambda_handler(event, context):
         # Create CloudTrail
         self.trail = cloudtrail.Trail(
             self, "ComplianceTrail",
-            trail_name=f"ComplianceAuditTrail-{unique_suffix}",
+            trail_name=f"ComplianceAuditTrail-{self.unique_suffix}",
             bucket=self.cloudtrail_bucket,
             include_global_service_events=True,
             is_multi_region_trail=True,
@@ -1388,14 +1373,10 @@ def lambda_handler(event, context):
     def create_config_delivery_channel(self):
         """Create AWS Config delivery channel"""
         
-        # Generate unique suffix for naming
-        import hashlib
-        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
-        
         # Create S3 bucket for Config
         config_bucket = s3.Bucket(
             self, "ConfigBucket",
-            bucket_name=f"tap-aws-config-{self.account}-{unique_suffix}",
+            bucket_name=f"tap-aws-config-{self.account}-{self.unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.logs_kms_key,
             versioned=True,
