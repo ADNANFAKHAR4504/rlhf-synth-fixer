@@ -1,4 +1,4 @@
-``````python
+```python
 """tap_stack.py
 This module defines the TapStack class, which serves as the main CDK stack for 
 the TAP (Test Automation Platform) project.
@@ -490,10 +490,10 @@ class TapStack(cdk.Stack):
         import hashlib
         unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
         
-        # Create CloudWatch Log Group for VPC Flow Logs with unique name including account ID
+        # Create CloudWatch Log Group for VPC Flow Logs with completely different naming pattern
         self.flow_logs_group = logs.LogGroup(
             self, "VPCFlowLogsGroup",
-            log_group_name=f"/aws/vpc/tap-flowlogs-{self.account}-{unique_suffix}",
+            log_group_name=f"/tap/network/vpc-flow-logs-{self.account}-{unique_suffix}",
             retention=logs.RetentionDays.ONE_YEAR,
             encryption_key=self.logs_kms_key
         )
