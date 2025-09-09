@@ -41,6 +41,13 @@
           ]
         }
       ]
+    },
+    "CreateHttpListener": {
+      "Fn::Not": [
+        {
+          "Condition": "CreateHttpsListener"
+        }
+      ]
     }
   },
   "Resources": {
@@ -326,13 +333,7 @@
     },
     "HttpListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
-      "Condition": {
-        "Fn::Not": [
-          {
-            "Condition": "CreateHttpsListener"
-          }
-        ]
-      },
+      "Condition": "CreateHttpListener",
       "Properties": {
         "LoadBalancerArn": {
           "Ref": "ApplicationLoadBalancer"
