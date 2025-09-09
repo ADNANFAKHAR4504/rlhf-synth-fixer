@@ -535,62 +535,73 @@ export class TapStack extends cdk.Stack {
     );
 
     // AWS Config configuration recorder
-    const configRecorder = new config.CfnConfigurationRecorder(
-      this,
-      'ConfigRecorder',
-      {
-        name: 'production-config-recorder',
-        roleArn: configRole.roleArn,
-        recordingGroup: {
-          allSupported: true, // Record all supported resource types
-          includeGlobalResourceTypes: true,
-          resourceTypes: [],
-        },
-      }
-    );
+    // Note: AWS Config allows only one configuration recorder per region per account.
+    // We make this optional via context parameter to handle existing recorders gracefully.
+    const createConfigRecorder = this.node.tryGetContext('createConfigRecorder') === 'true';
+    
+    let configRecorder: config.CfnConfigurationRecorder | undefined;
+    let configDeliveryChannel: config.CfnDeliveryChannel | undefined;
+    
+    if (createConfigRecorder) {
+      configRecorder = new config.CfnConfigurationRecorder(
+        this,
+        'ConfigRecorder',
+        {
+          name: `production-config-recorder-${environmentSuffix}`,
+          roleArn: configRole.roleArn,
+          recordingGroup: {
+            allSupported: true, // Record all supported resource types
+            includeGlobalResourceTypes: true,
+            resourceTypes: [],
+          },
+        }
+      );
 
-    // AWS Config delivery channel
-    const configDeliveryChannel = new config.CfnDeliveryChannel(
-      this,
-      'ConfigDeliveryChannel',
-      {
-        name: 'production-delivery-channel',
-        s3BucketName: configBucket.bucketName,
-        s3KeyPrefix: 'config/',
-        configSnapshotDeliveryProperties: {
-          deliveryFrequency: 'TwentyFour_Hours',
-        },
-      }
-    );
+      // AWS Config delivery channel
+      configDeliveryChannel = new config.CfnDeliveryChannel(
+        this,
+        'ConfigDeliveryChannel',
+        {
+          name: `production-delivery-channel-${environmentSuffix}`,
+          s3BucketName: configBucket.bucketName,
+          s3KeyPrefix: 'config/',
+          configSnapshotDeliveryProperties: {
+            deliveryFrequency: 'TwentyFour_Hours',
+          },
+        }
+      );
 
-    // Ensure delivery channel depends on recorder
-    configDeliveryChannel.addDependency(configRecorder);
+      // Ensure delivery channel depends on recorder
+      configDeliveryChannel.addDependency(configRecorder);
+    }
 
-    // AWS Config rules for compliance monitoring
-    const s3EncryptionRule = new config.CfnConfigRule(
-      this,
-      'S3BucketServerSideEncryptionEnabled',
-      {
-        configRuleName: 's3-bucket-server-side-encryption-enabled',
-        description:
-          'Checks that S3 buckets have server-side encryption enabled',
+    // AWS Config rules for compliance monitoring (only create if we have a recorder)
+    if (configRecorder) {
+      const s3EncryptionRule = new config.CfnConfigRule(
+        this,
+        'S3BucketServerSideEncryptionEnabled',
+        {
+          configRuleName: `s3-bucket-server-side-encryption-enabled-${environmentSuffix}`,
+          description:
+            'Checks that S3 buckets have server-side encryption enabled',
+          source: {
+            owner: 'AWS',
+            sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
+          },
+        }
+      );
+      s3EncryptionRule.addDependency(configRecorder);
+
+      const rootMfaRule = new config.CfnConfigRule(this, 'RootUserMfaEnabled', {
+        configRuleName: `root-user-mfa-enabled-${environmentSuffix}`,
+        description: 'Checks whether MFA is enabled for root user',
         source: {
           owner: 'AWS',
-          sourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED',
+          sourceIdentifier: 'ROOT_USER_MFA_ENABLED',
         },
-      }
-    );
-    s3EncryptionRule.addDependency(configRecorder);
-
-    const rootMfaRule = new config.CfnConfigRule(this, 'RootUserMfaEnabled', {
-      configRuleName: 'root-user-mfa-enabled',
-      description: 'Checks whether MFA is enabled for root user',
-      source: {
-        owner: 'AWS',
-        sourceIdentifier: 'ROOT_USER_MFA_ENABLED',
-      },
-    });
-    rootMfaRule.addDependency(configRecorder);
+      });
+      rootMfaRule.addDependency(configRecorder);
+    }
 
     // GuardDuty for continuous security monitoring
     // Note: GuardDuty detector is an account-level resource (one per account per region).

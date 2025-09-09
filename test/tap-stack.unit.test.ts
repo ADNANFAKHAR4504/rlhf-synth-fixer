@@ -302,38 +302,63 @@ describe('TapStack Security Infrastructure', () => {
       });
     });
 
-    test('should create Config configuration recorder', () => {
-      template.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
-        Name: 'production-config-recorder',
+    test('should not create Config configuration recorder when disabled', () => {
+      // Since createConfigRecorder is set to 'false' in cdk.json, these resources should not exist
+      template.resourceCountIs('AWS::Config::ConfigurationRecorder', 0);
+    });
+
+    test('should not create Config delivery channel when disabled', () => {
+      // Since createConfigRecorder is set to 'false' in cdk.json, these resources should not exist
+      template.resourceCountIs('AWS::Config::DeliveryChannel', 0);
+    });
+
+    test('should not create Config rules when recorder is disabled', () => {
+      // Since createConfigRecorder is set to 'false' in cdk.json, these resources should not exist
+      template.resourceCountIs('AWS::Config::ConfigRule', 0);
+    });
+
+    test('should create Config resources when enabled via context', () => {
+      // Test with Config resources enabled
+      const configEnabledApp = new cdk.App({
+        context: {
+          createConfigRecorder: 'true'
+        }
+      });
+      
+      const configEnabledStack = new TapStack(configEnabledApp, 'ConfigEnabledTestStack', {
+        environment: 'test',
+        allowedIpRanges: ['10.0.0.0/8'],
+        kmsAlias: 'test-key',
+      });
+      
+      const configEnabledTemplate = Template.fromStack(configEnabledStack);
+      
+      // Should have Config resources when enabled
+      configEnabledTemplate.hasResourceProperties('AWS::Config::ConfigurationRecorder', {
+        Name: Match.stringLikeRegexp('production-config-recorder-.*'),
         RecordingGroup: {
           AllSupported: true,
           IncludeGlobalResourceTypes: true
         }
       });
-    });
-
-    test('should create Config delivery channel', () => {
-      template.hasResourceProperties('AWS::Config::DeliveryChannel', {
-        Name: 'production-delivery-channel',
+      
+      configEnabledTemplate.hasResourceProperties('AWS::Config::DeliveryChannel', {
+        Name: Match.stringLikeRegexp('production-delivery-channel-.*'),
         ConfigSnapshotDeliveryProperties: {
           DeliveryFrequency: 'TwentyFour_Hours'
         }
       });
-    });
-
-    test('should create Config rules for S3 encryption compliance', () => {
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        ConfigRuleName: 's3-bucket-server-side-encryption-enabled',
+      
+      configEnabledTemplate.hasResourceProperties('AWS::Config::ConfigRule', {
+        ConfigRuleName: Match.stringLikeRegexp('s3-bucket-server-side-encryption-enabled-.*'),
         Source: {
           Owner: 'AWS',
           SourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED'
         }
       });
-    });
-
-    test('should create Config rules for root user MFA', () => {
-      template.hasResourceProperties('AWS::Config::ConfigRule', {
-        ConfigRuleName: 'root-user-mfa-enabled',
+      
+      configEnabledTemplate.hasResourceProperties('AWS::Config::ConfigRule', {
+        ConfigRuleName: Match.stringLikeRegexp('root-user-mfa-enabled-.*'),
         Source: {
           Owner: 'AWS',
           SourceIdentifier: 'ROOT_USER_MFA_ENABLED'
