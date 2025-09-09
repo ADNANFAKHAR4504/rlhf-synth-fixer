@@ -9,7 +9,7 @@
   "subtask": "Database and Storage Setup",
   "subject_labels": [
     "Database Management",
-    "Security Configuration", 
+    "Security Configuration",
     "Monitoring Setup",
     "Resource Scaling",
     "Access Control",
@@ -24,5 +24,11 @@
     "DynamoDB",
     "VPC",
     "KMS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
 }
