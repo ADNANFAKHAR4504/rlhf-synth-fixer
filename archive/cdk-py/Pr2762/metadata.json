@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348826",
+  "team": "4",
+  "startedAt": "2025-09-05T01:18:28.389Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "serverless-computing",
+    "api-gateway",
+    "database-management",
+    "security-controls",
+    "content-delivery",
+    "monitoring-logging",
+    "infrastructure-automation"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "lambda",
+    "apigateway",
+    "dynamodb",
+    "s3",
+    "cloudfront",
+    "sns",
+    "cloudwatch",
+    "iam"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}
