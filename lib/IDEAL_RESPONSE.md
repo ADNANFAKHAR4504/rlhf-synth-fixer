@@ -1176,7 +1176,7 @@ resource "aws_launch_template" "app" {
       volume_size = 20
       volume_type = "gp3"
       encrypted   = true
-      kms_key_id  = aws_kms_key.master_key.arn
+      kms_key_id  = aws_kms_key.master_key.key_id
     }
   }
 
