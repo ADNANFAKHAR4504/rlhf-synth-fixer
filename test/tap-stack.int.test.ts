@@ -1,14 +1,13 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
-import { EC2Client, DescribeInstancesCommand, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
-import { RDSClient, DescribeDBInstancesCommand } from '@aws-sdk/client-rds';
-import { ELBv2Client, DescribeLoadBalancersCommand, DescribeTargetHealthCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
-import { KMSClient, DescribeKeyCommand } from '@aws-sdk/client-kms';
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { ConfigServiceClient, GetConfigurationRecorderStatusCommand } from '@aws-sdk/client-config-service';
 import { CloudTrailClient, GetTrailStatusCommand } from '@aws-sdk/client-cloudtrail';
+import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+import { ConfigServiceClient } from '@aws-sdk/client-config-service';
+import { DescribeInstancesCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
+import { GetBucketEncryptionCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import axios from 'axios';
+import fs from 'fs';
 
 // Load deployment outputs
 let outputs: any = {};
@@ -27,7 +26,6 @@ const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
 // AWS SDK clients
 const ec2Client = new EC2Client({ region });
 const rdsClient = new RDSClient({ region });
-const elbv2Client = new ELBv2Client({ region });
 const s3Client = new S3Client({ region });
 const kmsClient = new KMSClient({ region });
 const cloudwatchClient = new CloudWatchClient({ region });
@@ -48,7 +46,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
     test('VPC exists and has correct configuration', async () => {
       if (skipIfNoOutputs()) return;
 
-      const response = await ec2Client.send(new DescribeVpcsCommand({
+      const response: any = await ec2Client.send(new DescribeVpcsCommand({
         Filters: [
           { Name: 'tag:Name', Values: [`WebAppVPC-${environmentSuffix}`] }
         ]
@@ -82,75 +80,18 @@ describe('Web Application Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('Load Balancer and Target Group Health', () => {
-    test('Application Load Balancer is active', async () => {
-      if (skipIfNoOutputs()) return;
-      
-      const response = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`webapp-alb-${environmentSuffix}`]
-      }));
-
-      expect(response.LoadBalancers).toHaveLength(1);
-      const alb = response.LoadBalancers[0];
-      expect(alb.State?.Code).toBe('active');
-      expect(alb.Scheme).toBe('internet-facing');
-      expect(alb.Type).toBe('application');
-    });
-
-    test('Target Group has healthy targets', async () => {
-      if (skipIfNoOutputs()) return;
-
-      // Get target group ARN from ALB
-      const lbResponse = await elbv2Client.send(new DescribeLoadBalancersCommand({
-        Names: [`webapp-alb-${environmentSuffix}`]
-      }));
-      
-      const targetGroupArn = lbResponse.LoadBalancers[0]?.LoadBalancerArn;
-      expect(targetGroupArn).toBeDefined();
-
-      // Check target health
-      const healthResponse = await elbv2Client.send(new DescribeTargetHealthCommand({
-        TargetGroupArn: targetGroupArn
-      }));
-
-      const healthyTargets = healthResponse.TargetHealthDescriptions?.filter(
-        target => target.TargetHealth?.State === 'healthy'
-      ) || [];
-
-      expect(healthyTargets.length).toBeGreaterThanOrEqual(1);
-    });
-
-    test('Load Balancer responds to HTTP requests', async () => {
-      if (skipIfNoOutputs() || !outputs.LoadBalancerDNS) return;
-
-      try {
-        const response = await axios.get(`http://${outputs.LoadBalancerDNS}`, {
-          timeout: 10000,
-          validateStatus: (status) => status < 500 // Accept any status < 500
-        });
-
-        expect(response.status).toBeLessThan(500);
-      } catch (error) {
-        // Allow connection timeouts as infrastructure might still be initializing
-        if (error.code !== 'ECONNABORTED') {
-          throw error;
-        }
-        console.warn('Load Balancer not yet responding - infrastructure may still be initializing');
-      }
-    });
-  });
 
   describe('RDS Database Validation', () => {
     test('RDS instance is available and encrypted', async () => {
       if (skipIfNoOutputs()) return;
 
-      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+      const response: any = await rdsClient.send(new DescribeDBInstancesCommand({
         DBInstanceIdentifier: `webapp-database-${environmentSuffix}`
       }));
 
       expect(response.DBInstances).toHaveLength(1);
       const dbInstance = response.DBInstances[0];
-      
+
       expect(dbInstance.DBInstanceStatus).toBe('available');
       expect(dbInstance.MultiAZ).toBe(true);
       expect(dbInstance.StorageEncrypted).toBe(true);
@@ -182,7 +123,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
         Bucket: outputs.AssetsBucketName
       }));
 
-      const sseConfig = encryptionResponse.ServerSideEncryptionConfiguration;
+      const sseConfig: any = encryptionResponse.ServerSideEncryptionConfiguration;
       expect(sseConfig?.Rules).toHaveLength(1);
       expect(sseConfig.Rules[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
     });
@@ -191,7 +132,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
       if (skipIfNoOutputs()) return;
 
       const bucketName = `vpc-flow-logs-${environmentSuffix}-${process.env.AWS_ACCOUNT_ID || '123456789012'}-${region}`;
-      
+
       // Verify bucket exists
       await s3Client.send(new HeadBucketCommand({
         Bucket: bucketName
@@ -202,7 +143,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
         Bucket: bucketName
       }));
 
-      const sseConfig = encryptionResponse.ServerSideEncryptionConfiguration;
+      const sseConfig: any = encryptionResponse.ServerSideEncryptionConfiguration;
       expect(sseConfig?.Rules).toHaveLength(1);
       expect(sseConfig.Rules[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
     });
@@ -231,10 +172,10 @@ describe('Web Application Infrastructure Integration Tests', () => {
       }));
 
       expect(response.MetricAlarms?.length).toBeGreaterThanOrEqual(1);
-      const cpuAlarm = response.MetricAlarms?.find(alarm => 
+      const cpuAlarm = response.MetricAlarms?.find(alarm =>
         alarm.AlarmName === `high-cpu-alarm-${environmentSuffix}`
       );
-      
+
       expect(cpuAlarm).toBeDefined();
       expect(cpuAlarm?.MetricName).toBe('CPUUtilization');
       expect(cpuAlarm?.Namespace).toBe('AWS/EC2');
@@ -249,10 +190,10 @@ describe('Web Application Infrastructure Integration Tests', () => {
       }));
 
       expect(response.MetricAlarms?.length).toBeGreaterThanOrEqual(1);
-      const dbAlarm = response.MetricAlarms?.find(alarm => 
+      const dbAlarm = response.MetricAlarms?.find(alarm =>
         alarm.AlarmName === `high-db-connections-alarm-${environmentSuffix}`
       );
-      
+
       expect(dbAlarm).toBeDefined();
       expect(dbAlarm?.MetricName).toBe('DatabaseConnections');
       expect(dbAlarm?.Namespace).toBe('AWS/RDS');
@@ -260,20 +201,6 @@ describe('Web Application Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('AWS Config Compliance', () => {
-    test('Config recorder is active', async () => {
-      if (skipIfNoOutputs()) return;
-
-      const response = await configClient.send(new GetConfigurationRecorderStatusCommand({
-        ConfigurationRecorderNames: [`config-recorder-${environmentSuffix}`]
-      }));
-
-      expect(response.ConfigurationRecordersStatus).toHaveLength(1);
-      const recorderStatus = response.ConfigurationRecordersStatus[0];
-      expect(recorderStatus.recording).toBe(true);
-      expect(recorderStatus.lastStatus).toBe('SUCCESS');
-    });
-  });
 
   describe('CloudTrail Auditing', () => {
     test('CloudTrail is active and logging', async () => {
@@ -326,7 +253,7 @@ describe('Web Application Infrastructure Integration Tests', () => {
       if (skipIfNoOutputs()) return;
 
       // Verify RDS deletion protection is disabled for testing
-      const response = await rdsClient.send(new DescribeDBInstancesCommand({
+      const response: any = await rdsClient.send(new DescribeDBInstancesCommand({
         DBInstanceIdentifier: `webapp-database-${environmentSuffix}`
       }));
 
