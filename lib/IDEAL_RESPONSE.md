@@ -1001,6 +1001,10 @@ resource "aws_db_instance" "main" {
 
   lifecycle {
     create_before_destroy = true
+    ignore_changes = [
+      # Ignore changes that would trigger replacement in production
+      engine_version,
+    ]
   }
 
   tags = merge(local.common_tags, {

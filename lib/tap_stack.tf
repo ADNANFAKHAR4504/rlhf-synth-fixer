@@ -944,7 +944,6 @@ resource "aws_db_instance" "main" {
     create_before_destroy = true
     ignore_changes = [
       # Ignore changes that would trigger replacement in production
-      identifier,
       engine_version,
     ]
   }
