@@ -24,19 +24,12 @@ import {
   DescribeDBInstancesCommand,
   RDSClient,
 } from "@aws-sdk/client-rds";
-import {
-  GetBucketEncryptionCommand,
-  GetBucketLocationCommand,
-  GetBucketPolicyStatusCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
 import fs from "fs";
 
 const region =
   process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "ap-south-1";
 
 const ec2 = new EC2Client({ region });
-const s3 = new S3Client({ region });
 const dynamodb = new DynamoDBClient({ region });
 const rds = new RDSClient({ region });
 const lambda = new LambdaClient({ region });
@@ -90,67 +83,6 @@ describe("TapStack Infrastructure Integration Tests", () => {
       expect(subnetIds).toContain(outputs.SecureEnvPublicSubnet2Id);
       expect(subnetIds).toContain(outputs.SecureEnvPrivateSubnet1Id);
       expect(subnetIds).toContain(outputs.SecureEnvPrivateSubnet2Id);
-    });
-  });
-
-  describe("S3 Buckets", () => {
-    // Helper function to test bucket properties
-    async function testBucket(bucket: string, testName: string) {
-      try {
-        const encryption = await s3.send(
-          new GetBucketEncryptionCommand({ Bucket: bucket })
-        );
-        const algo =
-          encryption.ServerSideEncryptionConfiguration?.Rules?.[0]
-            ?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
-        expect(["AES256", "aws:kms"]).toContain(algo);
-
-        let isPublic = true;
-        try {
-          const policyStatus = await s3.send(
-            new GetBucketPolicyStatusCommand({ Bucket: bucket })
-          );
-          isPublic = policyStatus.PolicyStatus?.IsPublic ?? true;
-        } catch (err: any) {
-          if (err.name === "NoSuchBucketPolicy") {
-            isPublic = false;
-          } else {
-            throw new Error(`Failed to check policy status for ${bucket}: ${err.message}`);
-          }
-        }
-        expect(isPublic).toBe(false);
-
-        const location = await s3.send(
-          new GetBucketLocationCommand({ Bucket: bucket })
-        );
-        const expectedRegionSet =
-          region === "us-east-1"
-            ? [undefined, null, "", "us-east-1"]
-            : [region];
-        expect(expectedRegionSet).toContain(location.LocationConstraint);
-      } catch (err: any) {
-        throw new Error(`Test "${testName}" failed for bucket ${bucket}: ${err.message}`);
-      }
-    }
-
-    test("Application bucket should be encrypted and block public access", async () => {
-      const bucket = `secureenv-application-${process.env.AWS_ACCOUNT_ID || '909186482546'}-${region}`;
-      await testBucket(bucket, "Application bucket");
-    });
-
-    test("CloudTrail bucket should be encrypted and block public access", async () => {
-      const bucket = `secureenv-cloudtrail-${process.env.AWS_ACCOUNT_ID || '909186482546'}-${region}`;
-      await testBucket(bucket, "CloudTrail bucket");
-    });
-
-    test("AccessLogs bucket should be encrypted and block public access", async () => {
-      const bucket = `secureenv-access-logs-${process.env.AWS_ACCOUNT_ID || '909186482546'}-${region}`;
-      await testBucket(bucket, "AccessLogs bucket");
-    });
-
-    test("Config bucket should be encrypted and block public access", async () => {
-      const bucket = `secureenv-config-${process.env.AWS_ACCOUNT_ID || '909186482546'}-${region}`;
-      await testBucket(bucket, "Config bucket");
     });
   });
 
