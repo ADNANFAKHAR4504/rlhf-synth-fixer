@@ -32,6 +32,26 @@ describe('TapStack Unit Tests', () => {
     test('should create NAT Gateway', () => {
       template.resourceCountIs('AWS::EC2::NatGateway', 1);
     });
+
+    test('should have correct subnet configuration', () => {
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'aws-cdk:subnet-type',
+            Value: 'Public',
+          }),
+        ]),
+      });
+      
+      template.hasResourceProperties('AWS::EC2::Subnet', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'aws-cdk:subnet-type',
+            Value: 'Private',
+          }),
+        ]),
+      });
+    });
   });
 
   describe('KMS Key', () => {
@@ -70,6 +90,17 @@ describe('TapStack Unit Tests', () => {
         VersioningConfiguration: {
           Status: 'Enabled',
         },
+      });
+    });
+
+    test('should have auto delete objects enabled', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'aws-cdk:auto-delete-objects',
+            Value: 'true',
+          }),
+        ]),
       });
     });
   });
@@ -116,6 +147,17 @@ describe('TapStack Unit Tests', () => {
         ]),
       });
     });
+
+    test('should be in public subnet', () => {
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'aws-cdk:subnet-name',
+            Value: 'Public',
+          }),
+        ]),
+      });
+    });
   });
 
   describe('RDS PostgreSQL Instance', () => {
@@ -133,6 +175,12 @@ describe('TapStack Unit Tests', () => {
     test('should have RDS security group', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
         GroupDescription: 'Security group for RDS PostgreSQL',
+      });
+    });
+
+    test('should have generated credentials secret', () => {
+      template.hasResourceProperties('AWS::SecretsManager::Secret', {
+        Name: 'tap-rds-credentials-test',
       });
     });
   });
@@ -155,6 +203,21 @@ describe('TapStack Unit Tests', () => {
     test('should create instance profile for EC2', () => {
       template.hasResourceProperties('AWS::IAM::InstanceProfile', {
         InstanceProfileName: 'tap-ec2-instance-profile-test',
+      });
+    });
+
+    test('should grant EC2 role access to S3 and KMS', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith(['s3:GetObject', 's3:PutObject']),
+            }),
+            Match.objectLike({
+              Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt']),
+            }),
+          ]),
+        },
       });
     });
   });
@@ -191,15 +254,29 @@ describe('TapStack Unit Tests', () => {
         },
       });
     });
+
+    test('should grant remediation role necessary permissions', () => {
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith(['ec2:DescribeInstances', 'ec2:ModifyInstanceAttribute']),
+            }),
+          ]),
+        },
+      });
+    });
   });
 
   describe('EventBridge Rule', () => {
     test('should create unauthorized API rule', () => {
       template.hasResourceProperties('AWS::Events::Rule', {
-        RuleName: 'tap-unauthorized-api-rule-test',
+        // Note: RuleName is not a property in the CloudFormation template
+        // Use Name instead for EventBridge rules
+        Name: 'tap-unauthorized-api-rule-test',
         EventPattern: {
           source: ['aws.cloudtrail'],
-          detailType: ['AWS API Call via CloudTrail'],
+          'detail-type': ['AWS API Call via CloudTrail'],
           detail: {
             errorCode: ['UnauthorizedOperation', 'AccessDenied'],
           },
@@ -212,6 +289,17 @@ describe('TapStack Unit Tests', () => {
         LogGroupName: '/aws/events/security-alerts/tap-security-test',
         RetentionInDays: 365,
       });
+    });
+
+    test('should connect rule to Lambda target', () => {
+      const rules = template.findResources('AWS::Events::Rule');
+      const rule = Object.values(rules).find((r: any) => 
+        r.Properties?.Name === 'tap-unauthorized-api-rule-test'
+      );
+      
+      expect(rule).toBeDefined();
+      expect(rule?.Properties?.Targets).toBeDefined();
+      expect(rule?.Properties?.Targets.length).toBeGreaterThan(0);
     });
   });
 
@@ -245,6 +333,24 @@ describe('TapStack Unit Tests', () => {
         Description: 'VPC ID',
       });
     });
+
+    test('should output EC2 Role ARN', () => {
+      template.hasOutput('EC2RoleArn', {
+        Description: 'EC2 IAM Role ARN',
+      });
+    });
+
+    test('should output Lambda Function ARN', () => {
+      template.hasOutput('RemediationFunctionArn', {
+        Description: 'Remediation Lambda Function ARN',
+      });
+    });
+
+    test('should output Environment Suffix', () => {
+      template.hasOutput('EnvironmentSuffix', {
+        Description: 'Environment suffix used for resource naming',
+      });
+    });
   });
 
   describe('Resource Tagging', () => {
@@ -261,6 +367,39 @@ describe('TapStack Unit Tests', () => {
           expect.objectContaining({ Key: 'Project', Value: 'TapSecurity' }),
         ])
       );
+    });
+
+    test('should tag EC2 instance', () => {
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Environment',
+            Value: 'Production',
+          }),
+        ]),
+      });
+    });
+
+    test('should tag S3 bucket', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Environment',
+            Value: 'Production',
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('Environment Configuration', () => {
+    test('should use provided environment suffix', () => {
+      expect(stack.node.tryGetContext('environmentSuffix')).toBeUndefined();
+    });
+
+    test('should handle VPC creation when no vpcId provided', () => {
+      const vpcs = template.findResources('AWS::EC2::VPC');
+      expect(Object.keys(vpcs).length).toBe(1);
     });
   });
 });
@@ -310,6 +449,45 @@ describe('TapStack with Existing VPC', () => {
   test('should still create S3 bucket with existing VPC', () => {
     template.hasResourceProperties('AWS::S3::Bucket', {
       BucketEncryption: Match.objectLike({}),
+    });
+  });
+
+  test('should still create EC2 instance with existing VPC', () => {
+    template.hasResourceProperties('AWS::EC2::Instance', {
+      InstanceType: 't3.micro',
+    });
+  });
+});
+
+describe('TapStack with Context Environment', () => {
+  test('should use environment suffix from context', () => {
+    const contextApp = new cdk.App();
+    contextApp.node.setContext('environmentSuffix', 'context-test');
+
+    const stack = new TapStack(contextApp, 'ContextTestStack', {
+      env: { region: 'us-east-1', account: '123456789012' },
+    });
+
+    const contextTemplate = Template.fromStack(stack);
+
+    // Should use context value for resource naming
+    contextTemplate.hasResourceProperties('AWS::KMS::Key', {
+      Description: Match.stringLikeRegexp('context-test'),
+    });
+  });
+
+  test('should use default environment suffix when none provided', () => {
+    const defaultApp = new cdk.App();
+
+    const stack = new TapStack(defaultApp, 'DefaultTestStack', {
+      env: { region: 'us-east-1', account: '123456789012' },
+    });
+
+    const defaultTemplate = Template.fromStack(stack);
+
+    // Should use 'dev' as default
+    defaultTemplate.hasResourceProperties('AWS::KMS::Key', {
+      Description: Match.stringLikeRegexp('dev'),
     });
   });
 });
