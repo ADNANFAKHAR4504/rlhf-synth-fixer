@@ -528,6 +528,10 @@ resource "aws_subnet" "database" {
   cidr_block        = var.database_subnet_cidrs[count.index]
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-database-subnet-${count.index + 1}-${local.suffix}"
     Type = "Database"
@@ -680,6 +684,10 @@ resource "aws_security_group" "database" {
   name_prefix = "${local.name_prefix}-db-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for RDS database - app servers only"
+
+  lifecycle {
+    create_before_destroy = true
+  }
 
   ingress {
     description     = "MySQL/Aurora from app servers"
@@ -914,6 +922,10 @@ resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group-${local.suffix}"
   subnet_ids = aws_subnet.database[*].id
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-group-${local.suffix}"
   })
@@ -925,6 +937,8 @@ resource "aws_db_instance" "main" {
   engine         = var.db_engine
   engine_version = var.db_engine_version
   instance_class = local.current_config.db_instance_class
+
+  depends_on = [aws_db_subnet_group.main]
 
   allocated_storage     = var.db_allocated_storage
   max_allocated_storage = var.db_allocated_storage * 2
@@ -1617,6 +1631,8 @@ resource "aws_api_gateway_method_response" "health" {
 }
 
 resource "aws_api_gateway_integration_response" "health" {
+  depends_on = [aws_api_gateway_integration.health]
+
   rest_api_id = aws_api_gateway_rest_api.main.id
   resource_id = aws_api_gateway_resource.health.id
   http_method = aws_api_gateway_method.health_get.http_method
