@@ -485,10 +485,14 @@ class TapStack(cdk.Stack):
     def enable_vpc_flow_logs(self):
         """Enable VPC Flow Logs for network monitoring"""
         
-        # Create CloudWatch Log Group for VPC Flow Logs
+        # Generate unique suffix for naming
+        import hashlib
+        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
+        
+        # Create CloudWatch Log Group for VPC Flow Logs with unique name including account ID
         self.flow_logs_group = logs.LogGroup(
             self, "VPCFlowLogsGroup",
-            log_group_name="/aws/vpc/flowlogs",
+            log_group_name=f"/aws/vpc/tap-flowlogs-{self.account}-{unique_suffix}",
             retention=logs.RetentionDays.ONE_YEAR,
             encryption_key=self.logs_kms_key
         )
@@ -562,10 +566,14 @@ class TapStack(cdk.Stack):
     def create_secure_s3_bucket(self):
         """Create S3 bucket with all security best practices"""
         
+        # Generate unique suffix for bucket names
+        import hashlib
+        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
+        
         # Create access logs bucket first
         self.access_logs_bucket = s3.Bucket(
             self, "AccessLogsBucket",
-            bucket_name=f"access-logs-bucket-{self.account}-{self.region}",
+            bucket_name=f"tap-access-logs-{self.account}-{unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.app_kms_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -581,7 +589,7 @@ class TapStack(cdk.Stack):
         
         self.secure_bucket = s3.Bucket(
             self, "SecureApplicationBucket",
-            bucket_name=f"secure-app-bucket-{self.account}-{self.region}",
+            bucket_name=f"tap-secure-app-{self.account}-{unique_suffix}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.app_kms_key,
             versioned=True,
@@ -615,10 +623,14 @@ class TapStack(cdk.Stack):
     def create_lambda_functions(self):
         """Create secure Lambda functions with proper configuration"""
         
+        # Generate unique suffix for naming
+        import hashlib
+        unique_suffix = hashlib.md5(f"{self.stack_name}".encode()).hexdigest()[:8]
+        
         # Create log group first for Lambda
         self.security_lambda_log_group = logs.LogGroup(
             self, f"security-processorLogGroup",
-            log_group_name=f"/aws/lambda/security-processor",
+            log_group_name=f"/aws/lambda/security-processor-{unique_suffix}",
             retention=logs.RetentionDays.ONE_YEAR,
             encryption_key=self.lambda_kms_key
         )
@@ -626,7 +638,7 @@ class TapStack(cdk.Stack):
         # Security processing Lambda
         self.security_lambda = lambda_.Function(
             self, f"security-processorFunction",
-            function_name="security-processor",
+            function_name=f"security-processor-{unique_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="lambda_function.lambda_handler",
             code=lambda_.Code.from_inline("""
