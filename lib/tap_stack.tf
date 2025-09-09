@@ -49,6 +49,10 @@ locals {
 # RANDOM RESOURCES FOR RDS CREDENTIALS
 # =============================================================================
 
+resource "random_id" "unique_suffix" {
+  byte_length = 4
+}
+
 resource "random_string" "rds_username" {
   length  = 8
   special = false
@@ -195,7 +199,7 @@ resource "aws_route_table_association" "private" {
 
 # IAM Role for VPC Flow Logs
 resource "aws_iam_role" "vpc_flow_logs" {
-  name = "${var.project_name}-vpc-flow-logs-role"
+  name = "${var.project_name}-vpc-flow-${random_id.unique_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -214,7 +218,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
-  name = "${var.project_name}-vpc-flow-logs-policy"
+  name = "${var.project_name}-vpc-flow-${random_id.unique_suffix.hex}"
   role = aws_iam_role.vpc_flow_logs.id
 
   policy = jsonencode({
@@ -237,7 +241,7 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 
 # CloudWatch Log Group for VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs"
+  name              = "/aws/vpc/flowlogs-${random_id.unique_suffix.hex}"
   retention_in_days = 14
 
   tags = local.common_tags
@@ -466,7 +470,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 # =============================================================================
 
 resource "aws_iam_role" "ec2" {
-  name = "${var.project_name}-ec2-role"
+  name = "${var.project_name}-ec2-role-${random_id.unique_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -485,7 +489,7 @@ resource "aws_iam_role" "ec2" {
 }
 
 resource "aws_iam_role_policy" "ec2_s3_access" {
-  name = "${var.project_name}-ec2-s3-policy"
+  name = "${var.project_name}-ec2-s3-${random_id.unique_suffix.hex}"
   role = aws_iam_role.ec2.id
 
   policy = jsonencode({
@@ -518,7 +522,7 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 }
 
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${var.project_name}-ec2-profile"
+  name = "${var.project_name}-ec2-profile-${random_id.unique_suffix.hex}"
   role = aws_iam_role.ec2.name
 
   tags = local.common_tags
@@ -529,7 +533,7 @@ resource "aws_iam_instance_profile" "ec2" {
 # =============================================================================
 
 resource "aws_secretsmanager_secret" "rds_credentials" {
-  name        = "${var.project_name}-rds-credentials"
+  name        = "${var.project_name}-rds-creds-${random_id.unique_suffix.hex}"
   description = "RDS master user credentials"
 
   tags = local.common_tags
@@ -550,11 +554,11 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
+  name       = "${var.project_name}-db-subnet--${random_id.unique_suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.common_tags, {
-    Name = "${var.project_name}-db-subnet-group"
+    Name = "${var.project_name}-db-subnet--${random_id.unique_suffix.hex}"
   })
 }
 
@@ -804,7 +808,7 @@ resource "aws_elasticache_replication_group" "main" {
 # =============================================================================
 
 resource "aws_cloudtrail" "main" {
-  name           = "${var.project_name}-cloudtrail"
+  name           = "${var.project_name}-cloudtrail-${random_id.unique_suffix.hex}"
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
