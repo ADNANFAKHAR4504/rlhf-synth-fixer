@@ -73,95 +73,35 @@ export class TapStack extends cdk.Stack {
     }
 
     // 1. KMS Key
-    const kmsKey = this.createKMSKey(environmentSuffix);
-
-    // 2. Security bucket
-    const securityBucket = this.createSecurityBucket(environmentSuffix, kmsKey);
-
-    // 3. Create EC2 instance
-    const ec2Instance = this.createEC2Instance(environmentSuffix, vpc, kmsKey);
-
-    // 4. Create RDS PostgreSQL instance
-    const rdsInstance = this.createRDSInstance(
-      environmentSuffix,
-      vpc,
-      kmsKey,
-      ec2Instance.connections.securityGroups[0]
-    );
-
-    // 5. Setup IAM roles and policies
-    this.createIAMRoles(environmentSuffix, securityBucket, kmsKey);
-
-    // 6. Setup Systems Manager
-    this.createSystemsManagerSetup(environmentSuffix);
-
-    // 7. Setup automated remediation
-    const remediationFunction =
-      this.createRemediationFunction(environmentSuffix);
-
-    // 8. Setup monitoring and alerting
-    this.createMonitoring(environmentSuffix, remediationFunction, kmsKey);
-
-    // 9. Output important values
-    new cdk.CfnOutput(this, 'SecurityKmsKeyId', {
-      value: kmsKey.keyId,
-      description: 'KMS Key ID for security resources',
-    });
-
-    new cdk.CfnOutput(this, 'SecurityBucketName', {
-      value: securityBucket.bucketName,
-      description: 'Security Logs Bucket Name',
-    });
-
-    new cdk.CfnOutput(this, 'EC2InstanceId', {
-      value: ec2Instance.instanceId,
-      description: 'EC2 Instance ID',
-    });
-
-    new cdk.CfnOutput(this, 'RDSEndpoint', {
-      value: rdsInstance.dbInstanceEndpointAddress,
-      description: 'RDS PostgreSQL Endpoint',
-    });
-
-    new cdk.CfnOutput(this, 'VPCId', {
-      value: vpc.vpcId,
-      description: 'VPC ID',
-    });
-  }
-
-  private createKMSKey(environmentSuffix: string): kms.Key {
-    return new kms.Key(this, `TapSecurityKmsKey-${environmentSuffix}`, {
+    const kmsKey = new kms.Key(this, `TapSecurityKmsKey-${environmentSuffix}`, {
       description: `KMS key for security-related resources ${environmentSuffix}`,
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
-  }
 
-  private createSecurityBucket(
-    environmentSuffix: string,
-    kmsKey: kms.Key
-  ): s3.Bucket {
-    const bucket = new s3.Bucket(
+    // KMS key alias for easier identification
+    new kms.Alias(this, `TapSecurityKmsKeyAlias-${environmentSuffix}`, {
+      aliasName: `alias/tap-security-kms-key-${environmentSuffix}`,
+      targetKey: kmsKey,
+    });
+
+    // 2. Security bucket
+    const securityBucket = new s3.Bucket(
       this,
       `TapSecurityBucket-${environmentSuffix}`,
       {
+        bucketName: `tap-security-bucket-${environmentSuffix}-${this.account}-${this.region}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: kmsKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
         versioned: true,
         enforceSSL: true,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
+        autoDeleteObjects: true,
       }
     );
 
-    return bucket;
-  }
-
-  private createEC2Instance(
-    environmentSuffix: string,
-    vpc: ec2.IVpc,
-    kmsKey: kms.Key
-  ): ec2.Instance {
+    // 3. Create EC2 instance
     const ec2SecurityGroup = new ec2.SecurityGroup(
       this,
       `TapEC2SecurityGroup-${environmentSuffix}`,
@@ -178,7 +118,13 @@ export class TapStack extends cdk.Stack {
       'Allow HTTPS traffic'
     );
 
-    const instance = new ec2.Instance(
+    ec2SecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(22),
+      'Allow SSH traffic'
+    );
+
+    const ec2Instance = new ec2.Instance(
       this,
       `TapEC2Instance-${environmentSuffix}`,
       {
@@ -205,20 +151,12 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    cdk.Tags.of(instance).add(
+    cdk.Tags.of(ec2Instance).add(
       'PatchGroup',
       `tap-security-${environmentSuffix}`
     );
 
-    return instance;
-  }
-
-  private createRDSInstance(
-    environmentSuffix: string,
-    vpc: ec2.IVpc,
-    kmsKey: kms.Key,
-    ec2SecurityGroup: ec2.ISecurityGroup
-  ): rds.DatabaseInstance {
+    // 4. Create RDS PostgreSQL instance
     const rdsSecurityGroup = new ec2.SecurityGroup(
       this,
       `TapRDSSecurityGroup-${environmentSuffix}`,
@@ -235,7 +173,7 @@ export class TapStack extends cdk.Stack {
       'Allow PostgreSQL access from EC2 instance'
     );
 
-    return new rds.DatabaseInstance(
+    const rdsInstance = new rds.DatabaseInstance(
       this,
       `TapRDSInstance-${environmentSuffix}`,
       {
@@ -262,15 +200,10 @@ export class TapStack extends cdk.Stack {
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
-  }
 
-  private createIAMRoles(
-    environmentSuffix: string,
-    securityBucket: s3.Bucket,
-    kmsKey: kms.Key
-  ): void {
-    const appRole = new iam.Role(this, `TapAppRole-${environmentSuffix}`, {
-      roleName: `tap-app-role-${environmentSuffix}`,
+    // 5. IAM Role for EC2 instance
+    const ec2Role = new iam.Role(this, `TapEC2Role-${environmentSuffix}`, {
+      roleName: `tap-ec2-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
@@ -279,18 +212,21 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
+    // Grant EC2 role access to S3 and KMS
+    securityBucket.grantReadWrite(ec2Role);
+    kmsKey.grantEncryptDecrypt(ec2Role);
+
+    // Create instance profile for EC2
     new iam.CfnInstanceProfile(
       this,
       `TapInstanceProfile-${environmentSuffix}`,
       {
-        instanceProfileName: `tap-app-instance-profile-${environmentSuffix}`,
-        roles: [appRole.roleName],
+        instanceProfileName: `tap-ec2-instance-profile-${environmentSuffix}`,
+        roles: [ec2Role.roleName],
       }
     );
-  }
 
-  private createSystemsManagerSetup(environmentSuffix: string): void {
-    // Simple SSM setup
+    // 6. SSM Patch Baseline
     new ssm.CfnPatchBaseline(this, `TapPatchBaseline-${environmentSuffix}`, {
       name: `tap-security-patch-baseline-${environmentSuffix}`,
       description: 'Patch baseline for security updates',
@@ -311,11 +247,8 @@ export class TapStack extends cdk.Stack {
         ],
       },
     });
-  }
 
-  private createRemediationFunction(
-    environmentSuffix: string
-  ): lambda.Function {
+    // 7. Lambda remediation function
     const remediationRole = new iam.Role(
       this,
       `TapRemediationRole-${environmentSuffix}`,
@@ -330,7 +263,23 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    return new lambda.Function(
+    // Grant remediation role necessary permissions
+    securityBucket.grantReadWrite(remediationRole);
+    kmsKey.grantEncryptDecrypt(remediationRole);
+    remediationRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ec2:DescribeInstances',
+          'ec2:ModifyInstanceAttribute',
+          'ssm:SendCommand',
+          'ssm:GetParameter',
+        ],
+        resources: ['*'],
+      })
+    );
+
+    const remediationFunction = new lambda.Function(
       this,
       `TapRemediationFunction-${environmentSuffix}`,
       {
@@ -348,28 +297,41 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def handler(event, context):
-    logger.info("Remediation function called")
+    logger.info("Security remediation function called")
+    logger.info(f"Event: {json.dumps(event)}")
+    
+    # Example remediation logic
+    try:
+        # Check for security events and take action
+        if 'detail' in event and event['detail'].get('errorCode') in ['UnauthorizedOperation', 'AccessDenied']:
+            logger.warning(f"Unauthorized access attempt detected: {event['detail']}")
+            # Add your remediation logic here
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'message': 'Security event processed'})
+            }
+            
+    except Exception as e:
+        logger.error(f"Error in remediation function: {str(e)}")
+        raise e
+    
     return {
         'statusCode': 200,
-        'body': json.dumps({'message': 'Remediation completed'})
+        'body': json.dumps({'message': 'No action needed'})
     }
 `),
       }
     );
-  }
 
-  private createMonitoring(
-    environmentSuffix: string,
-    remediationFunction: lambda.Function,
-    kmsKey: kms.Key
-  ): void {
-    // Monitor for unauthorized API calls
+    // 8. EventBridge rule for security monitoring (without KMS encryption for log group)
     const unauthorizedApiRule = new events.Rule(
       this,
       `TapUnauthorizedApiRule-${environmentSuffix}`,
       {
+        ruleName: `tap-unauthorized-api-rule-${environmentSuffix}`,
         eventPattern: {
           source: ['aws.cloudtrail'],
+          detailType: ['AWS API Call via CloudTrail'],
           detail: {
             errorCode: ['UnauthorizedOperation', 'AccessDenied'],
           },
@@ -383,7 +345,6 @@ def handler(event, context):
       {
         logGroupName: `/aws/events/security-alerts/tap-security-${environmentSuffix}`,
         retention: logs.RetentionDays.ONE_YEAR,
-        encryptionKey: kmsKey,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
@@ -391,5 +352,49 @@ def handler(event, context):
     unauthorizedApiRule.addTarget(
       new targets.CloudWatchLogGroup(alertLogGroup)
     );
+    unauthorizedApiRule.addTarget(
+      new targets.LambdaFunction(remediationFunction)
+    );
+
+    // 9. Outputs
+    new cdk.CfnOutput(this, 'SecurityKmsKeyId', {
+      value: kmsKey.keyId,
+      description: 'KMS Key ID for security resources',
+    });
+
+    new cdk.CfnOutput(this, 'SecurityBucketName', {
+      value: securityBucket.bucketName,
+      description: 'Security Logs Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, 'EC2InstanceId', {
+      value: ec2Instance.instanceId,
+      description: 'EC2 Instance ID',
+    });
+
+    new cdk.CfnOutput(this, 'RDSEndpoint', {
+      value: rdsInstance.dbInstanceEndpointAddress,
+      description: 'RDS PostgreSQL Endpoint',
+    });
+
+    new cdk.CfnOutput(this, 'VPCId', {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, 'EC2RoleArn', {
+      value: ec2Role.roleArn,
+      description: 'EC2 IAM Role ARN',
+    });
+
+    new cdk.CfnOutput(this, 'RemediationFunctionArn', {
+      value: remediationFunction.functionArn,
+      description: 'Remediation Lambda Function ARN',
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: environmentSuffix,
+      description: 'Environment suffix used for resource naming',
+    });
   }
 }
