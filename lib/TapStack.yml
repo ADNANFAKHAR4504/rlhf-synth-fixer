@@ -5,7 +5,7 @@ Parameters:
   Environment:
     Type: String
     Default: 'prod'
-    Description: Environment name
+    Description: Environment name (e.g., prod, dev)
   Owner:
     Type: String
     Default: 'PlatformTeam'
@@ -52,8 +52,8 @@ Parameters:
     Description: Availability Zone C
   AlertEmail:
     Type: String
-    Default: ''
-    Description: Email for threat alerts (optional)
+    Default: 'alerts@example.com'
+    Description: Email for threat alerts
 
 Conditions:
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
@@ -706,10 +706,12 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # IMPORTANT: WAF requires destination names to start with 'aws-waf-logs-'.
+  # Using StackName ensures uniqueness, satisfies prefix rule, and avoids conflicts.
   WafLogsDeliveryStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     Properties:
-      DeliveryStreamName: !Sub 'KDF-WafLogs-${Environment}'
+      DeliveryStreamName: !Sub 'aws-waf-logs-${Environment}-${AWS::StackName}'
       DeliveryStreamType: DirectPut
       ExtendedS3DestinationConfiguration:
         BucketARN: !Sub 'arn:aws:s3:::${WafLogsBucket}'
@@ -905,6 +907,7 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # EventBridge notifications for S3 object creation → Lambda
   S3ObjectCreatedRule:
     Type: AWS::Events::Rule
     Properties:
