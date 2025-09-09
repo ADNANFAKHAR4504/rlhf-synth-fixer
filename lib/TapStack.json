@@ -244,7 +244,7 @@
     "MicroserviceLambda": {
       "Type": "AWS::Lambda::Function",
       "Properties": {
-        "Runtime": "nodejs22.x",
+        "Runtime": "nodejs18.x",
         "Handler": "index.handler",
         "Role": {
           "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/lambda-execution-role"
