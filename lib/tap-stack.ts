@@ -212,7 +212,7 @@ export class TapStack extends cdk.Stack {
       this,
       `TapSecurityBucket-${environmentSuffix}`,
       {
-        bucketName: `tap-security-logs-${environmentSuffix}-${this.account}`,
+        // bucketName: `tap-security-logs-${environmentSuffix}-${this.account}`,
         encryption: s3.BucketEncryption.KMS,
         encryptionKey: kmsKey,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
