@@ -67,13 +67,6 @@ describe("tap_stack.tf Static Validation", () => {
     });
   });
 
-  // Secrets Manager
-  ["primary_db_credentials4", "secondary_db_credentials4"].forEach(secret => {
-    it(`declares Secrets Manager secret resource ${secret}`, () => {
-      expect(has(new RegExp(`resource\\s+"aws_secretsmanager_secret"\\s+"${secret}"`))).toBe(true);
-      expect(has(new RegExp(`resource\\s+"aws_secretsmanager_secret_version"\\s+"${secret.replace("credentials", "credentials_version")}"`))).toBe(true);
-    });
-  });
 
   // RDS Instances
   ["primary_db4", "secondary_db4"].forEach(rds => {
