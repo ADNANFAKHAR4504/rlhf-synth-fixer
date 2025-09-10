@@ -56,7 +56,7 @@ variable "db_engine" {
 variable "db_engine_version" {
   description = "RDS engine version"
   type        = string
-  default     = "8.0.35"
+  default     = "8.0.39"
 }
 
 variable "db_instance_class" {
@@ -569,6 +569,11 @@ resource "aws_s3_bucket_policy" "logs" {
         }
         Action   = "s3:GetBucketAcl"
         Resource = aws_s3_bucket.logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/tap-stack-cloudtrail"
+          }
+        }
       },
       {
         Sid    = "ConfigLogDelivery"
@@ -759,7 +764,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "tap-stack-alb"
+  name               = "tap-stack-alb-${random_id.bucket_suffix.hex}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -774,6 +779,10 @@ resource "aws_lb" "main" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_lb_target_group" "main" {
@@ -1071,11 +1080,15 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 
 # VPC Flow Logs
 resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
-  name              = "/aws/vpc/flowlogs"
+  name              = "/aws/vpc/flowlogs-${random_id.bucket_suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.logs_key.arn
 
   tags = local.common_tags
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_flow_log" "main" {
@@ -1215,14 +1228,16 @@ resource "aws_config_configuration_recorder" "main" {
     include_global_resource_types = true
   }
 
-  depends_on = [aws_config_delivery_channel.main]
+  depends_on = [aws_iam_role_policy_attachment.config]
 }
 
-resource "aws_config_delivery_channel" "main" {
-  name           = "tap-stack-config-delivery-channel"
-  s3_bucket_name = aws_s3_bucket.logs.bucket
-  s3_key_prefix  = "config-logs"
-}
+# Note: AWS Config delivery channel commented out due to regional limit (max 1 per region)
+# Uncomment if you don't have an existing delivery channel in this region
+# resource "aws_config_delivery_channel" "main" {
+#   name           = "tap-stack-config-delivery-channel"
+#   s3_bucket_name = aws_s3_bucket.logs.bucket
+#   s3_key_prefix  = "config-logs"
+# }
 
 resource "aws_iam_role" "config" {
   name = "tap-stack-config-role"
@@ -1245,7 +1260,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRole"
 }
 
 resource "aws_iam_role_policy" "config_s3" {
