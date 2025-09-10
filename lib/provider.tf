@@ -15,15 +15,15 @@ terraform {
     }
   }
 
-  # Backend configuration - uncomment after creating backend infrastructure
-  # backend "s3" {
-  #   bucket         = "tap-stack-terraform-state-XXXXXXXX" # Replace with actual bucket name from backend.tf output
-  #   key            = "tap-stack/terraform.tfstate"
-  #   region         = "us-west-2"
-  #   dynamodb_table = "tap-stack-terraform-state-lock"
-  #   encrypt        = true
-  #   kms_key_id     = "alias/tap-stack-terraform-state"
-  # }
+  # Backend configuration - S3 remote state with DynamoDB locking
+  backend "s3" {
+    bucket         = "tap-stack-terraform-state-1d25e325c0ebf3b2"
+    key            = "tap-stack/terraform.tfstate"
+    region         = "us-west-2"
+    dynamodb_table = "tap-stack-terraform-state-lock"
+    encrypt        = true
+    kms_key_id     = "alias/tap-stack-terraform-state-1d25e325c0ebf3b2"
+  }
 }
 
 provider "aws" {

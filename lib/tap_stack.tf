@@ -109,6 +109,18 @@ variable "acm_certificate_arn" {
   default     = ""
 }
 
+variable "create_db_subnet_group" {
+  description = "Whether to create a new DB subnet group (set to false if quota exceeded)"
+  type        = bool
+  default     = true
+}
+
+variable "existing_db_subnet_group" {
+  description = "Name of existing DB subnet group to use if create_db_subnet_group is false"
+  type        = string
+  default     = ""
+}
+
 # Locals
 locals {
   common_tags = {
@@ -557,7 +569,8 @@ resource "aws_s3_bucket_policy" "logs" {
         Resource = "${aws_s3_bucket.logs.arn}/cloudtrail-logs/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/tap-stack-cloudtrail-${random_id.bucket_suffix.hex}"
           }
         }
       },
@@ -978,6 +991,7 @@ resource "aws_wafv2_web_acl_association" "main" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
+  count      = var.create_db_subnet_group ? 1 : 0
   name       = "tap-stack-db-subnet-group-${random_id.bucket_suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
 
@@ -1017,7 +1031,7 @@ resource "aws_db_instance" "main" {
   password = var.db_password
 
   vpc_security_group_ids = [aws_security_group.rds.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
+  db_subnet_group_name   = var.create_db_subnet_group ? aws_db_subnet_group.main[0].name : var.existing_db_subnet_group
   parameter_group_name   = aws_db_parameter_group.main.name
 
   backup_retention_period = 7
@@ -1260,7 +1274,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
 }
 
 resource "aws_iam_role_policy" "config_s3" {
