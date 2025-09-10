@@ -490,7 +490,7 @@ class TapStack(pulumi.ComponentResource):
         # DB Parameter Group
         self.db_parameter_group = rds.ParameterGroup(
             f"db-parameter-group-{self.environment_suffix}",
-            family="postgres13",
+            family="postgres17",
             description="Custom parameter group for PostgreSQL",
             parameters=[
                 {"name": "log_statement", "value": "all"},
