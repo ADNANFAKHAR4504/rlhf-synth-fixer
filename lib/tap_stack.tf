@@ -1565,3 +1565,4 @@ output "target_group_health_check_protocol" {
 output "target_group_health_check_port" {
   description = "Health check port of the target group"
   value       = aws_lb_target_group.main.health_check[0].port
+}
