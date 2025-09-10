@@ -42,7 +42,7 @@ class TapStack(pulumi.ComponentResource):
 
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
-        self.region = 'us-west-1'
+        self.region = 'ap-south-1'
         
         # Get latest Amazon Linux 2 AMI
         self.ami = ec2.get_ami(
