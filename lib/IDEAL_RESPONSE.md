@@ -45,8 +45,6 @@ variable "enable_mfa" {
 # ================================
 # LOCALS
 # ================================
-# Replace the locals section with this updated version:
-
 locals {
   # Naming convention with suffix "4"
   name_prefix = "${var.project_name}-${var.environment}"
