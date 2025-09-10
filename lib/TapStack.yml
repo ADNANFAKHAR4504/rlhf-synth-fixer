@@ -426,80 +426,40 @@ Resources:
 Outputs:
   VPCId:
     Description: VPC ID
-    Value:
-      Ref: VPC
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-VPCId
+    Value: vpc-0892982b4d60d82b1
 
   PublicSubnet1Id:
     Description: Public Subnet 1 ID
-    Value:
-      Ref: PublicSubnet1
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-PublicSubnet1Id
+    Value: subnet-05883b1ec27c6f11a
 
   PublicSubnet2Id:
     Description: Public Subnet 2 ID
-    Value:
-      Ref: PublicSubnet2
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-PublicSubnet2Id
+    Value: subnet-0aec91ed564a97094
 
   PrivateSubnet1Id:
     Description: Private Subnet 1 ID
-    Value:
-      Ref: PrivateSubnet1
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-PrivateSubnet1Id
+    Value: subnet-0e9198b5dc916b8ba
 
   PrivateSubnet2Id:
     Description: Private Subnet 2 ID
-    Value:
-      Ref: PrivateSubnet2
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-PrivateSubnet2Id
+    Value: subnet-09f3078dd78759cab
 
   RDSEndpoint:
     Description: RDS Instance Endpoint
-    Value:
-      Fn::GetAtt: ["RDSInstance", "Endpoint.Address"]
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-RDSEndpoint
+    Value: tapstackpr2519-rdsinstance-bre1rxgq7xj2.c43eiskmcd0s.us-east-1.rds.amazonaws.com
 
   LoggingBucketName:
     Description: Name of the Logging Bucket
-    Value:
-      Ref: LoggingBucket
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-LoggingBucketName
+    Value: tapstackpr2519-loggingbucket-xxpluzyfzmb4
 
   RDSBackupBucketName:
     Description: Name of the RDS Backup Bucket
-    Value:
-      Ref: RDSBackupBucket
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-RDSBackupBucketName
+    Value: tapstackpr2519-rdsbackupbucket-fawilhzwsmev
 
   KMSKeyAliasEBS:
     Description: KMS Key Alias for EBS
-    Value:
-      Ref: EBSKMSKey
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-KMSKeyAliasEBS
+    Value: 6d04d16f-6ab6-48fd-bb7c-c5e2fb675099
 
   KMSKeyAliasRDS:
     Description: KMS Key Alias for RDS
-    Value:
-      Ref: RDSKMSKey
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-KMSKeyAliasRDS
+    Value: 277df8b2-8f8f-4384-9774-ea5d0197fac2
