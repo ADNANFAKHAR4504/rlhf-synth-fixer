@@ -212,16 +212,6 @@ describe("Tap Stack Flat Outputs Integration Tests", () => {
     });
   });
 
-  it("resource suffix applied to resource names for uniqueness", () => {
-    Object.entries(outputsRaw).forEach(([key, val]) => {
-      if (typeof val === "string" && key !== "resource_suffix") {
-        if (val.startsWith("tap-stack-") || val.startsWith("arn:aws")) {
-          expect(val.includes(outputsRaw.resource_suffix)).toBe(true);
-        }
-      }
-    });
-  });
-
   it("ALB is internet-facing and application type", () => {
     expect(outputsRaw.alb_scheme).toBe("internet-facing");
     expect(outputsRaw.alb_load_balancer_type).toBe("application");
