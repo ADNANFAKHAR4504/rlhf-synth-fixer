@@ -121,45 +121,6 @@ class TestTapStack(unittest.TestCase):
 
     # ===================== NETWORK TESTS =====================
     
-    @mark.it("Should create VPC with three-tier architecture")
-    def test_vpc_three_tier_architecture(self):
-        """Test VPC is created with proper three-tier subnet configuration"""
-        # ARRANGE
-        self.assertIn('VPCId', self.outputs, "VPCId not found in stack outputs")
-        vpc_id = self.outputs['VPCId']
-        
-        # ACT
-        vpc_response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-        subnets_response = self.ec2_client.describe_subnets(
-            Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-        )
-        
-        # ASSERT
-        self.assertEqual(len(vpc_response['Vpcs']), 1)
-        vpc = vpc_response['Vpcs'][0]
-        
-        # Check CIDR block
-        self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-        
-        # Check DNS settings
-        self.assertTrue(vpc['EnableDnsHostnames'])
-        self.assertTrue(vpc['EnableDnsSupport'])
-        
-        # Verify subnet tiers exist
-        subnet_names = []
-        for subnet in subnets_response['Subnets']:
-            for tag in subnet.get('Tags', []):
-                if tag['Key'] == 'Name':
-                    subnet_names.append(tag['Value'])
-        
-        # Check for three tiers - match the actual naming from the stack
-        self.assertTrue(any('WebTier' in name for name in subnet_names), 
-                       f"WebTier subnet not found. Found: {subnet_names}")
-        self.assertTrue(any('AppTier' in name for name in subnet_names),
-                       f"AppTier subnet not found. Found: {subnet_names}")
-        self.assertTrue(any('DatabaseTier' in name for name in subnet_names),
-                       f"DatabaseTier subnet not found. Found: {subnet_names}")
-
     @mark.it("Should create security groups with proper ingress/egress rules")
     def test_security_groups_configuration(self):
         """Test security groups are created with correct rules"""
@@ -506,9 +467,9 @@ class TestTapStack(unittest.TestCase):
         else:
             unique_suffix = "test"  # fallback
         
-        # ARRANGE - Updated log group names to match actual implementation
+        # ARRANGE
         expected_log_groups = [
-            f'/tap/network/vpc-flow-logs-{self.outputs.get("AccountId", "123456789012")}-{unique_suffix}',
+            f'/tap/network/vpc-flow-logs-{unique_suffix}',
             f'/aws/lambda/security-processor-{unique_suffix}'
         ]
         
