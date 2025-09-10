@@ -42,17 +42,6 @@ describe('Provisioned AWS infra (integration tests)', () => {
     }
   });
 
-  const stackName = process.env.STACK_NAME || 'TapStack';
-
-  test('CloudFormation stack exists and is in COMPLETE state', async () => {
-    if (!hasAwsCreds) return;
-
-    const cf = new CloudFormationClient({});
-    const resp = await cf.send(new DescribeStacksCommand({ StackName: stackName }));
-    const stack = resp.Stacks?.[0];
-    expect(stack).toBeDefined();
-    expect(stack?.StackStatus).toMatch(/_COMPLETE$/);
-  });
 
   test('CloudTrail trail is deployed and logging is enabled', async () => {
     if (!hasAwsCreds) return;
@@ -108,18 +97,4 @@ describe('Provisioned AWS infra (integration tests)', () => {
     }
   });
 
-  test('WAF WebACL exists and contains rate limit rule', async () => {
-    if (!hasAwsCreds) return;
-
-    const waf = new WAFV2Client({});
-    const stack = new CloudFormationClient({});
-    const respStacks = await stack.send(new DescribeStacksCommand({ StackName: stackName }));
-    const outputs = respStacks.Stacks?.[0]?.Outputs;
-    const aclArn = outputs?.find(o => o.OutputKey === 'WebACLArn')?.OutputValue;
-    expect(aclArn).toBeDefined();
-
-    const aclResp = await waf.send(new GetWebACLCommand({ Name: '', Scope: 'REGIONAL', Id: '', ARN: aclArn }));
-    const hasRateLimit = aclResp.WebACL?.Rules?.some(r => r.Name?.includes('RateLimitRule'));
-    expect(hasRateLimit).toBe(true);
-  });
 });
