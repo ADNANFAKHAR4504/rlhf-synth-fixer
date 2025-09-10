@@ -3,7 +3,7 @@ its showing error in lint and deploy stages
 lint 
 
 Running linting for platform: cfn, language: json
-✅ CloudFormation project detected, running CloudFormation validation...
+CloudFormation project detected, running CloudFormation validation...
 E8005 {'Fn::Select': [0, {'Fn::Split': [':', {'Ref': 'SNSOperationsTopicNameOrArn'}]}]} is not of type 'boolean'
 lib/TapStack.json:50:9
 
