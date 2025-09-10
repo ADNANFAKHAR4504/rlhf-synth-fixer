@@ -886,3 +886,12 @@ if __name__ == "__main__":
         name="pulumi-infra",
         args=TapStackArgs(environment_suffix=environment_suffix),
     )
+    
+    # Export outputs at stack level
+    from pulumi import export
+    
+    # Export the outputs
+    export("vpc_id", stack.vpc.id)
+    export("alb_dns_name", stack.alb.dns_name)
+    export("rds_endpoint", stack.rds_instance.endpoint)
+    export("s3_bucket_name", stack.static_files_bucket.id)
