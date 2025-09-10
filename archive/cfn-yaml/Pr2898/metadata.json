@@ -1,0 +1,44 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350203",
+  "team": "3",
+  "startedAt": "2025-09-08T20:51:05.243Z",
+  "subtask": "Serverless Architecture Implementation",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Web Application Deployment",
+    "Security Configuration",
+    "Database Management",
+    "Performance Optimization",
+    "Access Control",
+    "Monitoring Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "AWS::S3::Bucket",
+    "AWS::KMS::Key",
+    "AWS::KMS::Alias",
+    "AWS::DynamoDB::Table",
+    "AWS::IAM::Role",
+    "AWS::Lambda::Function",
+    "AWS::Lambda::Permission",
+    "AWS::Lambda::EventSourceMapping",
+    "AWS::ApiGateway::RestApi",
+    "AWS::ApiGateway::Resource",
+    "AWS::ApiGateway::Method",
+    "AWS::ApiGateway::Deployment",
+    "AWS::ApiGateway::Stage",
+    "AWS::ApiGateway::Account",
+    "AWS::Logs::LogGroup",
+    "AWS::S3::BucketPolicy"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "UsamaIftikhar12",
+  "dockerS3Location": ""
+}
