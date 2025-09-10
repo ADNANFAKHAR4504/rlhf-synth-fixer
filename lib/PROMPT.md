@@ -83,4 +83,4 @@ Deploys without errors in us-east-1.
 
 Fully satisfies the above requirements.
 
-Contains descriptive logical resource names and output.
+Contains descriptive logical resource names and outputs.
