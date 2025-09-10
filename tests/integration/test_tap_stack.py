@@ -438,7 +438,7 @@ class TestAWSInfrastructureLiveIntegration(unittest.TestCase):
             # Find log groups with our naming pattern
             log_groups = []
             for lg in response['logGroups']:
-                if ('/aws/ec2/' in lg['logGroupName'] or '/aws/rds/' in lg['logGroupName']) and 'dev' in lg['logGroupName']:
+                if ('/aws/ec2/v1-' in lg['logGroupName'] or '/aws/rds/v1-' in lg['logGroupName']) and 'dev' in lg['logGroupName']:
                     log_groups.append(lg)
             
             if not log_groups:
