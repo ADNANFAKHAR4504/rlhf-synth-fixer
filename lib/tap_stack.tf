@@ -625,7 +625,7 @@ resource "aws_s3_bucket_policy" "logs" {
 }
 
 # IAM Role for EC2 instances
-resource "aws_iam_role" "ec2_role" {
+resource "aws_iam_role" "ec2" {
   name = "tap-stack-ec2-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
@@ -646,7 +646,7 @@ resource "aws_iam_role" "ec2_role" {
 
 resource "aws_iam_role_policy" "ec2_policy" {
   name = "tap-stack-ec2-policy-${random_id.bucket_suffix.hex}"
-  role = aws_iam_role.ec2_role.id
+  role = aws_iam_role.ec2.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -674,15 +674,15 @@ resource "aws_iam_role_policy" "ec2_policy" {
   })
 }
 
-resource "aws_iam_instance_profile" "ec2_profile" {
+resource "aws_iam_instance_profile" "ec2" {
   name = "tap-stack-ec2-profile-${random_id.bucket_suffix.hex}"
-  role = aws_iam_role.ec2_role.name
+  role = aws_iam_role.ec2.name
 
   tags = local.common_tags
 }
 
 # Launch Template
-resource "aws_launch_template" "main" {
+resource "aws_launch_template" "app" {
   name_prefix   = "tap-stack-lt-"
   image_id      = data.aws_ssm_parameter.amazon_linux_ami.value
   instance_type = var.instance_type
@@ -690,7 +690,7 @@ resource "aws_launch_template" "main" {
   vpc_security_group_ids = [aws_security_group.app.id]
 
   iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
+    name = aws_iam_instance_profile.ec2.name
   }
 
   metadata_options {
@@ -735,7 +735,7 @@ resource "aws_autoscaling_group" "main" {
   desired_capacity = var.asg_desired_capacity
 
   launch_template {
-    id      = aws_launch_template.main.id
+    id      = aws_launch_template.app.id
     version = "$Latest"
   }
 
@@ -761,10 +761,15 @@ resource "aws_autoscaling_group" "main" {
 
 resource "aws_autoscaling_policy" "scale_up" {
   name                   = "tap-stack-scale-up-${random_id.bucket_suffix.hex}"
-  scaling_adjustment     = 1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  policy_type            = "TargetTrackingScaling"
   autoscaling_group_name = aws_autoscaling_group.main.name
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+    target_value = var.target_cpu_utilization
+  }
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
@@ -819,7 +824,7 @@ resource "aws_lb_target_group" "main" {
   tags = local.common_tags
 }
 
-resource "aws_lb_listener" "redirect" {
+resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
@@ -836,7 +841,7 @@ resource "aws_lb_listener" "redirect" {
   tags = local.common_tags
 }
 
-resource "aws_lb_listener" "main" {
+resource "aws_lb_listener" "https" {
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
@@ -849,11 +854,13 @@ resource "aws_lb_listener" "main" {
   }
 
   tags = local.common_tags
+
+  depends_on = [aws_acm_certificate.main]
 }
 
-# ACM Certificate for ALB
+# ACM Certificate for ALB (dummy certificate for testing)
 resource "aws_acm_certificate" "main" {
-  domain_name       = "*.${aws_lb.main.dns_name}"
+  domain_name       = "example.com"
   validation_method = "DNS"
 
   lifecycle {
@@ -1040,6 +1047,8 @@ resource "aws_db_instance" "main" {
 
   multi_az = true
 
+  performance_insights_enabled = true
+
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
   monitoring_interval             = 60
   monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
@@ -1052,7 +1061,7 @@ resource "aws_db_instance" "main" {
 }
 
 # RDS Read Replica
-resource "aws_db_instance" "replica" {
+resource "aws_db_instance" "read_replica" {
   identifier                 = "tap-stack-db-replica-${random_id.bucket_suffix.hex}"
   replicate_source_db        = aws_db_instance.main.identifier
   instance_class             = var.db_instance_class
@@ -1150,6 +1159,39 @@ resource "aws_iam_role_policy" "flow_logs" {
         ]
         Effect   = "Allow"
         Resource = "${aws_cloudwatch_log_group.vpc_flow_logs.arn}:*"
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/cloudtrail-logs/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
       }
     ]
   })
@@ -1470,7 +1512,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   tags = local.common_tags
 }
 
-resource "aws_cloudwatch_metric_alarm" "rds_free_storage" {
+resource "aws_cloudwatch_metric_alarm" "rds_storage" {
   alarm_name          = "tap-stack-rds-free-storage-low-${random_id.bucket_suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
@@ -1523,7 +1565,7 @@ EOF
 resource "aws_lambda_function" "sample" {
   filename         = "sample_lambda.zip"
   function_name    = "tap-stack-sample-function-${random_id.bucket_suffix.hex}"
-  role             = aws_iam_role.lambda_role.arn
+  role             = aws_iam_role.lambda.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.11"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
@@ -1537,7 +1579,7 @@ resource "aws_lambda_function" "sample" {
   tags = local.common_tags
 
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_basic_execution,
+    aws_iam_role_policy_attachment.lambda_basic,
     aws_cloudwatch_log_group.lambda_logs
   ]
 }
@@ -1550,7 +1592,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
   tags = local.common_tags
 }
 
-resource "aws_iam_role" "lambda_role" {
+resource "aws_iam_role" "lambda" {
   name = "tap-stack-lambda-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
@@ -1569,14 +1611,14 @@ resource "aws_iam_role" "lambda_role" {
   tags = local.common_tags
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  role       = aws_iam_role.lambda_role.name
+  role       = aws_iam_role.lambda.name
 }
 
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "tap-stack-lambda-policy-${random_id.bucket_suffix.hex}"
-  role = aws_iam_role.lambda_role.id
+  role = aws_iam_role.lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -1648,7 +1690,7 @@ output "alb_zone_id" {
   value       = aws_lb.main.zone_id
 }
 
-output "cloudfront_domain_name" {
+output "cloudfront_domain" {
   description = "Domain name of the CloudFront distribution"
   value       = aws_cloudfront_distribution.main.domain_name
 }
@@ -1665,10 +1707,10 @@ output "rds_endpoint" {
 
 output "rds_replica_endpoint" {
   description = "RDS read replica endpoint"
-  value       = aws_db_instance.replica.endpoint
+  value       = aws_db_instance.read_replica.endpoint
 }
 
-output "logs_bucket_name" {
+output "logs_bucket" {
   description = "Name of the logs S3 bucket"
   value       = aws_s3_bucket.logs.bucket
 }
@@ -1683,12 +1725,12 @@ output "sns_topic_arn" {
   value       = aws_sns_topic.alerts.arn
 }
 
-output "kms_logs_key_arn" {
+output "logs_kms_key_arn" {
   description = "ARN of the KMS key for logs"
   value       = aws_kms_key.logs_key.arn
 }
 
-output "kms_data_key_arn" {
+output "data_kms_key_arn" {
   description = "ARN of the KMS key for data"
   value       = aws_kms_key.data_key.arn
 }
