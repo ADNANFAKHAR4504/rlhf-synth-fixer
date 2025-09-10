@@ -20,9 +20,9 @@ terraform {
     bucket         = "tap-stack-terraform-state-1d25e325c0ebf3b2"
     key            = "tap-stack/terraform.tfstate"
     region         = "us-west-2"
-    dynamodb_table = "tap-stack-terraform-state-lock"
     encrypt        = true
     kms_key_id     = "alias/tap-stack-terraform-state-1d25e325c0ebf3b2"
+    dynamodb_table = "tap-stack-terraform-state-lock"
   }
 }
 
