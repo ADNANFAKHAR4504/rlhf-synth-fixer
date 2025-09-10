@@ -223,7 +223,7 @@ class TestAWSInfrastructureLiveIntegration(unittest.TestCase):
             # Test VPC configuration
             self.assertEqual(vpc['VpcId'], vpc_id)
             self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16')
-            self.assertTrue(vpc['IsDefault'], False)
+            self.assertFalse(vpc['IsDefault'], "VPC should be custom, not default")
             
             # Test DNS configuration
             self.assertTrue(vpc['EnableDnsHostnames'])
