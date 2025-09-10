@@ -427,39 +427,69 @@ Outputs:
   VPCId:
     Description: VPC ID
     Value: vpc-0892982b4d60d82b1
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-VPCId
 
   PublicSubnet1Id:
     Description: Public Subnet 1 ID
     Value: subnet-05883b1ec27c6f11a
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PublicSubnet1Id
 
   PublicSubnet2Id:
     Description: Public Subnet 2 ID
     Value: subnet-0aec91ed564a97094
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PublicSubnet2Id
 
   PrivateSubnet1Id:
     Description: Private Subnet 1 ID
     Value: subnet-0e9198b5dc916b8ba
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrivateSubnet1Id
 
   PrivateSubnet2Id:
     Description: Private Subnet 2 ID
     Value: subnet-09f3078dd78759cab
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-PrivateSubnet2Id
 
   RDSEndpoint:
     Description: RDS Instance Endpoint
     Value: tapstackpr2519-rdsinstance-bre1rxgq7xj2.c43eiskmcd0s.us-east-1.rds.amazonaws.com
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-RDSEndpoint
 
   LoggingBucketName:
     Description: Name of the Logging Bucket
     Value: tapstackpr2519-loggingbucket-xxpluzyfzmb4
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-LoggingBucketName
 
   RDSBackupBucketName:
     Description: Name of the RDS Backup Bucket
     Value: tapstackpr2519-rdsbackupbucket-fawilhzwsmev
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-RDSBackupBucketName
 
   KMSKeyAliasEBS:
     Description: KMS Key Alias for EBS
     Value: 6d04d16f-6ab6-48fd-bb7c-c5e2fb675099
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-KMSKeyAliasEBS
 
   KMSKeyAliasRDS:
     Description: KMS Key Alias for RDS
     Value: 277df8b2-8f8f-4384-9774-ea5d0197fac2
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-KMSKeyAliasRDS
