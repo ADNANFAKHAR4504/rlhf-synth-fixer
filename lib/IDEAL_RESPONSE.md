@@ -1,8 +1,10 @@
-```hcl
 
 # tap_stack.tf - Complete Infrastructure Stack
 
+```hcl
+
 # ================================
+
 # VARIABLES
 # ================================
 
@@ -1720,9 +1722,10 @@ output "db_instance_class4" {
 
 ```
 
-```hcl
 
 # provider.tf
+
+```hcl 
 
 terraform {
   required_version = ">= 1.4.0"
