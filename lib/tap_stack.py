@@ -202,8 +202,8 @@ class TapStack(pulumi.ComponentResource):
         """Create security groups and network ACLs."""
         # ALB Security Group
         self.alb_sg = ec2.SecurityGroup(
-            f"alb-sg-{self.environment_suffix}",
-            name=f"alb-sg-{self.environment_suffix}",
+            f"alb-sg-v2-{self.environment_suffix}",
+            name=f"alb-sg-v2-{self.environment_suffix}",
             description="Security group for Application Load Balancer",
             vpc_id=self.vpc.id,
             ingress=[
@@ -228,14 +228,14 @@ class TapStack(pulumi.ComponentResource):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**self.tags, "Name": f"alb-sg-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"alb-sg-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # EC2 Security Group
         self.ec2_sg = ec2.SecurityGroup(
-            f"ec2-sg-{self.environment_suffix}",
-            name=f"ec2-sg-{self.environment_suffix}",
+            f"ec2-sg-v2-{self.environment_suffix}",
+            name=f"ec2-sg-v2-{self.environment_suffix}",
             description="Security group for EC2 instances",
             vpc_id=self.vpc.id,
             ingress=[
@@ -260,14 +260,14 @@ class TapStack(pulumi.ComponentResource):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**self.tags, "Name": f"ec2-sg-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"ec2-sg-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # RDS Security Group
         self.rds_sg = ec2.SecurityGroup(
-            f"rds-sg-{self.environment_suffix}",
-            name=f"rds-sg-{self.environment_suffix}",
+            f"rds-sg-v2-{self.environment_suffix}",
+            name=f"rds-sg-v2-{self.environment_suffix}",
             description="Security group for RDS database",
             vpc_id=self.vpc.id,
             ingress=[
@@ -286,7 +286,7 @@ class TapStack(pulumi.ComponentResource):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**self.tags, "Name": f"rds-sg-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"rds-sg-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
@@ -633,19 +633,19 @@ echo "<h1>Hello from $(hostname)</h1>" > /var/www/html/index.html
         
         # Application Load Balancer
         self.alb = lb.LoadBalancer(
-            f"alb-{self.environment_suffix}",
-            name=f"alb-{self.environment_suffix}",
+            f"alb-v2-{self.environment_suffix}",
+            name=f"alb-v2-{self.environment_suffix}",
             load_balancer_type="application",
             security_groups=[self.alb_sg.id],
             subnets=[subnet.id for subnet in self.public_subnets],
             enable_deletion_protection=False,
-            tags={**self.tags, "Name": f"alb-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"alb-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # ALB Listener
         self.alb_listener = lb.Listener(
-            f"alb-listener-{self.environment_suffix}",
+            f"alb-listener-v2-{self.environment_suffix}",
             load_balancer_arn=self.alb.arn,
             port=80,
             protocol="HTTP",
