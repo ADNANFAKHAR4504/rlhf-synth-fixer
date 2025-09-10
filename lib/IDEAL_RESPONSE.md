@@ -129,7 +129,7 @@
 
 1. Microservices with API Gateway
 2. Event-driven architecture with EventBridge
-3. Serverless-first approach where applicable
+3. Serverless-first approach where applicables
 4. Container-native applications
 5. Database per service pattern
 6. CQRS and Event Sourcing for complex domains
