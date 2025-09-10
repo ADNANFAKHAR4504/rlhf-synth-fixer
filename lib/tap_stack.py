@@ -711,7 +711,7 @@ echo "<h1>Hello from $(hostname)</h1>" > /var/www/html/index.html
         # CloudWatch Log Groups
         self.ec2_log_group = cloudwatch.LogGroup(
             f"ec2-logs-v1-{self.environment_suffix}",
-            name=f"/aws/ec2/{self.environment_suffix}",
+            name=f"/aws/ec2/v1-{self.environment_suffix}",
             retention_in_days=30,
             tags={**self.tags, "Name": f"ec2-logs-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
@@ -719,7 +719,7 @@ echo "<h1>Hello from $(hostname)</h1>" > /var/www/html/index.html
         
         self.rds_log_group = cloudwatch.LogGroup(
             f"rds-logs-v1-{self.environment_suffix}",
-            name=f"/aws/rds/{self.environment_suffix}",
+            name=f"/aws/rds/v1-{self.environment_suffix}",
             retention_in_days=30,
             tags={**self.tags, "Name": f"rds-logs-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
