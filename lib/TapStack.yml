@@ -391,7 +391,7 @@ Resources:
   CPUUtilizationAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: 
+      AlarmName:
         Fn::Sub: ${AWS::StackName}-CPU-Utilization
       AlarmDescription: Alarm if CPU utilization exceeds 75%
       MetricName: CPUUtilization
@@ -417,9 +417,9 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName:
-        Fn::Sub: ${AWS::StackName}-alarms
+        Fn::Sub: ${AWS::StackName}-${Environment}-alarms
       DisplayName:
-        Fn::Sub: ${AWS::StackName}-infrastructure-alarms
+        Fn::Sub: ${AWS::StackName}-${Environment}-infrastructure-alarms
       Tags:
         - Key: Name
           Value:
