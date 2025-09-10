@@ -2,6 +2,31 @@
 # This file creates the S3 bucket and DynamoDB table needed for Terraform state management
 # NOTE: This should be applied first with local backend, then backend configuration should be added
 
+# Data sources
+data "aws_caller_identity" "current" {}
+
+# Variables
+variable "environment_suffix" {
+  description = "Environment suffix to avoid conflicts"
+  type        = string
+  default     = "dev"
+}
+
+# Local values for backend-specific resources
+locals {
+  backend_tags = {
+    "cost-center" = "1234"
+    Purpose       = "TerraformBackend"
+    Environment   = "shared"
+    ManagedBy     = "Terraform"
+  }
+
+  # Generate unique names with environment suffix
+  state_bucket_name = "tap-stack-terraform-state-${var.environment_suffix}-${random_id.backend_suffix.hex}"
+  lock_table_name   = "tap-stack-terraform-state-lock-${var.environment_suffix}"
+  kms_alias_name    = "alias/tap-stack-terraform-state-${var.environment_suffix}-${random_id.backend_suffix.hex}"
+}
+
 # Random suffix for backend resources to ensure uniqueness
 resource "random_id" "backend_suffix" {
   byte_length = 8
@@ -43,24 +68,23 @@ resource "aws_kms_key" "terraform_state" {
     ]
   })
 
-  tags = merge(local.common_tags, {
-    Name = "tap-stack-terraform-state-key"
+  tags = merge(local.backend_tags, {
+    Name = "tap-stack-terraform-state-key-${var.environment_suffix}"
   })
 }
 
 resource "aws_kms_alias" "terraform_state" {
-  name          = "alias/tap-stack-terraform-state-${random_id.backend_suffix.hex}"
+  name          = local.kms_alias_name
   target_key_id = aws_kms_key.terraform_state.key_id
 }
 
 # S3 Bucket for Terraform State
 resource "aws_s3_bucket" "terraform_state" {
-  bucket        = "tap-stack-terraform-state-${random_id.backend_suffix.hex}"
-  force_destroy = false # Prevent accidental deletion
+  bucket        = local.state_bucket_name
+  force_destroy = true # Allow destruction for QA pipeline
 
-  tags = merge(local.common_tags, {
-    Name        = "tap-stack-terraform-state"
-    Purpose     = "TerraformBackend"
+  tags = merge(local.backend_tags, {
+    Name        = "tap-stack-terraform-state-${var.environment_suffix}"
     Description = "S3 bucket for storing Terraform state"
   })
 }
@@ -159,7 +183,7 @@ resource "aws_s3_bucket_policy" "terraform_state" {
 
 # DynamoDB Table for State Locking
 resource "aws_dynamodb_table" "terraform_state_lock" {
-  name         = "tap-stack-terraform-state-lock"
+  name         = local.lock_table_name
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -177,16 +201,15 @@ resource "aws_dynamodb_table" "terraform_state_lock" {
     enabled = true
   }
 
-  tags = merge(local.common_tags, {
-    Name        = "tap-stack-terraform-state-lock"
-    Purpose     = "TerraformBackend"
+  tags = merge(local.backend_tags, {
+    Name        = "tap-stack-terraform-state-lock-${var.environment_suffix}"
     Description = "DynamoDB table for Terraform state locking"
   })
 }
 
 # IAM Policy for Terraform Backend Access
 resource "aws_iam_policy" "terraform_backend" {
-  name        = "tap-stack-terraform-backend-access"
+  name        = "tap-stack-terraform-backend-access-${var.environment_suffix}"
   path        = "/"
   description = "IAM policy for Terraform backend access"
 
@@ -234,7 +257,7 @@ resource "aws_iam_policy" "terraform_backend" {
     ]
   })
 
-  tags = local.common_tags
+  tags = local.backend_tags
 }
 
 # Outputs for Backend Configuration

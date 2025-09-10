@@ -236,7 +236,7 @@ resource "aws_kms_alias" "data_key" {
   target_key_id = aws_kms_key.data_key.key_id
 }
 
-data "aws_caller_identity" "current" {}
+# Using aws_caller_identity data source from backend.tf
 
 # VPC and networking
 resource "aws_vpc" "main" {
