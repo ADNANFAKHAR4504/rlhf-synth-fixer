@@ -42,7 +42,7 @@ class TapStack(pulumi.ComponentResource):
 
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
-        self.region = 'us-west-1'
+        self.region = 'ap-south-1'
         
         # Get latest Amazon Linux 2 AMI
         self.ami = ec2.get_ami(
@@ -68,33 +68,36 @@ class TapStack(pulumi.ComponentResource):
         
         # Register outputs
         try:
-            self.register_outputs({
-                'vpc_id': self.vpc.id,
-                'alb_dns_name': self.alb.dns_name,
-                'rds_endpoint': self.rds_instance.endpoint,
-                's3_bucket_name': self.static_files_bucket.id
-            })
-        except AttributeError:
+            if hasattr(self, 'vpc') and self.vpc:
+                self.register_outputs({'vpc_id': self.vpc.id})
+            if hasattr(self, 'alb') and self.alb:
+                self.register_outputs({'alb_dns_name': self.alb.dns_name})
+            if hasattr(self, 'rds_instance') and self.rds_instance:
+                self.register_outputs({'rds_endpoint': self.rds_instance.endpoint})
+            if hasattr(self, 'static_files_bucket') and self.static_files_bucket:
+                self.register_outputs({'s3_bucket_name': self.static_files_bucket.id})
+        except Exception as e:
             # Handle case where attributes don't exist (e.g., during testing)
+            print(f"Warning: Could not register outputs: {e}")
             pass
     
     def _create_vpc_and_networking(self):
         """Create VPC with public and private subnets across two AZs."""
         # VPC
         self.vpc = ec2.Vpc(
-            f"vpc-{self.environment_suffix}",
+            f"vpc-v1-{self.environment_suffix}",
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={**self.tags, "Name": f"vpc-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"vpc-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # Internet Gateway
         self.igw = ec2.InternetGateway(
-            f"igw-{self.environment_suffix}",
+            f"igw-v1-{self.environment_suffix}",
             vpc_id=self.vpc.id,
-            tags={**self.tags, "Name": f"igw-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"igw-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
@@ -111,37 +114,37 @@ class TapStack(pulumi.ComponentResource):
         for i, az in enumerate(azs.names[:2]):  # Use first 2 AZs
             # Public subnet
             public_subnet = ec2.Subnet(
-                f"public-subnet-{i+1}-{self.environment_suffix}",
+                f"public-subnet-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{i+1}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
-                tags={**self.tags, "Name": f"public-subnet-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"public-subnet-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             self.public_subnets.append(public_subnet)
             
             # Private subnet
             private_subnet = ec2.Subnet(
-                f"private-subnet-{i+1}-{self.environment_suffix}",
+                f"private-subnet-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{i+10}.0/24",
                 availability_zone=az,
-                tags={**self.tags, "Name": f"private-subnet-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"private-subnet-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             self.private_subnets.append(private_subnet)
             
             # Public route table
             public_rt = ec2.RouteTable(
-                f"public-rt-{i+1}-{self.environment_suffix}",
+                f"public-rt-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
-                tags={**self.tags, "Name": f"public-rt-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"public-rt-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             
             ec2.Route(
-                f"public-route-{i+1}-{self.environment_suffix}",
+                f"public-route-v1-{i+1}-{self.environment_suffix}",
                 route_table_id=public_rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 gateway_id=self.igw.id,
@@ -149,7 +152,7 @@ class TapStack(pulumi.ComponentResource):
             )
             
             ec2.RouteTableAssociation(
-                f"public-rta-{i+1}-{self.environment_suffix}",
+                f"public-rta-v1-{i+1}-{self.environment_suffix}",
                 subnet_id=public_subnet.id,
                 route_table_id=public_rt.id,
                 opts=ResourceOptions(parent=self)
@@ -159,31 +162,31 @@ class TapStack(pulumi.ComponentResource):
         # Create single NAT Gateway (to avoid AWS limit of 100 NAT gateways)
         # Use the first public subnet for the NAT Gateway
         nat_eip = ec2.Eip(
-            f"nat-eip-{self.environment_suffix}",
+            f"nat-eip-v1-{self.environment_suffix}",
             domain="vpc",
-            tags={**self.tags, "Name": f"nat-eip-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"nat-eip-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         self.nat_gateway = ec2.NatGateway(
-            f"nat-gateway-{self.environment_suffix}",
+            f"nat-gateway-v1-{self.environment_suffix}",
             allocation_id=nat_eip.id,
             subnet_id=self.public_subnets[0].id,  # Use first public subnet
-            tags={**self.tags, "Name": f"nat-gateway-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"nat-gateway-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # Create private route tables that all use the single NAT Gateway
         for i, private_subnet in enumerate(self.private_subnets):
             private_rt = ec2.RouteTable(
-                f"private-rt-{i+1}-{self.environment_suffix}",
+                f"private-rt-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
-                tags={**self.tags, "Name": f"private-rt-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"private-rt-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             
             ec2.Route(
-                f"private-route-{i+1}-{self.environment_suffix}",
+                f"private-route-v1-{i+1}-{self.environment_suffix}",
                 route_table_id=private_rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=self.nat_gateway.id,  # All private subnets use same NAT Gateway
@@ -191,7 +194,7 @@ class TapStack(pulumi.ComponentResource):
             )
             
             ec2.RouteTableAssociation(
-                f"private-rta-{i+1}-{self.environment_suffix}",
+                f"private-rta-v1-{i+1}-{self.environment_suffix}",
                 subnet_id=private_subnet.id,
                 route_table_id=private_rt.id,
                 opts=ResourceOptions(parent=self)
@@ -202,8 +205,8 @@ class TapStack(pulumi.ComponentResource):
         """Create security groups and network ACLs."""
         # ALB Security Group
         self.alb_sg = ec2.SecurityGroup(
-            f"alb-sg-{self.environment_suffix}",
-            name=f"alb-sg-{self.environment_suffix}",
+            f"alb-sg-v2-{self.environment_suffix}",
+            name=f"alb-sg-v2-{self.environment_suffix}",
             description="Security group for Application Load Balancer",
             vpc_id=self.vpc.id,
             ingress=[
@@ -228,14 +231,14 @@ class TapStack(pulumi.ComponentResource):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**self.tags, "Name": f"alb-sg-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"alb-sg-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # EC2 Security Group
         self.ec2_sg = ec2.SecurityGroup(
-            f"ec2-sg-{self.environment_suffix}",
-            name=f"ec2-sg-{self.environment_suffix}",
+            f"ec2-sg-v2-{self.environment_suffix}",
+            name=f"ec2-sg-v2-{self.environment_suffix}",
             description="Security group for EC2 instances",
             vpc_id=self.vpc.id,
             ingress=[
@@ -260,14 +263,14 @@ class TapStack(pulumi.ComponentResource):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**self.tags, "Name": f"ec2-sg-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"ec2-sg-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # RDS Security Group
         self.rds_sg = ec2.SecurityGroup(
-            f"rds-sg-{self.environment_suffix}",
-            name=f"rds-sg-{self.environment_suffix}",
+            f"rds-sg-v2-{self.environment_suffix}",
+            name=f"rds-sg-v2-{self.environment_suffix}",
             description="Security group for RDS database",
             vpc_id=self.vpc.id,
             ingress=[
@@ -286,7 +289,7 @@ class TapStack(pulumi.ComponentResource):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**self.tags, "Name": f"rds-sg-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"rds-sg-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
@@ -481,28 +484,28 @@ class TapStack(pulumi.ComponentResource):
         """Deploy PostgreSQL RDS with multi-AZ in private subnet."""
         # DB Subnet Group
         self.db_subnet_group = rds.SubnetGroup(
-            f"db-subnet-group-{self.environment_suffix}",
+            f"db-subnet-group-v1-{self.environment_suffix}",
             subnet_ids=[subnet.id for subnet in self.private_subnets],
-            tags={**self.tags, "Name": f"db-subnet-group-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"db-subnet-group-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # DB Parameter Group
         self.db_parameter_group = rds.ParameterGroup(
-            f"db-parameter-group-{self.environment_suffix}",
-            family="postgres13",
+            f"db-parameter-group-v1-{self.environment_suffix}",
+            family="postgres17",
             description="Custom parameter group for PostgreSQL",
             parameters=[
                 {"name": "log_statement", "value": "all"},
                 {"name": "log_min_duration_statement", "value": "1000"}
             ],
-            tags={**self.tags, "Name": f"db-parameter-group-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"db-parameter-group-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # RDS Instance
         self.rds_instance = rds.Instance(
-            f"rds-instance-{self.environment_suffix}",
+            f"rds-instance-v1-{self.environment_suffix}",
             engine="postgres",
             engine_version="17.6",
             instance_class="db.t3.micro",
@@ -633,19 +636,19 @@ echo "<h1>Hello from $(hostname)</h1>" > /var/www/html/index.html
         
         # Application Load Balancer
         self.alb = lb.LoadBalancer(
-            f"alb-{self.environment_suffix}",
-            name=f"alb-{self.environment_suffix}",
+            f"alb-v2-{self.environment_suffix}",
+            name=f"alb-v2-{self.environment_suffix}",
             load_balancer_type="application",
             security_groups=[self.alb_sg.id],
             subnets=[subnet.id for subnet in self.public_subnets],
             enable_deletion_protection=False,
-            tags={**self.tags, "Name": f"alb-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"alb-v2-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # ALB Listener
         self.alb_listener = lb.Listener(
-            f"alb-listener-{self.environment_suffix}",
+            f"alb-listener-v2-{self.environment_suffix}",
             load_balancer_arn=self.alb.arn,
             port=80,
             protocol="HTTP",
@@ -879,4 +882,13 @@ if __name__ == "__main__":
         name="pulumi-infra",
         args=TapStackArgs(environment_suffix=environment_suffix),
     )
+    
+    # Export outputs at stack level
+    from pulumi import export
+    
+    # Export the outputs - these will be available after the stack is created
+    export("vpc_id", stack.vpc.id)
+    export("alb_dns_name", stack.alb.dns_name) 
+    export("rds_endpoint", stack.rds_instance.endpoint)
+    export("s3_bucket_name", stack.static_files_bucket.id)
 ```

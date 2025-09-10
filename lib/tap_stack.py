@@ -68,14 +68,17 @@ class TapStack(pulumi.ComponentResource):
         
         # Register outputs
         try:
-            self.register_outputs({
-                'vpc_id': self.vpc.id,
-                'alb_dns_name': self.alb.dns_name,
-                'rds_endpoint': self.rds_instance.endpoint,
-                's3_bucket_name': self.static_files_bucket.id
-            })
-        except AttributeError:
+            if hasattr(self, 'vpc') and self.vpc:
+                self.register_outputs({'vpc_id': self.vpc.id})
+            if hasattr(self, 'alb') and self.alb:
+                self.register_outputs({'alb_dns_name': self.alb.dns_name})
+            if hasattr(self, 'rds_instance') and self.rds_instance:
+                self.register_outputs({'rds_endpoint': self.rds_instance.endpoint})
+            if hasattr(self, 'static_files_bucket') and self.static_files_bucket:
+                self.register_outputs({'s3_bucket_name': self.static_files_bucket.id})
+        except Exception as e:
             # Handle case where attributes don't exist (e.g., during testing)
+            print(f"Warning: Could not register outputs: {e}")
             pass
     
     def _create_vpc_and_networking(self):
@@ -879,3 +882,12 @@ if __name__ == "__main__":
         name="pulumi-infra",
         args=TapStackArgs(environment_suffix=environment_suffix),
     )
+    
+    # Export outputs at stack level
+    from pulumi import export
+    
+    # Export the outputs - these will be available after the stack is created
+    export("vpc_id", stack.vpc.id)
+    export("alb_dns_name", stack.alb.dns_name) 
+    export("rds_endpoint", stack.rds_instance.endpoint)
+    export("s3_bucket_name", stack.static_files_bucket.id)
