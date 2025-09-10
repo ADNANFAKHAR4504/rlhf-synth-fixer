@@ -481,28 +481,28 @@ class TapStack(pulumi.ComponentResource):
         """Deploy PostgreSQL RDS with multi-AZ in private subnet."""
         # DB Subnet Group
         self.db_subnet_group = rds.SubnetGroup(
-            f"db-subnet-group-{self.environment_suffix}",
+            f"db-subnet-group-v1-{self.environment_suffix}",
             subnet_ids=[subnet.id for subnet in self.private_subnets],
-            tags={**self.tags, "Name": f"db-subnet-group-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"db-subnet-group-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # DB Parameter Group
         self.db_parameter_group = rds.ParameterGroup(
-            f"db-parameter-group-{self.environment_suffix}",
+            f"db-parameter-group-v1-{self.environment_suffix}",
             family="postgres17",
             description="Custom parameter group for PostgreSQL",
             parameters=[
                 {"name": "log_statement", "value": "all"},
                 {"name": "log_min_duration_statement", "value": "1000"}
             ],
-            tags={**self.tags, "Name": f"db-parameter-group-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"db-parameter-group-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # RDS Instance
         self.rds_instance = rds.Instance(
-            f"rds-instance-{self.environment_suffix}",
+            f"rds-instance-v1-{self.environment_suffix}",
             engine="postgres",
             engine_version="17.6",
             instance_class="db.t3.micro",
