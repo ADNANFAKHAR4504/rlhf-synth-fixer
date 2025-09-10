@@ -9,7 +9,7 @@
   "subtask": "Web Application Deployment",
   "subject_labels": [
     "General Infrastructure Tooling QA",
-    "Web Application Deployment", 
+    "Web Application Deployment",
     "Security Configuration",
     "Database Management",
     "Network Configuration",
@@ -22,7 +22,7 @@
     "VPC",
     "EC2",
     "Auto Scaling",
-    "Application Load Balancer", 
+    "Application Load Balancer",
     "RDS",
     "CloudWatch",
     "CloudWatch Logs",
@@ -30,5 +30,11 @@
     "Internet Gateway",
     "NAT Gateway",
     "Security Groups"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "chiragp-turing",
+  "dockerS3Location": ""
 }
