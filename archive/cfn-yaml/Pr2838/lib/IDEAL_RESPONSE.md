@@ -1,0 +1,1242 @@
+Stand up two identical AWS environments (Production in us-east-1 and Staging in us-west-2) from brand-new stacks, using a single, self-contained TapStack.yml that:
+
+Creates its own VPC (10.0.0.0/16) with one public (10.0.1.0/24) and one private (10.0.2.0/24) subnet.
+
+Fronts traffic with an internet-facing ALB (HTTP :80 only), targets an ASG (min 2 / max 5) of Amazon Linux 2 EC2 instances, and integrates with DynamoDB.
+
+Uses RDS (PostgreSQL, Multi-AZ), S3 (with access logging), IAM, CloudWatch (logs + dashboard), SSM Parameter Store (for non-secret config), and VPC endpoints so private instances don’t need outbound internet.
+
+Enforces security, least privilege, and encryption at rest (S3/RDS/KMS for logs).
+
+Tags everything with Environment: Production|Staging and other helpful keys.
+
+No SSL/cert config (explicitly excluded).
+
+No references to pre-existing resources; everything is created in-stack.
+
+Parm defaults provided so the template deploys without supplying values.
+
+Lint-clean and deployable.
+
+⚠️ Note: An internet-facing ALB normally requires at least two public subnets across two AZs. Because the subnet CIDRs were fixed to one public and one private, the ideal long-term improvement is to add a second public subnet (e.g., 10.0.3.0/24) in another AZ. In this delivery we preserved your exact CIDRs and added VPC endpoints so instances in the private subnet avoid public egress.
+
+The ideal, human-sounding prompt that would generate TapStack.yml
+
+Prompt:
+“Create a single CloudFormation template named TapStack.yml that fully provisions two AWS environments—Production (us-east-1) and Staging (us-west-2)—from scratch. The template must include:
+
+A new VPC (10.0.0.0/16) with one public subnet (10.0.1.0/24) and one private subnet (10.0.2.0/24). Internet gateway for the public route table only.
+
+VPC endpoints (S3 gateway; interface endpoints for SSM/SSMMessages/EC2Messages/CloudWatch Logs/Monitoring) so private instances don’t require NAT.
+
+An internet-facing Application Load Balancer listening on HTTP :80 only (no SSL or certificates).
+
+A Target Group and Listener, plus an Auto Scaling Group (min 2, max 5, desired 2) of Amazon Linux 2 EC2 instances (latest AL2 via public SSM parameter). Instances run httpd and the CloudWatch Agent to push CPU/memory/disk metrics and logs.
+
+DynamoDB table (provisioned 5R/5W, SSE, PITR).
+
+RDS PostgreSQL in Multi-AZ with encryption at rest. The DB master password must be created with Secrets Manager in-stack; do not require any pre-existing SSM SecureString. Make the engine version parameter default to auto and omit EngineVersion when auto is selected so it always deploys in any region.
+
+S3: one bucket for logs (server-side encryption, access logging enabled) and a separate bucket for ALB access logs; names must be globally unique and lowercase.
+
+An IAM instance role/profile with least privilege: read SSM app parameters under /tapstack/${EnvironmentName}/..., S3 access to the logs bucket, and CRUD for the single DynamoDB table.
+
+CloudWatch: a KMS CMK for encrypting the log group; one log group /tapstack/${EnvironmentName}/application; a dashboard visualizing EC2 (CPU/memory), ALB (5xx/requests/latency), and RDS (CPU/Mem/Connections).
+
+SSM Parameter Store for non-secret app config values (DB host/port/name/user, logs bucket, Dynamo table name).
+
+Security groups: ALB allows inbound 80 from 0.0.0.0/0; app instances accept 80 only from ALB SG; RDS accepts 5432 from the app SG; EGRESs only as needed (no circular SG dependencies).
+
+Everything tagged at minimum with Name, Project=TapStack, Owner=DevOps, Environment, and CostCenter=App.
+
+No references to anything outside the stack.
+
+Pass cfn-lint cleanly (no errors/warnings).
+
+Provide sensible parameter defaults so the template can be deployed with zero overrides.
+Exclude all SSL/certificate resources. Also include exports/outputs for IDs/ARNs (VPC, subnets, ALB, TG, ASG, IAM, RDS, DynamoDB, S3, CW resources). Keep the file as a single self-contained YAML template.”
+
+This prompt makes it clear, human, and specific—while encoding all your constraints and best practices.
+
+Smoke checks
+
+Hit the ALB DNS on port 80 and confirm the sample web page renders.
+
+Confirm ASG desired=2, health checks pass, scaling works.
+
+Write/read test item in DynamoDB; exercise IAM permissions via the app.
+
+Connect to RDS (from a bastion or SSM) and verify engine/version, Multi-AZ, encryption.
+
+Check S3 buckets (logs + access logs), verify server-side encryption and log delivery.
+
+Confirm CloudWatch dashboard graphs populate; log group is KMS-encrypted.
+
+Ensure SSM Parameter Store keys exist and match outputs.
+
+What “great” looks like
+
+Self-contained template; no external secrets or params required.
+
+No circular SG references; least-privilege IAM.
+
+Region-proof DB engine handling (auto → omit EngineVersion).
+
+Clean linter pass; clean stack creation; idempotent re-deploys.
+
+Clear outputs and tags to distinguish Staging vs Production.
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TapStack - Complete infrastructure for staging and production environments'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    AllowedValues:
+      - Production
+      - Staging
+    Default: Production
+    Description: Environment name for this deployment
+  AppInstanceType:
+    Type: String
+    Default: t3.micro
+    Description: EC2 instance type for application servers
+  DBInstanceClass:
+    Type: String
+    Default: db.t3.micro
+    Description: RDS instance class
+  DBEngineVersion:
+    Type: String
+    Default: auto
+    AllowedValues:
+      - auto
+      - 14.11
+      - 15.6
+      - 16.3
+    Description: 'PostgreSQL engine version. Use "auto" to let AWS select a valid version for the region.'
+  DBName:
+    Type: String
+    Default: tapstackdb
+    Description: Database name
+  DBUsername:
+    Type: String
+    Default: tapstackuser
+    Description: Database master username
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentName, 'Production']
+  UseAutoDBVersion: !Equals [!Ref DBEngineVersion, 'auto']
+
+Mappings:
+  ALBAccountMap:
+    us-east-1:
+      AccountId: '127311923021'
+    us-west-2:
+      AccountId: '797873946194'
+  EnvSlugMap:
+    Production:
+      Slug: 'production'
+      Short: 'prod'
+    Staging:
+      Slug: 'staging'
+      Short: 'stg'
+
+Resources:
+  # ------------------------
+  # VPC and Networking
+  # ------------------------
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-VPC'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-IGW'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-Subnet'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-Subnet'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Public-RT'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Private-RT'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  # ------------------------
+  # VPC Endpoints (Gateway & Interface)
+  # ------------------------
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VPC interface endpoints
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-VPCEndpoint-SG'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  SSMVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+
+  SSMMessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssmmessages'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+
+  EC2MessagesVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ec2messages'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+
+  CloudWatchLogsVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+
+  MonitoringVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.monitoring'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+
+  # ------------------------
+  # Security Groups
+  # ------------------------
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ALB-SG'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for application instances
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      # Avoid circular deps: no explicit egress to RDS SG (stateful SG allows return traffic).
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-App-SG'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for RDS database
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-RDS-SG'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  # ------------------------
+  # S3 Buckets (logs + access logs)
+  # ------------------------
+  S3AccessLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        !Sub
+          - 'tapstack-${Slug}-access-logs-${AWS::Region}-${AWS::AccountId}'
+          - { Slug: !FindInMap [EnvSlugMap, !Ref EnvironmentName, Slug] }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-AccessLogs-Bucket'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  S3LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        !Sub
+          - 'tapstack-${Slug}-logs-${AWS::Region}-${AWS::AccountId}'
+          - { Slug: !FindInMap [EnvSlugMap, !Ref EnvironmentName, Slug] }
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName: !Ref S3AccessLogsBucket
+        LogFilePrefix: access-logs/
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-Logs-Bucket'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  S3LogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3LogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              AWS:
+                !Sub
+                  - 'arn:aws:iam::${AccountId}:root'
+                  - { AccountId: !FindInMap [ALBAccountMap, !Ref 'AWS::Region', AccountId] }
+            Action: s3:PutObject
+            Resource: !Sub 'arn:aws:s3:::${S3LogsBucket}/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              AWS:
+                !Sub
+                  - 'arn:aws:iam::${AccountId}:root'
+                  - { AccountId: !FindInMap [ALBAccountMap, !Ref 'AWS::Region', AccountId] }
+            Action: s3:GetBucketAcl
+            Resource: !Sub 'arn:aws:s3:::${S3LogsBucket}'
+
+  # ------------------------
+  # KMS for CloudWatch Logs encryption
+  # ------------------------
+  LogsKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      Description: KMS key for encrypting CloudWatch Log Group
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowRootAccount
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: AllowCloudWatchLogsUse
+            Effect: Allow
+            Principal:
+              Service: !Sub 'logs.${AWS::Region}.amazonaws.com'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/tapstack/${EnvironmentName}/application'
+      Tags:
+        - Key: Project
+          Value: TapStack
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  LogsKmsAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/tapstack/${EnvironmentName}/logs'
+      TargetKeyId: !Ref LogsKmsKey
+
+  # ------------------------
+  # CloudWatch Log Group (encrypted)
+  # ------------------------
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/tapstack/${EnvironmentName}/application'
+      RetentionInDays: 14
+      KmsKeyId: !GetAtt LogsKmsKey.Arn
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-LogGroup'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  # ------------------------
+  # Secrets Manager: DB master password (self-contained)
+  # ------------------------
+  DBMasterSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'tapstack-${EnvironmentName}-db-master-secret'
+      Description: RDS master user password for TapStack
+      GenerateSecretString:
+        PasswordLength: 32
+        ExcludePunctuation: true
+        ExcludeCharacters: '"@/\\'
+      Tags:
+        - Key: Project
+          Value: TapStack
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ------------------------
+  # Application Load Balancer & Target Group
+  # ------------------------
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub '${EnvironmentName}-ALB'
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet
+        - !Ref PrivateSubnet
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      LoadBalancerAttributes:
+        - Key: access_logs.s3.enabled
+          Value: 'true'
+        - Key: access_logs.s3.bucket
+          Value: !Ref S3LogsBucket
+        - Key: access_logs.s3.prefix
+          Value: alb-logs
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ALB'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${EnvironmentName}-TG'
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-TG'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # ------------------------
+  # IAM Roles and Policies
+  # ------------------------
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentName}-TapStack-InstanceRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: SSMParameterAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/tapstack/${EnvironmentName}/*'
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::${S3LogsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::${S3LogsBucket}'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt DynamoDBTable.Arn
+      Tags:
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${EnvironmentName}-TapStack-InstanceProfile'
+      Roles:
+        - !Ref InstanceRole
+
+  # ------------------------
+  # Launch Template and Auto Scaling Group
+  # ------------------------
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}"
+        InstanceType: !Ref AppInstanceType
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref AppSecurityGroup
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            set -euo pipefail
+            yum update -y
+            yum install -y amazon-cloudwatch-agent httpd
+
+            systemctl enable httpd
+            systemctl start httpd
+
+            cat > /var/www/html/index.html << 'EOF'
+            <html>
+            <head><title>TapStack ${EnvironmentName}</title></head>
+            <body>
+              <h1>TapStack ${EnvironmentName} Environment</h1>
+              <p>Instance ID: $(curl -s http://169.254.169.254/latest/meta-data/instance-id)</p>
+              <p>Region: ${AWS::Region}</p>
+            </body>
+            </html>
+            EOF
+
+            cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+            {
+              "metrics": {
+                "namespace": "CWAgent",
+                "metrics_collected": {
+                  "cpu": {
+                    "measurement": [
+                      {"name": "cpu_usage_idle", "rename": "CPU_USAGE_IDLE", "unit": "Percent"},
+                      {"name": "cpu_usage_iowait", "rename": "CPU_USAGE_IOWAIT", "unit": "Percent"},
+                      {"name": "cpu_usage_user", "rename": "CPU_USAGE_USER", "unit": "Percent"},
+                      {"name": "cpu_usage_system", "rename": "CPU_USAGE_SYSTEM", "unit": "Percent"}
+                    ],
+                    "metrics_collection_interval": 60,
+                    "totalcpu": true
+                  },
+                  "disk": {
+                    "measurement": ["used_percent"],
+                    "metrics_collection_interval": 60,
+                    "resources": ["*"]
+                  },
+                  "diskio": {
+                    "measurement": ["io_time"],
+                    "metrics_collection_interval": 60,
+                    "resources": ["*"]
+                  },
+                  "mem": {
+                    "measurement": ["mem_used_percent"],
+                    "metrics_collection_interval": 60
+                  }
+                }
+              },
+              "logs": {
+                "logs_collected": {
+                  "files": {
+                    "collect_list": [
+                      {
+                        "file_path": "/var/log/httpd/access_log",
+                        "log_group_name": "${LogGroup}",
+                        "log_stream_name": "{instance_id}/httpd/access_log"
+                      },
+                      {
+                        "file_path": "/var/log/httpd/error_log",
+                        "log_group_name": "${LogGroup}",
+                        "log_stream_name": "{instance_id}/httpd/error_log"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+            EOF
+
+            /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+              -a fetch-config -m ec2 \
+              -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: !Sub '${EnvironmentName}-ASG'
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      MinSize: 2
+      MaxSize: 5
+      DesiredCapacity: 2
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet
+      TargetGroupARNs:
+        - !Ref TargetGroup
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-ASG'
+          PropagateAtLaunch: false
+        - Key: Project
+          Value: TapStack
+          PropagateAtLaunch: true
+        - Key: Owner
+          Value: DevOps
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentName
+          PropagateAtLaunch: true
+        - Key: CostCenter
+          Value: App
+          PropagateAtLaunch: true
+
+  # ------------------------
+  # DynamoDB Table
+  # ------------------------
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${EnvironmentName}-TapStackTable'
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-TapStackTable'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  # ------------------------
+  # RDS Database
+  # ------------------------
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub '${EnvironmentName}-db-subnet-group'
+      DBSubnetGroupDescription: Subnet group for RDS database
+      SubnetIds:
+        - !Ref PrivateSubnet
+        - !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-DBSubnetGroup'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub '${EnvironmentName}-tapstack-db'
+      DBInstanceClass: !Ref DBInstanceClass
+      Engine: postgres
+      EngineVersion: !If [UseAutoDBVersion, !Ref 'AWS::NoValue', !Ref DBEngineVersion]
+      AutoMinorVersionUpgrade: true
+      DBName: !Ref DBName
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterSecret}:SecretString}}'
+      AllocatedStorage: 20
+      StorageType: gp2
+      StorageEncrypted: true
+      MultiAZ: true
+      PubliclyAccessible: false
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      BackupRetentionPeriod: 7
+      DeletionProtection: !If [IsProduction, true, false]
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-RDS'
+        - Key: Project
+          Value: TapStack
+        - Key: Owner
+          Value: DevOps
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: CostCenter
+          Value: App
+
+  # ------------------------
+  # CloudWatch Dashboard
+  # ------------------------
+  CloudWatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${EnvironmentName}-TapStack-Dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", "${AutoScalingGroup}"],
+                  ["CWAgent", "mem_used_percent", "AutoScalingGroupName", "${AutoScalingGroup}"]
+                ],
+                "period": 300, "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "EC2 (ASG) CPU & Memory"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/ApplicationELB", "HTTPCode_ELB_5XX_Count", "LoadBalancer", "${ApplicationLoadBalancer.LoadBalancerFullName}"],
+                  [".", "TargetResponseTime", ".", "."],
+                  [".", "RequestCount", ".", "."]
+                ],
+                "period": 300, "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "ALB Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 6, "width": 12, "height": 6,
+              "properties": {
+                "metrics": [
+                  ["AWS/RDS", "CPUUtilization", "DBInstanceIdentifier", "${RDSInstance}"],
+                  [".", "FreeableMemory", ".", "."],
+                  [".", "DatabaseConnections", ".", "."]
+                ],
+                "period": 300, "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "RDS Metrics"
+              }
+            }
+          ]
+        }
+
+  # ------------------------
+  # SSM Parameters (non-secret application config)
+  # ------------------------
+  SSMDbHostParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/tapstack/${EnvironmentName}/app/config/db_host'
+      Type: String
+      Value: !GetAtt RDSInstance.Endpoint.Address
+      Description: RDS endpoint hostname
+
+  SSMDbPortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/tapstack/${EnvironmentName}/app/config/db_port'
+      Type: String
+      Value: !GetAtt RDSInstance.Endpoint.Port
+      Description: RDS endpoint port
+
+  SSMDbNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/tapstack/${EnvironmentName}/app/config/db_name'
+      Type: String
+      Value: !Ref DBName
+      Description: RDS database name
+
+  SSMDbUserParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/tapstack/${EnvironmentName}/app/config/db_user'
+      Type: String
+      Value: !Ref DBUsername
+      Description: RDS database user (non-secret)
+
+  SSMDynamoTableParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/tapstack/${EnvironmentName}/app/config/dynamo_table'
+      Type: String
+      Value: !Ref DynamoDBTable
+      Description: DynamoDB table name for the application
+
+  SSMLogsBucketParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/tapstack/${EnvironmentName}/app/config/logs_bucket'
+      Type: String
+      Value: !Ref S3LogsBucket
+      Description: S3 logs bucket name for the application
+
+Outputs:
+  # Core Networking
+  VpcId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${EnvironmentName}-VpcId'
+
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref PublicSubnet
+    Export:
+      Name: !Sub '${EnvironmentName}-PublicSubnetId'
+
+  PrivateSubnetId:
+    Description: Private Subnet ID
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: !Sub '${EnvironmentName}-PrivateSubnetId'
+
+  # ALB / TG
+  AlbArn:
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${EnvironmentName}-AlbArn'
+
+  AlbDnsName:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${EnvironmentName}-AlbDnsName'
+
+  AlbSecurityGroupId:
+    Description: Application Load Balancer Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-AlbSecurityGroupId'
+
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-TargetGroupArn'
+
+  HttpListenerArn:
+    Description: HTTP Listener ARN
+    Value: !Ref HTTPListener
+    Export:
+      Name: !Sub '${EnvironmentName}-HttpListenerArn'
+
+  # Compute / IAM
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-AutoScalingGroupName'
+
+  LaunchTemplateId:
+    Description: Launch Template ID
+    Value: !Ref LaunchTemplate
+    Export:
+      Name: !Sub '${EnvironmentName}-LaunchTemplateId'
+
+  InstanceRoleArn:
+    Description: Instance Role ARN
+    Value: !GetAtt InstanceRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-InstanceRoleArn'
+
+  InstanceProfileArn:
+    Description: Instance Profile ARN
+    Value: !GetAtt InstanceProfile.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-InstanceProfileArn'
+
+  AppSecurityGroupId:
+    Description: Application Security Group ID
+    Value: !Ref AppSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-AppSecurityGroupId'
+
+  # RDS
+  RdsEndpoint:
+    Description: RDS Endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentName}-RdsEndpoint'
+
+  RdsPort:
+    Description: RDS Port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${EnvironmentName}-RdsPort'
+
+  DbSubnetGroupName:
+    Description: DB Subnet Group Name
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-DbSubnetGroupName'
+
+  RdsSecurityGroupId:
+    Description: RDS Security Group ID
+    Value: !Ref RDSSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-RdsSecurityGroupId'
+
+  # DynamoDB
+  DynamoTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref DynamoDBTable
+    Export:
+      Name: !Sub '${EnvironmentName}-DynamoTableName'
+
+  DynamoTableArn:
+    Description: DynamoDB Table ARN
+    Value: !GetAtt DynamoDBTable.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-DynamoTableArn'
+
+  # S3
+  S3LogsBucketName:
+    Description: S3 Logs Bucket Name
+    Value: !Ref S3LogsBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-S3LogsBucketName'
+
+  S3LogsBucketArn:
+    Description: S3 Logs Bucket ARN
+    Value: !GetAtt S3LogsBucket.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-S3LogsBucketArn'
+
+  S3AccessLogsBucketName:
+    Description: S3 Access Logs Bucket Name
+    Value: !Ref S3AccessLogsBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-S3AccessLogsBucketName'
+
+  S3AccessLogsBucketArn:
+    Description: S3 Access Logs Bucket ARN
+    Value: !GetAtt S3AccessLogsBucket.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-S3AccessLogsBucketArn'
+
+  # Monitoring / Config
+  CloudWatchDashboardName:
+    Description: CloudWatch Dashboard Name
+    Value: !Sub '${EnvironmentName}-TapStack-Dashboard'
+    Export:
+      Name: !Sub '${EnvironmentName}-CloudWatchDashboardName'
+
+  LogGroupName:
+    Description: CloudWatch Log Group Name
+    Value: !Ref LogGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-LogGroupName'
+
+  # SSM Path
+  SsmParameterPathPrefix:
+    Description: SSM Parameter Store path prefix for environment configuration
+    Value: !Sub '/tapstack/${EnvironmentName}'
+    Export:
+      Name: !Sub '${EnvironmentName}-SsmParameterPathPrefix'
+```
