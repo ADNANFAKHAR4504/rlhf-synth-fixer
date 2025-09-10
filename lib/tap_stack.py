@@ -82,19 +82,19 @@ class TapStack(pulumi.ComponentResource):
         """Create VPC with public and private subnets across two AZs."""
         # VPC
         self.vpc = ec2.Vpc(
-            f"vpc-{self.environment_suffix}",
+            f"vpc-v1-{self.environment_suffix}",
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
-            tags={**self.tags, "Name": f"vpc-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"vpc-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # Internet Gateway
         self.igw = ec2.InternetGateway(
-            f"igw-{self.environment_suffix}",
+            f"igw-v1-{self.environment_suffix}",
             vpc_id=self.vpc.id,
-            tags={**self.tags, "Name": f"igw-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"igw-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
@@ -111,37 +111,37 @@ class TapStack(pulumi.ComponentResource):
         for i, az in enumerate(azs.names[:2]):  # Use first 2 AZs
             # Public subnet
             public_subnet = ec2.Subnet(
-                f"public-subnet-{i+1}-{self.environment_suffix}",
+                f"public-subnet-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{i+1}.0/24",
                 availability_zone=az,
                 map_public_ip_on_launch=True,
-                tags={**self.tags, "Name": f"public-subnet-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"public-subnet-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             self.public_subnets.append(public_subnet)
             
             # Private subnet
             private_subnet = ec2.Subnet(
-                f"private-subnet-{i+1}-{self.environment_suffix}",
+                f"private-subnet-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{i+10}.0/24",
                 availability_zone=az,
-                tags={**self.tags, "Name": f"private-subnet-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"private-subnet-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             self.private_subnets.append(private_subnet)
             
             # Public route table
             public_rt = ec2.RouteTable(
-                f"public-rt-{i+1}-{self.environment_suffix}",
+                f"public-rt-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
-                tags={**self.tags, "Name": f"public-rt-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"public-rt-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             
             ec2.Route(
-                f"public-route-{i+1}-{self.environment_suffix}",
+                f"public-route-v1-{i+1}-{self.environment_suffix}",
                 route_table_id=public_rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 gateway_id=self.igw.id,
@@ -149,7 +149,7 @@ class TapStack(pulumi.ComponentResource):
             )
             
             ec2.RouteTableAssociation(
-                f"public-rta-{i+1}-{self.environment_suffix}",
+                f"public-rta-v1-{i+1}-{self.environment_suffix}",
                 subnet_id=public_subnet.id,
                 route_table_id=public_rt.id,
                 opts=ResourceOptions(parent=self)
@@ -159,31 +159,31 @@ class TapStack(pulumi.ComponentResource):
         # Create single NAT Gateway (to avoid AWS limit of 100 NAT gateways)
         # Use the first public subnet for the NAT Gateway
         nat_eip = ec2.Eip(
-            f"nat-eip-{self.environment_suffix}",
+            f"nat-eip-v1-{self.environment_suffix}",
             domain="vpc",
-            tags={**self.tags, "Name": f"nat-eip-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"nat-eip-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         self.nat_gateway = ec2.NatGateway(
-            f"nat-gateway-{self.environment_suffix}",
+            f"nat-gateway-v1-{self.environment_suffix}",
             allocation_id=nat_eip.id,
             subnet_id=self.public_subnets[0].id,  # Use first public subnet
-            tags={**self.tags, "Name": f"nat-gateway-{self.environment_suffix}"},
+            tags={**self.tags, "Name": f"nat-gateway-v1-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
         
         # Create private route tables that all use the single NAT Gateway
         for i, private_subnet in enumerate(self.private_subnets):
             private_rt = ec2.RouteTable(
-                f"private-rt-{i+1}-{self.environment_suffix}",
+                f"private-rt-v1-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
-                tags={**self.tags, "Name": f"private-rt-{i+1}-{self.environment_suffix}"},
+                tags={**self.tags, "Name": f"private-rt-v1-{i+1}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
             
             ec2.Route(
-                f"private-route-{i+1}-{self.environment_suffix}",
+                f"private-route-v1-{i+1}-{self.environment_suffix}",
                 route_table_id=private_rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=self.nat_gateway.id,  # All private subnets use same NAT Gateway
@@ -191,7 +191,7 @@ class TapStack(pulumi.ComponentResource):
             )
             
             ec2.RouteTableAssociation(
-                f"private-rta-{i+1}-{self.environment_suffix}",
+                f"private-rta-v1-{i+1}-{self.environment_suffix}",
                 subnet_id=private_subnet.id,
                 route_table_id=private_rt.id,
                 opts=ResourceOptions(parent=self)
