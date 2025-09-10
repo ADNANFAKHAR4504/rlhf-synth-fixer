@@ -43,6 +43,7 @@ variable "enable_mfa" {
 # ================================
 # LOCALS
 # ================================
+# Replace the locals section with this updated version:
 
 locals {
   # Naming convention with suffix "4"
@@ -60,29 +61,34 @@ locals {
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
   
-  # Subnet configurations for primary region (us-east-2)
-  primary_public_subnets = [
+  # Dynamic subnet configurations based on available AZs
+  # Primary region (us-east-2) - limit to available AZs
+  primary_az_count = min(length(data.aws_availability_zones.primary4.names), 3)
+  primary_public_subnets = slice([
     "10.0.1.0/24",
     "10.0.2.0/24",
     "10.0.3.0/24"
-  ]
-  primary_private_subnets = [
+  ], 0, local.primary_az_count)
+  
+  primary_private_subnets = slice([
     "10.0.101.0/24",
     "10.0.102.0/24",
     "10.0.103.0/24"
-  ]
+  ], 0, local.primary_az_count)
   
-  # Subnet configurations for secondary region (us-west-1)
-  secondary_public_subnets = [
+  # Secondary region (us-west-1) - limit to available AZs
+  secondary_az_count = min(length(data.aws_availability_zones.secondary4.names), 3)
+  secondary_public_subnets = slice([
     "10.1.1.0/24",
     "10.1.2.0/24",
     "10.1.3.0/24"
-  ]
-  secondary_private_subnets = [
+  ], 0, local.secondary_az_count)
+  
+  secondary_private_subnets = slice([
     "10.1.101.0/24",
     "10.1.102.0/24",
     "10.1.103.0/24"
-  ]
+  ], 0, local.secondary_az_count)
 }
 
 # ================================
@@ -227,7 +233,7 @@ resource "aws_subnet" "primary_public_subnets4" {
   count                   = length(local.primary_public_subnets)
   vpc_id                  = aws_vpc.primary_vpc4.id
   cidr_block              = local.primary_public_subnets[count.index]
-  availability_zone       = data.aws_availability_zones.primary4.names[count.index]
+  availability_zone       = data.aws_availability_zones.primary4.names[count.index % length(data.aws_availability_zones.primary4.names)]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
@@ -237,13 +243,12 @@ resource "aws_subnet" "primary_public_subnets4" {
   })
 }
 
-# Primary Private Subnets
 resource "aws_subnet" "primary_private_subnets4" {
   provider          = aws.us_east_2
   count             = length(local.primary_private_subnets)
   vpc_id            = aws_vpc.primary_vpc4.id
   cidr_block        = local.primary_private_subnets[count.index]
-  availability_zone = data.aws_availability_zones.primary4.names[count.index]
+  availability_zone = data.aws_availability_zones.primary4.names[count.index % length(data.aws_availability_zones.primary4.names)]
 
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-primary-private-subnet-${count.index + 1}4"
@@ -251,7 +256,6 @@ resource "aws_subnet" "primary_private_subnets4" {
     Region = var.primary_region
   })
 }
-
 # Primary NAT Gateways
 resource "aws_eip" "primary_nat_eips4" {
   provider = aws.us_east_2
@@ -365,7 +369,7 @@ resource "aws_subnet" "secondary_public_subnets4" {
   count                   = length(local.secondary_public_subnets)
   vpc_id                  = aws_vpc.secondary_vpc4.id
   cidr_block              = local.secondary_public_subnets[count.index]
-  availability_zone       = data.aws_availability_zones.secondary4.names[count.index]
+  availability_zone       = data.aws_availability_zones.secondary4.names[count.index % length(data.aws_availability_zones.secondary4.names)]
   map_public_ip_on_launch = true
 
   tags = merge(local.common_tags, {
@@ -375,13 +379,13 @@ resource "aws_subnet" "secondary_public_subnets4" {
   })
 }
 
-# Secondary Private Subnets
+# Update the secondary region private subnets resource:
 resource "aws_subnet" "secondary_private_subnets4" {
   provider          = aws.us_west_1
   count             = length(local.secondary_private_subnets)
   vpc_id            = aws_vpc.secondary_vpc4.id
   cidr_block        = local.secondary_private_subnets[count.index]
-  availability_zone = data.aws_availability_zones.secondary4.names[count.index]
+  availability_zone = data.aws_availability_zones.secondary4.names[count.index % length(data.aws_availability_zones.secondary4.names)]
 
   tags = merge(local.common_tags, {
     Name   = "${local.name_prefix}-secondary-private-subnet-${count.index + 1}4"
@@ -389,7 +393,6 @@ resource "aws_subnet" "secondary_private_subnets4" {
     Region = var.secondary_region
   })
 }
-
 # Secondary NAT Gateways
 resource "aws_eip" "secondary_nat_eips4" {
   provider = aws.us_west_1
