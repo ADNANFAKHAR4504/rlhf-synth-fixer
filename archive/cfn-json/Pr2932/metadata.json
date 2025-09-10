@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348918",
+  "team": "5",
+  "startedAt": "2025-09-09T10:09:30.142Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Database Management",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 2,
+  "aws_services": [],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "divyam-turing",
+  "dockerS3Location": ""
+}
