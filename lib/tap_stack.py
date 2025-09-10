@@ -475,7 +475,7 @@ class TapStack(pulumi.ComponentResource):
         )
         
         self.db_secret_version = secretsmanager.SecretVersion(
-            f"rds-credentials-version-{self.environment_suffix}",
+            f"rds-credentials-version-v1-{self.environment_suffix}",
             secret_id=self.db_secret.id,
             secret_string=json.dumps({
                 "username": "dbadmin",
