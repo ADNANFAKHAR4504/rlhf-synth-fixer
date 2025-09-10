@@ -9,15 +9,20 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 
-  # Uncomment and configure for remote state
+  # Backend configuration - uncomment after creating backend infrastructure
   # backend "s3" {
-  #   bucket         = "your-terraform-state-bucket"
+  #   bucket         = "tap-stack-terraform-state-XXXXXXXX" # Replace with actual bucket name from backend.tf output
   #   key            = "tap-stack/terraform.tfstate"
   #   region         = "us-west-2"
-  #   dynamodb_table = "terraform-state-lock"
+  #   dynamodb_table = "tap-stack-terraform-state-lock"
   #   encrypt        = true
+  #   kms_key_id     = "alias/tap-stack-terraform-state"
   # }
 }
 

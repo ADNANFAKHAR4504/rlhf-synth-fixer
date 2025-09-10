@@ -180,7 +180,7 @@ resource "aws_kms_key" "logs_key" {
 }
 
 resource "aws_kms_alias" "logs_key" {
-  name          = "alias/tap-stack-logs"
+  name          = "alias/tap-stack-logs-${random_id.bucket_suffix.hex}"
   target_key_id = aws_kms_key.logs_key.key_id
 }
 
@@ -220,7 +220,7 @@ resource "aws_kms_key" "data_key" {
 }
 
 resource "aws_kms_alias" "data_key" {
-  name          = "alias/tap-stack-data"
+  name          = "alias/tap-stack-data-${random_id.bucket_suffix.hex}"
   target_key_id = aws_kms_key.data_key.key_id
 }
 
@@ -571,7 +571,7 @@ resource "aws_s3_bucket_policy" "logs" {
         Resource = aws_s3_bucket.logs.arn
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/tap-stack-cloudtrail"
+            "AWS:SourceArn" = "arn:aws:cloudtrail:us-west-2:${data.aws_caller_identity.current.account_id}:trail/tap-stack-cloudtrail-${random_id.bucket_suffix.hex}"
           }
         }
       },
@@ -613,7 +613,7 @@ resource "aws_s3_bucket_policy" "logs" {
 
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2_role" {
-  name = "tap-stack-ec2-role"
+  name = "tap-stack-ec2-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -632,7 +632,7 @@ resource "aws_iam_role" "ec2_role" {
 }
 
 resource "aws_iam_role_policy" "ec2_policy" {
-  name = "tap-stack-ec2-policy"
+  name = "tap-stack-ec2-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.ec2_role.id
 
   policy = jsonencode({
@@ -662,7 +662,7 @@ resource "aws_iam_role_policy" "ec2_policy" {
 }
 
 resource "aws_iam_instance_profile" "ec2_profile" {
-  name = "tap-stack-ec2-profile"
+  name = "tap-stack-ec2-profile-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.ec2_role.name
 
   tags = local.common_tags
@@ -711,7 +711,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "tap-stack-asg"
+  name                      = "tap-stack-asg-${random_id.bucket_suffix.hex}"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
@@ -747,7 +747,7 @@ resource "aws_autoscaling_group" "main" {
 }
 
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "tap-stack-scale-up"
+  name                   = "tap-stack-scale-up-${random_id.bucket_suffix.hex}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -755,7 +755,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "tap-stack-scale-down"
+  name                   = "tap-stack-scale-down-${random_id.bucket_suffix.hex}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -786,7 +786,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "main" {
-  name     = "tap-stack-tg"
+  name     = "tap-stack-tg-${random_id.bucket_suffix.hex}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -911,7 +911,7 @@ resource "aws_cloudfront_distribution" "main" {
 
 # WAF v2
 resource "aws_wafv2_web_acl" "main" {
-  name  = "tap-stack-waf"
+  name  = "tap-stack-waf-${random_id.bucket_suffix.hex}"
   scope = "REGIONAL"
 
   default_action {
@@ -978,7 +978,7 @@ resource "aws_wafv2_web_acl_association" "main" {
 
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "tap-stack-db-subnet-group"
+  name       = "tap-stack-db-subnet-group-${random_id.bucket_suffix.hex}"
   subnet_ids = aws_subnet.private[*].id
 
   tags = merge(local.common_tags, {
@@ -989,7 +989,7 @@ resource "aws_db_subnet_group" "main" {
 # RDS Parameter Group
 resource "aws_db_parameter_group" "main" {
   family = "mysql8.0"
-  name   = "tap-stack-db-params"
+  name   = "tap-stack-db-params-${random_id.bucket_suffix.hex}"
 
   parameter {
     name  = "innodb_buffer_pool_size"
@@ -1001,7 +1001,7 @@ resource "aws_db_parameter_group" "main" {
 
 # RDS Primary Instance
 resource "aws_db_instance" "main" {
-  identifier     = "tap-stack-db-primary"
+  identifier     = "tap-stack-db-primary-${random_id.bucket_suffix.hex}"
   engine         = var.db_engine
   engine_version = var.db_engine_version
   instance_class = var.db_instance_class
@@ -1039,7 +1039,7 @@ resource "aws_db_instance" "main" {
 
 # RDS Read Replica
 resource "aws_db_instance" "replica" {
-  identifier                 = "tap-stack-db-replica"
+  identifier                 = "tap-stack-db-replica-${random_id.bucket_suffix.hex}"
   replicate_source_db        = aws_db_instance.main.identifier
   instance_class             = var.db_instance_class
   publicly_accessible        = false
@@ -1055,7 +1055,7 @@ resource "aws_db_instance" "replica" {
 
 # RDS Monitoring Role
 resource "aws_iam_role" "rds_monitoring" {
-  name = "tap-stack-rds-monitoring-role"
+  name = "tap-stack-rds-monitoring-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1101,7 +1101,7 @@ resource "aws_flow_log" "main" {
 }
 
 resource "aws_iam_role" "flow_logs" {
-  name = "tap-stack-flow-logs-role"
+  name = "tap-stack-flow-logs-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1120,7 +1120,7 @@ resource "aws_iam_role" "flow_logs" {
 }
 
 resource "aws_iam_role_policy" "flow_logs" {
-  name = "tap-stack-flow-logs-policy"
+  name = "tap-stack-flow-logs-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.flow_logs.id
 
   policy = jsonencode({
@@ -1143,7 +1143,7 @@ resource "aws_iam_role_policy" "flow_logs" {
 
 # CloudTrail
 resource "aws_cloudwatch_log_group" "cloudtrail" {
-  name              = "/aws/cloudtrail/tap-stack"
+  name              = "/aws/cloudtrail/tap-stack-${random_id.bucket_suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.logs_key.arn
 
@@ -1151,7 +1151,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 }
 
 resource "aws_cloudtrail" "main" {
-  name                       = "tap-stack-cloudtrail"
+  name                       = "tap-stack-cloudtrail-${random_id.bucket_suffix.hex}"
   s3_bucket_name             = aws_s3_bucket.logs.bucket
   s3_key_prefix              = "cloudtrail-logs"
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
@@ -1182,7 +1182,7 @@ resource "aws_cloudtrail" "main" {
 }
 
 resource "aws_iam_role" "cloudtrail" {
-  name = "tap-stack-cloudtrail-role"
+  name = "tap-stack-cloudtrail-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1201,7 +1201,7 @@ resource "aws_iam_role" "cloudtrail" {
 }
 
 resource "aws_iam_role_policy" "cloudtrail" {
-  name = "tap-stack-cloudtrail-policy"
+  name = "tap-stack-cloudtrail-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.cloudtrail.id
 
   policy = jsonencode({
@@ -1220,7 +1220,7 @@ resource "aws_iam_role_policy" "cloudtrail" {
 
 # AWS Config
 resource "aws_config_configuration_recorder" "main" {
-  name     = "tap-stack-config-recorder"
+  name     = "tap-stack-config-recorder-${random_id.bucket_suffix.hex}"
   role_arn = aws_iam_role.config.arn
 
   recording_group {
@@ -1240,7 +1240,7 @@ resource "aws_config_configuration_recorder" "main" {
 # }
 
 resource "aws_iam_role" "config" {
-  name = "tap-stack-config-role"
+  name = "tap-stack-config-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1264,7 +1264,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 }
 
 resource "aws_iam_role_policy" "config_s3" {
-  name = "tap-stack-config-s3-policy"
+  name = "tap-stack-config-s3-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.config.id
 
   policy = jsonencode({
@@ -1294,7 +1294,7 @@ resource "aws_iam_role_policy" "config_s3" {
 
 # Config Rules
 resource "aws_config_config_rule" "cloudtrail_enabled" {
-  name = "cloudtrail-enabled"
+  name = "cloudtrail-enabled-${random_id.bucket_suffix.hex}"
 
   source {
     owner             = "AWS"
@@ -1307,7 +1307,7 @@ resource "aws_config_config_rule" "cloudtrail_enabled" {
 }
 
 resource "aws_config_config_rule" "s3_encryption" {
-  name = "s3-bucket-server-side-encryption-enabled"
+  name = "s3-bucket-server-side-encryption-enabled-${random_id.bucket_suffix.hex}"
 
   source {
     owner             = "AWS"
@@ -1320,7 +1320,7 @@ resource "aws_config_config_rule" "s3_encryption" {
 }
 
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name = "encrypted-volumes"
+  name = "encrypted-volumes-${random_id.bucket_suffix.hex}"
 
   source {
     owner             = "AWS"
@@ -1333,7 +1333,7 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 }
 
 resource "aws_config_config_rule" "restricted_ssh" {
-  name = "incoming-ssh-disabled"
+  name = "incoming-ssh-disabled-${random_id.bucket_suffix.hex}"
 
   source {
     owner             = "AWS"
@@ -1347,7 +1347,7 @@ resource "aws_config_config_rule" "restricted_ssh" {
 
 # SNS Topic for alerts
 resource "aws_sns_topic" "alerts" {
-  name              = "tap-stack-alerts"
+  name              = "tap-stack-alerts-${random_id.bucket_suffix.hex}"
   kms_master_key_id = aws_kms_key.logs_key.arn
 
   tags = local.common_tags
@@ -1362,7 +1362,7 @@ resource "aws_sns_topic_subscription" "email" {
 
 # CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "asg_cpu_high" {
-  alarm_name          = "tap-stack-asg-cpu-high"
+  alarm_name          = "tap-stack-asg-cpu-high-${random_id.bucket_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1381,7 +1381,7 @@ resource "aws_cloudwatch_metric_alarm" "asg_cpu_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "asg_cpu_low" {
-  alarm_name          = "tap-stack-asg-cpu-low"
+  alarm_name          = "tap-stack-asg-cpu-low-${random_id.bucket_suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1400,7 +1400,7 @@ resource "aws_cloudwatch_metric_alarm" "asg_cpu_low" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
-  alarm_name          = "tap-stack-alb-5xx-errors"
+  alarm_name          = "tap-stack-alb-5xx-errors-${random_id.bucket_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "HTTPCode_ELB_5XX_Count"
@@ -1419,7 +1419,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
-  alarm_name          = "tap-stack-alb-response-time"
+  alarm_name          = "tap-stack-alb-response-time-${random_id.bucket_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "TargetResponseTime"
@@ -1438,7 +1438,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_response_time" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
-  alarm_name          = "tap-stack-rds-cpu-high"
+  alarm_name          = "tap-stack-rds-cpu-high-${random_id.bucket_suffix.hex}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
@@ -1457,7 +1457,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_free_storage" {
-  alarm_name          = "tap-stack-rds-free-storage-low"
+  alarm_name          = "tap-stack-rds-free-storage-low-${random_id.bucket_suffix.hex}"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
   metric_name         = "FreeStorageSpace"
@@ -1508,7 +1508,7 @@ EOF
 
 resource "aws_lambda_function" "sample" {
   filename         = "sample_lambda.zip"
-  function_name    = "tap-stack-sample-function"
+  function_name    = "tap-stack-sample-function-${random_id.bucket_suffix.hex}"
   role             = aws_iam_role.lambda_role.arn
   handler          = "lambda_function.lambda_handler"
   runtime          = "python3.11"
@@ -1529,7 +1529,7 @@ resource "aws_lambda_function" "sample" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda_logs" {
-  name              = "/aws/lambda/tap-stack-sample-function"
+  name              = "/aws/lambda/tap-stack-sample-function-${random_id.bucket_suffix.hex}"
   retention_in_days = 14
   kms_key_id        = aws_kms_key.logs_key.arn
 
@@ -1537,7 +1537,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 }
 
 resource "aws_iam_role" "lambda_role" {
-  name = "tap-stack-lambda-role"
+  name = "tap-stack-lambda-role-${random_id.bucket_suffix.hex}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1561,7 +1561,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
 }
 
 resource "aws_iam_role_policy" "lambda_policy" {
-  name = "tap-stack-lambda-policy"
+  name = "tap-stack-lambda-policy-${random_id.bucket_suffix.hex}"
   role = aws_iam_role.lambda_role.id
 
   policy = jsonencode({
