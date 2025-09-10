@@ -6,5 +6,23 @@
   "po_id": "350129",
   "team": "4",
   "author": "balasl342",
-  "startedAt": "2025-09-10T14:04:04.057Z"
+  "startedAt": "2025-09-10T14:04:04.057Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "Network Configuration",
+    "General Infrastructure Tooling QA",
+    "Performance Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "S3",
+    "SSM"
+  ]
 }
