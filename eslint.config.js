@@ -110,6 +110,7 @@ module.exports = [
       'cdk.out/**',
       'coverage/**',
       'archive/**',
+      'lambda/**', // Exclude lambda folder from linting
       '**/*.js',
       '**/*.d.ts',
       '**/*.test.ts', // Exclude test files from linting
