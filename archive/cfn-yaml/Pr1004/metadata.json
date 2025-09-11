@@ -6,5 +6,10 @@
   "po_id": "292057",
   "team": "4",
   "author": "balasl342",
-  "startedAt": "2025-08-11T17:38:28.130Z"
+  "startedAt": "2025-08-11T17:38:28.130Z",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
