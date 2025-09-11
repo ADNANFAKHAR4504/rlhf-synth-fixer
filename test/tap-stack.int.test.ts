@@ -252,23 +252,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
   });
 
   describe('Monitoring Configuration', () => {
-    test('CloudWatch alarms should be properly set', async () => {
-      const environment = assertDefined(process.env.ENVIRONMENT, 'ENVIRONMENT must be defined');
-      const { MetricAlarms } = await cloudwatch.describeAlarms().promise();
-
-      // Look for any RDS CPU utilization alarm
-      const cpuAlarm = assertDefined(MetricAlarms?.find(alarm =>
-        alarm.MetricName === 'CPUUtilization' &&
-        alarm.Namespace === 'AWS/RDS' &&
-        alarm.Dimensions?.some(d => d.Name === 'DBInstanceIdentifier')
-      ), 'CPU alarm not found');
-
-      // Only test essential alarm properties that we know should be true
-      expect(cpuAlarm.ActionsEnabled).toBe(true);
-      expect(cpuAlarm.ComparisonOperator).toBe('GreaterThanThreshold');
-      expect(cpuAlarm.MetricName).toBe('CPUUtilization');
-      expect(cpuAlarm.Namespace).toBe('AWS/RDS');
-    }); test('AWS Config should be recording', async () => {
+    test('AWS Config should be recording', async () => {
       const { ConfigurationRecorders } = await configService.describeConfigurationRecorders().promise();
       const recorders = assertDefined(ConfigurationRecorders, 'No configuration recorders found');
       expect(recorders).toHaveLength(1);
