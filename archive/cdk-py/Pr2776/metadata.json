@@ -6,5 +6,10 @@
   "po_id": "349205",
   "team": "4",
   "startedAt": "2025-09-04T11:31:24.368Z",
-  "author": "abdullahj2"
+  "author": "abdullahj2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
