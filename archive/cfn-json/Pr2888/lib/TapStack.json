@@ -1,0 +1,1490 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CI/CD Pipeline for ECS deployment with Blue/Green rollback capability (fixed: supports existing GitHub secret ARN or creates a secret fallback; pipeline role granted permission to read secret)",
+  "Parameters": {
+    "ApplicationName": {
+      "Type": "String",
+      "Default": "my-app",
+      "MinLength": 3,
+      "MaxLength": 50,
+      "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9-]*$",
+      "ConstraintDescription": "ApplicationName must be 3-50 characters, start with letter, contain only letters, numbers, and hyphens",
+      "Description": "Name of the application"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "MinLength": 2,
+      "MaxLength": 20,
+      "AllowedPattern": "^[a-zA-Z0-9-]+$",
+      "ConstraintDescription": "EnvironmentSuffix must be 2-20 characters and contain only letters, numbers, and hyphens",
+      "Description": "Environment suffix for stack name and resources"
+    },
+    "PipelineArtifactBucketName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "S3 bucket name for pipeline artifacts. If empty, a new bucket will be created."
+    },
+    "SNSOperationsTopicNameOrArn": {
+      "Type": "String",
+      "Default": "pipeline-notifications",
+      "Description": "SNS Topic name to create or ARN of existing topic for notifications"
+    },
+    "ECSClusterName": {
+      "Type": "String",
+      "Default": "",
+      "Description": "ECS Cluster name. If empty, a new cluster will be created."
+    },
+    "CodeBuildImage": {
+      "Type": "String",
+      "Default": "aws/codebuild/standard:6.0",
+      "Description": "CodeBuild container image"
+    },
+    "GitRepository": {
+      "Type": "String",
+      "Default": "https://github.com/example/example-repo",
+      "AllowedPattern": "^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$",
+      "ConstraintDescription": "GitRepository must be a valid GitHub HTTPS URL",
+      "Description": "Git repository URL"
+    },
+    "GitBranch": {
+      "Type": "String",
+      "Default": "main",
+      "Description": "Git branch to build"
+    },
+    "ServiceDesiredCount": {
+      "Type": "Number",
+      "Default": 0,
+      "MinValue": 0,
+      "MaxValue": 100,
+      "Description": "Desired count for ECS service on stack create (0-100, set 0 if image not available at create time)"
+    },
+    "GitHubTokenSecretArn": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Full ARN of the AWS Secrets Manager secret containing the GitHub OAuth token. If empty, the stack will create a placeholder secret (you must populate it after deployment)."
+    },
+    "Environment": {
+      "Type": "String",
+      "Default": "dev",
+      "AllowedValues": ["dev", "staging", "prod"],
+      "Description": "Environment type for resource sizing optimization"
+    },
+    "ECSTaskCpu": {
+      "Type": "Number",
+      "Default": 256,
+      "AllowedValues": [256, 512, 1024, 2048, 4096],
+      "Description": "CPU units for ECS task (256=0.25vCPU, 512=0.5vCPU, 1024=1vCPU, 2048=2vCPU, 4096=4vCPU)"
+    },
+    "ECSTaskMemory": {
+      "Type": "Number", 
+      "Default": 512,
+      "AllowedValues": [512, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192],
+      "Description": "Memory (MB) for ECS task - must be compatible with CPU value"
+    }
+  },
+  "Conditions": {
+    "CreateArtifactBucket": {
+      "Fn::Equals": [
+        {
+          "Ref": "PipelineArtifactBucketName"
+        },
+        ""
+      ]
+    },
+    "CreateSNSTopic": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Fn::Select": [
+                0,
+                {
+                  "Fn::Split": [
+                    ":",
+                    {
+                      "Fn::Sub": "${SNSOperationsTopicNameOrArn}::"
+                    }
+                  ]
+                }
+              ]
+            },
+            "arn"
+          ]
+        }
+      ]
+    },
+    "CreateECSCluster": {
+      "Fn::Equals": [
+        {
+          "Ref": "ECSClusterName"
+        },
+        ""
+      ]
+    },
+    "CreateGitHubSecret": {
+      "Fn::Equals": [
+        {
+          "Ref": "GitHubTokenSecretArn"
+        },
+        ""
+      ]
+    },
+    "IsProductionEnvironment": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "prod"
+      ]
+    },
+    "IsDevelopmentEnvironment": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "dev"
+      ]
+    }
+  },
+  "Resources": {
+    "PipelineArtifactBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "CreateArtifactBucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "${ApplicationName}-pipeline-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    },
+    "SNSOperationsTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Condition": "CreateSNSTopic",
+      "Properties": {
+        "TopicName": {
+          "Ref": "SNSOperationsTopicNameOrArn"
+        }
+      }
+    },
+    "ECSCluster": {
+      "Type": "AWS::ECS::Cluster",
+      "Condition": "CreateECSCluster",
+      "Properties": {
+        "ClusterName": {
+          "Fn::Sub": "${ApplicationName}-cluster-${EnvironmentSuffix}"
+        },
+        "CapacityProviders": [
+          "FARGATE"
+        ]
+      }
+    },
+    "CodeBuildLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/codebuild/${ApplicationName}-build"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "CodeBuildTestLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/codebuild/${ApplicationName}-test"
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "ECSLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/ecs/${ApplicationName}"
+        },
+        "RetentionInDays": {
+          "Fn::If": [
+            "IsProductionEnvironment",
+            90,
+            {
+              "Fn::If": [
+                "IsDevelopmentEnvironment",
+                7,
+                30
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "DefaultVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-vpc-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "DefaultVPCInternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-igw"
+            }
+          }
+        ]
+      }
+    },
+    "DefaultVPCGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DefaultVPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "DefaultVPCInternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DefaultVPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-public-subnet-1-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DefaultVPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-public-subnet-2-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "DefaultVPC"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${ApplicationName}-public-rt"
+            }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "DefaultVPCGatewayAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "DefaultVPCInternetGateway"
+        }
+      }
+    },
+    "PublicSubnet1RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "PublicSubnet2RouteTableAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "PublicSubnet2"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRouteTable"
+        }
+      }
+    },
+    "GitHubOAuthSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Condition": "CreateGitHubSecret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}/github-token-${EnvironmentSuffix}"
+        },
+        "Description": "Placeholder GitHub OAuth token for CodePipeline. Populate secret value after deploy if created by stack.",
+        "SecretString": "{\"token\":\"CHANGE_ME\"}"
+      }
+    },
+    "CodePipelineServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codepipeline.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "PipelineServiceRolePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketVersioning",
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": [
+                        "${BucketArn}",
+                        {
+                          "BucketArn": {
+                            "Fn::If": [
+                              "CreateArtifactBucket",
+                              {
+                                "Fn::GetAtt": [
+                                  "PipelineArtifactBucket",
+                                  "Arn"
+                                ]
+                              },
+                              {
+                                "Fn::Sub": "arn:aws:s3:::${PipelineArtifactBucketName}"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "Fn::Sub": [
+                        "${BucketArn}/*",
+                        {
+                          "BucketArn": {
+                            "Fn::If": [
+                              "CreateArtifactBucket",
+                              {
+                                "Fn::GetAtt": [
+                                  "PipelineArtifactBucket",
+                                  "Arn"
+                                ]
+                              },
+                              {
+                                "Fn::Sub": "arn:aws:s3:::${PipelineArtifactBucketName}"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:BatchGetBuilds",
+                    "codebuild:StartBuild"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "CodeBuildProject",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::GetAtt": [
+                        "CodeBuildTestProject",
+                        "Arn"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:DescribeServices",
+                    "ecs:DescribeTaskDefinition",
+                    "ecs:DescribeTasks",
+                    "ecs:ListTasks",
+                    "ecs:RegisterTaskDefinition",
+                    "ecs:UpdateService"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource": "*",
+                  "Condition": {
+                    "StringLike": {
+                      "iam:PassedToService": [
+                        "ecs-tasks.amazonaws.com"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "sns:Publish"
+                  ],
+                  "Resource": {
+                    "Fn::If": [
+                      "CreateSNSTopic",
+                      {
+                        "Ref": "SNSOperationsTopic"
+                      },
+                      {
+                        "Ref": "SNSOperationsTopicNameOrArn"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue",
+                    "secretsmanager:DescribeSecret"
+                  ],
+                  "Resource": {
+                    "Fn::If": [
+                      "CreateGitHubSecret",
+                      {
+                        "Fn::Join": [
+                          "",
+                          [
+                            {
+                              "Ref": "GitHubOAuthSecret"
+                            },
+                            "*"
+                          ]
+                        ]
+                      },
+                      {
+                        "Fn::Sub": "${GitHubTokenSecretArn}*"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "CodeBuildServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "CodeBuildServiceRolePolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Fn::GetAtt": [
+                              "CodeBuildLogGroup",
+                              "Arn"
+                            ]
+                          },
+                          ":*"
+                        ]
+                      ]
+                    },
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          {
+                            "Fn::GetAtt": [
+                              "CodeBuildTestLogGroup",
+                              "Arn"
+                            ]
+                          },
+                          ":*"
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": [
+                        "${BucketArn}/*",
+                        {
+                          "BucketArn": {
+                            "Fn::If": [
+                              "CreateArtifactBucket",
+                              {
+                                "Fn::GetAtt": [
+                                  "PipelineArtifactBucket",
+                                  "Arn"
+                                ]
+                              },
+                              {
+                                "Fn::Sub": "arn:aws:s3:::${PipelineArtifactBucketName}"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                    "ecr:GetAuthorizationToken",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:PutImage"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ECSTaskExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "CloudWatchLogsPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        {
+                          "Fn::GetAtt": [
+                            "ECSLogGroup",
+                            "Arn"
+                          ]
+                        },
+                        ":*"
+                      ]
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ECSTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+      }
+    },
+    "CodeBuildProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-build"
+        },
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "CodeBuildServiceRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE"
+        },
+        "Source": {
+          "Type": "CODEPIPELINE",
+          "BuildSpec": {
+            "Fn::Sub": "version: 0.2\nphases:\n  pre_build:\n    commands:\n      - echo Logging in to Amazon ECR...\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com\n  build:\n    commands:\n      - echo Build started on `date`\n      - echo Building the Docker image...\n      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .\n      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG\n  post_build:\n    commands:\n      - echo Build completed on `date`\n      - echo Pushing the Docker image...\n      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG\n      - echo Writing image definitions file...\n      - printf '[{\"name\":\"${ApplicationName}-container\",\"imageUri\":\"%s\"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG > imagedefinitions.json\nartifacts:\n  files:\n    - imagedefinitions.json"
+          }
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_MEDIUM",
+          "Image": {
+            "Ref": "CodeBuildImage"
+          },
+          "PrivilegedMode": true,
+          "EnvironmentVariables": [
+            {
+              "Name": "AWS_DEFAULT_REGION",
+              "Value": {
+                "Ref": "AWS::Region"
+              }
+            },
+            {
+              "Name": "AWS_ACCOUNT_ID",
+              "Value": {
+                "Ref": "AWS::AccountId"
+              }
+            },
+            {
+              "Name": "IMAGE_REPO_NAME",
+              "Value": {
+                "Ref": "ApplicationName"
+              }
+            },
+            {
+              "Name": "IMAGE_TAG",
+              "Value": "latest"
+            }
+          ]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "CodeBuildLogGroup"
+            }
+          }
+        }
+      }
+    },
+    "CodeBuildTestProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-test"
+        },
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "CodeBuildServiceRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "CODEPIPELINE"
+        },
+        "Source": {
+          "Type": "CODEPIPELINE",
+          "BuildSpec": "version: 0.2\nphases:\n  install:\n    runtime-versions:\n      nodejs: 16\n  pre_build:\n    commands:\n      - echo Running tests...\n      - npm install\n  build:\n    commands:\n      - npm test\n  post_build:\n    commands:\n      - echo Tests completed on `date`"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": {
+            "Ref": "CodeBuildImage"
+          }
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "CodeBuildTestLogGroup"
+            }
+          }
+        }
+      }
+    },
+    "ECRRepository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {
+          "Ref": "ApplicationName"
+        }
+      }
+    },
+    "ECSTaskDefinition": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": {
+          "Fn::Sub": "${ApplicationName}-task"
+        },
+        "NetworkMode": "awsvpc",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "Cpu": {
+          "Ref": "ECSTaskCpu"
+        },
+        "Memory": {
+          "Ref": "ECSTaskMemory"
+        },
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ECSTaskRole",
+            "Arn"
+          ]
+        },
+        "ContainerDefinitions": [
+          {
+            "Name": {
+              "Fn::Sub": "${ApplicationName}-container"
+            },
+            "Image": {
+              "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ApplicationName}:latest"
+            },
+            "PortMappings": [
+              {
+                "ContainerPort": 80,
+                "Protocol": "tcp"
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "ECSLogGroup"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "ecs"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "ECSService": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": [],
+      "Properties": {
+        "ServiceName": {
+          "Fn::Sub": "${ApplicationName}-service-${EnvironmentSuffix}"
+        },
+        "Cluster": {
+          "Fn::If": [
+            "CreateECSCluster",
+            {
+              "Ref": "ECSCluster"
+            },
+            {
+              "Ref": "ECSClusterName"
+            }
+          ]
+        },
+        "TaskDefinition": {
+          "Ref": "ECSTaskDefinition"
+        },
+        "LaunchType": "FARGATE",
+        "DesiredCount": {
+          "Ref": "ServiceDesiredCount"
+        },
+        "DeploymentConfiguration": {
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true
+          },
+          "MaximumPercent": 200,
+          "MinimumHealthyPercent": 0
+        },
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "AssignPublicIp": "ENABLED",
+            "Subnets": [
+              {
+                "Ref": "PublicSubnet1"
+              },
+              {
+                "Ref": "PublicSubnet2"
+              }
+            ],
+            "SecurityGroups": [
+              {
+                "Ref": "ECSSecurityGroup"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "ECSSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": {
+          "Fn::Sub": "Security group for ${ApplicationName} ECS service"
+        },
+        "VpcId": {
+          "Ref": "DefaultVPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "CodePipeline": {
+      "Type": "AWS::CodePipeline::Pipeline",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-pipeline"
+        },
+        "RoleArn": {
+          "Fn::GetAtt": [
+            "CodePipelineServiceRole",
+            "Arn"
+          ]
+        },
+        "ArtifactStore": {
+          "Type": "S3",
+          "Location": {
+            "Fn::If": [
+              "CreateArtifactBucket",
+              {
+                "Ref": "PipelineArtifactBucket"
+              },
+              {
+                "Ref": "PipelineArtifactBucketName"
+              }
+            ]
+          }
+        },
+        "Stages": [
+          {
+            "Name": "Source",
+            "Actions": [
+              {
+                "Name": "Source",
+                "ActionTypeId": {
+                  "Category": "Source",
+                  "Owner": "ThirdParty",
+                  "Provider": "GitHub",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "Owner": {
+                    "Fn::Select": [
+                      3,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Ref": "GitRepository"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Repo": {
+                    "Fn::Select": [
+                      4,
+                      {
+                        "Fn::Split": [
+                          "/",
+                          {
+                            "Ref": "GitRepository"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "Branch": {
+                    "Ref": "GitBranch"
+                  },
+                  "OAuthToken": {
+                    "Fn::Sub": [
+                      "{{resolve:secretsmanager:${SecretArn}:SecretString::}}",
+                      {
+                        "SecretArn": {
+                          "Fn::If": [
+                            "CreateGitHubSecret",
+                            {
+                              "Ref": "GitHubOAuthSecret"
+                            },
+                            {
+                              "Ref": "GitHubTokenSecretArn"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                "OutputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Test",
+            "Actions": [
+              {
+                "Name": "Test",
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Provider": "CodeBuild",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuildTestProject"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ],
+                "OutputArtifacts": [
+                  {
+                    "Name": "TestOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Build",
+            "Actions": [
+              {
+                "Name": "Build",
+                "ActionTypeId": {
+                  "Category": "Build",
+                  "Owner": "AWS",
+                  "Provider": "CodeBuild",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ProjectName": {
+                    "Ref": "CodeBuildProject"
+                  }
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "SourceOutput"
+                  }
+                ],
+                "OutputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "Name": "Deploy",
+            "Actions": [
+              {
+                "Name": "Deploy",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "ECS",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "ClusterName": {
+                    "Fn::If": [
+                      "CreateECSCluster",
+                      {
+                        "Ref": "ECSCluster"
+                      },
+                      {
+                        "Ref": "ECSClusterName"
+                      }
+                    ]
+                  },
+                  "ServiceName": {
+                    "Ref": "ECSService"
+                  },
+                  "FileName": "imagedefinitions.json"
+                },
+                "InputArtifacts": [
+                  {
+                    "Name": "BuildOutput"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "PipelineStateChangeRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${ApplicationName}-pipeline-state-change"
+        },
+        "Description": "Rule to capture pipeline state changes",
+        "EventPattern": {
+          "source": [
+            "aws.codepipeline"
+          ],
+          "detail-type": [
+            "CodePipeline Pipeline Execution State Change"
+          ],
+          "detail": {
+            "pipeline": [
+              {
+                "Ref": "CodePipeline"
+              }
+            ]
+          }
+        },
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "SNSTarget",
+            "Arn": {
+              "Fn::If": [
+                "CreateSNSTopic",
+                {
+                  "Ref": "SNSOperationsTopic"
+                },
+                {
+                  "Ref": "SNSOperationsTopicNameOrArn"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "PipelineFailureAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-pipeline-failures"
+        },
+        "AlarmDescription": "Pipeline failure alarm",
+        "MetricName": "PipelineExecutionFailure",
+        "Namespace": "AWS/CodePipeline",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 1,
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "PipelineName",
+            "Value": {
+              "Ref": "CodePipeline"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Fn::If": [
+              "CreateSNSTopic",
+              {
+                "Ref": "SNSOperationsTopic"
+              },
+              {
+                "Ref": "SNSOperationsTopicNameOrArn"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "ECSServiceCPUAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-ecs-high-cpu"
+        },
+        "AlarmDescription": "ECS service high CPU utilization",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/ECS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Ref": "ECSService"
+            }
+          },
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::If": [
+                "CreateECSCluster",
+                {
+                  "Ref": "ECSCluster"
+                },
+                {
+                  "Ref": "ECSClusterName"
+                }
+              ]
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Fn::If": [
+              "CreateSNSTopic",
+              {
+                "Ref": "SNSOperationsTopic"
+              },
+              {
+                "Ref": "SNSOperationsTopicNameOrArn"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "ECSServiceMemoryAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ApplicationName}-${EnvironmentSuffix}-ecs-high-memory"
+        },
+        "AlarmDescription": "ECS service high memory utilization",
+        "MetricName": "MemoryUtilization",
+        "Namespace": "AWS/ECS",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "ServiceName",
+            "Value": {
+              "Ref": "ECSService"
+            }
+          },
+          {
+            "Name": "ClusterName",
+            "Value": {
+              "Fn::If": [
+                "CreateECSCluster",
+                {
+                  "Ref": "ECSCluster"
+                },
+                {
+                  "Ref": "ECSClusterName"
+                }
+              ]
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Fn::If": [
+              "CreateSNSTopic",
+              {
+                "Ref": "SNSOperationsTopic"
+              },
+              {
+                "Ref": "SNSOperationsTopicNameOrArn"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "PipelineName": {
+      "Description": "Name of the CodePipeline",
+      "Value": {
+        "Ref": "CodePipeline"
+      }
+    },
+    "ArtifactBucketName": {
+      "Description": "Name of the S3 artifacts bucket",
+      "Value": {
+        "Fn::If": [
+          "CreateArtifactBucket",
+          {
+            "Ref": "PipelineArtifactBucket"
+          },
+          {
+            "Ref": "PipelineArtifactBucketName"
+          }
+        ]
+      }
+    },
+    "SNSArn": {
+      "Description": "ARN of the SNS topic for operations notifications",
+      "Value": {
+        "Fn::If": [
+          "CreateSNSTopic",
+          {
+            "Ref": "SNSOperationsTopic"
+          },
+          {
+            "Ref": "SNSOperationsTopicNameOrArn"
+          }
+        ]
+      }
+    },
+    "ECSClusterName": {
+      "Description": "Name of the ECS cluster",
+      "Value": {
+        "Fn::If": [
+          "CreateECSCluster",
+          {
+            "Ref": "ECSCluster"
+          },
+          {
+            "Ref": "ECSClusterName"
+          }
+        ]
+      }
+    },
+    "ECSServiceName": {
+      "Description": "ECS service name",
+      "Value": {
+        "Ref": "ECSService"
+      }
+    },
+    "UsedGitHubSecretArn": {
+      "Description": "ARN of the GitHub token secret used by the pipeline (either existing ARN param or the secret created by the stack).",
+      "Value": {
+        "Fn::If": [
+          "CreateGitHubSecret",
+          {
+            "Ref": "GitHubOAuthSecret"
+          },
+          {
+            "Ref": "GitHubTokenSecretArn"
+          }
+        ]
+      }
+    }
+  },
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "General Configuration"
+          },
+          "Parameters": [
+            "ApplicationName",
+            "EnvironmentSuffix"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Pipeline Configuration"
+          },
+          "Parameters": [
+            "PipelineArtifactBucketName",
+            "SNSOperationsTopicNameOrArn",
+            "GitHubTokenSecretArn"
+          ]
+        },
+        {
+          "Label": {
+            "default": "ECS Configuration"
+          },
+          "Parameters": [
+            "ECSClusterName",
+            "ServiceDesiredCount"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Source Control"
+          },
+          "Parameters": [
+            "GitRepository",
+            "GitBranch"
+          ]
+        }
+      ],
+      "ParameterLabels": {
+        "ApplicationName": {
+          "default": "Application Name"
+        },
+        "EnvironmentSuffix": {
+          "default": "Environment Suffix"
+        },
+        "PipelineArtifactBucketName": {
+          "default": "Pipeline Artifact Bucket Name"
+        },
+        "SNSOperationsTopicNameOrArn": {
+          "default": "SNS Topic Name or ARN"
+        },
+        "ECSClusterName": {
+          "default": "ECS Cluster Name"
+        },
+        "ServiceDesiredCount": {
+          "default": "ECS Service Desired Count"
+        },
+        "GitRepository": {
+          "default": "Git Repository URL"
+        },
+        "GitBranch": {
+          "default": "Git Branch"
+        },
+        "GitHubTokenSecretArn": {
+          "default": "GitHub Token Secret ARN (leave empty to create a placeholder secret)"
+        }
+      }
+    },
+    "TestingInstructions": {
+      "Validation": "Run 'aws cloudformation validate-template --template-body file://template.json' to validate syntax",
+      "DeploymentTest": "Deploy stack (service desired count defaults to 0). If you left GitHubTokenSecretArn empty the stack created a placeholder secret; populate it in Secrets Manager with your GitHub token (plain string) under the secret's SecretString value. Then start the pipeline.",
+      "RollbackTest": "To test rollback, introduce a failing health check or deployment error in your application code, commit and push. The ECS circuit breaker will automatically rollback on failure",
+      "MonitoringTest": "Check SNS topic for pipeline state change notifications and CloudWatch logs for build/deployment logs",
+      "Prerequisites": "Either provide the full Secrets Manager secret ARN in the GitHubTokenSecretArn parameter, or populate the created secret's value after deployment. Secret must be in the same account & region as the stack."
+    }
+  }
+}
