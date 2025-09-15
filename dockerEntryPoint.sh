@@ -74,7 +74,9 @@ run_step() {
         echo ""
         echo "=== $step_name ==="
     fi
-    
+
+    local success=true
+
     if [ "$DEBUG_MODE" = "1" ]; then
         # In debug mode, capture exit code but continue
         if [ "$REPORT" = "1" ]; then
@@ -91,6 +93,7 @@ run_step() {
                 FAILED_STEP="$step_name"
                 update_status "Failed" "$step_name"
                 write_to_csv "$step_name failed" "Exit code: $exit_code | $error_output"
+                success=false
             fi
         else
             # Normal debug mode with output
@@ -102,6 +105,7 @@ run_step() {
                 echo "❌ $step_name failed with exit code: $exit_code"
                 FAILED_STEPS+=("$step_name (exit code: $exit_code)")
                 write_to_csv "$step_name failed" "Exit code: $exit_code"
+                success=false
             fi
         fi
     else
@@ -129,6 +133,13 @@ run_step() {
                 exit 1
             fi
         fi
+    fi
+
+   # The function now returns success status
+    if [ "$success" = true ]; then
+        return 0
+    else
+        return 1
     fi
 }
 
@@ -168,82 +179,99 @@ if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
         ["iac-rlhf-cfn-states-ap-northeast-1-$CURRENT_ACCOUNT_ID"]="ap-northeast-1"
         ["iac-rlhf-cfn-states-ap-south-1-$CURRENT_ACCOUNT_ID"]="ap-south-1"
         ["iac-rlhf-cfn-states-ap-southeast-1-$CURRENT_ACCOUNT_ID"]="ap-southeast-1"
-        ["iac-rlhf-cfn-states-ap-southeast-2-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-cfn-states-ap-southeast-2-$CURRENT_ACCOUNT_ID"]="ap-southeast-2"
         ["iac-rlhf-cfn-states-eu-central-1-$CURRENT_ACCOUNT_ID"]="eu-central-1"
         ["iac-rlhf-cfn-states-eu-north-1-$CURRENT_ACCOUNT_ID"]="eu-north-1"
-        ["iac-rlhf-cfn-states-eu-west-1-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-cfn-states-eu-west-1-$CURRENT_ACCOUNT_ID"]="eu-west-1"
         ["iac-rlhf-cfn-states-eu-west-2-$CURRENT_ACCOUNT_ID"]="eu-west-2"
         ["iac-rlhf-cfn-states-eu-west-3-$CURRENT_ACCOUNT_ID"]="eu-west-3"
         ["iac-rlhf-cfn-states-us-east-1-$CURRENT_ACCOUNT_ID"]="us-east-1"
         ["iac-rlhf-cfn-states-us-east-2-$CURRENT_ACCOUNT_ID"]="us-east-2"
-        ["iac-rlhf-cfn-states-us-west-1-$CURRENT_ACCOUNT_ID"]="us-east-1"
+        ["iac-rlhf-cfn-states-us-west-1-$CURRENT_ACCOUNT_ID"]="us-west-1"
         ["iac-rlhf-cfn-states-us-west-2-$CURRENT_ACCOUNT_ID"]="us-west-2"
         ["iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
         ["iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID"]="us-east-1"
     )
     
     # Buckets that need versioning enabled
-    VERSIONED_BUCKETS=("iac-rlhf-pulumi-states" "iac-rlhf-tf-states")
-    
+    VERSIONED_BUCKETS=("iac-rlhf-pulumi-states-$CURRENT_ACCOUNT_ID" "iac-rlhf-tf-states-$CURRENT_ACCOUNT_ID")
+
+    # Function to enable versioning on a bucket
+    enable_versioning() {
+        local bucket_name=$1
+        local region=$2
+        if aws s3api get-bucket-versioning --bucket "$bucket_name" --region "$region" >/dev/null 2>&1 | grep -q 'Enabled'; then
+            [ "$REPORT" != "1" ] && echo "✅ Versioning already enabled on $bucket_name in $region"
+        else
+            [ "$REPORT" != "1" ] && echo "Enabling versioning on bucket $bucket_name in region $region..."
+            if aws s3api put-bucket-versioning --bucket "$bucket_name" --region "$region" --versioning-configuration Status=Enabled >/dev/null 2>&1; then
+                [ "$REPORT" != "1" ] && echo "✅ Versioning enabled on $bucket_name"
+            else
+                [ "$REPORT" != "1" ] && echo "❌ Failed to enable versioning on $bucket_name"
+            fi
+        fi
+    }
+
     # Create buckets if they don't exist
     for bucket in "${!BUCKETS[@]}"; do
         region="${BUCKETS[$bucket]}"
-        
+
         # Check if bucket exists
         if aws s3api head-bucket --bucket "$bucket" --region "$region" >/dev/null 2>&1; then
             [ "$REPORT" != "1" ] && echo "✅ Bucket $bucket already exists in $region"
         else
             [ "$REPORT" != "1" ] && echo "Creating bucket $bucket in region $region..."
-            
+
+            MAX_RETRIES=3
+            RETRY_DELAY=5  # seconds
+
             if [ "$region" = "us-east-1" ]; then
                 # us-east-1 doesn't need LocationConstraint
-                if aws s3api create-bucket --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' >/dev/null 2>&1; then
-                    [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
-                else
-                    if [ "$REPORT" != "1" ]; then
-                        echo "❌ Failed to create bucket $bucket in $region"
-                        aws s3api create-bucket --bucket "$bucket" --region "$region" 2>&1 | head -5
+                for ((i=1; i<=MAX_RETRIES; i++)); do
+                    if aws s3api create-bucket --bucket "$bucket" --region "$region" >/dev/null; then
+                        [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
+                        # Add tagging after successful creation
+                        aws s3api put-bucket-tagging --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' >/dev/null 2>&1
+                        break # Success, exit retry loop
+                    else
+                        [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
+                        if [ $i -eq $MAX_RETRIES ]; then
+                            [ "$REPORT" != "1" ] && echo "❌ All retries failed. Exiting."
+                            if [ "$DEBUG_MODE" = "0" ]; then
+                                exit 1
+                            fi
+                        fi
+                        sleep "$RETRY_DELAY"
                     fi
-                    if [ "$DEBUG_MODE" = "0" ]; then
-                        exit 1
-                    fi
-                fi
+                done
             else
                 # Other regions need LocationConstraint
-                if aws s3api create-bucket --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' --create-bucket-configuration LocationConstraint="$region" >/dev/null 2>&1; then
-                    [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
-                else
-                    if [ "$REPORT" != "1" ]; then
-                        echo "❌ Failed to create bucket $bucket in $region"
-                        aws s3api create-bucket --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' --create-bucket-configuration LocationConstraint="$region" 2>&1 | head -5
+                for ((i=1; i<=MAX_RETRIES; i++)); do
+                    if aws s3api create-bucket --bucket "$bucket" --region "$region" --create-bucket-configuration LocationConstraint="$region" >/dev/null; then
+                        [ "$REPORT" != "1" ] && echo "✅ Created bucket $bucket in $region"
+                        # Add tagging after successful creation
+                        aws s3api put-bucket-tagging --bucket "$bucket" --region "$region" --tagging 'TagSet=[{Key=NUKE_RETAIN,Value=true}]' >/dev/null 2>&1
+                        break # Success, exit retry loop
+                    else
+                        [ "$REPORT" != "1" ] && echo "❌ Failed to create bucket $bucket in $region (Attempt $i/$MAX_RETRIES)"
+                        if [ $i -eq $MAX_RETRIES ]; then
+                            [ "$REPORT" != "1" ] && echo "❌ All retries failed. Exiting."
+                            if [ "$DEBUG_MODE" = "0" ]; then
+                                exit 1
+                            fi
+                        fi
+                        sleep "$RETRY_DELAY"
                     fi
-                    if [ "$DEBUG_MODE" = "0" ]; then
-                        exit 1
-                    fi
-                fi
+                done
             fi
         fi
-        
-        # Enable versioning for state buckets
-        for versioned_bucket in "${VERSIONED_BUCKETS[@]}"; do
-            if [ "$bucket" = "$versioned_bucket" ]; then
-                [ "$REPORT" != "1" ] && echo "Enabling versioning for $bucket..."
-                if aws s3api put-bucket-versioning --bucket "$bucket" --versioning-configuration Status=Enabled --region "$region" >/dev/null 2>&1; then
-                    [ "$REPORT" != "1" ] && echo "✅ Versioning enabled for $bucket"
-                else
-                    if [ "$REPORT" != "1" ]; then
-                        echo "❌ Failed to enable versioning for $bucket"
-                        aws s3api put-bucket-versioning --bucket "$bucket" --versioning-configuration Status=Enabled --region "$region" 2>&1 | head -5
-                    fi
-                    if [ "$DEBUG_MODE" = "0" ]; then
-                        exit 1
-                    fi
-                fi
-                break
-            fi
-        done
+
+        # Enable versioning if bucket is in the versioned list
+        if [[ " ${VERSIONED_BUCKETS[@]} " =~ " ${bucket} " ]]; then
+            enable_versioning "$bucket" "$region"
+        fi
     done
-    
+
     [ "$REPORT" != "1" ] && echo "S3 bucket setup completed"
     write_to_csv "S3 bucket setup completed" ""
 else
@@ -340,9 +368,20 @@ run_step "STEP 4: UNIT TESTS" "./scripts/unit-tests.sh"
 
 # STEP 5: DEPLOY
 run_step "STEP 5: DEPLOY" "./scripts/deploy.sh"
+DEPLOY_SUCCESS=$?
 
 # STEP 6: INTEGRATION TESTS
-run_step "STEP 6: INTEGRATION TESTS" "./scripts/integration-tests.sh"
+if [ "$DEPLOY_SUCCESS" -eq 0 ]; then
+    run_step "STEP 6: INTEGRATION TESTS" "./scripts/integration-tests.sh"
+else
+    echo "❌ Deployment failed. Skipping integration tests."
+    # Log the skip to the CSV file
+    write_to_csv "STEP 6: INTEGRATION TESTS skipped" "Deployment failed"
+    # Add a note to the FAILED_STEPS for reporting if in debug mode
+    if [ "$DEBUG_MODE" = "1" ]; then
+        FAILED_STEPS+=("STEP 6: INTEGRATION TESTS (skipped)")
+    fi
+fi
 
 # STEP 7: DESTROY (Optional)
 run_step "STEP 7: DESTROY (Optional)" "./scripts/destroy.sh"
