@@ -17,12 +17,6 @@ import software.amazon.awscdk.assertions.Template;
  */
 public class MainIntegrationTest {
 
-    /**
-     * Integration test for full stack deployment simulation.
-     *
-     * This test verifies that the complete stack can be synthesized
-     * with all its components working together.
-     */
     @Test
     public void testFullStackDeployment() {
         App app = new App();
@@ -41,12 +35,7 @@ public class MainIntegrationTest {
         assertThat(template).isNotNull();
     }
 
-    /**
-     * Integration test for multiple environment configurations.
-     *
-     * This test verifies that the stack can be configured for different
-     * environments (dev, staging, prod) with appropriate settings.
-     */
+
     @Test
     public void testMultiEnvironmentConfiguration() {
         // Test different environment configurations
@@ -68,12 +57,6 @@ public class MainIntegrationTest {
         }
     }
 
-    /**
-     * Integration test for stack with nested components.
-     *
-     * This test would verify the integration between the main stack
-     * and any nested stacks or components that might be added in the future.
-     */
     @Test
     public void testStackWithNestedComponents() {
         App app = new App();
@@ -87,9 +70,5 @@ public class MainIntegrationTest {
         // Verify basic stack structure
         assertThat(stack).isNotNull();
         assertThat(template).isNotNull();
-
-        // When nested stacks are added, additional assertions would go here
-        // For example:
-        // template.hasResourceProperties("AWS::CloudFormation::Stack", Map.of(...));
     }
 }
