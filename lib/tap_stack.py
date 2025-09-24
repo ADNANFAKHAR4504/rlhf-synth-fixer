@@ -241,42 +241,42 @@ class TapStack(cdk.Stack):
     
     cdk.CfnOutput(
         self,
-        f"LoadBalancerDNS{environment_suffix}",
+        f"LoadBalancerDNS",
         value=self.load_balancer.load_balancer_dns_name,
         description="DNS name of the Application Load Balancer",
     )
 
     cdk.CfnOutput(
         self,
-        f"VpcId{environment_suffix}",
+        f"VpcId",
         value=self.vpc.vpc_id,
         description="ID of the VPC",
     )
 
     cdk.CfnOutput(
         self,
-        f"ClusterName{environment_suffix}",
+        f"ClusterName",
         value=self.cluster.cluster_name,
         description="Name of the ECS Cluster",
     )
 
     cdk.CfnOutput(
         self,
-        f"PaymentServiceName{environment_suffix}",
+        f"PaymentServiceName",
         value=self.payment_service.service_name,
         description="Name of the Payment Service",
     )
 
     cdk.CfnOutput(
         self,
-        f"AuthServiceName{environment_suffix}",
+        f"AuthServiceName",
         value=self.auth_service.service_name,
         description="Name of the Auth Service",
     )
 
     cdk.CfnOutput(
         self,
-        f"ServiceDiscoveryNamespace{environment_suffix}",
+        f"ServiceDiscoveryNamespace",
         value=self.namespace.namespace_name,
         description="Service Discovery Namespace",
     )

@@ -98,21 +98,21 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT
-        template.has_output("LoadBalancerDNSdev", {
+        template.has_output("LoadBalancerDNS", {
             "Description": "DNS name of the Application Load Balancer",
         })
-        template.has_output("VpcIddev", {
+        template.has_output("VpcId", {
             "Description": "ID of the VPC",
         })
-        template.has_output("ClusterNamedev", {
+        template.has_output("ClusterName", {
             "Description": "Name of the ECS Cluster",
         })
-        template.has_output("PaymentServiceNamedev", {
+        template.has_output("PaymentServiceName", {
             "Description": "Name of the Payment Service",
         })
-        template.has_output("AuthServiceNamedev", {
+        template.has_output("AuthServiceName", {
             "Description": "Name of the Auth Service",
         })
-        template.has_output("ServiceDiscoveryNamespacedev", {
+        template.has_output("ServiceDiscoveryNamespace", {
             "Description": "Service Discovery Namespace",
         })

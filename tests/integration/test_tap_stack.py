@@ -31,8 +31,8 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("Validates the VPC exists")
     def test_vpc_exists(self):
-        vpc_id = flat_outputs.get("VpcIddev")
-        self.assertIsNotNone(vpc_id, "VpcIddev is missing in flat-outputs.json")
+        vpc_id = flat_outputs.get("VpcId")
+        self.assertIsNotNone(vpc_id, "VpcId is missing in flat-outputs.json")
 
         try:
             response = ec2_client.describe_vpcs(VpcIds=[vpc_id])
@@ -42,8 +42,8 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("Validates the ECS cluster exists")
     def test_ecs_cluster_exists(self):
-        cluster_name = flat_outputs.get("ClusterNamedev")
-        self.assertIsNotNone(cluster_name, "ClusterNamedev is missing in flat-outputs.json")
+        cluster_name = flat_outputs.get("ClusterName")
+        self.assertIsNotNone(cluster_name, "ClusterName is missing in flat-outputs.json")
 
         try:
             response = ecs_client.describe_clusters(clusters=[cluster_name])
@@ -54,8 +54,8 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("Validates the Application Load Balancer exists")
     def test_load_balancer_exists(self):
-        alb_dns = flat_outputs.get("LoadBalancerDNSdev")
-        self.assertIsNotNone(alb_dns, "LoadBalancerDNSdev is missing in flat-outputs.json")
+        alb_dns = flat_outputs.get("LoadBalancerDNS")
+        self.assertIsNotNone(alb_dns, "LoadBalancerDNS is missing in flat-outputs.json")
 
         try:
             response = elbv2_client.describe_load_balancers()
@@ -66,12 +66,12 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("Validates the Payment Service exists")
     def test_payment_service_exists(self):
-        payment_service_name = flat_outputs.get("PaymentServiceNamedev")
-        self.assertIsNotNone(payment_service_name, "PaymentServiceNamedev is missing in flat-outputs.json")
+        payment_service_name = flat_outputs.get("PaymentServiceName")
+        self.assertIsNotNone(payment_service_name, "PaymentServiceName is missing in flat-outputs.json")
 
         try:
             response = ecs_client.describe_services(
-                cluster=flat_outputs.get("ClusterNamedev"),
+                cluster=flat_outputs.get("ClusterName"),
                 services=[payment_service_name],
             )
             self.assertEqual(len(response["services"]), 1, "Payment service not found")
@@ -81,12 +81,12 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("Validates the Auth Service exists")
     def test_auth_service_exists(self):
-        auth_service_name = flat_outputs.get("AuthServiceNamedev")
-        self.assertIsNotNone(auth_service_name, "AuthServiceNamedev is missing in flat-outputs.json")
+        auth_service_name = flat_outputs.get("AuthServiceName")
+        self.assertIsNotNone(auth_service_name, "AuthServiceName is missing in flat-outputs.json")
 
         try:
             response = ecs_client.describe_services(
-                cluster=flat_outputs.get("ClusterNamedev"),
+                cluster=flat_outputs.get("ClusterName"),
                 services=[auth_service_name],
             )
             self.assertEqual(len(response["services"]), 1, "Auth service not found")
@@ -96,8 +96,8 @@ class TestTapStackIntegration(unittest.TestCase):
 
     @mark.it("Validates the Service Discovery namespace exists")
     def test_service_discovery_namespace_exists(self):
-        namespace_name = flat_outputs.get("ServiceDiscoveryNamespacedev")
-        self.assertIsNotNone(namespace_name, "ServiceDiscoveryNamespacedev is missing in flat-outputs.json")
+        namespace_name = flat_outputs.get("ServiceDiscoveryNamespace")
+        self.assertIsNotNone(namespace_name, "ServiceDiscoveryNamespace is missing in flat-outputs.json")
 
         try:
             response = servicediscovery_client.list_namespaces()
