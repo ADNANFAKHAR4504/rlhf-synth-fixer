@@ -1,11 +1,11 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Simple single-account CI/CD pipeline with CodePipeline, CodeBuild, SNS and manual approval.",
+  "Description": "CI/CD pipeline with CodePipeline, CodeBuild, CodeDeploy, SNS, and manual approval for single AWS account.",
   "Parameters": {
     "GitHubOwner": {
       "Type": "String",
       "Default": "dummy-owner",
-      "Description": "GitHub organization or user name"
+      "Description": "GitHub organization or username"
     },
     "GitHubRepo": {
       "Type": "String",
@@ -15,18 +15,28 @@
     "GitHubBranch": {
       "Type": "String",
       "Default": "main",
-      "Description": "Branch to use"
+      "Description": "GitHub branch name"
     },
     "GitHubOAuthToken": {
       "Type": "String",
       "NoEcho": true,
-      "Default": "ghp_yourtoken",
-      "Description": "GitHub personal access token"
+      "Default": "ghp_exampletoken",
+      "Description": "GitHub Personal Access Token"
     },
     "NotificationEmail": {
       "Type": "String",
       "Default": "you@example.com",
-      "Description": "Email address to receive SNS notifications"
+      "Description": "Email for SNS notifications"
+    },
+    "ApplicationName": {
+      "Type": "String",
+      "Default": "MyCodeDeployApp",
+      "Description": "CodeDeploy application name"
+    },
+    "DeploymentGroupName": {
+      "Type": "String",
+      "Default": "MyDeploymentGroup",
+      "Description": "CodeDeploy deployment group name"
     }
   },
   "Resources": {
@@ -34,9 +44,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "VersioningConfiguration": { "Status": "Enabled" },
-        "Tags": [
-          { "Key": "CreatedBy", "Value": "CI/CD Pipeline" }
-        ]
+        "Tags": [{ "Key": "CreatedBy", "Value": "CICDPipeline" }]
       }
     },
     "SNSTopic": {
@@ -47,9 +55,6 @@
             "Protocol": "email",
             "Endpoint": { "Ref": "NotificationEmail" }
           }
-        ],
-        "Tags": [
-          { "Key": "CreatedBy", "Value": "CI/CD Pipeline" }
         ]
       }
     },
@@ -77,6 +82,7 @@
                   "Action": [
                     "s3:*",
                     "codebuild:*",
+                    "codedeploy:*",
                     "sns:Publish",
                     "iam:PassRole"
                   ],
@@ -126,9 +132,7 @@
       "Properties": {
         "Name": { "Fn::Sub": "${AWS::StackName}-Build" },
         "ServiceRole": { "Fn::GetAtt": ["CodeBuildRole", "Arn"] },
-        "Artifacts": {
-          "Type": "CODEPIPELINE"
-        },
+        "Artifacts": { "Type": "CODEPIPELINE" },
         "Environment": {
           "ComputeType": "BUILD_GENERAL1_SMALL",
           "Image": "aws/codebuild/standard:6.0",
@@ -140,7 +144,27 @@
         }
       }
     },
-    "Pipeline": {
+    "CodeDeployApplication": {
+      "Type": "AWS::CodeDeploy::Application",
+      "Properties": {
+        "ApplicationName": { "Ref": "ApplicationName" },
+        "ComputePlatform": "Server"
+      }
+    },
+    "CodeDeployDeploymentGroup": {
+      "Type": "AWS::CodeDeploy::DeploymentGroup",
+      "Properties": {
+        "ApplicationName": { "Ref": "CodeDeployApplication" },
+        "DeploymentGroupName": { "Ref": "DeploymentGroupName" },
+        "ServiceRoleArn": { "Fn::GetAtt": ["PipelineRole", "Arn"] },
+        "DeploymentConfigName": "CodeDeployDefault.AllAtOnce",
+        "AutoRollbackConfiguration": {
+          "Enabled": true,
+          "Events": ["DEPLOYMENT_FAILURE"]
+        }
+      }
+    },
+    "CodePipeline": {
       "Type": "AWS::CodePipeline::Pipeline",
       "Properties": {
         "RoleArn": { "Fn::GetAtt": ["PipelineRole", "Arn"] },
@@ -160,9 +184,7 @@
                   "Provider": "GitHub",
                   "Version": "1"
                 },
-                "OutputArtifacts": [
-                  { "Name": "SourceOutput" }
-                ],
+                "OutputArtifacts": [{ "Name": "SourceOutput" }],
                 "Configuration": {
                   "Owner": { "Ref": "GitHubOwner" },
                   "Repo": { "Ref": "GitHubRepo" },
@@ -184,12 +206,8 @@
                   "Provider": "CodeBuild",
                   "Version": "1"
                 },
-                "InputArtifacts": [
-                  { "Name": "SourceOutput" }
-                ],
-                "OutputArtifacts": [
-                  { "Name": "BuildOutput" }
-                ],
+                "InputArtifacts": [{ "Name": "SourceOutput" }],
+                "OutputArtifacts": [{ "Name": "BuildOutput" }],
                 "Configuration": {
                   "ProjectName": { "Ref": "CodeBuildProject" }
                 },
@@ -210,7 +228,27 @@
                 },
                 "Configuration": {
                   "NotificationArn": { "Ref": "SNSTopic" },
-                  "CustomData": "Please approve deployment"
+                  "CustomData": "Please approve the deployment"
+                },
+                "RunOrder": 1
+              }
+            ]
+          },
+          {
+            "Name": "Deploy",
+            "Actions": [
+              {
+                "Name": "CodeDeployApp",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "CodeDeploy",
+                  "Version": "1"
+                },
+                "InputArtifacts": [{ "Name": "BuildOutput" }],
+                "Configuration": {
+                  "ApplicationName": { "Ref": "ApplicationName" },
+                  "DeploymentGroupName": { "Ref": "DeploymentGroupName" }
                 },
                 "RunOrder": 1
               }
@@ -222,16 +260,28 @@
   },
   "Outputs": {
     "PipelineName": {
-      "Value": { "Ref": "Pipeline" },
-      "Description": "The name of the CodePipeline"
+      "Description": "The name of the CodePipeline",
+      "Value": { "Ref": "CodePipeline" }
+    },
+    "CodeBuildProjectName": {
+      "Description": "The name of the CodeBuild project",
+      "Value": { "Ref": "CodeBuildProject" }
+    },
+    "CodeDeployApplicationName": {
+      "Description": "The name of the CodeDeploy application",
+      "Value": { "Ref": "CodeDeployApplication" }
+    },
+    "CodeDeployDeploymentGroup": {
+      "Description": "The name of the CodeDeploy deployment group",
+      "Value": { "Ref": "CodeDeployDeploymentGroup" }
     },
     "SNSTopicARN": {
-      "Value": { "Ref": "SNSTopic" },
-      "Description": "The ARN of the SNS topic for notifications"
+      "Description": "SNS Topic ARN for notifications",
+      "Value": { "Ref": "SNSTopic" }
     },
     "ArtifactBucketName": {
-      "Value": { "Ref": "ArtifactBucket" },
-      "Description": "S3 Bucket used for artifact storage"
+      "Description": "S3 Bucket name for pipeline artifacts",
+      "Value": { "Ref": "ArtifactBucket" }
     }
   }
 }

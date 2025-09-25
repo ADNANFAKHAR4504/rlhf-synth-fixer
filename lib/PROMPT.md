@@ -2,7 +2,7 @@
 
 ## Goal
 
-Generate a **JSON-formatted AWS CloudFormation template** that provisions a **CI/CD pipeline using AWS CodePipeline** to deploy a web application across multiple AWS accounts and regions. The pipeline must incorporate best practices for security, compliance, and operations.
+Generate a **JSON-formatted AWS CloudFormation template** that provisions a **CI/CD pipeline using AWS CodePipeline** to deploy a web application in  AWS account. The pipeline must incorporate best practices for security, compliance, and operations.
 
 ---
 
