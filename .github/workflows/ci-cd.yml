@@ -21,11 +21,10 @@ env:
   # Use PR number for resource isolation, fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release'
+  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release-342597974367-us-east-1'
   TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
-  S3_PRODUCTION_BUCKET_NAME: 'iac-rlhf-production'
   PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
   PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}

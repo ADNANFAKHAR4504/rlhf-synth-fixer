@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "349302",
+  "team": "4",
+  "startedAt": "2025-09-08T18:18:59.115Z",
+  "author": "abdullahj2",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "General Infrastructure Tooling QA",
+    "Access Control",
+    "Network Configuration",
+    "Monitoring Setup",
+    "IaC Optimization"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "SSM",
+    "EC2",
+    "VPC",
+    "Lambda",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "CloudTrail",
+    "GuardDuty",
+    "Config",
+    "EventBridge",
+    "Systems Manager"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,28 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "350272",
+  "team": "5",
+  "startedAt": "2025-09-06T08:50:25.541Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Access Control",
+    "General Infrastructure Tooling QA",
+    "IaC Optimization"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "S3",
+    "IAM",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sadaf-jamal-au27",
+  "dockerS3Location": ""
+}

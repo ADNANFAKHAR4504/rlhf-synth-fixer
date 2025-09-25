@@ -1,0 +1,45 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "348914",
+  "team": "5",
+  "startedAt": "2025-09-08T20:01:46.548Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "IaC Optimization",
+    "General Infrastructure Tooling QA",
+    "Network Configuration",
+    "Database Management",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "Auto Scaling Groups",
+    "KMS",
+    "IAM",
+    "WAF",
+    "CloudTrail",
+    "CloudWatch",
+    "Config",
+    "SNS",
+    "API Gateway",
+    "Route53",
+    "ACM"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raaj1021",
+  "dockerS3Location": ""
+}
