@@ -2,33 +2,22 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 
-export interface ServerlessDataPipelineStackProps extends cdk.StackProps {
+export interface ServerlessDataPipelineStackProps extends cdk.NestedStackProps {
   environmentSuffix: string;
   notificationEmail?: string;
 }
 
-export class ServerlessDataPipelineStack extends cdk.Stack {
-  // Public properties to expose resources for parent stack
-  public readonly apiEndpoint: string;
-  public readonly bucketName: string;
-  public readonly lambdaFunctionName: string;
-  public readonly snsTopicArn: string;
-  public readonly snsTopicName: string;
-  public readonly iamRoleName: string;
-  public readonly iamRoleArn: string;
-  public readonly cloudWatchDashboardName: string;
-  public readonly dashboardUrl: string;
-  public readonly region: string;
-  public readonly environmentSuffix: string;
-
+export class ServerlessDataPipelineStack extends cdk.NestedStack {
   constructor(
     scope: Construct,
     id: string,
@@ -38,6 +27,35 @@ export class ServerlessDataPipelineStack extends cdk.Stack {
 
     // Apply tags to all resources
     cdk.Tags.of(this).add('Environment', 'Production');
+
+    // Create VPC for enhanced security
+    const vpc = new ec2.Vpc(this, 'DataPipelineVPC', {
+      maxAzs: 2,
+      natGateways: 0, // No NAT gateways needed for serverless with VPC endpoints
+      subnetConfiguration: [
+        {
+          name: 'Private',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+          cidrMask: 24,
+        },
+      ],
+    });
+
+    // Create VPC endpoints for AWS services
+    vpc.addInterfaceEndpoint('S3Endpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.S3,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+    });
+
+    vpc.addInterfaceEndpoint('SNSEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.SNS,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+    });
+
+    vpc.addInterfaceEndpoint('CloudWatchLogsEndpoint', {
+      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+    });
 
     // Create S3 bucket with AES-256 encryption
     const dataBucket = new s3.Bucket(this, 'DataProcessingBucket', {
@@ -74,15 +92,20 @@ export class ServerlessDataPipelineStack extends cdk.Stack {
       );
     }
 
-    // CloudWatch log group will be created automatically by Lambda
+    // Create CloudWatch log group with retention
+    const logGroup = new logs.LogGroup(this, 'DataProcessingLogs', {
+      logGroupName: `/aws/lambda/data-processor-${props.environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
-    // Create Lambda execution role with minimal permissions
+    // Create Lambda execution role with VPC and minimal permissions
     const lambdaRole = new iam.Role(this, 'DataProcessingLambdaRole', {
       roleName: `data-processing-role-${props.environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName(
-          'service-role/AWSLambdaBasicExecutionRole'
+          'service-role/AWSLambdaVPCAccessExecutionRole'
         ),
       ],
       inlinePolicies: {
@@ -288,12 +311,18 @@ async function sendErrorNotification(error) {
       timeout: cdk.Duration.minutes(5),
       memorySize: 3008, // Maximum memory for better performance
       role: lambdaRole,
+      vpc: vpc,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
       environment: {
         BUCKET_NAME: dataBucket.bucketName,
         SNS_TOPIC_ARN: notificationTopic.topicArn,
+        NODE_OPTIONS: '--enable-source-maps', // Better debugging
       },
       tracing: lambda.Tracing.ACTIVE,
-      reservedConcurrentExecutions: 10, // Reduced to stay within account limits
+      logGroup: logGroup,
+      reservedConcurrentExecutions: 10, // Reserved concurrency for predictable performance
     });
 
     // S3 will trigger the main Lambda function directly
@@ -373,6 +402,7 @@ async function sendErrorNotification(error) {
     processResource.addMethod(
       'POST',
       new apigateway.LambdaIntegration(dataProcessor, {
+        proxy: true, // Enable response streaming and full proxy integration
         requestTemplates: {
           'application/json': JSON.stringify({
             body: '$input.body',
@@ -380,6 +410,7 @@ async function sendErrorNotification(error) {
             queryParams: '$input.params().querystring',
             pathParams: '$input.params().path',
             requestId: '$context.requestId',
+            sourceIp: '$context.identity.sourceIp',
           }),
         },
         integrationResponses: [
@@ -579,6 +610,19 @@ async function sendErrorNotification(error) {
       exportName: `EnvironmentSuffix-${props.environmentSuffix}`,
     });
 
+    // VPC outputs for security validation
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: vpc.vpcId,
+      description: 'VPC ID for enhanced security',
+      exportName: `VpcId-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'VpcEndpointCount', {
+      value: '3', // S3, SNS, CloudWatch Logs endpoints
+      description: 'Number of VPC endpoints configured',
+      exportName: `VpcEndpointCount-${props.environmentSuffix}`,
+    });
+
     // Error alarm outputs for testing
     new cdk.CfnOutput(this, 'ErrorAlarmName', {
       value: errorAlarm.alarmName,
@@ -592,17 +636,6 @@ async function sendErrorNotification(error) {
       exportName: `DurationAlarmName-${props.environmentSuffix}`,
     });
 
-    // Assign public properties for parent stack access
-    this.apiEndpoint = api.url;
-    this.bucketName = dataBucket.bucketName;
-    this.lambdaFunctionName = dataProcessor.functionName;
-    this.snsTopicArn = notificationTopic.topicArn;
-    this.snsTopicName = notificationTopic.topicName;
-    this.iamRoleName = lambdaRole.roleName;
-    this.iamRoleArn = lambdaRole.roleArn;
-    this.cloudWatchDashboardName = dashboard.dashboardName;
-    this.dashboardUrl = `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`;
-    this.region = this.region;
-    this.environmentSuffix = props.environmentSuffix;
+    // Integration testing outputs are handled via CfnOutput above
   }
 }
