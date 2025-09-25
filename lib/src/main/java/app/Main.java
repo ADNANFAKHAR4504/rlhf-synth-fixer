@@ -149,7 +149,26 @@ class SecurityStack extends Stack {
         this.kmsKey = Key.Builder.create(this, "SecurityKmsKey")
                 .description("KMS key for encryption at rest - " + environmentSuffix)
                 .enableKeyRotation(true)
-                .removalPolicy(RemovalPolicy.DESTROY) // For demo purposes
+                .removalPolicy(RemovalPolicy.DESTROY)
+                .policy(PolicyDocument.Builder.create()
+                        .statements(Arrays.asList(
+                                // Allow CloudTrail to use the KMS key
+                                PolicyStatement.Builder.create()
+                                        .effect(Effect.ALLOW)
+                                        .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                                        .actions(Arrays.asList(
+                                                "kms:Decrypt",
+                                                "kms:GenerateDataKey"))
+                                        .resources(Arrays.asList("*"))
+                                        .build(),
+                                // Allow root account full access
+                                PolicyStatement.Builder.create()
+                                        .effect(Effect.ALLOW)
+                                        .principals(Arrays.asList(new AccountRootPrincipal()))
+                                        .actions(Arrays.asList("kms:*"))
+                                        .resources(Arrays.asList("*"))
+                                        .build()))
+                        .build())
                 .build();
 
         Alias.Builder.create(this, "SecurityKmsKeyAlias")
@@ -189,6 +208,23 @@ class SecurityStack extends Stack {
                 .versioned(true)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
+
+        // Add CloudTrail bucket policy
+        cloudTrailBucket.addToResourcePolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                .actions(Arrays.asList("s3:GetBucketAcl"))
+                .resources(Arrays.asList(cloudTrailBucket.getBucketArn()))
+                .build());
+
+        cloudTrailBucket.addToResourcePolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .principals(Arrays.asList(new ServicePrincipal("cloudtrail.amazonaws.com")))
+                .actions(Arrays.asList("s3:PutObject"))
+                .resources(Arrays.asList(cloudTrailBucket.getBucketArn() + "/*"))
+                .conditions(Map.of("StringEquals", 
+                    Map.of("s3:x-amz-acl", "bucket-owner-full-control")))
+                .build());
 
         // Create CloudTrail
         this.cloudTrail = Trail.Builder.create(this, "SecurityCloudTrail")

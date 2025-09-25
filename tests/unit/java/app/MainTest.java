@@ -8,6 +8,10 @@ import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.assertions.Template;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.rds.MariaDbEngineVersion;
+
+import java.util.Arrays;
 import java.util.Map;
 
 /**
@@ -45,6 +49,11 @@ public class MainTest {
         // Verify stack was created
         assertThat(stack).isNotNull();
         assertThat(stack.getEnvironmentSuffix()).isEqualTo("test");
+
+        // Verify all component stacks are created
+        assertThat(stack.getSecurityStack()).isNotNull();
+        assertThat(stack.getInfrastructureStack()).isNotNull();
+        assertThat(stack.getApplicationStack()).isNotNull();
     }
 
     /**
@@ -138,11 +147,14 @@ public class MainTest {
         // Check for Internet Gateway
         template.resourceCountIs("AWS::EC2::InternetGateway", 1);
 
-        // Check for public subnets (2 AZs = 2 subnets)
-        template.resourceCountIs("AWS::EC2::Subnet", 2);
+        // Check for subnets (2 AZs x 3 subnet types = 6 subnets)
+        template.resourceCountIs("AWS::EC2::Subnet", 6);
 
         // Check for route tables
         template.hasResource("AWS::EC2::RouteTable", Map.of());
+        
+        // Verify NAT Gateway
+        template.resourceCountIs("AWS::EC2::NatGateway", 1);
     }
 
     /**
@@ -160,9 +172,13 @@ public class MainTest {
 
         Template template = Template.fromStack(stack.getVpcStack());
 
-        // Verify security group with SSH ingress rule
+        // Verify security groups are created
+        template.resourceCountIs("AWS::EC2::SecurityGroup", 3); // Bastion, SSH, and RDS
+
+        // Verify SSH security group properties
         template.hasResourceProperties("AWS::EC2::SecurityGroup", Map.of(
-            "SecurityGroupIngress", java.util.Arrays.asList(
+            "GroupDescription", "Security group for SSH access to EC2 instances",
+            "SecurityGroupIngress", Arrays.asList(
                 Map.of(
                     "IpProtocol", "tcp",
                     "FromPort", 22,
@@ -174,7 +190,40 @@ public class MainTest {
     }
 
     /**
-     * Test IAM role for EC2 instance.
+     * Test RDS configuration.
+     */
+    @Test
+    public void testRdsConfiguration() {
+        App app = new App();
+        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
+                .environmentSuffix("test")
+                .stackProps(StackProps.builder()
+                        .env(testEnvironment)
+                        .build())
+                .build());
+
+        Template template = Template.fromStack(stack.getVpcStack());
+
+        // Verify RDS instance is created
+        template.hasResourceProperties("AWS::RDS::DBInstance", Map.of(
+            "Engine", "mariadb",
+            "EngineVersion", MariaDbEngineVersion.VER_10_6.toString(),
+            "DBInstanceClass", "db.t3.micro",
+            "StorageEncrypted", true,
+            "DeleteProtection", false
+        ));
+
+        // Verify DB subnet group
+        template.hasResourceProperties("AWS::RDS::DBSubnetGroup", Map.of(
+            "SubnetIds", stack.getVpcStack().getVpc().getPrivateSubnets().stream()
+                    .filter(subnet -> subnet.getSubnetType() == SubnetType.PRIVATE_ISOLATED)
+                    .map(subnet -> subnet.getSubnetId())
+                    .toArray()
+        ));
+    }
+
+    /**
+     * Test IAM role configuration.
      */
     @Test
     public void testIamRoleConfiguration() {
@@ -188,22 +237,154 @@ public class MainTest {
 
         Template template = Template.fromStack(stack.getVpcStack());
 
-        // Verify IAM role is created
-        template.resourceCountIs("AWS::IAM::Role", 1);
-
-        // Verify the role has SSM managed policy
+        // Verify EC2 role
         template.hasResourceProperties("AWS::IAM::Role", Map.of(
-            "ManagedPolicyArns", java.util.Arrays.asList(
+            "AssumeRolePolicyDocument", Map.of(
+                "Statement", Arrays.asList(
+                    Map.of(
+                        "Action", "sts:AssumeRole",
+                        "Effect", "Allow",
+                        "Principal", Map.of("Service", "ec2.amazonaws.com")
+                    )
+                )
+            ),
+            "ManagedPolicyArns", Arrays.asList(
                 Map.of(
-                    "Fn::Join", java.util.Arrays.asList(
+                    "Fn::Join", Arrays.asList(
                         "",
-                        java.util.Arrays.asList(
+                        Arrays.asList(
                             "arn:",
                             Map.of("Ref", "AWS::Partition"),
                             ":iam::aws:policy/AmazonSSMManagedInstanceCore"
                         )
                     )
                 )
+            )
+        ));
+
+        // Verify Lambda role
+        template.hasResourceProperties("AWS::IAM::Role", Map.of(
+            "AssumeRolePolicyDocument", Map.of(
+                "Statement", Arrays.asList(
+                    Map.of(
+                        "Action", "sts:AssumeRole",
+                        "Effect", "Allow",
+                        "Principal", Map.of("Service", "lambda.amazonaws.com")
+                    )
+                )
+            )
+        ));
+    }
+
+    /**
+     * Test Lambda function configuration.
+     */
+    @Test
+    public void testLambdaConfiguration() {
+        App app = new App();
+        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
+                .environmentSuffix("test")
+                .stackProps(StackProps.builder()
+                        .env(testEnvironment)
+                        .build())
+                .build());
+
+        Template template = Template.fromStack(stack.getApplicationStack());
+
+        // Verify Lambda function
+        template.hasResourceProperties("AWS::Lambda::Function", Map.of(
+            "Handler", "index.handler",
+            "Runtime", "python3.9",
+            "Timeout", 30,
+            "MemorySize", 256
+        ));
+    }
+
+    /**
+     * Test API Gateway configuration.
+     */
+    @Test
+    public void testApiGatewayConfiguration() {
+        App app = new App();
+        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
+                .environmentSuffix("test")
+                .stackProps(StackProps.builder()
+                        .env(testEnvironment)
+                        .build())
+                .build());
+
+        Template template = Template.fromStack(stack.getApplicationStack());
+
+        // Verify API Gateway
+        template.hasResourceProperties("AWS::ApiGateway::RestApi", Map.of(
+            "Name", "tap-test-api"
+        ));
+
+        // Verify deployment stage
+        template.hasResourceProperties("AWS::ApiGateway::Stage", Map.of(
+            "StageName", "prod"
+        ));
+    }
+
+    /**
+     * Test CloudFront distribution configuration.
+     */
+    @Test
+    public void testCloudFrontConfiguration() {
+        App app = new App();
+        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
+                .environmentSuffix("test")
+                .stackProps(StackProps.builder()
+                        .env(testEnvironment)
+                        .build())
+                .build());
+
+        Template template = Template.fromStack(stack.getApplicationStack());
+
+        // Verify CloudFront distribution
+        template.hasResourceProperties("AWS::CloudFront::Distribution", Map.of(
+            "DistributionConfig", Map.of(
+                "Enabled", true,
+                "PriceClass", "PriceClass_100",
+                "DefaultCacheBehavior", Map.of(
+                    "ViewerProtocolPolicy", "redirect-to-https"
+                )
+            )
+        ));
+    }
+
+    /**
+     * Test S3 bucket configuration.
+     */
+    @Test
+    public void testS3Configuration() {
+        App app = new App();
+        TapStack stack = new TapStack(app, "TestStack", TapStackProps.builder()
+                .environmentSuffix("test")
+                .stackProps(StackProps.builder()
+                        .env(testEnvironment)
+                        .build())
+                .build());
+
+        Template template = Template.fromStack(stack.getApplicationStack());
+
+        // Verify S3 bucket
+        template.hasResourceProperties("AWS::S3::Bucket", Map.of(
+            "BucketEncryption", Map.of(
+                "ServerSideEncryptionConfiguration", Arrays.asList(
+                    Map.of("ServerSideEncryptionByDefault", Map.of(
+                        "SSEAlgorithm", "aws:kms"
+                    ))
+                )
+            ),
+            "PublicAccessBlockConfiguration", Map.of(
+                "BlockPublicAcls", true,
+                "BlockPublicPolicy", true,
+                "IgnorePublicAcls", true,
+                "RestrictPublicBuckets", true
+            ),
+            "VersioningConfiguration", Map.of(
+                "Status", "Enabled"
             )
         ));
     }
@@ -221,12 +402,18 @@ public class MainTest {
                         .build())
                 .build());
 
-        Template template = Template.fromStack(stack.getVpcStack());
+        Template applicationTemplate = Template.fromStack(stack.getApplicationStack());
+        
+        // Verify application outputs
+        applicationTemplate.hasOutput("BucketName", Map.of());
+        applicationTemplate.hasOutput("ApiUrl", Map.of());
+        applicationTemplate.hasOutput("CloudFrontUrl", Map.of());
 
-        // Verify outputs are created
-        template.hasOutput("VpcId", Map.of());
-        template.hasOutput("InstanceId", Map.of());
-        template.hasOutput("InstancePublicIp", Map.of());
-        template.hasOutput("SecurityGroupId", Map.of());
+        Template vpcTemplate = Template.fromStack(stack.getVpcStack());
+
+        // Verify infrastructure outputs
+        vpcTemplate.hasOutput("VpcId", Map.of());
+        vpcTemplate.hasOutput("InstanceId", Map.of());
+        vpcTemplate.hasOutput("SecurityGroupId", Map.of());
     }
 }
