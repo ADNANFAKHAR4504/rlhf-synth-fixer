@@ -1,7 +1,6 @@
 package app;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -14,30 +13,19 @@ import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.apigateway.CfnStage;
 import software.amazon.awscdk.services.apigateway.LambdaRestApi;
 import software.amazon.awscdk.services.apigateway.RestApi;
-import software.amazon.awscdk.services.cloudfront.CfnDistribution;
 import software.amazon.awscdk.services.cloudfront.Distribution;
-import software.amazon.awscdk.services.cloudfront.OriginRequestPolicy;
 import software.amazon.awscdk.services.cloudfront.ViewerProtocolPolicy;
 import software.amazon.awscdk.services.cloudfront.origins.S3Origin;
-import software.amazon.awscdk.services.cloudtrail.CfnEventDataStore;
-import software.amazon.awscdk.services.cloudtrail.CfnTrail;
-import software.amazon.awscdk.services.cloudtrail.ReadWriteType;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.config.CfnConfigurationRecorder;
 import software.amazon.awscdk.services.config.CfnDeliveryChannel;
-import software.amazon.awscdk.services.config.ManagedRule;
-import software.amazon.awscdk.services.config.RuleScope;
 import software.amazon.awscdk.services.ec2.AmazonLinuxCpuType;
 import software.amazon.awscdk.services.ec2.AmazonLinuxEdition;
 import software.amazon.awscdk.services.ec2.AmazonLinuxGeneration;
 import software.amazon.awscdk.services.ec2.AmazonLinuxImageProps;
 import software.amazon.awscdk.services.ec2.AmazonLinuxVirt;
-import software.amazon.awscdk.services.ec2.CfnFlowLog;
-import software.amazon.awscdk.services.ec2.CfnSecurityGroup;
-import software.amazon.awscdk.services.ec2.CfnVPC;
 import software.amazon.awscdk.services.ec2.FlowLog;
 import software.amazon.awscdk.services.ec2.FlowLogDestination;
 import software.amazon.awscdk.services.ec2.FlowLogResourceType;
@@ -58,7 +46,6 @@ import software.amazon.awscdk.services.ec2.UserData;
 import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.guardduty.CfnDetector;
 import software.amazon.awscdk.services.iam.AccountRootPrincipal;
-import software.amazon.awscdk.services.iam.CfnRole;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyDocument;
@@ -77,7 +64,6 @@ import software.amazon.awscdk.services.rds.DatabaseInstance;
 import software.amazon.awscdk.services.rds.DatabaseInstanceEngine;
 import software.amazon.awscdk.services.rds.MariaDbEngineVersion;
 import software.amazon.awscdk.services.rds.MariaDbInstanceEngineProps;
-import software.amazon.awscdk.services.rds.ParameterGroup;
 import software.amazon.awscdk.services.rds.SubnetGroup;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
@@ -283,7 +269,7 @@ class SecurityStack extends Stack {
         Tags.of(this).add("Component", "Security");
     }
 
-    private void setupAwsConfig(String environmentSuffix) {
+    private void setupAwsConfig(final String environmentSuffix) {
         // Create S3 bucket for Config
         Bucket configBucket = Bucket.Builder.create(this, "ConfigBucket")
                 .bucketName("tap-" + environmentSuffix + "-config-" + this.getAccount())
@@ -617,11 +603,67 @@ class ApplicationStack extends Stack {
                 .build();
 
         // Create Lambda function
+
+        // Create Lambda function
+        String lambdaCode = "import json\n" +
+                "import boto3\n" +
+                "import os\n" +
+                "from datetime import datetime\n" +
+                "\n" +
+                "def handler(event, context):\n" +
+                "    s3_client = boto3.client('s3')\n" +
+                "    bucket_name = os.environ['BUCKET_NAME']\n" +
+                "    \n" +
+                "    # Log request details for security monitoring\n" +
+                "    log_entry = {\n" +
+                "        'timestamp': datetime.utcnow().isoformat(),\n" +
+                "        'source_ip': event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown'),\n" +
+                "        'user_agent': event.get('requestContext', {}).get('identity', {}).get('userAgent', 'unknown'),\n" +
+                "        'request_id': context.aws_request_id,\n" +
+                "        'function_name': context.function_name,\n" +
+                "        'path': event.get('path', '/'),\n" +
+                "        'method': event.get('httpMethod', 'GET')\n" +
+                "    }\n" +
+                "    \n" +
+                "    try:\n" +
+                "        # Store security log in S3\n" +
+                "        log_key = f\"security-logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.aws_request_id}.json\"\n" +
+                "        s3_client.put_object(\n" +
+                "            Bucket=bucket_name,\n" +
+                "            Key=log_key,\n" +
+                "            Body=json.dumps(log_entry),\n" +
+                "            ContentType='application/json'\n" +
+                "        )\n" +
+                "        \n" +
+                "        # Return API response with security headers\n" +
+                "        return {\n" +
+                "            'statusCode': 200,\n" +
+                "            'headers': {\n" +
+                "                'Content-Type': 'application/json',\n" +
+                "                'X-Content-Type-Options': 'nosniff',\n" +
+                "                'X-Frame-Options': 'DENY',\n" +
+                "                'X-XSS-Protection': '1; mode=block',\n" +
+                "                'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'\n" +
+                "            },\n" +
+                "            'body': json.dumps({\n" +
+                "                'message': 'Request processed and logged',\n" +
+                "                'timestamp': log_entry['timestamp'],\n" +
+                "                'request_id': context.aws_request_id\n" +
+                "            })\n" +
+                "        }\n" +
+                "    except Exception as e:\n" +
+                "        return {\n" +
+                "            'statusCode': 500,\n" +
+                "            'headers': {'Content-Type': 'application/json'},\n" +
+                "            'body': json.dumps({'error': 'Processing failed', 'message': str(e)})\n" +
+                "        }\n";
+
+
         this.lambdaFunction = Function.Builder.create(this, "AppFunction")
                 .functionName("tap-" + environmentSuffix + "-function")
                 .runtime(Runtime.PYTHON_3_9)
                 .handler("index.handler")
-                .code(Code.fromInline("import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndef handler(event, context):\n    s3_client = boto3.client('s3')\n    bucket_name = os.environ['BUCKET_NAME']\n    \n    # Log request details for security monitoring\n    log_entry = {\n        'timestamp': datetime.utcnow().isoformat(),\n        'source_ip': event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown'),\n        'user_agent': event.get('requestContext', {}).get('identity', {}).get('userAgent', 'unknown'),\n        'request_id': context.aws_request_id,\n        'function_name': context.function_name,\n        'path': event.get('path', '/'),\n        'method': event.get('httpMethod', 'GET')\n    }\n    \n    try:\n        # Store security log in S3\n        log_key = f\"security-logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.aws_request_id}.json\"\n        s3_client.put_object(\n            Bucket=bucket_name,\n            Key=log_key,\n            Body=json.dumps(log_entry),\n            ContentType='application/json'\n        )\n        \n        # Return API response with security headers\n        return {\n            'statusCode': 200,\n            'headers': {\n                'Content-Type': 'application/json',\n                'X-Content-Type-Options': 'nosniff',\n                'X-Frame-Options': 'DENY',\n                'X-XSS-Protection': '1; mode=block',\n                'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'\n            },\n            'body': json.dumps({\n                'message': 'Request processed and logged',\n                'timestamp': log_entry['timestamp'],\n                'request_id': context.aws_request_id\n            })\n        }\n    except Exception as e:\n        return {\n            'statusCode': 500,\n            'headers': {'Content-Type': 'application/json'},\n            'body': json.dumps({'error': 'Processing failed', 'message': str(e)})\n        }\n"))
+                .code(Code.fromInline(lambdaCode))
                 .role(lambdaRole)
                 .environment(Map.of("BUCKET_NAME", s3Bucket.getBucketName()))
                 .timeout(Duration.seconds(30))
