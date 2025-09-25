@@ -175,7 +175,6 @@ class SecurityStack extends Stack {
         this.securityLogGroup = LogGroup.Builder.create(this, "SecurityLogGroup")
                 .logGroupName("/aws/security/tap-" + environmentSuffix)
                 .retention(RetentionDays.ONE_YEAR)
-                .encryptionKey(kmsKey)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
@@ -389,7 +388,6 @@ class InfrastructureStack extends Stack {
         LogGroup vpcFlowLogGroup = LogGroup.Builder.create(this, "VpcFlowLogGroup")
                 .logGroupName("/aws/vpc/flowlogs-" + environmentSuffix)
                 .retention(RetentionDays.ONE_YEAR)
-                .encryptionKey(kmsKey)
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
 
@@ -786,6 +784,9 @@ class TapStack extends Stack {
 
     public ApplicationStack getApplicationStack() {
         return applicationStack;
+    }
+    public InfrastructureStack getVpcStack() {
+        return infrastructureStack;
     }
 }
 
