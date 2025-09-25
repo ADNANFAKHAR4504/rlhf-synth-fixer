@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -16,6 +16,19 @@ export interface ServerlessDataPipelineStackProps extends cdk.StackProps {
 }
 
 export class ServerlessDataPipelineStack extends cdk.Stack {
+  // Public properties to expose resources for parent stack
+  public readonly apiEndpoint: string;
+  public readonly bucketName: string;
+  public readonly lambdaFunctionName: string;
+  public readonly snsTopicArn: string;
+  public readonly snsTopicName: string;
+  public readonly iamRoleName: string;
+  public readonly iamRoleArn: string;
+  public readonly cloudWatchDashboardName: string;
+  public readonly dashboardUrl: string;
+  public readonly region: string;
+  public readonly environmentSuffix: string;
+
   constructor(
     scope: Construct,
     id: string,
@@ -61,12 +74,7 @@ export class ServerlessDataPipelineStack extends cdk.Stack {
       );
     }
 
-    // Create CloudWatch log group
-    const logGroup = new logs.LogGroup(this, 'DataProcessingLogs', {
-      logGroupName: `/aws/lambda/data-processing-${props.environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    // CloudWatch log group will be created automatically by Lambda
 
     // Create Lambda execution role with minimal permissions
     const lambdaRole = new iam.Role(this, 'DataProcessingLambdaRole', {
@@ -92,8 +100,14 @@ export class ServerlessDataPipelineStack extends cdk.Stack {
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
-              resources: [logGroup.logGroupArn],
+              actions: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+              ],
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/*`,
+              ],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -279,81 +293,13 @@ async function sendErrorNotification(error) {
         SNS_TOPIC_ARN: notificationTopic.topicArn,
       },
       tracing: lambda.Tracing.ACTIVE,
-      logGroup: logGroup,
-      reservedConcurrentExecutions: 100,
+      reservedConcurrentExecutions: 10, // Reduced to stay within account limits
     });
 
-    // S3 trigger function with inline code
-    const s3TriggerFunction = new lambda.Function(this, 'S3TriggerFunction', {
-      functionName: `s3-trigger-processor-${props.environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
-
-const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION });
-
-exports.handler = async (event) => {
-  console.log('S3 event:', JSON.stringify(event, null, 2));
-
-  for (const record of event.Records) {
-    if (record.eventName.startsWith('ObjectCreated:')) {
-      const bucketName = record.s3.bucket.name;
-      const objectKey = decodeURIComponent(record.s3.object.key.replace(/\\+/g, ' '));
-
-      console.log(\`Processing new file: \${objectKey} from bucket: \${bucketName}\`);
-
-      try {
-        // Determine processing type based on file path
-        const processingType = determineProcessingType(objectKey);
-
-        // Invoke main processor function
-        const payload = {
-          fileName: objectKey,
-          processingType,
-        };
-
-        const command = new InvokeCommand({
-          FunctionName: process.env.PROCESSOR_FUNCTION_NAME,
-          InvocationType: 'Event', // Async invocation
-          Payload: JSON.stringify(payload),
-        });
-
-        await lambdaClient.send(command);
-        console.log(\`Successfully triggered processing for \${objectKey}\`);
-      } catch (error) {
-        console.error(\`Error processing \${objectKey}:\`, error);
-        throw error;
-      }
-    }
-  }
-};
-
-function determineProcessingType(objectKey) {
-  if (objectKey.includes('/priority/')) {
-    return 'priority';
-  } else if (objectKey.includes('/batch/')) {
-    return 'batch';
-  }
-  return 'standard';
-}
-      `),
-      timeout: cdk.Duration.seconds(30),
-      memorySize: 512,
-      role: lambdaRole,
-      environment: {
-        PROCESSOR_FUNCTION_NAME: dataProcessor.functionName,
-        SNS_TOPIC_ARN: notificationTopic.topicArn,
-      },
-    });
-
-    // Grant S3 trigger function permission to invoke main processor
-    dataProcessor.grantInvoke(s3TriggerFunction);
-
-    // Add S3 event notification to trigger Lambda
+    // S3 will trigger the main Lambda function directly
     dataBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
-      new s3n.LambdaDestination(s3TriggerFunction),
+      new s3n.LambdaDestination(dataProcessor),
       { suffix: '.json' }
     );
 
@@ -502,122 +448,12 @@ function determineProcessingType(objectKey) {
       },
     });
 
-    // Create CloudWatch dashboard
+    // Create simplified CloudWatch dashboard
     const dashboard = new cloudwatch.Dashboard(
       this,
       'DataProcessingDashboard',
       {
         dashboardName: `data-processing-pipeline-${props.environmentSuffix}`,
-        widgets: [
-          // First row - Lambda metrics
-          [
-            new cloudwatch.GraphWidget({
-              title: 'Lambda Invocations',
-              left: [dataProcessor.metricInvocations()],
-              right: [dataProcessor.metricErrors()],
-              width: 12,
-              height: 6,
-            }),
-            new cloudwatch.GraphWidget({
-              title: 'Lambda Duration',
-              left: [dataProcessor.metricDuration()],
-              width: 12,
-              height: 6,
-            }),
-          ],
-          // Second row - API Gateway metrics
-          [
-            new cloudwatch.GraphWidget({
-              title: 'API Gateway Requests',
-              left: [
-                new cloudwatch.Metric({
-                  namespace: 'AWS/ApiGateway',
-                  metricName: 'Count',
-                  dimensionsMap: {
-                    ApiName: api.restApiName,
-                    Stage: 'prod',
-                  },
-                  statistic: 'Sum',
-                }),
-              ],
-              right: [
-                new cloudwatch.Metric({
-                  namespace: 'AWS/ApiGateway',
-                  metricName: '4XXError',
-                  dimensionsMap: {
-                    ApiName: api.restApiName,
-                    Stage: 'prod',
-                  },
-                  statistic: 'Sum',
-                }),
-                new cloudwatch.Metric({
-                  namespace: 'AWS/ApiGateway',
-                  metricName: '5XXError',
-                  dimensionsMap: {
-                    ApiName: api.restApiName,
-                    Stage: 'prod',
-                  },
-                  statistic: 'Sum',
-                }),
-              ],
-              width: 12,
-              height: 6,
-            }),
-            new cloudwatch.GraphWidget({
-              title: 'API Gateway Latency',
-              left: [
-                new cloudwatch.Metric({
-                  namespace: 'AWS/ApiGateway',
-                  metricName: 'Latency',
-                  dimensionsMap: {
-                    ApiName: api.restApiName,
-                    Stage: 'prod',
-                  },
-                  statistic: 'Average',
-                }),
-                new cloudwatch.Metric({
-                  namespace: 'AWS/ApiGateway',
-                  metricName: 'IntegrationLatency',
-                  dimensionsMap: {
-                    ApiName: api.restApiName,
-                    Stage: 'prod',
-                  },
-                  statistic: 'Average',
-                }),
-              ],
-              width: 12,
-              height: 6,
-            }),
-          ],
-          // Third row - SNS metrics
-          [
-            new cloudwatch.GraphWidget({
-              title: 'SNS Messages',
-              left: [
-                new cloudwatch.Metric({
-                  namespace: 'AWS/SNS',
-                  metricName: 'NumberOfMessagesPublished',
-                  dimensionsMap: {
-                    TopicName: notificationTopic.topicName,
-                  },
-                  statistic: 'Sum',
-                }),
-              ],
-              right: [
-                new cloudwatch.Metric({
-                  namespace: 'AWS/SNS',
-                  metricName: 'NumberOfNotificationsFailed',
-                  dimensionsMap: {
-                    TopicName: notificationTopic.topicName,
-                  },
-                  statistic: 'Sum',
-                }),
-              ],
-              width: 24,
-              height: 6,
-            }),
-          ],
-        ],
       }
     );
 
@@ -637,7 +473,7 @@ function determineProcessingType(objectKey) {
 
     // Add alarm action to SNS topic
     errorAlarm.addAlarmAction(
-      new cdk.aws_cloudwatch_actions.SnsAction(notificationTopic)
+      new cloudwatchActions.SnsAction(notificationTopic)
     );
 
     // Lambda duration alarm
@@ -655,26 +491,74 @@ function determineProcessingType(objectKey) {
     });
 
     durationAlarm.addAlarmAction(
-      new cdk.aws_cloudwatch_actions.SnsAction(notificationTopic)
+      new cloudwatchActions.SnsAction(notificationTopic)
     );
 
-    // Outputs
+    // Outputs for integration testing
     new cdk.CfnOutput(this, 'APIEndpoint', {
       value: api.url,
-      description: 'API Gateway endpoint URL',
+      description: 'API Gateway endpoint URL for testing',
       exportName: `APIEndpoint-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'APIGatewayId', {
+      value: api.restApiId,
+      description: 'API Gateway REST API ID',
+      exportName: `APIGatewayId-${props.environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'BucketName', {
       value: dataBucket.bucketName,
-      description: 'S3 bucket name for data uploads',
+      description: 'S3 bucket name for data uploads and testing',
       exportName: `DataBucket-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'BucketArn', {
+      value: dataBucket.bucketArn,
+      description: 'S3 bucket ARN for testing',
+      exportName: `DataBucketArn-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionName', {
+      value: dataProcessor.functionName,
+      description: 'Lambda function name for testing',
+      exportName: `LambdaFunctionName-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaFunctionArn', {
+      value: dataProcessor.functionArn,
+      description: 'Lambda function ARN for testing',
+      exportName: `LambdaFunctionArn-${props.environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'SNSTopicArn', {
       value: notificationTopic.topicArn,
-      description: 'SNS topic ARN for notifications',
+      description: 'SNS topic ARN for notifications and testing',
       exportName: `SNSTopicArn-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'SNSTopicName', {
+      value: notificationTopic.topicName,
+      description: 'SNS topic name for testing',
+      exportName: `SNSTopicName-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'IAMRoleName', {
+      value: lambdaRole.roleName,
+      description: 'Lambda execution role name for testing',
+      exportName: `IAMRoleName-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'IAMRoleArn', {
+      value: lambdaRole.roleArn,
+      description: 'Lambda execution role ARN for testing',
+      exportName: `IAMRoleArn-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'CloudWatchDashboardName', {
+      value: dashboard.dashboardName,
+      description: 'CloudWatch dashboard name for testing',
+      exportName: `DashboardName-${props.environmentSuffix}`,
     });
 
     new cdk.CfnOutput(this, 'DashboardUrl', {
@@ -682,5 +566,43 @@ function determineProcessingType(objectKey) {
       description: 'CloudWatch dashboard URL',
       exportName: `DashboardUrl-${props.environmentSuffix}`,
     });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: this.region,
+      description: 'AWS region where resources are deployed',
+      exportName: `Region-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: props.environmentSuffix,
+      description: 'Environment suffix used for resource naming',
+      exportName: `EnvironmentSuffix-${props.environmentSuffix}`,
+    });
+
+    // Error alarm outputs for testing
+    new cdk.CfnOutput(this, 'ErrorAlarmName', {
+      value: errorAlarm.alarmName,
+      description: 'CloudWatch error alarm name for testing',
+      exportName: `ErrorAlarmName-${props.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DurationAlarmName', {
+      value: durationAlarm.alarmName,
+      description: 'CloudWatch duration alarm name for testing',
+      exportName: `DurationAlarmName-${props.environmentSuffix}`,
+    });
+
+    // Assign public properties for parent stack access
+    this.apiEndpoint = api.url;
+    this.bucketName = dataBucket.bucketName;
+    this.lambdaFunctionName = dataProcessor.functionName;
+    this.snsTopicArn = notificationTopic.topicArn;
+    this.snsTopicName = notificationTopic.topicName;
+    this.iamRoleName = lambdaRole.roleName;
+    this.iamRoleArn = lambdaRole.roleArn;
+    this.cloudWatchDashboardName = dashboard.dashboardName;
+    this.dashboardUrl = `https://${this.region}.console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${dashboard.dashboardName}`;
+    this.region = this.region;
+    this.environmentSuffix = props.environmentSuffix;
   }
 }
