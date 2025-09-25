@@ -605,58 +605,58 @@ class ApplicationStack extends Stack {
         // Create Lambda function
 
         // Create Lambda function
-        String lambdaCode = "import json\n" +
-                "import boto3\n" +
-                "import os\n" +
-                "from datetime import datetime\n" +
-                "\n" +
-                "def handler(event, context):\n" +
-                "    s3_client = boto3.client('s3')\n" +
-                "    bucket_name = os.environ['BUCKET_NAME']\n" +
-                "    \n" +
-                "    # Log request details for security monitoring\n" +
-                "    log_entry = {\n" +
-                "        'timestamp': datetime.utcnow().isoformat(),\n" +
-                "        'source_ip': event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown'),\n" +
-                "        'user_agent': event.get('requestContext', {}).get('identity', {}).get('userAgent', 'unknown'),\n" +
-                "        'request_id': context.aws_request_id,\n" +
-                "        'function_name': context.function_name,\n" +
-                "        'path': event.get('path', '/'),\n" +
-                "        'method': event.get('httpMethod', 'GET')\n" +
-                "    }\n" +
-                "    \n" +
-                "    try:\n" +
-                "        # Store security log in S3\n" +
-                "        log_key = f\"security-logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.aws_request_id}.json\"\n" +
-                "        s3_client.put_object(\n" +
-                "            Bucket=bucket_name,\n" +
-                "            Key=log_key,\n" +
-                "            Body=json.dumps(log_entry),\n" +
-                "            ContentType='application/json'\n" +
-                "        )\n" +
-                "        \n" +
-                "        # Return API response with security headers\n" +
-                "        return {\n" +
-                "            'statusCode': 200,\n" +
-                "            'headers': {\n" +
-                "                'Content-Type': 'application/json',\n" +
-                "                'X-Content-Type-Options': 'nosniff',\n" +
-                "                'X-Frame-Options': 'DENY',\n" +
-                "                'X-XSS-Protection': '1; mode=block',\n" +
-                "                'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'\n" +
-                "            },\n" +
-                "            'body': json.dumps({\n" +
-                "                'message': 'Request processed and logged',\n" +
-                "                'timestamp': log_entry['timestamp'],\n" +
-                "                'request_id': context.aws_request_id\n" +
-                "            })\n" +
-                "        }\n" +
-                "    except Exception as e:\n" +
-                "        return {\n" +
-                "            'statusCode': 500,\n" +
-                "            'headers': {'Content-Type': 'application/json'},\n" +
-                "            'body': json.dumps({'error': 'Processing failed', 'message': str(e)})\n" +
-                "        }\n";
+        String lambdaCode = "import json\n"
+                + "import boto3\n" 
+                + "import os\n" 
+                + "from datetime import datetime\n" 
+                + "\n" 
+                + "def handler(event, context):\n" 
+                + "    s3_client = boto3.client('s3')\n" 
+                + "    bucket_name = os.environ['BUCKET_NAME']\n" 
+                + "    \n" 
+                + "    # Log request details for security monitoring\n" 
+                + "    log_entry = {\n" 
+                + "        'timestamp': datetime.utcnow().isoformat(),\n" 
+                + "        'source_ip': event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown'),\n" 
+                + "        'user_agent': event.get('requestContext', {}).get('identity', {}).get('userAgent', 'unknown'),\n" 
+                + "        'request_id': context.aws_request_id,\n" 
+                + "        'function_name': context.function_name,\n" 
+                + "        'path': event.get('path', '/'),\n" 
+                + "        'method': event.get('httpMethod', 'GET')\n" 
+                + "    }\n" 
+                + "    \n" 
+                + "    try:\n" 
+                + "        # Store security log in S3\n" 
+                + "        log_key = f\"security-logs/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.aws_request_id}.json\"\n" 
+                + "        s3_client.put_object(\n" 
+                + "            Bucket=bucket_name,\n" 
+                + "            Key=log_key,\n" 
+                + "            Body=json.dumps(log_entry),\n" 
+                + "            ContentType='application/json'\n" 
+                + "        )\n" 
+                + "        \n" 
+                + "        # Return API response with security headers\n" 
+                + "        return {\n" 
+                + "            'statusCode': 200,\n" 
+                + "            'headers': {\n" 
+                + "                'Content-Type': 'application/json',\n" 
+                + "                'X-Content-Type-Options': 'nosniff',\n" 
+                + "                'X-Frame-Options': 'DENY',\n" 
+                + "                'X-XSS-Protection': '1; mode=block',\n" 
+                + "                'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'\n" 
+                + "            },\n" 
+                + "            'body': json.dumps({\n" 
+                + "                'message': 'Request processed and logged',\n" 
+                + "                'timestamp': log_entry['timestamp'],\n" 
+                + "                'request_id': context.aws_request_id\n" 
+                + "            })\n" 
+                + "        }\n" 
+                + "    except Exception as e:\n" 
+                + "        return {\n" 
+                + "            'statusCode': 500,\n" 
+                + "            'headers': {'Content-Type': 'application/json'},\n" 
+                + "            'body': json.dumps({'error': 'Processing failed', 'message': str(e)})\n" 
+                + "        }\n";
 
 
         this.lambdaFunction = Function.Builder.create(this, "AppFunction")
