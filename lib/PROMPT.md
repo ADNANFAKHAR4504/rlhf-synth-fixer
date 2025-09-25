@@ -13,8 +13,8 @@ Generate a **JSON-formatted AWS CloudFormation template** that provisions a **CI
 - **Source**: Application source code is hosted on **GitHub**.
 - **Build**: Use **AWS CodeBuild** to build the application.
 - **Deploy**: Use **AWS CloudFormation StackSets** to deploy across:
-  - **Environments**: `dev`, `staging`, and `production`
-  - **Regions**: `us-west-2` and `us-east-1`
+  - **Environments**: `Any`
+  - **Regions**: `us-east-1`
 
 ---
 
@@ -33,6 +33,7 @@ Generate a **JSON-formatted AWS CloudFormation template** that provisions a **CI
 - Enable **CloudWatch Logs** for:
   - CodePipeline
   - CodeBuild
+  - CodePipeline
   - StackSet deployments (if applicable)
 - Define **IAM roles** using the **principle of least privilege**.
 - Ensure all resources are **tagged** using a consistent tagging policy, including:
@@ -49,7 +50,6 @@ Generate a **JSON-formatted AWS CloudFormation template** that provisions a **CI
   - Sets up the complete CI/CD pipeline as described
   - Includes **parameterization** for reusable components:
     - GitHub repo URL and branch
-    - KMS key ID
     - SNS Topic ARNs
     - Account IDs (if needed for StackSets)
 - Automatically applies **consistent tags** to all created resources.
@@ -71,10 +71,4 @@ Generate a **JSON-formatted AWS CloudFormation template** that provisions a **CI
 - GitHub access tokens or OAuth credentials are stored securely and referenced properly in CodePipeline.
 
 ---
-
-## Notes
-
-- Include `"AWSTemplateFormatVersion": "2010-09-09"` at the top of the template.
-- Ensure logical IDs and resource names are **descriptive and consistent**.
-- Follow AWS best practices for high availability and fault tolerance where relevant.
 
