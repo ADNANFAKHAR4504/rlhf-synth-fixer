@@ -344,8 +344,26 @@ class InfrastructureStack extends Stack {
             final List<String> allowedIpAddresses, final Key kmsKey, final StackProps props) {
         super(scope, id, props);
 
-        // Create VPC with both public and private subnets
-        this.vpc = Vpc.Builder.create(this, "MainVpc")
+        this.vpc = createVpcWithSubnets(environmentSuffix);
+        setupVpcFlowLogs(environmentSuffix);
+        this.bastionSecurityGroup = createBastionSecurityGroup(environmentSuffix, allowedIpAddresses);
+        this.sshSecurityGroup = createSshSecurityGroup(environmentSuffix);
+        this.rdsSecurityGroup = createRdsSecurityGroup(environmentSuffix);
+        
+        Role ec2Role = createEc2Role(environmentSuffix);
+        IMachineImage amazonLinuxAmi = getAmazonLinuxAmi();
+        this.bastionHost = createBastionHost(environmentSuffix, ec2Role, amazonLinuxAmi, kmsKey);
+        this.ec2Instance = createWebServerInstance(environmentSuffix, ec2Role, amazonLinuxAmi, kmsKey);
+        
+        this.dbSubnetGroup = createDbSubnetGroup();
+        this.rdsInstance = createRdsInstance(environmentSuffix, kmsKey);
+        
+        Tags.of(this).add("Environment", environmentSuffix);
+        Tags.of(this).add("Component", "Infrastructure");
+    }
+
+    private Vpc createVpcWithSubnets(final String environmentSuffix) {
+        return Vpc.Builder.create(this, "MainVpc")
                 .vpcName("tap-" + environmentSuffix + "-vpc")
                 .ipAddresses(IpAddresses.cidr("10.0.0.0/16"))
                 .maxAzs(2)
@@ -369,8 +387,9 @@ class InfrastructureStack extends Stack {
                                 .build()))
                 .natGateways(1)
                 .build();
+    }
 
-        // Enable VPC Flow Logs
+    private void setupVpcFlowLogs(final String environmentSuffix) {
         LogGroup vpcFlowLogGroup = LogGroup.Builder.create(this, "VpcFlowLogGroup")
                 .logGroupName("/aws/vpc/flowlogs-" + environmentSuffix)
                 .retention(RetentionDays.ONE_YEAR)
@@ -381,9 +400,11 @@ class InfrastructureStack extends Stack {
                 .resourceType(FlowLogResourceType.fromVpc(vpc))
                 .destination(FlowLogDestination.toCloudWatchLogs(vpcFlowLogGroup))
                 .build();
+    }
 
-        // Create security group for bastion host
-        this.bastionSecurityGroup = SecurityGroup.Builder.create(this, "BastionSecurityGroup")
+    private SecurityGroup createBastionSecurityGroup(final String environmentSuffix, 
+            final List<String> allowedIpAddresses) {
+        SecurityGroup securityGroup = SecurityGroup.Builder.create(this, "BastionSecurityGroup")
                 .securityGroupName("tap-" + environmentSuffix + "-bastion-sg")
                 .vpc(vpc)
                 .description("Security group for bastion host SSH access")
@@ -392,14 +413,17 @@ class InfrastructureStack extends Stack {
 
         // Add SSH access only from specific IP addresses
         for (String ipAddress : allowedIpAddresses) {
-            bastionSecurityGroup.addIngressRule(
+            securityGroup.addIngressRule(
                     Peer.ipv4(ipAddress),
                     Port.tcp(22),
                     "SSH access from " + ipAddress);
         }
 
-        // Create security group for EC2 instances (no direct SSH from internet)
-        this.sshSecurityGroup = SecurityGroup.Builder.create(this, "SshSecurityGroup")
+        return securityGroup;
+    }
+
+    private SecurityGroup createSshSecurityGroup(final String environmentSuffix) {
+        SecurityGroup securityGroup = SecurityGroup.Builder.create(this, "SshSecurityGroup")
                 .securityGroupName("tap-" + environmentSuffix + "-ssh-sg")
                 .vpc(vpc)
                 .description("Security group for SSH access to EC2 instances")
@@ -407,13 +431,16 @@ class InfrastructureStack extends Stack {
                 .build();
 
         // Allow SSH only from bastion host
-        sshSecurityGroup.addIngressRule(
+        securityGroup.addIngressRule(
                 Peer.securityGroupId(bastionSecurityGroup.getSecurityGroupId()),
                 Port.tcp(22),
                 "SSH access from bastion host");
 
-        // Create security group for RDS
-        this.rdsSecurityGroup = SecurityGroup.Builder.create(this, "RdsSecurityGroup")
+        return securityGroup;
+    }
+
+    private SecurityGroup createRdsSecurityGroup(final String environmentSuffix) {
+        SecurityGroup securityGroup = SecurityGroup.Builder.create(this, "RdsSecurityGroup")
                 .securityGroupName("tap-" + environmentSuffix + "-rds-sg")
                 .vpc(vpc)
                 .description("Security group for RDS database")
@@ -421,13 +448,16 @@ class InfrastructureStack extends Stack {
                 .build();
 
         // Allow database access only from EC2 security group
-        rdsSecurityGroup.addIngressRule(
+        securityGroup.addIngressRule(
                 Peer.securityGroupId(sshSecurityGroup.getSecurityGroupId()),
                 Port.tcp(3306),
                 "MySQL access from EC2 instances");
 
-        // Create IAM role for EC2 instances
-        Role ec2Role = Role.Builder.create(this, "Ec2Role")
+        return securityGroup;
+    }
+
+    private Role createEc2Role(final String environmentSuffix) {
+        return Role.Builder.create(this, "Ec2Role")
                 .roleName("tap-" + environmentSuffix + "-ec2-role")
                 .assumedBy(ServicePrincipal.Builder.create("ec2.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
@@ -441,18 +471,21 @@ class InfrastructureStack extends Stack {
                                         .build()))
                         .build()))
                 .build();
+    }
 
-        // Get the latest Amazon Linux 2 AMI
-        IMachineImage amazonLinuxAmi = MachineImage.latestAmazonLinux(
+    private IMachineImage getAmazonLinuxAmi() {
+        return MachineImage.latestAmazonLinux(
                 AmazonLinuxImageProps.builder()
                         .generation(AmazonLinuxGeneration.AMAZON_LINUX_2)
                         .edition(AmazonLinuxEdition.STANDARD)
                         .virtualization(AmazonLinuxVirt.HVM)
                         .cpuType(AmazonLinuxCpuType.X86_64)
                         .build());
+    }
 
-        // Create bastion host in public subnet
-        this.bastionHost = Instance.Builder.create(this, "BastionHost")
+    private Instance createBastionHost(final String environmentSuffix, final Role ec2Role,
+            final IMachineImage amazonLinuxAmi, final Key kmsKey) {
+        return Instance.Builder.create(this, "BastionHost")
                 .instanceName("tap-" + environmentSuffix + "-bastion")
                 .vpc(vpc)
                 .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
@@ -473,9 +506,11 @@ class InfrastructureStack extends Stack {
                                                 .build()))
                                 .build()))
                 .build();
+    }
 
-        // Create main EC2 instance in private subnet
-        this.ec2Instance = Instance.Builder.create(this, "WebServerInstance")
+    private Instance createWebServerInstance(final String environmentSuffix, final Role ec2Role,
+            final IMachineImage amazonLinuxAmi, final Key kmsKey) {
+        return Instance.Builder.create(this, "WebServerInstance")
                 .instanceName("tap-" + environmentSuffix + "-ec2-instance")
                 .vpc(vpc)
                 .instanceType(InstanceType.of(InstanceClass.T3, InstanceSize.MICRO))
@@ -496,18 +531,20 @@ class InfrastructureStack extends Stack {
                                                 .build()))
                                 .build()))
                 .build();
+    }
 
-        // Create DB subnet group for RDS
-        this.dbSubnetGroup = SubnetGroup.Builder.create(this, "DbSubnetGroup")
+    private SubnetGroup createDbSubnetGroup() {
+        return SubnetGroup.Builder.create(this, "DbSubnetGroup")
                 .description("Subnet group for RDS database")
                 .vpc(vpc)
                 .vpcSubnets(SubnetSelection.builder()
                         .subnetType(SubnetType.PRIVATE_ISOLATED)
                         .build())
                 .build();
+    }
 
-        // Create RDS instance in private isolated subnet
-        this.rdsInstance = DatabaseInstance.Builder.create(this, "Database")
+    private DatabaseInstance createRdsInstance(final String environmentSuffix, final Key kmsKey) {
+        return DatabaseInstance.Builder.create(this, "Database")
                 .instanceIdentifier("tap-" + environmentSuffix + "-db")
                 .engine(DatabaseInstanceEngine.mariaDb(MariaDbInstanceEngineProps.builder()
                         .version(MariaDbEngineVersion.VER_10_6)
@@ -523,9 +560,6 @@ class InfrastructureStack extends Stack {
                 .deletionProtection(false) // For demo purposes
                 .removalPolicy(RemovalPolicy.DESTROY)
                 .build();
-
-        Tags.of(this).add("Environment", environmentSuffix);
-        Tags.of(this).add("Component", "Infrastructure");
     }
 
     public Vpc getVpc() {
@@ -559,8 +593,22 @@ class ApplicationStack extends Stack {
             final StackProps props) {
         super(scope, id, props);
 
-        // Create S3 bucket with IP restrictions and encryption
-        this.s3Bucket = Bucket.Builder.create(this, "AppBucket")
+        this.s3Bucket = createS3Bucket(environmentSuffix, kmsKey, allowedIpAddresses);
+        Role lambdaRole = createLambdaRole(environmentSuffix, kmsKey);
+        this.lambdaFunction = createLambdaFunction(environmentSuffix, lambdaRole);
+        this.apiGateway = createApiGateway(environmentSuffix);
+        associateWafWithApi(webAcl);
+        this.cloudFrontDistribution = createCloudFrontDistribution();
+        createOutputs();
+        
+        Tags.of(this).add("aws-shield-advanced", "false");
+        Tags.of(this).add("Environment", environmentSuffix);
+        Tags.of(this).add("Component", "Application");
+    }
+
+    private Bucket createS3Bucket(final String environmentSuffix, final Key kmsKey,
+            final List<String> allowedIpAddresses) {
+        Bucket bucket = Bucket.Builder.create(this, "AppBucket")
                 .bucketName("tap-" + environmentSuffix + "-app-data-" + this.getAccount())
                 .encryption(BucketEncryption.KMS)
                 .encryptionKey(kmsKey)
@@ -570,19 +618,22 @@ class ApplicationStack extends Stack {
                 .build();
 
         // Create bucket policy to restrict access to specific IPs
-        s3Bucket.addToResourcePolicy(PolicyStatement.Builder.create()
+        bucket.addToResourcePolicy(PolicyStatement.Builder.create()
                 .effect(Effect.DENY)
                 .principals(Arrays.asList(new AccountRootPrincipal()))
                 .actions(Arrays.asList("s3:*"))
                 .resources(Arrays.asList(
-                        s3Bucket.getBucketArn(),
-                        s3Bucket.getBucketArn() + "/*"))
+                        bucket.getBucketArn(),
+                        bucket.getBucketArn() + "/*"))
                 .conditions(Map.of("IpAddressIfExists", Map.of("aws:SourceIp", allowedIpAddresses),
                         "Bool", Map.of("aws:ViaAWSService", "false")))
                 .build());
 
-        // Create IAM role for Lambda with least privilege
-        Role lambdaRole = Role.Builder.create(this, "LambdaRole")
+        return bucket;
+    }
+
+    private Role createLambdaRole(final String environmentSuffix, final Key kmsKey) {
+        return Role.Builder.create(this, "LambdaRole")
                 .roleName("tap-" + environmentSuffix + "-lambda-role")
                 .assumedBy(ServicePrincipal.Builder.create("lambda.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
@@ -601,10 +652,9 @@ class ApplicationStack extends Stack {
                                         .build()))
                         .build()))
                 .build();
+    }
 
-        // Create Lambda function
-
-        // Create Lambda function
+    private Function createLambdaFunction(final String environmentSuffix, final Role lambdaRole) {
         String lambdaCode = "import json\n"
                 + "import boto3\n" 
                 + "import os\n" 
@@ -658,8 +708,7 @@ class ApplicationStack extends Stack {
                 + "            'body': json.dumps({'error': 'Processing failed', 'message': str(e)})\n" 
                 + "        }\n";
 
-
-        this.lambdaFunction = Function.Builder.create(this, "AppFunction")
+        return Function.Builder.create(this, "AppFunction")
                 .functionName("tap-" + environmentSuffix + "-function")
                 .runtime(Runtime.PYTHON_3_9)
                 .handler("index.handler")
@@ -669,9 +718,10 @@ class ApplicationStack extends Stack {
                 .timeout(Duration.seconds(30))
                 .memorySize(256)
                 .build();
+    }
 
-        // Create API Gateway with WAF protection
-        this.apiGateway = LambdaRestApi.Builder.create(this, "AppApi")
+    private RestApi createApiGateway(final String environmentSuffix) {
+        RestApi api = LambdaRestApi.Builder.create(this, "AppApi")
                 .restApiName("tap-" + environmentSuffix + "-api")
                 .handler(lambdaFunction)
                 .proxy(false)
@@ -682,21 +732,23 @@ class ApplicationStack extends Stack {
                                 .throttlingRateLimit(100.0)
                                 .throttlingBurstLimit(200)
                                 .build()))
-       
                         .build())
                 .build();
 
         // Add resource and method
-        apiGateway.getRoot().addResource("hello").addMethod("GET");
+        api.getRoot().addResource("hello").addMethod("GET");
+        return api;
+    }
 
-        // Associate WAF with API Gateway
+    private void associateWafWithApi(final CfnWebACL webAcl) {
         software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
                 .resourceArn("arn:aws:apigateway:" + this.getRegion() + "::/restapis/" + apiGateway.getRestApiId() + "/stages/prod")
                 .webAclArn(webAcl.getAttrArn())
                 .build();
+    }
 
-        // Create CloudFront distribution for HTTPS-only access
-        this.cloudFrontDistribution = Distribution.Builder.create(this, "AppDistribution")
+    private Distribution createCloudFrontDistribution() {
+        return Distribution.Builder.create(this, "AppDistribution")
                 .defaultBehavior(software.amazon.awscdk.services.cloudfront.BehaviorOptions.builder()
                         .origin(S3Origin.Builder.create(s3Bucket).build())
                         .viewerProtocolPolicy(ViewerProtocolPolicy.REDIRECT_TO_HTTPS)
@@ -706,13 +758,9 @@ class ApplicationStack extends Stack {
                 .priceClass(software.amazon.awscdk.services.cloudfront.PriceClass.PRICE_CLASS_100)
                 .enabled(true)
                 .build();
+    }
 
-        // Enable AWS Shield Standard (Advanced requires manual setup)
-        Tags.of(this).add("aws-shield-advanced", "false");
-        Tags.of(this).add("Environment", environmentSuffix);
-        Tags.of(this).add("Component", "Application");
-
-        // Create outputs
+    private void createOutputs() {
         CfnOutput.Builder.create(this, "BucketName")
                 .value(s3Bucket.getBucketName())
                 .description("S3 Bucket Name")
