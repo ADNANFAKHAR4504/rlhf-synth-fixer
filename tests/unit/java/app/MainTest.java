@@ -7,6 +7,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Environment;
 import software.amazon.awscdk.StackProps;
+import software.amazon.awscdk.services.ec2.ISubnet;
+import software.amazon.awscdk.services.ec2.PrivateSubnet;
+import software.amazon.awscdk.services.ec2.SubnetSelection;
 import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.services.ec2.SubnetType;
 import software.amazon.awscdk.services.rds.MariaDbEngineVersion;
@@ -215,8 +218,7 @@ public class MainTest {
 
         // Verify DB subnet group
         template.hasResourceProperties("AWS::RDS::DBSubnetGroup", Map.of(
-            "SubnetIds", stack.getVpcStack().getVpc().getPrivateSubnets().stream()
-                    .filter(subnet -> subnet.getSubnetType() == SubnetType.PRIVATE_ISOLATED)
+            "SubnetIds", stack.getVpcStack().getVpc().getIsolatedSubnets().stream()
                     .map(subnet -> subnet.getSubnetId())
                     .toArray()
         ));
