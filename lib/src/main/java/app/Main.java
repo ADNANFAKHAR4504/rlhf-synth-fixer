@@ -494,7 +494,6 @@ class InfrastructureStack extends Stack {
 
     private Role createEc2Role(final String environmentSuffix) {
         return Role.Builder.create(this, "Ec2Role")
-                .roleName("tap-" + environmentSuffix + "-ec2-role")
                 .assumedBy(ServicePrincipal.Builder.create("ec2.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
                         ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")))
@@ -670,7 +669,6 @@ class ApplicationStack extends Stack {
 
     private Role createLambdaRole(final String environmentSuffix, final Key kmsKey) {
         return Role.Builder.create(this, "LambdaRole")
-                .roleName("tap-" + environmentSuffix + "-lambda-role")
                 .assumedBy(ServicePrincipal.Builder.create("lambda.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
                         ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")))
