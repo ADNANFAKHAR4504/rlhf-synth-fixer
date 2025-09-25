@@ -30,6 +30,7 @@ env:
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
   AWS_REGION: ${{ vars.AWS_REGION }}
+  CURRENT_ACCOUNT_ID: '342597974367'
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
@@ -261,6 +262,7 @@ jobs:
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
+          CURRENT_ACCOUNT_ID: ${{ env.CURRENT_ACCOUNT_ID }}
 
       # Note: Deployment outputs are now collected by the deploy.sh script
 
