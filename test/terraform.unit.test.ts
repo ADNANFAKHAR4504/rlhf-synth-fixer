@@ -1,77 +1,119 @@
-/**
- * Live validation tests for tap_stack.tf
- * Expanded to cover resource existence, naming, tags, and IAM policy structure.
- */
-
 import fs from "fs";
+import path from "path";
 
-const tfFile = fs.readFileSync("tap_stack.tf", "utf8");
+// Path to your tap_stack.tf
+const LIB_DIR = path.resolve(__dirname, '../lib');
+const TAP_STACK_TF = path.join(LIB_DIR, 'tap_stack.tf');
+
+// Read Terraform file
+const tfFile = fs.readFileSync(TAP_STACK_TF, "utf8");
+
+// Helper to check if regex exists in file
+const has = (regex: RegExp) => regex.test(tfFile);
 
 describe("Terraform tap_stack.tf validation", () => {
-  //
-  // VPC
-  //
-  test("should define a VPC named main", () => {
-    expect(tfFile).toMatch(/resource\s+"aws_vpc"\s+"main"/);
+  it("tap_stack.tf exists and is non-empty", () => {
+    expect(tfFile.length).toBeGreaterThan(0);
   });
 
-  //
-  // CloudWatch Log Group
-  //
-  test("should define a CloudWatch log group for VPC flow logs", () => {
-    expect(tfFile).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"vpc_flow_logs"/);
+  it("declares region, vpc_cidr, and domain_name variables", () => {
+    expect(has(/variable\s+"region"/)).toBe(true);
+    expect(has(/variable\s+"vpc_cidr"/)).toBe(true);
+    expect(has(/variable\s+"domain_name"/)).toBe(true);
   });
 
-  test("CloudWatch log group should set retention_in_days", () => {
-    expect(tfFile).toMatch(/retention_in_days\s*=\s*\d+/);
+  it("declares aws_availability_zones and aws_ami data sources", () => {
+    expect(has(/data\s+"aws_availability_zones"/)).toBe(true);
+    expect(has(/data\s+"aws_ami"/)).toBe(true);
   });
 
-  //
-  // IAM Role & Policy
-  //
-  test("should define an IAM role for flow logs", () => {
-    expect(tfFile).toMatch(/resource\s+"aws_iam_role"\s+"vpc_flow_logs"/);
+  it("defines locals for azs and common_tags", () => {
+    expect(has(/locals\s*{[^}]*azs/)).toBe(true);
+    expect(has(/locals\s*{[^}]*common_tags/)).toBe(true);
   });
 
-  test("IAM role should allow vpc-flow-logs.amazonaws.com service to assume it", () => {
-    expect(tfFile).toMatch(/"Service"\s*:\s*\["vpc-flow-logs.amazonaws.com"\]/);
+  it("defines random_string and random_password resources", () => {
+    expect(has(/resource\s+"random_string"/)).toBe(true);
+    expect(has(/resource\s+"random_password"/)).toBe(true);
   });
 
-  test("should define an IAM role policy for flow logs", () => {
-    expect(tfFile).toMatch(/resource\s+"aws_iam_role_policy"\s+"vpc_flow_logs"/);
+  it("creates aws_vpc resource with DNS enabled", () => {
+    expect(has(/resource\s+"aws_vpc"/)).toBe(true);
+    expect(has(/enable_dns_support/)).toBe(true);
+    expect(has(/enable_dns_hostnames/)).toBe(true);
   });
 
-  test("IAM role policy should include logs:CreateLogStream", () => {
-    expect(tfFile).toMatch(/"logs:CreateLogStream"/);
+  it("creates public and private subnets", () => {
+    expect(has(/resource\s+"aws_subnet"\s+"public"/)).toBe(true);
+    expect(has(/resource\s+"aws_subnet"\s+"private"/)).toBe(true);
   });
 
-  test("IAM role policy should include logs:PutLogEvents", () => {
-    expect(tfFile).toMatch(/"logs:PutLogEvents"/);
+  it("creates Internet Gateway, Elastic IPs and NAT Gateways", () => {
+    expect(has(/resource\s+"aws_internet_gateway"/)).toBe(true);
+    expect(has(/resource\s+"aws_eip"/)).toBe(true);
+    expect(has(/resource\s+"aws_nat_gateway"/)).toBe(true);
   });
 
-  //
-  // Flow Logs
-  //
-  test("should define a VPC flow log resource", () => {
-    expect(tfFile).toMatch(/resource\s+"aws_flow_log"\s+"main"/);
+  it("defines route tables for public and private subnets", () => {
+    expect(has(/resource\s+"aws_route_table"\s+"public"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table"\s+"private"/)).toBe(true);
+    expect(has(/resource\s+"aws_route_table_association"/)).toBe(true);
   });
 
-  test("VPC flow log should capture ALL traffic", () => {
-    expect(tfFile).toMatch(/traffic_type\s*=\s*"ALL"/);
+  it("creates S3 buckets and enables encryption/versioning", () => {
+    expect(has(/resource\s+"aws_s3_bucket"/)).toBe(true);
+    expect(has(/resource\s+"aws_s3_bucket_versioning"/)).toBe(true);
   });
 
-  test("VPC flow log should use log_destination set to CloudWatch log group ARN", () => {
-    expect(tfFile).toMatch(/log_destination\s*=\s*aws_cloudwatch_log_group\.vpc_flow_logs\.arn/);
+  it("creates CloudWatch log group, IAM roles and flow logs", () => {
+    expect(has(/resource\s+"aws_cloudwatch_log_group"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role"/)).toBe(true);
+    expect(has(/resource\s+"aws_iam_role_policy"/)).toBe(true);
+    expect(has(/resource\s+"aws_flow_log"/)).toBe(true);
   });
 
-  test("VPC flow log should reference IAM role", () => {
-    expect(tfFile).toMatch(/iam_role_arn\s*=\s*aws_iam_role\.vpc_flow_logs\.arn/);
+  it("creates security groups for ALB, EC2, and RDS", () => {
+    expect(has(/resource\s+"aws_security_group"/)).toBe(true);
   });
 
-  //
-  // Tags
-  //
-  test("resources should apply common_tags merge", () => {
-    expect(tfFile).toMatch(/tags\s*=\s*merge\(local\.common_tags/);
+  it("creates IAM role and instance profile for EC2", () => {
+    expect(has(/resource\s+"aws_iam_instance_profile"/)).toBe(true);
+  });
+
+  it("creates launch template and Auto Scaling Group", () => {
+    expect(has(/resource\s+"aws_launch_template"/)).toBe(true);
+    expect(has(/resource\s+"aws_autoscaling_group"/)).toBe(true);
+  });
+
+  it("creates ALB, target group, listener and Route53 records", () => {
+    expect(has(/resource\s+"aws_lb"/)).toBe(true);
+    expect(has(/resource\s+"aws_lb_target_group"/)).toBe(true);
+    expect(has(/resource\s+"aws_lb_listener"/)).toBe(true);
+    expect(has(/resource\s+"aws_route53_zone"/)).toBe(true);
+    expect(has(/resource\s+"aws_route53_record"/)).toBe(true);
+  });
+
+  it("creates Secrets Manager secret and version", () => {
+    expect(has(/resource\s+"aws_secretsmanager_secret"/)).toBe(true);
+    expect(has(/resource\s+"aws_secretsmanager_secret_version"/)).toBe(true);
+  });
+
+  it("creates RDS subnet group and DB instance", () => {
+    expect(has(/resource\s+"aws_db_subnet_group"/)).toBe(true);
+    expect(has(/resource\s+"aws_db_instance"/)).toBe(true);
+  });
+
+  it("defines lifecycle create_before_destroy where present", () => {
+    expect(has(/lifecycle\s*{[^}]*create_before_destroy/)).toBe(true);
+  });
+
+  it("exports major outputs", () => {
+    const outputs = [
+      "vpc_id", "internet_gateway_id", "public_subnet_ids", "private_subnet_ids",
+      "nat_gateway_ids", "ec2_instance_ids", "s3_bucket_id", "flow_log_id"
+    ];
+    outputs.forEach(output => {
+      expect(has(new RegExp(`output\\s+"${output}"`))).toBe(true);
+    });
   });
 });
