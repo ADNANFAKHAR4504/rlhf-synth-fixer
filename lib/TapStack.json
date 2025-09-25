@@ -148,13 +148,7 @@
       "Type": "AWS::CodeDeploy::Application",
       "Properties": {
         "ApplicationName": { "Ref": "ApplicationName" },
-        "ComputePlatform": "Server",
-        "AutoRollbackConfiguration": {
-          "Enabled": true,
-          "Events": [
-            "DEPLOYMENT_FAILURE"
-          ]
-        }
+        "ComputePlatform": "Server"
       }
     },
     "CodeDeployDeploymentGroup": {
