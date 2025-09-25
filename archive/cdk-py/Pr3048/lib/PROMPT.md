@@ -1,0 +1,6 @@
+I want to build out a containerized microservices setup on AWS using CDK with Python. The idea is to take a payment processing system that’s been broken into smaller services and run them on ECS with Fargate. These services need to talk to each other dynamically, so service discovery with Cloud Map should be in place, and I want traffic to be routed properly with an application load balancer. The networking side has to be solid – the services should sit in private subnets inside a VPC, while outbound access goes through a NAT gateway. No public exposure of containers directly.
+
+To make this real, think of two microservices: one called `payment_service` and another called `auth_service`. Each has its own container definition with reasonable CPU and memory settings, and I’d like them registered in service discovery so they can resolve each other by name. The load balancer should distribute requests to them correctly, and health checks should be active so unhealthy tasks are replaced. The VPC should cover at least two availability zones, with private and public subnets set up properly.
+
+The final solution should be an AWS CDK project written in Python, where all these pieces come together in code that’s easy to follow but production-ready.
+
