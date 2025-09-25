@@ -144,24 +144,12 @@
         }
       }
     },
+    
     "CodeDeployApplication": {
       "Type": "AWS::CodeDeploy::Application",
       "Properties": {
         "ApplicationName": { "Ref": "ApplicationName" },
         "ComputePlatform": "Server"
-      }
-    },
-    "CodeDeployDeploymentGroup": {
-      "Type": "AWS::CodeDeploy::DeploymentGroup",
-      "Properties": {
-        "ApplicationName": { "Ref": "CodeDeployApplication" },
-        "DeploymentGroupName": { "Ref": "DeploymentGroupName" },
-        "ServiceRoleArn": { "Fn::GetAtt": ["PipelineRole", "Arn"] },
-        "DeploymentConfigName": "CodeDeployDefault.AllAtOnce",
-        "AutoRollbackConfiguration": {
-          "Enabled": true,
-          "Events": ["DEPLOYMENT_FAILURE"]
-        }
       }
     },
     "CodePipeline": {
@@ -270,10 +258,6 @@
     "CodeDeployApplicationName": {
       "Description": "The name of the CodeDeploy application",
       "Value": { "Ref": "CodeDeployApplication" }
-    },
-    "CodeDeployDeploymentGroup": {
-      "Description": "The name of the CodeDeploy deployment group",
-      "Value": { "Ref": "CodeDeployDeploymentGroup" }
     },
     "SNSTopicARN": {
       "Description": "SNS Topic ARN for notifications",
