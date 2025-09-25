@@ -22,10 +22,10 @@ env:
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.number && format('pr{0}', github.event.number) || 'dev' }}
   S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release-342597974367-us-east-1'
-  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states'
+  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states-342597974367'
   TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
-  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states'
+  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states-342597974367'
   PULUMI_BUCKET_REGION: 'us-east-1'
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
   PULUMI_ORG: 'organization'
