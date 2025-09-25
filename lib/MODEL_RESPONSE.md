@@ -36,7 +36,7 @@ Here's a comprehensive Terraform configuration file `tap_stack.tf` that fulfills
 variable "region" {
   description = "AWS region for resource deployment"
   type        = string
-  default     = "us-west-2"
+  default     = "us-east-1"
 }
 
 variable "vpc_cidr" {

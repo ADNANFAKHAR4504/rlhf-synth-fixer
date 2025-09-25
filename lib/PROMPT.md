@@ -1,5 +1,5 @@
 Create a single Terraform configuration file named tap_stack.tf containing all variables, locals, resources, and outputs (no provider block, no module references) that fulfills the following security and infrastructure requirements: -
-1. There is requirement to have resources deployed in region  us-west-2 . So Please create proper VPC in this region and set specific CIDR for the VPC as 10.0.0.0/16 .Capture VPC Flow Logs
+1. There is requirement to have resources deployed in region  us-east-1 . So Please create proper VPC in this region and set specific CIDR for the VPC as 10.0.0.0/16 .Capture VPC Flow Logs
 2. VPCs should have 2 private and 2 public subnets . Also crate necessary Nat gateway, internet gateway, route table and route table association as per the network infrastructure requirements.
 3. Create EC2 instances with latest amazon linux-2 ami. Isolate this EC2 instances within a VPC using private subnets.
 4. Configure the EC2 instances with IAM roles that allow secure access to S3 buckets in the same region.
