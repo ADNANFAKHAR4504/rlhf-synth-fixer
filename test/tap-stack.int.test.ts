@@ -1,7 +1,7 @@
 // Import necessary modules
 import fs from 'fs';
 import AWS from 'aws-sdk';
-import { expect } from '@jest/globals'; // Ensure you have Jest installed
+import { expect } from '@jest/globals';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
@@ -23,31 +23,24 @@ const s3 = new AWS.S3();
 async function checkResourceExistence(resourceName: string, resourceType: string): Promise<boolean> {
   let exists = false;
   try {
-    switch (resourceType) {
-      case 'CodePipeline':
-        await codepipeline.getPipeline({ name: resourceName }).promise();
-        exists = true;
-        break;
-      case 'CodeBuildProject':
-        const buildResult = await codebuild.batchGetProjects({ names: [resourceName] }).promise();
-        exists = (buildResult.projects?.length ?? 0) > 0;
-        break;
-      case 'CodeDeployApplication':
-        await codedeploy.getApplication({ applicationName: resourceName }).promise();
-        exists = true;
-        break;
-      case 'SNSTopic':
-        const snsResult = await sns.listTopics().promise();
-        exists = snsResult.Topics?.some(topic => topic.TopicArn === resourceName) || false;
-        break;
-      case 'ArtifactBucket':
-        await s3.headBucket({ Bucket: resourceName }).promise();
-        exists = true;
-        break;
-      default:
-        console.warn(`Warning: No existence check implemented for resource type: ${resourceType}`);
-        exists = true; 
-        break;
+    if (resourceType === 'CodePipeline') {
+      await codepipeline.getPipeline({ name: resourceName }).promise();
+      exists = true;
+    } else if (resourceType === 'CodeBuildProject') {
+      const buildResult = await codebuild.batchGetProjects({ names: [resourceName] }).promise();
+      exists = (buildResult.projects?.length ?? 0) > 0;
+    } else if (resourceType === 'CodeDeployApplication') {
+      await codedeploy.getApplication({ applicationName: resourceName }).promise();
+      exists = true;
+    } else if (resourceType === 'SNSTopic') {
+      const snsResult = await sns.listTopics().promise();
+      exists = snsResult.Topics?.some(topic => topic.TopicArn === resourceName) || false;
+    } else if (resourceType === 'ArtifactBucket') {
+      await s3.headBucket({ Bucket: resourceName }).promise();
+      exists = true;
+    } else {
+      console.warn(`Warning: No existence check implemented for resource type: ${resourceType}`);
+      exists = true; 
     }
   } catch (error: unknown) {
     const awsError = error as { code?: string, message?: string };

@@ -90,7 +90,6 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
-  aws cloudformation describe-stack-events --stack-name TapStackpr3052 --region us-east-1
   npm run cfn:deploy-json
 
 elif [ "$PLATFORM" = "tf" ]; then
