@@ -1,7 +1,7 @@
 {
   "platform": "cdk",
   "language": "java",
-  "complexity": "hard",
+  "complexity": "expert",
   "turn_type": "multi",
   "po_id": "349402",
   "team": "1",
