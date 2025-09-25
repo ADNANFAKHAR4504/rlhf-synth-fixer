@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
-// eslint-disable-next-line import/no-extraneous-dependencies
-import * as fs from 'fs-extra';
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { confirm, input, select } from '@inquirer/prompts';
+import * as fs from 'fs-extra';
 import * as path from 'path';
 
 interface TaskMetadata {
@@ -14,6 +12,9 @@ interface TaskMetadata {
   po_id: string;
   team: string;
   startedAt: string;
+  task_sub_category?: string;
+  use_case_category?: string;
+  aws_services?: string;
 }
 
 async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
@@ -23,8 +24,8 @@ async function generateMetadataFile(metadata: TaskMetadata): Promise<void> {
   try {
     await fs.writeJson(metadataPath, metadata, { spaces: 2 });
     console.log('✓ Generated metadata.json');
-  } catch (error) {
-    console.error('Error generating metadata.json:', error);
+  } catch (err: unknown) {
+    console.error('Error generating metadata.json:', err);
   }
 }
 
@@ -59,8 +60,8 @@ async function copyTemplate(templateName: string): Promise<void> {
     console.log(
       `\n🎉 Template '${templateName}' has been successfully applied to your project!`
     );
-  } catch (error) {
-    console.error('Error copying template:', error);
+  } catch (err: unknown) {
+    console.error('Error copying template:', err);
   }
 }
 
@@ -117,21 +118,69 @@ async function main(): Promise<void> {
   if (command === 'rlhf-task') {
     console.log('🔧 TAP Template Selector\n');
 
-    const platform = await select({
-      message: 'Select the platform:',
+    const taskSubCategory = await select({
+      message: 'Select the Task Sub-category:',
       choices: [
-        { name: 'CDK', value: 'cdk' },
-        { name: 'CDK Terraform', value: 'cdktf' },
-        { name: 'CloudFormation', value: 'cfn' },
-        { name: 'Terraform', value: 'tf' },
-        { name: 'Pulumi', value: 'pulumi' },
+        {
+          name: 'IaC-Cloud-Environment-Setup',
+          value: 'IaC-Cloud-Environment-Setup',
+        },
+        { name: 'IaC-Cloud-Migration', value: 'IaC-Cloud-Migration' },
+        {
+          name: 'IaC-Multi-Environment-Management',
+          value: 'IaC-Multi-Environment-Management',
+        },
+        {
+          name: 'IaC-Application-Deployment',
+          value: 'IaC-Application-Deployment',
+        },
+        {
+          name: 'IaC-Serverless-Architecture',
+          value: 'IaC-Serverless-Architecture',
+        },
+        {
+          name: 'IaC-Failure-Recovery-Automation',
+          value: 'IaC-Failure-Recovery-Automation',
+        },
+        { name: 'IaC-Security-Hardening', value: 'IaC-Security-Hardening' },
+        { name: 'IaC-Analysis/Monitoring', value: 'IaC-Analysis/Monitoring' },
+        {
+          name: 'IaC-Code-Review-Diagnosis',
+          value: 'IaC-Code-Review-Diagnosis',
+        },
       ],
     });
 
-    const language = await select({
-      message: 'Select the language:',
-      choices: getLanguageChoices(platform),
-    });
+    let platform = '';
+    let language = '';
+
+    if (taskSubCategory === 'IaC-Analysis/Monitoring') {
+      platform = 'analysis';
+      const analysisChoice = await select({
+        message: 'Select analysis template type:',
+        choices: [
+          { name: 'Shell', value: 'shell' },
+          { name: 'Python', value: 'python' },
+        ],
+      });
+      language = analysisChoice;
+    } else {
+      platform = await select({
+        message: 'Select the platform:',
+        choices: [
+          { name: 'CDK', value: 'cdk' },
+          { name: 'CDK Terraform', value: 'cdktf' },
+          { name: 'CloudFormation', value: 'cfn' },
+          { name: 'Terraform', value: 'tf' },
+          { name: 'Pulumi', value: 'pulumi' },
+        ],
+      });
+
+      language = await select({
+        message: 'Select the language:',
+        choices: getLanguageChoices(platform),
+      });
+    }
 
     const complexity = await select({
       message: 'Select the complexity:',
@@ -173,15 +222,45 @@ async function main(): Promise<void> {
       ],
     });
 
-    const templateName = `${platform}-${language}`;
-    const templatesDir = path.join(__dirname, '..', 'templates');
-    const templatePath = path.join(templatesDir, templateName);
+    const subCatToUseCase: Record<string, string> = {
+      'IaC-Cloud-Environment-Setup': 'Provisioning Infrastructure Environments',
+      'IaC-Cloud-Migration': 'Environment Migration',
+      'IaC-Multi-Environment-Management':
+        'Multi-Environment Consistency and Replication',
+      'IaC-Application-Deployment': 'Web Application Deployment',
+      'IaC-Serverless-Architecture':
+        'Serverless Infrastructure (Functions as Code)',
+      'IaC-Failure-Recovery-Automation':
+        'Failure Recovery and High Availability',
+      'IaC-Security-Hardening': 'Security, Compliance, and Governance',
+      'IaC-Analysis/Monitoring': 'Infrastructure QA and Management',
+      'IaC-Code-Review-Diagnosis': 'Infrastructure QA and Management',
+    };
 
-    if (!(await fs.pathExists(templatePath))) {
-      console.error(
-        `Template '${templateName}' not found in templates directory`
-      );
-      process.exit(1);
+    let resourcesText: string | undefined = undefined;
+    if (taskSubCategory !== 'IaC-Analysis/Monitoring') {
+      resourcesText = await input({
+        message:
+          'Enter aws_services to provision (comma-separated). e.g., S3 Bucket, CloudFormation, Lambda, Fargate, VPC',
+        default:
+          'S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC',
+      });
+    }
+
+    const templateName =
+      taskSubCategory === 'IaC-Analysis/Monitoring'
+        ? `analysis-${language}`
+        : `${platform}-${language}`;
+
+    if (taskSubCategory !== 'IaC-Analysis/Monitoring') {
+      const templatesDir = path.join(__dirname, '..', 'templates');
+      const templatePath = path.join(templatesDir, templateName);
+      if (!(await fs.pathExists(templatePath))) {
+        console.error(
+          `Template '${templateName}' not found in templates directory`
+        );
+        process.exit(1);
+      }
     }
 
     const metadata: TaskMetadata = {
@@ -192,6 +271,11 @@ async function main(): Promise<void> {
       po_id: taskId,
       team,
       startedAt: new Date().toISOString(),
+      task_sub_category: taskSubCategory,
+      use_case_category: subCatToUseCase[taskSubCategory],
+      ...(resourcesText && resourcesText.trim().length > 0
+        ? { aws_services: resourcesText.trim() }
+        : {}),
     };
 
     console.log('\n📋 Task Summary:');
@@ -202,6 +286,7 @@ async function main(): Promise<void> {
     console.log(`Task ID: ${taskId}`);
     console.log(`Team: ${team}`);
     console.log(`Template: ${templateName}`);
+    console.log(`Task Sub-category: ${taskSubCategory}`);
 
     const confirmApply = await confirm({
       message:
