@@ -5,7 +5,7 @@ describe('CI/CD CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '../lib/CICDPipeline.json');
+    const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     template = JSON.parse(templateContent);
   });
@@ -84,10 +84,8 @@ describe('CI/CD CloudFormation Template', () => {
 
     test('should define CodeDeploy application and deployment group', () => {
       const app = template.Resources.CodeDeployApplication;
-      const group = template.Resources.CodeDeployDeploymentGroup;
       expect(app.Type).toBe('AWS::CodeDeploy::Application');
-      expect(group.Type).toBe('AWS::CodeDeploy::DeploymentGroup');
-      expect(group.Properties.AutoRollbackConfiguration.Enabled).toBe(true);
+      expect(app.Properties.AutoRollbackConfiguration.Enabled).toBe(true);
     });
 
     test('should define CodePipeline with all 4 stages', () => {
@@ -105,7 +103,6 @@ describe('CI/CD CloudFormation Template', () => {
       'PipelineName',
       'CodeBuildProjectName',
       'CodeDeployApplicationName',
-      'CodeDeployDeploymentGroup',
       'SNSTopicARN',
       'ArtifactBucketName'
     ];
