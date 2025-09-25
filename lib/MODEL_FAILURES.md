@@ -1,13 +1,11 @@
-- **Fix in Ideal Response**: Added `priority=100` for the Auth service listener rule.
-
-### **Issue 2: Missing Outputs**
+### **Issue: Missing Outputs**
 - **Problem**: The `MODEL_RESPONSE.md` does not include CloudFormation outputs for key resources such as the VPC ID, ECS cluster name, and service names.
 - **Impact**: This makes it difficult to monitor and integrate the deployed resources.
 - **Fix in Ideal Response**: Added outputs for the VPC ID, ECS cluster name, ALB DNS name, and service names.
 
 ---
 
-## 3. Security Concerns
+## Security Concerns
 
 ### **Issue 1: Public Subnet Exposure**
 - **Problem**: The `MODEL_RESPONSE.md` does not explicitly configure the services to run in private subnets.
@@ -21,7 +19,7 @@
 
 ---
 
-## 4. Performance Considerations
+## Performance Considerations
 
 ### **Issue 1: Single NAT Gateway**
 - **Problem**: The `MODEL_RESPONSE.md` uses a single NAT Gateway for the VPC.
@@ -35,7 +33,7 @@
 
 ---
 
-## 5. Observability and Monitoring
+## Observability and Monitoring
 
 ### **Issue 1: Missing Logging Configuration**
 - **Problem**: The `MODEL_RESPONSE.md` does not configure logging for the ECS containers.
