@@ -586,8 +586,7 @@
         ]
       },
       "DependsOn": [
-        "Listener",
-        "TargetGroup"
+        "Listener"
       ]
     },
     "ScalingTarget": {
@@ -625,13 +624,7 @@
               ":role/aws-service-role/ecs.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_ECSService"
             ]
           ]
-        },
-        "Tags": [
-          {
-            "Key": "Environment",
-            "Value": "Production"
-          }
-        ]
+        }
       }
     },
     "ScalingPolicyCPU": {
@@ -642,7 +635,7 @@
         "ScalingTargetId": {
           "Ref": "ScalingTarget"
         },
-        "TargetTrackingScalingConfiguration": {
+        "TargetTrackingScalingPolicyConfiguration": {
           "PredefinedMetricSpecification": {
             "PredefinedMetricType": "ECSServiceAverageCPUUtilization"
           },
