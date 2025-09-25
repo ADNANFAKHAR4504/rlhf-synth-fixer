@@ -117,28 +117,29 @@ async function checkResourceExistence(resourceName: string, resourceType: string
 
 // Jest Integration Test Suite
 describe('CloudFormation Stack Resources Existence Check', () => {
-  test('All resources in outputs should exist', async () => {
-    const outputKeys = Object.keys(outputs);
-    for (const key of outputKeys) {
-      const resourceName = outputs[key];
-      let resourceType;
-      
-      if (key.includes('PipelineName')) {
-        resourceType = 'CodePipeline';
-      } else if (key.includes('CodeBuildProjectName')) {
-        resourceType = 'CodeBuildProject';
-      } else if (key.includes('CodeDeployApplicationName')) {
-        resourceType = 'CodeDeployApplication';
-      } else if (key.includes('SNSTopicARN')) {
-        resourceType = 'SNSTopic';
-      } else if (key.includes('ArtifactBucketName')) {
-        resourceType = 'ArtifactBucket';
-      }
-      
-      if (resourceType) {
+  // Use a loop to dynamically create a separate test case for each resource
+  const outputKeys = Object.keys(outputs);
+  for (const key of outputKeys) {
+    const resourceName = outputs[key];
+    let resourceType;
+    
+    if (key.includes('PipelineName')) {
+      resourceType = 'CodePipeline';
+    } else if (key.includes('CodeBuildProjectName')) {
+      resourceType = 'CodeBuildProject';
+    } else if (key.includes('CodeDeployApplicationName')) {
+      resourceType = 'CodeDeployApplication';
+    } else if (key.includes('SNSTopicARN')) {
+      resourceType = 'SNSTopic';
+    } else if (key.includes('ArtifactBucketName')) {
+      resourceType = 'ArtifactBucket';
+    }
+    
+    if (resourceType) {
+      test(`resource "${key}" (${resourceType}) should exist`, async () => {
         const exists = await checkResourceExistence(resourceName, resourceType);
         expect(exists).toBe(true);
-      }
+      });
     }
-  });
+  }
 });
