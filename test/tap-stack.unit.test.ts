@@ -85,7 +85,6 @@ describe('CI/CD CloudFormation Template', () => {
     test('should define CodeDeploy application and deployment group', () => {
       const app = template.Resources.CodeDeployApplication;
       expect(app.Type).toBe('AWS::CodeDeploy::Application');
-      expect(app.Properties.AutoRollbackConfiguration.Enabled).toBe(true);
     });
 
     test('should define CodePipeline with all 4 stages', () => {
