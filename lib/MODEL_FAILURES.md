@@ -4,7 +4,7 @@ This document outlines conditions under which a generated response would be cons
 
 ---
 
-## ❌ Invalid Output Conditions
+## Invalid Output Conditions
 
 ### 1. **Incorrect Format**
 - Output is in YAML instead of **JSON**.

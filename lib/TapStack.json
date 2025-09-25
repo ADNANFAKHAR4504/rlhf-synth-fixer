@@ -1,24 +1,27 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "CI/CD pipeline with CodeBuild, CodePipeline, StackSets, manual approval, SNS, tags, encryption, logging",
+  "Description": "Dynamic CI/CD pipeline with CodePipeline, CodeBuild, CloudFormation StackSets, manual approval, SNS notifications, encryption, and tagging. Fully parameterized.",
   "Parameters": {
     "GitHubOwner": {
       "Type": "String",
+      "Default": "dummy-owner",
       "Description": "GitHub owner or organization"
     },
     "GitHubRepo": {
       "Type": "String",
+      "Default": "dummy-repo",
       "Description": "GitHub repository name"
     },
     "GitHubBranch": {
       "Type": "String",
       "Default": "main",
-      "Description": "Branch to build from"
+      "Description": "GitHub branch to build from"
     },
     "GitHubOAuthToken": {
       "Type": "String",
       "NoEcho": true,
-      "Description": "GitHub OAuth token (with repo read permissions)"
+      "Default": "dummy-token",
+      "Description": "GitHub OAuth token with repo read permissions"
     },
     "ArtifactBucketName": {
       "Type": "String",
@@ -26,39 +29,34 @@
     },
     "KmsKeyArn": {
       "Type": "String",
-      "Description": "KMS key ARN to encrypt S3 artifacts"
+      "Description": "KMS Key ARN for S3 artifact encryption"
     },
     "NotificationEmail": {
       "Type": "String",
-      "Description": "Email address to subscribe to SNS notifications"
+      "Description": "Email to receive SNS notifications"
     },
-    "TagEnvironment": {
-      "Type": "String",
-      "AllowedValues": [
-        "dev",
-        "staging",
-        "prod"
-      ],
-      "Description": "Tag for environment (used as default tag)"
-    }
-  },
-  "Conditions": {
-    "IsProd": {
-      "Fn::Equals": [
-        {
-          "Ref": "TagEnvironment"
-        },
-        "prod"
-      ]
+    "DevAccounts": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of AWS Account IDs for Dev deployment"
+    },
+    "StagingAccounts": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of AWS Account IDs for Staging deployment"
+    },
+    "ProdAccounts": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of AWS Account IDs for Production deployment"
+    },
+    "DeployRegions": {
+      "Type": "CommaDelimitedList",
+      "Description": "Comma-separated list of AWS regions to deploy to"
     }
   },
   "Resources": {
     "PipelineArtifactBucket": {
       "Type": "AWS::S3::Bucket",
       "Properties": {
-        "BucketName": {
-          "Ref": "ArtifactBucketName"
-        },
+        "BucketName": { "Ref": "ArtifactBucketName" },
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
@@ -66,97 +64,43 @@
           "ServerSideEncryptionConfiguration": [
             {
               "ServerSideEncryptionByDefault": {
-                "KMSMasterKeyID": {
-                  "Ref": "KmsKeyArn"
-                },
-                "SSEAlgorithm": "aws:kms"
+                "SSEAlgorithm": "aws:kms",
+                "KMSMasterKeyID": { "Ref": "KmsKeyArn" }
               }
             }
           ]
         },
         "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "TagEnvironment"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "AWS::StackName"
-            }
-          }
+          { "Key": "CreatedBy", "Value": "CodePipelineStack" },
+          { "Key": "Purpose", "Value": "PipelineArtifacts" }
         ]
-      }
-    },
-    "PipelineArtifactBucketPolicy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": {
-          "Ref": "PipelineArtifactBucket"
-        },
-        "PolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Sid": "AllowCodePipelineS3Access",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "codepipeline.amazonaws.com"
-              },
-              "Action": [
-                "s3:GetObject",
-                "s3:GetObjectVersion",
-                "s3:PutObject"
-              ],
-              "Resource": {
-                "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactBucketName}/*"
-              }
-            }
-          ]
-        }
       }
     },
     "SNSTopicPipelineNotifications": {
       "Type": "AWS::SNS::Topic",
       "Properties": {
-        "DisplayName": "PipelineNotifications",
+        "DisplayName": "PipelineNotificationsTopic",
         "Subscription": [
           {
-            "Endpoint": {
-              "Ref": "NotificationEmail"
-            },
-            "Protocol": "email"
+            "Protocol": "email",
+            "Endpoint": { "Ref": "NotificationEmail" }
           }
         ],
         "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "TagEnvironment"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "AWS::StackName"
-            }
-          }
+          { "Key": "CreatedBy", "Value": "CodePipelineStack" }
         ]
       }
     },
     "CodePipelineRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
+        "RoleName": { "Fn::Sub": "${AWS::StackName}-CodePipelineRole" },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": {
-                "Service": "codepipeline.amazonaws.com"
-              },
+              "Principal": { "Service": "codepipeline.amazonaws.com" },
               "Action": "sts:AssumeRole"
             }
           ]
@@ -164,32 +108,30 @@
         "Path": "/",
         "Policies": [
           {
-            "PolicyName": "CodePipelineArtifactAccess",
+            "PolicyName": "CodePipelineS3Access",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
                 {
-                  "Sid": "AllowS3ArtifactAccess",
                   "Effect": "Allow",
                   "Action": [
                     "s3:GetObject",
                     "s3:GetObjectVersion",
                     "s3:PutObject"
                   ],
-                  "Resource": {
-                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactBucketName}/*"
-                  }
+                  "Resource": [
+                    { "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactBucketName}/*" }
+                  ]
                 }
               ]
             }
           },
           {
-            "PolicyName": "CodePipelineStackSetPermissions",
+            "PolicyName": "CodePipelineCloudFormationStackSet",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
                 {
-                  "Sid": "AllowCFStackSetActions",
                   "Effect": "Allow",
                   "Action": [
                     "cloudformation:CreateStackSet",
@@ -208,124 +150,108 @@
                   "Resource": "*"
                 },
                 {
-                  "Sid": "AllowIAMPassRole",
                   "Effect": "Allow",
-                  "Action": [
-                    "iam:PassRole"
-                  ],
+                  "Action": "iam:PassRole",
                   "Resource": "*"
                 },
                 {
-                  "Sid": "AllowSNSPublish",
                   "Effect": "Allow",
-                  "Action": [
-                    "sns:Publish"
-                  ],
-                  "Resource": {
-                    "Ref": "SNSTopicPipelineNotifications"
-                  }
+                  "Action": "sns:Publish",
+                  "Resource": { "Ref": "SNSTopicPipelineNotifications" }
                 }
               ]
             }
           }
         ],
         "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "TagEnvironment"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "AWS::StackName"
-            }
-          }
+          { "Key": "CreatedBy", "Value": "CodePipelineStack" }
         ]
       }
     },
     "CodeBuildRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
+        "RoleName": { "Fn::Sub": "${AWS::StackName}-CodeBuildRole" },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
             {
               "Effect": "Allow",
-              "Principal": {
-                "Service": "codebuild.amazonaws.com"
-              },
+              "Principal": { "Service": "codebuild.amazonaws.com" },
               "Action": "sts:AssumeRole"
             }
           ]
         },
         "Path": "/",
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/AmazonS3FullAccess",
-          "arn:aws:iam::aws:policy/AWSCloudFormationFullAccess"
-        ],
         "Policies": [
           {
-            "PolicyName": "CodeBuildNotifySNS",
+            "PolicyName": "CodeBuildS3Access",
             "PolicyDocument": {
               "Version": "2012-10-17",
               "Statement": [
                 {
-                  "Sid": "PublishToSNS",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    { "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactBucketName}/*" }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CodeBuildCloudFormation",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "cloudformation:DescribeStacks",
+                    "cloudformation:CreateChangeSet",
+                    "cloudformation:ExecuteChangeSet",
+                    "cloudformation:DeleteChangeSet",
+                    "cloudformation:DescribeChangeSet"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          },
+          {
+            "PolicyName": "CodeBuildSNSPublish",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
                   "Effect": "Allow",
                   "Action": "sns:Publish",
-                  "Resource": {
-                    "Ref": "SNSTopicPipelineNotifications"
-                  }
+                  "Resource": { "Ref": "SNSTopicPipelineNotifications" }
                 }
               ]
             }
           }
         ],
         "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "TagEnvironment"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "AWS::StackName"
-            }
-          }
+          { "Key": "CreatedBy", "Value": "CodePipelineStack" }
         ]
       }
     },
     "CodeBuildProject": {
       "Type": "AWS::CodeBuild::Project",
       "Properties": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-build"
-        },
-        "ServiceRole": {
-          "Fn::GetAtt": [
-            "CodeBuildRole",
-            "Arn"
-          ]
-        },
-        "Artifacts": {
-          "Type": "CODEPIPELINE"
-        },
+        "Name": { "Fn::Sub": "${AWS::StackName}-BuildProject" },
+        "ServiceRole": { "Fn::GetAtt": ["CodeBuildRole", "Arn"] },
+        "Artifacts": { "Type": "CODEPIPELINE" },
         "Environment": {
           "ComputeType": "BUILD_GENERAL1_SMALL",
           "Image": "aws/codebuild/standard:6.0",
           "Type": "LINUX_CONTAINER",
-          "EnvironmentVariables": [
-            {
-              "Name": "ENVIRONMENT",
-              "Value": {
-                "Ref": "TagEnvironment"
-              }
-            }
-          ]
+          "EnvironmentVariables": []
         },
         "Source": {
           "Type": "CODEPIPELINE",
@@ -334,86 +260,48 @@
         "LogsConfig": {
           "CloudWatchLogs": {
             "Status": "ENABLED",
-            "GroupName": {
-              "Fn::Sub": "/aws/codebuild/${AWS::StackName}"
-            },
-            "StreamName": {
-              "Fn::Sub": "${AWS::StackName}-build"
-            }
+            "GroupName": { "Fn::Sub": "/aws/codebuild/${AWS::StackName}" },
+            "StreamName": { "Fn::Sub": "${AWS::StackName}-BuildLogs" }
           }
         },
         "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "TagEnvironment"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "AWS::StackName"
-            }
-          }
+          { "Key": "CreatedBy", "Value": "CodePipelineStack" }
         ]
       }
     },
     "CodePipeline": {
       "Type": "AWS::CodePipeline::Pipeline",
       "Properties": {
-        "Name": {
-          "Fn::Sub": "${AWS::StackName}-pipeline"
-        },
-        "RoleArn": {
-          "Fn::GetAtt": [
-            "CodePipelineRole",
-            "Arn"
-          ]
-        },
+        "Name": { "Fn::Sub": "${AWS::StackName}-Pipeline" },
+        "RoleArn": { "Fn::GetAtt": ["CodePipelineRole", "Arn"] },
         "ArtifactStore": {
           "Type": "S3",
-          "Location": {
-            "Ref": "PipelineArtifactBucket"
-          },
+          "Location": { "Ref": "ArtifactBucketName" },
           "EncryptionKey": {
-            "Id": {
-              "Ref": "KmsKeyArn"
-            },
+            "Id": { "Ref": "KmsKeyArn" },
             "Type": "KMS"
           }
         },
-        "RestartExecutionOnUpdate": false,
         "Stages": [
           {
             "Name": "Source",
             "Actions": [
               {
-                "Name": "GitHub_Source",
+                "Name": "SourceAction",
                 "ActionTypeId": {
                   "Category": "Source",
                   "Owner": "ThirdParty",
                   "Provider": "GitHub",
                   "Version": "1"
                 },
+                "OutputArtifacts": [{ "Name": "SourceOutput" }],
                 "Configuration": {
-                  "Owner": {
-                    "Ref": "GitHubOwner"
-                  },
-                  "Repo": {
-                    "Ref": "GitHubRepo"
-                  },
-                  "Branch": {
-                    "Ref": "GitHubBranch"
-                  },
-                  "OAuthToken": {
-                    "Ref": "GitHubOAuthToken"
-                  }
+                  "Owner": { "Ref": "GitHubOwner" },
+                  "Repo": { "Ref": "GitHubRepo" },
+                  "Branch": { "Ref": "GitHubBranch" },
+                  "OAuthToken": { "Ref": "GitHubOAuthToken" },
+                  "PollForSourceChanges": "false"
                 },
-                "OutputArtifacts": [
-                  {
-                    "Name": "SourceOutput"
-                  }
-                ],
                 "RunOrder": 1
               }
             ]
@@ -422,85 +310,63 @@
             "Name": "Build",
             "Actions": [
               {
-                "Name": "CodeBuild_Action",
+                "Name": "BuildAction",
                 "ActionTypeId": {
                   "Category": "Build",
                   "Owner": "AWS",
                   "Provider": "CodeBuild",
                   "Version": "1"
                 },
-                "InputArtifacts": [
-                  {
-                    "Name": "SourceOutput"
-                  }
-                ],
-                "OutputArtifacts": [
-                  {
-                    "Name": "BuildOutput"
-                  }
-                ],
+                "InputArtifacts": [{ "Name": "SourceOutput" }],
+                "OutputArtifacts": [{ "Name": "BuildOutput" }],
                 "Configuration": {
-                  "ProjectName": {
-                    "Fn::GetAtt": [
-                      "CodeBuildProject",
-                      "Name"
-                    ]
-                  }
+                  "ProjectName": { "Ref": "CodeBuildProject" }
                 },
                 "RunOrder": 1
               }
             ]
           },
           {
-            "Name": "Deploy_StackSet",
+            "Name": "Deploy_Dev",
             "Actions": [
               {
-                "Name": "CreateOrUpdate_StackSet",
-                "ActionTypeId": {
-                  "Category": "Deploy",
-                  "Owner": "AWS",
-                  "Provider": "CloudFormationStackSet",
-                  "Version": "1"
-                },
-                "InputArtifacts": [
-                  {
-                    "Name": "BuildOutput"
-                  }
-                ],
-                "Configuration": {
-                  "StackSetName": {
-                    "Fn::Sub": "${AWS::StackName}-StackSet"
-                  },
-                  "TemplatePath": "BuildOutput::template.yaml",
-                  "Capabilities": "CAPABILITY_NAMED_IAM",
-                  "PermissionModel": "SELF_MANAGED"
-                },
-                "RunOrder": 1
-              },
-              {
-                "Name": "Deploy_StackInstances",
+                "Name": "DeployStackSetDev",
                 "ActionTypeId": {
                   "Category": "Deploy",
                   "Owner": "AWS",
                   "Provider": "CloudFormationStackInstances",
                   "Version": "1"
                 },
-                "InputArtifacts": [
-                  {
-                    "Name": "BuildOutput"
-                  }
-                ],
                 "Configuration": {
-                  "StackSetName": {
-                    "Fn::Sub": "${AWS::StackName}-StackSet"
-                  },
-                  "Regions": "us-west-2,us-east-1",
-                  "Accounts": "123456789012,111122223333",
-                  "ParameterOverrides": "BuildOutput::stackset-params.json",
-                  "Capabilities": "CAPABILITY_NAMED_IAM",
-                  "OperationPreferences": "{\"FailureToleranceCount\":1, \"MaxConcurrentCount\":2}"
+                  "StackSetName": { "Fn::Sub": "${AWS::StackName}-StackSet" },
+                  "Accounts": { "Fn::Join": [",", { "Ref": "DevAccounts" }] },
+                  "Regions": { "Fn::Join": [",", { "Ref": "DeployRegions" }] },
+                  "Capabilities": "CAPABILITY_NAMED_IAM"
                 },
-                "RunOrder": 2
+                "InputArtifacts": [{ "Name": "BuildOutput" }],
+                "RunOrder": 1
+              }
+            ]
+          },
+          {
+            "Name": "Deploy_Staging",
+            "Actions": [
+              {
+                "Name": "DeployStackSetStaging",
+                "ActionTypeId": {
+                  "Category": "Deploy",
+                  "Owner": "AWS",
+                  "Provider": "CloudFormationStackInstances",
+                  "Version": "1"
+                },
+                "Configuration": {
+                  "StackSetName": { "Fn::Sub": "${AWS::StackName}-StackSet" },
+                  "Accounts": { "Fn::Join": [",", { "Ref": "StagingAccounts" }] },
+                  "Regions": { "Fn::Join": [",", { "Ref": "DeployRegions" }] },
+                  "Capabilities": "CAPABILITY_NAMED_IAM"
+                },
+                "InputArtifacts": [{ "Name": "BuildOutput" }],
+                "RunOrder": 1
               }
             ]
           },
@@ -516,78 +382,60 @@
                   "Version": "1"
                 },
                 "Configuration": {
-                  "NotificationArn": {
-                    "Ref": "SNSTopicPipelineNotifications"
-                  },
-                  "CustomData": "Please approve deployment to production"
+                  "NotificationArn": { "Ref": "SNSTopicPipelineNotifications" },
+                  "CustomData": "Manual approval required before production deployment"
                 },
                 "RunOrder": 1
               }
             ]
           },
           {
-            "Name": "Deploy_To_Prod",
+            "Name": "Deploy_Prod",
             "Actions": [
               {
-                "Name": "Deploy_Prod_StackInstances",
+                "Name": "DeployStackSetProd",
                 "ActionTypeId": {
                   "Category": "Deploy",
                   "Owner": "AWS",
                   "Provider": "CloudFormationStackInstances",
                   "Version": "1"
                 },
-                "InputArtifacts": [
-                  {
-                    "Name": "BuildOutput"
-                  }
-                ],
                 "Configuration": {
-                  "StackSetName": {
-                    "Fn::Sub": "${AWS::StackName}-StackSet"
-                  },
-                  "Regions": "us-west-2,us-east-1",
-                  "Accounts": "222233334444,333344445555",
-                  "ParameterOverrides": "BuildOutput::stackset-params-prod.json",
-                  "Capabilities": "CAPABILITY_NAMED_IAM",
-                  "OperationPreferences": "{\"FailureToleranceCount\":1, \"MaxConcurrentCount\":1}"
+                  "StackSetName": { "Fn::Sub": "${AWS::StackName}-StackSet" },
+                  "Accounts": { "Fn::Join": [",", { "Ref": "ProdAccounts" }] },
+                  "Regions": { "Fn::Join": [",", { "Ref": "DeployRegions" }] },
+                  "Capabilities": "CAPABILITY_NAMED_IAM"
                 },
+                "InputArtifacts": [{ "Name": "BuildOutput" }],
                 "RunOrder": 1
               }
             ]
           }
         ],
+        "DisableInboundStageTransitions": [],
+        "RestartExecutionOnUpdate": true,
         "Tags": [
-          {
-            "Key": "Environment",
-            "Value": {
-              "Ref": "TagEnvironment"
-            }
-          },
-          {
-            "Key": "Project",
-            "Value": {
-              "Ref": "AWS::StackName"
-            }
-          }
+          { "Key": "CreatedBy", "Value": "CodePipelineStack" }
         ]
       }
     }
   },
   "Outputs": {
     "PipelineName": {
-      "Description": "Name of the pipeline",
-      "Value": {
-        "Fn::GetAtt": [
-          "CodePipeline",
-          "Name"
-        ]
-      }
+      "Description": "The name of the created CodePipeline",
+      "Value": { "Ref": "CodePipeline" }
+    },
+    "PipelineRoleArn": {
+      "Description": "IAM Role ARN used by CodePipeline",
+      "Value": { "Fn::GetAtt": ["CodePipelineRole", "Arn"] }
+    },
+    "CodeBuildProjectName": {
+      "Description": "CodeBuild project name",
+      "Value": { "Ref": "CodeBuildProject" }
     },
     "SNSTopicArn": {
       "Description": "SNS topic ARN for pipeline notifications",
-      "Value": {
-        "Ref": "SNSTopicPipelineNotifications"
-      }
+      "Value": { "Ref": "SNSTopicPipelineNotifications" }
     }
   }
 }
