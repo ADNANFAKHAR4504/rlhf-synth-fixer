@@ -308,15 +308,10 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 
 # VPC Flow Logs
 resource "aws_flow_log" "main" {
-  vpc_id       = aws_vpc.main.id
-  traffic_type = "ALL"
-  iam_role_arn = aws_iam_role.vpc_flow_logs.arn
-
-  log_destination {
-    log_group {
-      arn = aws_cloudwatch_log_group.vpc_flow_logs.arn
-    }
-  }
+  vpc_id          = aws_vpc.main.id
+  traffic_type    = "ALL"
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
 
   tags = merge(local.common_tags, {
     Name = "main-vpc-flow-log-${var.resource_suffix}"
