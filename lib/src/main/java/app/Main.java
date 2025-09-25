@@ -283,7 +283,7 @@ class SecurityStack extends Stack {
         Role configRole = Role.Builder.create(this, "ConfigRole")
                 .assumedBy(ServicePrincipal.Builder.create("config.amazonaws.com").build())
                 .managedPolicies(Arrays.asList(
-                        ManagedPolicy.fromAwsManagedPolicyName("service-role/ConfigRole")))
+                        ManagedPolicy.fromAwsManagedPolicyName("service-role/AWS_ConfigRole")))
                 .inlinePolicies(Map.of("ConfigBucketPolicy", PolicyDocument.Builder.create()
                         .statements(Arrays.asList(
                                 PolicyStatement.Builder.create()
