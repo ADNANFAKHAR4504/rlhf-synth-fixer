@@ -2,6 +2,7 @@
 # Variables
 # ===========================
 
+
 variable "primary_region" {
   description = "Primary AWS region"
   type        = string
