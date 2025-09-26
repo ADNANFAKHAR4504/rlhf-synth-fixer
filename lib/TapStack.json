@@ -192,7 +192,7 @@
     "TaskExecutionRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "ecs-task-execution-role",
+        "RoleName": "ecs-task-execution-role-3067",
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
