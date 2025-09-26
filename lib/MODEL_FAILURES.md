@@ -28,3 +28,13 @@
 │  695: resource "aws_db_instance" "secondary" {
 
 ```
+
+```
+
+ Error: creating RDS DB Instance (tap-stack-postgres-secondary): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: bdbbf57c-120c-45cd-96de-fc0bb508692a, api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+│ 
+│   with aws_db_instance.secondary,
+│   on tap_stack.tf line 695, in resource "aws_db_instance" "secondary":
+│  695: resource "aws_db_instance" "secondary" {
+
+```
