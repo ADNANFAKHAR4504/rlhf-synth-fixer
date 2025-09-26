@@ -56,8 +56,8 @@
     "tf:validate": "cd lib && terraform validate",
     "tf:help": "cd lib && terraform -help",
     "tf:output": "cd lib && terraform show -json > ../tf-outputs/tfplan.json",
-    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
-    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cfn:deploy-yaml": "aws cloudformation deploy --template-file lib/TapStack.yml --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}}-${CURRENT_ACCOUNT_ID:-342597974367} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
+    "cfn:deploy-json": "aws cloudformation deploy --template-file lib/TapStack.json --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev} --capabilities CAPABILITY_IAM --parameter-overrides EnvironmentSuffix=${ENVIRONMENT_SUFFIX:-dev} --tags Repository=${REPOSITORY:-unknown} CommitAuthor=${COMMIT_AUTHOR:-unknown} --s3-bucket=${CFN_S3_BUCKET:-iac-rlhf-cfn-states-${AWS_REGION:-us-east-1}}-${CURRENT_ACCOUNT_ID:-342597974367} --s3-prefix=${ENVIRONMENT_SUFFIX:-dev}",
     "cfn:destroy": "aws cloudformation delete-stack --stack-name TapStack${ENVIRONMENT_SUFFIX:-dev}",
     "pulumi:up": "pulumi up --cwd lib --stack ${ENVIRONMENT_SUFFIX:-dev} --yes",
     "pulumi:deploy": "pulumi up --yes --stack TapStack${ENVIRONMENT_SUFFIX}",
@@ -113,7 +113,6 @@
     "@aws-sdk/client-xray": "^3.872.0",
     "@aws-sdk/credential-provider-node": "^3.846.0",
     "@babel/preset-env": "^7.28.3",
-    "@inquirer/prompts": "^7.8.0",
     "@opensearch-project/opensearch": "^3.5.1",
     "@semantic-release/changelog": "6.0.3",
     "@semantic-release/commit-analyzer": "13.0.0",
@@ -143,7 +142,6 @@
     "eslint-import-resolver-typescript": "4.4.4",
     "eslint-plugin-import": "2.32.0",
     "eslint-plugin-prettier": "5.5.1",
-    "fs-extra": "^11.3.0",
     "hcl2-parser": "^1.0.3",
     "inquirer": "^12.7.0",
     "jest": "^29.7.0",
@@ -185,6 +183,8 @@
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2",
-    "source-map-support": "^0.5.21"
+    "source-map-support": "^0.5.21",
+    "@inquirer/prompts": "^7.8.0",
+    "fs-extra": "^11.3.0"
   }
 }

@@ -1,0 +1,41 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348952",
+  "team": "4",
+  "startedAt": "2025-09-07T05:19:50.248Z",
+  "subtask": "Security and Compliance Implementation",
+  "subject_labels": [
+    "Security Configuration",
+    "Network Configuration",
+    "Access Control",
+    "Performance Optimization",
+    "Monitoring Setup"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "CDK",
+    "KMS",
+    "VPC",
+    "EC2",
+    "ELB",
+    "WAF",
+    "S3",
+    "API Gateway",
+    "CloudWatch",
+    "SNS",
+    "EventBridge",
+    "GuardDuty",
+    "Config",
+    "IAM",
+    "Shield"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "anilg-turing",
+  "dockerS3Location": ""
+}
