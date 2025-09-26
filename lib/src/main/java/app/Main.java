@@ -348,7 +348,8 @@ class SecurityStack extends Stack {
                         .includeGlobalResourceTypes(true)
                         .build())
                 .build();
-    }
+        }
+
 
     public Key getKmsKey() {
         return kmsKey;
@@ -360,6 +361,15 @@ class SecurityStack extends Stack {
 
     public Trail getCloudTrail() {
         return cloudTrail;
+    }
+
+    public void associateWafWithApi(RestApi apiGateway) {
+        software.amazon.awscdk.services.wafv2.CfnWebACLAssociation wafAssociation = 
+            software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
+                    .resourceArn("arn:aws:apigateway:" + this.getRegion() + "::/restapis/" + apiGateway.getRestApiId() + "/stages/prod")
+                    .webAclArn(webAcl.getAttrArn())
+                    .build();
+        wafAssociation.addDependsOn(webAcl);
     }
 }
 
@@ -632,7 +642,6 @@ class ApplicationStack extends Stack {
         Role lambdaRole = createLambdaRole(environmentSuffix, kmsKey);
         this.lambdaFunction = createLambdaFunction(environmentSuffix, lambdaRole);
         this.apiGateway = createApiGateway(environmentSuffix);
-        associateWafWithApi(webAcl);
         this.cloudFrontDistribution = createCloudFrontDistribution();
         createOutputs();
         
@@ -774,14 +783,6 @@ class ApplicationStack extends Stack {
         return api;
     }
 
-    private void associateWafWithApi(final CfnWebACL webAcl) {
-        software.amazon.awscdk.services.wafv2.CfnWebACLAssociation wafAssociation = 
-            software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
-                    .resourceArn("arn:aws:apigateway:" + this.getRegion() + "::/restapis/" + apiGateway.getRestApiId() + "/stages/prod")
-                    .webAclArn(webAcl.getAttrArn())
-                    .build();
-    }
-
     private Distribution createCloudFrontDistribution() {
         return Distribution.Builder.create(this, "AppDistribution")
                 .defaultBehavior(software.amazon.awscdk.services.cloudfront.BehaviorOptions.builder()
@@ -883,8 +884,6 @@ class TapStack extends Stack {
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
                         .description("Application Stack for environment: " + environmentSuffix)
                         .build());
-        // Make sure the application stack waits for security stack to be completely deployed
-        applicationStack.getNode().addDependency(securityStack.getWebAcl());
 
         // Add stack dependencies
         infrastructureStack.addDependency(securityStack);
