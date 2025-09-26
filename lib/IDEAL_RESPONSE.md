@@ -1,4 +1,4 @@
-###tap_stack.tf file
+# tap_stack.tf file
 
 ```hcl
 
@@ -369,7 +369,7 @@ resource "aws_db_instance" "primary" {
   db_name                     = "tapdb"
   username                    = "a${random_string.primary_rds_username.result}"
   password                    = random_password.primary_rds_password.result
-  parameter_group_name        = "default.postgres15"
+  parameter_group_name        = "default.postgres17"
   db_subnet_group_name        = aws_db_subnet_group.primary.name
   vpc_security_group_ids      = [aws_security_group.primary_rds.id]
   publicly_accessible         = false
@@ -708,7 +708,7 @@ resource "aws_db_instance" "secondary" {
   db_name                     = "tapdb"
   username                    = "b${random_string.secondary_rds_username.result}"
   password                    = random_password.secondary_rds_password.result
-  parameter_group_name        = "default.postgres15"
+  parameter_group_name        = "default.postgres17"
   db_subnet_group_name        = aws_db_subnet_group.secondary.name
   vpc_security_group_ids      = [aws_security_group.secondary_rds.id]
   publicly_accessible         = false
