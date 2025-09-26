@@ -219,7 +219,7 @@
     "TaskRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": "ecs-task-role",
+        "RoleName": "ecs-task-role-3067",
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
