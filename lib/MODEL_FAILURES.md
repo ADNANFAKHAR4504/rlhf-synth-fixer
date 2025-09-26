@@ -1,3 +1,7 @@
+Generated response by the model had below failures -
+
+1. Model wrongly used the wrong security group name appending with sg- which is now allowed in AWS as per the reserved categpory. 
+
 ```
 ╷
 │ Error: invalid value for name (cannot begin with sg-)
