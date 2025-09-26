@@ -5,7 +5,7 @@ resource "random_password" "db_password" {
 
 resource "aws_db_subnet_group" "main" {
   name       = "${var.environment}-db-subnet-group"
-  subnet_ids = [aws_subnet.private.id]
+  subnet_ids = [aws_subnet.private.id, aws_subnet.private_2.id]
 
   tags = {
     Name    = "${var.environment}-db-subnet-group"
