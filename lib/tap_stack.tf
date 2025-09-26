@@ -195,7 +195,7 @@ resource "aws_route_table_association" "private_rta" {
 
 # EC2 Security Group
 resource "aws_security_group" "ec2_sg" {
-  name        = "sg-ec2-${local.resource_suffix}"
+  name        = "ec2-${local.resource_suffix}"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main_vpc.id
 
@@ -224,13 +224,13 @@ resource "aws_security_group" "ec2_sg" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "sg-ec2-${local.resource_suffix}"
+    Name = "ec2-${local.resource_suffix}"
   })
 }
 
 # RDS Security Group - Very restrictive
 resource "aws_security_group" "rds_sg" {
-  name        = "sg-rds-${local.resource_suffix}"
+  name        = "rds-${local.resource_suffix}"
   description = "Restrictive security group for RDS database"
   vpc_id      = aws_vpc.main_vpc.id
 
@@ -251,7 +251,7 @@ resource "aws_security_group" "rds_sg" {
   }
 
   tags = merge(local.common_tags, {
-    Name = "sg-rds-${local.resource_suffix}"
+    Name = "rds-${local.resource_suffix}"
   })
 }
 
