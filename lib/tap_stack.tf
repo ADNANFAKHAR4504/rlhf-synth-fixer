@@ -468,7 +468,7 @@ resource "aws_iam_role_policy" "flow_logs" {
 resource "aws_flow_log" "primary" {
   provider             = aws.us_east_2
   iam_role_arn         = aws_iam_role.flow_logs.arn
-  log_destination_arn  = aws_cloudwatch_log_group.primary_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.primary_flow_logs.arn
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.primary.id
   
@@ -764,7 +764,7 @@ resource "aws_cloudwatch_log_group" "secondary_flow_logs" {
 resource "aws_flow_log" "secondary" {
   provider             = aws.us_west_1
   iam_role_arn         = aws_iam_role.flow_logs.arn
-  log_destination_arn  = aws_cloudwatch_log_group.secondary_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.secondary_flow_logs.arn
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.secondary.id
   
