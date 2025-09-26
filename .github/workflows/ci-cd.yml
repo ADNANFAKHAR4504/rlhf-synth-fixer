@@ -505,8 +505,6 @@ jobs:
             Follow instructions in .claude/agents/iac-code-reviewer.md. Do not commit any changes, but allow the metadata.json file to be updated.
             Important: The Metadata Enhancement phase in .claude/agents/iac-code-reviewer.md is very important for this project. Make sure that the
             metadata.json file is updated with the fields stated there. If the metadata.json file after the review does not contain the fields:
-            - subtask
-            - subject_labels
             - training_quality
             - aws_services
             then add a comment indicating the issue.
