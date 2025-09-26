@@ -13,7 +13,7 @@ const ec2Client = new EC2Client({});
 
 const expectedOutputKeys = [
     "VPCId", "PublicSubnet1Id", "PublicSubnet2Id",
-    "PrivateSubnet1Id", "PrivateSubnet2Id", "EcrRepositoryUri",
+    "EcrRepositoryUri",
     "ECSClusterName", "ECSServiceName", "ALBDNSName"
 ];
 
@@ -28,6 +28,10 @@ describe('ECS Fargate WebApp Service Existence and Status Checks', () => {
       expect(typeof outputs[key]).toBe('string');
       expect(outputs[key].length).toBeGreaterThan(0);
     });
+    
+    // Verify removal of private subnet outputs
+    expect(outputs.PrivateSubnet1Id).toBeUndefined();
+    expect(outputs.PrivateSubnet2Id).toBeUndefined();
   });
 
   // ------------------------------------------------------------------
@@ -44,7 +48,6 @@ describe('ECS Fargate WebApp Service Existence and Status Checks', () => {
 
     const response = await ecsClient.send(command);
 
-    // FIX: Add check for undefined clusters property
     expect(response.clusters).toBeDefined();
     if (!response.clusters || response.clusters.length === 0) {
         throw new Error(`ECS Cluster with name ${clusterName} not found.`);
@@ -71,7 +74,6 @@ describe('ECS Fargate WebApp Service Existence and Status Checks', () => {
 
     const response = await ecsClient.send(command);
 
-    // FIX: Add check for undefined services property
     expect(response.services).toBeDefined();
     if (!response.services || response.services.length === 0) {
         throw new Error(`ECS Service with name ${serviceName} not found in cluster ${clusterName}.`);
@@ -83,7 +85,6 @@ describe('ECS Fargate WebApp Service Existence and Status Checks', () => {
     expect(service.status).toBe("ACTIVE");
     expect(service.serviceName).toBe(serviceName);
     
-    // Ensure tasks are running (or at least attempting to run)
     expect(service.runningCount).toBeGreaterThanOrEqual(1);
     expect(service.desiredCount).toBeGreaterThanOrEqual(2);
 
@@ -105,7 +106,6 @@ describe('ECS Fargate WebApp Service Existence and Status Checks', () => {
 
     const response = await ec2Client.send(command);
     
-    // FIX: Add check for undefined Vpcs property
     expect(response.Vpcs).toBeDefined();
     if (!response.Vpcs || response.Vpcs.length === 0) {
         throw new Error(`VPC with ID ${vpcId} not found.`);

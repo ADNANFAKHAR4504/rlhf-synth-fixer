@@ -10,6 +10,7 @@ describe('ECS Fargate WebApp CloudFormation Template', () => {
 
   beforeAll(() => {
     // Ensure the template is saved in JSON format at this path
+    // NOTE: Replace '../lib/TapStack.json' with the actual path if different
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     // The JSON.parse result is assigned to the explicitly typed variable
@@ -36,9 +37,10 @@ describe('ECS Fargate WebApp CloudFormation Template', () => {
 
   // --- Parameters Tests ---
   describe('Parameters', () => {
+    // UPDATED: Removed PrivateSubnet1Cid and PrivateSubnet2Cid
     const expectedParameters = [
-      'VpcCidrBlock', 'PublicSubnet1Cidr', 'PublicSubnet2Cidr',
-      'PrivateSubnet1Cidr', 'PrivateSubnet2Cidr', 'ImageEcrRepositoryName'
+      'VpcCidrBlock', 'PublicSubnet1Cidr', 'PublicSubnet2Cidr', 
+      'ImageEcrRepositoryName'
     ];
 
     test(`should have exactly ${expectedParameters.length} parameters`, () => {
@@ -60,10 +62,18 @@ describe('ECS Fargate WebApp CloudFormation Template', () => {
       expect(template.Resources.VPC.Properties.CidrBlock).toEqual({ Ref: 'VpcCidrBlock' });
     });
 
-    test('Subnets should be defined as EC2::Subnet', () => {
+    test('Subnets should only be Public Subnets and have MapPublicIpOnLaunch enabled', () => {
+      // Public Subnet 1
       expect(template.Resources.PublicSubnet1.Type).toBe('AWS::EC2::Subnet');
-      expect(template.Resources.PrivateSubnet1.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PublicSubnet1.Properties.MapPublicIpOnLaunch).toBe(true);
+      // Public Subnet 2
+      expect(template.Resources.PublicSubnet2.Type).toBe('AWS::EC2::Subnet');
+      expect(template.Resources.PublicSubnet2.Properties.MapPublicIpOnLaunch).toBe(true);
+      // Removed check for PrivateSubnet1
+      expect(template.Resources.PrivateSubnet1).toBeUndefined();
     });
+    
+    // REMOVED: No more NAT Gateway or EIP resources to check.
 
     test('ECSCluster should be defined as AWS::ECS::Cluster', () => {
       expect(template.Resources.ECSCluster.Type).toBe('AWS::ECS::Cluster');
@@ -82,12 +92,20 @@ describe('ECS Fargate WebApp CloudFormation Template', () => {
       expect(td.Properties.ContainerDefinitions[0].LogConfiguration.LogDriver).toBe('awslogs');
     });
 
-    test('ECSService should use FARGATE launch type and depend on Listener', () => {
+    test('ECSService should use FARGATE launch type and assign public IP in Public Subnets', () => {
       const service = template.Resources.ECSService;
       expect(service.Type).toBe('AWS::ECS::Service');
       expect(service.Properties.LaunchType).toBe('FARGATE');
       expect(service.DependsOn).toContain('Listener');
-      expect(service.Properties.NetworkConfiguration.AwsvpcConfiguration.AssignPublicIp).toBe('DISABLED');
+      
+      const config = service.Properties.NetworkConfiguration.AwsvpcConfiguration;
+      // UPDATED: Must be 'ENABLED' now for internet access in Public Subnets
+      expect(config.AssignPublicIp).toBe('ENABLED'); 
+      // UPDATED: Must use Public Subnets
+      expect(config.Subnets).toEqual([
+        { Ref: 'PublicSubnet1' },
+        { Ref: 'PublicSubnet2' }
+      ]);
     });
   });
 
@@ -96,6 +114,11 @@ describe('ECS Fargate WebApp CloudFormation Template', () => {
     test('ALB should be defined as ElasticLoadBalancingV2::LoadBalancer', () => {
       expect(template.Resources.ALB.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
       expect(template.Resources.ALB.Properties.Subnets.length).toBe(2);
+      // Should use the two remaining subnets
+      expect(template.Resources.ALB.Properties.Subnets).toEqual([
+        { Ref: 'PublicSubnet1' },
+        { Ref: 'PublicSubnet2' }
+      ]);
     });
 
     test('Listener should forward to TargetGroup', () => {
@@ -128,15 +151,17 @@ describe('ECS Fargate WebApp CloudFormation Template', () => {
 
   // --- Outputs Tests ---
   describe('Outputs', () => {
+    // UPDATED: Removed PrivateSubnet1Id and PrivateSubnet2Id
     const expectedOutputs = [
       'VPCId', 'PublicSubnet1Id', 'PublicSubnet2Id',
-      'PrivateSubnet1Id', 'PrivateSubnet2Id', 'EcrRepositoryUri',
-      'ECSClusterName', 'ECSServiceName', 'ALBDNSName'
+      'EcrRepositoryUri', 'ECSClusterName', 'ECSServiceName', 'ALBDNSName'
     ];
 
     test(`should have exactly ${expectedOutputs.length} required outputs`, () => {
       expect(Object.keys(template.Outputs).length).toBe(expectedOutputs.length);
     });
+
+    // Removed specific Private Subnet ID checks
 
     test('ALBDNSName output should be correct', () => {
       const output = template.Outputs.ALBDNSName;
