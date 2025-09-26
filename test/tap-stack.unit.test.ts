@@ -1,16 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 
-// Note: environmentSuffix is not used in the template, simplifying the tests.
-// const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('ECS Fargate WebApp CloudFormation Template', () => {
-  // FIX: Explicitly set the type of 'template' to 'any' or 'object'
   let template: any; 
 
   beforeAll(() => {
-    // Ensure the template is saved in JSON format at this path
-    // NOTE: Replace '../lib/TapStack.json' with the actual path if different
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
     // The JSON.parse result is assigned to the explicitly typed variable
