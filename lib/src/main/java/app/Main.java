@@ -775,10 +775,11 @@ class ApplicationStack extends Stack {
     }
 
     private void associateWafWithApi(final CfnWebACL webAcl) {
-        software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
-                .resourceArn("arn:aws:apigateway:" + this.getRegion() + "::/restapis/" + apiGateway.getRestApiId() + "/stages/prod")
-                .webAclArn(webAcl.getAttrArn())
-                .build();
+        software.amazon.awscdk.services.wafv2.CfnWebACLAssociation wafAssociation = 
+            software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
+                    .resourceArn("arn:aws:apigateway:" + this.getRegion() + "::/restapis/" + apiGateway.getRestApiId() + "/stages/prod")
+                    .webAclArn(webAcl.getAttrArn())
+                    .build();
     }
 
     private Distribution createCloudFrontDistribution() {
@@ -882,6 +883,8 @@ class TapStack extends Stack {
                         .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
                         .description("Application Stack for environment: " + environmentSuffix)
                         .build());
+        // Make sure the application stack waits for security stack to be completely deployed
+        applicationStack.getNode().addDependency(securityStack.getWebAcl());
 
         // Add stack dependencies
         infrastructureStack.addDependency(securityStack);
