@@ -30,7 +30,7 @@
     "ImageEcrRepositoryName": {
       "Type": "String",
       "Default": "my-web-app-repo",
-      "Description": "Name of the ECR repository for the application container image. Note: The image URI assumes an ImportValue which must be created externally."
+      "Description": "Name of the ECR repository for the application container image."
     }
   },
   "Resources": {
@@ -89,6 +89,7 @@
             }
           ]
         },
+        "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Environment",
@@ -114,6 +115,7 @@
             }
           ]
         },
+        "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Environment",
@@ -188,6 +190,7 @@
     },
     "PublicRoute": {
       "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
       "Properties": {
         "RouteTableId": {
           "Ref": "PublicRouteTable"
@@ -256,6 +259,49 @@
         }
       }
     },
+    
+    "NatGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "Properties": {
+        "Domain": "vpc",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "NatGatewayEIP"
+          }
+        ]
+      }
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": {
+          "Fn::GetAtt": ["NatGatewayEIP", "AllocationId"]
+        },
+        "SubnetId": {
+          "Ref": "PublicSubnet1"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "NatGateway"
+          }
+        ]
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PrivateRouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": {
+          "Ref": "NatGateway"
+        }
+      }
+    },
+    
     "EcrRepository": {
       "Type": "AWS::ECR::Repository",
       "Properties": {
@@ -338,7 +384,18 @@
                     "logs:CreateLogStream",
                     "logs:PutLogEvents"
                   ],
-                  "Resource": "arn:aws:logs:*:*:*"
+                  "Resource": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "arn:aws:logs:",
+                            {"Ref": "AWS::Region"},
+                            ":",
+                            {"Ref": "AWS::AccountId"},
+                            ":log-group:/ecs/webapp:*"
+                        ]
+                    ]
+                  }
                 }
               ]
             }
@@ -388,7 +445,10 @@
                 "",
                 [
                   {
-                    "Fn::ImportValue": "ECR-Repository-URI"
+                    "Fn::GetAtt": [
+                      "EcrRepository",
+                      "RepositoryUri"
+                    ]
                   },
                   ":latest"
                 ]
