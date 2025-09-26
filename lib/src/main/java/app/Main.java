@@ -348,7 +348,15 @@ class SecurityStack extends Stack {
                         .includeGlobalResourceTypes(true)
                         .build())
                 .build();
-        }
+    }
+    public void associateWafWithApi(final RestApi apiGateway) {
+        software.amazon.awscdk.services.wafv2.CfnWebACLAssociation wafAssociation = 
+            software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
+                    .resourceArn("arn:aws:apigateway:" + this.getRegion() + "::/restapis/" + apiGateway.getRestApiId() + "/stages/prod")
+                    .webAclArn(webAcl.getAttrArn())
+                    .build();
+        wafAssociation.addDependsOn(webAcl);
+    }
 
 
     public Key getKmsKey() {
@@ -363,14 +371,6 @@ class SecurityStack extends Stack {
         return cloudTrail;
     }
 
-    public void associateWafWithApi(RestApi apiGateway) {
-        software.amazon.awscdk.services.wafv2.CfnWebACLAssociation wafAssociation = 
-            software.amazon.awscdk.services.wafv2.CfnWebACLAssociation.Builder.create(this, "ApiWafAssociation")
-                    .resourceArn("arn:aws:apigateway:" + this.getRegion() + "::/restapis/" + apiGateway.getRestApiId() + "/stages/prod")
-                    .webAclArn(webAcl.getAttrArn())
-                    .build();
-        wafAssociation.addDependsOn(webAcl);
-    }
 }
 
 /**
