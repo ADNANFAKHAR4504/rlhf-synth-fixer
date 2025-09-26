@@ -1,7 +1,9 @@
 import * as fs from "fs";
+import * as path from "path";
 
-const tf = fs.readFileSync("tap_stack.tf", "utf8");
-const has = (re: RegExp) => re.test(tf);
+const TAP_STACK_TF = path.resolve(__dirname, "../lib/tap_stack.tf");
+const tf = fs.readFileSync(TAP_STACK_TF, "utf8");
+const has = (regex: RegExp) => regex.test(tf);
 
 describe("Terraform tap-stack validation (adjusted)", () => {
   // === BASICS ===
@@ -86,7 +88,7 @@ describe("Terraform tap-stack validation (adjusted)", () => {
   });
 
   it("ensures resources include mandatory tags (Owner, CostCenter, Environment)", () => {
-    ["Owner","CostCenter","Environment"].forEach(tag => {
+    ["Owner", "CostCenter", "Environment"].forEach(tag => {
       expect(new RegExp(`${tag}\\s*=`).test(tf)).toBe(true);
     });
   });
