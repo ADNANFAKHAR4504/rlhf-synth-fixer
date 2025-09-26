@@ -464,7 +464,7 @@
           "Ref": "TaskDefinition"
         },
         "LaunchType": "FARGATE",
-        "DesiredCount": 2,
+        "DesiredCount": 0,
         "NetworkConfiguration": {
           "AwsvpcConfiguration": {
             "AssignPublicIp": "ENABLED",
@@ -506,8 +506,8 @@
     "ScalingTarget": {
       "Type": "AWS::ApplicationAutoScaling::ScalableTarget",
       "Properties": {
-        "MaxCapacity": 4,
-        "MinCapacity": 2,
+        "MaxCapacity": 0,
+        "MinCapacity": 0,
         "ResourceId": {
           "Fn::Join": [
             "/",
