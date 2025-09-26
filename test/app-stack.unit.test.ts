@@ -3,8 +3,8 @@ import { Template } from 'aws-cdk-lib/assertions';
 import { AppStack } from '../lib/app-stack';
 
 // Mock the construct modules
-jest.mock('../lib/constructs/storage-construct');
-jest.mock('../lib/constructs/lambda-construct');
+jest.mock('../lib/stacks/storage-stack');
+jest.mock('../lib/stacks/lambda-stack');
 
 import { LambdaConstruct } from '../lib/stacks/lambda-stack';
 import { StorageConstruct } from '../lib/stacks/storage-stack';
@@ -37,13 +37,13 @@ describe('AppStack', () => {
       addSubscription: jest.fn()
     };
 
-    (mockStorageConstruct as jest.Mock).mockImplementation(() => ({
+    (mockStorageConstruct as unknown as jest.Mock).mockImplementation(() => ({
       dataBucket: mockBucket,
       metadataTable: mockTable,
       encryptionKey: mockKey
     }));
 
-    (mockLambdaConstruct as jest.Mock).mockImplementation(() => ({
+    (mockLambdaConstruct as unknown as jest.Mock).mockImplementation(() => ({
       dataProcessor: mockFunction,
       alarmTopic: mockTopic
     }));
@@ -113,7 +113,7 @@ describe('AppStack', () => {
         addSubscription: jest.fn()
       };
 
-      mockLambdaConstruct.mockImplementation(() => ({
+      (mockLambdaConstruct as unknown as jest.Mock).mockImplementation(() => ({
         dataProcessor: { functionName: 'mock-function-name' },
         alarmTopic: mockTopic
       }));
@@ -125,7 +125,7 @@ describe('AppStack', () => {
     });
 
     test('adds email subscription to alarm topic', () => {
-      const mockTopic = (mockLambdaConstruct as jest.Mock).mock.results[0].value.alarmTopic;
+      const mockTopic = (mockLambdaConstruct as unknown as jest.Mock).mock.results[0].value.alarmTopic;
       expect(mockTopic.addSubscription).toHaveBeenCalled();
     });
   });
@@ -166,8 +166,8 @@ describe('AppStack', () => {
     });
 
     test('configures S3 event notification for Lambda trigger', () => {
-      const mockBucket = (mockStorageConstruct as jest.Mock).mock.results[0].value.dataBucket;
-      const mockFunction = (mockLambdaConstruct as jest.Mock).mock.results[0].value.dataProcessor;
+      const mockBucket = (mockStorageConstruct as unknown as jest.Mock).mock.results[0].value.dataBucket;
+      const mockFunction = (mockLambdaConstruct as unknown as jest.Mock).mock.results[0].value.dataProcessor;
 
       expect(mockBucket.addEventNotification).toHaveBeenCalledWith(
         expect.anything(), // S3 event type
