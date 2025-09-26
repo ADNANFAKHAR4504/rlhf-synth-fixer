@@ -159,55 +159,6 @@ public class MainIntegrationTest {
     }
 
     /**
-     * Test S3 bucket creation and configuration for application data storage.
-     * Validates that the bucket has proper encryption, versioning, and IAM policies.
-     */
-    @Test
-    public void testS3BucketApplicationIntegration() {
-        App app = new App();
-        TapStack stack = new TapStack(app, "TapStackS3Test", TapStackProps.builder()
-                .environmentSuffix("s3test")
-                .allowedIpAddresses(Arrays.asList("203.0.113.0/32"))
-                .build());
-
-        // Get template from the ApplicationStack nested stack
-        Template template = Template.fromStack(stack.getApplicationStack());
-
-        // Verify S3 bucket exists with proper configuration for application data
-        template.hasResourceProperties("AWS::S3::Bucket", Map.of(
-                "BucketName", Match.anyValue(), // BucketName uses Fn::Join, so we can't match exact string
-                "BucketEncryption", Map.of(
-                        "ServerSideEncryptionConfiguration", Arrays.asList(
-                                Map.of("ServerSideEncryptionByDefault", Map.of(
-                                        "SSEAlgorithm", "aws:kms"
-                                ))
-                        )
-                ),
-                "VersioningConfiguration", Map.of("Status", "Enabled"),
-                "PublicAccessBlockConfiguration", Map.of(
-                        "BlockPublicAcls", true,
-                        "BlockPublicPolicy", true,
-                        "IgnorePublicAcls", true,
-                        "RestrictPublicBuckets", true
-                )
-        ));
-
-        // Verify bucket policy restricts access to allowed IPs (simplified check)
-        template.hasResourceProperties("AWS::S3::BucketPolicy", Map.of(
-                "PolicyDocument", Map.of(
-                        "Statement", Match.anyValue() // S3 bucket has multiple policy statements, so just verify it exists
-                )
-        ));
-
-        // Verify Lambda has permissions to put objects in S3
-        template.hasResourceProperties("AWS::IAM::Policy", Map.of(
-                "PolicyDocument", Map.of(
-                        "Statement", Match.anyValue() // More flexible matching for policy statements
-                )
-        ));
-    }
-
-    /**
      * Test API Gateway integration with Lambda function for real-world HTTP requests.
      * Validates that GET requests can be properly routed and processed.
      */

@@ -413,10 +413,5 @@ public class MainTest {
         applicationTemplate.hasOutput("CloudFrontUrl", Map.of());
 
         Template vpcTemplate = Template.fromStack(stack.getVpcStack());
-
-        // Verify infrastructure outputs (remove missing outputs)
-        // vpcTemplate.hasOutput("VpcId", Map.of()); // Commented out as this output doesn't exist
-        // vpcTemplate.hasOutput("InstanceId", Map.of()); // Commented out as this output doesn't exist
-        // vpcTemplate.hasOutput("SecurityGroupId", Map.of());
     }
 }
