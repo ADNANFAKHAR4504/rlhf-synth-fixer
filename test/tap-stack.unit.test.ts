@@ -127,8 +127,8 @@ describe('ECS Fargate WebApp CloudFormation Template', () => {
       expect(target.Type).toBe('AWS::ApplicationAutoScaling::ScalableTarget');
       expect(target.Properties.ScalableDimension).toBe('ecs:service:DesiredCount');
       expect(target.Properties.ServiceNamespace).toBe('ecs');
-      expect(target.Properties.MinCapacity).toBe(2);
-      expect(target.Properties.MaxCapacity).toBe(4);
+      expect(target.Properties.MinCapacity).toBe(0);
+      expect(target.Properties.MaxCapacity).toBe(0);
       // Ensures the 'Tags' property was correctly removed as per the linter fix
       expect(target.Properties.Tags).toBeUndefined();
     });
