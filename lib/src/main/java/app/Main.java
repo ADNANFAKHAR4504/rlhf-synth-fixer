@@ -265,69 +265,69 @@ class ServerlessStack extends Stack {
     }
 
     private String generateLambdaCode(final String functionType, final String environmentSuffix) {
-        return "import json\n" +
-                "import boto3\n" + 
-                "import os\n" + 
-                "import logging\n" +
-                "from datetime import datetime\n" + 
-                "\n" + 
-                "# Configure logging\n" +
-                "logging.basicConfig(level=logging.INFO)\n" +
-                "logger = logging.getLogger(__name__)\n" +
-                "\n" + 
-                "def handler(event, context):\n" + 
-                "    \"\"\"" + functionType.toUpperCase() + " Lambda function handler\"\"\"\n" +
-                "    \n" +
-                "    # Log execution details to CloudWatch\n" +
-                "    logger.info(f'Function: {context.function_name} started')\n" +
-                "    logger.info(f'Request ID: {context.aws_request_id}')\n" +
-                "    logger.info(f'Environment: {os.environ.get(\"ENVIRONMENT\", \"unknown\")}')\n" +
-                "    \n" +
-                "    try:\n" +
-                "        # Process based on function type\n" +
-                "        if '" + functionType + "' == 'user':\n" +
-                "            result = process_user_request(event)\n" +
-                "        elif '" + functionType + "' == 'order':\n" +
-                "            result = process_order_request(event)\n" +
-                "        else:\n" +
-                "            result = process_notification_request(event)\n" +
-                "        \n" +
-                "        logger.info(f'Function: {context.function_name} completed successfully')\n" +
-                "        \n" +
-                "        return {\n" +
-                "            'statusCode': 200,\n" +
-                "            'headers': {\n" +
-                "                'Content-Type': 'application/json',\n" +
-                "                'Access-Control-Allow-Origin': '*',\n" +
-                "                'Access-Control-Allow-Headers': 'Content-Type',\n" +
-                "                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'\n" +
-                "            },\n" +
-                "            'body': json.dumps(result)\n" +
-                "        }\n" +
-                "    \n" +
-                "    except Exception as e:\n" +
-                "        logger.error(f'Function: {context.function_name} failed: {str(e)}')\n" +
-                "        \n" +
-                "        return {\n" +
-                "            'statusCode': 500,\n" +
-                "            'headers': {\n" +
-                "                'Content-Type': 'application/json',\n" +
-                "                'Access-Control-Allow-Origin': '*'\n" +
-                "            },\n" +
-                "            'body': json.dumps({\n" +
-                "                'error': 'Internal server error',\n" +
-                "                'message': str(e),\n" +
-                "                'requestId': context.aws_request_id\n" +
-                "            })\n" +
-                "        }\n" +
-                "\n" +
-                "def process_" + functionType + "_request(event):\n" +
-                "    \"\"\"Process " + functionType + " specific logic\"\"\"\n" +
-                "    return {\n" +
-                "        'message': '" + functionType.toUpperCase() + " function executed successfully',\n" +
-                "        'timestamp': datetime.utcnow().isoformat(),\n" +
-                "        'data': event.get('body', {})\n" +
-                "    }\n";
+        return "import json\n" 
+               + "import boto3\n" 
+               + "import os\n" 
+               + "import logging\n" 
+               + "from datetime import datetime\n" 
+               + "\n" 
+               + "# Configure logging\n" 
+               + "logging.basicConfig(level=logging.INFO)\n" 
+               + "logger = logging.getLogger(__name__)\n" 
+               + "\n" 
+               + "def handler(event, context):\n" 
+               + "    \"\"\"" + functionType.toUpperCase() + " Lambda function handler\"\"\"\n" 
+               + "    \n" 
+               + "    # Log execution details to CloudWatch\n" 
+               + "    logger.info(f'Function: {context.function_name} started')\n" 
+               + "    logger.info(f'Request ID: {context.aws_request_id}')\n" 
+               + "    logger.info(f'Environment: {os.environ.get(\"ENVIRONMENT\", \"unknown\")}')\n" 
+               + "    \n" 
+               + "    try:\n" 
+               + "        # Process based on function type\n" 
+               + "        if '" + functionType + "' == 'user':\n" 
+               + "            result = process_user_request(event)\n" 
+               + "        elif '" + functionType + "' == 'order':\n" 
+               + "            result = process_order_request(event)\n" 
+               + "        else:\n" 
+               + "            result = process_notification_request(event)\n" 
+               + "        \n" 
+               + "        logger.info(f'Function: {context.function_name} completed successfully')\n" 
+               + "        \n" 
+               + "        return {\n" 
+               + "            'statusCode': 200,\n" 
+               + "            'headers': {\n" 
+               + "                'Content-Type': 'application/json',\n" 
+               + "                'Access-Control-Allow-Origin': '*',\n" 
+               + "                'Access-Control-Allow-Headers': 'Content-Type',\n" 
+               + "                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'\n" 
+               + "            },\n" 
+               + "            'body': json.dumps(result)\n" 
+               + "        }\n" 
+               + "    \n" 
+               + "    except Exception as e:\n" 
+               + "        logger.error(f'Function: {context.function_name} failed: {str(e)}')\n" 
+               + "        \n" 
+               + "        return {\n" 
+               + "            'statusCode': 500,\n" 
+               + "            'headers': {\n" 
+               + "                'Content-Type': 'application/json',\n" 
+               + "                'Access-Control-Allow-Origin': '*'\n" 
+               + "            },\n" 
+               + "            'body': json.dumps({\n" 
+               + "                'error': 'Internal server error',\n" 
+               + "                'message': str(e),\n" 
+               + "                'requestId': context.aws_request_id\n" 
+               + "            })\n" 
+               + "        }\n" 
+               + "\n" 
+               + "def process_" + functionType + "_request(event):\n" 
+               + "    \"\"\"Process " + functionType + " specific logic\"\"\"\n" 
+               + "    return {\n" 
+               + "        'message': '" + functionType.toUpperCase() + " function executed successfully',\n" 
+               + "        'timestamp': datetime.utcnow().isoformat(),\n" 
+               + "        'data': event.get('body', {})\n" 
+               + "    }\n";
     }
 
     private RestApi createApiGateway(final String environmentSuffix, final List<String> corsAllowedDomains) {
