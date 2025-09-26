@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "CloudFormation template to deploy a containerized web application using ECS, Fargate, ALB, and Route 53.",
+  "Description": "CloudFormation template to deploy a containerized web application using ECS, Fargate, and ALB (Route 53 integration removed).",
   "Parameters": {
     "VpcCidrBlock": {
       "Type": "String",
@@ -30,15 +30,7 @@
     "ImageEcrRepositoryName": {
       "Type": "String",
       "Default": "my-web-app-repo",
-      "Description": "Name of the ECR repository for the application container image."
-    },
-    "DomainName": {
-      "Type": "String",
-      "Description": "Your custom domain name for Route 53."
-    },
-    "HostedZoneId": {
-      "Type": "String",
-      "Description": "The Route 53 Hosted Zone ID for your custom domain."
+      "Description": "Name of the ECR repository for the application container image. Note: The image URI assumes an ImportValue which must be created externally."
     }
   },
   "Resources": {
@@ -642,32 +634,6 @@
           "TargetValue": 50
         }
       }
-    },
-    "Route53Record": {
-      "Type": "AWS::Route53::RecordSet",
-      "Properties": {
-        "HostedZoneId": {
-          "Ref": "HostedZoneId"
-        },
-        "Name": {
-          "Ref": "DomainName"
-        },
-        "Type": "A",
-        "AliasTarget": {
-          "HostedZoneId": {
-            "Fn::GetAtt": [
-              "ALB",
-              "CanonicalHostedZoneID"
-            ]
-          },
-          "DNSName": {
-            "Fn::GetAtt": [
-              "ALB",
-              "DNSName"
-            ]
-          }
-        }
-      }
     }
   },
   "Outputs": {
@@ -726,7 +692,7 @@
       }
     },
     "ALBDNSName": {
-      "Description": "The DNS name of the Application Load Balancer.",
+      "Description": "The DNS name of the Application Load Balancer. Use this name to manually create your Route 53 CNAME or A-Alias record.",
       "Value": {
         "Fn::GetAtt": [
           "ALB",
