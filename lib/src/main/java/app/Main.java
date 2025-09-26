@@ -520,6 +520,9 @@ class TapStack extends Stack {
 
     public SecurityStack getSecurityStack() { return securityStack; }
     public ServerlessStack getServerlessStack() { return serverlessStack; }
+    public String getEnvironmentSuffix() { 
+        return environmentSuffix;
+    }
 }
 
 /**
