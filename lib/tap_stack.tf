@@ -357,7 +357,7 @@ resource "aws_db_instance" "primary" {
   provider                    = aws.us_east_2
   identifier                  = "${local.resource_prefix}-postgres-primary"
   engine                      = "postgres"
-  engine_version              = "15.4"
+  engine_version              = "17.6"
   instance_class              = "db.t3.micro"
   allocated_storage           = 20
   storage_type                = "gp3"
@@ -696,7 +696,7 @@ resource "aws_db_instance" "secondary" {
   provider                    = aws.us_west_1
   identifier                  = "${local.resource_prefix}-postgres-secondary"
   engine                      = "postgres"
-  engine_version              = "15.4"
+  engine_version              = "17.6"
   instance_class              = "db.t3.micro"
   allocated_storage           = 20
   storage_type                = "gp3"

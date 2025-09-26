@@ -9,3 +9,22 @@
 │ An argument named "log_destination_arn" is not expected here.
 
 ```
+
+```
+
+╷
+│ Error: creating RDS DB Instance (tap-stack-postgres-primary): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: 115072c2-83bc-4250-81e6-09a272cf5617, api error InvalidParameterCombination: Cannot find version 15.4 for postgres
+│ 
+│   with aws_db_instance.primary,
+│   on tap_stack.tf line 356, in resource "aws_db_instance" "primary":
+│  356: resource "aws_db_instance" "primary" {
+│ 
+╵
+╷
+│ Error: creating RDS DB Instance (tap-stack-postgres-secondary): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: 41481da1-1a51-47ca-9d08-b929b1351cd9, api error InvalidParameterCombination: Cannot find version 15.4 for postgres
+│ 
+│   with aws_db_instance.secondary,
+│   on tap_stack.tf line 695, in resource "aws_db_instance" "secondary":
+│  695: resource "aws_db_instance" "secondary" {
+
+```
