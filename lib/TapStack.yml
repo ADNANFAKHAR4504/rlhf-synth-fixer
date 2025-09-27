@@ -392,20 +392,36 @@ Resources:
             Principal:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
       Policies:
-        - PolicyName: ConfigBucketAccess
+        - PolicyName: ConfigServiceRolePolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - 's3:PutObject'
                   - 's3:GetBucketAcl'
-                Resource:
-                  - !GetAtt ConfigBucket.Arn
-                  - !Sub '${ConfigBucket.Arn}/*'
+                  - 's3:ListBucket'
+                  - 's3:PutObject'
+                  - 'sns:Publish'
+                  - 'config:Put*'
+                  - 'config:Get*'
+                  - 'config:List*'
+                  - 'config:Describe*'
+                  - 'config:BatchGet*'
+                  - 'config:Select*'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetBucketAcl'
+                  - 's3:ListBucket'
+                Resource: !GetAtt ConfigBucket.Arn
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                Resource: !Sub '${ConfigBucket.Arn}/*'
+                Condition:
+                  StringEquals:
+                    's3:x-amz-acl': 'bucket-owner-full-control'
 
   # Config Rules for Encryption Compliance
   S3BucketSSLRequestsOnly:
