@@ -4,11 +4,11 @@ Description: 'SaaS Encryption Standards Enforcement Template - Compliant with cf
 Parameters:
   Environment:
     Type: String
-    Default: Production
+    Default: production
     AllowedValues:
-      - Development
-      - Staging
-      - Production
+      - development
+      - staging
+      - production
     Description: Environment name for resource tagging
   
   MFAAge:
@@ -23,6 +23,7 @@ Parameters:
 
 Conditions:
   UseCustomKMS: !Not [!Equals [!Ref KMSKeyArn, '']]
+  UseDefaultKMS: !Equals [!Ref KMSKeyArn, '']
 
 Resources:
   # ==========================================
@@ -30,7 +31,7 @@ Resources:
   # ==========================================
   EncryptionKey:
     Type: AWS::KMS::Key
-    Condition: !Not [UseCustomKMS]
+    Condition: UseDefaultKMS
     Properties:
       Description: Master key for encryption compliance
       EnableKeyRotation: true  # cfn-nag requirement
@@ -63,7 +64,7 @@ Resources:
 
   EncryptionKeyAlias:
     Type: AWS::KMS::Alias
-    Condition: !Not [UseCustomKMS]
+    Condition: UseDefaultKMS
     Properties:
       AliasName: !Sub 'alias/encryption-compliance-${Environment}'
       TargetKeyId: !Ref EncryptionKey
@@ -77,6 +78,9 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'saas-app-data-${AWS::AccountId}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -138,6 +142,9 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'saas-logs-${AWS::AccountId}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -303,7 +310,7 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     Properties:
       Name: !Sub 'EncryptionComplianceRecorder-${Environment}'
-      RoleArn: !GetAtt ConfigRole.Arn
+      RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -326,6 +333,9 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'config-bucket-${AWS::AccountId}-${Environment}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
