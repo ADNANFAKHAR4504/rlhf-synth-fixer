@@ -348,6 +348,279 @@ describe('IAM Security Stack Integration Tests', () => {
     }, 10000);
   });
 
+  describe('Static Analysis and Live Inspection Tests', () => {
+    test('should pass cfn-nag static analysis for IAM wildcard patterns', async () => {
+      console.log('🔍 Running cfn-nag static analysis...');
+      
+      const templatePath = require('path').join(__dirname, '../lib/TapStack.json');
+      expect(require('fs').existsSync(templatePath)).toBe(true);
+      
+      // Run cfn_nag scan on the CloudFormation template
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      
+      try {
+        const { stdout, stderr } = await execAsync(`cfn_nag_scan --input-path ${templatePath}`);
+        
+        console.log('📋 cfn-nag scan results:');
+        console.log(stdout);
+        
+        if (stderr) {
+          console.log('⚠️ cfn-nag warnings:', stderr);
+        }
+        
+        // Parse the results to check for critical failures related to IAM wildcards
+        const scanResults = stdout.toString();
+        
+        // Check that there are no FAIL violations related to wildcards
+        const failLines = scanResults.split('\n').filter(line => line.includes('FAIL'));
+        const wildcardFails = failLines.filter(line => 
+          line.toLowerCase().includes('wildcard') || 
+          line.toLowerCase().includes('*') ||
+          line.toLowerCase().includes('overly permissive')
+        );
+        
+        // Ensure no critical wildcard failures
+        expect(wildcardFails).toHaveLength(0);
+        
+        // Check for specific IAM wildcard rules that should pass
+        const shouldNotContain = [
+          'IAMStarActionResourcePolicyDocument',
+          'IAMWildcardActionResourcePolicyDocument', 
+          'IAMStarResourcePolicyDocument'
+        ];
+        
+        shouldNotContain.forEach(rule => {
+          expect(scanResults).not.toMatch(new RegExp(`FAIL.*${rule}`, 'i'));
+        });
+        
+        console.log('✅ cfn-nag static analysis passed - no critical IAM wildcard failures');
+        
+      } catch (error: any) {
+        // If cfn_nag returns non-zero exit code due to findings, parse the output
+        if (error.code && error.stdout) {
+          const scanResults = error.stdout.toString();
+          console.log('📋 cfn-nag scan results (with findings):');
+          console.log(scanResults);
+          
+          // Still check for wildcard-specific failures
+          const failLines = scanResults.split('\n').filter(line => line.includes('FAIL'));
+          const wildcardFails = failLines.filter(line => 
+            line.toLowerCase().includes('wildcard') || 
+            line.toLowerCase().includes('iam') && line.toLowerCase().includes('*')
+          );
+          
+          if (wildcardFails.length > 0) {
+            console.error('❌ Critical IAM wildcard failures found:', wildcardFails);
+            throw new Error(`cfn-nag found critical IAM wildcard violations: ${wildcardFails.join(', ')}`);
+          }
+          
+          console.log('✅ cfn-nag completed - no critical IAM wildcard failures found');
+        } else {
+          throw error;
+        }
+      }
+      
+    }, 30000);
+
+    test('should validate live IAM policies contain no wildcard actions/resources', async () => {
+      // Skip test if no outputs available (e.g., in unit test only mode)
+      if (!outputs.EC2RoleArn || !outputs.LambdaRoleArn) {
+        console.warn('Skipping live IAM inspection - stack not deployed or outputs missing');
+        return;
+      }
+
+      console.log('🔍 Starting live IAM policy inspection for wildcard patterns...');
+      console.log('📋 Inspecting policies via IAM console/CLI equivalent calls...');
+      
+      const ec2RoleName = outputs.EC2RoleArn.split('/').pop();
+      const lambdaRoleName = outputs.LambdaRoleArn.split('/').pop();
+      
+      // 1. Get all inline policies for both roles
+      const [ec2InlinePolicies, lambdaInlinePolicies] = await Promise.all([
+        iamClient.send(new ListRolePoliciesCommand({ RoleName: ec2RoleName })),
+        iamClient.send(new ListRolePoliciesCommand({ RoleName: lambdaRoleName }))
+      ]);
+      
+      console.log(`📜 Found ${ec2InlinePolicies.PolicyNames?.length || 0} inline policies for EC2 role`);
+      console.log(`📜 Found ${lambdaInlinePolicies.PolicyNames?.length || 0} inline policies for Lambda role`);
+      
+      // 2. Inspect each inline policy document
+      const policyDocuments: Array<{roleName: string, policyName: string, document: any}> = [];
+      
+      // Get EC2 role inline policies
+      if (ec2InlinePolicies.PolicyNames) {
+        for (const policyName of ec2InlinePolicies.PolicyNames) {
+          const policyResponse = await iamClient.send(new GetRolePolicyCommand({
+            RoleName: ec2RoleName,
+            PolicyName: policyName
+          }));
+          
+          const policyDoc = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument || '{}'));
+          policyDocuments.push({
+            roleName: ec2RoleName,
+            policyName,
+            document: policyDoc
+          });
+        }
+      }
+      
+      // Get Lambda role inline policies
+      if (lambdaInlinePolicies.PolicyNames) {
+        for (const policyName of lambdaInlinePolicies.PolicyNames) {
+          const policyResponse = await iamClient.send(new GetRolePolicyCommand({
+            RoleName: lambdaRoleName,
+            PolicyName: policyName
+          }));
+          
+          const policyDoc = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument || '{}'));
+          policyDocuments.push({
+            roleName: lambdaRoleName,
+            policyName,
+            document: policyDoc
+          });
+        }
+      }
+      
+      // 3. Get attached managed policies (if any)
+      const [ec2AttachedPolicies, lambdaAttachedPolicies] = await Promise.all([
+        iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: ec2RoleName })),
+        iamClient.send(new ListAttachedRolePoliciesCommand({ RoleName: lambdaRoleName }))
+      ]);
+      
+      console.log(`🔗 Found ${ec2AttachedPolicies.AttachedPolicies?.length || 0} attached policies for EC2 role`);
+      console.log(`🔗 Found ${lambdaAttachedPolicies.AttachedPolicies?.length || 0} attached policies for Lambda role`);
+      
+      // Get attached policy documents (for custom managed policies only, not AWS managed)
+      const attachedPolicies = [
+        ...(ec2AttachedPolicies.AttachedPolicies || []).map(p => ({...p, roleName: ec2RoleName})),
+        ...(lambdaAttachedPolicies.AttachedPolicies || []).map(p => ({...p, roleName: lambdaRoleName}))
+      ].filter(policy => !policy.PolicyArn?.includes('arn:aws:iam::aws:policy/')); // Skip AWS managed policies
+      
+      for (const attachedPolicy of attachedPolicies) {
+        try {
+          const policyResponse = await iamClient.send(new GetPolicyCommand({
+            PolicyArn: attachedPolicy.PolicyArn
+          }));
+          
+          if (policyResponse.Policy?.DefaultVersionId) {
+            const policyVersionResponse = await iamClient.send(new GetPolicyVersionCommand({
+              PolicyArn: attachedPolicy.PolicyArn!,
+              VersionId: policyResponse.Policy.DefaultVersionId
+            }));
+            
+            const policyDoc = JSON.parse(decodeURIComponent(policyVersionResponse.PolicyVersion?.Document || '{}'));
+            policyDocuments.push({
+              roleName: attachedPolicy.roleName,
+              policyName: attachedPolicy.PolicyName || 'Unknown',
+              document: policyDoc
+            });
+          }
+        } catch (error) {
+          console.warn(`Could not retrieve attached policy ${attachedPolicy.PolicyArn}:`, error);
+        }
+      }
+      
+      console.log(`🔍 Inspecting ${policyDocuments.length} total policy documents...`);
+      
+      // 4. Manual verification of wildcard patterns
+      const wildcardViolations: Array<{roleName: string, policyName: string, violation: string}> = [];
+      
+      for (const { roleName, policyName, document } of policyDocuments) {
+        console.log(`📋 Inspecting policy: ${policyName} on role: ${roleName}`);
+        
+        if (document.Statement && Array.isArray(document.Statement)) {
+          document.Statement.forEach((statement: any, index: number) => {
+            // Check for Action: "*" in Allow statements
+            if (statement.Effect === 'Allow' && statement.Action) {
+              const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+              
+              actions.forEach((action: string) => {
+                if (action === '*') {
+                  wildcardViolations.push({
+                    roleName,
+                    policyName,
+                    violation: `Allow statement contains "Action": "*" at statement index ${index}`
+                  });
+                }
+              });
+            }
+            
+            // Check for Resource: "*" in Allow statements (with some exceptions for read-only actions)
+            if (statement.Effect === 'Allow' && statement.Resource) {
+              const resources = Array.isArray(statement.Resource) ? statement.Resource : [statement.Resource];
+              
+              resources.forEach((resource: string) => {
+                if (resource === '*') {
+                  // Allow wildcard resources for certain read-only actions
+                  const allowedWildcardActions = [
+                    'logs:CreateLogGroup',
+                    'logs:CreateLogStream', 
+                    'logs:PutLogEvents',
+                    'logs:DescribeLogStreams',
+                    'cloudwatch:PutMetricData',
+                    'xray:PutTraceSegments',
+                    'xray:PutTelemetryRecords'
+                  ];
+                  
+                  const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+                  const hasOnlyAllowedActions = actions.every((action: string) => 
+                    allowedWildcardActions.includes(action) || 
+                    action.startsWith('logs:') ||
+                    action.startsWith('cloudwatch:') ||
+                    action.startsWith('xray:')
+                  );
+                  
+                  if (!hasOnlyAllowedActions) {
+                    wildcardViolations.push({
+                      roleName,
+                      policyName,
+                      violation: `Allow statement contains "Resource": "*" for non-logging actions at statement index ${index}`
+                    });
+                  }
+                }
+              });
+            }
+          });
+        }
+      }
+      
+      // 5. Report findings
+      if (wildcardViolations.length > 0) {
+        console.error('❌ Wildcard violations found in live IAM policies:');
+        wildcardViolations.forEach(violation => {
+          console.error(`  - Role: ${violation.roleName}, Policy: ${violation.policyName}`);
+          console.error(`    Violation: ${violation.violation}`);
+        });
+        
+        throw new Error(`Found ${wildcardViolations.length} wildcard violations in live IAM policies`);
+      }
+      
+      console.log('✅ Live IAM policy inspection completed successfully');
+      console.log(`📊 Verified ${policyDocuments.length} policy documents across ${new Set(policyDocuments.map(p => p.roleName)).size} roles`);
+      console.log('🔒 No "Action": "*" or inappropriate "Resource": "*" patterns found in Allow statements');
+      
+      // Verify explicit deny statements exist
+      let explicitDenyFound = false;
+      for (const { document } of policyDocuments) {
+        if (document.Statement && Array.isArray(document.Statement)) {
+          const denyStatement = document.Statement.find((stmt: any) => 
+            stmt.Effect === 'Deny' && stmt.Action === '*'
+          );
+          if (denyStatement) {
+            explicitDenyFound = true;
+            break;
+          }
+        }
+      }
+      
+      expect(explicitDenyFound).toBe(true);
+      console.log('✅ Explicit wildcard deny statements found as expected');
+      
+    }, 60000);
+  });
+
   describe('End-to-End Security Integration Test', () => {
     test('should validate complete security stack meets all requirements', async () => {
       // Skip test if no outputs available (e.g., in unit test only mode)
