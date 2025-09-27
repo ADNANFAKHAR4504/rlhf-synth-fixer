@@ -353,7 +353,7 @@ Outputs:
 
 ## Security Validation Confirmation
 
-### ✅ **CFN-Nag Compliance**
+### CFN-Nag Compliance
 
 This template addresses common CFN-Nag security findings:
 
@@ -363,7 +363,7 @@ This template addresses common CFN-Nag security findings:
 - **Permission boundaries** applied to all roles
 - **Least-privilege policies** with specific actions only
 
-### ✅ **No Wildcard Actions**
+### No Wildcard Actions
 
 - All policies use **specific, enumerated actions** only
 - Wildcard actions (`*`) are **explicitly denied** in multiple places:
@@ -371,7 +371,7 @@ This template addresses common CFN-Nag security findings:
   2. In each inline policy with explicit deny statements
 - The only `Resource: '*'` usage is for services that require it (like X-Ray and CloudWatch Metrics) but with specific actions and conditions
 
-### 🔒 **Key Security Features**
+### Key Security Features
 
 1. **Permission Boundaries**: Prevent privilege escalation even if role policies are modified
 2. **Conditional Access**: Uses IP restrictions, region restrictions, and service-specific conditions
@@ -380,7 +380,7 @@ This template addresses common CFN-Nag security findings:
 5. **Resource Tagging**: All resources are tagged for governance and compliance
 6. **Explicit Deny Statements**: Multiple layers of deny statements for defense in depth
 
-### 📋 **Usage Example**
+### Usage Example
 
 ```bash
 # Deploy the stack
