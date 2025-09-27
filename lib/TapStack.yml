@@ -343,11 +343,6 @@ Resources:
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
-        ResourceTypes:
-          - AWS::S3::Bucket
-          - AWS::EC2::Volume
-          - AWS::RDS::DBInstance
-          - AWS::EFS::FileSystem
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
