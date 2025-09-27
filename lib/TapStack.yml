@@ -159,12 +159,41 @@ Resources:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 365
-      AccessControl: LogDeliveryWrite  # Required for S3 logging
       Tags:
         - Key: Environment
           Value: !Ref Environment
         - Key: Purpose
           Value: Logging
+
+  # S3 Bucket Policy for Log Delivery
+  LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingBucket
+      PolicyDocument:
+        Statement:
+          - Sid: S3ServerAccessLogsPolicy
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${LoggingBucket}/*'
+            Condition:
+              ArnLike:
+                'aws:SourceArn': !GetAtt ApplicationDataBucket.Arn
+              StringEquals:
+                'aws:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: S3ServerAccessLogsDeliveryRootAccess
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action:
+              - s3:PutObject
+            Resource: !Sub '${LoggingBucket}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
 
   # ==========================================
   # Enable Default EBS Encryption
