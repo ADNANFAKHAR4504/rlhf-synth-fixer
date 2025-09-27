@@ -374,8 +374,8 @@ describe('IAM Security Stack Integration Tests', () => {
         const scanResults = stdout.toString();
         
         // Check that there are no FAIL violations related to wildcards
-        const failLines = scanResults.split('\n').filter(line => line.includes('FAIL'));
-        const wildcardFails = failLines.filter(line => 
+        const failLines = scanResults.split('\n').filter((line: string) => line.includes('FAIL'));
+        const wildcardFails = failLines.filter((line: string) => 
           line.toLowerCase().includes('wildcard') || 
           line.toLowerCase().includes('*') ||
           line.toLowerCase().includes('overly permissive')
@@ -405,8 +405,8 @@ describe('IAM Security Stack Integration Tests', () => {
           console.log(scanResults);
           
           // Still check for wildcard-specific failures
-          const failLines = scanResults.split('\n').filter(line => line.includes('FAIL'));
-          const wildcardFails = failLines.filter(line => 
+          const failLines = scanResults.split('\n').filter((line: string) => line.includes('FAIL'));
+          const wildcardFails = failLines.filter((line: string) => 
             line.toLowerCase().includes('wildcard') || 
             line.toLowerCase().includes('iam') && line.toLowerCase().includes('*')
           );
