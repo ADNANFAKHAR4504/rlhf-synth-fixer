@@ -15,7 +15,10 @@ import {
   RunInstancesCommand,
   DescribeInstancesCommand,
   DescribeVolumesCommand,
-  TerminateInstancesCommand
+  TerminateInstancesCommand,
+  DescribeVpcsCommand,
+  DescribeSubnetsCommand,
+  DescribeSecurityGroupsCommand
 } from '@aws-sdk/client-ec2';
 import {
   IAMClient,
@@ -66,6 +69,101 @@ const iamClient = new IAMClient({ region });
 const configClient = new ConfigServiceClient({ region });
 const kmsClient = new KMSClient({ region });
 const snsClient = new SNSClient({ region });
+
+// Helper function to find available VPC and subnet
+async function findAvailableVpcAndSubnet() {
+  try {
+    // First, try to find default VPC
+    const vpcCommand = new DescribeVpcsCommand({
+      Filters: [
+        {
+          Name: 'is-default',
+          Values: ['true']
+        }
+      ]
+    });
+    
+    let vpc;
+    try {
+      const vpcResponse = await ec2Client.send(vpcCommand);
+      if (vpcResponse.Vpcs && vpcResponse.Vpcs.length > 0) {
+        vpc = vpcResponse.Vpcs[0];
+      }
+    } catch (error) {
+      console.log('No default VPC found, looking for any available VPC');
+    }
+    
+    // If no default VPC, get any available VPC
+    if (!vpc) {
+      const allVpcsCommand = new DescribeVpcsCommand({
+        Filters: [
+          {
+            Name: 'state',
+            Values: ['available']
+          }
+        ]
+      });
+      const allVpcsResponse = await ec2Client.send(allVpcsCommand);
+      if (allVpcsResponse.Vpcs && allVpcsResponse.Vpcs.length > 0) {
+        vpc = allVpcsResponse.Vpcs[0];
+      } else {
+        throw new Error('No available VPC found in the region');
+      }
+    }
+    
+    // Find a subnet in the VPC
+    const subnetCommand = new DescribeSubnetsCommand({
+      Filters: [
+        {
+          Name: 'vpc-id',
+          Values: [vpc.VpcId!]
+        },
+        {
+          Name: 'state',
+          Values: ['available']
+        }
+      ]
+    });
+    
+    const subnetResponse = await ec2Client.send(subnetCommand);
+    if (!subnetResponse.Subnets || subnetResponse.Subnets.length === 0) {
+      throw new Error(`No available subnets found in VPC ${vpc.VpcId}`);
+    }
+    
+    const subnet = subnetResponse.Subnets[0];
+    
+    // Find default security group for the VPC
+    const sgCommand = new DescribeSecurityGroupsCommand({
+      Filters: [
+        {
+          Name: 'vpc-id',
+          Values: [vpc.VpcId!]
+        },
+        {
+          Name: 'group-name',
+          Values: ['default']
+        }
+      ]
+    });
+    
+    const sgResponse = await ec2Client.send(sgCommand);
+    if (!sgResponse.SecurityGroups || sgResponse.SecurityGroups.length === 0) {
+      throw new Error(`No default security group found in VPC ${vpc.VpcId}`);
+    }
+    
+    const securityGroup = sgResponse.SecurityGroups[0];
+    
+    return {
+      vpcId: vpc.VpcId!,
+      subnetId: subnet.SubnetId!,
+      securityGroupId: securityGroup.GroupId!
+    };
+    
+  } catch (error) {
+    console.error('Error finding VPC and subnet:', error);
+    throw new Error(`Failed to find available VPC and subnet: ${error}`);
+  }
+}
 
 describe('SaaS Encryption Standards - Integration Tests', () => {
 
@@ -206,12 +304,18 @@ describe('SaaS Encryption Standards - Integration Tests', () => {
       let instanceId: string | undefined;
       
       try {
+        // Find available VPC and subnet
+        const { vpcId, subnetId, securityGroupId } = await findAvailableVpcAndSubnet();
+        console.log(`Using VPC: ${vpcId}, Subnet: ${subnetId}, SecurityGroup: ${securityGroupId}`);
+        
         // Launch a small EC2 instance to test EBS encryption
         const runCommand = new RunInstancesCommand({
           ImageId: 'ami-0c02fb55956c7d316', // Amazon Linux 2 (update as needed)
           InstanceType: 't3.micro',
           MinCount: 1,
           MaxCount: 1,
+          SubnetId: subnetId,
+          SecurityGroupIds: [securityGroupId],
           TagSpecifications: [{
             ResourceType: 'instance',
             Tags: [{
