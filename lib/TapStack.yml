@@ -179,7 +179,7 @@ Resources:
               Service: logging.s3.amazonaws.com
             Action:
               - s3:PutObject
-            Resource: !Sub '${LoggingBucket}/*'
+            Resource: !Sub '${LoggingBucket.Arn}/*'
             Condition:
               StringEquals:
                 'aws:SourceAccount': !Ref 'AWS::AccountId'
