@@ -171,6 +171,7 @@ Resources:
     Properties:
       Bucket: !Ref LoggingBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: S3ServerAccessLogsPolicy
             Effect: Allow
