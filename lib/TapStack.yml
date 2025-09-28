@@ -247,28 +247,39 @@ Resources:
                   if request_type in ['Create', 'Update']:
                       # Enable EBS encryption by default
                       response = ec2.enable_ebs_encryption_by_default()
+                      print(f"EBS encryption enabled: {response}")
                       
-                      # Optionally set KMS key
+                      # Optionally set KMS key if provided
                       kms_key = event['ResourceProperties'].get('KmsKeyId')
-                      if kms_key:
+                      if kms_key and kms_key != '':
+                          print(f"Setting custom KMS key: {kms_key}")
                           ec2.modify_ebs_default_kms_key_id(KmsKeyId=kms_key)
+                      else:
+                          print("Using AWS managed key for EBS encryption")
                       
                       cfnresponse.send(event, context, cfnresponse.SUCCESS, 
-                                     {'Message': 'EBS encryption enabled'})
+                                     {'Message': 'EBS encryption enabled successfully'})
+                  elif request_type == 'Delete':
+                      # For delete operations, we typically don't disable EBS encryption
+                      # as it's a security feature that should remain enabled
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                     {'Message': 'Delete completed - EBS encryption left enabled'})
                   else:
                       cfnresponse.send(event, context, cfnresponse.SUCCESS,
                                      {'Message': 'No action taken'})
                                      
               except Exception as e:
-                  print(f"Error: {str(e)}")
+                  print(f"Error in Lambda function: {str(e)}")
+                  import traceback
+                  print(f"Traceback: {traceback.format_exc()}")
                   cfnresponse.send(event, context, cfnresponse.FAILED,
-                                 {'Message': str(e)})
+                                 {'Message': f'Lambda execution failed: {str(e)}'})
 
   EnableEBSEncryption:
     Type: Custom::EnableEBSEncryption
     Properties:
       ServiceToken: !GetAtt EBSEncryptionLambda.Arn
-      KmsKeyId: !If [UseCustomKMS, !Ref KMSKeyArn, !GetAtt EncryptionKey.Arn]
+      KmsKeyId: !If [UseCustomKMS, !Ref KMSKeyArn, !Ref AWS::NoValue]
 
   # ==========================================
   # IAM MFA Enforcement Policy
