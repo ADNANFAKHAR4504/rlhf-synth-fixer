@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350199",
+  "team": "3",
+  "startedAt": "2025-09-26T10:53:57.575Z",
+  "task_sub_category": "IaC-Serverless-Architecture",
+  "use_case_category": "Serverless Infrastructure (Functions as Code)",
+  "aws_services": [
+    "lambda",
+    "dynamodb",
+    "apigateway",
+    "s3",
+    "cloudwatch",
+    "sns",
+    "ec2",
+    "iam",
+    "xray"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "veera-turing",
+  "dockerS3Location": ""
+}
