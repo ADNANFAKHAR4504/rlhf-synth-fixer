@@ -107,47 +107,47 @@ final class TapStackProps implements StackProps {
         private boolean isPrimary;
         private String environmentSuffix;
 
-        public Builder environment(final Environment env) {
+        Builder environment(final Environment env) {
             this.environment = env;
             return this;
         }
 
-        public Builder stackName(final String name) {
+        Builder stackName(final String name) {
             this.stackName = name;
             return this;
         }
 
-        public Builder description(final String desc) {
+        Builder description(final String desc) {
             this.description = desc;
             return this;
         }
 
-        public Builder primaryRegion(final String region) {
+        Builder primaryRegion(final String region) {
             this.primaryRegion = region;
             return this;
         }
 
-        public Builder secondaryRegion(final String region) {
+        Builder secondaryRegion(final String region) {
             this.secondaryRegion = region;
             return this;
         }
 
-        public Builder domainName(final String domain) {
+        Builder domainName(final String domain) {
             this.domainName = domain;
             return this;
         }
 
-        public Builder isPrimary(final boolean primary) {
+        Builder isPrimary(final boolean primary) {
             this.isPrimary = primary;
             return this;
         }
 
-        public Builder environmentSuffix(final String suffix) {
+        Builder environmentSuffix(final String suffix) {
             this.environmentSuffix = suffix;
             return this;
         }
 
-        public TapStackProps build() {
+        TapStackProps build() {
             return new TapStackProps(this);
         }
     }
@@ -162,7 +162,7 @@ class TapStack extends Stack {
     private CfnHealthCheck healthCheck;
     private String environmentSuffix;
 
-    public TapStack(final App scope, final String id, final TapStackProps props) {
+    TapStack(final App scope, final String id, final TapStackProps props) {
         super(scope, id, props);
 
         // Store environment suffix
@@ -211,7 +211,8 @@ class TapStack extends Stack {
                         .build());
 
         // Add listener
-        this.loadBalancer.addListener("Listener", software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps.builder()
+        this.loadBalancer.addListener("Listener",
+                software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps.builder()
                 .port(80)
                 .protocol(ApplicationProtocol.HTTP)
                 .defaultTargetGroups(Arrays.asList(targetGroup))
@@ -431,6 +432,7 @@ class TapStack extends Stack {
                 .resources(Arrays.asList(this.dataBucket.getBucketArn() + "/*"))
                 .build());
 
+        String destinationBucket = "arn:aws:s3:::tap-secondary-data-" + props.getEnv().getAccount();
         replicationRole.addToPolicy(PolicyStatement.Builder.create()
                 .effect(Effect.ALLOW)
                 .actions(Arrays.asList(
@@ -438,9 +440,7 @@ class TapStack extends Stack {
                         "s3:ReplicateDelete",
                         "s3:ReplicateTags"
                 ))
-                .resources(Arrays.asList(
-                        "arn:aws:s3:::tap-secondary-data-" + props.getEnv().getAccount() + "/*"
-                ))
+                .resources(Arrays.asList(destinationBucket + "/*"))
                 .build());
 
         // Configure replication on the bucket
@@ -456,7 +456,7 @@ class TapStack extends Stack {
                                                 .prefix("")
                                                 .build())
                                         .destination(CfnBucket.ReplicationDestinationProperty.builder()
-                                                .bucket("arn:aws:s3:::tap-secondary-data-" + props.getEnv().getAccount())
+                                                .bucket(destinationBucket)
                                                 .build())
                                         .deleteMarkerReplication(CfnBucket.DeleteMarkerReplicationProperty.builder()
                                                 .status("Enabled")
@@ -467,15 +467,15 @@ class TapStack extends Stack {
         );
     }
 
-    public ApplicationLoadBalancer getLoadBalancer() {
+    ApplicationLoadBalancer getLoadBalancer() {
         return loadBalancer;
     }
 
-    public CfnHealthCheck getHealthCheck() {
+    CfnHealthCheck getHealthCheck() {
         return healthCheck;
     }
 
-    public String getEnvironmentSuffix() {
+    String getEnvironmentSuffix() {
         return environmentSuffix;
     }
 }
