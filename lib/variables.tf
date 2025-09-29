@@ -13,7 +13,7 @@ variable "environment" {
 variable "region" {
   description = "Primary AWS region"
   type        = string
-  default     = "ap-southeast-1"
+  default     = "eu-north-1"
 }
 
 variable "vpc_cidr" {
@@ -31,7 +31,7 @@ variable "private_subnet_cidrs" {
 variable "availability_zones" {
   description = "Availability zones for deployment"
   type        = list(string)
-  default     = ["ap-southeast-1a", "ap-southeast-1b"]
+  default     = ["eu-north-1a", "eu-north-1b"]
 }
 
 variable "allowed_admin_ips" {

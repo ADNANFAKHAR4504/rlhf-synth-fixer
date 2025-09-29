@@ -7,7 +7,7 @@ The user wants a comprehensive Terraform configuration for a secure AWS environm
    - Use Terraform 1.x with AWS provider
    - Files: versions.tf, main.tf, variables.tf, outputs.tf, README.md
    - providers.tf will be provided at deployment time (so I shouldn't create it)
-   - Use provider aliases for ap-southeast-1 where needed
+   - Use provider aliases for eu-north-1 where needed
 
 2. **S3 Requirements**:
    - SSE-KMS encryption
@@ -23,14 +23,14 @@ The user wants a comprehensive Terraform configuration for a secure AWS environm
    - No wildcard actions
 
 4. **Networking Requirements**:
-   - VPC with private subnets in ap-southeast-1
+   - VPC with private subnets in eu-north-1
    - EC2 instances in VPC only
    - No 0.0.0.0/0 ingress in security groups
    - VPC Flow Logs
 
 5. **Compute Requirements**:
    - Lambda with KMS-encrypted environment variables
-   - Lambda@Edge function in ap-southeast-1
+   - Lambda@Edge function in eu-north-1
 
 6. **Logging and Monitoring**:
    - CloudTrail multi-region with SSE-KMS
@@ -39,7 +39,7 @@ The user wants a comprehensive Terraform configuration for a secure AWS environm
 
 7. **Storage Requirements**:
    - EBS encryption by default
-   - RDS Multi-AZ with backups in ap-southeast-1
+   - RDS Multi-AZ with backups in eu-north-1
 
 8. **Secrets Management**:
    - SSM Parameter Store with SecureString
@@ -73,10 +73,10 @@ terraform {
     # These values should be configured during terraform init
     # terraform init -backend-config="bucket=my-terraform-state" \
     #               -backend-config="key=secure-env/terraform.tfstate" \
-    #               -backend-config="region=ap-southeast-1"
+    #               -backend-config="region=eu-north-1"
     # bucket         = "my-terraform-state-bucket"
     # key            = "secure-env/terraform.tfstate"
-    # region         = "ap-southeast-1"
+    # region         = "eu-north-1"
     # encrypt        = true
     # dynamodb_table = "terraform-state-lock"
   }
@@ -100,7 +100,7 @@ variable "environment" {
 variable "region" {
   description = "Primary AWS region"
   type        = string
-  default     = "ap-southeast-1"
+  default     = "eu-north-1"
 }
 
 variable "vpc_cidr" {
@@ -118,7 +118,7 @@ variable "private_subnet_cidrs" {
 variable "availability_zones" {
   description = "Availability zones for deployment"
   type        = list(string)
-  default     = ["ap-southeast-1a", "ap-southeast-1b"]
+  default     = ["eu-north-1a", "eu-north-1b"]
 }
 
 variable "allowed_admin_ips" {
@@ -1383,7 +1383,7 @@ Create a `providers.tf` file with your AWS configuration:
 
 ```hcl
 provider "aws" {
-  region = "ap-southeast-1"
+  region = "eu-north-1"
 }
 
 # For Lambda@Edge (must be in us-east-1)
@@ -1403,7 +1403,7 @@ terraform init
 terraform init \
   -backend-config="bucket=your-terraform-state-bucket" \
   -backend-config="key=secure-env/terraform.tfstate" \
-  -backend-config="region=ap-southeast-1" \
+  -backend-config="region=eu-north-1" \
   -backend-config="encrypt=true" \
   -backend-config="dynamodb_table=terraform-state-lock"
 ```

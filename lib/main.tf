@@ -750,7 +750,7 @@ resource "aws_db_instance" "main" {
   maintenance_window      = var.maintenance_window
 
   multi_az                  = true
-  deletion_protection       = true
+  deletion_protection       = false
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-db-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 

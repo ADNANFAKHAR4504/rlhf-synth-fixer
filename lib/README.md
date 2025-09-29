@@ -37,7 +37,7 @@ Create a `providers.tf` file with your AWS configuration:
 
 ```hcl
 provider "aws" {
-  region = "ap-southeast-1"
+  region = "eu-north-1"
 }
 
 # For Lambda@Edge (must be in us-east-1)
@@ -57,7 +57,7 @@ terraform init
 terraform init \
   -backend-config="bucket=your-terraform-state-bucket" \
   -backend-config="key=secure-env/terraform.tfstate" \
-  -backend-config="region=ap-southeast-1" \
+  -backend-config="region=eu-north-1" \
   -backend-config="encrypt=true" \
   -backend-config="dynamodb_table=terraform-state-lock"
 ```
