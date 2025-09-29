@@ -85,6 +85,7 @@
     "@aws-sdk/client-ecr": "^3.873.0",
     "@aws-sdk/client-ecs": "^3.856.0",
     "@aws-sdk/client-elastic-beanstalk": "^3.848.0",
+    "@aws-sdk/client-elastic-load-balancing-v2": "^3.896.0",
     "@aws-sdk/client-elasticache": "^3.846.0",
     "@aws-sdk/client-eventbridge": "^3.863.0",
     "@aws-sdk/client-guardduty": "^3.868.0",
@@ -166,12 +167,12 @@
     "@aws-sdk/client-acm": "^3.856.0",
     "@aws-sdk/client-cloudtrail": "^3.883.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.865.0",
-    "@aws-sdk/client-elastic-load-balancing-v2": "^3.873.0",
     "@aws-sdk/client-secrets-manager": "^3.863.0",
     "@aws-sdk/client-sqs": "^3.879.0",
     "@aws-sdk/client-ssm": "^3.879.0",
     "@cdktf/provider-aws": "21.9.1",
     "@cdktf/provider-random": "^12.0.0",
+    "@inquirer/prompts": "^7.8.0",
     "@pulumi/aws": "^7.3.1",
     "@pulumi/awsx": "^3.0.0",
     "@pulumi/pulumi": "^3.188.0",
@@ -180,11 +181,11 @@
     "@types/aws-lambda": "^8.10.152",
     "archiver": "^7.0.1",
     "aws-cdk-lib": "2.204.0",
+    "cdk-ec2-key-pair": "^4.0.1",
     "cdktf": "^0.21.0",
     "cdktf-cli": "0.21.0",
     "constructs": "10.4.2",
-    "source-map-support": "^0.5.21",
-    "@inquirer/prompts": "^7.8.0",
-    "fs-extra": "^11.3.0"
+    "fs-extra": "^11.3.0",
+    "source-map-support": "^0.5.21"
   }
 }

@@ -1,0 +1,12 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "350028",
+  "team": "2",
+  "startedAt": "2025-09-26T12:42:33.800Z",
+  "task_sub_category": "IaC-Cloud-Migration",
+  "use_case_category": "Environment Migration",
+  "aws_services": "VPC, EC2, ALB"
+}
