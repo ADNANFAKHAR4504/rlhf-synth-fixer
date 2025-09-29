@@ -97,7 +97,7 @@ final class TapStackProps implements StackProps {
         return new Builder();
     }
 
-    public static class Builder {
+    static class Builder {
         private Environment environment;
         private String stackName;
         private String description;
@@ -253,20 +253,22 @@ class TapStack extends Stack {
         // Only create the hosted zone in the primary region to avoid conflicts
         IHostedZone hostedZone;
         if (props.isPrimary()) {
-            hostedZone = new HostedZone(this, "HostedZone", software.amazon.awscdk.services.route53.HostedZoneProps.builder()
-                    .zoneName("joshteamgifted.com")
-                    .comment("Hosted zone for disaster recovery setup")
-                    .build());
+            hostedZone = new HostedZone(this, "HostedZone",
+                    software.amazon.awscdk.services.route53.HostedZoneProps.builder()
+                            .zoneName("joshteamgifted.com")
+                            .comment("Hosted zone for disaster recovery setup")
+                            .build());
         } else {
             // In secondary region, import the hosted zone by ID from primary region
             // You'll need to get this ID from the primary stack outputs
             String hostedZoneId = (String) this.getNode().tryGetContext("hosted_zone_id");
             if (hostedZoneId == null || hostedZoneId.isEmpty()) {
                 // Fallback: create a new hosted zone (not recommended for production)
-                hostedZone = new HostedZone(this, "HostedZone", software.amazon.awscdk.services.route53.HostedZoneProps.builder()
-                        .zoneName("joshteamgifted.com")
-                        .comment("Hosted zone for disaster recovery setup")
-                        .build());
+                hostedZone = new HostedZone(this, "HostedZone",
+                        software.amazon.awscdk.services.route53.HostedZoneProps.builder()
+                                .zoneName("joshteamgifted.com")
+                                .comment("Hosted zone for disaster recovery setup")
+                                .build());
             } else {
                 hostedZone = HostedZone.fromHostedZoneId(this, "HostedZone", hostedZoneId);
             }
