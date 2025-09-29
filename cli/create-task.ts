@@ -12,8 +12,8 @@ interface TaskMetadata {
   po_id: string;
   team: string;
   startedAt: string;
-  task_sub_category?: string;
-  use_case_category?: string;
+  subtask: string;
+  subject_labels?: string[];
   aws_services?: string;
 }
 
@@ -271,8 +271,8 @@ async function main(): Promise<void> {
       po_id: taskId,
       team,
       startedAt: new Date().toISOString(),
-      task_sub_category: taskSubCategory,
-      use_case_category: subCatToUseCase[taskSubCategory],
+      subtask: taskSubCategory,
+      subject_labels: [subCatToUseCase[taskSubCategory]],
       ...(resourcesText && resourcesText.trim().length > 0
         ? { aws_services: resourcesText.trim() }
         : {}),
