@@ -1,0 +1,13 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349859",
+  "team": "2",
+  "startedAt": "2025-09-29T18:47:06.944Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ]
+}
