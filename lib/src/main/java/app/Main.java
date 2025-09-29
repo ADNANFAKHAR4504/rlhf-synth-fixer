@@ -10,6 +10,7 @@ import software.amazon.awscdk.services.ec2.Vpc;
 import software.amazon.awscdk.services.ec2.VpcProps;
 import software.amazon.awscdk.services.ec2.SubnetConfiguration;
 import software.amazon.awscdk.services.ec2.SubnetType;
+// import software.amazon.awscdk.services.ec2.IVpc;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancerProps;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
@@ -27,12 +28,13 @@ import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.route53.IHostedZone;
 import software.amazon.awscdk.services.route53.HostedZone;
-import software.amazon.awscdk.services.route53.HostedZoneProviderProps;
 import software.amazon.awscdk.services.route53.CfnRecordSet;
 import software.amazon.awscdk.services.route53.CfnHealthCheck;
 import software.amazon.awscdk.Duration;
 
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Properties for TapStack
@@ -232,11 +234,28 @@ class TapStack extends Stack {
                 ))
                 .build();
 
-        // Lookup existing hosted zone for joshteamgifted.com
-        IHostedZone hostedZone = HostedZone.fromLookup(this, "HostedZone",
-                HostedZoneProviderProps.builder()
-                        .domainName("joshteamgifted.com")
+        // Create or reference hosted zone for joshteamgifted.com
+        // Only create the hosted zone in the primary region to avoid conflicts
+        IHostedZone hostedZone;
+        if (props.isPrimary()) {
+            hostedZone = new HostedZone(this, "HostedZone", software.amazon.awscdk.services.route53.HostedZoneProps.builder()
+                    .zoneName("joshteamgifted.com")
+                    .comment("Hosted zone for disaster recovery setup")
+                    .build());
+        } else {
+            // In secondary region, import the hosted zone by ID from primary region
+            // You'll need to get this ID from the primary stack outputs
+            String hostedZoneId = (String) this.getNode().tryGetContext("hosted_zone_id");
+            if (hostedZoneId == null || hostedZoneId.isEmpty()) {
+                // Fallback: create a new hosted zone (not recommended for production)
+                hostedZone = new HostedZone(this, "HostedZone", software.amazon.awscdk.services.route53.HostedZoneProps.builder()
+                        .zoneName("joshteamgifted.com")
+                        .comment("Hosted zone for disaster recovery setup")
                         .build());
+            } else {
+                hostedZone = HostedZone.fromHostedZoneId(this, "HostedZone", hostedZoneId);
+            }
+        }
 
         // Configure Route53 Failover Records
         configureRoute53Failover(hostedZone, props);
@@ -269,6 +288,12 @@ class TapStack extends Stack {
                 .value(this.healthCheck.getAttrHealthCheckId())
                 .description("Route53 Health Check ID")
                 .exportName(props.isPrimary() ? "PrimaryHealthCheckId" : "SecondaryHealthCheckId")
+                .build());
+
+        new CfnOutput(this, "HostedZoneId", CfnOutputProps.builder()
+                .value(hostedZone.getHostedZoneId())
+                .description("Route53 Hosted Zone ID")
+                .exportName(props.isPrimary() ? "PrimaryHostedZoneId" : "SecondaryHostedZoneId")
                 .build());
 
         new CfnOutput(this, "AppEndpoint", CfnOutputProps.builder()
