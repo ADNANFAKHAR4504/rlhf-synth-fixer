@@ -3,11 +3,11 @@ import {
   GetMetricStatisticsCommand,
   ListMetricsCommand,
 } from '@aws-sdk/client-cloudwatch';
-import { DescribeVpcsCommand, DescribeVpcEndpointsCommand, EC2Client } from '@aws-sdk/client-ec2';
-import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
-import { S3Client, GetBucketPolicyCommand, GetBucketTaggingCommand } from '@aws-sdk/client-s3';
-import { GetFunctionCommand, LambdaClient, GetFunctionConfigurationCommand } from '@aws-sdk/client-lambda';
+import { DescribeVpcEndpointsCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import { GetPolicyCommand, IAMClient, ListAttachedRolePoliciesCommand } from '@aws-sdk/client-iam';
+import { GetFunctionCommand, GetFunctionConfigurationCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { GetResourcesCommand, ResourceGroupsTaggingAPIClient } from '@aws-sdk/client-resource-groups-tagging-api';
+import { GetBucketPolicyCommand, GetBucketTaggingCommand, S3Client } from '@aws-sdk/client-s3';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -199,12 +199,12 @@ describe('AWS Resource Validation - Integration Tests', () => {
 
           // If metrics not found and still within timeout, wait and retry
           if (Date.now() - startTime < maxWaitTime - pollInterval) {
-            console.log(`CloudWatch metrics not yet available for ${functionName}. Waiting ${pollInterval/1000}s before retry...`);
+            console.log(`CloudWatch metrics not yet available for ${functionName}. Waiting ${pollInterval / 1000}s before retry...`);
             await new Promise(resolve => setTimeout(resolve, pollInterval));
           }
         }
 
-        throw new Error(`CloudWatch metrics for Lambda function ${functionName} not available after ${maxWaitTime/1000} seconds`);
+        throw new Error(`CloudWatch metrics for Lambda function ${functionName} not available after ${maxWaitTime / 1000} seconds`);
       };
 
       // Wait up to 2 minutes for metrics to become available
@@ -213,7 +213,7 @@ describe('AWS Resource Validation - Integration Tests', () => {
 
       // Should have basic Lambda metrics available
       const invocationsMetric = response.Metrics?.find(
-        metric => metric.MetricName === 'Invocations'
+        (metric: any) => metric.MetricName === 'Invocations'
       );
       expect(invocationsMetric).toBeDefined();
     }, 150000); // Increase Jest timeout to 2.5 minutes to account for wait time
