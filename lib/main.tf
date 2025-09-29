@@ -358,13 +358,21 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowGetBucketPolicyForCurrentAccountRoot"
+        Sid       = "AllowS3ReadConfigForTerraform"
         Effect    = "Allow"
         Principal = {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
-        Action    = "s3:GetBucketPolicy"
-        Resource  = aws_s3_bucket.main.arn
+        Action = [
+          "s3:GetBucketEncryption",
+          "s3:GetEncryptionConfiguration",
+          "s3:GetBucketPublicAccessBlock",
+          "s3:GetBucketVersioning",
+          "s3:GetBucketPolicy"
+        ]
+        Resource = [
+          aws_s3_bucket.main.arn
+        ]
       },
       {
         Sid       = "DenyInsecureConnections"
