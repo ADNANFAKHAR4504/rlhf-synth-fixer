@@ -229,9 +229,9 @@ class TapStack extends Stack {
 
         // NOTE: S3 Replication is commented out for initial deployment
         // Uncomment after both stacks are successfully deployed
-        // if (props.isPrimary()) {
-        //     configureS3Replication(props);
-        // }
+        if (props.isPrimary()) {
+            configureS3Replication(props);
+        }
 
         // Create Route53 Health Check
         this.healthCheck = CfnHealthCheck.Builder.create(this, "HealthCheck")
