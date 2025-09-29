@@ -1,12 +1,13 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import fetch from 'node-fetch'; // if not installed, run: npm i node-fetch@2
+import { execSync } from 'child_process';
 
-// Narrow JSON responses from fetch() to satisfy strict TS
+// Use global fetch (Node 18+). Remove node-fetch import to avoid type conflicts.
+
 type HealthResp = { status: string; timestamp?: string };
 type RootResp = { message: string; status: string; timestamp?: string };
 
-async function parseJson<T>(res: Response): Promise<T> {
+async function parseJson<T>(res: globalThis.Response): Promise<T> {
   return (await res.json()) as T;
 }
 
@@ -19,7 +20,6 @@ describe('TAP Stack Integration Tests', () => {
   let vpcId: string;
 
   beforeAll(() => {
-    // Load pre-generated outputs JSON
     terraformOutput = JSON.parse(
       readFileSync(join(__dirname, '../cfn-outputs/flat-outputs.json'), 'utf8')
     );
@@ -42,7 +42,7 @@ describe('TAP Stack Integration Tests', () => {
 
       let attempts = 0;
       const maxAttempts = 30;
-      let response: Response | undefined;
+      let response: globalThis.Response | null = null;
 
       while (attempts < maxAttempts) {
         try {
@@ -53,8 +53,10 @@ describe('TAP Stack Integration Tests', () => {
         if (attempts < maxAttempts) await new Promise(r => setTimeout(r, 5000));
       }
 
-      expect(response && response.status).toBe(200);
-      const data = await parseJson<RootResp>(response!);
+      if (!response) throw new Error('ALB endpoint did not respond in time');
+
+      expect(response.status).toBe(200);
+      const data = await parseJson<RootResp>(response);
       expect(data.status).toBe('running');
       expect(data.message).toBeDefined();
       expect(data.timestamp).toBeDefined();
@@ -66,7 +68,6 @@ describe('TAP Stack Integration Tests', () => {
       expect(rdsHost).toBeDefined();
       expect(rdsPort).toBeDefined();
 
-      const { execSync } = await import('child_process');
       try {
         execSync(`timeout 5 nc -zv ${rdsHost} ${rdsPort}`, { stdio: 'pipe' });
         expect(true).toBe(false); // should not connect
@@ -76,8 +77,7 @@ describe('TAP Stack Integration Tests', () => {
       }
     }, 30000);
 
-    test('RDS storage encryption enabled', async () => {
-      const { execSync } = await import('child_process');
+    test('RDS storage encryption enabled', () => {
       const rdsId = terraformOutput.rds_instance_id;
 
       const result = execSync(
@@ -122,14 +122,13 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   describe('Security Groups', () => {
-    test('ALB security group allows HTTP and HTTPS', () => {
-      // For simplicity, you can just check the SG ID exists
+    test('ALB security group exists', () => {
       const sgId = terraformOutput.alb_security_group_id;
       expect(sgId).toBeDefined();
       console.log('✅ ALB security group exists:', sgId);
     });
 
-    test('RDS security group allows traffic only from EC2', () => {
+    test('RDS security group exists', () => {
       const sgId = terraformOutput.rds_security_group_id;
       expect(sgId).toBeDefined();
       console.log('✅ RDS security group exists:', sgId);
