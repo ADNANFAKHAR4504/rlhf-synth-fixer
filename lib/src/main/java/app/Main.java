@@ -33,13 +33,11 @@ import software.amazon.awscdk.services.route53.CfnHealthCheck;
 import software.amazon.awscdk.Duration;
 
 import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Properties for TapStack
  */
-class TapStackProps implements StackProps {
+final class TapStackProps implements StackProps {
     private final Environment environment;
     private final String stackName;
     private final String description;
@@ -49,7 +47,7 @@ class TapStackProps implements StackProps {
     private final boolean isPrimary;
     private final String environmentSuffix;
 
-    private TapStackProps(Builder builder) {
+    private TapStackProps(final Builder builder) {
         this.environment = builder.environment;
         this.stackName = builder.stackName;
         this.description = builder.description;
@@ -109,43 +107,43 @@ class TapStackProps implements StackProps {
         private boolean isPrimary;
         private String environmentSuffix;
 
-        public Builder environment(Environment environment) {
-            this.environment = environment;
+        public Builder environment(final Environment env) {
+            this.environment = env;
             return this;
         }
 
-        public Builder stackName(String stackName) {
-            this.stackName = stackName;
+        public Builder stackName(final String name) {
+            this.stackName = name;
             return this;
         }
 
-        public Builder description(String description) {
-            this.description = description;
+        public Builder description(final String desc) {
+            this.description = desc;
             return this;
         }
 
-        public Builder primaryRegion(String primaryRegion) {
-            this.primaryRegion = primaryRegion;
+        public Builder primaryRegion(final String region) {
+            this.primaryRegion = region;
             return this;
         }
 
-        public Builder secondaryRegion(String secondaryRegion) {
-            this.secondaryRegion = secondaryRegion;
+        public Builder secondaryRegion(final String region) {
+            this.secondaryRegion = region;
             return this;
         }
 
-        public Builder domainName(String domainName) {
-            this.domainName = domainName;
+        public Builder domainName(final String domain) {
+            this.domainName = domain;
             return this;
         }
 
-        public Builder isPrimary(boolean isPrimary) {
-            this.isPrimary = isPrimary;
+        public Builder isPrimary(final boolean primary) {
+            this.isPrimary = primary;
             return this;
         }
 
-        public Builder environmentSuffix(String environmentSuffix) {
-            this.environmentSuffix = environmentSuffix;
+        public Builder environmentSuffix(final String suffix) {
+            this.environmentSuffix = suffix;
             return this;
         }
 
@@ -220,11 +218,12 @@ class TapStack extends Stack {
                 .build());
 
         // Create S3 Bucket
+        String bucketNameSuffix = props.isPrimary()
+                ? "tap-primary-data-" + props.getEnv().getAccount()
+                : "tap-secondary-data-" + props.getEnv().getAccount();
         this.dataBucket = new Bucket(this, "DataBucket", BucketProps.builder()
                 .versioned(true)
-                .bucketName(props.isPrimary() ? 
-                    "tap-primary-data-" + props.getEnv().getAccount() : 
-                    "tap-secondary-data-" + props.getEnv().getAccount())
+                .bucketName(bucketNameSuffix)
                 .build());
 
         // Configure S3 Replication if this is the primary region
@@ -318,7 +317,7 @@ class TapStack extends Stack {
                 .build());
     }
 
-    private void configureRoute53Failover(IHostedZone hostedZone, TapStackProps props) {
+    private void configureRoute53Failover(final IHostedZone hostedZone, final TapStackProps props) {
         if (props.isPrimary()) {
             // Primary failover record for app.joshteamgifted.com
             CfnRecordSet primaryAppRecord = CfnRecordSet.Builder.create(this, "PrimaryAppRecord")
@@ -404,7 +403,7 @@ class TapStack extends Stack {
         }
     }
 
-    private void configureS3Replication(TapStackProps props) {
+    private void configureS3Replication(final TapStackProps props) {
         // Create replication role
         Role replicationRole = new Role(this, "ReplicationRole", RoleProps.builder()
                 .assumedBy(new ServicePrincipal("s3.amazonaws.com"))
@@ -482,7 +481,12 @@ class TapStack extends Stack {
 /**
  * Main Application Entry Point
  */
-public class Main {
+public final class Main {
+    
+    private Main() {
+        // Private constructor to hide utility class constructor
+    }
+
     public static void main(final String[] args) {
         App app = new App();
 
