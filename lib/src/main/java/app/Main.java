@@ -1,73 +1,90 @@
 package app;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
 import software.amazon.awscdk.App;
-import software.amazon.awscdk.CfnOutput;
-import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Environment;
-import software.amazon.awscdk.RemovalPolicy;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.StackProps;
-import software.amazon.awscdk.Tags;
-import software.amazon.awscdk.services.apigateway.CorsOptions;
-import software.amazon.awscdk.services.apigateway.LambdaRestApi;
-import software.amazon.awscdk.services.apigateway.RestApi;
-import software.amazon.awscdk.services.apigateway.StageOptions;
-import software.amazon.awscdk.services.cloudwatch.Alarm;
-import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
-import software.amazon.awscdk.services.cloudwatch.Metric;
-import software.amazon.awscdk.services.cloudwatch.MetricOptions;
-import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
-import software.amazon.awscdk.services.cloudwatch.actions.SnsAction;
-import software.amazon.awscdk.services.iam.Effect;
-import software.amazon.awscdk.services.iam.ManagedPolicy;
-import software.amazon.awscdk.services.iam.PolicyDocument;
-import software.amazon.awscdk.services.iam.PolicyStatement;
-import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.ServicePrincipal;
-import software.amazon.awscdk.services.kms.Key;
-import software.amazon.awscdk.services.lambda.Alias;
-import software.amazon.awscdk.services.lambda.Code;
-import software.amazon.awscdk.services.lambda.Function;
-import software.amazon.awscdk.services.lambda.Runtime;
-import software.amazon.awscdk.services.lambda.Version;
-import software.amazon.awscdk.services.logs.LogGroup;
-import software.amazon.awscdk.services.logs.RetentionDays;
-import software.amazon.awscdk.services.s3.BlockPublicAccess;
+import software.amazon.awscdk.CfnOutput;
+import software.amazon.awscdk.CfnOutputProps;
+import software.amazon.awscdk.services.ec2.Vpc;
+import software.amazon.awscdk.services.ec2.VpcProps;
+import software.amazon.awscdk.services.ec2.SubnetConfiguration;
+import software.amazon.awscdk.services.ec2.SubnetType;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancerProps;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroup;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationTargetGroupProps;
+import software.amazon.awscdk.services.elasticloadbalancingv2.TargetType;
+import software.amazon.awscdk.services.elasticloadbalancingv2.HealthCheck;
+import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationProtocol;
 import software.amazon.awscdk.services.s3.Bucket;
-import software.amazon.awscdk.services.s3.BucketEncryption;
-import software.amazon.awscdk.services.sam.CfnApplication;
-import software.amazon.awscdk.services.sns.Topic;
-import software.constructs.Construct;
+import software.amazon.awscdk.services.s3.BucketProps;
+import software.amazon.awscdk.services.s3.CfnBucket;
+import software.amazon.awscdk.services.iam.Role;
+import software.amazon.awscdk.services.iam.RoleProps;
+import software.amazon.awscdk.services.iam.ServicePrincipal;
+import software.amazon.awscdk.services.iam.PolicyStatement;
+import software.amazon.awscdk.services.iam.Effect;
+import software.amazon.awscdk.services.route53.IHostedZone;
+import software.amazon.awscdk.services.route53.HostedZone;
+import software.amazon.awscdk.services.route53.HostedZoneProviderProps;
+import software.amazon.awscdk.services.route53.CfnRecordSet;
+import software.amazon.awscdk.services.route53.CfnHealthCheck;
+import software.amazon.awscdk.Duration;
+
+import java.util.Arrays;
 
 /**
- * TapStackProps holds configuration for the TapStack CDK stack.
+ * Properties for TapStack
  */
-final class TapStackProps {
-    private final String environmentSuffix;
-    private final StackProps stackProps;
-    private final List<String> corsAllowedDomains;
+class TapStackProps implements StackProps {
+    private final Environment environment;
+    private final String stackName;
+    private final String description;
+    private final String primaryRegion;
+    private final String secondaryRegion;
+    private final String domainName;
+    private final boolean isPrimary;
 
-    private TapStackProps(final String envSuffix, final StackProps props, final List<String> corsAllowedDomains) {
-        this.environmentSuffix = envSuffix;
-        this.stackProps = props != null ? props : StackProps.builder().build();
-        this.corsAllowedDomains = corsAllowedDomains != null ? corsAllowedDomains : Arrays.asList("https://example.com");
+    private TapStackProps(Builder builder) {
+        this.environment = builder.environment;
+        this.stackName = builder.stackName;
+        this.description = builder.description;
+        this.primaryRegion = builder.primaryRegion;
+        this.secondaryRegion = builder.secondaryRegion;
+        this.domainName = builder.domainName;
+        this.isPrimary = builder.isPrimary;
     }
 
-    public String getEnvironmentSuffix() {
-        return environmentSuffix;
+    @Override
+    public Environment getEnv() {
+        return environment;
     }
 
-    public StackProps getStackProps() {
-        return stackProps;
+    @Override
+    public String getStackName() {
+        return stackName;
     }
 
-    public List<String> getCorsAllowedDomains() {
-        return corsAllowedDomains;
+    @Override
+    public String getDescription() {
+        return description;
+    }
+
+    public String getPrimaryRegion() {
+        return primaryRegion;
+    }
+
+    public String getSecondaryRegion() {
+        return secondaryRegion;
+    }
+
+    public String getDomainName() {
+        return domainName;
+    }
+
+    public boolean isPrimary() {
+        return isPrimary;
     }
 
     public static Builder builder() {
@@ -75,497 +92,389 @@ final class TapStackProps {
     }
 
     public static class Builder {
-        private String environmentSuffix;
-        private StackProps stackProps;
-        private List<String> corsAllowedDomains;
+        private Environment environment;
+        private String stackName;
+        private String description;
+        private String primaryRegion;
+        private String secondaryRegion;
+        private String domainName;
+        private boolean isPrimary;
 
-        public Builder environmentSuffix(final String suffix) {
-            this.environmentSuffix = suffix;
+        public Builder environment(Environment environment) {
+            this.environment = environment;
             return this;
         }
 
-        public Builder stackProps(final StackProps props) {
-            this.stackProps = props;
+        public Builder stackName(String stackName) {
+            this.stackName = stackName;
             return this;
         }
 
-        public Builder corsAllowedDomains(final List<String> domains) {
-            this.corsAllowedDomains = domains;
+        public Builder description(String description) {
+            this.description = description;
+            return this;
+        }
+
+        public Builder primaryRegion(String primaryRegion) {
+            this.primaryRegion = primaryRegion;
+            return this;
+        }
+
+        public Builder secondaryRegion(String secondaryRegion) {
+            this.secondaryRegion = secondaryRegion;
+            return this;
+        }
+
+        public Builder domainName(String domainName) {
+            this.domainName = domainName;
+            return this;
+        }
+
+        public Builder isPrimary(boolean isPrimary) {
+            this.isPrimary = isPrimary;
             return this;
         }
 
         public TapStackProps build() {
-            return new TapStackProps(environmentSuffix, stackProps, corsAllowedDomains);
+            return new TapStackProps(this);
         }
     }
 }
 
 /**
- * Security Infrastructure Stack with KMS for encryption
- */
-class SecurityStack extends Stack {
-    private final Key kmsKey;
-
-    SecurityStack(final Construct scope, final String id, final String environmentSuffix, final StackProps props) {
-        super(scope, id, props);
-
-        // Create KMS Key for encryption
-        this.kmsKey = Key.Builder.create(this, "ServerlessKmsKey")
-                .description("KMS key for serverless infrastructure encryption - " + environmentSuffix)
-                .enableKeyRotation(true)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
-
-        software.amazon.awscdk.services.kms.Alias.Builder.create(this, "ServerlessKmsKeyAlias")
-                .aliasName("alias/serverless-" + environmentSuffix + "-key")
-                .targetKey(kmsKey)
-                .build();
-
-        Tags.of(this).add("project", "serverless-infrastructure");
-        Tags.of(this).add("environment", environmentSuffix);
-    }
-
-    public Key getKmsKey() {
-        return kmsKey;
-    }
-}
-
-/**
- * Serverless Application Stack with Lambda, API Gateway, and S3
- */
-class ServerlessStack extends Stack {
-    private final Function userFunction;
-    private final Function orderFunction;
-    private final Function notificationFunction;
-    private final Bucket staticAssetsBucket;
-    private final RestApi apiGateway;
-    private final Topic alertTopic;
-
-    ServerlessStack(final Construct scope, final String id, final String environmentSuffix,
-            final List<String> corsAllowedDomains, final Key kmsKey, final StackProps props) {
-        super(scope, id, props);
-
-        // Create S3 bucket for static assets
-        this.staticAssetsBucket = createS3Bucket(environmentSuffix, kmsKey);
-
-        // Create SNS topic for alerts
-        this.alertTopic = createAlertTopic(environmentSuffix, kmsKey);
-
-        // Create Lambda functions
-        this.userFunction = createLambdaFunction("UserFunction", "user", environmentSuffix, kmsKey);
-        this.orderFunction = createLambdaFunction("OrderFunction", "order", environmentSuffix, kmsKey);
-        this.notificationFunction = createLambdaFunction("NotificationFunction", "notification", environmentSuffix, kmsKey);
-
-        // Create API Gateway
-        this.apiGateway = createApiGateway(environmentSuffix, corsAllowedDomains);
-
-        // Deploy functions using SAM
-        deploySamApplication(environmentSuffix);
-
-        // Setup monitoring and alerts
-        setupMonitoring();
-
-        // Create function versions and aliases for auto-rollback
-        setupVersioningAndRollback();
-
-        Tags.of(this).add("project", "serverless-infrastructure");
-        Tags.of(this).add("environment", environmentSuffix);
-    }
-
-    private Bucket createS3Bucket(final String environmentSuffix, final Key kmsKey) {
-        Bucket bucket = Bucket.Builder.create(this, "StaticAssetsBucket")
-                .bucketName("serverless-" + environmentSuffix + "-static-assets-" + this.getAccount())
-                .encryption(BucketEncryption.KMS)
-                .encryptionKey(kmsKey)
-                .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
-                .versioned(true)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
-
-        // Add cache control for static assets
-        bucket.addToResourcePolicy(PolicyStatement.Builder.create()
-                .effect(Effect.ALLOW)
-                .principals(Arrays.asList(new ServicePrincipal("cloudfront.amazonaws.com")))
-                .actions(Arrays.asList("s3:GetObject"))
-                .resources(Arrays.asList(bucket.getBucketArn() + "/*"))
-                .conditions(Map.of("StringEquals", Map.of(
-                    "AWS:SourceAccount", this.getAccount()
-                )))
-                .build());
-
-        return bucket;
-    }
-
-    private Topic createAlertTopic(final String environmentSuffix, final Key kmsKey) {
-        return Topic.Builder.create(this, "AlertTopic")
-                .topicName("serverless-" + environmentSuffix + "-alerts")
-                .displayName("Serverless Infrastructure Alerts")
-                .masterKey(kmsKey)
-                .build();
-    }
-
-    private Function createLambdaFunction(final String functionName, final String functionType, 
-            final String environmentSuffix, final Key kmsKey) {
-        
-        // Create IAM role with least privilege
-        Role lambdaRole = Role.Builder.create(this, functionName + "Role")
-                .roleName("serverless-" + environmentSuffix + "-" + functionType + "-role")
-                .assumedBy(ServicePrincipal.Builder.create("lambda.amazonaws.com").build())
-                .managedPolicies(Arrays.asList(
-                        ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSLambdaBasicExecutionRole")))
-                .inlinePolicies(Map.of("LeastPrivilegePolicy", PolicyDocument.Builder.create()
-                        .statements(Arrays.asList(
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .actions(Arrays.asList("s3:GetObject", "s3:PutObject"))
-                                        .resources(Arrays.asList(staticAssetsBucket.getBucketArn() + "/*"))
-                                        .build(),
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .actions(Arrays.asList("kms:Decrypt", "kms:GenerateDataKey"))
-                                        .resources(Arrays.asList(kmsKey.getKeyArn()))
-                                        .build(),
-                                PolicyStatement.Builder.create()
-                                        .effect(Effect.ALLOW)
-                                        .actions(Arrays.asList("logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"))
-                                        .resources(Arrays.asList("arn:aws:logs:" + this.getRegion() + ":" + this.getAccount() + ":*"))
-                                        .build()))
-                        .build()))
-                .build();
-
-        // Create Log Group for the function
-        LogGroup logGroup = LogGroup.Builder.create(this, functionName + "LogGroup")
-                .logGroupName("/aws/lambda/serverless-" + environmentSuffix + "-" + functionType)
-                .retention(RetentionDays.ONE_YEAR)
-                .removalPolicy(RemovalPolicy.DESTROY)
-                .build();
-
-        // Lambda function code
-        String lambdaCode = generateLambdaCode(functionType, environmentSuffix);
-
-        // Create Lambda function
-        Function function = Function.Builder.create(this, functionName)
-                .functionName("serverless-" + environmentSuffix + "-" + functionType)
-                .runtime(Runtime.PYTHON_3_9)
-                .handler("index.handler")
-                .code(Code.fromInline(lambdaCode))
-                .role(lambdaRole)
-                .environment(Map.of(
-                    "BUCKET_NAME", staticAssetsBucket.getBucketName(),
-                    "KMS_KEY_ID", kmsKey.getKeyId(),
-                    "ENVIRONMENT", environmentSuffix,
-                    "LOG_LEVEL", "INFO"
-                ))
-                .timeout(Duration.seconds(30))
-                .memorySize(256)
-                .reservedConcurrentExecutions(100)
-                .build();
-
-        return function;
-    }
-
-    private String generateLambdaCode(final String functionType, final String environmentSuffix) {
-        return "import json\n" 
-               + "import boto3\n" 
-               + "import os\n" 
-               + "import logging\n" 
-               + "from datetime import datetime\n" 
-               + "\n" 
-               + "# Configure logging\n" 
-               + "logging.basicConfig(level=logging.INFO)\n" 
-               + "logger = logging.getLogger(__name__)\n" 
-               + "\n" 
-               + "def handler(event, context):\n" 
-               + "    \"\"\"" + functionType.toUpperCase() + " Lambda function handler\"\"\"\n" 
-               + "    \n" 
-               + "    # Log execution details to CloudWatch\n" 
-               + "    logger.info(f'Function: {context.function_name} started')\n" 
-               + "    logger.info(f'Request ID: {context.aws_request_id}')\n" 
-               + "    logger.info(f'Environment: {os.environ.get(\"ENVIRONMENT\", \"unknown\")}')\n" 
-               + "    \n" 
-               + "    try:\n" 
-               + "        # Process based on function type\n" 
-               + "        if '" + functionType + "' == 'user':\n" 
-               + "            result = process_user_request(event)\n" 
-               + "        elif '" + functionType + "' == 'order':\n" 
-               + "            result = process_order_request(event)\n" 
-               + "        else:\n" 
-               + "            result = process_notification_request(event)\n" 
-               + "        \n" 
-               + "        logger.info(f'Function: {context.function_name} completed successfully')\n" 
-               + "        \n" 
-               + "        return {\n" 
-               + "            'statusCode': 200,\n" 
-               + "            'headers': {\n" 
-               + "                'Content-Type': 'application/json',\n" 
-               + "                'Access-Control-Allow-Origin': '*',\n" 
-               + "                'Access-Control-Allow-Headers': 'Content-Type',\n" 
-               + "                'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'\n" 
-               + "            },\n" 
-               + "            'body': json.dumps(result)\n" 
-               + "        }\n" 
-               + "    \n" 
-               + "    except Exception as e:\n" 
-               + "        logger.error(f'Function: {context.function_name} failed: {str(e)}')\n" 
-               + "        \n" 
-               + "        return {\n" 
-               + "            'statusCode': 500,\n" 
-               + "            'headers': {\n" 
-               + "                'Content-Type': 'application/json',\n" 
-               + "                'Access-Control-Allow-Origin': '*'\n" 
-               + "            },\n" 
-               + "            'body': json.dumps({\n" 
-               + "                'error': 'Internal server error',\n" 
-               + "                'message': str(e),\n" 
-               + "                'requestId': context.aws_request_id\n" 
-               + "            })\n" 
-               + "        }\n" 
-               + "\n" 
-               + "def process_" + functionType + "_request(event):\n" 
-               + "    \"\"\"Process " + functionType + " specific logic\"\"\"\n" 
-               + "    return {\n" 
-               + "        'message': '" + functionType.toUpperCase() + " function executed successfully',\n" 
-               + "        'timestamp': datetime.utcnow().isoformat(),\n" 
-               + "        'data': event.get('body', {})\n" 
-               + "    }\n";
-    }
-
-    private RestApi createApiGateway(final String environmentSuffix, final List<String> corsAllowedDomains) {
-        // Create API Gateway with CORS
-        RestApi api = LambdaRestApi.Builder.create(this, "ServerlessApi")
-                .restApiName("serverless-" + environmentSuffix + "-api")
-                .description("Serverless infrastructure API Gateway")
-                .handler(userFunction) // Default handler
-                .proxy(false)
-                .deployOptions(StageOptions.builder()
-                        .stageName("prod")
-                        .throttlingRateLimit(1000.0)
-                        .throttlingBurstLimit(2000)
-                        .build())
-                .defaultCorsPreflightOptions(CorsOptions.builder()
-                        .allowOrigins(corsAllowedDomains)
-                        .allowMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"))
-                        .allowHeaders(Arrays.asList("Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key"))
-                        .build())
-                .build();
-
-        // Add resources and methods
-        api.getRoot().addResource("users").addMethod("GET", 
-            new software.amazon.awscdk.services.apigateway.LambdaIntegration(userFunction));
-        api.getRoot().addResource("orders").addMethod("POST", 
-            new software.amazon.awscdk.services.apigateway.LambdaIntegration(orderFunction));
-        api.getRoot().addResource("notifications").addMethod("PUT", 
-            new software.amazon.awscdk.services.apigateway.LambdaIntegration(notificationFunction));
-
-        return api;
-    }
-
-    private void deploySamApplication(final String environmentSuffix) {
-        // Deploy Lambda functions using AWS SAM
-        CfnApplication.Builder.create(this, "ServerlessSamApp")
-                .location(CfnApplication.ApplicationLocationProperty.builder()
-                        .applicationId("arn:aws:serverlessrepo:us-east-1:123456789012:applications/my-serverless-app")
-                        .semanticVersion("1.0.0")
-                        .build())
-                .parameters(Map.of(
-                    "Environment", environmentSuffix,
-                    "BucketName", staticAssetsBucket.getBucketName()
-                ))
-                .build();
-    }
-
-    private void setupMonitoring() {
-        // Create CloudWatch alarms for Lambda function errors
-        createLambdaErrorAlarm(userFunction, "UserFunction");
-        createLambdaErrorAlarm(orderFunction, "OrderFunction");
-        createLambdaErrorAlarm(notificationFunction, "NotificationFunction");
-    }
-
-    private void createLambdaErrorAlarm(final Function function, final String functionName) {
-        Metric errorMetric = Metric.Builder.create()
-                .namespace("AWS/Lambda")
-                .metricName("Errors")
-                .dimensionsMap(Map.of("FunctionName", function.getFunctionName()))
-                .statistic("Sum")
-                .period(Duration.minutes(5))
-                .build();
-
-        Alarm errorAlarm = Alarm.Builder.create(this, functionName + "ErrorAlarm")
-                .alarmName("Serverless-" + functionName + "-Errors")
-                .metric(errorMetric)
-                .threshold(1.0)
-                .comparisonOperator(ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD)
-                .evaluationPeriods(1)
-                .treatMissingData(TreatMissingData.NOT_BREACHING)
-                .alarmDescription("Lambda function " + functionName + " error alarm")
-                .build();
-
-        errorAlarm.addAlarmAction(new SnsAction(alertTopic));
-    }
-
-    private void setupVersioningAndRollback() {
-        // Create versions and aliases for each function
-        setupFunctionVersioning(userFunction, "UserFunction");
-        setupFunctionVersioning(orderFunction, "OrderFunction");
-        setupFunctionVersioning(notificationFunction, "NotificationFunction");
-    }
-
-    private void setupFunctionVersioning(final Function function, final String functionName) {
-        // Create a version
-        Version version = Version.Builder.create(this, functionName + "Version")
-                .lambda(function)
-                .removalPolicy(RemovalPolicy.RETAIN)
-                .build();
-
-        // Create an alias pointing to the version
-        Alias.Builder.create(this, functionName + "Alias")
-                .aliasName("LIVE")
-                .version(version)
-                .build();
-    }
-
-    // Getters for stack outputs
-    public Function getUserFunction() { return userFunction; }
-    public Function getOrderFunction() { return orderFunction; }
-    public Function getNotificationFunction() { return notificationFunction; }
-    public Bucket getStaticAssetsBucket() { return staticAssetsBucket; }
-    public RestApi getApiGateway() { return apiGateway; }
-    public Topic getAlertTopic() { return alertTopic; }
-}
-
-/**
- * Main Serverless Infrastructure Stack
+ * Main Stack for Disaster Recovery setup
  */
 class TapStack extends Stack {
-    private final String environmentSuffix;
-    private final SecurityStack securityStack;
-    private final ServerlessStack serverlessStack;
+    private Bucket dataBucket;
+    private ApplicationLoadBalancer loadBalancer;
+    private CfnHealthCheck healthCheck;
 
-    TapStack(final Construct scope, final String id, final TapStackProps props) {
-        super(scope, id, props != null ? props.getStackProps() : null);
+    public TapStack(final App scope, final String id, final TapStackProps props) {
+        super(scope, id, props);
 
-        // Get environment suffix
-        this.environmentSuffix = Optional.ofNullable(props)
-                .map(TapStackProps::getEnvironmentSuffix)
-                .orElse("dev");
+        // Create VPC
+        Vpc vpc = new Vpc(this, "VPC", VpcProps.builder()
+                .maxAzs(2)
+                .natGateways(1)
+                .subnetConfiguration(Arrays.asList(
+                        SubnetConfiguration.builder()
+                                .name("Public")
+                                .subnetType(SubnetType.PUBLIC)
+                                .cidrMask(24)
+                                .build(),
+                        SubnetConfiguration.builder()
+                                .name("Private")
+                                .subnetType(SubnetType.PRIVATE_WITH_EGRESS)
+                                .cidrMask(24)
+                                .build()
+                ))
+                .build());
 
-        List<String> corsAllowedDomains = Optional.ofNullable(props)
-                .map(TapStackProps::getCorsAllowedDomains)
-                .orElse(Arrays.asList("https://example.com"));
+        // Create Application Load Balancer
+        this.loadBalancer = new ApplicationLoadBalancer(this, "ALB", ApplicationLoadBalancerProps.builder()
+                .vpc(vpc)
+                .internetFacing(true)
+                .loadBalancerName(props.isPrimary() ? "primary-alb" : "secondary-alb")
+                .build());
 
-        // Create security stack
-        this.securityStack = new SecurityStack(
-                this,
-                "Security",
-                environmentSuffix,
-                StackProps.builder()
-                        .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
-                        .description("Security Stack for serverless infrastructure: " + environmentSuffix)
+        // Create Target Group
+        ApplicationTargetGroup targetGroup = new ApplicationTargetGroup(this, "TargetGroup",
+                ApplicationTargetGroupProps.builder()
+                        .vpc(vpc)
+                        .port(80)
+                        .protocol(ApplicationProtocol.HTTP)
+                        .targetType(TargetType.IP)
+                        .healthCheck(HealthCheck.builder()
+                                .enabled(true)
+                                .path("/health")
+                                .interval(Duration.seconds(30))
+                                .timeout(Duration.seconds(5))
+                                .healthyThresholdCount(2)
+                                .unhealthyThresholdCount(3)
+                                .build())
                         .build());
 
-        // Create serverless application stack
-        this.serverlessStack = new ServerlessStack(
-                this,
-                "ServerlessApp",
-                environmentSuffix,
-                corsAllowedDomains,
-                securityStack.getKmsKey(),
-                StackProps.builder()
-                        .env(props != null && props.getStackProps() != null ? props.getStackProps().getEnv() : null)
-                        .description("Serverless Application Stack: " + environmentSuffix)
+        // Add listener
+        this.loadBalancer.addListener("Listener", software.amazon.awscdk.services.elasticloadbalancingv2.BaseApplicationListenerProps.builder()
+                .port(80)
+                .protocol(ApplicationProtocol.HTTP)
+                .defaultTargetGroups(Arrays.asList(targetGroup))
+                .build());
+
+        // Create S3 Bucket
+        this.dataBucket = new Bucket(this, "DataBucket", BucketProps.builder()
+                .versioned(true)
+                .bucketName(props.isPrimary() ? 
+                    "tap-primary-data-" + props.getEnv().getAccount() : 
+                    "tap-secondary-data-" + props.getEnv().getAccount())
+                .build());
+
+        // Configure S3 Replication if this is the primary region
+        if (props.isPrimary()) {
+            configureS3Replication(props);
+        }
+
+        // Create Route53 Health Check
+        this.healthCheck = CfnHealthCheck.Builder.create(this, "HealthCheck")
+                .healthCheckConfig(CfnHealthCheck.HealthCheckConfigProperty.builder()
+                        .type("HTTPS")
+                        .resourcePath("/health")
+                        .fullyQualifiedDomainName(this.loadBalancer.getLoadBalancerDnsName())
+                        .port(80)
+                        .requestInterval(30)
+                        .failureThreshold(3)
+                        .build())
+                .healthCheckTags(Arrays.asList(
+                        CfnHealthCheck.HealthCheckTagProperty.builder()
+                                .key("Name")
+                                .value(props.isPrimary() ? "Primary-HealthCheck" : "Secondary-HealthCheck")
+                                .build()
+                ))
+                .build();
+
+        // Lookup existing hosted zone for joshteamgifted.com
+        IHostedZone hostedZone = HostedZone.fromLookup(this, "HostedZone",
+                HostedZoneProviderProps.builder()
+                        .domainName("joshteamgifted.com")
                         .build());
 
-        // Add dependencies
-        serverlessStack.addDependency(securityStack);
+        // Configure Route53 Failover Records
+        configureRoute53Failover(hostedZone, props);
 
-        // Create outputs
-        createOutputs();
+        // Output values
+        new CfnOutput(this, "VpcId", CfnOutputProps.builder()
+                .value(vpc.getVpcId())
+                .description("VPC ID")
+                .exportName(props.isPrimary() ? "PrimaryVpcId" : "SecondaryVpcId")
+                .build());
 
-        // Add tags to all resources
-        Tags.of(this).add("project", "serverless-infrastructure");
-        Tags.of(this).add("environment", environmentSuffix);
+        new CfnOutput(this, "LoadBalancerDNS", CfnOutputProps.builder()
+                .value(this.loadBalancer.getLoadBalancerDnsName())
+                .description("Load Balancer DNS Name")
+                .exportName(props.isPrimary() ? "PrimaryAlbDns" : "SecondaryAlbDns")
+                .build());
+
+        new CfnOutput(this, "BucketName", CfnOutputProps.builder()
+                .value(this.dataBucket.getBucketName())
+                .description("S3 Bucket Name")
+                .exportName(props.isPrimary() ? "PrimaryBucketName" : "SecondaryBucketName")
+                .build());
+
+        new CfnOutput(this, "DeployedRegion", CfnOutputProps.builder()
+                .value(props.getEnv().getRegion())
+                .description("Deployed Region")
+                .build());
+
+        new CfnOutput(this, "HealthCheckId", CfnOutputProps.builder()
+                .value(this.healthCheck.getAttrHealthCheckId())
+                .description("Route53 Health Check ID")
+                .exportName(props.isPrimary() ? "PrimaryHealthCheckId" : "SecondaryHealthCheckId")
+                .build());
+
+        new CfnOutput(this, "AppEndpoint", CfnOutputProps.builder()
+                .value(props.isPrimary() ? "app.joshteamgifted.com" : "sync.app.joshteamgifted.com")
+                .description("Application Endpoint")
+                .build());
     }
 
-    private void createOutputs() {
-        CfnOutput.Builder.create(this, "ApiGatewayUrl")
-                .value(serverlessStack.getApiGateway().getUrl())
-                .description("API Gateway URL")
-                .exportName("ServerlessApiUrl-" + environmentSuffix)
-                .build();
+    private void configureRoute53Failover(IHostedZone hostedZone, TapStackProps props) {
+        if (props.isPrimary()) {
+            // Primary failover record for app.joshteamgifted.com
+            CfnRecordSet primaryAppRecord = CfnRecordSet.Builder.create(this, "PrimaryAppRecord")
+                    .hostedZoneId(hostedZone.getHostedZoneId())
+                    .name("app.joshteamgifted.com")
+                    .type("A")
+                    .setIdentifier("primary-app")
+                    .failover("PRIMARY")
+                    .healthCheckId(this.healthCheck.getAttrHealthCheckId())
+                    .aliasTarget(CfnRecordSet.AliasTargetProperty.builder()
+                            .dnsName(this.loadBalancer.getLoadBalancerDnsName())
+                            .hostedZoneId(this.loadBalancer.getLoadBalancerCanonicalHostedZoneId())
+                            .evaluateTargetHealth(true)
+                            .build())
+                    .build();
 
-        CfnOutput.Builder.create(this, "StaticAssetsBucket")
-                .value(serverlessStack.getStaticAssetsBucket().getBucketName())
-                .description("S3 bucket for static assets")
-                .exportName("ServerlessStaticBucket-" + environmentSuffix)
-                .build();
+            // Primary failover record for sync.app.joshteamgifted.com
+            CfnRecordSet primarySyncRecord = CfnRecordSet.Builder.create(this, "PrimarySyncRecord")
+                    .hostedZoneId(hostedZone.getHostedZoneId())
+                    .name("sync.app.joshteamgifted.com")
+                    .type("A")
+                    .setIdentifier("primary-sync")
+                    .failover("PRIMARY")
+                    .healthCheckId(this.healthCheck.getAttrHealthCheckId())
+                    .aliasTarget(CfnRecordSet.AliasTargetProperty.builder()
+                            .dnsName(this.loadBalancer.getLoadBalancerDnsName())
+                            .hostedZoneId(this.loadBalancer.getLoadBalancerCanonicalHostedZoneId())
+                            .evaluateTargetHealth(true)
+                            .build())
+                    .build();
 
-        CfnOutput.Builder.create(this, "UserFunctionArn")
-                .value(serverlessStack.getUserFunction().getFunctionArn())
-                .description("User Lambda function ARN")
-                .exportName("ServerlessUserFunctionArn-" + environmentSuffix)
-                .build();
+            new CfnOutput(this, "PrimaryAppDomain", CfnOutputProps.builder()
+                    .value("app.joshteamgifted.com")
+                    .description("Primary Application Domain")
+                    .exportName("PrimaryAppDomain")
+                    .build());
 
-        CfnOutput.Builder.create(this, "OrderFunctionArn")
-                .value(serverlessStack.getOrderFunction().getFunctionArn())
-                .description("Order Lambda function ARN")
-                .exportName("ServerlessOrderFunctionArn-" + environmentSuffix)
-                .build();
+            new CfnOutput(this, "PrimarySyncDomain", CfnOutputProps.builder()
+                    .value("sync.app.joshteamgifted.com")
+                    .description("Primary Sync Domain")
+                    .exportName("PrimarySyncDomain")
+                    .build());
+        } else {
+            // Secondary failover record for app.joshteamgifted.com
+            CfnRecordSet secondaryAppRecord = CfnRecordSet.Builder.create(this, "SecondaryAppRecord")
+                    .hostedZoneId(hostedZone.getHostedZoneId())
+                    .name("app.joshteamgifted.com")
+                    .type("A")
+                    .setIdentifier("secondary-app")
+                    .failover("SECONDARY")
+                    .aliasTarget(CfnRecordSet.AliasTargetProperty.builder()
+                            .dnsName(this.loadBalancer.getLoadBalancerDnsName())
+                            .hostedZoneId(this.loadBalancer.getLoadBalancerCanonicalHostedZoneId())
+                            .evaluateTargetHealth(true)
+                            .build())
+                    .build();
 
-        CfnOutput.Builder.create(this, "NotificationFunctionArn")
-                .value(serverlessStack.getNotificationFunction().getFunctionArn())
-                .description("Notification Lambda function ARN")
-                .exportName("ServerlessNotificationFunctionArn-" + environmentSuffix)
-                .build();
+            // Secondary failover record for sync.app.joshteamgifted.com
+            CfnRecordSet secondarySyncRecord = CfnRecordSet.Builder.create(this, "SecondarySyncRecord")
+                    .hostedZoneId(hostedZone.getHostedZoneId())
+                    .name("sync.app.joshteamgifted.com")
+                    .type("A")
+                    .setIdentifier("secondary-sync")
+                    .failover("SECONDARY")
+                    .aliasTarget(CfnRecordSet.AliasTargetProperty.builder()
+                            .dnsName(this.loadBalancer.getLoadBalancerDnsName())
+                            .hostedZoneId(this.loadBalancer.getLoadBalancerCanonicalHostedZoneId())
+                            .evaluateTargetHealth(true)
+                            .build())
+                    .build();
+
+            new CfnOutput(this, "SecondaryAppDomain", CfnOutputProps.builder()
+                    .value("app.joshteamgifted.com")
+                    .description("Secondary Application Domain")
+                    .exportName("SecondaryAppDomain")
+                    .build());
+
+            new CfnOutput(this, "SecondarySyncDomain", CfnOutputProps.builder()
+                    .value("sync.app.joshteamgifted.com")
+                    .description("Secondary Sync Domain")
+                    .exportName("SecondarySyncDomain")
+                    .build());
+        }
     }
 
-    public SecurityStack getSecurityStack() { return securityStack; }
-    public ServerlessStack getServerlessStack() { return serverlessStack; }
-    public String getEnvironmentSuffix() { 
-        return environmentSuffix;
+    private void configureS3Replication(TapStackProps props) {
+        // Create replication role
+        Role replicationRole = new Role(this, "ReplicationRole", RoleProps.builder()
+                .assumedBy(new ServicePrincipal("s3.amazonaws.com"))
+                .build());
+
+        // Add permissions for replication
+        replicationRole.addToPolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(Arrays.asList(
+                        "s3:GetReplicationConfiguration",
+                        "s3:ListBucket"
+                ))
+                .resources(Arrays.asList(this.dataBucket.getBucketArn()))
+                .build());
+
+        replicationRole.addToPolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(Arrays.asList(
+                        "s3:GetObjectVersionForReplication",
+                        "s3:GetObjectVersionAcl",
+                        "s3:GetObjectVersionTagging"
+                ))
+                .resources(Arrays.asList(this.dataBucket.getBucketArn() + "/*"))
+                .build());
+
+        replicationRole.addToPolicy(PolicyStatement.Builder.create()
+                .effect(Effect.ALLOW)
+                .actions(Arrays.asList(
+                        "s3:ReplicateObject",
+                        "s3:ReplicateDelete",
+                        "s3:ReplicateTags"
+                ))
+                .resources(Arrays.asList(
+                        "arn:aws:s3:::tap-secondary-data-" + props.getEnv().getAccount() + "/*"
+                ))
+                .build());
+
+        // Configure replication on the bucket
+        CfnBucket cfnBucket = (CfnBucket) this.dataBucket.getNode().getDefaultChild();
+        cfnBucket.setReplicationConfiguration(
+                CfnBucket.ReplicationConfigurationProperty.builder()
+                        .role(replicationRole.getRoleArn())
+                        .rules(Arrays.asList(
+                                CfnBucket.ReplicationRuleProperty.builder()
+                                        .status("Enabled")
+                                        .priority(1)
+                                        .filter(CfnBucket.ReplicationRuleFilterProperty.builder()
+                                                .prefix("")
+                                                .build())
+                                        .destination(CfnBucket.ReplicationDestinationProperty.builder()
+                                                .bucket("arn:aws:s3:::tap-secondary-data-" + props.getEnv().getAccount())
+                                                .build())
+                                        .deleteMarkerReplication(CfnBucket.DeleteMarkerReplicationProperty.builder()
+                                                .status("Enabled")
+                                                .build())
+                                        .build()
+                        ))
+                        .build()
+        );
+    }
+
+    public ApplicationLoadBalancer getLoadBalancer() {
+        return loadBalancer;
+    }
+
+    public CfnHealthCheck getHealthCheck() {
+        return healthCheck;
     }
 }
 
 /**
- * Main entry point for the Serverless CDK Java application
+ * Main Application Entry Point
  */
-public final class Main {
-
-    private Main() {
-        // Utility class should not be instantiated
-    }
-
+public class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        // Get environment suffix from environment variable, context, or default
-        String environmentSuffix = System.getenv("ENVIRONMENT_SUFFIX");
-        if (environmentSuffix == null || environmentSuffix.isEmpty()) {
-            environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
-        }
-        if (environmentSuffix == null || environmentSuffix.isEmpty()) {
-            environmentSuffix = "dev";
+        // Get primary region from context or default to us-east-1
+        String primaryRegion = (String) app.getNode().tryGetContext("primary_region");
+        if (primaryRegion == null || primaryRegion.isEmpty()) {
+            primaryRegion = "us-east-1";
         }
 
-        // Get CORS allowed domains from environment
-        String corsDomainsEnv = System.getenv("CORS_ALLOWED_DOMAINS");
-        List<String> corsAllowedDomains;
-        if (corsDomainsEnv != null && !corsDomainsEnv.isEmpty()) {
-            corsAllowedDomains = Arrays.asList(corsDomainsEnv.split(","));
-        } else {
-            corsAllowedDomains = Arrays.asList("https://example.com", "https://app.example.com");
+        String secondaryRegion = primaryRegion.equals("us-east-1") ? "us-west-2" : "us-east-1";
+        String accountId = System.getenv("CDK_DEFAULT_ACCOUNT");
+        
+        if (accountId == null || accountId.isEmpty()) {
+            accountId = "123456789012"; // Placeholder
         }
 
-        // Create the main TAP stack
-        new TapStack(app, "TapStack" + environmentSuffix, TapStackProps.builder()
-                .environmentSuffix(environmentSuffix)
-                .corsAllowedDomains(corsAllowedDomains)
-                .stackProps(StackProps.builder()
-                        .env(Environment.builder()
-                                .account(System.getenv("CDK_DEFAULT_ACCOUNT"))
-                                .region("us-west-2")
-                                .build())
-                        .build())
-                .build());
+        // Determine if we're deploying to primary region
+        boolean isPrimary = primaryRegion.equals("us-east-1");
+
+        // Create environment for the selected region
+        Environment env = Environment.builder()
+                .account(accountId)
+                .region(primaryRegion)
+                .build();
+
+        // Create primary/secondary stack
+        TapStackProps stackProps = TapStackProps.builder()
+                .environment(env)
+                .stackName("TapStack-" + primaryRegion)
+                .description("Disaster Recovery Stack for " + primaryRegion)
+                .primaryRegion("us-east-1")
+                .secondaryRegion("us-west-2")
+                .domainName("joshteamgifted.com")
+                .isPrimary(isPrimary)
+                .build();
+
+        TapStack stack = new TapStack(app, "TapStack", stackProps);
 
         app.synth();
     }
