@@ -355,21 +355,6 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          aws_s3_bucket.main.arn,
-          "${aws_s3_bucket.main.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      },
-      {
         Sid       = "AllowCurrentAccountManagement"
         Effect    = "Allow"
         Principal = {
