@@ -320,7 +320,6 @@ resource "aws_s3_bucket" "main" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
-  count  = var.enable_s3_controls ? 1 : 0
   bucket = aws_s3_bucket.main.id
 
   rule {
@@ -333,7 +332,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 }
 
 resource "aws_s3_bucket_public_access_block" "main" {
-  count  = var.enable_s3_controls ? 1 : 0
   bucket = aws_s3_bucket.main.id
 
   block_public_acls       = true
@@ -343,7 +341,6 @@ resource "aws_s3_bucket_public_access_block" "main" {
 }
 
 resource "aws_s3_bucket_versioning" "main" {
-  count  = var.enable_s3_controls ? 1 : 0
   bucket = aws_s3_bucket.main.id
 
   versioning_configuration {
@@ -358,23 +355,41 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowS3ReadConfigForCurrentIdentity"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource = [
+          aws_s3_bucket.main.arn,
+          "${aws_s3_bucket.main.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      },
+      {
+        Sid       = "AllowCurrentAccountManagement"
         Effect    = "Allow"
         Principal = {
-          AWS = data.aws_caller_identity.current.arn
+          AWS = "arn:${local.partition}:iam::${local.account_id}:root"
         }
         Action = [
-          "s3:GetBucketEncryption",
-          "s3:GetEncryptionConfiguration",
-          "s3:GetBucketPublicAccessBlock",
+          "s3:GetBucketPolicy",
           "s3:GetBucketVersioning",
-          "s3:GetBucketPolicy"
+          "s3:GetBucketPublicAccessBlock",
+          "s3:GetEncryptionConfiguration",
+          "s3:PutBucketPolicy",
+          "s3:PutBucketVersioning",
+          "s3:PutBucketPublicAccessBlock",
+          "s3:PutEncryptionConfiguration"
         ]
         Resource = [
-          aws_s3_bucket.main.arn
+          aws_s3_bucket.main.arn,
+          "${aws_s3_bucket.main.arn}/*"
         ]
-      },
-      # ... your Deny statements here ...
+      }
     ]
   })
 }
