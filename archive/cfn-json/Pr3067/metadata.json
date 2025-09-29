@@ -8,5 +8,12 @@
   "startedAt": "2025-09-25T17:48:51.131Z",
   "task_sub_category": "IaC-Cloud-Environment-Setup",
   "use_case_category": "Provisioning Infrastructure Environments",
-  "aws_services": "EC2, ECS, ECR, IAM, CloudWatch, Application Load Balancer, Route 53, Application Auto Scaling."
+  "aws_services": "EC2, ECS, ECR, IAM, CloudWatch, Application Load Balancer, Route 53, Application Auto Scaling.",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sreeni-ops",
+  "dockerS3Location": ""
 }
