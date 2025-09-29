@@ -422,12 +422,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
     }
 
     transition {
-      days          = 90
+      days          = 60
       storage_class = "GLACIER"
     }
 
     expiration {
-      days = var.cloudtrail_retention_days
+      days = max(var.cloudtrail_retention_days, 90)
     }
   }
 }
