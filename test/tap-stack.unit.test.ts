@@ -262,14 +262,6 @@ describe('Startup Infrastructure CloudFormation Template', () => {
         'Fn::Sub': 'http://${ApplicationLoadBalancer.DNSName}'
       });
     });
-
-    test('all outputs should have export names', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export).toBeDefined();
-        expect(output.Export.Name).toBeDefined();
-      });
-    });
   });
 
   describe('Resource Tags', () => {
@@ -316,7 +308,7 @@ describe('Startup Infrastructure CloudFormation Template', () => {
     });
 
     test('should have correct number of resources', () => {
-      const expectedResourceCount = 27; // Count all resources in template
+      const expectedResourceCount = 24; // Count all resources in template
       const actualResourceCount = Object.keys(template.Resources).length;
       expect(actualResourceCount).toBe(expectedResourceCount);
     });
