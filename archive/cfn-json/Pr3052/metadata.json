@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348921",
+  "team": "3",
+  "startedAt": "2025-09-25T09:29:18.055Z",
+  "subtask": "CI/CD Pipeline Infrastructure",
+  "subject_labels": [
+    "CI/CD Pipeline Infrastructure",
+    "Security Configuration",
+    "Resource Scaling",
+    "Access Control",
+    "General Infrastructure Tooling QA"
+  ],
+  "training_quality": 4,
+  "aws_services": [
+    "AWS::CodePipeline::Pipeline",
+    "AWS::CodeBuild::Project",
+    "AWS::CodeDeploy::Application",
+    "AWS::CodeDeploy::DeploymentGroup",
+    "AWS::S3::Bucket",
+    "AWS::SNS::Topic",
+    "AWS::IAM::Role",
+    "AWS::CloudWatch::Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sreeni-ops",
+  "dockerS3Location": ""
+}
