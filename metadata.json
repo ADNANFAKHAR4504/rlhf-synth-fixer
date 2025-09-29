@@ -5,8 +5,8 @@
   "turn_type": "single",
   "po_id": "349419",
   "team": "1",
-  "startedAt": "2025-09-26T02:40:51.887Z",
-  "task_sub_category": "IaC-Serverless-Architecture",
-  "use_case_category": "Serverless Infrastructure (Functions as Code)",
-  "aws_services": "lamda,cloudwatch,s3,iam,kms"
+  "startedAt": "2025-09-29T02:40:51.887Z",
+  "task_sub_category": "Failure Recovery Automation",
+  "use_case_category": "Disaster Recovery",
+  "aws_services": "s3, route53, vpc, alb"
 }
