@@ -171,7 +171,7 @@ class TapStack extends Stack {
         // Create VPC
         Vpc vpc = new Vpc(this, "VPC", VpcProps.builder()
                 .maxAzs(2)
-                .natGateways(1)
+                .natGateways(0)
                 .subnetConfiguration(Arrays.asList(
                         SubnetConfiguration.builder()
                                 .name("Public")
@@ -227,10 +227,11 @@ class TapStack extends Stack {
                 .bucketName(bucketNameSuffix)
                 .build());
 
-        // Configure S3 Replication if this is the primary region
-        if (props.isPrimary()) {
-            configureS3Replication(props);
-        }
+        // NOTE: S3 Replication is commented out for initial deployment
+        // Uncomment after both stacks are successfully deployed
+        // if (props.isPrimary()) {
+        //     configureS3Replication(props);
+        // }
 
         // Create Route53 Health Check
         this.healthCheck = CfnHealthCheck.Builder.create(this, "HealthCheck")
@@ -261,7 +262,6 @@ class TapStack extends Stack {
                             .build());
         } else {
             // In secondary region, import the hosted zone by ID from primary region
-            // You'll need to get this ID from the primary stack outputs
             String hostedZoneId = (String) this.getNode().tryGetContext("hosted_zone_id");
             if (hostedZoneId == null || hostedZoneId.isEmpty()) {
                 // Fallback: create a new hosted zone (not recommended for production)
@@ -478,6 +478,10 @@ class TapStack extends Stack {
     String getEnvironmentSuffix() {
         return environmentSuffix;
     }
+
+    Bucket getDataBucket() {
+        return dataBucket;
+    }
 }
 
 /**
@@ -492,47 +496,58 @@ public final class Main {
     public static void main(final String[] args) {
         App app = new App();
 
-        // Get primary region from context or default to us-east-1
-        String primaryRegion = (String) app.getNode().tryGetContext("primary_region");
-        if (primaryRegion == null || primaryRegion.isEmpty()) {
-            primaryRegion = "us-east-1";
-        }
-
         // Get environment suffix from context or default to "dev"
         String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
         if (environmentSuffix == null || environmentSuffix.isEmpty()) {
             environmentSuffix = "dev";
         }
 
-        String secondaryRegion = primaryRegion.equals("us-east-1") ? "us-west-2" : "us-east-1";
         String accountId = System.getenv("CDK_DEFAULT_ACCOUNT");
-        
         if (accountId == null || accountId.isEmpty()) {
             accountId = "123456789012"; // Placeholder
         }
 
-        // Determine if we're deploying to primary region
-        boolean isPrimary = primaryRegion.equals("us-east-1");
+        // Define primary and secondary regions
+        String primaryRegion = "us-east-1";
+        String secondaryRegion = "us-west-2";
 
-        // Create environment for the selected region
-        Environment env = Environment.builder()
+        // Create primary stack in us-east-1
+        Environment primaryEnv = Environment.builder()
                 .account(accountId)
                 .region(primaryRegion)
                 .build();
 
-        // Create primary/secondary stack
-        TapStackProps stackProps = TapStackProps.builder()
-                .environment(env)
-                .stackName("TapStack-" + primaryRegion)
-                .description("Disaster Recovery Stack for " + primaryRegion)
-                .primaryRegion("us-east-1")
-                .secondaryRegion("us-west-2")
+        TapStackProps primaryStackProps = TapStackProps.builder()
+                .environment(primaryEnv)
+                .stackName("TapStack-Primary")
+                .description("Primary Disaster Recovery Stack in us-east-1")
+                .primaryRegion(primaryRegion)
+                .secondaryRegion(secondaryRegion)
                 .domainName("joshteamgifted.com")
-                .isPrimary(isPrimary)
+                .isPrimary(true)
                 .environmentSuffix(environmentSuffix)
                 .build();
 
-        TapStack stack = new TapStack(app, "TapStack", stackProps);
+        TapStack primaryStack = new TapStack(app, "TapStackPrimary", primaryStackProps);
+
+        // Create secondary stack in us-west-2
+        Environment secondaryEnv = Environment.builder()
+                .account(accountId)
+                .region(secondaryRegion)
+                .build();
+
+        TapStackProps secondaryStackProps = TapStackProps.builder()
+                .environment(secondaryEnv)
+                .stackName("TapStack-Secondary")
+                .description("Secondary Disaster Recovery Stack in us-west-2")
+                .primaryRegion(primaryRegion)
+                .secondaryRegion(secondaryRegion)
+                .domainName("joshteamgifted.com")
+                .isPrimary(false)
+                .environmentSuffix(environmentSuffix)
+                .build();
+
+        TapStack secondaryStack = new TapStack(app, "TapStackSecondary", secondaryStackProps);
 
         app.synth();
     }
