@@ -11,7 +11,7 @@ resource "random_id" "suffix" {
 locals {
   account_id = data.aws_caller_identity.current.account_id
   partition  = data.aws_partition.current.partition
-  region     = data.aws_region.current.name
+  region     = var.region
 
   common_tags = merge(
     var.tags,
@@ -375,7 +375,6 @@ resource "aws_s3_bucket_policy" "main" {
         Principal = "*"
         Action    = "s3:*"
         Resource = [
-          aws_s3_bucket.main.arn,
           "${aws_s3_bucket.main.arn}/*"
         ]
         Condition = {
@@ -422,6 +421,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
   rule {
     id     = "expire-old-logs"
     status = "Enabled"
+    filter {
+      prefix = ""
+    }
 
     transition {
       days          = 30
@@ -819,24 +821,6 @@ resource "aws_cloudtrail" "main" {
 resource "aws_guardduty_detector" "main" {
   enable                       = true
   finding_publishing_frequency = "FIFTEEN_MINUTES"
-
-  datasources {
-    s3_logs {
-      enable = true
-    }
-    kubernetes {
-      audit_logs {
-        enable = true
-      }
-    }
-    malware_protection {
-      scan_ec2_instance_with_findings {
-        ebs_volumes {
-          enable = true
-        }
-      }
-    }
-  }
 
   tags = local.common_tags
 }
