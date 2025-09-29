@@ -360,7 +360,6 @@ resource "aws_s3_bucket_policy" "main" {
         Principal = "*"
         Action    = "s3:*"
         Resource = [
-          aws_s3_bucket.main.arn,
           "${aws_s3_bucket.main.arn}/*"
         ]
         Condition = {
@@ -385,6 +384,12 @@ resource "aws_s3_bucket_policy" "main" {
       }
     ]
   })
+
+  depends_on = [
+    aws_s3_bucket_server_side_encryption_configuration.main,
+    aws_s3_bucket_public_access_block.main,
+    aws_s3_bucket_versioning.main
+  ]
 }
 
 # CloudTrail S3 Bucket
