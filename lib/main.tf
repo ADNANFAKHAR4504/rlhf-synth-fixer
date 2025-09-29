@@ -358,6 +358,15 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid       = "AllowGetBucketPolicyForCurrentAccountRoot"
+        Effect    = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action    = "s3:GetBucketPolicy"
+        Resource  = aws_s3_bucket.main.arn
+      },
+      {
         Sid       = "DenyInsecureConnections"
         Effect    = "Deny"
         Principal = "*"
@@ -387,8 +396,6 @@ resource "aws_s3_bucket_policy" "main" {
       }
     ]
   })
-
-  # Do not depend on S3 control-plane resources when disabled
 }
 
 # CloudTrail S3 Bucket
