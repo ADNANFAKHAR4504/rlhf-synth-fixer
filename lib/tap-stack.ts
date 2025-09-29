@@ -30,6 +30,7 @@ export class TapStack extends cdk.Stack {
 
     // Apply production tags to the main stack
     cdk.Tags.of(this).add('Environment', 'Production');
+    cdk.Tags.of(this).add('iac-rlhf-amazon', 'true');
 
     // Main stack outputs
     new cdk.CfnOutput(this, 'DeploymentSummary', {

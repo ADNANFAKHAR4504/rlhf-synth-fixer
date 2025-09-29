@@ -27,6 +27,7 @@ export class ServerlessDataPipelineStack extends cdk.NestedStack {
 
     // Apply tags to all resources
     cdk.Tags.of(this).add('Environment', 'Production');
+    cdk.Tags.of(this).add('iac-rlhf-amazon', 'true');
 
     // Create VPC for enhanced security
     const vpc = new ec2.Vpc(this, 'DataPipelineVPC', {
@@ -42,9 +43,10 @@ export class ServerlessDataPipelineStack extends cdk.NestedStack {
     });
 
     // Create VPC endpoints for AWS services
-    vpc.addInterfaceEndpoint('S3Endpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.S3,
-      subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+    // S3 Gateway endpoint (required for PrivateDnsOnlyForInboundResolverEndpoint)
+    vpc.addGatewayEndpoint('S3GatewayEndpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }],
     });
 
     vpc.addInterfaceEndpoint('SNSEndpoint', {
@@ -322,7 +324,7 @@ async function sendErrorNotification(error) {
       },
       tracing: lambda.Tracing.ACTIVE,
       logGroup: logGroup,
-      reservedConcurrentExecutions: 10, // Reserved concurrency for predictable performance
+      // reservedConcurrentExecutions: 5, // Removed to avoid account limits
     });
 
     // S3 will trigger the main Lambda function directly
