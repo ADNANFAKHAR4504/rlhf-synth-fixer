@@ -252,7 +252,6 @@ resource "aws_security_group" "rds" {
 resource "aws_cloudwatch_log_group" "flow_logs" {
   name              = "/aws/vpc/flowlogs/${var.project_name}"
   retention_in_days = var.flow_logs_retention_days
-  kms_key_id        = aws_kms_key.main.arn
 
   tags = local.common_tags
 }
@@ -934,10 +933,12 @@ resource "aws_iam_role_policy" "config" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/ConfigRole"
-}
+# AWS managed policy ConfigRole may not be available in all regions
+# Using custom policy instead
+# resource "aws_iam_role_policy_attachment" "config" {
+#   role       = aws_iam_role.config.name
+#   policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/ConfigRole"
+# }
 
 resource "aws_config_configuration_recorder" "main" {
   name     = "${var.project_name}-recorder"
