@@ -348,36 +348,36 @@ resource "aws_s3_bucket_versioning" "main" {
   }
 }
 
-resource "aws_s3_bucket_policy" "main" {
-  bucket = aws_s3_bucket.main.id
+# resource "aws_s3_bucket_policy" "main" {
+#   bucket = aws_s3_bucket.main.id
 
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowCurrentAccountManagement"
-        Effect = "Allow"
-        Principal = {
-          AWS = "*"
-        }
-        Action = [
-          "s3:GetBucketPolicy",
-          "s3:GetBucketVersioning",
-          "s3:GetBucketPublicAccessBlock",
-          "s3:GetEncryptionConfiguration",
-          "s3:PutBucketPolicy",
-          "s3:PutBucketVersioning",
-          "s3:PutBucketPublicAccessBlock",
-          "s3:PutEncryptionConfiguration"
-        ]
-        Resource = [
-          aws_s3_bucket.main.arn,
-          "${aws_s3_bucket.main.arn}/*"
-        ]
-      }
-    ]
-  })
-}
+#   policy = jsonencode({
+#     Version = "2012-10-17"
+#     Statement = [
+#       {
+#         Sid    = "AllowCurrentAccountManagement"
+#         Effect = "Allow"
+#         Principal = {
+#           AWS = "*"
+#         }
+#         Action = [
+#           "s3:GetBucketPolicy",
+#           "s3:GetBucketVersioning",
+#           "s3:GetBucketPublicAccessBlock",
+#           "s3:GetEncryptionConfiguration",
+#           "s3:PutBucketPolicy",
+#           "s3:PutBucketVersioning",
+#           "s3:PutBucketPublicAccessBlock",
+#           "s3:PutEncryptionConfiguration"
+#         ]
+#         Resource = [
+#           aws_s3_bucket.main.arn,
+#           "${aws_s3_bucket.main.arn}/*"
+#         ]
+#       }
+#     ]
+#   })
+# }
 
 # CloudTrail S3 Bucket
 resource "aws_s3_bucket" "cloudtrail" {
