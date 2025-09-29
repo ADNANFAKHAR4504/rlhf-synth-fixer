@@ -43,7 +43,7 @@ export class MigrationStack extends cdk.Stack {
     });
 
     // 2. Security Groups
-    
+
     // ALB Security Group: Allow inbound HTTP from anywhere
     const albSecurityGroup = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
       vpc,
@@ -57,11 +57,15 @@ export class MigrationStack extends cdk.Stack {
     );
 
     // Web Tier Security Group: Only allow inbound from ALB
-    const webTierSecurityGroup = new ec2.SecurityGroup(this, 'WebTierSecurityGroup', {
-      vpc,
-      description: 'Security group for the Web Tier EC2 instances',
-      allowAllOutbound: true,
-    });
+    const webTierSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'WebTierSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for the Web Tier EC2 instances',
+        allowAllOutbound: true,
+      }
+    );
     webTierSecurityGroup.addIngressRule(
       ec2.Peer.securityGroupId(albSecurityGroup.securityGroupId),
       ec2.Port.tcp(80),
@@ -69,11 +73,15 @@ export class MigrationStack extends cdk.Stack {
     );
 
     // Bastion Host Security Group: Allow SSH from specified IP
-    const bastionSecurityGroup = new ec2.SecurityGroup(this, 'BastionSecurityGroup', {
-      vpc,
-      description: 'Security group for the Bastion Host',
-      allowAllOutbound: true,
-    });
+    const bastionSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'BastionSecurityGroup',
+      {
+        vpc,
+        description: 'Security group for the Bastion Host',
+        allowAllOutbound: true,
+      }
+    );
     bastionSecurityGroup.addIngressRule(
       ec2.Peer.ipv4(bastionSourceIp),
       ec2.Port.tcp(22),
@@ -81,7 +89,7 @@ export class MigrationStack extends cdk.Stack {
     );
 
     // 3. EC2 Instances
-    
+
     // AMI for EC2 Instances
     const ami = ec2.MachineImage.latestAmazonLinux2({
       cpuType: ec2.AmazonLinuxCpuType.X86_64,
@@ -89,7 +97,10 @@ export class MigrationStack extends cdk.Stack {
 
     const webTierAsg = new autoscaling.AutoScalingGroup(this, 'WebTierASG', {
       vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.MICRO
+      ),
       machineImage: ami,
       securityGroup: webTierSecurityGroup,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -127,15 +138,19 @@ export class MigrationStack extends cdk.Stack {
       open: true,
     });
 
-    const targetGroup = new elbv2.ApplicationTargetGroup(this, 'WebTierTargetGroup', {
-      vpc,
-      port: 80,
-      targets: [webTierAsg],
-      healthCheck: {
-        path: '/',
-        interval: cdk.Duration.seconds(30),
-      },
-    });
+    const targetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'WebTierTargetGroup',
+      {
+        vpc,
+        port: 80,
+        targets: [webTierAsg],
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+        },
+      }
+    );
 
     listener.addTargetGroups('DefaultTargetGroup', {
       targetGroups: [targetGroup],
@@ -158,7 +173,10 @@ export class MigrationStack extends cdk.Stack {
 
     const bastionHost = new ec2.Instance(this, 'BastionHost', {
       vpc,
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.NANO),
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T3,
+        ec2.InstanceSize.NANO
+      ),
       machineImage: ami,
       securityGroup: bastionSecurityGroup,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
@@ -181,7 +199,7 @@ export class MigrationStack extends cdk.Stack {
       value: alb.loadBalancerDnsName,
       description: 'The DNS name of the load balancer',
     });
-    
+
     new cdk.CfnOutput(this, 'BastionInstanceId', {
       value: bastionHost.instanceId,
       description: 'The ID of the bastion host instance',
