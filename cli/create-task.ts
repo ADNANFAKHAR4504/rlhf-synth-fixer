@@ -104,6 +104,69 @@ function getLanguageChoices(platform: string) {
   ];
 }
 
+const SUBTASK_CHOICES = [
+  { name: 'Cloud Environment Setup', value: 'Cloud Environment Setup' },
+  { name: 'Environment Migration', value: 'Environment Migration' },
+  {
+    name: 'Multi-Environment Consistency',
+    value: 'Multi-Environment Consistency',
+  },
+  { name: 'Web Application Deployment', value: 'Web Application Deployment' },
+
+  {
+    name: 'Serverless Infrastructure (Functions as Code)',
+    value: 'Serverless Infrastructure (Functions as Code)',
+  },
+
+  { name: 'CI/CD Pipeline', value: 'CI/CD Pipeline' },
+
+  { name: 'Failure Recovery Automation', value: 'Failure Recovery Automation' },
+
+  {
+    name: 'Security Configuration as Code',
+    value: 'Security Configuration as Code',
+  },
+
+  { name: 'IaC Diagnosis/Edits', value: 'IaC Diagnosis/Edits' },
+  { name: 'IaC Optimization', value: 'IaC Optimization' },
+
+  {
+    name: 'Infrastructure Analysis/Monitoring',
+    value: 'Infrastructure Analysis/Monitoring',
+  },
+  {
+    name: 'General Infrastructure Tooling QA',
+    value: 'General Infrastructure Tooling QA',
+  },
+] as const;
+
+const subjectLabelsBySubtask: Record<string, string> = {
+  'Environment Migration': 'Provisioning of Infrastructure Environments',
+  'Cloud Environment Setup': 'Provisioning of Infrastructure Environments',
+  'Multi-Environment Consistency':
+    'Provisioning of Infrastructure Environments',
+  'Web Application Deployment': 'Provisioning of Infrastructure Environments',
+
+  'Serverless Infrastructure (Functions as Code)': 'Application Deployment',
+
+  'CI/CD Pipeline': 'CI/CD Pipeline',
+
+  'Failure Recovery Automation': 'Failure Recovery and High Availability',
+
+  'Security Configuration as Code': 'Security, Compliance and Governance',
+
+  'IaC Diagnosis/Edits': 'IaC Program Optimization',
+  'IaC Optimization': 'IaC Program Optimization',
+
+  'Infrastructure Analysis/Monitoring': 'IaC Program Optimization',
+  'General Infrastructure Tooling QA': 'Infrastructure QA and Management',
+};
+
+const ANALYSIS_SUBTASKS = new Set<string>([
+  'Infrastructure Analysis/Monitoring',
+  'General Infrastructure Tooling QA',
+]);
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
@@ -119,42 +182,16 @@ async function main(): Promise<void> {
     console.log('🔧 TAP Template Selector\n');
 
     const taskSubCategory = await select({
-      message: 'Select the Task Sub-category:',
-      choices: [
-        {
-          name: 'IaC-Cloud-Environment-Setup',
-          value: 'IaC-Cloud-Environment-Setup',
-        },
-        { name: 'IaC-Cloud-Migration', value: 'IaC-Cloud-Migration' },
-        {
-          name: 'IaC-Multi-Environment-Management',
-          value: 'IaC-Multi-Environment-Management',
-        },
-        {
-          name: 'IaC-Application-Deployment',
-          value: 'IaC-Application-Deployment',
-        },
-        {
-          name: 'IaC-Serverless-Architecture',
-          value: 'IaC-Serverless-Architecture',
-        },
-        {
-          name: 'IaC-Failure-Recovery-Automation',
-          value: 'IaC-Failure-Recovery-Automation',
-        },
-        { name: 'IaC-Security-Hardening', value: 'IaC-Security-Hardening' },
-        { name: 'IaC-Analysis/Monitoring', value: 'IaC-Analysis/Monitoring' },
-        {
-          name: 'IaC-Code-Review-Diagnosis',
-          value: 'IaC-Code-Review-Diagnosis',
-        },
-      ],
+      message: 'Select the Subtask:',
+      choices: SUBTASK_CHOICES,
     });
+
+    const isAnalysis = ANALYSIS_SUBTASKS.has(taskSubCategory);
 
     let platform = '';
     let language = '';
 
-    if (taskSubCategory === 'IaC-Analysis/Monitoring') {
+    if (isAnalysis) {
       platform = 'analysis';
       const analysisChoice = await select({
         message: 'Select analysis template type:',
@@ -222,23 +259,8 @@ async function main(): Promise<void> {
       ],
     });
 
-    const subCatToUseCase: Record<string, string> = {
-      'IaC-Cloud-Environment-Setup': 'Provisioning Infrastructure Environments',
-      'IaC-Cloud-Migration': 'Environment Migration',
-      'IaC-Multi-Environment-Management':
-        'Multi-Environment Consistency and Replication',
-      'IaC-Application-Deployment': 'Web Application Deployment',
-      'IaC-Serverless-Architecture':
-        'Serverless Infrastructure (Functions as Code)',
-      'IaC-Failure-Recovery-Automation':
-        'Failure Recovery and High Availability',
-      'IaC-Security-Hardening': 'Security, Compliance, and Governance',
-      'IaC-Analysis/Monitoring': 'Infrastructure QA and Management',
-      'IaC-Code-Review-Diagnosis': 'Infrastructure QA and Management',
-    };
-
     let resourcesText: string | undefined = undefined;
-    if (taskSubCategory !== 'IaC-Analysis/Monitoring') {
+    if (!isAnalysis) {
       resourcesText = await input({
         message:
           'Enter aws_services to provision (comma-separated). e.g., S3 Bucket, CloudFormation, Lambda, Fargate, VPC',
@@ -247,12 +269,11 @@ async function main(): Promise<void> {
       });
     }
 
-    const templateName =
-      taskSubCategory === 'IaC-Analysis/Monitoring'
-        ? `analysis-${language}`
-        : `${platform}-${language}`;
+    const templateName = isAnalysis
+      ? `analysis-${language}`
+      : `${platform}-${language}`;
 
-    if (taskSubCategory !== 'IaC-Analysis/Monitoring') {
+    if (!isAnalysis) {
       const templatesDir = path.join(__dirname, '..', 'templates');
       const templatePath = path.join(templatesDir, templateName);
       if (!(await fs.pathExists(templatePath))) {
@@ -263,6 +284,7 @@ async function main(): Promise<void> {
       }
     }
 
+    const label = subjectLabelsBySubtask[taskSubCategory];
     const metadata: TaskMetadata = {
       platform,
       language,
@@ -272,13 +294,15 @@ async function main(): Promise<void> {
       team,
       startedAt: new Date().toISOString(),
       subtask: taskSubCategory,
-      subject_labels: [subCatToUseCase[taskSubCategory]],
+      ...(label ? { subject_labels: [label] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? { aws_services: resourcesText.trim() }
         : {}),
     };
 
     console.log('\n📋 Task Summary:');
+    console.log(`Subtask: ${taskSubCategory}`);
+    console.log(`Subject Labels: ${label ? `[${label}]` : '[]'}`);
     console.log(`Platform: ${platform}`);
     console.log(`Language: ${language}`);
     console.log(`Complexity: ${complexity}`);
@@ -286,7 +310,6 @@ async function main(): Promise<void> {
     console.log(`Task ID: ${taskId}`);
     console.log(`Team: ${team}`);
     console.log(`Template: ${templateName}`);
-    console.log(`Task Sub-category: ${taskSubCategory}`);
 
     const confirmApply = await confirm({
       message:
