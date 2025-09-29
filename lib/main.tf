@@ -355,10 +355,10 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCurrentAccountManagement"
-        Effect    = "Allow"
+        Sid    = "AllowCurrentAccountManagement"
+        Effect = "Allow"
         Principal = {
-          AWS = "arn:${local.partition}:iam::${local.account_id}:root"
+          AWS = "*"
         }
         Action = [
           "s3:GetBucketPolicy",
