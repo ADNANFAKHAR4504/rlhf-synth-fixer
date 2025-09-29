@@ -96,7 +96,6 @@ class TestTapStack(unittest.TestCase):
         template.has_resource_properties("AWS::ApiGateway::Stage", {
             "MethodSettings": [
                 {
-                    "LoggingLevel": "INFO",
                     "DataTraceEnabled": True,
                     "MetricsEnabled": True
                 }

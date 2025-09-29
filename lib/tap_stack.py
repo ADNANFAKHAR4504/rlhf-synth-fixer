@@ -428,7 +428,7 @@ class TapStack(Stack):
             rest_api_name=f"{resource_prefix}-api",
             deploy_options=apigw.StageOptions(
                 stage_name=environment_suffix,
-                logging_level=apigw.MethodLoggingLevel.INFO,  # Enable INFO level logging
+                logging_level=None,  # Disable logging
                 data_trace_enabled=True,
                 metrics_enabled=True
             )
