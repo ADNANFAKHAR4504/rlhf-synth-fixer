@@ -320,6 +320,7 @@ resource "aws_s3_bucket" "main" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+  count  = var.enable_s3_controls ? 1 : 0
   bucket = aws_s3_bucket.main.id
 
   rule {
@@ -332,6 +333,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 }
 
 resource "aws_s3_bucket_public_access_block" "main" {
+  count  = var.enable_s3_controls ? 1 : 0
   bucket = aws_s3_bucket.main.id
 
   block_public_acls       = true
@@ -341,6 +343,7 @@ resource "aws_s3_bucket_public_access_block" "main" {
 }
 
 resource "aws_s3_bucket_versioning" "main" {
+  count  = var.enable_s3_controls ? 1 : 0
   bucket = aws_s3_bucket.main.id
 
   versioning_configuration {
@@ -385,11 +388,7 @@ resource "aws_s3_bucket_policy" "main" {
     ]
   })
 
-  depends_on = [
-    aws_s3_bucket_server_side_encryption_configuration.main,
-    aws_s3_bucket_public_access_block.main,
-    aws_s3_bucket_versioning.main
-  ]
+  # Do not depend on S3 control-plane resources when disabled
 }
 
 # CloudTrail S3 Bucket

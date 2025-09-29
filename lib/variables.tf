@@ -92,4 +92,10 @@ variable "tags" {
   }
 }
 
+variable "enable_s3_controls" {
+  description = "If true, manage S3 bucket SSE config, public access block, and versioning via control-plane APIs"
+  type        = bool
+  default     = false
+}
+
 
