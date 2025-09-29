@@ -29,6 +29,7 @@ export class AppStack extends Stack {
     Tags.of(this).add('Project', prefix);
     Tags.of(this).add('Environment', environment);
     Tags.of(this).add('ManagedBy', 'CDK');
+    Tags.of(this).add('iac-rlhf-amazon', 'true');
 
     // Create storage resources
     const storage = new StorageConstruct(this, 'Storage', {

@@ -20,12 +20,8 @@ const metrics = new Metrics({
 });
 const tracer = new Tracer({ serviceName: process.env.POWERTOOLS_SERVICE_NAME });
 
-const s3Client = tracer.captureAWSv3Client(
-  new S3Client({ region: 'us-west-2' })
-);
-const dynamoClient = tracer.captureAWSv3Client(
-  new DynamoDBClient({ region: 'us-west-2' })
-);
+const s3Client = tracer.captureAWSv3Client(new S3Client({}));
+const dynamoClient = tracer.captureAWSv3Client(new DynamoDBClient({}));
 
 const BUCKET_NAME = process.env.BUCKET_NAME!;
 const TABLE_NAME = process.env.TABLE_NAME!;
