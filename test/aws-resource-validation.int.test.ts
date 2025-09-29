@@ -170,17 +170,45 @@ describe('AWS Resource Validation - Integration Tests', () => {
     test('Lambda function has CloudWatch metrics available', async () => {
       const functionName = outputs.LambdaFunctionName;
 
-      const command = new ListMetricsCommand({
-        Namespace: 'AWS/Lambda',
-        Dimensions: [
-          {
-            Name: 'FunctionName',
-            Value: functionName,
-          },
-        ],
-      });
+      // Helper function to wait for metrics with timeout
+      const waitForMetrics = async (maxWaitTime: number = 120000): Promise<any> => {
+        const startTime = Date.now();
+        const pollInterval = 10000; // 10 seconds
 
-      const response = await cloudWatchClient.send(command);
+        while (Date.now() - startTime < maxWaitTime) {
+          const command = new ListMetricsCommand({
+            Namespace: 'AWS/Lambda',
+            Dimensions: [
+              {
+                Name: 'FunctionName',
+                Value: functionName,
+              },
+            ],
+          });
+
+          const response = await cloudWatchClient.send(command);
+
+          // Check if Invocations metric is available
+          const invocationsMetric = response.Metrics?.find(
+            metric => metric.MetricName === 'Invocations'
+          );
+
+          if (invocationsMetric) {
+            return response;
+          }
+
+          // If metrics not found and still within timeout, wait and retry
+          if (Date.now() - startTime < maxWaitTime - pollInterval) {
+            console.log(`CloudWatch metrics not yet available for ${functionName}. Waiting ${pollInterval/1000}s before retry...`);
+            await new Promise(resolve => setTimeout(resolve, pollInterval));
+          }
+        }
+
+        throw new Error(`CloudWatch metrics for Lambda function ${functionName} not available after ${maxWaitTime/1000} seconds`);
+      };
+
+      // Wait up to 2 minutes for metrics to become available
+      const response = await waitForMetrics(120000);
       expect(response.Metrics).toBeDefined();
 
       // Should have basic Lambda metrics available
@@ -188,7 +216,7 @@ describe('AWS Resource Validation - Integration Tests', () => {
         metric => metric.MetricName === 'Invocations'
       );
       expect(invocationsMetric).toBeDefined();
-    });
+    }, 150000); // Increase Jest timeout to 2.5 minutes to account for wait time
 
     test('API Gateway has CloudWatch metrics available', async () => {
       const apiId = outputs.APIGatewayId;
