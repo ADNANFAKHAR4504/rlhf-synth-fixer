@@ -47,6 +47,7 @@ class TapStackProps implements StackProps {
     private final String secondaryRegion;
     private final String domainName;
     private final boolean isPrimary;
+    private final String environmentSuffix;
 
     private TapStackProps(Builder builder) {
         this.environment = builder.environment;
@@ -56,6 +57,7 @@ class TapStackProps implements StackProps {
         this.secondaryRegion = builder.secondaryRegion;
         this.domainName = builder.domainName;
         this.isPrimary = builder.isPrimary;
+        this.environmentSuffix = builder.environmentSuffix;
     }
 
     @Override
@@ -89,6 +91,10 @@ class TapStackProps implements StackProps {
         return isPrimary;
     }
 
+    public String getEnvironmentSuffix() {
+        return environmentSuffix;
+    }
+
     public static Builder builder() {
         return new Builder();
     }
@@ -101,6 +107,7 @@ class TapStackProps implements StackProps {
         private String secondaryRegion;
         private String domainName;
         private boolean isPrimary;
+        private String environmentSuffix;
 
         public Builder environment(Environment environment) {
             this.environment = environment;
@@ -137,6 +144,11 @@ class TapStackProps implements StackProps {
             return this;
         }
 
+        public Builder environmentSuffix(String environmentSuffix) {
+            this.environmentSuffix = environmentSuffix;
+            return this;
+        }
+
         public TapStackProps build() {
             return new TapStackProps(this);
         }
@@ -150,9 +162,13 @@ class TapStack extends Stack {
     private Bucket dataBucket;
     private ApplicationLoadBalancer loadBalancer;
     private CfnHealthCheck healthCheck;
+    private String environmentSuffix;
 
     public TapStack(final App scope, final String id, final TapStackProps props) {
         super(scope, id, props);
+
+        // Store environment suffix
+        this.environmentSuffix = props.getEnvironmentSuffix() != null ? props.getEnvironmentSuffix() : "dev";
 
         // Create VPC
         Vpc vpc = new Vpc(this, "VPC", VpcProps.builder()
@@ -457,6 +473,10 @@ class TapStack extends Stack {
     public CfnHealthCheck getHealthCheck() {
         return healthCheck;
     }
+
+    public String getEnvironmentSuffix() {
+        return environmentSuffix;
+    }
 }
 
 /**
@@ -470,6 +490,12 @@ public class Main {
         String primaryRegion = (String) app.getNode().tryGetContext("primary_region");
         if (primaryRegion == null || primaryRegion.isEmpty()) {
             primaryRegion = "us-east-1";
+        }
+
+        // Get environment suffix from context or default to "dev"
+        String environmentSuffix = (String) app.getNode().tryGetContext("environmentSuffix");
+        if (environmentSuffix == null || environmentSuffix.isEmpty()) {
+            environmentSuffix = "dev";
         }
 
         String secondaryRegion = primaryRegion.equals("us-east-1") ? "us-west-2" : "us-east-1";
@@ -497,6 +523,7 @@ public class Main {
                 .secondaryRegion("us-west-2")
                 .domainName("joshteamgifted.com")
                 .isPrimary(isPrimary)
+                .environmentSuffix(environmentSuffix)
                 .build();
 
         TapStack stack = new TapStack(app, "TapStack", stackProps);
