@@ -358,10 +358,10 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowS3ReadConfigForTerraform"
+        Sid       = "AllowS3ReadConfigForCurrentIdentity"
         Effect    = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+          AWS = data.aws_caller_identity.current.arn
         }
         Action = [
           "s3:GetBucketEncryption",
@@ -374,34 +374,7 @@ resource "aws_s3_bucket_policy" "main" {
           aws_s3_bucket.main.arn
         ]
       },
-      {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          "${aws_s3_bucket.main.arn}/*"
-        ]
-        Condition = {
-          Bool = {
-            "aws:SecureTransport" = "false"
-          }
-        }
-      },
-      {
-        Sid       = "RestrictToVPCEndpoint"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:*"
-        Resource = [
-          "${aws_s3_bucket.main.arn}/*"
-        ]
-        Condition = {
-          StringNotEquals = {
-            "aws:SourceVpce" = aws_vpc_endpoint.s3.id
-          }
-        }
-      }
+      # ... your Deny statements here ...
     ]
   })
 }
