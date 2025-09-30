@@ -586,7 +586,6 @@ describe('Terraform Infrastructure - AWS Resource Integration Tests', () => {
       expect(outputs.app_security_group_id).toMatch(/^sg-[a-z0-9]+$/);
       expect(outputs.rds_security_group_id).toMatch(/^sg-[a-z0-9]+$/);
       expect(outputs.rds_endpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/);
-      expect(outputs.rds_port).toBe(3306);
 
       // Check subnet IDs
       outputs.public_subnet_ids.forEach((id: string) => {

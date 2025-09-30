@@ -1,9 +1,7 @@
 ```hcl
-
 # ===========================
 # TERRAFORM VERSION
 # ===========================
-
 terraform {
   required_version = ">= 1.5.0"
 }
@@ -11,6 +9,17 @@ terraform {
 # ===========================
 # VARIABLES
 # ===========================
+
+variable "aws_region" {
+  description = "AWS region to deploy resources"
+  type        = string
+  default     = "us-east-1"
+
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[1-9]{1}$", var.aws_region))
+    error_message = "AWS region must be in the format: aa-bbbb-#, e.g., us-east-1, eu-west-2, ap-southeast-1"
+  }
+}
 
 variable "name_prefix" {
   description = "Prefix for resource names"
@@ -68,7 +77,7 @@ variable "db_max_allocated_storage" {
 variable "db_engine_version" {
   description = "MySQL engine version"
   type        = string
-  default     = "8.0.35"
+  default     = "8.0"  # Latest stable version supported in RDS as of Sept 2025
 
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", var.db_engine_version))
@@ -395,8 +404,9 @@ resource "aws_security_group" "rds" {
 # ===========================
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.name_prefix}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
+  name_prefix = "${var.name_prefix}-"
+  subnet_ids  = aws_subnet.private[*].id
+  description = "Subnet group for RDS instance"
 
   tags = merge(
     local.common_tags,
@@ -404,6 +414,10 @@ resource "aws_db_subnet_group" "main" {
       Name = "${var.name_prefix}-db-subnet-group"
     }
   )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ===========================
@@ -411,11 +425,17 @@ resource "aws_db_subnet_group" "main" {
 # ===========================
 
 resource "aws_db_instance" "mysql" {
-  identifier = "${var.name_prefix}-mysql"
+  identifier = "${var.name_prefix}-mysql-${var.aws_region}"
 
   # Engine Configuration
   engine         = "mysql"
   engine_version = var.db_engine_version
+
+  # Wait for NAT Gateway to be ready
+  depends_on = [
+    aws_nat_gateway.main,
+    aws_route_table_association.private
+  ]
 
   # Instance Configuration
   instance_class        = var.db_instance_class
@@ -473,14 +493,27 @@ resource "aws_db_instance" "mysql" {
 # OUTPUTS
 # ===========================
 
+output "aws_region" {
+  description = "The AWS region where resources are deployed"
+  value       = var.aws_region
+}
+
 output "rds_endpoint" {
   description = "The connection endpoint for the RDS instance"
   value       = aws_db_instance.mysql.endpoint
+  depends_on  = [aws_db_instance.mysql]
 }
 
 output "rds_port" {
   description = "The port on which the RDS instance is listening"
   value       = aws_db_instance.mysql.port
+  depends_on  = [aws_db_instance.mysql]
+}
+
+output "rds_instance_id" {
+  description = "The ID of the RDS instance"
+  value       = aws_db_instance.mysql.id
+  depends_on  = [aws_db_instance.mysql]
 }
 
 output "vpc_id" {
