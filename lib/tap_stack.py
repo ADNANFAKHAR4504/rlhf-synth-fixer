@@ -69,7 +69,7 @@ class TapStack(pulumi.ComponentResource):
             "lambda_function_name": self.infrastructure["lambda_function"].name,
             "lambda_function_arn": self.infrastructure["lambda_function"].arn,
             "api_gateway_id": self.infrastructure["api_gateway"].id,
-            "api_gateway_url": self.infrastructure["api_gateway"].id.apply(lambda api_id: f"https://{api_id}.execute-api.us-east-1.amazonaws.com/dev/api"),
+            "api_gateway_url": self.infrastructure["api_gateway"].id.apply(lambda api_id: "https://" + api_id + ".execute-api.us-east-1.amazonaws.com/dev/api"),
             "s3_bucket_name": self.infrastructure["logs_bucket"].id,
             "s3_bucket_arn": self.infrastructure["logs_bucket"].arn,
             "dlq_url": self.infrastructure["dlq"].id,
@@ -79,6 +79,6 @@ class TapStack(pulumi.ComponentResource):
             "environment_variables": self.infrastructure["lambda_function"].environment.variables,
             "failover_function_name": self.infrastructure["failover_function"].name,
             "failover_function_arn": self.infrastructure["failover_function"].arn,
-            "parameter_prefix": self.infrastructure["lambda_function"].name.apply(lambda name: f"/{name}"),
+            "parameter_prefix": self.infrastructure["lambda_function"].name.apply(lambda name: "/" + name),
             "dashboard_url": self.infrastructure["dashboard"].dashboard_name
         })

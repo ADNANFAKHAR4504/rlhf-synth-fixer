@@ -23,7 +23,7 @@ class ServerlessConfig:
         self.environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
         
         # Generate names using environment suffix
-        self.s3_bucket_name = self.config.get("s3_bucket_name") or f"sa-{self.environment_suffix}-logs-{pulumi.get_stack()[:8]}"
+        self.s3_bucket_name = self.config.get("s3_bucket_name") or f"sa-{self.environment_suffix}-{pulumi.get_stack()[:6]}"
         self.lambda_function_name = self.config.get("lambda_function_name") or f"serverless-app-{self.environment_suffix}"
         self.custom_domain_name = self.config.get("custom_domain_name") or f"api-{self.environment_suffix}.example.com"
         
