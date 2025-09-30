@@ -549,7 +549,7 @@ export class S3Module extends Construct {
                 's3:x-amz-server-side-encryption': 'aws:kms',
                 's3:x-amz-server-side-encryption-aws-kms-key-id':
                   props.kmsKeyId,
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail'}`,
+                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
               },
             },
           },
@@ -563,7 +563,7 @@ export class S3Module extends Construct {
             Resource: `arn:aws:s3:::${props.cloudtrailBucketName}`,
             Condition: {
               StringEquals: {
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail'}`,
+                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
               },
             },
           },
