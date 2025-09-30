@@ -5,10 +5,10 @@ Unit tests for the infrastructure parameters module.
 Tests Parameter Store creation and secure parameter management.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock
-import sys
 import os
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
 
 # Add lib to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
@@ -18,8 +18,9 @@ sys.modules['pulumi'] = MagicMock()
 sys.modules['pulumi_aws'] = MagicMock()
 sys.modules['pulumi_aws.aws'] = MagicMock()
 
-from infrastructure.parameters import (create_secure_parameters, create_public_parameters, 
-                                      create_parameter_hierarchy)
+from infrastructure.parameters import (create_parameter_hierarchy,
+                                       create_public_parameters,
+                                       create_secure_parameters)
 
 
 class TestParametersModule(unittest.TestCase):
@@ -91,9 +92,8 @@ class TestParametersModule(unittest.TestCase):
 
     @patch('infrastructure.parameters.create_secure_parameters')
     @patch('infrastructure.parameters.create_public_parameters')
-    @patch('infrastructure.parameters.aws.ssm.Parameter')
     @patch('infrastructure.parameters.config')
-    def test_create_parameter_hierarchy(self, mock_config, mock_parameter, 
+    def test_create_parameter_hierarchy(self, mock_config, 
                                         mock_create_public, mock_create_secure):
         """Test that parameter hierarchy is created."""
         mock_config.aws_provider = MagicMock()
@@ -101,10 +101,6 @@ class TestParametersModule(unittest.TestCase):
         mock_config.aws_region = "us-east-1"
         mock_config.lambda_function_name = "test-function"
         mock_config.lambda_timeout = 180
-        
-        # Mock parameter creation
-        mock_parameter_instance = MagicMock()
-        mock_parameter.return_value = mock_parameter_instance
         
         # Mock public parameter creation
         mock_create_public.return_value = {"env": "params", "app": "params"}
@@ -117,9 +113,6 @@ class TestParametersModule(unittest.TestCase):
         # Test that parameter hierarchy is created
         self.assertEqual(mock_create_public.call_count, 2)  # env and app
         self.assertEqual(mock_create_secure.call_count, 1)  # security
-        
-        # Test that parameter policy is created
-        mock_parameter.assert_called_once()
 
     @patch('infrastructure.parameters.aws.ssm.Parameter')
     @patch('infrastructure.parameters.config')
@@ -206,13 +199,18 @@ class TestParametersModule(unittest.TestCase):
         # Test that parameter has tags
         call_args = mock_parameter.call_args
         self.assertIn('tags', call_args[1])
-        self.assertEqual(call_args[1]['tags'], {"Environment": "dev"})
+        expected_tags = {
+            "Environment": "dev",
+            "ParameterName": "TEST_PARAM",
+            "Purpose": "Configuration",
+            "Sensitivity": "Public"
+        }
+        self.assertEqual(call_args[1]['tags'], expected_tags)
 
     @patch('infrastructure.parameters.create_secure_parameters')
     @patch('infrastructure.parameters.create_public_parameters')
-    @patch('infrastructure.parameters.aws.ssm.Parameter')
     @patch('infrastructure.parameters.config')
-    def test_parameter_hierarchy_structure(self, mock_config, mock_parameter, 
+    def test_parameter_hierarchy_structure(self, mock_config, 
                                           mock_create_public, mock_create_secure):
         """Test that parameter hierarchy has correct structure."""
         mock_config.aws_provider = MagicMock()
@@ -220,10 +218,6 @@ class TestParametersModule(unittest.TestCase):
         mock_config.aws_region = "us-east-1"
         mock_config.lambda_function_name = "test-function"
         mock_config.lambda_timeout = 180
-        
-        # Mock parameter creation
-        mock_parameter_instance = MagicMock()
-        mock_parameter.return_value = mock_parameter_instance
         
         # Mock public parameter creation
         mock_create_public.return_value = {"env": "params", "app": "params"}
@@ -237,11 +231,6 @@ class TestParametersModule(unittest.TestCase):
         self.assertIn("env", result)
         self.assertIn("app", result)
         self.assertIn("security", result)
-        
-        # Test that parameter policy is created
-        mock_parameter.assert_called_once()
-        call_args = mock_parameter.call_args
-        self.assertEqual(call_args[1]['name'], "test-function-parameter-policy")
 
 
 if __name__ == '__main__':

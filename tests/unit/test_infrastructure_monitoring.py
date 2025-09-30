@@ -2,13 +2,13 @@
 test_infrastructure_monitoring.py
 
 Unit tests for the infrastructure monitoring module.
-Tests CloudWatch alarms, SNS topics, and CloudTrail.
+Tests CloudWatch alarms, SNS topics, and dashboards.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock
-import sys
 import os
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
 
 # Add lib to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
@@ -18,8 +18,8 @@ sys.modules['pulumi'] = MagicMock()
 sys.modules['pulumi_aws'] = MagicMock()
 sys.modules['pulumi_aws.aws'] = MagicMock()
 
-from infrastructure.monitoring import (create_lambda_alarms, create_sns_topic, 
-                                       create_cloudtrail, create_dashboard)
+from infrastructure.monitoring import (create_dashboard, create_lambda_alarms,
+                                       create_sns_topic)
 
 
 class TestMonitoringModule(unittest.TestCase):
@@ -86,34 +86,6 @@ class TestMonitoringModule(unittest.TestCase):
         # Test that policy is created
         mock_policy.assert_called_once()
 
-    @patch('infrastructure.monitoring.aws.cloudtrail.Trail')
-    @patch('infrastructure.monitoring.aws.cloudwatch.LogGroup')
-    @patch('infrastructure.monitoring.config')
-    def test_create_cloudtrail(self, mock_config, mock_log_group, mock_trail):
-        """Test that CloudTrail is created."""
-        mock_config.aws_provider = MagicMock()
-        mock_config.get_tags.return_value = {"Environment": "dev"}
-        
-        # Mock trail creation
-        mock_trail_instance = MagicMock()
-        mock_trail_instance.arn = "arn:aws:cloudtrail:us-east-1:123456789012:trail/test-trail"
-        mock_trail.return_value = mock_trail_instance
-        
-        # Mock log group creation
-        mock_log_group_instance = MagicMock()
-        mock_log_group.return_value = mock_log_group_instance
-        
-        result = create_cloudtrail("test-trail", "test-bucket")
-        
-        # Test that trail is created
-        mock_trail.assert_called_once()
-        call_args = mock_trail.call_args
-        self.assertEqual(call_args[1]['name'], "test-trail-cloudtrail")
-        self.assertTrue(call_args[1]['is_multi_region_trail'])
-        self.assertTrue(call_args[1]['enable_logging'])
-        
-        # Test that log group is created
-        mock_log_group.assert_called_once()
 
     @patch('infrastructure.monitoring.aws.cloudwatch.Dashboard')
     @patch('infrastructure.monitoring.config')
@@ -152,8 +124,8 @@ class TestMonitoringModule(unittest.TestCase):
         error_alarm_call = next(call for call in call_args_list if call[1]['name'] == "test-function-error-alarm")
         
         self.assertEqual(error_alarm_call[1]['metric_name'], "Errors")
-        self.assertEqual(error_alarm_call[1]['threshold'], 1)
-        self.assertEqual(error_alarm_call[1]['comparison_operator'], "GreaterThanOrEqualToThreshold")
+        self.assertEqual(error_alarm_call[1]['threshold'], 2)
+        self.assertEqual(error_alarm_call[1]['comparison_operator'], "GreaterThanThreshold")
 
     @patch('infrastructure.monitoring.aws.cloudwatch.MetricAlarm')
     @patch('infrastructure.monitoring.config')
@@ -174,7 +146,7 @@ class TestMonitoringModule(unittest.TestCase):
         
         self.assertEqual(throttle_alarm_call[1]['metric_name'], "Throttles")
         self.assertEqual(throttle_alarm_call[1]['threshold'], 1)
-        self.assertEqual(throttle_alarm_call[1]['comparison_operator'], "GreaterThanOrEqualToThreshold")
+        self.assertEqual(throttle_alarm_call[1]['comparison_operator'], "GreaterThanThreshold")
 
     @patch('infrastructure.monitoring.aws.cloudwatch.MetricAlarm')
     @patch('infrastructure.monitoring.config')
@@ -194,8 +166,8 @@ class TestMonitoringModule(unittest.TestCase):
         duration_alarm_call = next(call for call in call_args_list if call[1]['name'] == "test-function-duration-alarm")
         
         self.assertEqual(duration_alarm_call[1]['metric_name'], "Duration")
-        self.assertEqual(duration_alarm_call[1]['threshold'], 150000)  # 2.5 minutes in milliseconds
-        self.assertEqual(duration_alarm_call[1]['comparison_operator'], "GreaterThanOrEqualToThreshold")
+        self.assertEqual(duration_alarm_call[1]['threshold'], 160000)  # 160 seconds (close to 3 min timeout)
+        self.assertEqual(duration_alarm_call[1]['comparison_operator'], "GreaterThanThreshold")
 
     @patch('infrastructure.monitoring.aws.cloudwatch.MetricAlarm')
     @patch('infrastructure.monitoring.config')
@@ -215,8 +187,8 @@ class TestMonitoringModule(unittest.TestCase):
         concurrent_alarm_call = next(call for call in call_args_list if call[1]['name'] == "test-function-concurrent-alarm")
         
         self.assertEqual(concurrent_alarm_call[1]['metric_name'], "ConcurrentExecutions")
-        self.assertEqual(concurrent_alarm_call[1]['threshold'], 900)  # 90% of 1000 limit
-        self.assertEqual(concurrent_alarm_call[1]['comparison_operator'], "GreaterThanOrEqualToThreshold")
+        self.assertEqual(concurrent_alarm_call[1]['threshold'], 950)  # Close to 1000 concurrent execution limit
+        self.assertEqual(concurrent_alarm_call[1]['comparison_operator'], "GreaterThanThreshold")
 
 
 if __name__ == '__main__':

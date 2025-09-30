@@ -24,12 +24,13 @@ def create_secure_parameters(name: str, parameters: dict):
     ssm_parameters = {}
     
     for param_name, param_value in parameters.items():
-        # Create secure string parameter
+        # Create secure string parameter with KMS encryption
         ssm_param = aws.ssm.Parameter(
             f"{name}-{param_name}",
             name=f"/{name}/{param_name}",
             type="SecureString",
             value=param_value,
+            key_id="alias/aws/ssm",  # Use AWS managed key for SSM
             description=f"Secure parameter for {name} - {param_name}",
             tags={
                 **config.get_tags(),
