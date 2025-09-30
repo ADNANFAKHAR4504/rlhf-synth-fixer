@@ -89,8 +89,8 @@ Resources:
     Properties:
       BucketName: !If
         - HasDomainName
-        - !Sub '${DomainName}-logs-${EnvironmentSuffix}-${AWS::AccountId}'
-        - !Sub '${AWS::StackName}-logs-${EnvironmentSuffix}-${AWS::AccountId}'
+        - !Sub '${DomainName}-logs-${AWS::AccountId}'
+        - !Join ['-', [!Ref 'AWS::StackName', 'logs', !Ref 'AWS::AccountId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -145,8 +145,8 @@ Resources:
     Properties:
       BucketName: !If
         - HasDomainName
-        - !Sub '${DomainName}-static-website-${EnvironmentSuffix}-${AWS::AccountId}'
-        - !Sub '${AWS::StackName}-website-${EnvironmentSuffix}-${AWS::AccountId}'
+        - !Sub '${DomainName}-static-website-${AWS::AccountId}'
+        - !Join ['-', [!Ref 'AWS::StackName', 'website', !Ref 'AWS::AccountId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -196,6 +196,9 @@ Resources:
               Service: cloudfront.amazonaws.com
             Action: 's3:GetObject'
             Resource: !Sub '${WebsiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref AWS::AccountId
 
   # CloudFront Distribution (with Domain & SSL)
   CloudFrontDistributionSSLWithDomain:
