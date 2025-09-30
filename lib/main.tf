@@ -1,8 +1,15 @@
 # ===========================
 # TERRAFORM VERSION
-# ===========================
-
-terraform {
+# ========================variable "db_engine_version" {
+  description = "MySQL engine version"
+  type        = string
+  default     = "8.0.28"  # Latest stable version supported in RDS as of Sept 2025
+  
+  validation {
+    condition     = can(regex("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", var.db_engine_version))
+    error_message = "Engine version must be in format X.Y or X.Y.Z"
+  }
+}form {
   required_version = ">= 1.5.0"
 }
 

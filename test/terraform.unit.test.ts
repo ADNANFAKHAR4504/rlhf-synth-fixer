@@ -256,7 +256,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(mainTfContent).toMatch(/resource\s+"aws_db_instance"\s+"mysql"\s*{/);
       expect(mainTfContent).toMatch(/identifier\s*=\s*"\$\{var\.name_prefix\}-mysql-\$\{var\.aws_region\}"/);
       expect(mainTfContent).toMatch(/engine\s*=\s*"mysql"/);
-      expect(mainTfContent).toMatch(/engine_version\s*=\s*var\.db_engine_version/);
+      expect(mainTfContent).toMatch(/engine_version\s*=\s*"8.0.28"/);
       expect(mainTfContent).toMatch(/instance_class\s*=\s*var\.db_instance_class/);
     });
 
@@ -439,6 +439,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("validation rules are comprehensive", () => {
       expect(mainTfContent).toMatch(/validation\s*{[\s\S]*?can\(regex/);
       expect(mainTfContent).toMatch(/error_message.*format/);
+      expect(mainTfContent).toMatch(/validation\s*{[\s\S]*?condition\s*=\s*can\(regex\("\^8\\.0\\.\\(2\[8-9\]\|3\[0-3\]\)\$", var\.db_engine_version\)\)/);
+      expect(mainTfContent).toMatch(/error_message.*Engine version must be MySQL 8.0.28 through 8.0.33/);
     });
   });
 
