@@ -1,15 +1,7 @@
 # ===========================
 # TERRAFORM VERSION
-# ========================variable "db_engine_version" {
-  description = "MySQL engine version"
-  type        = string
-  default     = "8.0.28"  # Latest stable version supported in RDS as of Sept 2025
-  
-  validation {
-    condition     = can(regex("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", var.db_engine_version))
-    error_message = "Engine version must be in format X.Y or X.Y.Z"
-  }
-}form {
+# ===========================
+terraform {
   required_version = ">= 1.5.0"
 }
 
@@ -84,11 +76,11 @@ variable "db_max_allocated_storage" {
 variable "db_engine_version" {
   description = "MySQL engine version"
   type        = string
-  default     = "8.0.33"  # Latest stable version supported in RDS
+  default     = "8.0.28"  # Latest stable version supported in RDS as of Sept 2025
   
   validation {
-    condition     = can(regex("^8\\.0\\.(2[8-9]|3[0-3])$", var.db_engine_version))
-    error_message = "Engine version must be MySQL 8.0.28 through 8.0.33, which are the currently supported versions in RDS"
+    condition     = can(regex("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", var.db_engine_version))
+    error_message = "Engine version must be in format X.Y or X.Y.Z"
   }
 }
 

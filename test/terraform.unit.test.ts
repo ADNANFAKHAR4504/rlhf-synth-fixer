@@ -256,7 +256,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(mainTfContent).toMatch(/resource\s+"aws_db_instance"\s+"mysql"\s*{/);
       expect(mainTfContent).toMatch(/identifier\s*=\s*"\$\{var\.name_prefix\}-mysql-\$\{var\.aws_region\}"/);
       expect(mainTfContent).toMatch(/engine\s*=\s*"mysql"/);
-      expect(mainTfContent).toMatch(/engine_version\s*=\s*"8.0.28"/);
+      expect(mainTfContent).toMatch(/engine_version\s*=\s*var\.db_engine_version/);
       expect(mainTfContent).toMatch(/instance_class\s*=\s*var\.db_instance_class/);
     });
 
