@@ -188,7 +188,7 @@ export class WebAppStack extends cdk.Stack {
       deleteAutomatedBackups: true,
       deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      enablePerformanceInsights: true,
+      enablePerformanceInsights: false,
       monitoringInterval: cdk.Duration.seconds(60),
       monitoringRole: new iam.Role(this, 'RDSMonitoringRole', {
         assumedBy: new iam.ServicePrincipal('monitoring.rds.amazonaws.com'),
