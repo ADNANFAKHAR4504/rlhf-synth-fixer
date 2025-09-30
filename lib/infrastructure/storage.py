@@ -234,18 +234,6 @@ def create_cloudformation_logs_bucket():
                                 "s3:x-amz-acl": "bucket-owner-full-control"
                             }
                         }
-                    },
-                    {
-                        "Sid": "AWSCloudTrailLogDelivery",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": [
-                            "s3:GetBucketAcl",
-                            "s3:ListBucket"
-                        ],
-                        "Resource": args[0]
                     }
                 ]
             })
