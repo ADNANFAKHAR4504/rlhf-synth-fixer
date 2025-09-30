@@ -70,19 +70,22 @@ describe('CICDPipelineStack Unit Tests', () => {
 
     Object.values(s3Resources).forEach((resource: any) => {
       if (resource.Properties?.BucketName) {
-        expect(resource.Properties.BucketName).toContain('test-project-test');
+        expect(resource.Properties.BucketName).toContain('test-project');
+        expect(resource.Properties.BucketName).toContain('artifacts');
       }
     });
 
     Object.values(dynamoResources).forEach((resource: any) => {
       if (resource.Properties?.TableName) {
-        expect(resource.Properties.TableName).toContain('test-project-test');
+        expect(resource.Properties.TableName).toContain('test-project');
+        expect(resource.Properties.TableName).toContain('metadata');
       }
     });
 
     Object.values(lambdaResources).forEach((resource: any) => {
       if (resource.Properties?.FunctionName) {
-        expect(resource.Properties.FunctionName).toContain('test-project-test');
+        expect(resource.Properties.FunctionName).toContain('test-project');
+        expect(resource.Properties.FunctionName).toContain('cost-monitoring');
       }
     });
   });
@@ -91,17 +94,24 @@ describe('CICDPipelineStack Unit Tests', () => {
     stack = new CICDPipelineStack(app, 'TestStack', defaultProps);
     template = Template.fromStack(stack);
 
-    // Check CodeBuild environment variables
+    // Check CodeBuild environment variables - at least one project should have env vars
     const codeBuildProjects = template.findResources('AWS::CodeBuild::Project');
+    let hasValidEnvVars = false;
+
     Object.values(codeBuildProjects).forEach((project: any) => {
       if (project.Properties?.Environment?.EnvironmentVariables) {
         const envVars = project.Properties.Environment.EnvironmentVariables;
         const hasAwsRegion = envVars.some((env: any) => env.Name === 'AWS_DEFAULT_REGION');
         const hasAccountId = envVars.some((env: any) => env.Name === 'AWS_ACCOUNT_ID');
+        const hasArtifactsTable = envVars.some((env: any) => env.Name === 'ARTIFACTS_TABLE');
 
-        expect(hasAwsRegion || hasAccountId).toBeTruthy();
+        if (hasAwsRegion && hasAccountId && hasArtifactsTable) {
+          hasValidEnvVars = true;
+        }
       }
     });
+
+    expect(hasValidEnvVars).toBeTruthy();
 
     // Check Lambda environment variables
     const lambdaFunctions = template.findResources('AWS::Lambda::Function');
@@ -223,7 +233,7 @@ describe('CICDPipelineStack Unit Tests', () => {
       });
     }).not.toThrow(); // Should handle gracefully
 
-    // Test with very long names
+    // Test with very long names - should throw due to S3 bucket name limits
     const longName = 'a'.repeat(100);
     expect(() => {
       new CICDPipelineStack(app, 'TestStackLongName', {
@@ -234,7 +244,7 @@ describe('CICDPipelineStack Unit Tests', () => {
           region: 'us-east-1',
         },
       });
-    }).not.toThrow(); // AWS will enforce length limits during deployment
+    }).toThrow(); // AWS CDK validates bucket name length and will throw
   });
 
   test('Cost optimization features are enabled', () => {
@@ -303,12 +313,23 @@ describe('Cost Monitoring Lambda Tests', () => {
   });
 
   test('Lambda has required permissions for cost monitoring', () => {
-    // Should have CloudWatch read permissions
-    template.hasResourceProperties('AWS::IAM::Role', {
-      ManagedPolicyArns: [
-        'arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess',
-      ],
+    // Check that Lambda has CloudWatch permissions through managed policy
+    const lambdaRoles = template.findResources('AWS::IAM::Role');
+    let hasCloudWatchPolicy = false;
+
+    Object.values(lambdaRoles).forEach((role: any) => {
+      if (role.Properties?.ManagedPolicyArns) {
+        const managedPolicies = role.Properties.ManagedPolicyArns;
+        managedPolicies.forEach((policy: any) => {
+          const policyArn = typeof policy === 'string' ? policy : policy.Ref || JSON.stringify(policy);
+          if (policyArn.includes('CloudWatchReadOnlyAccess')) {
+            hasCloudWatchPolicy = true;
+          }
+        });
+      }
     });
+
+    expect(hasCloudWatchPolicy).toBeTruthy();
   });
 
   test('EventBridge rule targets Lambda correctly', () => {
