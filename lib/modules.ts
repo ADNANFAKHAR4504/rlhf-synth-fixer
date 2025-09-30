@@ -162,7 +162,7 @@ export class VpcModule extends Construct {
 
     // CloudWatch Log Group for VPC Flow Logs
     const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-log-group', {
-      name: '/aws/vpc/flowlogs-2930046340', // Unique name for the log group
+      name: '/aws/vpc/flowlogs-29300', // Unique name for the log group
       retentionInDays: 365, // 1-year retention for compliance
       kmsKeyId: props.kmsKeyId,
       lifecycle: {
@@ -173,7 +173,7 @@ export class VpcModule extends Construct {
 
     // IAM Role for VPC Flow Logs
     const flowLogRole = new IamRole(this, 'flow-log-role', {
-      name: 'VPCFlowLogRole',
+      name: 'VPCFlowLogRoleTs',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -294,7 +294,7 @@ export class Ec2Module extends Construct {
     // IAM Role for EC2 Instance - Implements least privilege principle
     // SECURITY RATIONALE: No excessive permissions, specifically excludes network interface manipulation
     const ec2Role = new IamRole(this, 'ec2-role', {
-      name: 'SecureEC2Role',
+      name: 'SecureEC2RoleTs',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -588,7 +588,7 @@ export class IamModule extends Construct {
     // MFA Enforcement Policy
     // SECURITY RATIONALE: Enforces multi-factor authentication for all console access
     this.mfaPolicy = new IamPolicy(this, 'mfa-policy', {
-      name: 'EnforceMFAPolicy',
+      name: 'EnforceMFAPolicyTs',
       description: 'Enforces MFA for all console users',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -653,7 +653,7 @@ export class IamModule extends Construct {
     // Security Group for users
     // SECURITY RATIONALE: Group-based permission management instead of individual user policies
     this.securityGroup = new IamGroup(this, 'security-group', {
-      name: 'SecurityUsersGroup',
+      name: 'SecurityUsersGroupTS',
       path: '/',
     });
 
@@ -666,7 +666,7 @@ export class IamModule extends Construct {
     // Access Key Rotation Policy (Note: This is typically handled by external automation)
     // COMPLIANCE REQUIREMENT: Access keys must be rotated every 90 days
     new IamPolicy(this, 'access-key-rotation-policy', {
-      name: 'AccessKeyRotationPolicy',
+      name: 'AccessKeyRotationPolicyTS',
       description: 'Policy for automated access key rotation',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -706,14 +706,14 @@ export class CloudTrailModule extends Construct {
 
     // CloudWatch Log Group for CloudTrail
     this.logGroup = new CloudwatchLogGroup(this, 'cloudtrail-log-group', {
-      name: '/aws/cloudtrail/management-events',
+      name: '/aws/cloudtrail/management-events-ts',
       retentionInDays: 365, // 1-year retention for compliance
       kmsKeyId: props.kmsKeyId,
     });
 
     // IAM Role for CloudTrail to CloudWatch Logs
     const cloudTrailRole = new IamRole(this, 'cloudtrail-role', {
-      name: 'CloudTrailLogsRole',
+      name: 'CloudTrailLogsRoleTs',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -986,7 +986,7 @@ export class KmsModule extends Construct {
 
     // KMS Alias
     this.kmsAlias = new KmsAlias(this, 'kms-alias', {
-      name: 'alias/secure-app-key',
+      name: 'alias/secure-app-key-ts',
       targetKeyId: this.kmsKey.keyId,
     });
   }

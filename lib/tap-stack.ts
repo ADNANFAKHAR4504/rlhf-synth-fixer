@@ -89,14 +89,14 @@ export class TapStack extends TerraformStack {
       amiId: 'ami-0c02fb55956c7d316', // This should be a real AMI ID
 
       // S3 configuration
-      appBucketName: 'secure-app-bucket-ts-1234', // Unique bucket name
-      cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-1234', // Unique bucket name
+      appBucketName: 'secure-app-bucket-ts-12345', // Unique bucket name
+      cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-12345', // Unique bucket name
 
       // CloudTrail configuration
-      cloudtrailName: 'secure-app-cloudtrail',
+      cloudtrailName: 'secure-app-cloudtrail-trail',
 
       // WAF configuration
-      webAclName: 'SecureAppWebACL',
+      webAclName: 'SecureAppWebACLTS',
 
       // IAM configuration
       mfaRequired: true,
