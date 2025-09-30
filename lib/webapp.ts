@@ -169,7 +169,7 @@ export class WebAppStack extends cdk.Stack {
     // Create RDS instance with Multi-AZ and Blue/Green deployment compatibility
     const database = new rds.DatabaseInstance(this, 'WebAppDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35,
+        version: rds.MysqlEngineVersion.VER_8_0,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
