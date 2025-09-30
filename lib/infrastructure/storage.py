@@ -127,7 +127,12 @@ def create_cloudformation_logs_bucket():
     Addresses model failure: Centralized CloudFormation logs missing.
     """
     
-    bucket_name = f"cf-{pulumi.get_stack()[:6]}-{config.aws_region}"
+    # Ensure bucket name is lowercase and valid for S3
+    stack_name = pulumi.get_stack()[:6].lower().replace('_', '-')
+    # Add timestamp suffix to ensure uniqueness
+    import time
+    timestamp = str(int(time.time()))[-6:]  # Last 6 digits of timestamp
+    bucket_name = f"cf-{stack_name}-{config.aws_region}-{timestamp}"
     
     bucket = aws.s3.Bucket(
         f"cloudformation-logs-bucket",
