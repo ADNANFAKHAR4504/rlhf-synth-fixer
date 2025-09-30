@@ -708,7 +708,7 @@ export class CloudTrailModule extends Construct {
     this.logGroup = new CloudwatchLogGroup(this, 'cloudtrail-log-group', {
       name: '/aws/cloudtrail/management-events-ts',
       retentionInDays: 365, // 1-year retention for compliance
-      // kmsKeyId: props.kmsKeyId,
+      kmsKeyId: props.kmsKeyId,
     });
 
     // IAM Role for CloudTrail to CloudWatch Logs
@@ -756,7 +756,7 @@ export class CloudTrailModule extends Construct {
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableLogFileValidation: true, // Ensures log integrity
-      kmsKeyId: props.kmsKeyId,
+      // kmsKeyId: props.kmsKeyId,
       cloudWatchLogsGroupArn: `${this.logGroup.arn}:*`,
       cloudWatchLogsRoleArn: cloudTrailRole.arn,
 
