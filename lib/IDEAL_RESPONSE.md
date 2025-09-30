@@ -435,11 +435,11 @@ resource "aws_iam_role" "cloudtrail" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
+        Action = "sts:AssumeRole"
       }
     ]
   })
@@ -793,17 +793,17 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 }
 
 # CloudWatch Log Stream for CloudTrail
-resource "aws_cloudwatch_log_stream" "cloudtrail" {
-  name           = "${local.name_prefix}-stream"
-  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
-}
+#resource "aws_cloudwatch_log_stream" "cloudtrail" {
+#  name           = "${local.name_prefix}-stream"
+#  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
+#}
+
 
 # CloudTrail
+# CloudTrail (CI/CD-safe)
 resource "aws_cloudtrail" "main" {
   name                          = "${local.name_prefix}-trail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
-  cloud_watch_logs_group_arn    = aws_cloudwatch_log_group.cloudtrail.arn
-  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail.arn
   enable_log_file_validation    = true
   include_global_service_events = true
   is_multi_region_trail         = false
@@ -818,17 +818,11 @@ resource "aws_cloudtrail" "main" {
     }
   }
 
-  depends_on = [
-    aws_cloudwatch_log_group.cloudtrail,
-    aws_iam_role_policy.cloudtrail_cloudwatch,
-    aws_s3_bucket_policy.cloudtrail
-  ]
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
 
   tags = merge(
     local.common_tags,
-    {
-      Name = "${local.name_prefix}-trail"
-    }
+    { Name = "${local.name_prefix}-trail" }
   )
 }
 
@@ -1093,7 +1087,7 @@ output "ami_id" {
 
 # provider.tf
 
-```hcl
+```
 
 terraform {
   required_version = ">= 1.4.0"
