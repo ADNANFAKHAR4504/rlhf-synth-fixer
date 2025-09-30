@@ -16,7 +16,4 @@ describe("Terraform single-file stack: tap_stack.tf", () => {
     }
     expect(exists).toBe(true);
   });
-
-
-
 });
