@@ -89,8 +89,8 @@ Resources:
     Properties:
       BucketName: !If
         - HasDomainName
-        - !Sub '${DomainName}-logs-${AWS::AccountId}'
-        - !Join ['-', [!Ref 'AWS::StackName', 'logs', !Ref 'AWS::AccountId']]
+        - !Join ['-', [!Ref DomainName, 'logs', !Ref EnvironmentSuffix, !Ref 'AWS::AccountId']]
+        - !Join ['-', ['logs', !Ref EnvironmentSuffix, !Ref 'AWS::AccountId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -145,8 +145,8 @@ Resources:
     Properties:
       BucketName: !If
         - HasDomainName
-        - !Sub '${DomainName}-static-website-${AWS::AccountId}'
-        - !Join ['-', [!Ref 'AWS::StackName', 'website', !Ref 'AWS::AccountId']]
+        - !Join ['-', [!Ref DomainName, 'website', !Ref EnvironmentSuffix, !Ref 'AWS::AccountId']]
+        - !Join ['-', ['website', !Ref EnvironmentSuffix, !Ref 'AWS::AccountId']]
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
