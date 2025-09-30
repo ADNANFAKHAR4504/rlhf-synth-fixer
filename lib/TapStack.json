@@ -5,8 +5,7 @@
   "Parameters": {
     "EnvironmentSuffix": {
       "Type": "String",
-      "Default": "prod",
-      "AllowedValues": ["dev", "staging", "prod"],
+      "Default": "dev",
       "Description": "Environment suffix for resource naming"
     },
     "SSHAllowedCIDR": {
