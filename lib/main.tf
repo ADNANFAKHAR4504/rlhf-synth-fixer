@@ -14,6 +14,11 @@ variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
   default     = "us-east-1"
+  
+  validation {
+    condition     = can(regex("^[a-z]{2}-[a-z]+-[1-9]{1}$", var.aws_region))
+    error_message = "AWS region must be in the format: aa-bbbb-#, e.g., us-east-1, eu-west-2, ap-southeast-1"
+  }
 }
 
 variable "name_prefix" {
@@ -72,11 +77,11 @@ variable "db_max_allocated_storage" {
 variable "db_engine_version" {
   description = "MySQL engine version"
   type        = string
-  default     = "8.0.35"
+  default     = "8.0.33"  # Latest stable version supported in RDS
   
   validation {
-    condition     = can(regex("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", var.db_engine_version))
-    error_message = "Engine version must be in format X.Y or X.Y.Z"
+    condition     = can(regex("^8\\.0\\.(2[8-9]|3[0-3])$", var.db_engine_version))
+    error_message = "Engine version must be MySQL 8.0.28 through 8.0.33, which are the currently supported versions in RDS"
   }
 }
 
@@ -420,7 +425,7 @@ resource "aws_db_subnet_group" "main" {
 # ===========================
 
 resource "aws_db_instance" "mysql" {
-  identifier_prefix = "${var.name_prefix}-"
+  identifier = "${var.name_prefix}-mysql-${var.aws_region}"
 
   # Engine Configuration
   engine         = "mysql"
@@ -487,6 +492,11 @@ resource "aws_db_instance" "mysql" {
 # ===========================
 # OUTPUTS
 # ===========================
+
+output "aws_region" {
+  description = "The AWS region where resources are deployed"
+  value       = var.aws_region
+}
 
 output "rds_endpoint" {
   description = "The connection endpoint for the RDS instance"
