@@ -1,7 +1,7 @@
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "secure-aws-env-bucket"
+  default     = "secure-aws-env-bucket-1"
 }
 
 variable "environment" {
