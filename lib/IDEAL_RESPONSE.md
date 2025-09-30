@@ -818,7 +818,11 @@ resource "aws_cloudtrail" "main" {
     }
   }
 
-  depends_on = [aws_s3_bucket_policy.cloudtrail]
+  depends_on = [
+    aws_cloudwatch_log_group.cloudtrail,
+    aws_iam_role_policy.cloudtrail_cloudwatch,
+    aws_s3_bucket_policy.cloudtrail
+  ]
 
   tags = merge(
     local.common_tags,
@@ -1083,6 +1087,9 @@ output "ami_id" {
 }
 
 ```
+
+
+
 
 # provider.tf
 
