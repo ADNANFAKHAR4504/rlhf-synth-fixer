@@ -5,19 +5,10 @@ import fs from 'fs';
 import path from 'path';
 
 const libPath = path.resolve(__dirname, '../lib');
-const modulesPath = path.resolve(libPath, 'modules');
 
 describe('Terraform Search API Configuration', () => {
   
   describe('Core Configuration Files', () => {
-    test('main.tf exists and documents the structure', () => {
-      const mainPath = path.join(libPath, 'main.tf');
-      expect(fs.existsSync(mainPath)).toBe(true);
-      
-      const content = fs.readFileSync(mainPath, 'utf8');
-      expect(content).toContain('Main Terraform configuration');
-    });
-
     test('provider.tf configures AWS provider correctly', () => {
       const providerPath = path.join(libPath, 'provider.tf');
       expect(fs.existsSync(providerPath)).toBe(true);
@@ -42,7 +33,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('Network Module', () => {
     test('network.tf creates VPC with proper configuration', () => {
-      const networkPath = path.join(modulesPath, 'network.tf');
+      const networkPath = path.join(libPath, 'network.tf');
       expect(fs.existsSync(networkPath)).toBe(true);
       
       const content = fs.readFileSync(networkPath, 'utf8');
@@ -53,7 +44,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('creates public and private subnets across multiple AZs', () => {
-      const networkPath = path.join(modulesPath, 'network.tf');
+      const networkPath = path.join(libPath, 'network.tf');
       const content = fs.readFileSync(networkPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_subnet"\s+"public_subnets"/);
@@ -65,7 +56,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('configures NAT gateway and internet gateway', () => {
-      const networkPath = path.join(modulesPath, 'network.tf');
+      const networkPath = path.join(libPath, 'network.tf');
       const content = fs.readFileSync(networkPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_internet_gateway"/);
@@ -74,7 +65,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('creates security group for Lambda', () => {
-      const networkPath = path.join(modulesPath, 'network.tf');
+      const networkPath = path.join(libPath, 'network.tf');
       const content = fs.readFileSync(networkPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_security_group"\s+"lambda_sg"/);
@@ -83,7 +74,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('IAM Module', () => {
     test('creates Lambda execution role', () => {
-      const iamPath = path.join(modulesPath, 'iam.tf');
+      const iamPath = path.join(libPath, 'iam.tf');
       expect(fs.existsSync(iamPath)).toBe(true);
       
       const content = fs.readFileSync(iamPath, 'utf8');
@@ -92,7 +83,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Lambda policy grants access to DynamoDB', () => {
-      const iamPath = path.join(modulesPath, 'iam.tf');
+      const iamPath = path.join(libPath, 'iam.tf');
       const content = fs.readFileSync(iamPath, 'utf8');
       
       expect(content).toContain('dynamodb:GetItem');
@@ -102,7 +93,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Lambda policy grants X-Ray permissions', () => {
-      const iamPath = path.join(modulesPath, 'iam.tf');
+      const iamPath = path.join(libPath, 'iam.tf');
       const content = fs.readFileSync(iamPath, 'utf8');
       
       expect(content).toContain('xray:PutTraceSegments');
@@ -110,7 +101,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Lambda policy grants EventBridge permissions', () => {
-      const iamPath = path.join(modulesPath, 'iam.tf');
+      const iamPath = path.join(libPath, 'iam.tf');
       const content = fs.readFileSync(iamPath, 'utf8');
       
       expect(content).toContain('events:PutEvents');
@@ -120,7 +111,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('DynamoDB Module', () => {
     test('creates DynamoDB table with proper configuration', () => {
-      const dynamoPath = path.join(modulesPath, 'dynamodb.tf');
+      const dynamoPath = path.join(libPath, 'dynamodb.tf');
       expect(fs.existsSync(dynamoPath)).toBe(true);
       
       const content = fs.readFileSync(dynamoPath, 'utf8');
@@ -130,7 +121,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('DynamoDB table has GSI for query access', () => {
-      const dynamoPath = path.join(modulesPath, 'dynamodb.tf');
+      const dynamoPath = path.join(libPath, 'dynamodb.tf');
       const content = fs.readFileSync(dynamoPath, 'utf8');
       
       expect(content).toContain('global_secondary_index');
@@ -141,7 +132,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('ElastiCache Module', () => {
     test('creates Redis cluster', () => {
-      const cachePath = path.join(modulesPath, 'elasticache.tf');
+      const cachePath = path.join(libPath, 'elasticache.tf');
       expect(fs.existsSync(cachePath)).toBe(true);
       
       const content = fs.readFileSync(cachePath, 'utf8');
@@ -151,7 +142,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Redis uses private subnets', () => {
-      const cachePath = path.join(modulesPath, 'elasticache.tf');
+      const cachePath = path.join(libPath, 'elasticache.tf');
       const content = fs.readFileSync(cachePath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_elasticache_subnet_group"/);
@@ -159,7 +150,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Redis has security group restricting access to Lambda', () => {
-      const cachePath = path.join(modulesPath, 'elasticache.tf');
+      const cachePath = path.join(libPath, 'elasticache.tf');
       const content = fs.readFileSync(cachePath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_security_group"\s+"redis_sg"/);
@@ -170,7 +161,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('Lambda Module', () => {
     test('Lambda function configuration is correct', () => {
-      const lambdaPath = path.join(modulesPath, 'lambda.tf');
+      const lambdaPath = path.join(libPath, 'lambda.tf');
       expect(fs.existsSync(lambdaPath)).toBe(true);
       
       const content = fs.readFileSync(lambdaPath, 'utf8');
@@ -185,7 +176,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Lambda has VPC configuration', () => {
-      const lambdaPath = path.join(modulesPath, 'lambda.tf');
+      const lambdaPath = path.join(libPath, 'lambda.tf');
       const content = fs.readFileSync(lambdaPath, 'utf8');
       
       expect(content).toContain('vpc_config');
@@ -193,7 +184,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Lambda has X-Ray tracing enabled', () => {
-      const lambdaPath = path.join(modulesPath, 'lambda.tf');
+      const lambdaPath = path.join(libPath, 'lambda.tf');
       const content = fs.readFileSync(lambdaPath, 'utf8');
       
       expect(content).toContain('tracing_config');
@@ -201,7 +192,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('Lambda has environment variables for all services', () => {
-      const lambdaPath = path.join(modulesPath, 'lambda.tf');
+      const lambdaPath = path.join(libPath, 'lambda.tf');
       const content = fs.readFileSync(lambdaPath, 'utf8');
       
       expect(content).toContain('DYNAMODB_TABLE');
@@ -213,7 +204,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('API Gateway Module', () => {
     test('creates REST API', () => {
-      const apiPath = path.join(modulesPath, 'api_gateway.tf');
+      const apiPath = path.join(libPath, 'api_gateway.tf');
       expect(fs.existsSync(apiPath)).toBe(true);
       
       const content = fs.readFileSync(apiPath, 'utf8');
@@ -222,7 +213,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('creates /search resource with GET and POST methods', () => {
-      const apiPath = path.join(modulesPath, 'api_gateway.tf');
+      const apiPath = path.join(libPath, 'api_gateway.tf');
       const content = fs.readFileSync(apiPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_api_gateway_resource"\s+"search"/);
@@ -232,7 +223,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('API Gateway integrates with Lambda', () => {
-      const apiPath = path.join(modulesPath, 'api_gateway.tf');
+      const apiPath = path.join(libPath, 'api_gateway.tf');
       const content = fs.readFileSync(apiPath, 'utf8');
       
       expect(content).toContain('AWS_PROXY');
@@ -240,7 +231,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('API Gateway has X-Ray tracing enabled', () => {
-      const apiPath = path.join(modulesPath, 'api_gateway.tf');
+      const apiPath = path.join(libPath, 'api_gateway.tf');
       const content = fs.readFileSync(apiPath, 'utf8');
       
       expect(content).toContain('xray_tracing_enabled = true');
@@ -249,7 +240,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('CloudWatch Module', () => {
     test('creates log groups for API Gateway and Lambda', () => {
-      const cwPath = path.join(modulesPath, 'cloudwatch.tf');
+      const cwPath = path.join(libPath, 'cloudwatch.tf');
       expect(fs.existsSync(cwPath)).toBe(true);
       
       const content = fs.readFileSync(cwPath, 'utf8');
@@ -258,7 +249,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('creates dashboard with metrics', () => {
-      const cwPath = path.join(modulesPath, 'cloudwatch.tf');
+      const cwPath = path.join(libPath, 'cloudwatch.tf');
       const content = fs.readFileSync(cwPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_cloudwatch_dashboard"/);
@@ -269,7 +260,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('creates alarms for API latency and Lambda errors', () => {
-      const cwPath = path.join(modulesPath, 'cloudwatch.tf');
+      const cwPath = path.join(libPath, 'cloudwatch.tf');
       const content = fs.readFileSync(cwPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_cloudwatch_metric_alarm"\s+"api_latency"/);
@@ -277,7 +268,7 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('creates SNS topic for alerts', () => {
-      const cwPath = path.join(modulesPath, 'cloudwatch.tf');
+      const cwPath = path.join(libPath, 'cloudwatch.tf');
       const content = fs.readFileSync(cwPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_sns_topic"\s+"alerts"/);
@@ -286,7 +277,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('X-Ray and EventBridge Module', () => {
     test('creates X-Ray sampling rule', () => {
-      const xrayPath = path.join(modulesPath, 'xray.tf');
+      const xrayPath = path.join(libPath, 'xray.tf');
       expect(fs.existsSync(xrayPath)).toBe(true);
       
       const content = fs.readFileSync(xrayPath, 'utf8');
@@ -294,14 +285,14 @@ describe('Terraform Search API Configuration', () => {
     });
 
     test('creates EventBridge event bus', () => {
-      const xrayPath = path.join(modulesPath, 'xray.tf');
+      const xrayPath = path.join(libPath, 'xray.tf');
       const content = fs.readFileSync(xrayPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_cloudwatch_event_bus"\s+"notification_bus"/);
     });
 
     test('creates EventBridge rule for search events', () => {
-      const xrayPath = path.join(modulesPath, 'xray.tf');
+      const xrayPath = path.join(libPath, 'xray.tf');
       const content = fs.readFileSync(xrayPath, 'utf8');
       
       expect(content).toMatch(/resource\s+"aws_cloudwatch_event_rule"\s+"search_events"/);
@@ -311,7 +302,7 @@ describe('Terraform Search API Configuration', () => {
 
   describe('Outputs Module', () => {
     test('exports all required outputs', () => {
-      const outputPath = path.join(modulesPath, 'output.tf');
+      const outputPath = path.join(libPath, 'outputs.tf');
       expect(fs.existsSync(outputPath)).toBe(true);
       
       const content = fs.readFileSync(outputPath, 'utf8');

@@ -144,6 +144,53 @@ Tests gracefully handle missing infrastructure with proper warnings:
 9. **test/terraform.int.test.ts** - Comprehensive integration tests (14 tests)
 10. **lib/MODEL_FAILURES.md** - Complete documentation
 
+---
+
+## Critical Fix: Module Directory Structure Issue
+
+### Problem Discovered During Deployment
+
+The deployment logs showed "No changes" and empty outputs `{}` even though the infrastructure should have been deployed. Investigation revealed a critical structural issue.
+
+**Root Cause:**
+- All Terraform resource files were in `lib/modules/*.tf`
+- Terraform was being executed from `lib/` directory
+- **Terraform only loads `.tf` files from the current working directory, NOT from subdirectories**
+- Result: Terraform wasn't loading any resources at all!
+
+**What was happening:**
+```
+lib/
+├── provider.tf       ✅ Loaded
+├── variable.tf       ✅ Loaded
+├── outputs.tf        ✅ Loaded (but referencing non-existent resources)
+└── modules/
+    ├── network.tf    ❌ NOT loaded
+    ├── iam.tf        ❌ NOT loaded
+    ├── lambda.tf     ❌ NOT loaded
+    └── ...           ❌ NOT loaded
+```
+
+**Solution Applied:**
+1. Moved all `.tf` files from `lib/modules/` to `lib/` directory
+2. Fixed deprecated Terraform syntax:
+   - `authorization_type` → `authorization` (API Gateway)
+   - `vpc = true` → `domain = "vpc"` (EIP)
+   - Added missing `resource_arn = "*"` to X-Ray sampling rule
+3. Fixed Lambda path from `../search_function.zip` → `search_function.zip`
+4. Updated all unit tests to look in `lib/` instead of `lib/modules/`
+5. Removed `main.tf` test since it's just documentation
+
+**Result:**
+- ✅ Terraform validate: Success
+- ✅ Unit tests: 32/32 passed
+- ✅ All resources now properly loaded
+- ✅ Infrastructure ready for deployment with outputs
+
+**Key Lesson:** Terraform's file loading behavior is directory-specific. Unlike modules (which use `source = "./path"`), regular `.tf` files must be in the same directory where `terraform` commands are executed.
+
+---
+
 ### 🎯 Project Status: COMPLETE AND READY FOR DEPLOYMENT
 
 All requirements from PROMPT.md have been met, all tests pass, and the infrastructure is ready to be deployed to AWS.
