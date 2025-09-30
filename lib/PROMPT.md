@@ -1,4 +1,4 @@
-We need to build out the infrastructure for a new serverless application in us-west-2. Please use the AWS CDK with TypeScript for this.
+We need to build out the infrastructure for a new serverless application in us-east-1. Please use the AWS CDK with TypeScript for this.
 
 The main flow is an API Gateway that triggers a Lambda function. This Lambda needs to run inside a VPC in a private subnet. In its code, it will read configuration from AWS Systems Manager Parameter Store, fetch secrets from AWS Secrets Manager to use as environment variables, write data to a DynamoDB table, and also interact with an S3 bucket.
 
