@@ -307,11 +307,23 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 }
 
 # VPC Flow Logs
+# VPC Flow Logs (fixed usage)
 resource "aws_flow_log" "main" {
-  vpc_id          = aws_vpc.main.id
-  traffic_type    = "ALL"
-  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+  vpc_id               = aws_vpc.main.id
+  traffic_type         = "ALL"
+
+  # Explicitly declare destination type for CloudWatch Logs
+  log_destination_type = "cloud-watch-logs"
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
+
+  # DeliverLogsPermissionArn — role that allows VPC Flow Logs to publish to CloudWatch
+  iam_role_arn = aws_iam_role.vpc_flow_logs.arn
+
+  # ensure the log group & role are created before the flow log to reduce race conditions
+  depends_on = [
+    aws_cloudwatch_log_group.vpc_flow_logs,
+    aws_iam_role_policy.vpc_flow_logs
+  ]
 
   tags = merge(local.common_tags, {
     Name = "main-vpc-flow-log-${var.resource_suffix}"
