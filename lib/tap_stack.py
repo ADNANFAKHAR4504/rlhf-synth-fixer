@@ -427,10 +427,6 @@ class TapStack(Stack):
                                 network_firewall.CfnRuleGroup.RuleOptionProperty(
                                     keyword="sid",
                                     settings=["1234567890"]
-                                ),
-                                network_firewall.CfnRuleGroup.RuleOptionProperty(
-                                    keyword="gid",
-                                    settings=["1"]
                                 )
                             ]
                         ),
