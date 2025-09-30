@@ -245,8 +245,8 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "s3",
       expect.objectContaining({
-        bucketName: 'secure-app-bucket-ts-1234',
-        cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-1234',
+        bucketName: 'secure-app-bucket-ts-12345',
+        cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-12345',
         kmsKeyId: kmsInstance.kmsKey.arn,
         trailName: 'secure-app-cloudtrail',
       })
@@ -264,7 +264,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "cloudtrail",
       expect.objectContaining({
-        trailName: 'secure-app-cloudtrail',
+        trailName: 'secure-app-cloudtrail-trail',
         s3BucketName: s3Instance.cloudtrailBucket.bucket,
         kmsKeyId: kmsInstance.kmsKey.arn,
       })
@@ -330,7 +330,7 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "waf",
       expect.objectContaining({
-        webAclName: 'SecureAppWebACL',
+        webAclName: 'SecureAppWebACLTS',
         allowedIpRanges: ['0.0.0.0/0'],
       })
     );
@@ -638,8 +638,8 @@ describe("TapStack Unit Tests", () => {
       expect.anything(),
       "s3",
       expect.objectContaining({
-        bucketName: 'secure-app-bucket-ts-1234',
-        cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-1234',
+        bucketName: 'secure-app-bucket-ts-12345',
+        cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-12345',
         trailName: 'secure-app-cloudtrail',
       })
     );

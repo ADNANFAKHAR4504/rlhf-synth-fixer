@@ -350,7 +350,7 @@ export class Ec2Module extends Construct {
       this,
       'ec2-instance-profile',
       {
-        name: 'secure-ec2-profile',
+        name: 'secure-ec2-profile-ts',
         role: ec2Role.name,
       }
     );
@@ -532,7 +532,7 @@ export class S3Module extends Construct {
             Resource: `arn:aws:s3:::${props.cloudtrailBucketName}`,
             Condition: {
               StringEquals: {
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail'}`,
+                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
               },
             },
           },
