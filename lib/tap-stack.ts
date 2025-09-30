@@ -1,18 +1,22 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
-import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
-import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
-import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as codebuild from 'aws-cdk-lib/aws-codebuild';
+import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
+import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as events_targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as logs_destinations from 'aws-cdk-lib/aws-logs-destinations';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import { Construct } from 'constructs';
 
 export interface CICDPipelineStackProps extends cdk.StackProps {
   githubOwner: string;
@@ -20,24 +24,51 @@ export interface CICDPipelineStackProps extends cdk.StackProps {
   githubBranch: string;
   notificationEmail: string;
   deploymentRegions: string[];
+  environmentName?: string;
+  projectName?: string;
+  costCenter?: string;
 }
 
 export class CICDPipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: CICDPipelineStackProps) {
     super(scope, id, props);
 
-    // KMS Key for encryption
+    // Configuration from props and context
+    const environmentName = props.environmentName || this.node.tryGetContext('environment') || 'dev';
+    const projectName = props.projectName || this.node.tryGetContext('projectName') || 'iac-test';
+    const costCenter = props.costCenter || this.node.tryGetContext('costCenter') || 'engineering';
+
+    // Helper function to create resource names
+    const createResourceName = (resource: string) => `${projectName}-${resource}-${environmentName}`;
+
+    // Common tags for all resources
+    const commonTags = {
+      Environment: environmentName,
+      Project: projectName,
+      CostCenter: costCenter,
+      ManagedBy: 'CDK',
+      'iac-rlhf-amazon': 'true'
+    };
+
+    // Apply tags to the stack
+    cdk.Tags.of(this).add('Environment', environmentName);
+    cdk.Tags.of(this).add('Project', projectName);
+    cdk.Tags.of(this).add('CostCenter', costCenter);
+    cdk.Tags.of(this).add('ManagedBy', 'CDK');
+    cdk.Tags.of(this).add('iac-rlhf-amazon', 'true');
+
+    // KMS Key for SNS encryption (S3 uses AWS managed encryption to avoid circular dependency)
     const encryptionKey = new kms.Key(this, 'PipelineEncryptionKey', {
       enableKeyRotation: true,
-      description: 'KMS key for CI/CD pipeline encryption',
-      alias: 'cicd-pipeline-key',
+      description: `KMS key for ${projectName} CI/CD pipeline SNS encryption`,
+      alias: createResourceName('pipeline-key'),
     });
+    cdk.Tags.of(encryptionKey).add('iac-rlhf-amazon', 'true');
 
-    // S3 Bucket for pipeline artifacts
+    // S3 Bucket for pipeline artifacts - using AWS managed encryption to avoid circular dependency
     const artifactBucket = new s3.Bucket(this, 'PipelineArtifacts', {
-      bucketName: `cicd-artifacts-${this.account}-${this.region}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: encryptionKey,
+      bucketName: `${createResourceName('artifacts')}-${this.account}-${this.region}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       lifecycleRules: [{
         id: 'delete-old-artifacts',
@@ -47,34 +78,40 @@ export class CICDPipelineStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
+    cdk.Tags.of(artifactBucket).add('iac-rlhf-amazon', 'true');
 
     // DynamoDB table for build artifacts metadata
     const artifactsMetadataTable = new dynamodb.Table(this, 'ArtifactsMetadata', {
-      tableName: 'cicd-artifacts-metadata',
-      partitionKey: { 
-        name: 'buildId', 
-        type: dynamodb.AttributeType.STRING 
+      tableName: createResourceName('artifacts-metadata'),
+      partitionKey: {
+        name: 'buildId',
+        type: dynamodb.AttributeType.STRING
       },
-      sortKey: { 
-        name: 'timestamp', 
-        type: dynamodb.AttributeType.STRING 
+      sortKey: {
+        name: 'timestamp',
+        type: dynamodb.AttributeType.STRING
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
     });
+    cdk.Tags.of(artifactsMetadataTable).add('iac-rlhf-amazon', 'true');
 
     // CloudWatch Log Group
     const logGroup = new logs.LogGroup(this, 'PipelineLogGroup', {
-      logGroupName: '/aws/codepipeline/cicd-pipeline',
+      logGroupName: `/aws/codepipeline/${createResourceName('pipeline')}`,
       retention: logs.RetentionDays.ONE_MONTH,
     });
+    cdk.Tags.of(logGroup).add('iac-rlhf-amazon', 'true');
 
     // SNS Topic for notifications
     const notificationTopic = new sns.Topic(this, 'PipelineNotifications', {
-      topicName: 'cicd-pipeline-notifications',
+      topicName: createResourceName('pipeline-notifications'),
       masterKey: encryptionKey,
     });
+    cdk.Tags.of(notificationTopic).add('iac-rlhf-amazon', 'true');
 
     notificationTopic.addSubscription(
       new sns_subscriptions.EmailSubscription(props.notificationEmail)
@@ -82,15 +119,16 @@ export class CICDPipelineStack extends cdk.Stack {
 
     // Secrets Manager for GitHub token
     const githubToken = new secretsmanager.Secret(this, 'GitHubToken', {
-      secretName: 'github-oauth-token',
-      description: 'GitHub OAuth token for repository access',
+      secretName: createResourceName('github-oauth-token'),
+      description: `GitHub OAuth token for ${projectName} repository access`,
       encryptionKey: encryptionKey,
     });
+    cdk.Tags.of(githubToken).add('iac-rlhf-amazon', 'true');
 
     // Database credentials secret
     const dbCredentials = new secretsmanager.Secret(this, 'DatabaseCredentials', {
-      secretName: 'app-database-credentials',
-      description: 'Database credentials for the application',
+      secretName: createResourceName('database-credentials'),
+      description: `Database credentials for ${projectName} application`,
       generateSecretString: {
         secretStringTemplate: JSON.stringify({ username: 'admin' }),
         generateStringKey: 'password',
@@ -98,11 +136,12 @@ export class CICDPipelineStack extends cdk.Stack {
       },
       encryptionKey: encryptionKey,
     });
+    cdk.Tags.of(dbCredentials).add('iac-rlhf-amazon', 'true');
 
     // IAM Role for CodeBuild
     const codeBuildRole = new iam.Role(this, 'CodeBuildRole', {
       assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com'),
-      description: 'IAM role for CodeBuild projects',
+      description: `IAM role for ${projectName} CodeBuild projects`,
       inlinePolicies: {
         CodeBuildPolicy: new iam.PolicyDocument({
           statements: [
@@ -131,21 +170,17 @@ export class CICDPipelineStack extends cdk.Stack {
               ],
               resources: [artifactsMetadataTable.tableArn],
             }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
-              resources: [encryptionKey.keyArn],
-            }),
+            // KMS permissions removed since S3 now uses AWS managed encryption
           ],
         }),
       },
     });
+    cdk.Tags.of(codeBuildRole).add('iac-rlhf-amazon', 'true');
 
     // CodeBuild Project for Building
     const buildProject = new codebuild.PipelineProject(this, 'BuildProject', {
-      projectName: 'cicd-build-project',
+      projectName: createResourceName('build-project'),
       role: codeBuildRole,
-      encryptionKey: encryptionKey,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
         computeType: codebuild.ComputeType.SMALL,
@@ -193,12 +228,12 @@ export class CICDPipelineStack extends cdk.Stack {
         },
       }),
     });
+    cdk.Tags.of(buildProject).add('iac-rlhf-amazon', 'true');
 
     // CodeBuild Project for Unit Tests
     const unitTestProject = new codebuild.PipelineProject(this, 'UnitTestProject', {
-      projectName: 'cicd-unit-test-project',
+      projectName: createResourceName('unit-test-project'),
       role: codeBuildRole,
-      encryptionKey: encryptionKey,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
         computeType: codebuild.ComputeType.SMALL,
@@ -226,12 +261,12 @@ export class CICDPipelineStack extends cdk.Stack {
         },
       }),
     });
+    cdk.Tags.of(unitTestProject).add('iac-rlhf-amazon', 'true');
 
     // CodeBuild Project for Integration Tests
     const integrationTestProject = new codebuild.PipelineProject(this, 'IntegrationTestProject', {
-      projectName: 'cicd-integration-test-project',
+      projectName: createResourceName('integration-test-project'),
       role: codeBuildRole,
-      encryptionKey: encryptionKey,
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
         computeType: codebuild.ComputeType.MEDIUM,
@@ -268,17 +303,18 @@ export class CICDPipelineStack extends cdk.Stack {
         },
       }),
     });
+    cdk.Tags.of(integrationTestProject).add('iac-rlhf-amazon', 'true');
 
     // Grant secret read permissions
     dbCredentials.grantRead(integrationTestProject);
 
     // CodePipeline
     const pipeline = new codepipeline.Pipeline(this, 'CICDPipeline', {
-      pipelineName: 'cicd-multi-stage-pipeline',
+      pipelineName: createResourceName('multi-stage-pipeline'),
       artifactBucket: artifactBucket,
-      encryptionKey: encryptionKey,
       restartExecutionOnUpdate: true,
     });
+    cdk.Tags.of(pipeline).add('iac-rlhf-amazon', 'true');
 
     // Source Artifact
     const sourceOutput = new codepipeline.Artifact('SourceOutput');
@@ -340,6 +376,7 @@ export class CICDPipelineStack extends cdk.Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess'),
       ],
     });
+    cdk.Tags.of(devDeployRole).add('iac-rlhf-amazon', 'true');
 
     pipeline.addStage({
       stageName: 'Deploy_Development',
@@ -347,10 +384,10 @@ export class CICDPipelineStack extends cdk.Stack {
         new codepipeline_actions.CloudFormationCreateUpdateStackAction({
           actionName: 'Deploy_Dev_Stack',
           templatePath: buildOutput.atPath('infrastructure/dev-stack.yaml'),
-          stackName: 'app-dev-stack',
+          stackName: createResourceName('dev-stack'),
           adminPermissions: false,
           deploymentRole: devDeployRole,
-          capabilities: [cdk.CfnCapabilities.NAMED_IAM],
+          cfnCapabilities: [cdk.CfnCapabilities.NAMED_IAM],
           runOrder: 1,
         }),
       ],
@@ -371,6 +408,7 @@ export class CICDPipelineStack extends cdk.Stack {
         iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess'),
       ],
     });
+    cdk.Tags.of(prodDeployRole).add('iac-rlhf-amazon', 'true');
 
     // Production stage with multi-region deployment
     const productionActions: codepipeline.IAction[] = [manualApprovalAction];
@@ -380,10 +418,10 @@ export class CICDPipelineStack extends cdk.Stack {
         new codepipeline_actions.CloudFormationCreateUpdateStackAction({
           actionName: `Deploy_Prod_${region}`,
           templatePath: buildOutput.atPath('infrastructure/prod-stack.yaml'),
-          stackName: `app-prod-stack-${region}`,
+          stackName: `${createResourceName('prod-stack')}-${region}`,
           adminPermissions: false,
           deploymentRole: prodDeployRole,
-          capabilities: [cdk.CfnCapabilities.NAMED_IAM],
+          cfnCapabilities: [cdk.CfnCapabilities.NAMED_IAM],
           region: region,
           runOrder: index + 2,
           parameterOverrides: {
@@ -400,8 +438,15 @@ export class CICDPipelineStack extends cdk.Stack {
 
     // CloudWatch Alarms
     const pipelineFailureAlarm = new cloudwatch.Alarm(this, 'PipelineFailureAlarm', {
-      alarmName: 'cicd-pipeline-failure',
-      metric: pipeline.metricPipelineFailed(),
+      alarmName: createResourceName('pipeline-failure'),
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/CodePipeline',
+        metricName: 'PipelineExecutionFailure',
+        dimensionsMap: {
+          PipelineName: pipeline.pipelineName,
+        },
+        statistic: 'Sum',
+      }),
       threshold: 1,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
@@ -410,10 +455,62 @@ export class CICDPipelineStack extends cdk.Stack {
     pipelineFailureAlarm.addAlarmAction(
       new cloudwatch_actions.SnsAction(notificationTopic)
     );
+    cdk.Tags.of(pipelineFailureAlarm).add('iac-rlhf-amazon', 'true');
+
+    // Lambda function for cost monitoring and log processing
+    const costMonitoringLambda = new lambda.Function(this, 'CostMonitoringLambda', {
+      functionName: createResourceName('cost-monitoring'),
+      runtime: lambda.Runtime.PYTHON_3_11,
+      handler: 'cost-monitoring.lambda_handler',
+      timeout: cdk.Duration.minutes(5),
+      memorySize: 256,
+      environment: {
+        SNS_TOPIC_ARN: notificationTopic.topicArn,
+        PROJECT_NAME: projectName,
+        ENVIRONMENT: environmentName,
+        TABLE_NAME: artifactsMetadataTable.tableName,
+      },
+      code: lambda.Code.fromAsset('lambda'),
+    });
+
+    // Grant necessary permissions to the Lambda
+    notificationTopic.grantPublish(costMonitoringLambda);
+    artifactsMetadataTable.grantReadWriteData(costMonitoringLambda);
+    logGroup.grantRead(costMonitoringLambda);
+
+    // Add managed policy for CloudWatch access
+    costMonitoringLambda.role?.addManagedPolicy(
+      iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchReadOnlyAccess')
+    );
+
+    cdk.Tags.of(costMonitoringLambda).add('iac-rlhf-amazon', 'true');
+
+    // CloudWatch log subscription to trigger cost monitoring
+    const logSubscription = new logs.SubscriptionFilter(this, 'CostMonitoringLogFilter', {
+      logGroup: logGroup,
+      destination: new logs_destinations.LambdaDestination(costMonitoringLambda),
+      filterPattern: logs.FilterPattern.anyTerm('SUCCEEDED', 'FAILED', 'Duration:', 'Memory:', 'CPU:'),
+    });
+    cdk.Tags.of(logSubscription).add('iac-rlhf-amazon', 'true');
+
+    // EventBridge rule for pipeline state changes
+    const pipelineEventRule = new events.Rule(this, 'PipelineEventRule', {
+      ruleName: createResourceName('pipeline-events'),
+      eventPattern: {
+        source: ['aws.codepipeline'],
+        detailType: ['CodePipeline Pipeline Execution State Change'],
+        detail: {
+          pipeline: [pipeline.pipelineName],
+          state: ['FAILED', 'SUCCEEDED']
+        }
+      },
+      targets: [new events_targets.LambdaFunction(costMonitoringLambda)]
+    });
+    cdk.Tags.of(pipelineEventRule).add('iac-rlhf-amazon', 'true');
 
     // Pipeline event notifications
     pipeline.onStateChange('PipelineStateChange', {
-      target: new cdk.aws_events_targets.SnsTopic(notificationTopic),
+      target: new events_targets.SnsTopic(notificationTopic),
       description: 'Notify on pipeline state changes',
     });
 

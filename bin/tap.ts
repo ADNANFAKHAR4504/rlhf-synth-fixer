@@ -1,15 +1,18 @@
 #!/usr/bin/env node
-import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import { CICDPipelineStack } from '../lib/cicd-pipeline-stack';
+import 'source-map-support/register';
+import { CICDPipelineStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
 // Get configuration from context or environment variables
-const githubOwner = app.node.tryGetContext('githubOwner') || process.env.GITHUB_OWNER || 'your-org';
-const githubRepo = app.node.tryGetContext('githubRepo') || process.env.GITHUB_REPO || 'your-repo';
+const githubOwner = app.node.tryGetContext('githubOwner') || process.env.GITHUB_OWNER || 'TuringGpt';
+const githubRepo = app.node.tryGetContext('githubRepo') || process.env.GITHUB_REPO || 'iac-test-automations';
 const githubBranch = app.node.tryGetContext('githubBranch') || process.env.GITHUB_BRANCH || 'main';
 const notificationEmail = app.node.tryGetContext('notificationEmail') || process.env.NOTIFICATION_EMAIL || 'admin@example.com';
+const environmentName = app.node.tryGetContext('environment') || process.env.ENVIRONMENT || 'dev';
+const projectName = app.node.tryGetContext('projectName') || process.env.PROJECT_NAME || 'iac-test';
+const costCenter = app.node.tryGetContext('costCenter') || process.env.COST_CENTER || 'engineering';
 
 // Primary region deployment
 const primaryStack = new CICDPipelineStack(app, 'CICDPipelineStack', {
@@ -21,12 +24,16 @@ const primaryStack = new CICDPipelineStack(app, 'CICDPipelineStack', {
   githubRepo,
   githubBranch,
   notificationEmail,
+  environmentName,
+  projectName,
+  costCenter,
   deploymentRegions: ['us-east-1', 'us-west-2', 'eu-west-1'], // Multi-region deployment
   tags: {
-    Environment: 'Production',
-    Project: 'CICD-Pipeline',
+    Environment: environmentName,
+    Project: projectName,
     ManagedBy: 'CDK',
-    CostCenter: 'Engineering',
+    CostCenter: costCenter,
+    'iac-rlhf-amazon': 'true',
   },
 });
 
@@ -40,12 +47,16 @@ const secondaryStack = new CICDPipelineStack(app, 'CICDPipelineStackSecondary', 
   githubRepo,
   githubBranch,
   notificationEmail,
+  environmentName: `${environmentName}-secondary`,
+  projectName,
+  costCenter,
   deploymentRegions: ['us-west-2', 'us-east-1', 'eu-west-1'],
   tags: {
-    Environment: 'Production',
-    Project: 'CICD-Pipeline',
+    Environment: `${environmentName}-secondary`,
+    Project: projectName,
     ManagedBy: 'CDK',
-    CostCenter: 'Engineering',
+    CostCenter: costCenter,
     Type: 'Secondary',
+    'iac-rlhf-amazon': 'true',
   },
 });
