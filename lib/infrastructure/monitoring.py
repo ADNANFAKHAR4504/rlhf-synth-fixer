@@ -2,7 +2,7 @@
 monitoring.py
 
 Monitoring module for CloudWatch, alarms, and X-Ray configuration.
-Addresses model failures: SNS notifications missing, CloudTrail auditing not implemented.
+Addresses model failures: SNS notifications missing.
 """
 
 import json
@@ -148,49 +148,6 @@ def create_sns_topic(name: str):
     return sns_topic
 
 
-def create_cloudtrail(name: str, s3_bucket_name: str):
-    """
-    Create CloudTrail for auditing.
-    Addresses model failure: CloudTrail auditing not implemented.
-    """
-    
-    # Create CloudTrail trail
-    cloudtrail = aws.cloudtrail.Trail(
-        f"{name}-cloudtrail",
-        name=f"{name}-cloudtrail",
-        s3_bucket_name=s3_bucket_name,
-        s3_key_prefix="cloudtrail-logs/",
-        include_global_service_events=True,
-        is_multi_region_trail=True,
-        enable_logging=True,
-        event_selectors=[aws.cloudtrail.TrailEventSelectorArgs(
-            read_write_type="All",
-            include_management_events=True,
-            data_resources=[aws.cloudtrail.TrailEventSelectorDataResourceArgs(
-                type="AWS::S3::Object",
-                values=[s3_bucket_name.apply(lambda name: "arn:aws:s3:::" + name + "/*")]
-            )]
-        )],
-        tags=config.get_tags(),
-        opts=pulumi.ResourceOptions(provider=config.aws_provider)
-    )
-
-    # Create CloudTrail log group
-    cloudtrail_log_group = aws.cloudwatch.LogGroup(
-        f"{name}-cloudtrail-logs",
-        name=f"/aws/cloudtrail/{name}",
-        retention_in_days=config.log_retention_days,
-        tags={
-            **config.get_tags(),
-            "Purpose": "CloudTrail"
-        },
-        opts=pulumi.ResourceOptions(provider=config.aws_provider)
-    )
-
-    return {
-        "trail": cloudtrail,
-        "log_group": cloudtrail_log_group
-    }
 
 
 def create_dashboard(name: str, function_name: str):

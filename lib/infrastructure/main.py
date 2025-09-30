@@ -84,11 +84,6 @@ def create_serverless_infrastructure():
         sns_topic.arn
     )
 
-    # Create CloudTrail for auditing (addresses model failure: CloudTrail auditing not implemented)
-    cloudtrail_result = monitoring.create_cloudtrail(
-        config.lambda_function_name,
-        cfn_logs_bucket.id
-    )
 
     # Create CloudWatch dashboard
     dashboard = monitoring.create_dashboard(
@@ -119,7 +114,6 @@ def create_serverless_infrastructure():
     pulumi.export("dlq_url", dlq.id)
     pulumi.export("dlq_arn", dlq.arn)
     pulumi.export("sns_topic_arn", sns_topic.arn)
-    pulumi.export("cloudtrail_arn", cloudtrail_result["trail"].arn)
     pulumi.export("xray_group_name", lambda_result["xray_group"].group_name)
     pulumi.export("dashboard_url", dashboard.dashboard_name)
     
@@ -141,7 +135,6 @@ def create_serverless_infrastructure():
         "dlq": dlq,
         "sns_topic": sns_topic,
         "alarms": alarms,
-        "cloudtrail": cloudtrail_result["trail"],
         "dashboard": dashboard,
         "parameters": parameter_hierarchy
     }

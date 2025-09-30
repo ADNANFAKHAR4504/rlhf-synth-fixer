@@ -212,29 +212,6 @@ def create_cloudformation_logs_bucket():
                         ],
                         "Resource": args[0] + "/*"
                     },
-                    {
-                        "Sid": "AWSCloudTrailAclCheck",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": "s3:GetBucketAcl",
-                        "Resource": args[0]
-                    },
-                    {
-                        "Sid": "AWSCloudTrailWrite",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "cloudtrail.amazonaws.com"
-                        },
-                        "Action": "s3:PutObject",
-                        "Resource": args[0] + "/AWSLogs/*",
-                        "Condition": {
-                            "StringEquals": {
-                                "s3:x-amz-acl": "bucket-owner-full-control"
-                            }
-                        }
-                    }
                 ]
             })
         ),

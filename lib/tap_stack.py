@@ -75,7 +75,6 @@ class TapStack(pulumi.ComponentResource):
             "dlq_url": self.infrastructure["dlq"].id,
             "dlq_arn": self.infrastructure["dlq"].arn,
             "sns_topic_arn": self.infrastructure["sns_topic"].arn,
-            "cloudtrail_arn": self.infrastructure["cloudtrail"].arn,
             "environment_variables": self.infrastructure["lambda_function"].environment.variables,
             "failover_function_name": self.infrastructure["failover_function"].name,
             "failover_function_arn": self.infrastructure["failover_function"].arn,
