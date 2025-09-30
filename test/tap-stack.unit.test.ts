@@ -248,7 +248,7 @@ describe("TapStack Unit Tests", () => {
         bucketName: 'secure-app-bucket-ts-12345',
         cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-12345',
         kmsKeyId: kmsInstance.kmsKey.arn,
-        trailName: 'secure-app-cloudtrail',
+        trailName: 'secure-app-cloudtrail-trail',
       })
     );
   });
@@ -640,7 +640,7 @@ describe("TapStack Unit Tests", () => {
       expect.objectContaining({
         bucketName: 'secure-app-bucket-ts-12345',
         cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-12345',
-        trailName: 'secure-app-cloudtrail',
+        trailName: 'secure-app-cloudtrail-trail',
       })
     );
   });

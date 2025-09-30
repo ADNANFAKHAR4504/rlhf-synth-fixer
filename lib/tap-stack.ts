@@ -123,7 +123,7 @@ export class TapStack extends TerraformStack {
       bucketName: config.appBucketName,
       cloudtrailBucketName: config.cloudtrailBucketName,
       kmsKeyId: kmsModule.kmsKey.arn,
-      trailName: 'secure-app-cloudtrail',
+      trailName: config.cloudtrailName,
     });
 
     // CloudTrail Module - Audit logging
