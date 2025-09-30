@@ -499,7 +499,7 @@ export class S3Module extends Construct {
           {
             applyServerSideEncryptionByDefault: {
               sseAlgorithm: 'aws:kms',
-              // kmsMasterKeyId: props.kmsKeyId,
+              kmsMasterKeyId: props.kmsKeyId,
             },
             bucketKeyEnabled: true,
           },
@@ -708,7 +708,7 @@ export class CloudTrailModule extends Construct {
     this.logGroup = new CloudwatchLogGroup(this, 'cloudtrail-log-group', {
       name: '/aws/cloudtrail/management-events-ts',
       retentionInDays: 365, // 1-year retention for compliance
-      kmsKeyId: props.kmsKeyId,
+      // kmsKeyId: props.kmsKeyId,
     });
 
     // IAM Role for CloudTrail to CloudWatch Logs
