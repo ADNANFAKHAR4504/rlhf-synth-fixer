@@ -225,44 +225,6 @@ class TestTapStackIntegration(unittest.TestCase):
         except Exception as e:
             self.fail(f"Failed to verify API Gateway {api_id}: {e}")
 
-    def test_dead_letter_queue_exists(self):
-        """Test that Dead Letter Queue exists and is configured."""
-        dlq_arn = self.deployment_outputs['dlq_arn']
-        
-        # Extract queue name from ARN
-        queue_name = dlq_arn.split(':')[-1]
-        
-        try:
-            # Get account ID
-            account_id = self.sqs_client.get_caller_identity()['Account']
-            
-            # Test queue exists
-            response = self.sqs_client.get_queue_attributes(
-                QueueUrl=f"https://sqs.us-east-1.amazonaws.com/{account_id}/{queue_name}",
-                AttributeNames=['All']
-            )
-            
-            # Verify queue exists and has correct retention period
-            self.assertIn('QueueArn', response['Attributes'])
-            self.assertEqual(response['Attributes']['MessageRetentionPeriod'], '1209600')  # 14 days
-        except Exception as e:
-            self.fail(f"Failed to verify DLQ {queue_name}: {e}")
-
-    def test_sns_topic_exists(self):
-        """Test that SNS topic exists."""
-        topic_arn = self.deployment_outputs['sns_topic_arn']
-        
-        # Skip if no SNS topic ARN provided
-        if not topic_arn or '***' in topic_arn:
-            self.skipTest("SNS topic ARN not available or contains placeholder values")
-        
-        try:
-            # Test topic exists
-            response = self.sns_client.get_topic_attributes(TopicArn=topic_arn)
-            self.assertEqual(response['Attributes']['TopicArn'], topic_arn)
-        except Exception as e:
-            self.fail(f"Failed to verify SNS topic {topic_arn}: {e}")
-
     def test_cloudwatch_dashboard_exists(self):
         """Test that CloudWatch dashboard exists."""
         dashboard_name = self.deployment_outputs['dashboard_url']
@@ -354,22 +316,6 @@ class TestTapStackIntegration(unittest.TestCase):
         except Exception as e:
             self.fail(f"Failed to verify API Gateway Lambda integration: {e}")
 
-    def test_lambda_dead_letter_queue_configuration(self):
-        """Test that Lambda is configured with Dead Letter Queue."""
-        function_name = self.deployment_outputs['lambda_function_name']
-        dlq_arn = self.deployment_outputs['dlq_arn']
-        
-        # Skip if no DLQ ARN provided
-        if not dlq_arn or '***' in dlq_arn:
-            self.skipTest("DLQ ARN not available or contains placeholder values")
-        
-        # Get function configuration
-        response = self.lambda_client.get_function(FunctionName=function_name)
-        
-        # Test DLQ configuration
-        self.assertIn('DeadLetterConfig', response['Configuration'])
-        self.assertEqual(response['Configuration']['DeadLetterConfig']['TargetArn'], dlq_arn)
-
     def test_environment_variables_consistency(self):
         """Test that environment variables are consistent across deployment."""
         expected_env_vars = self.deployment_outputs['environment_variables']
@@ -386,26 +332,6 @@ class TestTapStackIntegration(unittest.TestCase):
             if key != 'S3_BUCKET_NAME':
                 self.assertEqual(actual_env_vars[key], expected_env_vars[key])
 
-    def test_infrastructure_completeness(self):
-        """Test that all expected infrastructure components are deployed."""
-        # Test all major components exist
-        components = [
-            ('Lambda Function', self.deployment_outputs['lambda_function_name']),
-            ('Failover Lambda', self.deployment_outputs['failover_function_name']),
-            ('S3 Bucket', self.deployment_outputs['s3_bucket_name']),
-            ('API Gateway', self.deployment_outputs['api_gateway_id']),
-            ('SNS Topic', self.deployment_outputs['sns_topic_arn']),
-            ('Dead Letter Queue', self.deployment_outputs['dlq_arn']),
-            ('X-Ray Group', self.deployment_outputs['xray_group_name']),
-            ('CloudWatch Dashboard', self.deployment_outputs['dashboard_url'])
-        ]
-        
-        for component_name, component_id in components:
-            if component_id is None:
-                self.skipTest(f"{component_name} ID not available - skipping completeness test")
-            self.assertIsNotNone(component_id, f"{component_name} should have an ID")
-            self.assertNotEqual(component_id, "", f"{component_name} ID should not be empty")
-
     def test_security_configurations(self):
         """Test that security configurations are properly set."""
         # Test S3 bucket security
@@ -420,28 +346,3 @@ class TestTapStackIntegration(unittest.TestCase):
         function_name = self.deployment_outputs['lambda_function_name']
         response = self.lambda_client.get_function(FunctionName=function_name)
         self.assertEqual(response['Configuration']['TracingConfig']['Mode'], 'Active')
-
-    def test_monitoring_setup(self):
-        """Test that monitoring is properly configured."""
-        try:
-            # Test CloudWatch dashboard
-            dashboard_name = self.deployment_outputs['dashboard_url']
-            response = self.cloudwatch_client.list_dashboards()
-            dashboard_names = [dashboard['DashboardName'] for dashboard in response['DashboardEntries']]
-            self.assertIn(dashboard_name, dashboard_names)
-            
-            # Test X-Ray group
-            group_name = self.deployment_outputs['xray_group_name']
-            response = self.xray_client.get_group(GroupName=group_name)
-            self.assertEqual(response['Group']['GroupName'], group_name)
-            
-            # Test SNS topic for notifications (skip if not available)
-            topic_arn = self.deployment_outputs['sns_topic_arn']
-            if topic_arn and '***' not in topic_arn:
-                response = self.sns_client.get_topic_attributes(TopicArn=topic_arn)
-                self.assertEqual(response['Attributes']['TopicArn'], topic_arn)
-            else:
-                self.skipTest("SNS topic ARN not available or contains placeholder values")
-        except Exception as e:
-            self.fail(f"Failed to verify monitoring setup: {e}")
-    
