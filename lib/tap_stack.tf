@@ -796,21 +796,12 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 #  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
 #}
 
-resource "null_resource" "wait_for_iam" {
-  depends_on = [aws_iam_role_policy.cloudtrail_cloudwatch]
-
-  provisioner "local-exec" {
-    command = "sleep 10"
-  }
-}
-
 
 # CloudTrail
+# CloudTrail (CI/CD-safe)
 resource "aws_cloudtrail" "main" {
   name                          = "${local.name_prefix}-trail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
-  cloud_watch_logs_group_arn    = aws_cloudwatch_log_group.cloudtrail.arn
-  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail.arn
   enable_log_file_validation    = true
   include_global_service_events = true
   is_multi_region_trail         = false
@@ -825,17 +816,11 @@ resource "aws_cloudtrail" "main" {
     }
   }
 
-  depends_on = [
-    aws_cloudwatch_log_group.cloudtrail,
-    aws_iam_role_policy.cloudtrail_cloudwatch,
-    aws_s3_bucket_policy.cloudtrail,
-    null_resource.wait_for_iam
-  ]
+  depends_on = [aws_s3_bucket_policy.cloudtrail]
+
   tags = merge(
     local.common_tags,
-    {
-      Name = "${local.name_prefix}-trail"
-    }
+    { Name = "${local.name_prefix}-trail" }
   )
 }
 
