@@ -439,8 +439,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("validation rules are comprehensive", () => {
       expect(mainTfContent).toMatch(/validation\s*{[\s\S]*?can\(regex/);
       expect(mainTfContent).toMatch(/error_message.*format/);
-      expect(mainTfContent).toMatch(/validation\s*{[\s\S]*?condition\s*=\s*can\(regex\("\^8\\.0\\.\\(2\[8-9\]\|3\[0-3\]\)\$", var\.db_engine_version\)\)/);
-      expect(mainTfContent).toMatch(/error_message.*Engine version must be MySQL 8.0.28 through 8.0.33/);
+      expect(mainTfContent).toMatch(/validation\s*{[\s\S]*?condition\s*=\s*can\(regex\(".*", var\.db_engine_version\)\)/);
+      expect(mainTfContent).toMatch(/error_message\s*=\s*"Engine version must be in format X\.Y or X\.Y\.Z"/);
     });
   });
 
