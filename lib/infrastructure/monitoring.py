@@ -168,7 +168,7 @@ def create_cloudtrail(name: str, s3_bucket_name: str):
             include_management_events=True,
             data_resources=[aws.cloudtrail.TrailEventSelectorDataResourceArgs(
                 type="AWS::S3::Object",
-                values=[s3_bucket_name.apply(lambda name: f"arn:aws:s3:::{name}/*")]
+                values=[s3_bucket_name.apply(lambda name: "arn:aws:s3:::" + name + "/*")]
             )]
         )],
         tags=config.get_tags(),
@@ -216,7 +216,7 @@ def create_dashboard(name: str, function_name: str):
                             "period": 300,
                             "stat": "Sum",
                             "region": config.aws_region,
-                            "title": f"Lambda Function Metrics - {args[0]}"
+                            "title": "Lambda Function Metrics - " + args[0]
                         }
                     }
                 ]

@@ -76,7 +76,7 @@ def create_logs_bucket(bucket_name: str):
                         "Effect": "Deny",
                         "Principal": "*",
                         "Action": "s3:*",
-                        "Resource": [args[0], f"{args[0]}/*"],
+                        "Resource": [args[0], args[0] + "/*"],
                         "Condition": {
                             "Bool": {
                                 "aws:SecureTransport": "false"
@@ -88,7 +88,7 @@ def create_logs_bucket(bucket_name: str):
                         "Effect": "Deny",
                         "Principal": "*",
                         "Action": "s3:PutObject",
-                        "Resource": f"{args[0]}/*",
+                        "Resource": args[0] + "/*",
                         "Condition": {
                             "StringNotEquals": {
                                 "s3:x-amz-server-side-encryption": "AES256"
@@ -188,7 +188,7 @@ def create_cloudformation_logs_bucket():
                         "Effect": "Deny",
                         "Principal": "*",
                         "Action": "s3:*",
-                        "Resource": [args[0], f"{args[0]}/*"],
+                        "Resource": [args[0], args[0] + "/*"],
                         "Condition": {
                             "Bool": {
                                 "aws:SecureTransport": "false"
@@ -205,7 +205,7 @@ def create_cloudformation_logs_bucket():
                             "s3:GetObject",
                             "s3:PutObject"
                         ],
-                        "Resource": f"{args[0]}/*"
+                        "Resource": args[0] + "/*"
                     },
                     {
                         "Sid": "AWSCloudTrailAclCheck",
@@ -223,7 +223,7 @@ def create_cloudformation_logs_bucket():
                             "Service": "cloudtrail.amazonaws.com"
                         },
                         "Action": "s3:PutObject",
-                        "Resource": f"{args[0]}/cloudtrail-logs/*",
+                            "Resource": args[0] + "/cloudtrail-logs/*",
                         "Condition": {
                             "StringEquals": {
                                 "s3:x-amz-acl": "bucket-owner-full-control"

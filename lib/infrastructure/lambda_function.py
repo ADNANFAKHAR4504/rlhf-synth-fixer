@@ -76,7 +76,7 @@ def create_lambda_function(
     # Create X-Ray sampling rule for better tracing (addresses model failure: X-Ray tracing minimal)
     xray_sampling_rule = aws.xray.SamplingRule(
         f"{name}-xray-sampling",
-        rule_name=f"{name}-sampling-rule",
+        rule_name=f"{name[:20]}-sampling",
         resource_arn=f"arn:aws:lambda:{config.aws_region}:*:function:{name}",
         priority=1000,
         fixed_rate=0.1,  # 10% sampling rate

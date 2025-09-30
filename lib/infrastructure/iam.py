@@ -68,7 +68,7 @@ def create_lambda_execution_role(name: str, s3_bucket_arn: str, dlq_arn: str):
                         "s3:PutObject",
                         "s3:DeleteObject"
                     ],
-                    "Resource": f"{args[0]}/*"
+                    "Resource": args[0] + "/*"
                 }, {
                     "Effect": "Allow",
                     "Action": [
