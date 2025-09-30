@@ -819,11 +819,6 @@ resource "aws_cloudtrail" "main" {
       type   = "AWS::S3::Object"
       values = ["arn:${local.partition}:s3:::${aws_s3_bucket.main.id}/*"]
     }
-
-    data_resource {
-      type   = "AWS::Lambda::Function"
-      values = ["arn:${local.partition}:lambda:*:*:function/*"]
-    }
   }
 
   insight_selector {
