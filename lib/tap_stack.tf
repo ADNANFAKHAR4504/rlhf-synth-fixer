@@ -719,9 +719,8 @@ resource "aws_acm_certificate" "main" {
 }
 
 # --- Find the hosted zone in Route53 (must exist and be authoritative for var.domain_name) ---
-data "aws_route53_zone" "zone" {
-  name         = "tapstacknewex.com"
-  private_zone = false
+resource "aws_route53_zone" "main" {
+  name = "tapstacknewex.com"
 }
 
 # --- Create the validation records from ACM's domain_validation_options ---
@@ -735,7 +734,7 @@ resource "aws_route53_record" "cert_validation" {
     }
   }
 
-  zone_id = data.aws_route53_zone.zone.zone_id
+  zone_id = aws_route53_zone.main.zone_id
   name    = each.value.name
   type    = each.value.type
   ttl     = 60
