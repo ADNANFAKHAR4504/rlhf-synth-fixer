@@ -34,21 +34,18 @@ export class CICDPipelineStack extends cdk.Stack {
     super(scope, id, props);
 
     // Configuration from props and context
-    const environmentName = props.environmentName || this.node.tryGetContext('environment') || 'dev';
-    const projectName = props.projectName || this.node.tryGetContext('projectName') || 'iac-test';
-    const costCenter = props.costCenter || this.node.tryGetContext('costCenter') || 'engineering';
+    const environmentName =
+      props.environmentName || this.node.tryGetContext('environment') || 'dev';
+    const projectName =
+      props.projectName || this.node.tryGetContext('projectName') || 'iac-test';
+    const costCenter =
+      props.costCenter ||
+      this.node.tryGetContext('costCenter') ||
+      'engineering';
 
     // Helper function to create resource names
-    const createResourceName = (resource: string) => `${projectName}-${resource}-${environmentName}`;
-
-    // Common tags for all resources
-    const commonTags = {
-      Environment: environmentName,
-      Project: projectName,
-      CostCenter: costCenter,
-      ManagedBy: 'CDK',
-      'iac-rlhf-amazon': 'true'
-    };
+    const createResourceName = (resource: string) =>
+      `${projectName}-${resource}-${environmentName}`;
 
     // Apply tags to the stack
     cdk.Tags.of(this).add('Environment', environmentName);
@@ -70,33 +67,39 @@ export class CICDPipelineStack extends cdk.Stack {
       bucketName: `${createResourceName('artifacts')}-${this.account}-${this.region}`,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
-      lifecycleRules: [{
-        id: 'delete-old-artifacts',
-        expiration: cdk.Duration.days(30),
-        noncurrentVersionExpiration: cdk.Duration.days(7),
-      }],
+      lifecycleRules: [
+        {
+          id: 'delete-old-artifacts',
+          expiration: cdk.Duration.days(30),
+          noncurrentVersionExpiration: cdk.Duration.days(7),
+        },
+      ],
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
     cdk.Tags.of(artifactBucket).add('iac-rlhf-amazon', 'true');
 
     // DynamoDB table for build artifacts metadata
-    const artifactsMetadataTable = new dynamodb.Table(this, 'ArtifactsMetadata', {
-      tableName: createResourceName('artifacts-metadata'),
-      partitionKey: {
-        name: 'buildId',
-        type: dynamodb.AttributeType.STRING
-      },
-      sortKey: {
-        name: 'timestamp',
-        type: dynamodb.AttributeType.STRING
-      },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
-    });
+    const artifactsMetadataTable = new dynamodb.Table(
+      this,
+      'ArtifactsMetadata',
+      {
+        tableName: createResourceName('artifacts-metadata'),
+        partitionKey: {
+          name: 'buildId',
+          type: dynamodb.AttributeType.STRING,
+        },
+        sortKey: {
+          name: 'timestamp',
+          type: dynamodb.AttributeType.STRING,
+        },
+        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        encryption: dynamodb.TableEncryption.AWS_MANAGED,
+        pointInTimeRecoverySpecification: {
+          pointInTimeRecoveryEnabled: true,
+        },
+      }
+    );
     cdk.Tags.of(artifactsMetadataTable).add('iac-rlhf-amazon', 'true');
 
     // CloudWatch Log Group
@@ -126,16 +129,20 @@ export class CICDPipelineStack extends cdk.Stack {
     cdk.Tags.of(githubToken).add('iac-rlhf-amazon', 'true');
 
     // Database credentials secret
-    const dbCredentials = new secretsmanager.Secret(this, 'DatabaseCredentials', {
-      secretName: createResourceName('database-credentials'),
-      description: `Database credentials for ${projectName} application`,
-      generateSecretString: {
-        secretStringTemplate: JSON.stringify({ username: 'admin' }),
-        generateStringKey: 'password',
-        excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
-      },
-      encryptionKey: encryptionKey,
-    });
+    const dbCredentials = new secretsmanager.Secret(
+      this,
+      'DatabaseCredentials',
+      {
+        secretName: createResourceName('database-credentials'),
+        description: `Database credentials for ${projectName} application`,
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({ username: 'admin' }),
+          generateStringKey: 'password',
+          excludeCharacters: ' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
+        },
+        encryptionKey: encryptionKey,
+      }
+    );
     cdk.Tags.of(dbCredentials).add('iac-rlhf-amazon', 'true');
 
     // IAM Role for CodeBuild
@@ -152,22 +159,18 @@ export class CICDPipelineStack extends cdk.Stack {
                 'logs:CreateLogStream',
                 'logs:PutLogEvents',
               ],
-              resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/codebuild/*`],
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/codebuild/*`,
+              ],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                's3:GetObject',
-                's3:PutObject',
-              ],
+              actions: ['s3:GetObject', 's3:PutObject'],
               resources: [`${artifactBucket.bucketArn}/*`],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: [
-                'dynamodb:PutItem',
-                'dynamodb:GetItem',
-              ],
+              actions: ['dynamodb:PutItem', 'dynamodb:GetItem'],
               resources: [artifactsMetadataTable.tableArn],
             }),
             // KMS permissions removed since S3 now uses AWS managed encryption
@@ -218,9 +221,7 @@ export class CICDPipelineStack extends cdk.Stack {
             ],
           },
           post_build: {
-            commands: [
-              'echo Build completed on `date`',
-            ],
+            commands: ['echo Build completed on `date`'],
           },
         },
         artifacts: {
@@ -231,78 +232,80 @@ export class CICDPipelineStack extends cdk.Stack {
     cdk.Tags.of(buildProject).add('iac-rlhf-amazon', 'true');
 
     // CodeBuild Project for Unit Tests
-    const unitTestProject = new codebuild.PipelineProject(this, 'UnitTestProject', {
-      projectName: createResourceName('unit-test-project'),
-      role: codeBuildRole,
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
-        computeType: codebuild.ComputeType.SMALL,
-      },
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          install: {
-            commands: [
-              'npm ci',
-            ],
-          },
-          build: {
-            commands: [
-              'echo Running unit tests...',
-              'npm run test:unit -- --coverage',
-            ],
-          },
+    const unitTestProject = new codebuild.PipelineProject(
+      this,
+      'UnitTestProject',
+      {
+        projectName: createResourceName('unit-test-project'),
+        role: codeBuildRole,
+        environment: {
+          buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
+          computeType: codebuild.ComputeType.SMALL,
         },
-        reports: {
-          UnitTestReport: {
-            files: ['coverage/lcov.info'],
-            'file-format': 'SIMPLECOV',
+        buildSpec: codebuild.BuildSpec.fromObject({
+          version: '0.2',
+          phases: {
+            install: {
+              commands: ['npm ci'],
+            },
+            build: {
+              commands: [
+                'echo Running unit tests...',
+                'npm run test:unit -- --coverage',
+              ],
+            },
           },
-        },
-      }),
-    });
+          reports: {
+            UnitTestReport: {
+              files: ['coverage/lcov.info'],
+              'file-format': 'SIMPLECOV',
+            },
+          },
+        }),
+      }
+    );
     cdk.Tags.of(unitTestProject).add('iac-rlhf-amazon', 'true');
 
     // CodeBuild Project for Integration Tests
-    const integrationTestProject = new codebuild.PipelineProject(this, 'IntegrationTestProject', {
-      projectName: createResourceName('integration-test-project'),
-      role: codeBuildRole,
-      environment: {
-        buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
-        computeType: codebuild.ComputeType.MEDIUM,
-      },
-      environmentVariables: {
-        DB_SECRET_ARN: { value: dbCredentials.secretArn },
-      },
-      buildSpec: codebuild.BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          install: {
-            commands: [
-              'npm ci',
-            ],
-          },
-          pre_build: {
-            commands: [
-              'echo Setting up test environment...',
-              'docker-compose -f docker-compose.test.yml up -d',
-              'sleep 10',
-            ],
-          },
-          build: {
-            commands: [
-              'echo Running integration tests...',
-              'npm run test:integration',
-            ],
-          },
-          post_build: {
-            commands: [
-              'docker-compose -f docker-compose.test.yml down',
-            ],
-          },
+    const integrationTestProject = new codebuild.PipelineProject(
+      this,
+      'IntegrationTestProject',
+      {
+        projectName: createResourceName('integration-test-project'),
+        role: codeBuildRole,
+        environment: {
+          buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
+          computeType: codebuild.ComputeType.MEDIUM,
         },
-      }),
-    });
+        environmentVariables: {
+          DB_SECRET_ARN: { value: dbCredentials.secretArn },
+        },
+        buildSpec: codebuild.BuildSpec.fromObject({
+          version: '0.2',
+          phases: {
+            install: {
+              commands: ['npm ci'],
+            },
+            pre_build: {
+              commands: [
+                'echo Setting up test environment...',
+                'docker-compose -f docker-compose.test.yml up -d',
+                'sleep 10',
+              ],
+            },
+            build: {
+              commands: [
+                'echo Running integration tests...',
+                'npm run test:integration',
+              ],
+            },
+            post_build: {
+              commands: ['docker-compose -f docker-compose.test.yml down'],
+            },
+          },
+        }),
+      }
+    );
     cdk.Tags.of(integrationTestProject).add('iac-rlhf-amazon', 'true');
 
     // Grant secret read permissions
@@ -397,7 +400,8 @@ export class CICDPipelineStack extends cdk.Stack {
     const manualApprovalAction = new codepipeline_actions.ManualApprovalAction({
       actionName: 'Production_Approval',
       notificationTopic: notificationTopic,
-      additionalInformation: 'Please review the deployment and approve for production',
+      additionalInformation:
+        'Please review the deployment and approve for production',
       externalEntityLink: `https://github.com/${props.githubOwner}/${props.githubRepo}`,
     });
 
@@ -423,6 +427,7 @@ export class CICDPipelineStack extends cdk.Stack {
           deploymentRole: prodDeployRole,
           cfnCapabilities: [cdk.CfnCapabilities.NAMED_IAM],
           region: region,
+          account: this.account, // Explicit account required for cross-region support
           runOrder: index + 2,
           parameterOverrides: {
             DeploymentRegion: region,
@@ -437,20 +442,24 @@ export class CICDPipelineStack extends cdk.Stack {
     });
 
     // CloudWatch Alarms
-    const pipelineFailureAlarm = new cloudwatch.Alarm(this, 'PipelineFailureAlarm', {
-      alarmName: createResourceName('pipeline-failure'),
-      metric: new cloudwatch.Metric({
-        namespace: 'AWS/CodePipeline',
-        metricName: 'PipelineExecutionFailure',
-        dimensionsMap: {
-          PipelineName: pipeline.pipelineName,
-        },
-        statistic: 'Sum',
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const pipelineFailureAlarm = new cloudwatch.Alarm(
+      this,
+      'PipelineFailureAlarm',
+      {
+        alarmName: createResourceName('pipeline-failure'),
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/CodePipeline',
+          metricName: 'PipelineExecutionFailure',
+          dimensionsMap: {
+            PipelineName: pipeline.pipelineName,
+          },
+          statistic: 'Sum',
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
 
     pipelineFailureAlarm.addAlarmAction(
       new cloudwatch_actions.SnsAction(notificationTopic)
@@ -458,20 +467,24 @@ export class CICDPipelineStack extends cdk.Stack {
     cdk.Tags.of(pipelineFailureAlarm).add('iac-rlhf-amazon', 'true');
 
     // Lambda function for cost monitoring and log processing
-    const costMonitoringLambda = new lambda.Function(this, 'CostMonitoringLambda', {
-      functionName: createResourceName('cost-monitoring'),
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'cost-monitoring.lambda_handler',
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 256,
-      environment: {
-        SNS_TOPIC_ARN: notificationTopic.topicArn,
-        PROJECT_NAME: projectName,
-        ENVIRONMENT: environmentName,
-        TABLE_NAME: artifactsMetadataTable.tableName,
-      },
-      code: lambda.Code.fromAsset('lambda'),
-    });
+    const costMonitoringLambda = new lambda.Function(
+      this,
+      'CostMonitoringLambda',
+      {
+        functionName: createResourceName('cost-monitoring'),
+        runtime: lambda.Runtime.PYTHON_3_11,
+        handler: 'cost-monitoring.lambda_handler',
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 256,
+        environment: {
+          SNS_TOPIC_ARN: notificationTopic.topicArn,
+          PROJECT_NAME: projectName,
+          ENVIRONMENT: environmentName,
+          TABLE_NAME: artifactsMetadataTable.tableName,
+        },
+        code: lambda.Code.fromAsset('lambda'),
+      }
+    );
 
     // Grant necessary permissions to the Lambda
     notificationTopic.grantPublish(costMonitoringLambda);
@@ -486,11 +499,23 @@ export class CICDPipelineStack extends cdk.Stack {
     cdk.Tags.of(costMonitoringLambda).add('iac-rlhf-amazon', 'true');
 
     // CloudWatch log subscription to trigger cost monitoring
-    const logSubscription = new logs.SubscriptionFilter(this, 'CostMonitoringLogFilter', {
-      logGroup: logGroup,
-      destination: new logs_destinations.LambdaDestination(costMonitoringLambda),
-      filterPattern: logs.FilterPattern.anyTerm('SUCCEEDED', 'FAILED', 'Duration:', 'Memory:', 'CPU:'),
-    });
+    const logSubscription = new logs.SubscriptionFilter(
+      this,
+      'CostMonitoringLogFilter',
+      {
+        logGroup: logGroup,
+        destination: new logs_destinations.LambdaDestination(
+          costMonitoringLambda
+        ),
+        filterPattern: logs.FilterPattern.anyTerm(
+          'SUCCEEDED',
+          'FAILED',
+          'Duration:',
+          'Memory:',
+          'CPU:'
+        ),
+      }
+    );
     cdk.Tags.of(logSubscription).add('iac-rlhf-amazon', 'true');
 
     // EventBridge rule for pipeline state changes
@@ -501,10 +526,10 @@ export class CICDPipelineStack extends cdk.Stack {
         detailType: ['CodePipeline Pipeline Execution State Change'],
         detail: {
           pipeline: [pipeline.pipelineName],
-          state: ['FAILED', 'SUCCEEDED']
-        }
+          state: ['FAILED', 'SUCCEEDED'],
+        },
       },
-      targets: [new events_targets.LambdaFunction(costMonitoringLambda)]
+      targets: [new events_targets.LambdaFunction(costMonitoringLambda)],
     });
     cdk.Tags.of(pipelineEventRule).add('iac-rlhf-amazon', 'true');
 

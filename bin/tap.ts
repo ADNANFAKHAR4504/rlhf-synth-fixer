@@ -6,18 +6,35 @@ import { CICDPipelineStack } from '../lib/tap-stack';
 const app = new cdk.App();
 
 // Get configuration from context or environment variables
-const githubOwner = app.node.tryGetContext('githubOwner') || process.env.GITHUB_OWNER || 'TuringGpt';
-const githubRepo = app.node.tryGetContext('githubRepo') || process.env.GITHUB_REPO || 'iac-test-automations';
-const githubBranch = app.node.tryGetContext('githubBranch') || process.env.GITHUB_BRANCH || 'main';
-const notificationEmail = app.node.tryGetContext('notificationEmail') || process.env.NOTIFICATION_EMAIL || 'admin@example.com';
-const environmentName = app.node.tryGetContext('environment') || process.env.ENVIRONMENT || 'dev';
-const projectName = app.node.tryGetContext('projectName') || process.env.PROJECT_NAME || 'iac-test';
-const costCenter = app.node.tryGetContext('costCenter') || process.env.COST_CENTER || 'engineering';
+const githubOwner =
+  app.node.tryGetContext('githubOwner') ||
+  process.env.GITHUB_OWNER ||
+  'TuringGpt';
+const githubRepo =
+  app.node.tryGetContext('githubRepo') ||
+  process.env.GITHUB_REPO ||
+  'iac-test-automations';
+const githubBranch =
+  app.node.tryGetContext('githubBranch') || process.env.GITHUB_BRANCH || 'main';
+const notificationEmail =
+  app.node.tryGetContext('notificationEmail') ||
+  process.env.NOTIFICATION_EMAIL ||
+  'admin@example.com';
+const environmentName =
+  app.node.tryGetContext('environment') || process.env.ENVIRONMENT || 'dev';
+const projectName =
+  app.node.tryGetContext('projectName') ||
+  process.env.PROJECT_NAME ||
+  'iac-test';
+const costCenter =
+  app.node.tryGetContext('costCenter') ||
+  process.env.COST_CENTER ||
+  'engineering';
 
 // Primary region deployment
-const primaryStack = new CICDPipelineStack(app, 'CICDPipelineStack', {
+new CICDPipelineStack(app, 'CICDPipelineStack', {
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
+    account: process.env.CDK_DEFAULT_ACCOUNT || '123456789012', // Explicit account required for cross-region support
     region: process.env.CDK_DEFAULT_REGION || 'us-east-1',
   },
   githubOwner,
@@ -38,9 +55,9 @@ const primaryStack = new CICDPipelineStack(app, 'CICDPipelineStack', {
 });
 
 // Secondary region for high availability (pipeline redundancy)
-const secondaryStack = new CICDPipelineStack(app, 'CICDPipelineStackSecondary', {
+new CICDPipelineStack(app, 'CICDPipelineStackSecondary', {
   env: {
-    account: process.env.CDK_DEFAULT_ACCOUNT,
+    account: process.env.CDK_DEFAULT_ACCOUNT || '123456789012', // Explicit account required for cross-region support
     region: 'us-west-2',
   },
   githubOwner,
