@@ -46,6 +46,12 @@ variable "rds_allocated_storage" {
   default     = 20
 }
 
+variable "domain_name" {
+  description = "Root domain hosted in Route53 that will be used for ACM validation (e.g. example.com)"
+  type        = string
+  default     = "tapstacknewex.com"
+}
+
 # ================================
 # Data Sources
 # ================================
@@ -527,7 +533,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "postgres" {
   identifier     = "${local.name_prefix}-postgres"
   engine         = "postgres"
-  engine_version = "15.5"
+  engine_version = "17.5"
   
   instance_class        = var.rds_instance_class
   allocated_storage     = var.rds_allocated_storage
@@ -590,22 +596,18 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 
 resource "aws_launch_template" "main" {
   name_prefix = "${local.name_prefix}-launch-template"
-  
-  image_id               = data.aws_ami.amazon_linux_2.id
-  instance_type          = var.instance_type
+
+  image_id      = data.aws_ami.amazon_linux_2.id
+  instance_type = var.instance_type
+
+  # Provide SGs via vpc_security_group_ids (do not combine with network_interfaces block)
   vpc_security_group_ids = [aws_security_group.ec2.id]
-  
+
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2_profile.name
   }
-  
-  # Ensure no public IP assignment
-  network_interfaces {
-    associate_public_ip_address = false
-    security_groups             = [aws_security_group.ec2.id]
-    delete_on_termination       = true
-  }
-  
+
+  # user_data as before
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -615,7 +617,7 @@ resource "aws_launch_template" "main" {
     echo "<h1>Hello from ${local.name_prefix}</h1>" > /var/www/html/index.html
   EOF
   )
-  
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(
@@ -625,7 +627,7 @@ resource "aws_launch_template" "main" {
       }
     )
   }
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -699,20 +701,56 @@ resource "aws_lb_listener" "http" {
 }
 
 # Self-signed certificate for HTTPS (for demo purposes)
+
 resource "aws_acm_certificate" "main" {
-  domain_name       = "${local.name_prefix}.example.com"
+  domain_name       = "${local.name_prefix}.${var.domain_name}"
   validation_method = "DNS"
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   tags = merge(
     local.common_tags,
     {
       Name = "${local.name_prefix}-certificate"
     }
   )
+}
+
+# --- Find the hosted zone in Route53 (must exist and be authoritative for var.domain_name) ---
+data "aws_route53_zone" "zone" {
+  name         = var.domain_name
+  private_zone = false
+}
+
+# --- Create the validation records from ACM's domain_validation_options ---
+resource "aws_route53_record" "cert_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.main.domain_validation_options :
+    dvo.domain_name => {
+      name  = dvo.resource_record_name
+      type  = dvo.resource_record_type
+      value = dvo.resource_record_value
+    }
+  }
+
+  zone_id = data.aws_route53_zone.zone.zone_id
+  name    = each.value.name
+  type    = each.value.type
+  ttl     = 60
+  records = [each.value.value]
+}
+
+# --- Wait for ACM to validate using the created Route53 records ---
+resource "aws_acm_certificate_validation" "main" {
+  certificate_arn         = aws_acm_certificate.main.arn
+  validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
+
+  # If certificate issuance sometimes takes longer in your account, increase create timeout:
+  timeouts {
+    create = "20m"
+  }
 }
 
 # ALB Listener for HTTPS
