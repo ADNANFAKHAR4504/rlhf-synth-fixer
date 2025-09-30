@@ -76,7 +76,7 @@ variable "db_max_allocated_storage" {
 variable "db_engine_version" {
   description = "MySQL engine version"
   type        = string
-  default     = "8.0.28"  # Latest stable version supported in RDS as of Sept 2025
+  default     = "8.0"  # Latest stable version supported in RDS as of Sept 2025
   
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", var.db_engine_version))
