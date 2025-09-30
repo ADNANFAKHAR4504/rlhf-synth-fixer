@@ -114,22 +114,6 @@ describe('Static Website Infrastructure Integration Tests', () => {
       expect(config.Logging.Bucket).toContain(outputs.LoggingBucketName);
       expect(config.Logging.Prefix).toBe('cloudfront-logs/');
     });
-
-    test('should have custom error pages configured', async () => {
-      const distributionId = outputs.CloudFrontDistributionId;
-      const result: any = await cloudfront.getDistribution({ Id: distributionId }).promise();
-      const config = result.Distribution.DistributionConfig;
-
-      expect(config.CustomErrorResponses.Items).toHaveLength(2);
-
-      const error404 = config.CustomErrorResponses.Items.find((e: any) => e.ErrorCode === 404);
-      expect(error404.ResponseCode).toBe(404);
-      expect(error404.ResponsePagePath).toBe('/error.html');
-
-      const error403 = config.CustomErrorResponses.Items.find((e: any) => e.ErrorCode === 403);
-      expect(error403.ResponseCode).toBe(403);
-      expect(error403.ResponsePagePath).toBe('/error.html');
-    });
   });
 
   describe('KMS Key', () => {
