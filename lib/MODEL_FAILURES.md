@@ -134,7 +134,37 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
 
 **Fix Applied:** Used `max(var.cloudtrail_retention_days, 90)` and reduced GLACIER transition to 60 days to ensure proper ordering.
 
-### 7. GuardDuty Deprecated Configuration
+### 7. CloudTrail Event Selector ARN Validation Error
+
+**Model Generated:**
+```hcl
+resource "aws_cloudtrail" "main" {
+  # ... other configuration ...
+  
+  event_selector {
+    read_write_type           = "All"
+    include_management_events = true
+    
+    data_resource {
+      type   = "AWS::S3::Object"
+      values = ["arn:${local.partition}:s3:::*/*"]  # Invalid wildcard pattern
+    }
+    
+    data_resource {
+      type   = "AWS::Lambda::Function"
+      values = ["arn:${local.partition}:lambda:*:*:function/*"]  # Invalid wildcard pattern
+    }
+  }
+}
+```
+
+**Problem:** CloudTrail event selectors have strict validation rules for ARN patterns. Wildcard patterns like `*/*` and `*:*:function/*` are not accepted, causing `InvalidEventSelectorsException` errors.
+
+**Fix Applied:** 
+- Changed S3 data resource to use specific bucket ARN: `["arn:${local.partition}:s3:::${aws_s3_bucket.main.id}/*"]`
+- Removed Lambda function data resource selector entirely (management events are still captured via `include_management_events = true`)
+
+### 8. GuardDuty Deprecated Configuration
 
 **Model Generated:**
 ```hcl
@@ -166,7 +196,7 @@ resource "aws_guardduty_detector" "main" {
 
 **Fix Applied:** Removed the deprecated `datasources` block.
 
-### 8. Regional Compatibility Issues
+### 9. Regional Compatibility Issues
 
 **Model Generated:** Various configurations assuming all AWS services are available in all regions.
 
@@ -182,7 +212,7 @@ resource "aws_guardduty_detector" "main" {
 
 ## Minor Configuration Issues
 
-### 9. Deprecated Data Source Usage
+### 10. Deprecated Data Source Usage
 
 **Model Generated:**
 ```hcl
@@ -198,7 +228,7 @@ locals {
 }
 ```
 
-### 10. S3 Lifecycle Filter Requirement
+### 11. S3 Lifecycle Filter Requirement
 
 **Model Generated:** S3 lifecycle rule without required `filter` block.
 
@@ -215,11 +245,12 @@ locals {
 4. **KMS/CloudWatch Integration** - Regional compatibility issues
 5. **AWS Config Policy** - Regional availability issues
 6. **S3 Lifecycle Validation** - Logic errors in retention policies
+7. **CloudTrail Event Selector** - Invalid ARN patterns causing deployment failures
 
 **Low Severity Issues:**
-7. **GuardDuty Deprecation** - Warning messages but still functional
-8. **Data Source Deprecation** - Warning messages
-9. **Missing Filter Blocks** - Validation warnings
+8. **GuardDuty Deprecation** - Warning messages but still functional
+9. **Data Source Deprecation** - Warning messages
+10. **Missing Filter Blocks** - Validation warnings
 
 ## Root Causes
 
