@@ -11,10 +11,9 @@
     "General Infrastructure Tooling QA",
     "Network Configuration",
     "Security Configuration",
-    "Database Management",
     "Monitoring Setup"
   ],
-  "training_quality": 9,
+  "training_quality": 8,
   "aws_services": [
     "VPC",
     "IAM",
@@ -23,8 +22,8 @@
     "Internet Gateway",
     "Security Groups",
     "EC2",
-    "RDS",
     "S3",
+    "KMS",
     "EIP"
   ],
   "coverage": {
