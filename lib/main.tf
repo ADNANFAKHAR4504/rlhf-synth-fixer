@@ -399,8 +399,9 @@ resource "aws_security_group" "rds" {
 # ===========================
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.name_prefix}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
+  name_prefix = "${var.name_prefix}-"
+  subnet_ids  = aws_subnet.private[*].id
+  description = "Subnet group for RDS instance"
 
   tags = merge(
     local.common_tags,
@@ -408,6 +409,10 @@ resource "aws_db_subnet_group" "main" {
       Name = "${var.name_prefix}-db-subnet-group"
     }
   )
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # ===========================
@@ -415,11 +420,17 @@ resource "aws_db_subnet_group" "main" {
 # ===========================
 
 resource "aws_db_instance" "mysql" {
-  identifier = "${var.name_prefix}-mysql"
+  identifier_prefix = "${var.name_prefix}-"
 
   # Engine Configuration
   engine         = "mysql"
   engine_version = var.db_engine_version
+
+  # Wait for NAT Gateway to be ready
+  depends_on = [
+    aws_nat_gateway.main,
+    aws_route_table_association.private
+  ]
 
   # Instance Configuration
   instance_class        = var.db_instance_class
@@ -480,11 +491,19 @@ resource "aws_db_instance" "mysql" {
 output "rds_endpoint" {
   description = "The connection endpoint for the RDS instance"
   value       = aws_db_instance.mysql.endpoint
+  depends_on  = [aws_db_instance.mysql]
 }
 
 output "rds_port" {
   description = "The port on which the RDS instance is listening"
   value       = aws_db_instance.mysql.port
+  depends_on  = [aws_db_instance.mysql]
+}
+
+output "rds_instance_id" {
+  description = "The ID of the RDS instance"
+  value       = aws_db_instance.mysql.id
+  depends_on  = [aws_db_instance.mysql]
 }
 
 output "vpc_id" {
