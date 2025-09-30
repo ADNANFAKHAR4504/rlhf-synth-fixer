@@ -22,7 +22,7 @@ resource "aws_api_gateway_method" "search_get" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.search.id
   http_method   = "GET"
-  authorization_type = "NONE"
+  authorization = "NONE"
 }
 
 resource "aws_api_gateway_integration" "search_get_integration" {
@@ -38,7 +38,7 @@ resource "aws_api_gateway_method" "search_post" {
   rest_api_id   = aws_api_gateway_rest_api.api.id
   resource_id   = aws_api_gateway_resource.search.id
   http_method   = "POST"
-  authorization_type = "NONE"
+  authorization = "NONE"
 }
 
 resource "aws_api_gateway_integration" "search_post_integration" {

@@ -8,6 +8,7 @@ resource "aws_xray_sampling_rule" "api_sampling" {
   http_method    = "*"
   service_name   = aws_api_gateway_rest_api.api.name
   service_type   = "AWS::ApiGateway::Stage"
+  resource_arn   = "*"
   version        = 1
 }
 

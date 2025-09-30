@@ -44,8 +44,8 @@ resource "aws_internet_gateway" "igw" {
 }
 
 resource "aws_eip" "nat_eip" {
-  count = 1
-  vpc   = true
+  count  = 1
+  domain = "vpc"
 
   tags = {
     Name        = "${var.app_name}-nat-eip"

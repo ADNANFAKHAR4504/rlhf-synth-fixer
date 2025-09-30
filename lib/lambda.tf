@@ -3,8 +3,8 @@ resource "aws_lambda_function" "search_function" {
   role             = aws_iam_role.lambda_role.arn
   handler          = "index.handler"
   runtime          = "nodejs18.x"
-  filename         = "${path.module}/../search_function.zip"
-  source_code_hash = filebase64sha256("${path.module}/../search_function.zip")
+  filename         = "${path.module}/search_function.zip"
+  source_code_hash = filebase64sha256("${path.module}/search_function.zip")
   timeout          = 30
   memory_size      = 256
 
