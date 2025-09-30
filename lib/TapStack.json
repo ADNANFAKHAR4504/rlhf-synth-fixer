@@ -43,6 +43,7 @@
     },
     "AlertEmail": {
       "Type": "String",
+      "Default": "admin@example.com",
       "Description": "Email address for security alerts",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
     }
@@ -663,7 +664,7 @@
         "AllocatedStorage": "100",
         "DBInstanceClass": { "Ref": "DBInstanceClass" },
         "Engine": "mysql",
-        "EngineVersion": "8.0.28",
+        "EngineVersion": "8.0.43",
         "MasterUsername": {
           "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
         },
@@ -802,7 +803,7 @@
           ],
           "UserData": {
             "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Additional setup scripts here\n"
+              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\necho 'E-commerce App ${EnvironmentSuffix}' > /var/www/html/index.html\n"
             }
           }
         }
@@ -958,7 +959,7 @@
       "Type": "AWS::Config::ConfigurationRecorder",
       "Properties": {
         "Name": { "Fn::Sub": "ecommerce-config-recorder-${EnvironmentSuffix}" },
-        "RoleArn": { "Fn::GetAtt": ["ConfigRole", "Arn"] },
+        "RoleARN": { "Fn::GetAtt": ["ConfigRole", "Arn"] },
         "RecordingGroup": {
           "AllSupported": true,
           "IncludeGlobalResourceTypes": true
@@ -1114,7 +1115,7 @@
                     "ec2:StopInstances",
                     "ec2:TerminateInstances",
                     "s3:PutBucketPublicAccessBlock",
-                    "s3:PutBucketEncryption",
+                    "s3:PutEncryptionConfiguration",
                     "iam:UpdateAccountPasswordPolicy",
                     "logs:CreateLogGroup",
                     "logs:CreateLogStream",
