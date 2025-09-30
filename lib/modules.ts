@@ -499,7 +499,7 @@ export class S3Module extends Construct {
           {
             applyServerSideEncryptionByDefault: {
               sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: props.kmsKeyId,
+              // kmsMasterKeyId: props.kmsKeyId,
             },
             bucketKeyEnabled: true,
           },
@@ -981,11 +981,7 @@ export class KmsModule extends Construct {
             Principal: {
               Service: 'cloudtrail.amazonaws.com',
             },
-            Action: [
-              'kms:GenerateDataKey*',
-              'kms:DescribeKey',
-              'kms:Decrypt',
-            ],
+            Action: ['kms:GenerateDataKey*', 'kms:DescribeKey', 'kms:Decrypt'],
             Resource: '*',
             Condition: {
               StringLike: {
