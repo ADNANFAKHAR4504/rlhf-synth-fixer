@@ -165,7 +165,7 @@ export class VpcModule extends Construct {
 
     // CloudWatch Log Group for VPC Flow Logs
     const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-log-group', {
-      name: '/aws/vpc/flowlogs-2930046340', // Unique name for the log group
+      name: '/aws/vpc/flowlogs-29300', // Unique name for the log group
       retentionInDays: 365, // 1-year retention for compliance
       kmsKeyId: props.kmsKeyId,
       lifecycle: {
@@ -176,7 +176,7 @@ export class VpcModule extends Construct {
 
     // IAM Role for VPC Flow Logs
     const flowLogRole = new IamRole(this, 'flow-log-role', {
-      name: 'VPCFlowLogRole',
+      name: 'VPCFlowLogRoleTs',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -297,7 +297,7 @@ export class Ec2Module extends Construct {
     // IAM Role for EC2 Instance - Implements least privilege principle
     // SECURITY RATIONALE: No excessive permissions, specifically excludes network interface manipulation
     const ec2Role = new IamRole(this, 'ec2-role', {
-      name: 'SecureEC2Role',
+      name: 'SecureEC2RoleTs',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -353,7 +353,7 @@ export class Ec2Module extends Construct {
       this,
       'ec2-instance-profile',
       {
-        name: 'secure-ec2-profile',
+        name: 'secure-ec2-profile-ts',
         role: ec2Role.name,
       }
     );
@@ -535,7 +535,7 @@ export class S3Module extends Construct {
             Resource: `arn:aws:s3:::${props.cloudtrailBucketName}`,
             Condition: {
               StringEquals: {
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail'}`,
+                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
               },
             },
           },
@@ -552,7 +552,7 @@ export class S3Module extends Construct {
                 's3:x-amz-server-side-encryption': 'aws:kms',
                 's3:x-amz-server-side-encryption-aws-kms-key-id':
                   props.kmsKeyId,
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail'}`,
+                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
               },
             },
           },
@@ -566,7 +566,7 @@ export class S3Module extends Construct {
             Resource: `arn:aws:s3:::${props.cloudtrailBucketName}`,
             Condition: {
               StringEquals: {
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail'}`,
+                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
               },
             },
           },
@@ -591,7 +591,7 @@ export class IamModule extends Construct {
     // MFA Enforcement Policy
     // SECURITY RATIONALE: Enforces multi-factor authentication for all console access
     this.mfaPolicy = new IamPolicy(this, 'mfa-policy', {
-      name: 'EnforceMFAPolicy',
+      name: 'EnforceMFAPolicyTs',
       description: 'Enforces MFA for all console users',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -656,7 +656,7 @@ export class IamModule extends Construct {
     // Security Group for users
     // SECURITY RATIONALE: Group-based permission management instead of individual user policies
     this.securityGroup = new IamGroup(this, 'security-group', {
-      name: 'SecurityUsersGroup',
+      name: 'SecurityUsersGroupTS',
       path: '/',
     });
 
@@ -669,7 +669,7 @@ export class IamModule extends Construct {
     // Access Key Rotation Policy (Note: This is typically handled by external automation)
     // COMPLIANCE REQUIREMENT: Access keys must be rotated every 90 days
     new IamPolicy(this, 'access-key-rotation-policy', {
-      name: 'AccessKeyRotationPolicy',
+      name: 'AccessKeyRotationPolicyTS',
       description: 'Policy for automated access key rotation',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -709,14 +709,14 @@ export class CloudTrailModule extends Construct {
 
     // CloudWatch Log Group for CloudTrail
     this.logGroup = new CloudwatchLogGroup(this, 'cloudtrail-log-group', {
-      name: '/aws/cloudtrail/management-events',
+      name: '/aws/cloudtrail/management-events-ts',
       retentionInDays: 365, // 1-year retention for compliance
       kmsKeyId: props.kmsKeyId,
     });
 
     // IAM Role for CloudTrail to CloudWatch Logs
     const cloudTrailRole = new IamRole(this, 'cloudtrail-role', {
-      name: 'CloudTrailLogsRole',
+      name: 'CloudTrailLogsRoleTs',
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -978,6 +978,30 @@ export class KmsModule extends Construct {
               },
             },
           },
+          {
+            Sid: 'Allow CloudTrail to use the key',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: [
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:Decrypt',
+            ],
+            Resource: '*',
+            Condition: {
+              StringLike: {
+                'kms:ViaService': [
+                  `s3.${region}.amazonaws.com`,
+                  `cloudtrail.${region}.amazonaws.com`,
+                ],
+              },
+              StringEquals: {
+                'aws:SourceArn': `arn:aws:cloudtrail:${region}:${accountId}:trail/*`,
+              },
+            },
+          },
         ],
       }),
 
@@ -989,7 +1013,7 @@ export class KmsModule extends Construct {
 
     // KMS Alias
     this.kmsAlias = new KmsAlias(this, 'kms-alias', {
-      name: 'alias/secure-app-key',
+      name: 'alias/secure-app-key-ts',
       targetKeyId: this.kmsKey.keyId,
     });
   }
@@ -1090,14 +1114,14 @@ export class TapStack extends TerraformStack {
       amiId: 'ami-0c02fb55956c7d316', // This should be a real AMI ID
 
       // S3 configuration
-      appBucketName: 'secure-app-bucket-ts-1234', // Unique bucket name
-      cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-1234', // Unique bucket name
+      appBucketName: 'secure-app-bucket-ts-12345', // Unique bucket name
+      cloudtrailBucketName: 'secure-cloudtrail-bucket-ts-12345', // Unique bucket name
 
       // CloudTrail configuration
-      cloudtrailName: 'secure-app-cloudtrail',
+      cloudtrailName: 'secure-app-cloudtrail-trail',
 
       // WAF configuration
-      webAclName: 'SecureAppWebACL',
+      webAclName: 'SecureAppWebACLTS',
 
       // IAM configuration
       mfaRequired: true,
@@ -1124,7 +1148,7 @@ export class TapStack extends TerraformStack {
       bucketName: config.appBucketName,
       cloudtrailBucketName: config.cloudtrailBucketName,
       kmsKeyId: kmsModule.kmsKey.arn,
-      trailName: 'secure-app-cloudtrail',
+      trailName: config.cloudtrailName,
     });
 
     // CloudTrail Module - Audit logging

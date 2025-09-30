@@ -975,6 +975,30 @@ export class KmsModule extends Construct {
               },
             },
           },
+          {
+            Sid: 'Allow CloudTrail to use the key',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'cloudtrail.amazonaws.com',
+            },
+            Action: [
+              'kms:GenerateDataKey*',
+              'kms:DescribeKey',
+              'kms:Decrypt',
+            ],
+            Resource: '*',
+            Condition: {
+              StringLike: {
+                'kms:ViaService': [
+                  `s3.${region}.amazonaws.com`,
+                  `cloudtrail.${region}.amazonaws.com`,
+                ],
+              },
+              StringEquals: {
+                'aws:SourceArn': `arn:aws:cloudtrail:${region}:${accountId}:trail/*`,
+              },
+            },
+          },
         ],
       }),
 
