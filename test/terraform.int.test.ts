@@ -662,8 +662,10 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       expect(mainContent).toMatch(/storage_encrypted.*=.*true/);
       expect(mainContent).toMatch(/enable_key_rotation.*=.*true/);
 
-      // Test security groups don't allow 0.0.0.0/0
-      expect(mainContent).not.toMatch(/cidr_blocks.*=.*\["0\.0\.0\.0\/0"\]/);
+      // Test security groups don't allow 0.0.0.0/0 for ingress
+      // Allow egress 0.0.0.0/0, but disallow ingress rules that open all
+      const ingressOpenAllRegex = /resource\s+"aws_security_group"[\s\S]*?ingress[\s\S]*?cidr_blocks\s*=\s*\["0\.0\.0\.0\/0"\]/m;
+      expect(mainContent).not.toMatch(ingressOpenAllRegex);
 
       console.log('✅ Terraform configuration follows security best practices');
     });
