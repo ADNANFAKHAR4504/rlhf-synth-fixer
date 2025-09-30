@@ -433,11 +433,11 @@ resource "aws_iam_role" "cloudtrail" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = "sts:AssumeRole"
         Effect = "Allow"
         Principal = {
           Service = "cloudtrail.amazonaws.com"
         }
+        Action = "sts:AssumeRole"
       }
     ]
   })
@@ -791,10 +791,19 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 }
 
 # CloudWatch Log Stream for CloudTrail
-resource "aws_cloudwatch_log_stream" "cloudtrail" {
-  name           = "${local.name_prefix}-stream"
-  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
+#resource "aws_cloudwatch_log_stream" "cloudtrail" {
+#  name           = "${local.name_prefix}-stream"
+#  log_group_name = aws_cloudwatch_log_group.cloudtrail.name
+#}
+
+resource "null_resource" "wait_for_iam" {
+  depends_on = [aws_iam_role_policy.cloudtrail_cloudwatch]
+
+  provisioner "local-exec" {
+    command = "sleep 10"
+  }
 }
+
 
 # CloudTrail
 resource "aws_cloudtrail" "main" {
@@ -819,9 +828,9 @@ resource "aws_cloudtrail" "main" {
   depends_on = [
     aws_cloudwatch_log_group.cloudtrail,
     aws_iam_role_policy.cloudtrail_cloudwatch,
-    aws_s3_bucket_policy.cloudtrail
+    aws_s3_bucket_policy.cloudtrail,
+    null_resource.wait_for_iam
   ]
-
   tags = merge(
     local.common_tags,
     {
