@@ -23,12 +23,20 @@ from aws_cdk import aws_route53resolver as resolver
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_securityhub as securityhub
 from aws_cdk import aws_sns as sns
+from aws_cdk import aws_sns_subscriptions as sns_subscriptions
 from aws_cdk import aws_ssm as ssm
 from aws_cdk import custom_resources as cr
 from constructs import Construct
 
 
-class ZeroTrustSecurityStack(Stack):
+class TapStackProps:
+    """Properties for TapStack"""
+    def __init__(self, environment_suffix: str = "dev", env=None):
+        self.environment_suffix = environment_suffix
+        self.env = env
+
+
+class TapStack(Stack):
     """
     Zero-Trust Security Architecture Stack
     Implements comprehensive security controls for banking environment
@@ -38,18 +46,20 @@ class ZeroTrustSecurityStack(Stack):
         self,
         scope: Construct,
         construct_id: str,
-        environment: str = "production",
+        props: TapStackProps = None,
+        stack_environment: str = "production",
         **kwargs
     ) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Stack configuration
-        self.environment = environment
+        self.stack_environment = stack_environment
         self.org_id = "bank-org-12345"
+        self.environment_suffix = props.environment_suffix if props else "dev"
         self.compliance_tags = {
             "Compliance": "PCI-DSS",
             "DataClassification": "Sensitive",
-            "Environment": environment,
+            "Environment": stack_environment,
             "ManagedBy": "CDK",
             "SecurityLevel": "Critical"
         }
@@ -174,34 +184,36 @@ class ZeroTrustSecurityStack(Stack):
                     cidr_mask=24
                 )
             ],
-            flow_logs=ec2.FlowLogOptions(
-                destination=ec2.FlowLogDestination.to_s3(
-                    s3.Bucket(
-                        self, "VPCFlowLogsBucket",
-                        bucket_name=f"vpc-flow-logs-{self.account}-{self.region}",
-                        encryption=s3.BucketEncryption.KMS,
-                        encryption_key=self.master_key,
-                        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-                        removal_policy=RemovalPolicy.RETAIN,
-                        lifecycle_rules=[
-                            s3.LifecycleRule(
-                                transitions=[
-                                    s3.Transition(
-                                        storage_class=s3.StorageClass.INFREQUENT_ACCESS,
-                                        transition_after=Duration.days(30)
-                                    ),
-                                    s3.Transition(
-                                        storage_class=s3.StorageClass.GLACIER,
-                                        transition_after=Duration.days(90)
-                                    )
-                                ],
-                                expiration=Duration.days(2555)  # 7 years retention
-                            )
-                        ]
-                    )
-                ),
-                traffic_type=ec2.FlowLogTrafficType.ALL
-            )
+            flow_logs={
+                "vpc_flow_logs": ec2.FlowLogOptions(
+                    destination=ec2.FlowLogDestination.to_s3(
+                        s3.Bucket(
+                            self, "VPCFlowLogsBucket",
+                            bucket_name=f"vpc-flow-logs-{self.account}-{self.region}",
+                            encryption=s3.BucketEncryption.KMS,
+                            encryption_key=self.master_key,
+                            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+                            removal_policy=RemovalPolicy.RETAIN,
+                            lifecycle_rules=[
+                                s3.LifecycleRule(
+                                    transitions=[
+                                        s3.Transition(
+                                            storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                                            transition_after=Duration.days(30)
+                                        ),
+                                        s3.Transition(
+                                            storage_class=s3.StorageClass.GLACIER,
+                                            transition_after=Duration.days(90)
+                                        )
+                                    ],
+                                    expiration=Duration.days(2555)  # 7 years retention
+                                )
+                            ]
+                        )
+                    ),
+                    traffic_type=ec2.FlowLogTrafficType.ALL
+                )
+            }
         )
 
         # Create VPC endpoints for AWS services (avoid internet routing)
@@ -507,7 +519,7 @@ class ZeroTrustSecurityStack(Stack):
         self.auditor_role = iam.Role(
             self, "AuditorRole",
             role_name="ZeroTrustAuditorRole",
-            assumed_by=assume_role_policy,
+            assumed_by=iam.AccountPrincipal(self.account),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("SecurityAudit"),
                 iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsReadOnlyAccess")
@@ -585,18 +597,6 @@ class ZeroTrustSecurityStack(Stack):
             include_global_service_events=True,
             is_multi_region_trail=True,
             enable_file_validation=True,
-            event_selectors=[
-                cloudtrail.EventSelector(
-                    read_write_type=cloudtrail.ReadWriteType.ALL,
-                    include_management_events=True,
-                    data_resources=[
-                        cloudtrail.DataResource(
-                            data_resource_type=cloudtrail.DataResourceType.S3_OBJECT,
-                            values=["arn:aws:s3:::*/*"]
-                        )
-                    ]
-                )
-            ],
             insight_types=[
                 cloudtrail.InsightType.API_CALL_RATE,
                 cloudtrail.InsightType.API_ERROR_RATE
@@ -612,11 +612,7 @@ class ZeroTrustSecurityStack(Stack):
             removal_policy=RemovalPolicy.RETAIN
         )
 
-        # Send CloudTrail events to CloudWatch
-        self.trail.add_event_selector(
-            read_write_type=cloudtrail.ReadWriteType.ALL,
-            include_management_events=True
-        )
+        # CloudTrail events already configured in trail creation above
 
     def _create_guardduty(self):
         """Enable GuardDuty for threat detection"""
@@ -696,7 +692,7 @@ class ZeroTrustSecurityStack(Stack):
 
         # Add email subscription for security team
         self.alert_topic.add_subscription(
-            sns.subscriptions.EmailSubscription("security-team@bank.com")
+            sns_subscriptions.EmailSubscription("security-team@bank.com")
         )
 
         # Lambda function for automated response
@@ -1103,19 +1099,16 @@ def notify_security_team(event: Dict, response: Dict):
             self, "CriticalPatchBaseline",
             name="banking-critical-patches",
             operating_system="AMAZON_LINUX_2",
-            patch_filter_group=ssm.CfnPatchBaseline.PatchFilterGroupProperty(
-                patch_filters=[
-                    ssm.CfnPatchBaseline.PatchFilterProperty(
-                        key="SEVERITY",
-                        values=["Critical", "Important"]
-                    )
-                ]
-            ),
+            patch_groups=["banking-systems"],
             approval_rules=ssm.CfnPatchBaseline.RuleGroupProperty(
                 patch_rules=[
                     ssm.CfnPatchBaseline.RuleProperty(
                         patch_filter_group=ssm.CfnPatchBaseline.PatchFilterGroupProperty(
                             patch_filters=[
+                                ssm.CfnPatchBaseline.PatchFilterProperty(
+                                    key="SEVERITY",
+                                    values=["Critical", "Important"]
+                                ),
                                 ssm.CfnPatchBaseline.PatchFilterProperty(
                                     key="CLASSIFICATION",
                                     values=["Security"]
