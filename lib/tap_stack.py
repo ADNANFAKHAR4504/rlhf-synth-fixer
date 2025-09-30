@@ -68,8 +68,8 @@ class TapStack(pulumi.ComponentResource):
         self.register_outputs({
             "lambda_function_name": self.infrastructure["lambda_function"].name,
             "lambda_function_arn": self.infrastructure["lambda_function"].arn,
-            "api_gateway_id": self.infrastructure["api_gateway"][0].id,
-            "api_gateway_url": self.infrastructure["api_gateway"][5].invoke_url.apply(lambda url: url + "api"),
+            "api_gateway_id": self.infrastructure["api_gateway"].id,
+            "api_gateway_url": self.infrastructure["api_gateway"].id.apply(lambda api_id: f"https://{api_id}.execute-api.us-east-1.amazonaws.com/dev/api"),
             "s3_bucket_name": self.infrastructure["logs_bucket"][0].id,
             "s3_bucket_arn": self.infrastructure["logs_bucket"][0].arn,
             "dlq_url": self.infrastructure["dlq"].id,
