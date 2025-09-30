@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348967",
+  "team": "4",
+  "startedAt": "2025-09-30T16:39:16.740Z",
+  "subtask": "Multi-Environment Consistency",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "VPC, Subnet, EC2, ALB, Auto Sclaing, S3, RDS, CloudWatch"
+}
