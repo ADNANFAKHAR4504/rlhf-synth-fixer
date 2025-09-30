@@ -8,5 +8,5 @@
   "startedAt": "2025-09-29T08:46:36.037Z",
   "task_sub_category": "IaC-Security-Hardening",
   "use_case_category": "Security, Compliance, and Governance",
-  "aws_services": "S3 Bucket, Lambda Function, IAM Role, CloudWatch Logs"
+  "aws_services": "S3 Bucket, Lambda Function, IAM Role, CloudWatch Logs, KMS Key, VPC, EC2, RDS, CloudTrail, GuardDuty, AWS Config, Systems Manager Parameter Store, EBS"
 }
