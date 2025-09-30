@@ -369,15 +369,15 @@ resource "aws_s3_bucket_policy" "main" {
         }
       },
       {
-        Sid       = "AllowTerraformManagement"
-        Effect    = "Allow"
+        Sid    = "AllowTerraformManagement"
+        Effect = "Allow"
         Principal = {
           AWS = [
             "arn:${local.partition}:iam::${local.account_id}:root",
             data.aws_caller_identity.current.arn
           ]
         }
-        Action    = "s3:*"
+        Action = "s3:*"
         Resource = [
           aws_s3_bucket.main.arn,
           "${aws_s3_bucket.main.arn}/*"
@@ -817,7 +817,7 @@ resource "aws_cloudtrail" "main" {
 
     data_resource {
       type   = "AWS::S3::Object"
-      values = ["arn:${local.partition}:s3:::*/*"]
+      values = ["arn:${local.partition}:s3:::${aws_s3_bucket.main.id}/*"]
     }
 
     data_resource {
