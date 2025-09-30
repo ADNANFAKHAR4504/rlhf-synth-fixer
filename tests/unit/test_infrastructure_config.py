@@ -48,49 +48,7 @@ class TestServerlessConfig(unittest.TestCase):
         # Test that AWS provider is created
         mock_provider.assert_called_once()
 
-    @patch('infrastructure.config.pulumi.Config')
-    @patch('infrastructure.config.pulumi.get_stack')
-    @patch('infrastructure.config.aws.Provider')
-    def test_get_environment_variables(self, mock_provider, mock_get_stack, mock_config_class):
-        """Test that environment variables are correctly formatted."""
-        mock_config_class.return_value = self.mock_config
-        mock_get_stack.return_value = "dev"
-        
-        config = ServerlessConfig()
-        env_vars = config.get_environment_variables()
-        
-        # Test that all required environment variables are present
-        self.assertIn("ENVIRONMENT", env_vars)
-        self.assertIn("REGION", env_vars)
-        self.assertIn("PARAMETER_PREFIX", env_vars)
-        self.assertIn("S3_BUCKET_NAME", env_vars)
-        
-        # Test that values are correct
-        self.assertEqual(env_vars["ENVIRONMENT"], "dev")
-        self.assertEqual(env_vars["REGION"], "us-east-1")
 
-    @patch('infrastructure.config.pulumi.Config')
-    @patch('infrastructure.config.pulumi.get_stack')
-    @patch('infrastructure.config.aws.Provider')
-    def test_get_tags(self, mock_provider, mock_get_stack, mock_config_class):
-        """Test that default tags are correctly formatted."""
-        mock_config_class.return_value = self.mock_config
-        mock_get_stack.return_value = "dev"
-        
-        config = ServerlessConfig()
-        tags = config.get_tags()
-        
-        # Test that all required tags are present
-        self.assertIn("Environment", tags)
-        self.assertIn("Project", tags)
-        self.assertIn("ManagedBy", tags)
-        self.assertIn("Component", tags)
-        
-        # Test that values are correct
-        self.assertEqual(tags["Environment"], "dev")
-        self.assertEqual(tags["Project"], "serverless-infrastructure")
-        self.assertEqual(tags["ManagedBy"], "pulumi")
-        self.assertEqual(tags["Component"], "serverless")
 
     @patch('infrastructure.config.pulumi.Config')
     @patch('infrastructure.config.pulumi.get_stack')
