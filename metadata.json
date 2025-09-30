@@ -1,0 +1,12 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349030",
+  "team": "3",
+  "startedAt": "2025-09-30T10:57:58.297Z",
+  "task_sub_category": "IaC-Security-Hardening",
+  "use_case_category": "Security, Compliance, and Governance",
+  "aws_services": "S3 Bucket, DynamoDB, Cloudwatch, Cloudtrail"
+}
