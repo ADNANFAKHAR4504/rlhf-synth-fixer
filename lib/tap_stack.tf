@@ -720,7 +720,7 @@ resource "aws_acm_certificate" "main" {
 
 # --- Find the hosted zone in Route53 (must exist and be authoritative for var.domain_name) ---
 data "aws_route53_zone" "zone" {
-  name         = var.domain_name
+  name         = "tapstacknewex.com"
   private_zone = false
 }
 
