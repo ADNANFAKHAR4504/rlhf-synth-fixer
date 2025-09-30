@@ -429,7 +429,7 @@ describe('Terraform Infrastructure - AWS Resource Integration Tests', () => {
     test('RDS MySQL instance should exist and be available', async () => {
       const rdsEndpoint = outputs.rds_endpoint;
       expect(rdsEndpoint).toBeDefined();
-      expect(rdsEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+      expect(rdsEndpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/);
 
       // Extract DB identifier from endpoint
       const dbIdentifier = rdsEndpoint.split('.')[0];
@@ -585,7 +585,7 @@ describe('Terraform Infrastructure - AWS Resource Integration Tests', () => {
       expect(outputs.vpc_id).toMatch(/^vpc-[a-z0-9]+$/);
       expect(outputs.app_security_group_id).toMatch(/^sg-[a-z0-9]+$/);
       expect(outputs.rds_security_group_id).toMatch(/^sg-[a-z0-9]+$/);
-      expect(outputs.rds_endpoint).toMatch(/\.rds\.amazonaws\.com$/);
+      expect(outputs.rds_endpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/);
       expect(outputs.rds_port).toBe(3306);
 
       // Check subnet IDs
