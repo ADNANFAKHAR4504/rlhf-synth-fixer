@@ -1,0 +1,1197 @@
+#!/usr/bin/env python3
+"""
+Zero-Trust Security Architecture Stack for Banking Environment
+Implements comprehensive security controls with automated threat response
+"""
+
+import json
+from typing import Any, Dict, List
+
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
+from aws_cdk import aws_cloudtrail as cloudtrail
+from aws_cdk import aws_config as config
+from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_events as events
+from aws_cdk import aws_events_targets as targets
+from aws_cdk import aws_guardduty as guardduty
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_kms as kms
+from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_networkfirewall as network_firewall
+from aws_cdk import aws_route53resolver as resolver
+from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_securityhub as securityhub
+from aws_cdk import aws_sns as sns
+from aws_cdk import aws_ssm as ssm
+from aws_cdk import custom_resources as cr
+from constructs import Construct
+
+
+class ZeroTrustSecurityStack(Stack):
+    """
+    Zero-Trust Security Architecture Stack
+    Implements comprehensive security controls for banking environment
+    """
+
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        environment: str = "production",
+        **kwargs
+    ) -> None:
+        super().__init__(scope, construct_id, **kwargs)
+
+        # Stack configuration
+        self.environment = environment
+        self.org_id = "bank-org-12345"
+        self.compliance_tags = {
+            "Compliance": "PCI-DSS",
+            "DataClassification": "Sensitive",
+            "Environment": environment,
+            "ManagedBy": "CDK",
+            "SecurityLevel": "Critical"
+        }
+
+        # Apply compliance tags to all resources
+        for key, value in self.compliance_tags.items():
+            Tags.of(self).add(key, value)
+
+        # Create KMS keys for encryption
+        self._create_encryption_keys()
+        
+        # Create VPC and network infrastructure
+        self._create_network_infrastructure()
+        
+        # Set up Transit Gateway for inter-VPC communication
+        self._create_transit_gateway()
+        
+        # Deploy Network Firewall
+        self._create_network_firewall()
+        
+        # Configure IAM roles and policies
+        self._create_iam_resources()
+        
+        # Set up logging and monitoring
+        self._create_logging_infrastructure()
+        
+        # Deploy GuardDuty for threat detection
+        self._create_guardduty()
+        
+        # Set up Security Hub for centralized management
+        self._create_security_hub()
+        
+        # Create incident response automation
+        self._create_incident_response()
+        
+        # Configure Systems Manager for secure access
+        self._create_systems_manager()
+        
+        # Set up AWS Config for compliance monitoring
+        self._create_config_rules()
+
+    def _create_encryption_keys(self):
+        """Create KMS keys for encryption at rest"""
+        
+        # Master key for all encryption
+        self.master_key = kms.Key(
+            self, "MasterKey",
+            description="Master KMS key for banking zero-trust architecture",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.RETAIN,
+            alias="alias/zero-trust-master",
+            policy=iam.PolicyDocument(
+                statements=[
+                    iam.PolicyStatement(
+                        sid="Enable IAM User Permissions",
+                        effect=iam.Effect.ALLOW,
+                        principals=[iam.AccountRootPrincipal()],
+                        actions=["kms:*"],
+                        resources=["*"]
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow CloudWatch Logs",
+                        effect=iam.Effect.ALLOW,
+                        principals=[
+                            iam.ServicePrincipal("logs.amazonaws.com")
+                        ],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:CreateGrant",
+                            "kms:DescribeKey"
+                        ],
+                        resources=["*"]
+                    )
+                ]
+            )
+        )
+
+        # Separate key for audit logs (compliance requirement)
+        self.audit_key = kms.Key(
+            self, "AuditKey",
+            description="KMS key for audit logs encryption",
+            enable_key_rotation=True,
+            removal_policy=RemovalPolicy.RETAIN,
+            alias="alias/audit-logs"
+        )
+
+    def _create_network_infrastructure(self):
+        """Create isolated VPC architecture with security zones"""
+        
+        # Create main VPC with isolated subnets
+        self.vpc = ec2.Vpc(
+            self, "ZeroTrustVPC",
+            max_azs=3,
+            cidr="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            nat_gateways=0,  # No NAT by default, will add with strict controls
+            subnet_configuration=[
+                # DMZ subnet for external-facing resources
+                ec2.SubnetConfiguration(
+                    name="DMZ",
+                    subnet_type=ec2.SubnetType.PUBLIC,
+                    cidr_mask=24
+                ),
+                # Application subnet for workloads
+                ec2.SubnetConfiguration(
+                    name="Application",
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    cidr_mask=24
+                ),
+                # Data subnet for databases
+                ec2.SubnetConfiguration(
+                    name="Data",
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    cidr_mask=24
+                ),
+                # Management subnet for administration
+                ec2.SubnetConfiguration(
+                    name="Management",
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    cidr_mask=24
+                )
+            ],
+            flow_logs=ec2.FlowLogOptions(
+                destination=ec2.FlowLogDestination.to_s3(
+                    s3.Bucket(
+                        self, "VPCFlowLogsBucket",
+                        bucket_name=f"vpc-flow-logs-{self.account}-{self.region}",
+                        encryption=s3.BucketEncryption.KMS,
+                        encryption_key=self.master_key,
+                        block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+                        removal_policy=RemovalPolicy.RETAIN,
+                        lifecycle_rules=[
+                            s3.LifecycleRule(
+                                transitions=[
+                                    s3.Transition(
+                                        storage_class=s3.StorageClass.INFREQUENT_ACCESS,
+                                        transition_after=Duration.days(30)
+                                    ),
+                                    s3.Transition(
+                                        storage_class=s3.StorageClass.GLACIER,
+                                        transition_after=Duration.days(90)
+                                    )
+                                ],
+                                expiration=Duration.days(2555)  # 7 years retention
+                            )
+                        ]
+                    )
+                ),
+                traffic_type=ec2.FlowLogTrafficType.ALL
+            )
+        )
+
+        # Create VPC endpoints for AWS services (avoid internet routing)
+        self._create_vpc_endpoints()
+
+        # Create Network ACLs for subnet isolation
+        self._create_network_acls()
+
+    def _create_vpc_endpoints(self):
+        """Create VPC endpoints for secure AWS service access"""
+        
+        # S3 Gateway endpoint
+        self.vpc.add_gateway_endpoint(
+            "S3Endpoint",
+            service=ec2.GatewayVpcEndpointAwsService.S3,
+            subnets=[
+                ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
+            ]
+        )
+
+        # Systems Manager endpoints for Session Manager
+        ssm_services = [
+            "ssm", "ssmmessages", "ec2messages", "kms", "logs"
+        ]
+        
+        for service in ssm_services:
+            self.vpc.add_interface_endpoint(
+                f"{service.capitalize()}Endpoint",
+                service=ec2.InterfaceVpcEndpointAwsService(service),
+                subnets=ec2.SubnetSelection(
+                    subnet_group_name="Management"
+                )
+            )
+
+        # GuardDuty endpoint
+        self.vpc.add_interface_endpoint(
+            "GuardDutyEndpoint",
+            service=ec2.InterfaceVpcEndpointAwsService("guardduty-data"),
+            subnets=ec2.SubnetSelection(
+                subnet_group_name="Management"
+            )
+        )
+
+    def _create_network_acls(self):
+        """Create Network ACLs for subnet-level security"""
+        
+        # Data subnet NACL - most restrictive
+        data_nacl = ec2.NetworkAcl(
+            self, "DataNACL",
+            vpc=self.vpc,
+            subnet_selection=ec2.SubnetSelection(
+                subnet_group_name="Data"
+            )
+        )
+        
+        # Allow only application subnet to access data subnet
+        data_nacl.add_entry(
+            "AllowAppSubnet",
+            cidr=ec2.AclCidr.ipv4("10.0.1.0/24"),  # App subnet CIDR
+            rule_number=100,
+            traffic=ec2.AclTraffic.tcp_port(3306),  # MySQL
+            direction=ec2.TrafficDirection.INGRESS
+        )
+        
+        data_nacl.add_entry(
+            "AllowAppSubnetPostgres",
+            cidr=ec2.AclCidr.ipv4("10.0.1.0/24"),
+            rule_number=110,
+            traffic=ec2.AclTraffic.tcp_port(5432),  # PostgreSQL
+            direction=ec2.TrafficDirection.INGRESS
+        )
+
+    def _create_transit_gateway(self):
+        """Create Transit Gateway for controlled inter-VPC routing"""
+        
+        # Transit Gateway for multi-account connectivity
+        self.transit_gateway = ec2.CfnTransitGateway(
+            self, "TransitGateway",
+            description="Zero-Trust Transit Gateway for controlled routing",
+            default_route_table_association="disable",
+            default_route_table_propagation="disable",
+            dns_support="enable",
+            vpn_ecmp_support="enable",
+            tags=[{
+                "key": "Name",
+                "value": "ZeroTrustTGW"
+            }]
+        )
+
+        # Attach VPC to Transit Gateway
+        self.tgw_attachment = ec2.CfnTransitGatewayAttachment(
+            self, "TGWAttachment",
+            transit_gateway_id=self.transit_gateway.ref,
+            vpc_id=self.vpc.vpc_id,
+            subnet_ids=[subnet.subnet_id for subnet in self.vpc.private_subnets[:3]],
+            tags=[{
+                "key": "Name",
+                "value": "MainVPCAttachment"
+            }]
+        )
+
+        # Create Transit Gateway route table with strict routing rules
+        self.tgw_route_table = ec2.CfnTransitGatewayRouteTable(
+            self, "TGWRouteTable",
+            transit_gateway_id=self.transit_gateway.ref,
+            tags=[{
+                "key": "Name",
+                "value": "ZeroTrustRouteTable"
+            }]
+        )
+
+    def _create_network_firewall(self):
+        """Deploy AWS Network Firewall for traffic inspection"""
+        
+        # Create firewall policy
+        firewall_policy = network_firewall.CfnFirewallPolicy(
+            self, "FirewallPolicy",
+            firewall_policy_name="zero-trust-policy",
+            firewall_policy=network_firewall.CfnFirewallPolicy.FirewallPolicyProperty(
+                stateless_default_actions=["aws:forward_to_sfe"],
+                stateless_fragment_default_actions=["aws:forward_to_sfe"],
+                stateful_rule_group_references=[
+                    network_firewall.CfnFirewallPolicy.StatefulRuleGroupReferenceProperty(
+                        resource_arn=self._create_stateful_rules().attr_rule_group_arn
+                    )
+                ],
+                stateful_default_actions=["aws:drop_established"],
+                stateful_engine_options=network_firewall.CfnFirewallPolicy.StatefulEngineOptionsProperty(
+                    rule_order="STRICT_ORDER"
+                )
+            ),
+            description="Zero-trust firewall policy with strict inspection",
+            tags=[{
+                "key": "Name",
+                "value": "ZeroTrustFirewallPolicy"
+            }]
+        )
+
+        # Create firewall
+        self.firewall = network_firewall.CfnFirewall(
+            self, "NetworkFirewall",
+            firewall_name="zero-trust-firewall",
+            firewall_policy_arn=firewall_policy.attr_firewall_policy_arn,
+            vpc_id=self.vpc.vpc_id,
+            subnet_mappings=[
+                network_firewall.CfnFirewall.SubnetMappingProperty(
+                    subnet_id=subnet.subnet_id
+                ) for subnet in self.vpc.public_subnets[:2]
+            ],
+            delete_protection=True,
+            firewall_policy_change_protection=True,
+            subnet_change_protection=True,
+            description="Network firewall for zero-trust architecture",
+            tags=[{
+                "key": "Name",
+                "value": "ZeroTrustFirewall"
+            }]
+        )
+
+        # Enable firewall logging
+        network_firewall.CfnLoggingConfiguration(
+            self, "FirewallLogging",
+            firewall_arn=self.firewall.attr_firewall_arn,
+            logging_configuration=network_firewall.CfnLoggingConfiguration.LoggingConfigurationProperty(
+                log_destination_configs=[
+                    network_firewall.CfnLoggingConfiguration.LogDestinationConfigProperty(
+                        log_destination={
+                            "logGroup": f"/aws/networkfirewall/{self.firewall.firewall_name}"
+                        },
+                        log_destination_type="CloudWatchLogs",
+                        log_type="ALERT"
+                    ),
+                    network_firewall.CfnLoggingConfiguration.LogDestinationConfigProperty(
+                        log_destination={
+                            "logGroup": f"/aws/networkfirewall/{self.firewall.firewall_name}"
+                        },
+                        log_destination_type="CloudWatchLogs",
+                        log_type="FLOW"
+                    )
+                ]
+            )
+        )
+
+    def _create_stateful_rules(self):
+        """Create stateful firewall rules for deep packet inspection"""
+        
+        return network_firewall.CfnRuleGroup(
+            self, "StatefulRules",
+            rule_group_name="banking-stateful-rules",
+            type="STATEFUL",
+            capacity=100,
+            rule_group=network_firewall.CfnRuleGroup.RuleGroupProperty(
+                rules_source=network_firewall.CfnRuleGroup.RulesSourceProperty(
+                    stateful_rules=[
+                        # Block known malicious domains
+                        network_firewall.CfnRuleGroup.StatefulRuleProperty(
+                            action="DROP",
+                            header=network_firewall.CfnRuleGroup.HeaderProperty(
+                                destination="ANY",
+                                destination_port="ANY",
+                                direction="ANY",
+                                protocol="HTTP",
+                                source="ANY",
+                                source_port="ANY"
+                            ),
+                            rule_options=[
+                                network_firewall.CfnRuleGroup.RuleOptionProperty(
+                                    keyword="content",
+                                    settings=['"/malicious"']
+                                )
+                            ]
+                        ),
+                        # Allow only HTTPS traffic on standard ports
+                        network_firewall.CfnRuleGroup.StatefulRuleProperty(
+                            action="PASS",
+                            header=network_firewall.CfnRuleGroup.HeaderProperty(
+                                destination="ANY",
+                                destination_port="443",
+                                direction="FORWARD",
+                                protocol="TLS",
+                                source="10.0.0.0/16",
+                                source_port="ANY"
+                            ),
+                            rule_options=[
+                                network_firewall.CfnRuleGroup.RuleOptionProperty(
+                                    keyword="sid",
+                                    settings=["1"]
+                                )
+                            ]
+                        )
+                    ]
+                ),
+                stateful_rule_options=network_firewall.CfnRuleGroup.StatefulRuleOptionsProperty(
+                    rule_order="STRICT_ORDER"
+                )
+            ),
+            description="Stateful rules for banking compliance",
+            tags=[{
+                "key": "Name",
+                "value": "BankingStatefulRules"
+            }]
+        )
+
+    def _create_iam_resources(self):
+        """Create IAM roles and policies with least privilege and conditions"""
+        
+        # Create assume role policy with MFA requirement
+        assume_role_policy = iam.PolicyDocument(
+            statements=[
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    principals=[iam.AccountPrincipal(self.account)],
+                    actions=["sts:AssumeRole"],
+                    conditions={
+                        "Bool": {
+                            "aws:MultiFactorAuthPresent": "true"
+                        },
+                        "IpAddress": {
+                            "aws:SourceIp": [
+                                "192.168.1.0/24",  # Corporate IP range
+                                "10.0.0.0/16"      # VPC range
+                            ]
+                        }
+                    }
+                )
+            ]
+        )
+
+        # Admin role with time-based access
+        self.admin_role = iam.Role(
+            self, "AdminRole",
+            role_name="ZeroTrustAdminRole",
+            assumed_by=iam.CompositePrincipal(
+                iam.AccountPrincipal(self.account)
+            ),
+            inline_policies={
+                "TimeBasedAccess": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=["*"],
+                            resources=["*"],
+                            conditions={
+                                "DateGreaterThan": {
+                                    "aws:CurrentTime": "08:00Z"
+                                },
+                                "DateLessThan": {
+                                    "aws:CurrentTime": "18:00Z"
+                                },
+                                "ForAllValues:StringEquals": {
+                                    "aws:PrincipalTag/Department": ["Security", "Operations"]
+                                }
+                            }
+                        )
+                    ]
+                )
+            },
+            max_session_duration=Duration.hours(1),
+            description="Admin role with time-based and MFA-enforced access"
+        )
+
+        # Read-only role for auditors
+        self.auditor_role = iam.Role(
+            self, "AuditorRole",
+            role_name="ZeroTrustAuditorRole",
+            assumed_by=assume_role_policy,
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("SecurityAudit"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsReadOnlyAccess")
+            ],
+            max_session_duration=Duration.hours(4),
+            description="Auditor role with read-only access to compliance data"
+        )
+
+        # Incident response role
+        self.incident_response_role = iam.Role(
+            self, "IncidentResponseRole",
+            role_name="ZeroTrustIncidentResponseRole",
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal("lambda.amazonaws.com"),
+                iam.AccountPrincipal(self.account)
+            ),
+            inline_policies={
+                "IncidentResponsePolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "ec2:DescribeInstances",
+                                "ec2:IsolateInstance",
+                                "ec2:CreateSnapshot",
+                                "ec2:StopInstances",
+                                "ec2:ModifyInstanceAttribute",
+                                "guardduty:GetFindings",
+                                "securityhub:UpdateFindings",
+                                "sns:Publish",
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            resources=["*"]
+                        )
+                    ]
+                )
+            },
+            description="Automated incident response role"
+        )
+
+    def _create_logging_infrastructure(self):
+        """Set up comprehensive logging with CloudTrail"""
+        
+        # Create S3 bucket for CloudTrail
+        self.trail_bucket = s3.Bucket(
+            self, "CloudTrailBucket",
+            bucket_name=f"cloudtrail-{self.account}-{self.region}",
+            encryption=s3.BucketEncryption.KMS,
+            encryption_key=self.audit_key,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            removal_policy=RemovalPolicy.RETAIN,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    transitions=[
+                        s3.Transition(
+                            storage_class=s3.StorageClass.GLACIER,
+                            transition_after=Duration.days(90)
+                        )
+                    ],
+                    expiration=Duration.days(2555)  # 7 years for compliance
+                )
+            ],
+            versioned=True,
+            object_lock_enabled=True  # WORM compliance
+        )
+
+        # Create CloudTrail
+        self.trail = cloudtrail.Trail(
+            self, "CloudTrail",
+            trail_name="zero-trust-trail",
+            bucket=self.trail_bucket,
+            encryption_key=self.audit_key,
+            include_global_service_events=True,
+            is_multi_region_trail=True,
+            enable_file_validation=True,
+            event_selectors=[
+                cloudtrail.EventSelector(
+                    read_write_type=cloudtrail.ReadWriteType.ALL,
+                    include_management_events=True,
+                    data_resources=[
+                        cloudtrail.DataResource(
+                            data_resource_type=cloudtrail.DataResourceType.S3_OBJECT,
+                            values=["arn:aws:s3:::*/*"]
+                        )
+                    ]
+                )
+            ],
+            insight_types=[
+                cloudtrail.InsightType.API_CALL_RATE,
+                cloudtrail.InsightType.API_ERROR_RATE
+            ]
+        )
+
+        # CloudWatch Log Group for real-time monitoring
+        self.log_group = logs.LogGroup(
+            self, "CloudTrailLogGroup",
+            log_group_name="/aws/cloudtrail/zero-trust",
+            retention=logs.RetentionDays.ONE_YEAR,
+            encryption_key=self.master_key,
+            removal_policy=RemovalPolicy.RETAIN
+        )
+
+        # Send CloudTrail events to CloudWatch
+        self.trail.add_event_selector(
+            read_write_type=cloudtrail.ReadWriteType.ALL,
+            include_management_events=True
+        )
+
+    def _create_guardduty(self):
+        """Enable GuardDuty for threat detection"""
+        
+        # Enable GuardDuty detector
+        self.guardduty_detector = guardduty.CfnDetector(
+            self, "GuardDutyDetector",
+            enable=True,
+            finding_publishing_frequency="FIFTEEN_MINUTES",
+            data_sources=guardduty.CfnDetector.CFNDataSourceConfigurationsProperty(
+                s3_logs=guardduty.CfnDetector.CFNS3LogsConfigurationProperty(
+                    enable=True
+                ),
+                kubernetes=guardduty.CfnDetector.CFNKubernetesConfigurationProperty(
+                    audit_logs=guardduty.CfnDetector.CFNKubernetesAuditLogsConfigurationProperty(
+                        enable=True
+                    )
+                )
+            )
+        )
+
+        # Create threat intel set for known bad IPs
+        self.threat_intel_set = guardduty.CfnThreatIntelSet(
+            self, "ThreatIntelSet",
+            detector_id=self.guardduty_detector.ref,
+            format="TXT",
+            location=f"s3://{self.trail_bucket.bucket_name}/threat-intel/bad-ips.txt",
+            activate=True,
+            name="BankingThreatIntel"
+        )
+
+        # Create IP set for trusted IPs
+        self.trusted_ip_set = guardduty.CfnIPSet(
+            self, "TrustedIPSet",
+            detector_id=self.guardduty_detector.ref,
+            format="TXT",
+            location=f"s3://{self.trail_bucket.bucket_name}/trusted-ips/whitelist.txt",
+            activate=True,
+            name="TrustedBankingIPs"
+        )
+
+    def _create_security_hub(self):
+        """Enable Security Hub for centralized security management"""
+        
+        # Enable Security Hub
+        self.security_hub = securityhub.CfnHub(
+            self, "SecurityHub",
+            control_finding_generator="SECURITY_CONTROL",
+            enable_default_standards=True,
+            tags={
+                "Name": "ZeroTrustSecurityHub"
+            }
+        )
+
+        # Enable compliance standards
+        standards = [
+            "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.4.0",
+            "arn:aws:securityhub:*::standards/pci-dss/v/3.2.1",
+            "arn:aws:securityhub:*::standards/aws-foundational-security-best-practices/v/1.0.0"
+        ]
+
+        for standard_arn in standards:
+            securityhub.CfnStandard(
+                self, f"Standard-{standard_arn.split('/')[-3]}",
+                standards_arn=standard_arn
+            )
+
+    def _create_incident_response(self):
+        """Create automated incident response with Lambda"""
+        
+        # SNS topic for security alerts
+        self.alert_topic = sns.Topic(
+            self, "SecurityAlertTopic",
+            topic_name="zero-trust-security-alerts",
+            master_key=self.master_key
+        )
+
+        # Add email subscription for security team
+        self.alert_topic.add_subscription(
+            sns.subscriptions.EmailSubscription("security-team@bank.com")
+        )
+
+        # Lambda function for automated response
+        self.incident_response_lambda = lambda_.Function(
+            self, "IncidentResponseFunction",
+            function_name="zero-trust-incident-response",
+            runtime=lambda_.Runtime.PYTHON_3_11,
+            handler="incident_response.handler",
+            code=lambda_.Code.from_inline(self._get_incident_response_code()),
+            timeout=Duration.minutes(5),
+            memory_size=1024,
+            environment={
+                "SNS_TOPIC_ARN": self.alert_topic.topic_arn,
+                "SECURITY_HUB_REGION": self.region
+            },
+            role=self.incident_response_role,
+            reserved_concurrent_executions=10,
+            dead_letter_queue_enabled=True,
+            tracing=lambda_.Tracing.ACTIVE,
+            layers=[
+                lambda_.LayerVersion.from_layer_version_arn(
+                    self, "AWSLambdaPowertoolsLayer",
+                    f"arn:aws:lambda:{self.region}:017000801446:layer:AWSLambdaPowertoolsPython:15"
+                )
+            ]
+        )
+
+        # EventBridge rule for GuardDuty findings
+        guardduty_rule = events.Rule(
+            self, "GuardDutyFindingsRule",
+            rule_name="zero-trust-guardduty-findings",
+            event_pattern=events.EventPattern(
+                source=["aws.guardduty"],
+                detail_type=["GuardDuty Finding"],
+                detail={
+                    "severity": [
+                        {"numeric": [">=", 4]}  # Medium and above
+                    ]
+                }
+            )
+        )
+
+        guardduty_rule.add_target(
+            targets.LambdaFunction(
+                self.incident_response_lambda,
+                retry_attempts=2,
+                max_event_age=Duration.hours(1)
+            )
+        )
+
+        # EventBridge rule for Security Hub findings
+        security_hub_rule = events.Rule(
+            self, "SecurityHubFindingsRule",
+            rule_name="zero-trust-security-hub-findings",
+            event_pattern=events.EventPattern(
+                source=["aws.securityhub"],
+                detail_type=["Security Hub Findings - Imported"],
+                detail={
+                    "findings": {
+                        "Severity": {
+                            "Label": ["HIGH", "CRITICAL"]
+                        }
+                    }
+                }
+            )
+        )
+
+        security_hub_rule.add_target(
+            targets.LambdaFunction(self.incident_response_lambda)
+        )
+
+    def _get_incident_response_code(self) -> str:
+        """Return Lambda function code for incident response"""
+        
+        return """
+import json
+import boto3
+import os
+from datetime import datetime
+from typing import Dict, Any
+import logging
+
+# Initialize AWS clients
+ec2 = boto3.client('ec2')
+sns = boto3.client('sns')
+security_hub = boto3.client('securityhub')
+ssm = boto3.client('ssm')
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def handler(event, context):
+    '''
+    Automated incident response handler
+    '''
+    try:
+        logger.info(f"Processing event: {json.dumps(event)}")
+        
+        # Determine event source
+        source = event.get('source', '')
+        
+        if source == 'aws.guardduty':
+            response = handle_guardduty_finding(event['detail'])
+        elif source == 'aws.securityhub':
+            response = handle_security_hub_finding(event['detail'])
+        else:
+            logger.warning(f"Unknown event source: {source}")
+            return {
+                'statusCode': 400,
+                'body': json.dumps('Unknown event source')
+            }
+        
+        # Send notification
+        notify_security_team(event, response)
+        
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Incident response completed')
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing event: {str(e)}")
+        return {
+            'statusCode': 500,
+            'body': json.dumps(f'Error: {str(e)}')
+        }
+
+def handle_guardduty_finding(finding: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    Handle GuardDuty findings with automated response
+    '''
+    severity = finding.get('severity', 0)
+    finding_type = finding.get('type', '')
+    resource = finding.get('resource', {})
+    
+    response = {
+        'actions_taken': [],
+        'finding_id': finding.get('id'),
+        'severity': severity
+    }
+    
+    # High severity findings trigger immediate action
+    if severity >= 7:
+        if 'Instance' in resource.get('resourceType', ''):
+            instance_id = resource.get('instanceDetails', {}).get('instanceId')
+            if instance_id:
+                # Isolate the instance
+                isolate_instance(instance_id)
+                response['actions_taken'].append(f'Isolated instance: {instance_id}')
+                
+                # Create snapshot for forensics
+                create_forensic_snapshot(instance_id)
+                response['actions_taken'].append(f'Created forensic snapshot for: {instance_id}')
+        
+        # Block malicious IP if detected
+        if 'remoteIpDetails' in finding.get('service', {}).get('action', {}).get('networkConnectionAction', {}):
+            ip = finding['service']['action']['networkConnectionAction']['remoteIpDetails']['ipAddressV4']
+            block_ip_address(ip)
+            response['actions_taken'].append(f'Blocked IP: {ip}')
+    
+    # Update finding in Security Hub
+    update_security_hub_finding(finding, response['actions_taken'])
+    
+    return response
+
+def handle_security_hub_finding(detail: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    Handle Security Hub findings
+    '''
+    findings = detail.get('findings', [])
+    response = {
+        'actions_taken': [],
+        'findings_processed': len(findings)
+    }
+    
+    for finding in findings:
+        severity = finding.get('Severity', {}).get('Label', 'LOW')
+        
+        if severity in ['HIGH', 'CRITICAL']:
+            # Trigger remediation based on finding type
+            compliance_status = finding.get('Compliance', {}).get('Status', '')
+            
+            if compliance_status == 'FAILED':
+                # Attempt auto-remediation
+                resource_type = finding.get('Resources', [{}])[0].get('Type', '')
+                resource_id = finding.get('Resources', [{}])[0].get('Id', '')
+                
+                if resource_type == 'AwsEc2Instance':
+                    # Apply security patches via Systems Manager
+                    apply_security_patches(resource_id.split('/')[-1])
+                    response['actions_taken'].append(f'Applied patches to: {resource_id}')
+    
+    return response
+
+def isolate_instance(instance_id: str):
+    '''
+    Isolate EC2 instance by moving to quarantine security group
+    '''
+    try:
+        # Create quarantine security group if it doesn't exist
+        quarantine_sg = create_quarantine_security_group()
+        
+        # Modify instance security groups
+        ec2.modify_instance_attribute(
+            InstanceId=instance_id,
+            Groups=[quarantine_sg]
+        )
+        
+        logger.info(f"Isolated instance {instance_id} to quarantine security group")
+        
+    except Exception as e:
+        logger.error(f"Failed to isolate instance {instance_id}: {str(e)}")
+        raise
+
+def create_quarantine_security_group() -> str:
+    '''
+    Create or get quarantine security group
+    '''
+    try:
+        response = ec2.describe_security_groups(
+            GroupNames=['quarantine-sg']
+        )
+        return response['SecurityGroups'][0]['GroupId']
+    except:
+        # Create new quarantine SG
+        response = ec2.create_security_group(
+            GroupName='quarantine-sg',
+            Description='Quarantine security group for isolated instances'
+        )
+        
+        # Remove all egress rules
+        ec2.revoke_security_group_egress(
+            GroupId=response['GroupId'],
+            IpPermissions=[{
+                'IpProtocol': '-1',
+                'FromPort': -1,
+                'ToPort': -1,
+                'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
+            }]
+        )
+        
+        return response['GroupId']
+
+def create_forensic_snapshot(instance_id: str):
+    '''
+    Create EBS snapshot for forensic analysis
+    '''
+    try:
+        # Get instance volumes
+        response = ec2.describe_instances(InstanceIds=[instance_id])
+        volumes = []
+        
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                for mapping in instance.get('BlockDeviceMappings', []):
+                    if 'Ebs' in mapping:
+                        volumes.append(mapping['Ebs']['VolumeId'])
+        
+        # Create snapshots
+        for volume_id in volumes:
+            ec2.create_snapshot(
+                VolumeId=volume_id,
+                Description=f'Forensic snapshot for incident response - {datetime.utcnow().isoformat()}',
+                TagSpecifications=[{
+                    'ResourceType': 'snapshot',
+                    'Tags': [
+                        {'Key': 'IncidentResponse', 'Value': 'true'},
+                        {'Key': 'InstanceId', 'Value': instance_id},
+                        {'Key': 'Timestamp', 'Value': datetime.utcnow().isoformat()}
+                    ]
+                }]
+            )
+        
+        logger.info(f"Created forensic snapshots for instance {instance_id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to create snapshots: {str(e)}")
+
+def block_ip_address(ip: str):
+    '''
+    Block malicious IP in Network ACL
+    '''
+    # This would integrate with your Network Firewall or WAF
+    logger.info(f"Would block IP address: {ip}")
+
+def apply_security_patches(instance_id: str):
+    '''
+    Apply security patches using Systems Manager
+    '''
+    try:
+        ssm.send_command(
+            InstanceIds=[instance_id],
+            DocumentName='AWS-RunPatchBaseline',
+            Parameters={
+                'Operation': ['Install']
+            }
+        )
+        logger.info(f"Initiated patching for instance {instance_id}")
+    except Exception as e:
+        logger.error(f"Failed to apply patches: {str(e)}")
+
+def update_security_hub_finding(finding: Dict, actions: list):
+    '''
+    Update Security Hub finding with response actions
+    '''
+    try:
+        security_hub.batch_update_findings(
+            FindingIdentifiers=[{
+                'Id': finding.get('id'),
+                'ProductArn': finding.get('productArn')
+            }],
+            Note={
+                'Text': f"Automated response: {', '.join(actions)}",
+                'UpdatedBy': 'IncidentResponseLambda'
+            },
+            Workflow={
+                'Status': 'RESOLVED' if actions else 'NEW'
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to update Security Hub: {str(e)}")
+
+def notify_security_team(event: Dict, response: Dict):
+    '''
+    Send notification to security team
+    '''
+    try:
+        message = {
+            'event_source': event.get('source'),
+            'timestamp': datetime.utcnow().isoformat(),
+            'actions_taken': response.get('actions_taken', []),
+            'severity': response.get('severity', 'UNKNOWN'),
+            'raw_event': event
+        }
+        
+        sns.publish(
+            TopicArn=os.environ['SNS_TOPIC_ARN'],
+            Subject=f"[SECURITY] Automated Incident Response - {event.get('source')}",
+            Message=json.dumps(message, indent=2)
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to send notification: {str(e)}")
+"""
+
+    def _create_systems_manager(self):
+        """Configure Systems Manager for secure access"""
+        
+        # Create S3 bucket for Session Manager logs
+        self.session_logs_bucket = s3.Bucket(
+            self, "SessionLogsBucket",
+            bucket_name=f"session-logs-{self.account}-{self.region}",
+            encryption=s3.BucketEncryption.KMS,
+            encryption_key=self.audit_key,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            removal_policy=RemovalPolicy.RETAIN,
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    expiration=Duration.days(90)
+                )
+            ]
+        )
+
+        # Create SSM Document for session logging
+        ssm.CfnDocument(
+            self, "SessionManagerPreferences",
+            document_type="Session",
+            name="SSM-SessionManagerRunShell",
+            content=json.dumps({
+                "schemaVersion": "1.0",
+                "description": "Session Manager Preferences",
+                "sessionType": "Standard_Stream",
+                "inputs": {
+                    "s3BucketName": self.session_logs_bucket.bucket_name,
+                    "s3EncryptionEnabled": True,
+                    "s3KeyPrefix": "sessions/",
+                    "cloudWatchLogGroupName": "/aws/ssm/sessions",
+                    "cloudWatchEncryptionEnabled": True,
+                    "idleSessionTimeout": "20",
+                    "maxSessionDuration": "60",
+                    "runAsEnabled": False,
+                    "kmsKeyId": self.audit_key.key_id,
+                    "shellProfile": {
+                        "linux": "cd ~ && exec bash --login"
+                    }
+                }
+            })
+        )
+
+        # Create maintenance window for patching
+        self.maintenance_window = ssm.CfnMaintenanceWindow(
+            self, "PatchingMaintenanceWindow",
+            name="banking-patching-window",
+            schedule="cron(0 2 ? * SUN *)",  # Sunday 2 AM
+            duration=4,
+            cutoff=1,
+            allow_unassociated_targets=False,
+            description="Weekly patching window for banking systems"
+        )
+
+        # Patch baseline for critical updates
+        self.patch_baseline = ssm.CfnPatchBaseline(
+            self, "CriticalPatchBaseline",
+            name="banking-critical-patches",
+            operating_system="AMAZON_LINUX_2",
+            patch_filter_group=ssm.CfnPatchBaseline.PatchFilterGroupProperty(
+                patch_filters=[
+                    ssm.CfnPatchBaseline.PatchFilterProperty(
+                        key="SEVERITY",
+                        values=["Critical", "Important"]
+                    )
+                ]
+            ),
+            approval_rules=ssm.CfnPatchBaseline.RuleGroupProperty(
+                patch_rules=[
+                    ssm.CfnPatchBaseline.RuleProperty(
+                        patch_filter_group=ssm.CfnPatchBaseline.PatchFilterGroupProperty(
+                            patch_filters=[
+                                ssm.CfnPatchBaseline.PatchFilterProperty(
+                                    key="CLASSIFICATION",
+                                    values=["Security"]
+                                )
+                            ]
+                        ),
+                        approve_after_days=0,
+                        compliance_level="CRITICAL"
+                    )
+                ]
+            ),
+            description="Patch baseline for critical banking system updates"
+        )
+
+    def _create_config_rules(self):
+        """Create AWS Config rules for compliance monitoring"""
+        
+        # Config recorder
+        config_role = iam.Role(
+            self, "ConfigRole",
+            assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/ConfigRole")
+            ]
+        )
+
+        # Config bucket
+        config_bucket = s3.Bucket(
+            self, "ConfigBucket",
+            bucket_name=f"aws-config-{self.account}-{self.region}",
+            encryption=s3.BucketEncryption.KMS,
+            encryption_key=self.audit_key,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            removal_policy=RemovalPolicy.RETAIN
+        )
+
+        # Config recorder
+        config.CfnConfigurationRecorder(
+            self, "ConfigRecorder",
+            role_arn=config_role.role_arn,
+            recording_group=config.CfnConfigurationRecorder.RecordingGroupProperty(
+                all_supported=True,
+                include_global_resource_types=True
+            )
+        )
+
+        # Delivery channel
+        config.CfnDeliveryChannel(
+            self, "ConfigDeliveryChannel",
+            s3_bucket_name=config_bucket.bucket_name,
+            config_snapshot_delivery_properties=config.CfnDeliveryChannel.ConfigSnapshotDeliveryPropertiesProperty(
+                delivery_frequency="TwentyFour_Hours"
+            )
+        )
+
+        # Compliance rules
+        compliance_rules = [
+            ("encrypted-volumes", "ENCRYPTED_VOLUMES"),
+            ("iam-password-policy", "IAM_PASSWORD_POLICY"),
+            ("mfa-enabled-for-iam-console-access", "MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS"),
+            ("s3-bucket-public-read-prohibited", "S3_BUCKET_PUBLIC_READ_PROHIBITED"),
+            ("s3-bucket-ssl-requests-only", "S3_BUCKET_SSL_REQUESTS_ONLY")
+        ]
+
+        for rule_name, source_identifier in compliance_rules:
+            config.CfnConfigRule(
+                self, f"ConfigRule-{rule_name}",
+                config_rule_name=rule_name,
+                source=config.CfnConfigRule.SourceProperty(
+                    owner="AWS",
+                    source_identifier=source_identifier
+                )
+            )
+
+        # Output important values
+        CfnOutput(self, "VPCId", value=self.vpc.vpc_id)
+        CfnOutput(self, "SecurityHubArn", value=self.security_hub.attr_arn)
+        CfnOutput(self, "GuardDutyDetectorId", value=self.guardduty_detector.ref)
+        CfnOutput(self, "AlertTopicArn", value=self.alert_topic.topic_arn)
