@@ -262,8 +262,4 @@ export class TapStack extends cdk.Stack {
   }
 }
 
-// Create a CDK app and instantiate the stack (region controlled by env / props)
-const app = new cdk.App();
-new TapStack(app, 'CloudSetupStack', {
-  suffix: '-prod', // provide a short sanitized suffix; will be sanitized by the stack
-});
+// Remove runtime app/stack instantiation — tests and bin/tap.ts should create the app.
