@@ -16,6 +16,7 @@ import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 
 // S3 imports
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
 
 // CloudTrail imports
 import { cloudtrail } from '@cdktf/provider-aws';
@@ -297,6 +298,33 @@ export class SecureS3Bucket extends Construct {
         Environment: 'Production',
       },
     });
+    if (config.name.includes('cloudtrail')) {
+      new S3BucketPolicy(this, 'bucket-policy', {
+        bucket: this.bucket.bucket,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AWSCloudTrailAclCheck',
+              Effect: 'Allow',
+              Principal: { Service: 'cloudtrail.amazonaws.com' },
+              Action: 's3:GetBucketAcl',
+              Resource: `arn:aws:s3:::${config.name}`,
+            },
+            {
+              Sid: 'AWSCloudTrailWrite',
+              Effect: 'Allow',
+              Principal: { Service: 'cloudtrail.amazonaws.com' },
+              Action: 's3:PutObject',
+              Resource: `arn:aws:s3:::${config.name}/*`,
+              Condition: {
+                StringEquals: { 's3:x-amz-acl': 'bucket-owner-full-control' },
+              },
+            },
+          ],
+        }),
+      });
+    }
   }
 }
 
@@ -529,7 +557,7 @@ export class SecureWaf extends Construct {
 
     this.webAcl = new Wafv2WebAcl(this, 'web-acl', {
       name: config.name,
-      scope: config.scope, // "REGIONAL" or "GLOBAL"
+      scope: config.scope,
       defaultAction: {
         allow: {},
       },
@@ -541,9 +569,9 @@ export class SecureWaf extends Construct {
             none: {},
           },
           statement: {
-            rule_group_reference_statement: {
-              // Use the actual region in the ARN, not the scope value
-              arn: `arn:aws:wafv2:${config.region}:aws:managed-rule-set/AWSManagedRulesCommonRuleSet`,
+            managed_rule_group_statement: {
+              name: 'AWSManagedRulesCommonRuleSet',
+              vendor_name: 'AWS',
             },
           },
           visibilityConfig: {

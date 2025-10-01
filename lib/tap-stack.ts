@@ -4,6 +4,7 @@ import {
 } from '@cdktf/provider-aws/lib/provider';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { IamInstanceProfile } from '@cdktf/provider-aws/lib/iam-instance-profile';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -209,6 +210,15 @@ export class TapStack extends TerraformStack {
       ],
     });
 
+    const ec2InstanceProfile = new IamInstanceProfile(
+      this,
+      'ec2-instance-profile',
+      {
+        name: 'secure-tap-ec2-profile',
+        role: ec2Role.role.name,
+      }
+    );
+
     // In the TapStack class, create a security group for Lambda
     const lambdaSecurityGroup = new SecurityGroup(this, 'lambda-sg', {
       vpcId: vpc.vpc.id,
@@ -231,7 +241,7 @@ export class TapStack extends TerraformStack {
     const lambda = new SecureLambdaFunction(this, 'lambda', {
       functionName: 'secure-tap-function',
       handler: 'index.handler',
-      runtime: 'nodejs14.x',
+      runtime: 'nodejs20.x',
       role: lambdaRole.role.arn,
       s3Bucket: appBucket.bucket.bucket,
       s3Key: 'lambda/function.zip',
@@ -276,8 +286,8 @@ export class TapStack extends TerraformStack {
       engineVersion: '8.0',
       instanceClass: 'db.t3.micro',
       dbName: 'mydatabase',
-      username: 'admin',
-      password: 'dummy-password-to-be-replaced-with-parameter',
+      username: process.env.DB_USERNAME || 'admin',
+      password: process.env.DB_PASSWORD || 'changeme123!',
       subnetIds: vpc.databaseSubnets.map(subnet => subnet.id),
       vpcSecurityGroupIds: [rdsSecurityGroup.id], // Replace with actual SG
       kmsKeyId: kmsKey.arn,
@@ -331,7 +341,7 @@ export class TapStack extends TerraformStack {
       amiId: 'ami-0c02fb55956c7d316',
       subnetId: vpc.privateSubnets[0].id,
       securityGroupIds: [ec2SecurityGroup.id], // Use the actual SG created above
-      iamInstanceProfile: ec2Role.role.name,
+      iamInstanceProfile: ec2InstanceProfile.name,
       userData: `
         #!/bin/bash
         echo "Setting up secure instance"
