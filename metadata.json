@@ -10,5 +10,19 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "RDS Mysql"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "SSM",
+    "Secrets Manager",
+    "Security Groups",
+    "Internet Gateway",
+    "Subnets",
+    "Route Tables",
+    "Key Pairs"
+  ],
+  "training_quality": 8
 }
