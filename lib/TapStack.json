@@ -599,7 +599,7 @@
       "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "DBInstanceIdentifier": {
-          "Fn::Sub": "ecommerce-db-${EnvironmentSuffix}"
+          "Fn::Sub": "ecommerce-db-${EnvironmentSuffix}-${AWS::AccountId}"
         },
         "AllocatedStorage": "100",
         "DBInstanceClass": { "Ref": "DBInstanceClass" },
