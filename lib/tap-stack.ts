@@ -334,7 +334,7 @@ export class CICDPipelineStack extends cdk.Stack {
           owner: props.githubOwner,
           repo: props.githubRepo,
           branch: props.githubBranch,
-          oauthToken: githubToken.secretValueFromJson('token'),
+          oauthToken: githubToken.secretValue,
           output: sourceOutput,
         }),
       ],
