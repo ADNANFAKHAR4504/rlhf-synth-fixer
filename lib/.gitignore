@@ -1,0 +1,8 @@
+# Ignore runtime backend file created by CI
+backend.tf
+
+# Local TF variable files and state
+terraform.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/

@@ -1,0 +1,6 @@
+# Backend intentionally disabled in the tracked repo.
+# Bootstrap workflow:
+# 1) Create a dedicated S3 bucket (and optional DynamoDB table) outside this repo.
+# 2) Copy backend.tf.example -> backend.tf and set the real bucket name.
+# 3) Run terraform init.
+
