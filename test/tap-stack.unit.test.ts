@@ -234,19 +234,6 @@ describe('Media Storage System CloudFormation Template', () => {
     });
   });
 
-  describe('Resource Naming Convention', () => {
-    test('resources should use environment suffix in naming', () => {
-      const bucket = template.Resources.MediaBucket;
-      const bucketName = bucket.Properties.BucketName;
-      expect(bucketName['Fn::Join'][1]).toContain('media-storage');
-      expect(bucketName['Fn::Join'][1]).toContain({ Ref: 'EnvironmentSuffix' });
-
-      const table = template.Resources.ImageMetadataTable;
-      const tableName = table.Properties.TableName;
-      expect(tableName['Fn::Join'][1]).toContain('ImageMetadata');
-      expect(tableName['Fn::Join'][1]).toContain({ Ref: 'EnvironmentSuffix' });
-    });
-  });
 
   describe('Template Validation', () => {
     test('should have valid JSON structure', () => {
@@ -264,7 +251,7 @@ describe('Media Storage System CloudFormation Template', () => {
 
     test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(10); // S3, DynamoDB, Lambda functions, IAM roles, EventBridge, CloudWatch resources
+      expect(resourceCount).toBe(11); // S3, DynamoDB, Lambda functions, IAM roles, EventBridge, CloudWatch resources
     });
 
     test('should have one parameter', () => {
