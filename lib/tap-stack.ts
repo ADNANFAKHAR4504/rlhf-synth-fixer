@@ -30,7 +30,7 @@ export interface TapStackProps extends cdk.StackProps {
 
 /**
  * Comprehensive S3 Backup System Stack
- * 
+ *
  * Implements enterprise-grade backup solution addressing all prompt requirements:
  * - Deduplication and incremental backups for cost optimization
  * - Cross-region replication for disaster recovery (99.9% availability)
@@ -56,12 +56,15 @@ export class TapStack extends cdk.Stack {
 
     // Configuration with defaults aligned to prompt requirements
     const retentionDays = props?.retentionDays || 60;
-    const replicationRegion = props?.replicationRegion || 'us-west-2';
+    // const replicationRegion = props?.replicationRegion || 'us-west-2'; // Reserved for future multi-region support
     const scheduleExpression = props?.scheduleExpression || 'cron(0 2 * * ? *)';
     const maxConcurrentBackups = props?.maxConcurrentBackups || 10;
     const enableVpcEndpoints = props?.enableVpcEndpoints ?? true;
     const enableCrossAccountAccess = props?.enableCrossAccountAccess ?? false;
-    const environmentSuffix = props?.environmentSuffix || this.node.tryGetContext('environmentSuffix') || 'dev';
+    const environmentSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      'dev';
 
     // Create VPC for network isolation (addresses security requirement)
     let vpc: ec2.Vpc | undefined;
@@ -84,7 +87,8 @@ export class TapStack extends cdk.Stack {
     // Create KMS keys with automatic rotation (addresses encryption requirement)
     this.encryptionKey = new kms.Key(this, 'BackupEncryptionKey', {
       enableKeyRotation: true,
-      description: 'Primary KMS key for backup data encryption with automatic rotation',
+      description:
+        'Primary KMS key for backup data encryption with automatic rotation',
       alias: `backup-encryption-key-primary-${environmentSuffix}`,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       pendingWindow: cdk.Duration.days(7),
@@ -97,27 +101,28 @@ export class TapStack extends cdk.Stack {
             actions: ['kms:*'],
             resources: ['*'],
           }),
-          ...(enableCrossAccountAccess && props?.trustedAccountIds ? 
-            props.trustedAccountIds.map((accountId, index) => 
-              new iam.PolicyStatement({
-                sid: `CrossAccountAccess${index}`,
-                effect: iam.Effect.ALLOW,
-                principals: [new iam.AccountPrincipal(accountId)],
-                actions: [
-                  'kms:Decrypt',
-                  'kms:DescribeKey',
-                  'kms:GenerateDataKey',
-                  'kms:ReEncrypt*',
-                ],
-                resources: ['*'],
-                conditions: {
-                  StringEquals: {
-                    'kms:ViaService': [`s3.${this.region}.amazonaws.com`],
-                  },
-                },
-              })
-            ) : []
-          ),
+          ...(enableCrossAccountAccess && props?.trustedAccountIds
+            ? props.trustedAccountIds.map(
+                (accountId, index) =>
+                  new iam.PolicyStatement({
+                    sid: `CrossAccountAccess${index}`,
+                    effect: iam.Effect.ALLOW,
+                    principals: [new iam.AccountPrincipal(accountId)],
+                    actions: [
+                      'kms:Decrypt',
+                      'kms:DescribeKey',
+                      'kms:GenerateDataKey',
+                      'kms:ReEncrypt*',
+                    ],
+                    resources: ['*'],
+                    conditions: {
+                      StringEquals: {
+                        'kms:ViaService': [`s3.${this.region}.amazonaws.com`],
+                      },
+                    },
+                  })
+              )
+            : []),
         ],
       }),
     });
@@ -285,7 +290,9 @@ export class TapStack extends cdk.Stack {
       partitionKey: { name: 'backupId', type: dynamodb.AttributeType.STRING },
       sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey: this.encryptionKey,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
@@ -310,7 +317,10 @@ export class TapStack extends cdk.Stack {
 
     // Create DynamoDB table for deduplication (addresses deduplication requirement)
     this.deduplicationTable = new dynamodb.Table(this, 'DeduplicationTable', {
-      partitionKey: { name: 'contentHash', type: dynamodb.AttributeType.STRING },
+      partitionKey: {
+        name: 'contentHash',
+        type: dynamodb.AttributeType.STRING,
+      },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
       encryptionKey: this.encryptionKey,
@@ -328,10 +338,19 @@ export class TapStack extends cdk.Stack {
     // Create IAM role for backup operations with least-privilege access
     const backupExecutionRole = new iam.Role(this, 'BackupExecutionRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
-      description: 'Role for backup Lambda functions with least-privilege access',
+      description:
+        'Role for backup Lambda functions with least-privilege access',
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole'),
-        ...(vpc ? [iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole')] : []),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AWSLambdaBasicExecutionRole'
+        ),
+        ...(vpc
+          ? [
+              iam.ManagedPolicy.fromAwsManagedPolicyName(
+                'service-role/AWSLambdaVPCAccessExecutionRole'
+              ),
+            ]
+          : []),
       ],
       inlinePolicies: {
         BackupPolicy: new iam.PolicyDocument({
@@ -385,7 +404,10 @@ export class TapStack extends cdk.Stack {
                 'kms:GenerateDataKey*',
                 'kms:DescribeKey',
               ],
-              resources: [this.encryptionKey.keyArn, this.replicationKey.keyArn],
+              resources: [
+                this.encryptionKey.keyArn,
+                this.replicationKey.keyArn,
+              ],
             }),
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -423,10 +445,13 @@ export class TapStack extends cdk.Stack {
     }
 
     // Create Lambda function for backup initiation and orchestration
-    const backupInitiatorFunction = new lambda.Function(this, 'BackupInitiatorFunction', {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      handler: 'index.handler',
-      code: lambda.Code.fromInline(`
+    const backupInitiatorFunction = new lambda.Function(
+      this,
+      'BackupInitiatorFunction',
+      {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        handler: 'index.handler',
+        code: lambda.Code.fromInline(`
         const AWS = require('aws-sdk');
         const sqs = new AWS.SQS();
         const dynamodb = new AWS.DynamoDB.DocumentClient();
@@ -531,25 +556,35 @@ export class TapStack extends cdk.Stack {
           }
         };
       `),
-      role: backupExecutionRole,
-      timeout: cdk.Duration.minutes(5),
-      memorySize: 512,
-      environment: {
-        BACKUP_QUEUE_URL: backupQueue.queueUrl,
-        METADATA_TABLE: this.metadataTable.tableName,
-        MAX_CONCURRENT_BACKUPS: maxConcurrentBackups.toString(),
-        NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
-      },
-      vpc: vpc,
-      vpcSubnets: vpc ? { subnetType: ec2.SubnetType.PRIVATE_ISOLATED } : undefined,
-      logRetention: logs.RetentionDays.ONE_MONTH,
-      retryAttempts: 2,
-    });
+        role: backupExecutionRole,
+        timeout: cdk.Duration.minutes(5),
+        memorySize: 512,
+        environment: {
+          BACKUP_QUEUE_URL: backupQueue.queueUrl,
+          METADATA_TABLE: this.metadataTable.tableName,
+          MAX_CONCURRENT_BACKUPS: maxConcurrentBackups.toString(),
+          NOTIFICATION_TOPIC_ARN: notificationTopic.topicArn,
+        },
+        vpc: vpc,
+        vpcSubnets: vpc
+          ? { subnetType: ec2.SubnetType.PRIVATE_ISOLATED }
+          : undefined,
+        logGroup: new logs.LogGroup(this, 'BackupProcessorLogGroup', {
+          retention: logs.RetentionDays.ONE_MONTH,
+          removalPolicy: cdk.RemovalPolicy.DESTROY,
+        }),
+        retryAttempts: 2,
+      }
+    );
 
     // Create comprehensive monitoring dashboard
-    this.monitoringDashboard = new cloudwatch.Dashboard(this, 'BackupMonitoringDashboard', {
-      dashboardName: `BackupSystemMonitoring-${environmentSuffix}`,
-    });
+    this.monitoringDashboard = new cloudwatch.Dashboard(
+      this,
+      'BackupMonitoringDashboard',
+      {
+        dashboardName: `BackupSystemMonitoring-${environmentSuffix}`,
+      }
+    );
 
     // Add comprehensive widgets to dashboard
     this.monitoringDashboard.addWidgets(
@@ -620,20 +655,25 @@ export class TapStack extends cdk.Stack {
         ],
         width: 12,
         height: 6,
-      }),
+      })
     );
 
     // Create CloudWatch alarms for comprehensive monitoring
-    const backupFailureAlarm = new cloudwatch.Alarm(this, 'BackupFailureAlarm', {
-      metric: backupInitiatorFunction.metricErrors({
-        statistic: 'Sum',
-        period: cdk.Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      alarmDescription: 'Backup operation failed - immediate attention required',
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    const backupFailureAlarm = new cloudwatch.Alarm(
+      this,
+      'BackupFailureAlarm',
+      {
+        metric: backupInitiatorFunction.metricErrors({
+          statistic: 'Sum',
+          period: cdk.Duration.minutes(5),
+        }),
+        threshold: 1,
+        evaluationPeriods: 1,
+        alarmDescription:
+          'Backup operation failed - immediate attention required',
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }
+    );
 
     const dlqMessagesAlarm = new cloudwatch.Alarm(this, 'DLQMessagesAlarm', {
       metric: new cloudwatch.Metric({
@@ -647,12 +687,15 @@ export class TapStack extends cdk.Stack {
       }),
       threshold: 1,
       evaluationPeriods: 1,
-      alarmDescription: 'Messages in backup dead letter queue - investigate failed backups',
+      alarmDescription:
+        'Messages in backup dead letter queue - investigate failed backups',
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
     // Add alarm actions
-    backupFailureAlarm.addAlarmAction(new cwActions.SnsAction(notificationTopic));
+    backupFailureAlarm.addAlarmAction(
+      new cwActions.SnsAction(notificationTopic)
+    );
     dlqMessagesAlarm.addAlarmAction(new cwActions.SnsAction(notificationTopic));
 
     // Create CloudTrail for comprehensive audit logging
@@ -727,13 +770,15 @@ export class TapStack extends cdk.Stack {
     // Create comprehensive outputs for operational use
     new cdk.CfnOutput(this, 'BackupBucketName', {
       value: this.backupBucket.bucketName,
-      description: 'Primary backup bucket name for client reports (1TB capacity)',
+      description:
+        'Primary backup bucket name for client reports (1TB capacity)',
       exportName: `${this.stackName}-BackupBucket`,
     });
 
     new cdk.CfnOutput(this, 'ReplicationBucketName', {
       value: this.replicationBucket.bucketName,
-      description: 'Cross-region replication backup bucket name for disaster recovery',
+      description:
+        'Cross-region replication backup bucket name for disaster recovery',
       exportName: `${this.stackName}-ReplicationBucket`,
     });
 
@@ -745,30 +790,35 @@ export class TapStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'MetadataTableName', {
       value: this.metadataTable.tableName,
-      description: 'DynamoDB table for backup metadata and operational tracking',
+      description:
+        'DynamoDB table for backup metadata and operational tracking',
       exportName: `${this.stackName}-MetadataTable`,
     });
 
     new cdk.CfnOutput(this, 'DeduplicationTableName', {
       value: this.deduplicationTable.tableName,
-      description: 'DynamoDB table for backup deduplication and cost optimization',
+      description:
+        'DynamoDB table for backup deduplication and cost optimization',
       exportName: `${this.stackName}-DeduplicationTable`,
     });
 
     new cdk.CfnOutput(this, 'DashboardURL', {
       value: `https://console.aws.amazon.com/cloudwatch/home?region=${this.region}#dashboards:name=${this.monitoringDashboard.dashboardName}`,
-      description: 'CloudWatch dashboard URL for comprehensive backup system monitoring',
+      description:
+        'CloudWatch dashboard URL for comprehensive backup system monitoring',
     });
 
     new cdk.CfnOutput(this, 'NotificationTopicArn', {
       value: notificationTopic.topicArn,
-      description: 'SNS topic ARN for backup notifications and operational alerts',
+      description:
+        'SNS topic ARN for backup notifications and operational alerts',
       exportName: `${this.stackName}-NotificationTopic`,
     });
 
     new cdk.CfnOutput(this, 'BackupQueueUrl', {
       value: backupQueue.queueUrl,
-      description: 'SQS queue URL for concurrent backup job processing (handles 1000 users)',
+      description:
+        'SQS queue URL for concurrent backup job processing (handles 1000 users)',
       exportName: `${this.stackName}-BackupQueue`,
     });
 
