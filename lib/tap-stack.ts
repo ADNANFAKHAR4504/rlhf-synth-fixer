@@ -225,18 +225,12 @@ export class TapStack extends cdk.Stack {
     memoryAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
     // CloudWatch Application Insights
+    // Note: Removed resource group dependency to avoid deployment issues
     new applicationinsights.CfnApplication(this, 'ApplicationInsights', {
-      resourceGroupName: `community-platform-${environmentSuffix}`,
       autoConfigurationEnabled: true,
       cweMonitorEnabled: true,
       opsCenterEnabled: true,
-      componentMonitoringSettings: [
-        {
-          componentName: this.autoScalingGroup.autoScalingGroupName,
-          componentConfigurationMode: 'DEFAULT',
-          tier: 'DEFAULT',
-        },
-      ],
+      // Removed componentMonitoringSettings to simplify configuration
     });
 
     // EC2 Instance Connect Endpoint for secure browser-based SSH
