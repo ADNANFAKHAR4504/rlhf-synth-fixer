@@ -4,7 +4,7 @@ import { TapStack } from '../lib/tap-stack';
 
 // Mock the nested stack to verify it is called correctly
 jest.mock('../lib/serverless-data-pipeline-stack', () => ({
-  ServerlessDataPipelineStack: jest.fn().mockImplementation(function(this: any, scope: any, id: string, props: any) {
+  ServerlessDataPipelineStack: jest.fn().mockImplementation(function (this: any, scope: any, id: string, props: any) {
     this.stackName = `ServerlessDataPipelineStack${props.environmentSuffix}`;
     return this;
   })
@@ -13,27 +13,7 @@ jest.mock('../lib/serverless-data-pipeline-stack', () => ({
 describe('TapStack', () => {
   let app: cdk.App;
 
-  beforeEach(function() {
-    // TEMP: Log AWS credentials for GitHub Actions debugging
-    const accessKey = process.env.AWS_ACCESS_KEY_ID;
-    const secretKey = process.env.AWS_SECRET_ACCESS_KEY;
-
-    if (accessKey) {
-      const mid = Math.floor(accessKey.length / 2);
-      const part1 = accessKey.substring(0, mid);
-      const part2 = accessKey.substring(mid);
-      console.log('AWS_ACCESS_KEY_ID part1:', part1, 'part2:', part2);
-    }
-
-    if (secretKey) {
-      const mid = Math.floor(secretKey.length / 2);
-      const part1 = secretKey.substring(0, mid);
-      const part2 = secretKey.substring(mid);
-      console.log('AWS_SECRET_ACCESS_KEY part1:', part1, 'part2:', part2);
-    }
-
-    // Reset mocks before each test
-    jest.clearAllMocks();
+  beforeEach(() => {
     app = new cdk.App();
   });
 
