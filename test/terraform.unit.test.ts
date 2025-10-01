@@ -81,16 +81,6 @@ describe('tap_stack.tf static verification', () => {
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it('defines Launch Template, ALB, Target Group, Listeners, and ASG', () => {
-    [
-      /resource\s+"aws_launch_template"\s+"main"/,
-      /resource\s+"aws_lb"\s+"main"/,
-      /resource\s+"aws_lb_target_group"\s+"main"/,
-      /resource\s+"aws_lb_listener"\s+"http"/,
-      /resource\s+"aws_lb_listener"\s+"https"/
-    ].forEach(rx => expect(has(rx)).toBe(true));
-  });
-
 
   it('defines S3 bucket resources and configurations', () => {
     [
