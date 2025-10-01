@@ -1,60 +1,3 @@
-### Secure AWS stack (Terraform) – Ideal Response
-
-- All requirements implemented in a single Terraform file `lib/tap_stack.tf`.
-- References existing `aws_region` variable and enforces allowed regions (us-west-2 primary, us-east-1 secondary).
-- Creates all resources new in this stack; no reuse of existing modules/resources.
-
-#### What’s included
-
-- VPC with public/private subnets, IGW, NAT, private routing, S3 VPC Gateway Endpoint
-- Default SG deny-all; least-privilege SGs for Lambda/RDS; restricted egress
-- KMS CMKs for data and logs with key rotation
-- S3 static bucket (versioning, TLS-only policy, SSE-KMS) served by CloudFront (OAI)
-- API Gateway (Regional) integrated with Lambda; CloudFront routes /api to APIGW for edge delivery
-- WAFv2 Web ACL (CLOUDFRONT scope) with default block and explicit allow for `allowed_ips`
-- DynamoDB with CMK encryption and PITR; RDS MySQL (private, Multi-AZ, SSL required, encrypted)
-- Lambda using Node.js 20.x with inline packaged artifact; VPC-enabled
-- EC2 t3.micro in private subnet with encrypted EBS; restricted egress for patching/DNS
-- CloudTrail multi-region, VPC Flow Logs, CloudWatch Logs (KMS), alarms for Lambda errors, RDS CPU, DynamoDB throttles
-- GuardDuty enabled in primary and secondary regions; findings routed to SNS via EventBridge rule
-- SNS topic for alerts (encrypted)
-- DevSecOps role plus advisory deny policy scaffold for security-change approvals
-- Comprehensive outputs for key resource identifiers/URLs
-
-#### How to use
-
-1. Ensure `provider.tf` defines the AWS provider using variable `aws_region`.
-2. Set sensitive vars securely (e.g., `TF_VAR_db_password`). Example:
-
-```bash
-export TF_VAR_db_password='strong-password'
-```
-
-3. Initialize and apply:
-
-```bash
-cd lib
-terraform init
-terraform apply -auto-approve
-```
-
-4. Key variables you may override:
-
-- `project`, `environment`, `allowed_ips`, `vpc_cidr`, `public_subnet_cidrs`, `private_subnet_cidrs`, `db_name`, `db_username`, `rds_instance_class`
-
-#### Notes & security choices
-
-- WAF attached at CloudFront (scope CLOUDFRONT) satisfies “edge-optimized” delivery while honoring default block and IP allow.
-- S3 policies enforce HTTPS (`aws:SecureTransport`) for in-transit encryption.
-- RDS parameter `require_secure_transport=ON` enforces TLS to the database.
-- CloudTrail + KMS + CW Logs cover “logging for managed policies” and security auditing needs.
-- IAM policies are scoped and avoid wildcards where possible; network egress is minimized.
-
-All code is in `lib/tap_stack.tf`. Apply will provision a clean, secure, and compliant baseline per the prompt.
-
-#### Full code
-
-```hcl
 terraform {
   required_version = ">= 1.5.0"
 
@@ -1426,4 +1369,5 @@ output "kms_logs_key_id" {
   description = "KMS logs key ID"
   value       = aws_kms_key.logs.key_id
 }
-```
+
+
