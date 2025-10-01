@@ -492,7 +492,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "ecommerce-assets-${AWS::AccountId}-${EnvironmentSuffix}-${AWS::StackName}"
+          "Fn::Sub": "ecommerce-assets-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -800,7 +800,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "ecommerce-cloudtrail-${AWS::AccountId}-${EnvironmentSuffix}-${AWS::StackName}"
+          "Fn::Sub": "ecommerce-cloudtrail-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
@@ -919,7 +919,7 @@
       "Type": "AWS::S3::Bucket",
       "Properties": {
         "BucketName": {
-          "Fn::Sub": "ecommerce-config-${AWS::AccountId}-${EnvironmentSuffix}-${AWS::StackName}"
+          "Fn::Sub": "ecommerce-config-${AWS::AccountId}-${EnvironmentSuffix}"
         },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
