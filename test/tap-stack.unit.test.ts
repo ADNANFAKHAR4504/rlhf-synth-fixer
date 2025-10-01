@@ -41,6 +41,23 @@ describe('TapStack', () => {
         });
       }).toThrow('Stack must be deployed in eu-central-1. Current region: us-west-2');
     });
+
+    test('should use default environment suffix when not provided', () => {
+      const testStack = new TapStack(new cdk.App(), 'TestDefaultStack', {
+        env: { region: 'eu-central-1' }
+      });
+      const testTemplate = Template.fromStack(testStack);
+      
+      // Verify VPC is created with default 'dev' suffix
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'Environment',
+            Value: 'Production'
+          }
+        ])
+      });
+    });
   });
 
   describe('VPC Configuration Tests', () => {
@@ -208,7 +225,7 @@ describe('TapStack', () => {
   describe('Security Group Tests', () => {
     test('should create ALB security group with HTTP/HTTPS ingress', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupName: 'tap-pr3221-alb-sg',
+        GroupName: 'tap-dev-alb-sg',
         SecurityGroupIngress: Match.arrayWith([
           {
             CidrIp: '0.0.0.0/0',
@@ -234,7 +251,7 @@ describe('TapStack', () => {
 
     test('should create RDS security group with public MySQL access', () => {
       template.hasResourceProperties('AWS::EC2::SecurityGroup', {
-        GroupName: 'tap-pr3221-rds-sg',
+        GroupName: 'tap-dev-rds-sg',
         SecurityGroupIngress: [
           {
             CidrIp: '0.0.0.0/0',
