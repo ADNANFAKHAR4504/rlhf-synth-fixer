@@ -756,7 +756,7 @@ export class CloudTrailModule extends Construct {
       includeGlobalServiceEvents: true,
       isMultiRegionTrail: true,
       enableLogFileValidation: true, // Ensures log integrity
-      // kmsKeyId: props.kmsKeyId,
+      kmsKeyId: props.kmsKeyId,
       cloudWatchLogsGroupArn: `${this.logGroup.arn}:*`,
       cloudWatchLogsRoleArn: cloudTrailRole.arn,
 
