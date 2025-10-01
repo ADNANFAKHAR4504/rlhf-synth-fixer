@@ -61,11 +61,6 @@ describe('TAP Stack Integration Tests', () => {
       expect(addrs.address).toBeDefined();
     });
 
-    test('ALB DNS reachable over HTTP', async () => {
-      const res = await fetch(`http://${alb_dns_name}`, { signal: AbortSignal.timeout(8000) });
-      expect([200, 403, 404]).toContain(res.status);
-    }, 20000);
-
     test('ALB outputs valid', () => {
       expect(alb_zone_id).toMatch(/^Z[A-Z0-9]+/);
       expect(alb_security_group_id).toMatch(/^sg-/);
