@@ -920,6 +920,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_us_east_1" {
   rule {
     id     = "noncurrent-cleanup"
     status = "Enabled"
+    filter {}
     noncurrent_version_expiration { noncurrent_days = 90 }
   }
 }
@@ -962,6 +963,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "app_us_west_2" {
   rule {
     id     = "noncurrent-cleanup"
     status = "Enabled"
+    filter {}
     noncurrent_version_expiration { noncurrent_days = 90 }
   }
 }
@@ -1344,7 +1346,7 @@ data "archive_file" "lambda_placeholder" {
           // Upload a test object to S3 (KMS-encrypted server-side)
           if (event.httpMethod === 'POST' && event.path === '/upload') {
             const timestamp = Date.now();
-            const key = `test-uploads/lambda-upload-${timestamp}.json`;
+            const key = 'test-uploads/lambda-upload-' + timestamp + '.json';
             
             const uploadParams = {
               Bucket: bucketName,
