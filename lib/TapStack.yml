@@ -358,6 +358,7 @@ Resources:
   AppDataBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub 'prod-app-data-${AWS::AccountId}-${EnvironmentSuffix}'
       BucketEncryption:
@@ -654,30 +655,30 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   Database:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBName: appdb
-      AllocatedStorage: 20
-      DBInstanceClass: db.t3.medium
-      Engine: mysql
-      EngineVersion: 8.0
-      MasterUsername: admin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
-      MultiAZ: true
-      StorageType: gp2
-      StorageEncrypted: true
-      KmsKeyId: !Ref EncryptionKey
-      VPCSecurityGroups:
-        - !Ref DatabaseSecurityGroup
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      BackupRetentionPeriod: 7
-      DeleteAutomatedBackups: false
-      DeletionProtection: true
-      Tags:
-        - Key: Name
-          Value: !Sub 'prod-mysql-db-${EnvironmentSuffix}'
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
+      Type: AWS::RDS::DBInstance
+      Properties:
+        DBName: appdb
+        AllocatedStorage: 20
+        DBInstanceClass: db.t3.medium
+        Engine: mysql
+        EngineVersion: 8.0.43
+        MasterUsername: admin
+        MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-db-password:SecretString:password}}'
+        MultiAZ: true
+        StorageType: gp2
+        StorageEncrypted: true
+        KmsKeyId: !Ref EncryptionKey
+        VPCSecurityGroups:
+          - !Ref DatabaseSecurityGroup
+        DBSubnetGroupName: !Ref DBSubnetGroup
+        BackupRetentionPeriod: 7
+        DeleteAutomatedBackups: false
+        DeletionProtection: true
+        Tags:
+          - Key: Name
+            Value: !Sub 'prod-mysql-db-${EnvironmentSuffix}'
+          - Key: Environment
+            Value: !Ref EnvironmentSuffix
 
   # Database password in Secrets Manager
   DBPassword:
@@ -716,7 +717,7 @@ Resources:
       Name: !Sub 'prod-config-recorder-${EnvironmentSuffix}'
       RecordingGroup:
         AllSupported: true
-        IncludeGlobalResources: true
+        IncludeGlobalResourceTypes: true
       RoleARN: !GetAtt ConfigRole.Arn
 
   ConfigDeliveryChannel:
