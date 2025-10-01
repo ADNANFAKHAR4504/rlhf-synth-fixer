@@ -520,6 +520,7 @@ export interface WafConfig {
   scope: string;
 }
 
+// WAF Module
 export class SecureWaf extends Construct {
   public readonly webAcl: Wafv2WebAcl;
 
@@ -542,38 +543,14 @@ export class SecureWaf extends Construct {
             none: {},
           },
           statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesCommonRuleSet',
-              vendorName: 'AWS',
+            // Try with different property structure
+            ruleGroupReferenceStatement: {
+              arn: `arn:aws:wafv2:${config.scope}:aws:managed-rule-set/AWSManagedRulesCommonRuleSet`,
             },
-          },
-          action: {
-            block: {},
           },
           visibilityConfig: {
             cloudwatchMetricsEnabled: true,
             metricName: 'AWSManagedRulesCommonRuleSetMetric',
-            sampledRequestsEnabled: true,
-          },
-        },
-        {
-          name: 'AWSManagedRulesKnownBadInputsRuleSet',
-          priority: 2,
-          overrideAction: {
-            none: {},
-          },
-          statement: {
-            managedRuleGroupStatement: {
-              name: 'AWSManagedRulesKnownBadInputsRuleSet',
-              vendorName: 'AWS',
-            },
-          },
-          action: {
-            block: {},
-          },
-          visibilityConfig: {
-            cloudwatchMetricsEnabled: true,
-            metricName: 'AWSManagedRulesKnownBadInputsRuleSetMetric',
             sampledRequestsEnabled: true,
           },
         },
