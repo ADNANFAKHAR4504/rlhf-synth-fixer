@@ -239,7 +239,7 @@ describeIf('S3 Backup System Integration Tests', () => {
 
     test('should have globally unique bucket names', () => {
       expect(backupBucketName).toMatch(/^backup-primary-.*-\d+-.*$/);
-      expect(replicationBucketName).toMatch(/^backup-replication-.*-\d+-.*$/);
+      expect(replicationBucketName).toMatch(/^backup-replications-.*-\d+-.*$/);
       expect(backupBucketName).not.toBe(replicationBucketName);
     });
 
