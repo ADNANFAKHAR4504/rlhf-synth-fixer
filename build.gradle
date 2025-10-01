@@ -76,6 +76,9 @@ dependencies {
     implementation "com.hashicorp:cdktf:${hashicorpCdktfVersion}"
     implementation "com.hashicorp:cdktf-provider-aws:${hashicorpCdktfAwsVersion}"
     implementation 'com.pulumi:tls:5.2.0'
+    implementation 'software.amazon.awscdk:aws-cdk-lib:2.149.0'
+    implementation 'software.constructs:constructs:10.3.0'
+    implementation 'io.github.cdklabs:cdknag:2.37.40'
 
     // AWS CDK dependencies
     implementation "software.amazon.awscdk:aws-cdk-lib:${awsCdkVersion}"
