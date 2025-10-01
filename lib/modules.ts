@@ -66,8 +66,13 @@ export class NetworkingModule extends Construct {
   public readonly availabilityZones: DataAwsAvailabilityZones;
   public readonly publicSubnets: Subnet[];
   public readonly privateSubnets: Subnet[];
-  public readonly publicSubnetIds: string[];
-  public readonly privateSubnetIds: string[];
+  // Change these from string[] to token references
+  public get publicSubnetIds(): string[] {
+    return this.publicSubnets.map(subnet => subnet.id);
+  }
+  public get privateSubnetIds(): string[] {
+    return this.privateSubnets.map(subnet => subnet.id);
+  }
 
   constructor(scope: Construct, id: string, props: NetworkingModuleProps) {
     super(scope, id);
@@ -99,7 +104,7 @@ export class NetworkingModule extends Construct {
 
     // Create public subnets (2 for high availability)
     this.publicSubnets = [];
-    this.publicSubnetIds = [];
+    // Remove: this.publicSubnetIds = [];
 
     for (let i = 0; i < 2; i++) {
       const subnet = new Subnet(this, `public-subnet-${i}`, {
@@ -114,12 +119,12 @@ export class NetworkingModule extends Construct {
         },
       });
       this.publicSubnets.push(subnet);
-      this.publicSubnetIds.push(subnet.id);
+      // Remove: this.publicSubnetIds.push(subnet.id);
     }
 
     // Create private subnets (2 for high availability)
     this.privateSubnets = [];
-    this.privateSubnetIds = [];
+    // Remove: this.privateSubnetIds = [];
 
     for (let i = 0; i < 2; i++) {
       const subnet = new Subnet(this, `private-subnet-${i}`, {
@@ -133,10 +138,10 @@ export class NetworkingModule extends Construct {
         },
       });
       this.privateSubnets.push(subnet);
-      this.privateSubnetIds.push(subnet.id);
+      // Remove: this.privateSubnetIds.push(subnet.id);
     }
 
-    // Create route table for public subnets
+    // Rest of the code remains the same...
     const publicRouteTable = new RouteTable(this, 'public-route-table', {
       vpcId: this.vpc.id,
       tags: {
@@ -145,14 +150,12 @@ export class NetworkingModule extends Construct {
       },
     });
 
-    // Add route to internet gateway for public subnets
     new Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
       destinationCidrBlock: '0.0.0.0/0',
       gatewayId: internetGateway.id,
     });
 
-    // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, index) => {
       new RouteTableAssociation(this, `public-rta-${index}`, {
         subnetId: subnet.id,

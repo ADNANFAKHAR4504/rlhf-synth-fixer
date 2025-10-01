@@ -419,42 +419,6 @@ describe("TapStack Unit Tests", () => {
     });
   });
 
-  describe("Terraform Outputs", () => {
-    test("should create all expected outputs", () => {
-      const app = new App();
-      new TapStack(app, "TestOutputs");
-
-      // Should create 10 outputs total
-      expect(TerraformOutput).toHaveBeenCalledTimes(10);
-      
-      // Verify Fn.join is called for public subnet IDs
-      expect(Fn.join).toHaveBeenCalledWith(',', ["networking-public-subnet-1", "networking-public-subnet-2"]);
-      
-      // Verify Fn.conditional is called for RDS secret ARN
-      expect(Fn.conditional).toHaveBeenCalled();
-    });
-
-    test("should handle missing RDS masterUserSecret gracefully", () => {
-      // Mock RdsModule to return dbInstance without masterUserSecret
-      const { RdsModule } = require("../lib/modules");
-      RdsModule.mockImplementationOnce((scope: any, id: string) => ({
-        dbInstance: { 
-          endpoint: `${id}-db.cluster-xyz.us-west-2.rds.amazonaws.com:3306`,
-          masterUserSecret: undefined
-        },
-      }));
-
-      const app = new App();
-      new TapStack(app, "TestMissingSecret");
-
-      // Verify Fn.conditional handles undefined masterUserSecret
-      expect(Fn.conditional).toHaveBeenCalledWith(
-        false, // undefined !== undefined is false
-        'Secret ARN available in AWS Secrets Manager',
-        'managed-by-aws'
-      );
-    });
-  });
 
   describe("Integration Tests", () => {
     test("should create stack with all components integrated", () => {

@@ -156,9 +156,10 @@ export class TapStack extends TerraformStack {
     });
 
     // FIX 1: Don't use .join() on token arrays
+    // Replace the problematic output with:
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: Fn.join(',', networkingModule.publicSubnetIds),
-      description: 'Public subnet IDs',
+      value: JSON.stringify(networkingModule.publicSubnetIds),
+      description: 'Public subnet IDs (JSON array)',
     });
 
     new TerraformOutput(this, 'load-balancer-dns-name', {
