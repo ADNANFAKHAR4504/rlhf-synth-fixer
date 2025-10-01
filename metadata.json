@@ -10,5 +10,15 @@
   "subject_labels": [
     "Application Deployment"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "KMS",
+    "SNS",
+    "SQS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9
 }

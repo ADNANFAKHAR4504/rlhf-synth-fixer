@@ -19,7 +19,8 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toContain('TAP Stack');
+      expect(template.Description).toContain('Production-ready serverless backend');
+      expect(template.Description).toContain('Lambda, API Gateway, DynamoDB');
     });
 
     test('should have metadata section', () => {
@@ -68,6 +69,22 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Parameters.PointInTimeRecoveryEnabled).toBeDefined();
       expect(template.Parameters.PointInTimeRecoveryEnabled.Type).toBe('String');
       expect(template.Parameters.PointInTimeRecoveryEnabled.AllowedValues).toEqual(['true', 'false']);
+    });
+
+    test('should have LambdaMemorySize parameter', () => {
+      expect(template.Parameters.LambdaMemorySize).toBeDefined();
+      expect(template.Parameters.LambdaMemorySize.Type).toBe('Number');
+      expect(template.Parameters.LambdaMemorySize.Default).toBe(256);
+      expect(template.Parameters.LambdaMemorySize.MinValue).toBe(128);
+      expect(template.Parameters.LambdaMemorySize.MaxValue).toBe(10240);
+    });
+
+    test('should have LambdaTimeout parameter', () => {
+      expect(template.Parameters.LambdaTimeout).toBeDefined();
+      expect(template.Parameters.LambdaTimeout.Type).toBe('Number');
+      expect(template.Parameters.LambdaTimeout.Default).toBe(30);
+      expect(template.Parameters.LambdaTimeout.MinValue).toBe(1);
+      expect(template.Parameters.LambdaTimeout.MaxValue).toBe(900);
     });
   });
 
@@ -372,6 +389,171 @@ describe('TapStack CloudFormation Template', () => {
     });
   });
 
+  describe('IAM Resources', () => {
+    test('should have Lambda Execution Role', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('Lambda Execution Role should have correct assume role policy', () => {
+      const role = template.Resources.LambdaExecutionRole.Properties;
+      expect(role.AssumeRolePolicyDocument.Version).toBe('2012-10-17');
+      expect(role.AssumeRolePolicyDocument.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
+    });
+
+    test('Lambda Execution Role should have basic execution policy', () => {
+      const role = template.Resources.LambdaExecutionRole.Properties;
+      expect(role.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
+    });
+
+    test('Lambda Execution Role should have DynamoDB access policy', () => {
+      const role = template.Resources.LambdaExecutionRole.Properties;
+      const dynamoPolicy = role.Policies.find((p: any) => p.PolicyName === 'DynamoDBAccess');
+      expect(dynamoPolicy).toBeDefined();
+      expect(dynamoPolicy.PolicyDocument.Statement[0].Action).toContain('dynamodb:GetItem');
+    });
+
+    test('Lambda Execution Role should have proper tags', () => {
+      const role = template.Resources.LambdaExecutionRole.Properties;
+      expect(role.Tags).toContainEqual({ Key: 'ManagedBy', Value: 'CloudFormation' });
+    });
+  });
+
+  describe('SQS Resources', () => {
+    test('should have Dead Letter Queue', () => {
+      expect(template.Resources.DeadLetterQueue).toBeDefined();
+      expect(template.Resources.DeadLetterQueue.Type).toBe('AWS::SQS::Queue');
+    });
+
+    test('Dead Letter Queue should have KMS encryption', () => {
+      const queue = template.Resources.DeadLetterQueue.Properties;
+      expect(queue.KmsMasterKeyId).toEqual({ Ref: 'KMSKey' });
+    });
+
+    test('Dead Letter Queue should have proper naming', () => {
+      const queue = template.Resources.DeadLetterQueue.Properties;
+      expect(queue.QueueName['Fn::Sub']).toBe('${ProjectName}-${EnvironmentSuffix}-dlq');
+    });
+
+    test('Dead Letter Queue should have message retention period', () => {
+      const queue = template.Resources.DeadLetterQueue.Properties;
+      expect(queue.MessageRetentionPeriod).toBe(1209600); // 14 days
+    });
+  });
+
+  describe('Lambda Function', () => {
+    test('should have Task Function', () => {
+      expect(template.Resources.TaskFunction).toBeDefined();
+      expect(template.Resources.TaskFunction.Type).toBe('AWS::Lambda::Function');
+    });
+
+    test('Task Function should have correct runtime', () => {
+      const func = template.Resources.TaskFunction.Properties;
+      expect(func.Runtime).toBe('nodejs22.x');
+    });
+
+    test('Task Function should reference execution role', () => {
+      const func = template.Resources.TaskFunction.Properties;
+      expect(func.Role['Fn::GetAtt']).toEqual(['LambdaExecutionRole', 'Arn']);
+    });
+
+    test('Task Function should have Dead Letter Queue configured', () => {
+      const func = template.Resources.TaskFunction.Properties;
+      expect(func.DeadLetterConfig.TargetArn['Fn::GetAtt']).toEqual(['DeadLetterQueue', 'Arn']);
+    });
+
+    test('Task Function should have KMS encryption for environment variables', () => {
+      const func = template.Resources.TaskFunction.Properties;
+      expect(func.KmsKeyArn['Fn::GetAtt']).toEqual(['KMSKey', 'Arn']);
+    });
+
+    test('Task Function should have environment variables', () => {
+      const func = template.Resources.TaskFunction.Properties;
+      expect(func.Environment.Variables.DYNAMODB_TABLE_NAME).toEqual({ Ref: 'TurnAroundPromptTable' });
+    });
+
+    test('Task Function should have proper timeout and memory settings', () => {
+      const func = template.Resources.TaskFunction.Properties;
+      expect(func.Timeout).toEqual({ Ref: 'LambdaTimeout' });
+      expect(func.MemorySize).toEqual({ Ref: 'LambdaMemorySize' });
+    });
+  });
+
+  describe('API Gateway Resources', () => {
+    test('should have REST API', () => {
+      expect(template.Resources.RestApi).toBeDefined();
+      expect(template.Resources.RestApi.Type).toBe('AWS::ApiGateway::RestApi');
+    });
+
+    test('REST API should be regional', () => {
+      const api = template.Resources.RestApi.Properties;
+      expect(api.EndpointConfiguration.Types).toEqual(['REGIONAL']);
+    });
+
+    test('should have tasks resource', () => {
+      expect(template.Resources.TasksResource).toBeDefined();
+      expect(template.Resources.TasksResource.Type).toBe('AWS::ApiGateway::Resource');
+      expect(template.Resources.TasksResource.Properties.PathPart).toBe('tasks');
+    });
+
+    test('should have task ID resource', () => {
+      expect(template.Resources.TaskIdResource).toBeDefined();
+      expect(template.Resources.TaskIdResource.Type).toBe('AWS::ApiGateway::Resource');
+      expect(template.Resources.TaskIdResource.Properties.PathPart).toBe('{id}');
+    });
+
+    test('should have GET /tasks method', () => {
+      expect(template.Resources.TasksGetMethod).toBeDefined();
+      expect(template.Resources.TasksGetMethod.Properties.HttpMethod).toBe('GET');
+    });
+
+    test('should have POST /tasks method', () => {
+      expect(template.Resources.TasksPostMethod).toBeDefined();
+      expect(template.Resources.TasksPostMethod.Properties.HttpMethod).toBe('POST');
+    });
+
+    test('should have GET /tasks/{id} method', () => {
+      expect(template.Resources.TaskGetMethod).toBeDefined();
+      expect(template.Resources.TaskGetMethod.Properties.HttpMethod).toBe('GET');
+    });
+
+    test('should have Lambda permission for API Gateway', () => {
+      expect(template.Resources.LambdaApiGatewayPermission).toBeDefined();
+      expect(template.Resources.LambdaApiGatewayPermission.Type).toBe('AWS::Lambda::Permission');
+      expect(template.Resources.LambdaApiGatewayPermission.Properties.Principal).toBe('apigateway.amazonaws.com');
+    });
+
+    test('should have API deployment', () => {
+      expect(template.Resources.ApiDeployment).toBeDefined();
+      expect(template.Resources.ApiDeployment.Type).toBe('AWS::ApiGateway::Deployment');
+    });
+
+    test('should have API stage', () => {
+      expect(template.Resources.ApiStage).toBeDefined();
+      expect(template.Resources.ApiStage.Type).toBe('AWS::ApiGateway::Stage');
+      expect(template.Resources.ApiStage.Properties.StageName).toBe('prod');
+    });
+
+    test('API stage should have logging enabled', () => {
+      const stage = template.Resources.ApiStage.Properties;
+      expect(stage.MethodSettings[0].LoggingLevel).toBe('INFO');
+      expect(stage.MethodSettings[0].MetricsEnabled).toBe(true);
+    });
+
+    test('should have Usage Plan', () => {
+      expect(template.Resources.UsagePlan).toBeDefined();
+      expect(template.Resources.UsagePlan.Type).toBe('AWS::ApiGateway::UsagePlan');
+    });
+
+    test('Usage Plan should have throttle and quota limits', () => {
+      const plan = template.Resources.UsagePlan.Properties;
+      expect(plan.Throttle.RateLimit).toBe(1000);
+      expect(plan.Throttle.BurstLimit).toBe(2000);
+      expect(plan.Quota.Limit).toBe(10000);
+      expect(plan.Quota.Period).toBe('DAY');
+    });
+  });
+
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
@@ -384,6 +566,9 @@ describe('TapStack CloudFormation Template', () => {
         'DashboardURL',
         'StackName',
         'EnvironmentSuffix',
+        'ApiUrl',
+        'LambdaFunctionArn',
+        'DeadLetterQueueUrl',
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -455,6 +640,33 @@ describe('TapStack CloudFormation Template', () => {
       expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
     });
 
+    test('ApiUrl output should be correct', () => {
+      const output = template.Outputs.ApiUrl;
+      expect(output.Description).toBe('API Gateway endpoint URL');
+      expect(output.Value['Fn::Sub']).toBe('https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/prod');
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-ApiUrl',
+      });
+    });
+
+    test('LambdaFunctionArn output should be correct', () => {
+      const output = template.Outputs.LambdaFunctionArn;
+      expect(output.Description).toBe('Lambda function ARN');
+      expect(output.Value['Fn::GetAtt']).toEqual(['TaskFunction', 'Arn']);
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-LambdaFunctionArn',
+      });
+    });
+
+    test('DeadLetterQueueUrl output should be correct', () => {
+      const output = template.Outputs.DeadLetterQueueUrl;
+      expect(output.Description).toBe('Dead Letter Queue URL');
+      expect(output.Value).toEqual({ Ref: 'DeadLetterQueue' });
+      expect(output.Export.Name).toEqual({
+        'Fn::Sub': '${AWS::StackName}-DeadLetterQueueUrl',
+      });
+    });
+
     test('all outputs should have export names', () => {
       Object.keys(template.Outputs).forEach(outputKey => {
         const output = template.Outputs[outputKey];
@@ -482,17 +694,17 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBeGreaterThan(5);
+      expect(resourceCount).toBe(22); // Updated for complete serverless backend
     });
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(5);
+      expect(parameterCount).toBe(7); // Updated for Lambda parameters
     });
 
     test('should have correct number of outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(9);
+      expect(outputCount).toBe(12); // Updated for Lambda/API Gateway outputs
     });
 
     test('should have conditions section', () => {
