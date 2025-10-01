@@ -27,7 +27,7 @@ export class TapStack extends cdk.Stack {
       );
     }
 
-    // VPC with public and private subnets across 2 AZs
+    // 'VPC' with public and private subnets across 2 AZs
     const vpc = new ec2.Vpc(this, `ProductionVpc${environmentSuffix}`, {
       maxAzs: 2,
       natGateways: 2, // One per AZ for high availability
