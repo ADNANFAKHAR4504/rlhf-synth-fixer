@@ -86,7 +86,7 @@ variable "db_engine" {
 variable "db_engine_version" {
   description = "RDS engine version"
   type        = string
-  default     = "15.4"
+  default     = "16.3"
 }
 
 variable "db_instance_class" {
@@ -153,6 +153,12 @@ variable "app_port" {
   description = "Application port exposed by EC2"
   type        = number
   default     = 8080
+}
+
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateways (requires EIPs). Set to false if hitting EIP limits."
+  type        = bool
+  default     = false
 }
 
 variable "one_nat_gateway_per_region" {
@@ -283,14 +289,14 @@ resource "aws_subnet" "private_us_east_1" {
 
 resource "aws_eip" "nat_us_east_1" {
   provider = aws.us_east_1
-  for_each = var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_east_1 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_east_1))[0] } : var.public_subnet_cidrs_us_east_1
+  for_each = var.enable_nat_gateway ? (var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_east_1 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_east_1))[0] } : var.public_subnet_cidrs_us_east_1) : {}
   domain   = "vpc"
   tags     = merge(local.base_tags, { Name = "${var.app_name}-nat-eip-${each.key}" })
 }
 
 resource "aws_nat_gateway" "us_east_1" {
   provider      = aws.us_east_1
-  for_each      = var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_east_1 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_east_1))[0] } : var.public_subnet_cidrs_us_east_1
+  for_each      = var.enable_nat_gateway ? (var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_east_1 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_east_1))[0] } : var.public_subnet_cidrs_us_east_1) : {}
   allocation_id = aws_eip.nat_us_east_1[each.key].id
   subnet_id     = aws_subnet.public_us_east_1[each.key].id
   tags          = merge(local.base_tags, { Name = "${var.app_name}-nat-${each.key}" })
@@ -318,10 +324,15 @@ resource "aws_route_table" "private_us_east_1" {
   provider = aws.us_east_1
   for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(var.private_subnet_cidrs_us_east_1))[0] } : var.private_subnet_cidrs_us_east_1
   vpc_id   = aws_vpc.us_east_1.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_east_1[sort(keys(aws_nat_gateway.us_east_1))[0]].id : aws_nat_gateway.us_east_1[each.key].id
+  
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_east_1[sort(keys(aws_nat_gateway.us_east_1))[0]].id : aws_nat_gateway.us_east_1[each.key].id
+    }
   }
+  
   tags = merge(local.base_tags, { Name = var.one_nat_gateway_per_region ? "${var.app_name}-rt-private-east1" : "${var.app_name}-rt-private-${each.key}" })
 }
 
@@ -377,14 +388,14 @@ resource "aws_subnet" "private_us_west_2" {
 
 resource "aws_eip" "nat_us_west_2" {
   provider = aws.us_west_2
-  for_each = var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_west_2 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_west_2))[0] } : var.public_subnet_cidrs_us_west_2
+  for_each = var.enable_nat_gateway ? (var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_west_2 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_west_2))[0] } : var.public_subnet_cidrs_us_west_2) : {}
   domain   = "vpc"
   tags     = merge(local.base_tags, { Name = "${var.app_name}-nat-eip-${each.key}" })
 }
 
 resource "aws_nat_gateway" "us_west_2" {
   provider      = aws.us_west_2
-  for_each      = var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_west_2 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_west_2))[0] } : var.public_subnet_cidrs_us_west_2
+  for_each      = var.enable_nat_gateway ? (var.one_nat_gateway_per_region ? { for az, cidr in var.public_subnet_cidrs_us_west_2 : az => cidr if az == sort(keys(var.public_subnet_cidrs_us_west_2))[0] } : var.public_subnet_cidrs_us_west_2) : {}
   allocation_id = aws_eip.nat_us_west_2[each.key].id
   subnet_id     = aws_subnet.public_us_west_2[each.key].id
   tags          = merge(local.base_tags, { Name = "${var.app_name}-nat-${each.key}" })
@@ -412,10 +423,15 @@ resource "aws_route_table" "private_us_west_2" {
   provider = aws.us_west_2
   for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(var.private_subnet_cidrs_us_west_2))[0] } : var.private_subnet_cidrs_us_west_2
   vpc_id   = aws_vpc.us_west_2.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_west_2[sort(keys(aws_nat_gateway.us_west_2))[0]].id : aws_nat_gateway.us_west_2[each.key].id
+  
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_west_2[sort(keys(aws_nat_gateway.us_west_2))[0]].id : aws_nat_gateway.us_west_2[each.key].id
+    }
   }
+  
   tags = merge(local.base_tags, { Name = var.one_nat_gateway_per_region ? "${var.app_name}-rt-private-west2" : "${var.app_name}-rt-private-${each.key}" })
 }
 
