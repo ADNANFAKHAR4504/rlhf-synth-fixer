@@ -26,6 +26,7 @@ export interface TapStackProps extends cdk.StackProps {
   // prefer "suffix" or "environmentSuffix" via pipeline/context; keep optional
   suffix?: string;
   environmentSuffix?: string;
+  natGateways?: number; // default 0 for CI-friendly deployments
 }
 
 export class TapStack extends cdk.Stack {
@@ -42,10 +43,12 @@ export class TapStack extends cdk.Stack {
     const rawSuffix = props.suffix ?? props.environmentSuffix ?? '';
     const suffix = sanitize(rawSuffix || 'dev');
 
+    const natGateways = props.natGateways ?? 0;
+
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, `VPC-${suffix}`, {
       maxAzs: 2,
-      natGateways: 1,
+      natGateways,
       subnetConfiguration: [
         {
           cidrMask: 24,
@@ -132,6 +135,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
+    // CFN-level replication configuration requires 'role' at bucket level
     const cfnMain = mainBucket.node.defaultChild as s3.CfnBucket;
     cfnMain.replicationConfiguration = {
       role: replicationRole.roleArn,

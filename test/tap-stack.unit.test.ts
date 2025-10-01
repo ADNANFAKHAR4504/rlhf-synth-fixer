@@ -143,4 +143,28 @@ describe('TapStack (unit)', () => {
     const hasHealthPath = tgs.some((tg: any) => tg.Properties && (tg.Properties.HealthCheckPath === '/' || (tg.Properties.HealthCheckSettings && tg.Properties.HealthCheckSettings.Path === '/')));
     expect(hasHealthPath).toBe(true);
   });
+
+  test('defaults to "dev" suffix when no suffix/environmentSuffix provided', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'DefaultSuffixNoProps');
+    const tmpl = Template.fromStack(stack).toJSON();
+    const outputs = Object.keys(tmpl.Outputs || {});
+    // at least one output key should include the default sanitized 'dev' suffix
+    const hasDev = outputs.some((k) => k.toLowerCase().includes('dev'));
+    expect(hasDev).toBe(true);
+  });
+
+  test('main bucket has logging prefix "access-logs/" configured', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'LoggingPrefixTest', { environmentSuffix: 'logtest' });
+    const tmpl = Template.fromStack(stack).toJSON();
+    const buckets = Object.values(tmpl.Resources).filter((r: any) => r.Type === 'AWS::S3::Bucket');
+    const hasLoggingPrefix = buckets.some((b: any) => {
+      const props = b.Properties || {};
+      const logCfg = props.LoggingConfiguration || props.ServerAccessLogsConfiguration || {};
+      // CDK emits LoggingConfiguration.LogFilePrefix
+      return logCfg.LogFilePrefix === 'access-logs/' || logCfg.LogFilePrefix === 'access-logs';
+    });
+    expect(hasLoggingPrefix).toBe(true);
+  });
 });
