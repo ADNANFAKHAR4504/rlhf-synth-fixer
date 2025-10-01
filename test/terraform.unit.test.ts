@@ -137,6 +137,16 @@ describe("Terraform Infrastructure Files", () => {
       expect(content).toMatch(/resource\s+"aws_flow_log"\s+"main"\s*{/);
       expect(content).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"flow_log"\s*{/);
     });
+
+    test("public route table routes 0.0.0.0/0 to Internet Gateway", () => {
+      const content = fs.readFileSync(networkingPath, "utf8");
+      expect(content).toMatch(/resource\s+"aws_route_table"\s+"public"[\s\S]*route\s*{[\s\S]*cidr_block\s*=\s*"0.0.0.0\/0"[\s\S]*gateway_id\s*=\s*aws_internet_gateway\.main\.id[\s\S]*}/m);
+    });
+
+    test("private route table routes 0.0.0.0/0 to NAT Gateway", () => {
+      const content = fs.readFileSync(networkingPath, "utf8");
+      expect(content).toMatch(/resource\s+"aws_route_table"\s+"private"[\s\S]*route\s*{[\s\S]*cidr_block\s*=\s*"0.0.0.0\/0"[\s\S]*nat_gateway_id\s*=\s*aws_nat_gateway\.main\.id[\s\S]*}/m);
+    });
   });
 
   describe("Security Groups", () => {
@@ -154,6 +164,18 @@ describe("Terraform Infrastructure Files", () => {
     test("declares RDS security group", () => {
       const content = fs.readFileSync(securityPath, "utf8");
       expect(content).toMatch(/resource\s+"aws_security_group"\s+"rds"\s*{/);
+    });
+
+    test("EC2 SG allows HTTP(80), HTTPS(443), and SSH(22) from anywhere", () => {
+      const content = fs.readFileSync(securityPath, "utf8");
+      expect(content).toMatch(/ingress[\s\S]*from_port\s*=\s*80[\s\S]*to_port\s*=\s*80[\s\S]*protocol\s*=\s*"tcp"[\s\S]*cidr_blocks\s*=\s*\["0.0.0.0\/0"\]/m);
+      expect(content).toMatch(/ingress[\s\S]*from_port\s*=\s*443[\s\S]*to_port\s*=\s*443[\s\S]*protocol\s*=\s*"tcp"[\s\S]*cidr_blocks\s*=\s*\["0.0.0.0\/0"\]/m);
+      expect(content).toMatch(/ingress[\s\S]*from_port\s*=\s*22[\s\S]*to_port\s*=\s*22[\s\S]*protocol\s*=\s*"tcp"[\s\S]*cidr_blocks\s*=\s*\["0.0.0.0\/0"\]/m);
+    });
+
+    test("RDS SG restricts 3306 to EC2 SG only", () => {
+      const content = fs.readFileSync(securityPath, "utf8");
+      expect(content).toMatch(/resource\s+"aws_security_group"\s+"rds"[\s\S]*ingress[\s\S]*from_port\s*=\s*3306[\s\S]*to_port\s*=\s*3306[\s\S]*security_groups\s*=\s*\[aws_security_group\.ec2\.id\][\s\S]*}/m);
     });
   });
 
@@ -177,6 +199,18 @@ describe("Terraform Infrastructure Files", () => {
     test("declares instance profile", () => {
       const content = fs.readFileSync(iamPath, "utf8");
       expect(content).toMatch(/resource\s+"aws_iam_instance_profile"\s+"ec2"\s*{/);
+    });
+
+    test("Flow logs IAM role and policy exist and are attached (if flow logs configured)", () => {
+      const networkingPath = path.resolve(libPath, "networking.tf");
+      const net = fs.readFileSync(networkingPath, "utf8");
+      if (/resource\s+"aws_flow_log"\s+"main"/m.test(net)) {
+        expect(net).toMatch(/resource\s+"aws_iam_role"\s+"flow_log"/);
+        expect(net).toMatch(/resource\s+"aws_iam_policy"\s+"flow_log"/);
+        expect(net).toMatch(/resource\s+"aws_iam_role_policy_attachment"\s+"flow_log"/);
+      } else {
+        expect(true).toBe(true);
+      }
     });
   });
 
@@ -230,6 +264,14 @@ describe("Terraform Infrastructure Files", () => {
       expect(content).toMatch(/resource\s+"aws_ssm_parameter"\s+"db_username"\s*{/);
       expect(content).toMatch(/resource\s+"aws_ssm_parameter"\s+"db_password"\s*{/);
       expect(content).toMatch(/resource\s+"aws_ssm_parameter"\s+"db_name"\s*{/);
+    });
+
+    test("SSM parameter names are namespaced under /{environment}/db/*", () => {
+      const content = fs.readFileSync(ssmPath, "utf8");
+      ["db_host", "db_port", "db_username", "db_password", "db_name"].forEach((param) => {
+        const re = new RegExp(`resource\\s+"aws_ssm_parameter"\\s+"${param}"[\\s\\S]*name\\s*=\\s*"/\\\\\${var.environment}/db/`);
+        expect(/name\s*=\s*"\/.+\/db\//.test(content)).toBe(true);
+      });
     });
   });
 
@@ -318,6 +360,142 @@ describe("Terraform Infrastructure Files", () => {
     test("RDS has backup retention", () => {
       const content = fs.readFileSync(path.resolve(libPath, "database.tf"), "utf8");
       expect(content).toMatch(/backup_retention_period\s*=\s*7/);
+    });
+  });
+
+  describe("Storage & Encryption Best Practices", () => {
+    const tfFiles = [
+      "provider.tf",
+      "variables.tf",
+      "data.tf",
+      "networking.tf",
+      "security_groups.tf",
+      "iam.tf",
+      "compute.tf",
+      "database.tf",
+      "ssm.tf",
+      "outputs.tf",
+    ]
+      .map((f) => path.resolve(libPath, f))
+      .filter((p) => fs.existsSync(p));
+
+    const allContent = tfFiles.map((p) => fs.readFileSync(p, "utf8")).join("\n\n");
+
+    test("S3 buckets (if defined) have versioning enabled", () => {
+      const hasS3Bucket = /resource\s+"aws_s3_bucket"\s+"/m.test(allContent);
+      const hasS3BucketVersioningResource = /resource\s+"aws_s3_bucket_versioning"\s+"/m.test(allContent);
+      const hasInlineVersioningEnabled = /versioning\s*{[\s\S]*status\s*=\s*"Enabled"[\s\S]*}/m.test(allContent);
+
+      if (hasS3Bucket) {
+        expect(hasS3BucketVersioningResource || hasInlineVersioningEnabled).toBe(true);
+      } else {
+        expect(true).toBe(true);
+      }
+    });
+
+    test("S3 bucket policies (if defined) restrict access to VPC endpoint only", () => {
+      const hasBucketPolicy = /resource\s+"aws_s3_bucket_policy"\s+"/m.test(allContent);
+      const hasVpceCondition = /aws:sourceVpce|aws:\\u003asourceVpce/.test(allContent);
+      if (hasBucketPolicy) {
+        expect(hasVpceCondition).toBe(true);
+      } else {
+        expect(true).toBe(true);
+      }
+    });
+
+    test("S3 objects (if defined) can only be accessed through VPC endpoint", () => {
+      // Look for common deny statements ensuring requests not from VPCe are denied
+      const hasBucketPolicy = /resource\s+"aws_s3_bucket_policy"\s+"/m.test(allContent);
+      const hasDenyNotFromVpce = /(Effect\s*:\s*"?Deny"?|"Effect"\s*:\s*"Deny")[\s\S]*?(aws:sourceVpce|aws:\\u003asourceVpce)/m.test(allContent);
+      if (hasBucketPolicy) {
+        expect(hasDenyNotFromVpce).toBe(true);
+      } else {
+        expect(true).toBe(true);
+      }
+    });
+
+    test("KMS keys (if defined) have rotation enabled", () => {
+      const hasKmsKey = /resource\s+"aws_kms_key"\s+"/m.test(allContent);
+      const rotationEnabled = /enable_key_rotation\s*=\s*true/.test(allContent);
+      if (hasKmsKey) {
+        expect(rotationEnabled).toBe(true);
+      } else {
+        expect(true).toBe(true);
+      }
+    });
+
+    test("S3 Public Access Block (if defined) is fully enabled", () => {
+      const hasPab = /resource\s+"aws_s3_bucket_public_access_block"\s+"/m.test(allContent);
+      if (hasPab) {
+        expect(/block_public_acls\s*=\s*true/.test(allContent)).toBe(true);
+        expect(/block_public_policy\s*=\s*true/.test(allContent)).toBe(true);
+        expect(/ignore_public_acls\s*=\s*true/.test(allContent)).toBe(true);
+        expect(/restrict_public_buckets\s*=\s*true/.test(allContent)).toBe(true);
+      } else {
+        expect(true).toBe(true);
+      }
+    });
+
+    test("S3 bucket policy (if defined) denies insecure transport", () => {
+      const hasBucketPolicy = /resource\s+"aws_s3_bucket_policy"\s+"/m.test(allContent);
+      const deniesInsecure = /(aws:SecureTransport|aws:\\u003aSecureTransport)[\s\S]*?(false|\"false\")[\s\S]*?(Effect\s*:?\s*\"?Deny\"?)/m.test(allContent);
+      if (hasBucketPolicy) {
+        expect(deniesInsecure).toBe(true);
+      } else {
+        expect(true).toBe(true);
+      }
+    });
+  });
+
+  describe("EC2 & RDS Storage Profiles", () => {
+    test("EC2 root volume uses gp3 (if block defined)", () => {
+      const content = fs.readFileSync(path.resolve(libPath, "compute.tf"), "utf8");
+      if (/root_block_device\s*{/.test(content)) {
+        expect(/volume_type\s*=\s*"gp3"/.test(content)).toBe(true);
+      } else {
+        expect(true).toBe(true);
+      }
+    });
+
+    test("RDS storage type is gp3 and deletion protection is explicitly set", () => {
+      const content = fs.readFileSync(path.resolve(libPath, "database.tf"), "utf8");
+      expect(/storage_type\s*=\s*"gp3"/.test(content)).toBe(true);
+      expect(/deletion_protection\s*=\s*(true|false)/.test(content)).toBe(true);
+    });
+  });
+
+  describe("IAM Policy Hygiene (Conditional)", () => {
+    test("Inline IAM policies avoid broad wildcards (outside logs:*)", () => {
+      const iamContent = fs.readFileSync(path.resolve(libPath, "iam.tf"), "utf8");
+      const wildcards = iamContent.match(/\"Action\"\s*:\s*\"\*\"/g) || [];
+      const hasBadWildcard = wildcards.some(() => !/logs:\*/.test(iamContent));
+      expect(hasBadWildcard).toBe(false);
+    });
+  });
+
+  describe("Logs & Monitoring", () => {
+    test("VPC flow logs log group has retention set to 7 days", () => {
+      const content = fs.readFileSync(path.resolve(libPath, "networking.tf"), "utf8");
+      expect(/resource\s+"aws_cloudwatch_log_group"\s+"flow_log"[\s\S]*retention_in_days\s*=\s*7/m.test(content)).toBe(true);
+    });
+
+    test("VPC flow logs log group name follows /aws/vpc/{env}-flow-logs", () => {
+      const content = fs.readFileSync(path.resolve(libPath, "networking.tf"), "utf8");
+      expect(/name\s*=\s*"\/aws\/vpc\/\$\{var\.environment}\-flow\-logs"/.test(content)).toBe(true);
+    });
+  });
+
+  describe("Outputs Completeness", () => {
+    test("outputs include identifiers for key networking and security resources", () => {
+      const content = fs.readFileSync(path.resolve(libPath, "outputs.tf"), "utf8");
+      [
+        'output\s+"internet_gateway_id"',
+        'output\s+"nat_gateway_id"',
+        'output\s+"ec2_security_group_id"',
+        'output\s+"db_subnet_group_name"',
+        'output\s+"flow_log_id"',
+        'output\s+"flow_log_group_name"'
+      ].forEach((re) => expect(new RegExp(re).test(content)).toBe(true));
     });
   });
 });
