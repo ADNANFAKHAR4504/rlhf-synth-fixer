@@ -542,12 +542,6 @@ export class SecureWaf extends Construct {
           overrideAction: {
             none: {},
           },
-          statement: {
-            // Try with different property structure
-            ruleGroupReferenceStatement: {
-              arn: `arn:aws:wafv2:${config.scope}:aws:managed-rule-set/AWSManagedRulesCommonRuleSet`,
-            },
-          },
           visibilityConfig: {
             cloudwatchMetricsEnabled: true,
             metricName: 'AWSManagedRulesCommonRuleSetMetric',
