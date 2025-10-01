@@ -160,8 +160,7 @@ export class InfrastructureStack extends cdk.Stack {
       this,
       `DbAlarmTopic-${environmentSuffix}`,
       {
-        displayName: 'Aurora Database Alarms',
-        topicName: `aurora-alarms-${environmentSuffix}`,
+        displayName: `Aurora Database Alarms - ${environmentSuffix}`,
       }
     );
 

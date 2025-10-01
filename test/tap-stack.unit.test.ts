@@ -304,8 +304,7 @@ describe('InfrastructureStack', () => {
   describe('Monitoring and Alarms', () => {
     test('creates SNS topic for alarms', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
-        DisplayName: 'Aurora Database Alarms',
-        TopicName: `aurora-alarms-${environmentSuffix}`,
+        DisplayName: `Aurora Database Alarms - ${environmentSuffix}`,
       });
     });
 
