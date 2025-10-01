@@ -124,7 +124,7 @@ export class CICDPipelineStack extends cdk.Stack {
     // Secrets Manager for GitHub token - must be manually populated
     const githubToken = new secretsmanager.Secret(this, 'GitHubToken', {
       secretName: createResourceName('github-oauth-token'),
-      description: `GitHub OAuth token for ${projectName} repository access - must be manually set with valid token`,
+      description: `GitHub OAuth token for ${projectName} repository access - store as plain text`,
       encryptionKey: encryptionKey,
     });
     cdk.Tags.of(githubToken).add('iac-rlhf-amazon', 'true');
@@ -342,7 +342,7 @@ export class CICDPipelineStack extends cdk.Stack {
         owner: props.githubOwner,
         repo: props.githubRepo,
         branch: props.githubBranch,
-        oauthToken: githubToken.secretValueFromJson('token'),
+        oauthToken: githubToken.secretValue,
         output: sourceOutput,
         trigger: codepipeline_actions.GitHubTrigger.WEBHOOK,
       });
@@ -569,14 +569,15 @@ export class CICDPipelineStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'GitHubTokenSecretName', {
       value: githubToken.secretName,
-      description: 'Name of the GitHub token secret - must be manually populated with valid GitHub personal access token',
+      description:
+        'Name of the GitHub token secret - must be manually populated with valid GitHub personal access token',
     });
 
     // Output instructions for setting up GitHub credentials
     new cdk.CfnOutput(this, 'GitHubSetupInstructions', {
       value: props.codeStarConnectionArn
         ? 'Using CodeStar connection for GitHub integration'
-        : `Set GitHub token in AWS Secrets Manager: aws secretsmanager put-secret-value --secret-id ${githubToken.secretName} --secret-string '{"token":"your-github-personal-access-token"}'`,
+        : `Set GitHub token in AWS Secrets Manager: aws secretsmanager put-secret-value --secret-id ${githubToken.secretName} --secret-string 'your-github-personal-access-token'`,
       description: 'Instructions for configuring GitHub integration',
     });
   }
