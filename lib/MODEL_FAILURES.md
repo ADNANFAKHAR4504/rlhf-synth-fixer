@@ -105,6 +105,7 @@ practices.
 
 1. Rename main.tf to tap_stack.tf
 2. Add aws_region variable to variables.tf
+3. Update MySQL engine version from 8.0.35 to 8.0.40 (8.0.35 is no longer supported)
 
 ### Optional Enhancements
 
@@ -135,6 +136,7 @@ The only significant issues were:
 
 1. File naming convention (main.tf vs tap_stack.tf)
 2. Missing aws_region variable
+3. Outdated MySQL engine version (8.0.35 no longer supported)
 
 Both issues were minor and easily corrected. The overall quality of the initial response was
 excellent, with proper security controls, resource dependencies, and comprehensive coverage
