@@ -1,6 +1,6 @@
 # Input Variables
 # -----------------------------
-variable "aws_region" {
+variable "region" {
   description = "AWS region for all resources"
   type        = string
   default     = "us-west-2"
@@ -76,13 +76,17 @@ resource "aws_s3_bucket" "lambda_logs" {
     enabled = true
   }
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
+}
+
+# Recommended: S3 bucket server-side encryption configuration
+resource "aws_s3_bucket_server_side_encryption_configuration" "lambda_logs" {
+  bucket = aws_s3_bucket.lambda_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
+}
 }
 
 # -----------------------------
@@ -269,7 +273,6 @@ resource "aws_api_gateway_integration" "lambda_integration" {
 resource "aws_api_gateway_deployment" "main" {
   depends_on = [aws_api_gateway_integration.lambda_integration]
   rest_api_id = aws_api_gateway_rest_api.main.id
-  stage_name  = "prod"
 }
 
 resource "aws_api_gateway_stage" "prod" {
