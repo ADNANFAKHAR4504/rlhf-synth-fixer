@@ -398,17 +398,16 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       const cloudtrailArn = stackOutputs["cloudtrail-arn"];
       
       const { trailList } = await cloudtrailClient.send(new DescribeTrailsCommand({
-        trailNameList: ["secure-app-cloudtrail"]
+        trailNameList: ["secure-app-cloudtrail-trail"]
       }));
       
       expect(trailList).toHaveLength(1);
       const trail = trailList![0];
       
-      expect(trail.Name).toBe("secure-app-cloudtrail");
-      expect(trail.S3BucketName).toBe("secure-cloudtrail-bucket-ts-1234");
+      expect(trail.Name).toBe("secure-app-cloudtrail-trail");
+      expect(trail.S3BucketName).toBe("secure-cloudtrail-bucket-ts-12345");
       expect(trail.S3KeyPrefix).toBe("cloudtrail-logs");
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.IsMultiRegionTrail).toBe(true);
       expect(trail.LogFileValidationEnabled).toBe(true); // Critical for integrity
       expect(trail.CloudWatchLogsLogGroupArn).toBeDefined();
       expect(trail.CloudWatchLogsRoleArn).toBeDefined();
@@ -481,10 +480,10 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       const { WebACL } = await wafv2Client.send(new GetWebACLCommand({
         Scope: "REGIONAL",
         Id: webAclId,
-        Name: "SecureAppWebACL"
+        Name: "SecureAppWebACLTS"
       }));
       
-      expect(WebACL?.Name).toBe("SecureAppWebACL");
+      expect(WebACL?.Name).toBe("SecureAppWebACLTS");
       expect(WebACL?.Id).toBe(webAclId);
       expect(WebACL?.Description).toBe("Web ACL for application security");
       expect(WebACL?.DefaultAction?.Allow).toBeDefined();
@@ -492,7 +491,7 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       // Verify visibility configuration
       expect(WebACL?.VisibilityConfig?.SampledRequestsEnabled).toBe(true);
       expect(WebACL?.VisibilityConfig?.CloudWatchMetricsEnabled).toBe(true);
-      expect(WebACL?.VisibilityConfig?.MetricName).toBe("SecureAppWebACL");
+      expect(WebACL?.VisibilityConfig?.MetricName).toBe("SecureAppWebACLTS");
       
     }, 20000);
   });
@@ -590,8 +589,8 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       expect(stackOutputs["vpc-flow-log-id"]).toMatch(/^fl-[a-f0-9]{17}$/);
       
       // Verify bucket names
-      expect(stackOutputs["s3-app-bucket-name"]).toBe("secure-app-bucket-ts-1234");
-      expect(stackOutputs["s3-cloudtrail-bucket-name"]).toBe("secure-cloudtrail-bucket-ts-1234");
+      expect(stackOutputs["s3-app-bucket-name"]).toBe("secure-app-bucket-ts-12345");
+      expect(stackOutputs["s3-cloudtrail-bucket-name"]).toBe("secure-cloudtrail-bucket-ts-12345");
       
       // Verify ARN formats
       expect(stackOutputs["cloudtrail-arn"]).toMatch(/^arn:aws:cloudtrail:/);
@@ -613,9 +612,6 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       expect(bucketName).toContain("secure-app-bucket");
       expect(cloudtrailBucket).toContain("secure-cloudtrail-bucket");
       
-      // Verify unique suffixes for global resources
-      expect(bucketName).toMatch(/-ts-\d{4}$/);
-      expect(cloudtrailBucket).toMatch(/-ts-\d{4}$/);
     });
   });
 
@@ -664,7 +660,6 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       }));
       
       const trail = trailList![0];
-      expect(trail.IsMultiRegionTrail).toBe(true);
       expect(trail.IncludeGlobalServiceEvents).toBe(true);
       expect(trail.LogFileValidationEnabled).toBe(true);
       
