@@ -704,7 +704,7 @@ resource "aws_lb_listener" "http" {
 
 resource "aws_acm_certificate" "main" {
   domain_name       = "dev.tapstack.internal"  # any FQDN placeholder
-  validation_method = "NONE"                    # skip DNS/EMAIL validation
+  validation_method = "DNS"                    # skip DNS/EMAIL validation
   tags = {
     Environment = "dev"
   }
@@ -740,7 +740,7 @@ resource "aws_acm_certificate_validation" "main" {
 
   # If certificate issuance sometimes takes longer in your account, increase create timeout:
   timeouts {
-    create = "20m"
+    create = "5m"
   }
 }
 
