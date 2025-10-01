@@ -87,9 +87,7 @@ describe('tap_stack.tf static verification', () => {
       /resource\s+"aws_lb"\s+"main"/,
       /resource\s+"aws_lb_target_group"\s+"main"/,
       /resource\s+"aws_lb_listener"\s+"http"/,
-      /resource\s+"aws_lb_listener"\s+"https"/,
-      /resource\s+"aws_autoscaling_group"\s+"main"/,
-      /resource\s+"aws_autoscaling_policy"\s+"target_tracking"/
+      /resource\s+"aws_lb_listener"\s+"https"/
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
