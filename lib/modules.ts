@@ -530,11 +530,11 @@ export class S3Module extends Construct {
             },
             Action: 's3:GetBucketAcl',
             Resource: `arn:aws:s3:::${props.cloudtrailBucketName}`,
-            Condition: {
-              StringEquals: {
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
-              },
-            },
+            // Condition: {
+            //   StringEquals: {
+            //     'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
+            //   },
+            // },
           },
           {
             Sid: 'AWSCloudTrailWrite',
@@ -543,13 +543,14 @@ export class S3Module extends Construct {
               Service: 'cloudtrail.amazonaws.com',
             },
             Action: 's3:PutObject',
-            Resource: `arn:aws:s3:::${props.cloudtrailBucketName}/cloudtrail-logs/AWSLogs/${currentAccount.accountId}/*`,
+            Resource: `arn:aws:s3:::${props.cloudtrailBucketName}/*`,
+            // Resource: `arn:aws:s3:::${props.cloudtrailBucketName}/cloudtrail-logs/AWSLogs/${currentAccount.accountId}/*`,
             Condition: {
               StringEquals: {
                 's3:x-amz-server-side-encryption': 'aws:kms',
                 's3:x-amz-server-side-encryption-aws-kms-key-id':
                   props.kmsKeyId,
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
+                // 'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
               },
             },
           },
@@ -561,11 +562,11 @@ export class S3Module extends Construct {
             },
             Action: 's3:ListBucket',
             Resource: `arn:aws:s3:::${props.cloudtrailBucketName}`,
-            Condition: {
-              StringEquals: {
-                'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
-              },
-            },
+            // Condition: {
+            //   StringEquals: {
+            //     'aws:SourceArn': `arn:aws:cloudtrail:${process.env.AWS_REGION || 'us-east-1'}:${currentAccount.accountId}:trail/${props.trailName || 'secure-app-cloudtrail-trail'}`,
+            //   },
+            // },
           },
         ],
       }),
