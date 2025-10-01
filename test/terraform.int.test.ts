@@ -83,7 +83,7 @@ describe('TAP Stack Integration Tests', () => {
       const addrs = await dns.lookup(alb_dns_name);
       expect(addrs.address).toBeDefined();
     });
-
+  }); 
   // API Gateway
   describe('API Gateway', () => {
     test('Invoke URL reachable', async () => {
