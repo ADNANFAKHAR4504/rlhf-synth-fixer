@@ -344,7 +344,7 @@ export class CICDPipelineStack extends cdk.Stack {
         branch: props.githubBranch,
         oauthToken: githubToken.secretValue,
         output: sourceOutput,
-        trigger: codepipeline_actions.GitHubTrigger.WEBHOOK,
+        trigger: codepipeline_actions.GitHubTrigger.POLL,
       });
 
     pipeline.addStage({
@@ -577,7 +577,7 @@ export class CICDPipelineStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'GitHubSetupInstructions', {
       value: props.codeStarConnectionArn
         ? 'Using CodeStar connection for GitHub integration'
-        : `Set GitHub token in AWS Secrets Manager: aws secretsmanager put-secret-value --secret-id ${githubToken.secretName} --secret-string 'your-github-personal-access-token'`,
+        : `Pipeline uses polling (no webhook). Set GitHub token: aws secretsmanager put-secret-value --secret-id ${githubToken.secretName} --secret-string 'your-github-personal-access-token'. For webhooks, switch trigger to WEBHOOK after setting valid token.`,
       description: 'Instructions for configuring GitHub integration',
     });
   }
