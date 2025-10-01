@@ -1,0 +1,37 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350011",
+  "team": "3",
+  "startedAt": "2025-09-30T16:39:39.892Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "CloudTrail",
+    "CloudWatch",
+    "WAF",
+    "KMS",
+    "EBS",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "VPC Flow Logs",
+    "CloudWatch Logs",
+    "Elastic IP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tushar-turing8",
+  "dockerS3Location": ""
+}
