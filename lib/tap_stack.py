@@ -337,7 +337,8 @@ class TapStack(Stack):
                 stateless_fragment_default_actions=["aws:forward_to_sfe"],
                 stateful_rule_group_references=[
                     network_firewall.CfnFirewallPolicy.StatefulRuleGroupReferenceProperty(
-                        resource_arn=self._create_stateful_rules().attr_rule_group_arn
+                        resource_arn=self._create_stateful_rules().attr_rule_group_arn,
+                        priority=100
                     )
                 ],
                 stateful_default_actions=["aws:drop_established"],
