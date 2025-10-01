@@ -126,13 +126,13 @@ describe('Retail Order Processing Stack Unit Tests', () => {
 
       expect(attributeDefinitions).toHaveLength(3);
 
-      const orderIdAttr = attributeDefinitions.find(attr => attr.AttributeName === 'orderId');
+      const orderIdAttr = attributeDefinitions.find((attr: any) => attr.AttributeName === 'orderId');
       expect(orderIdAttr.AttributeType).toBe('S');
 
-      const statusAttr = attributeDefinitions.find(attr => attr.AttributeName === 'status');
+      const statusAttr = attributeDefinitions.find((attr: any) => attr.AttributeName === 'status');
       expect(statusAttr.AttributeType).toBe('S');
 
-      const processedAtAttr = attributeDefinitions.find(attr => attr.AttributeName === 'processedAt');
+      const processedAtAttr = attributeDefinitions.find((attr: any) => attr.AttributeName === 'processedAt');
       expect(processedAtAttr.AttributeType).toBe('N');
     });
   });
@@ -358,7 +358,7 @@ describe('Retail Order Processing Stack Unit Tests', () => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
 
-        const envTag = resource.Properties.Tags.find(tag => tag.Key === 'Environment');
+        const envTag = resource.Properties.Tags.find((tag: any) => tag.Key === 'Environment');
         expect(envTag).toBeDefined();
         expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
       });
