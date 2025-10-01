@@ -5,6 +5,7 @@
 variable "aws_region" {
   description = "Primary AWS region for deployment (required by provider.tf)"
   type        = string
+  default     = "us-west-2"
 }
 
 variable "app_name" {
