@@ -61,6 +61,8 @@ elif [ "$LANGUAGE" = "go" ]; then
       cp tests/integration/*_test.go lib/ || true
     fi
     cd lib
+    echo "🔧 Updating go.sum for integration test dependencies..."
+    go mod tidy
     go test ./... -v -tags "integration"
     cd ..
   else
