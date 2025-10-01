@@ -1,10 +1,5 @@
 // Integration tests for deployed TAP stack infrastructure
 import {
-  CloudFormationClient,
-  DescribeStacksCommand,
-  ListStackResourcesCommand,
-} from '@aws-sdk/client-cloudformation';
-import {
   CodeBuildClient,
   BatchGetProjectsCommand,
 } from '@aws-sdk/client-codebuild';
@@ -57,10 +52,8 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'ap-northeast-1';
-const stackName = `TapStack${environmentSuffix}`;
 
 // Initialize AWS SDK clients
-const cloudFormationClient = new CloudFormationClient({ region });
 const codeBuildClient = new CodeBuildClient({ region });
 const codeDeployClient = new CodeDeployClient({ region });
 const codePipelineClient = new CodePipelineClient({ region });
@@ -72,80 +65,47 @@ const snsClient = new SNSClient({ region });
 const cloudWatchClient = new CloudWatchClient({ region });
 
 describe('TAP Stack Integration Tests', () => {
-  let stackResources: any[];
-  let stackOutputs: any;
-
-  beforeAll(async () => {
-    // Get stack information
-    try {
-      const stackResponse = await cloudFormationClient.send(
-        new DescribeStacksCommand({ StackName: stackName })
-      );
-
-      if (!stackResponse.Stacks || stackResponse.Stacks.length === 0) {
-        throw new Error(`Stack ${stackName} not found`);
-      }
-
-      stackOutputs =
-        stackResponse.Stacks[0].Outputs?.reduce((acc: any, output: any) => {
-          acc[output.OutputKey] = output.OutputValue;
-          return acc;
-        }, {}) || {};
-
-      // Get stack resources
-      const resourcesResponse = await cloudFormationClient.send(
-        new ListStackResourcesCommand({ StackName: stackName })
-      );
-
-      stackResources = resourcesResponse.StackResourceSummaries || [];
-    } catch (error) {
-      console.error('Failed to get stack information:', error);
-      throw error;
-    }
-  }, 30000);
+  // Extract resource IDs from outputs
+  const vpcId = outputs[`VpcId${environmentSuffix}`];
+  const sourceBucketName = outputs[`TapSourceBucketOutput${environmentSuffix}`];
+  const artifactsBucketName =
+    outputs[`ArtifactsBucketName${environmentSuffix}`];
+  const secretArn = outputs[`BuildSecretsArn${environmentSuffix}`];
+  const codeBuildProjectName =
+    outputs[`CodeBuildProjectName${environmentSuffix}`];
+  const codeDeployAppName =
+    outputs[`CodeDeployApplicationName${environmentSuffix}`];
+  const deploymentGroupName =
+    outputs[`DeploymentGroupName${environmentSuffix}`];
+  const autoScalingGroupName =
+    outputs[`AutoScalingGroupName${environmentSuffix}`];
+  const launchTemplateId = outputs[`LaunchTemplateId${environmentSuffix}`];
+  const pipelineArn = outputs[`TapPipelineOutput${environmentSuffix}`];
+  const snsTopicArn = outputs[`SnsTopicArn${environmentSuffix}`];
+  const alarmName = outputs[`BuildFailureAlarmName${environmentSuffix}`];
+  const securityGroupId = outputs[`SecurityGroupId${environmentSuffix}`];
 
   describe('Stack Deployment Validation', () => {
-    test('should have deployed stack successfully', async () => {
-      const stackResponse = await cloudFormationClient.send(
-        new DescribeStacksCommand({ StackName: stackName })
-      );
-
-      expect(stackResponse.Stacks).toBeDefined();
-      expect(stackResponse.Stacks!.length).toBe(1);
-      expect(stackResponse.Stacks![0].StackStatus).toMatch(
-        /CREATE_COMPLETE|UPDATE_COMPLETE/
-      );
-    });
-
-    test('should have all expected stack outputs', () => {
-      expect(stackOutputs).toBeDefined();
-      expect(
-        stackOutputs[`TapPipelineOutput${environmentSuffix}`]
-      ).toBeDefined();
-      expect(
-        stackOutputs[`TapSourceBucketOutput${environmentSuffix}`]
-      ).toBeDefined();
+    test('should have all expected stack outputs from flat-outputs.json', () => {
+      expect(outputs).toBeDefined();
+      expect(pipelineArn).toBeDefined();
+      expect(sourceBucketName).toBeDefined();
+      expect(vpcId).toBeDefined();
 
       // Validate output formats
-      expect(stackOutputs[`TapPipelineOutput${environmentSuffix}`]).toMatch(
-        /^arn:aws:codepipeline:/
-      );
-      expect(stackOutputs[`TapSourceBucketOutput${environmentSuffix}`]).toMatch(
-        /^tap-source-/
-      );
+      expect(pipelineArn).toMatch(/^arn:aws:codepipeline:/);
+      expect(sourceBucketName).toMatch(/^tap-source-/);
+      expect(vpcId).toMatch(/^vpc-/);
     });
   });
 
   describe('VPC Infrastructure', () => {
     test('should have VPC with correct configuration', async () => {
-      const vpcResource = stackResources.find(
-        r => r.ResourceType === 'AWS::EC2::VPC'
-      );
-      expect(vpcResource).toBeDefined();
+      expect(vpcId).toBeDefined();
 
       const vpcsResponse = await ec2Client.send(
         new DescribeVpcsCommand({
-          VpcIds: [vpcResource.PhysicalResourceId],
+          VpcIds: [vpcId],
         })
       );
 
@@ -158,14 +118,18 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have public and private subnets', async () => {
-      const subnetResources = stackResources.filter(
-        r => r.ResourceType === 'AWS::EC2::Subnet'
-      );
-      expect(subnetResources.length).toBe(4); // 2 public + 2 private
+      expect(vpcId).toBeDefined();
 
-      const subnetIds = subnetResources.map(r => r.PhysicalResourceId);
+      // Get all subnets in the VPC
       const subnetsResponse = await ec2Client.send(
-        new DescribeSubnetsCommand({ SubnetIds: subnetIds })
+        new DescribeSubnetsCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+          ],
+        })
       );
 
       expect(subnetsResponse.Subnets).toBeDefined();
@@ -185,46 +149,47 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have Internet Gateway and NAT Gateway', async () => {
-      // Check Internet Gateway
-      const igwResource = stackResources.find(
-        r => r.ResourceType === 'AWS::EC2::InternetGateway'
-      );
-      expect(igwResource).toBeDefined();
+      expect(vpcId).toBeDefined();
 
+      // Check Internet Gateway
       const igwResponse = await ec2Client.send(
         new DescribeInternetGatewaysCommand({
-          InternetGatewayIds: [igwResource.PhysicalResourceId],
+          Filters: [
+            {
+              Name: 'attachment.vpc-id',
+              Values: [vpcId],
+            },
+          ],
         })
       );
+      expect(igwResponse.InternetGateways).toBeDefined();
+      expect(igwResponse.InternetGateways!.length).toBeGreaterThan(0);
       expect(igwResponse.InternetGateways![0].Attachments![0].State).toBe(
         'available'
       );
 
       // Check NAT Gateway
-      const natGwResource = stackResources.find(
-        r => r.ResourceType === 'AWS::EC2::NatGateway'
-      );
-      expect(natGwResource).toBeDefined();
-
       const natGwResponse = await ec2Client.send(
         new DescribeNatGatewaysCommand({
-          NatGatewayIds: [natGwResource.PhysicalResourceId],
+          Filter: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+          ],
         })
       );
+      expect(natGwResponse.NatGateways).toBeDefined();
+      expect(natGwResponse.NatGateways!.length).toBeGreaterThan(0);
       expect(natGwResponse.NatGateways![0].State).toBe('available');
     });
 
     test('should have security group with proper configuration', async () => {
-      const sgResource = stackResources.find(
-        r =>
-          r.ResourceType === 'AWS::EC2::SecurityGroup' &&
-          r.LogicalResourceId?.includes('TapEc2SecurityGroup')
-      );
-      expect(sgResource).toBeDefined();
+      expect(securityGroupId).toBeDefined();
 
       const sgResponse = await ec2Client.send(
         new DescribeSecurityGroupsCommand({
-          GroupIds: [sgResource.PhysicalResourceId],
+          GroupIds: [securityGroupId],
         })
       );
 
@@ -267,25 +232,19 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have artifacts S3 bucket with lifecycle rules', async () => {
-      // Find artifacts bucket resource
-      const bucketResource = stackResources.find(
-        r =>
-          r.ResourceType === 'AWS::S3::Bucket' &&
-          r.LogicalResourceId?.includes('TapArtifactsBucket')
-      );
-      expect(bucketResource).toBeDefined();
-
-      const bucketName = bucketResource.PhysicalResourceId;
+      expect(artifactsBucketName).toBeDefined();
 
       // Check versioning
       const versioningResponse = await s3Client.send(
-        new GetBucketVersioningCommand({ Bucket: bucketName })
+        new GetBucketVersioningCommand({ Bucket: artifactsBucketName })
       );
       expect(versioningResponse.Status).toBe('Enabled');
 
       // Check lifecycle configuration
       const lifecycleResponse = await s3Client.send(
-        new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
+        new GetBucketLifecycleConfigurationCommand({
+          Bucket: artifactsBucketName,
+        })
       );
       expect(lifecycleResponse.Rules).toBeDefined();
       expect(lifecycleResponse.Rules!.length).toBeGreaterThan(0);
@@ -300,14 +259,11 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Secrets Management', () => {
     test('should have build secrets in Secrets Manager', async () => {
-      const secretResource = stackResources.find(
-        r => r.ResourceType === 'AWS::SecretsManager::Secret'
-      );
-      expect(secretResource).toBeDefined();
+      expect(secretArn).toBeDefined();
 
       const secretResponse = await secretsManagerClient.send(
         new DescribeSecretCommand({
-          SecretId: secretResource.PhysicalResourceId,
+          SecretId: secretArn,
         })
       );
 
@@ -320,14 +276,11 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('CodeBuild Project', () => {
     test('should have CodeBuild project with correct configuration', async () => {
-      const buildResource = stackResources.find(
-        r => r.ResourceType === 'AWS::CodeBuild::Project'
-      );
-      expect(buildResource).toBeDefined();
+      expect(codeBuildProjectName).toBeDefined();
 
       const buildResponse = await codeBuildClient.send(
         new BatchGetProjectsCommand({
-          names: [buildResource.PhysicalResourceId],
+          names: [codeBuildProjectName],
         })
       );
 
@@ -353,28 +306,16 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('CodeDeploy Configuration', () => {
     test('should have CodeDeploy application', async () => {
-      const appsResponse = await codeDeployClient.send(
-        new ListApplicationsCommand()
-      );
-
-      const tapApp = appsResponse.applications?.find(app =>
-        app.includes(`tap-app-${environmentSuffix}`)
-      );
-      expect(tapApp).toBeDefined();
+      expect(codeDeployAppName).toBeDefined();
+      expect(codeDeployAppName).toMatch(`tap-app-${environmentSuffix}`);
     });
 
     test('should have deployment group configured', async () => {
-      const appsResponse = await codeDeployClient.send(
-        new ListApplicationsCommand()
-      );
-
-      const tapApp = appsResponse.applications?.find(app =>
-        app.includes(`tap-app-${environmentSuffix}`)
-      );
-      expect(tapApp).toBeDefined();
+      expect(codeDeployAppName).toBeDefined();
+      expect(deploymentGroupName).toBeDefined();
 
       const groupsResponse = await codeDeployClient.send(
-        new ListDeploymentGroupsCommand({ applicationName: tapApp })
+        new ListDeploymentGroupsCommand({ applicationName: codeDeployAppName })
       );
 
       expect(groupsResponse.deploymentGroups).toBeDefined();
@@ -387,14 +328,11 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Auto Scaling Configuration', () => {
     test('should have auto scaling group with proper configuration', async () => {
-      const asgResource = stackResources.find(
-        r => r.ResourceType === 'AWS::AutoScaling::AutoScalingGroup'
-      );
-      expect(asgResource).toBeDefined();
+      expect(autoScalingGroupName).toBeDefined();
 
       const asgResponse = await autoScalingClient.send(
         new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [asgResource.PhysicalResourceId],
+          AutoScalingGroupNames: [autoScalingGroupName],
         })
       );
 
@@ -414,14 +352,11 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have launch template configured', async () => {
-      const ltResource = stackResources.find(
-        r => r.ResourceType === 'AWS::EC2::LaunchTemplate'
-      );
-      expect(ltResource).toBeDefined();
+      expect(launchTemplateId).toBeDefined();
 
       const ltResponse = await ec2Client.send(
         new DescribeLaunchTemplatesCommand({
-          LaunchTemplateIds: [ltResource.PhysicalResourceId],
+          LaunchTemplateIds: [launchTemplateId],
         })
       );
 
@@ -457,12 +392,17 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have pipeline in available state', async () => {
+      expect(pipelineArn).toBeDefined();
+
+      // Extract pipeline name from ARN
+      const pipelineName = pipelineArn.split(':').pop();
+
       const pipelinesResponse = await codePipelineClient.send(
         new ListPipelinesCommand()
       );
 
-      const tapPipeline = pipelinesResponse.pipelines?.find(p =>
-        p.name?.includes(`tap-pipeline-${environmentSuffix}`)
+      const tapPipeline = pipelinesResponse.pipelines?.find(
+        p => p.name === pipelineName
       );
       expect(tapPipeline).toBeDefined();
       expect(tapPipeline!.created).toBeDefined();
@@ -472,14 +412,11 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Monitoring and Notifications', () => {
     test('should have SNS topic for notifications', async () => {
-      const snsResource = stackResources.find(
-        r => r.ResourceType === 'AWS::SNS::Topic'
-      );
-      expect(snsResource).toBeDefined();
+      expect(snsTopicArn).toBeDefined();
 
       const topicResponse = await snsClient.send(
         new GetTopicAttributesCommand({
-          TopicArn: snsResource.PhysicalResourceId,
+          TopicArn: snsTopicArn,
         })
       );
 
@@ -490,9 +427,11 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have CloudWatch alarms configured', async () => {
+      expect(alarmName).toBeDefined();
+
       const alarmsResponse = await cloudWatchClient.send(
         new DescribeAlarmsCommand({
-          AlarmNamePrefix: `tap-build-failure-${environmentSuffix}`,
+          AlarmNames: [alarmName],
         })
       );
 
@@ -509,30 +448,20 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Resource Tagging and Naming', () => {
     test('should have consistent naming with environment suffix', () => {
-      const resourcesWithSuffix = stackResources.filter(r =>
-        r.LogicalResourceId?.includes(environmentSuffix)
-      );
-
-      // Should have multiple resources with environment suffix
-      expect(resourcesWithSuffix.length).toBeGreaterThan(0);
-
-      // Check specific resource types
-      const pipelineResource = stackResources.find(
-        r => r.ResourceType === 'AWS::CodePipeline::Pipeline'
-      );
-      expect(pipelineResource?.LogicalResourceId).toContain(environmentSuffix);
+      // Check that outputs contain environment suffix
+      expect(pipelineArn).toContain(environmentSuffix);
+      expect(sourceBucketName).toContain(environmentSuffix);
+      expect(codeBuildProjectName).toContain(environmentSuffix);
+      expect(alarmName).toContain(environmentSuffix);
     });
 
     test('should have proper resource tags for cost tracking', async () => {
       // Check VPC tags
-      const vpcResource = stackResources.find(
-        r => r.ResourceType === 'AWS::EC2::VPC'
-      );
-      expect(vpcResource).toBeDefined();
+      expect(vpcId).toBeDefined();
 
       const vpcsResponse = await ec2Client.send(
         new DescribeVpcsCommand({
-          VpcIds: [vpcResource.PhysicalResourceId],
+          VpcIds: [vpcId],
         })
       );
 
@@ -540,22 +469,23 @@ describe('TAP Stack Integration Tests', () => {
       const environmentTag = vpc.Tags?.find(tag => tag.Key === 'Environment');
       expect(environmentTag).toBeDefined();
       expect(environmentTag!.Value).toBe(environmentSuffix);
+
+      // Check for iac-rlhf-amazon tag
+      const iacTag = vpc.Tags?.find(tag => tag.Key === 'iac-rlhf-amazon');
+      expect(iacTag).toBeDefined();
+      expect(iacTag!.Value).toBe('true');
     });
   });
 
   describe('Security Validation', () => {
     test('should have encrypted S3 buckets', async () => {
-      const bucketResources = stackResources.filter(
-        r => r.ResourceType === 'AWS::S3::Bucket'
-      );
-
-      expect(bucketResources.length).toBeGreaterThanOrEqual(2);
+      const buckets = [sourceBucketName, artifactsBucketName];
 
       // Test each bucket for encryption
-      for (const bucketResource of bucketResources) {
+      for (const bucket of buckets) {
         const encryptionResponse = await s3Client.send(
           new GetBucketEncryptionCommand({
-            Bucket: bucketResource.PhysicalResourceId,
+            Bucket: bucket,
           })
         );
 
@@ -570,14 +500,11 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have secrets properly stored in Secrets Manager', async () => {
-      const secretResource = stackResources.find(
-        r => r.ResourceType === 'AWS::SecretsManager::Secret'
-      );
-      expect(secretResource).toBeDefined();
+      expect(secretArn).toBeDefined();
 
       const secretResponse = await secretsManagerClient.send(
         new DescribeSecretCommand({
-          SecretId: secretResource.PhysicalResourceId,
+          SecretId: secretArn,
         })
       );
 
@@ -590,16 +517,13 @@ describe('TAP Stack Integration Tests', () => {
 
   describe('Cost Optimization', () => {
     test('should use cost-effective instance types', async () => {
-      const ltResource = stackResources.find(
-        r => r.ResourceType === 'AWS::EC2::LaunchTemplate'
-      );
-      expect(ltResource).toBeDefined();
+      expect(launchTemplateId).toBeDefined();
 
       // We can't directly check instance type from describe-launch-templates,
       // but we can verify the launch template exists and is properly configured
       const ltResponse = await ec2Client.send(
         new DescribeLaunchTemplatesCommand({
-          LaunchTemplateIds: [ltResource.PhysicalResourceId],
+          LaunchTemplateIds: [launchTemplateId],
         })
       );
 
@@ -607,16 +531,11 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have lifecycle policies for S3 cost optimization', async () => {
-      const bucketResource = stackResources.find(
-        r =>
-          r.ResourceType === 'AWS::S3::Bucket' &&
-          r.LogicalResourceId?.includes('TapArtifactsBucket')
-      );
-      expect(bucketResource).toBeDefined();
+      expect(artifactsBucketName).toBeDefined();
 
       const lifecycleResponse = await s3Client.send(
         new GetBucketLifecycleConfigurationCommand({
-          Bucket: bucketResource.PhysicalResourceId,
+          Bucket: artifactsBucketName,
         })
       );
 

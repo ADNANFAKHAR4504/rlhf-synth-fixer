@@ -579,8 +579,59 @@ export class TapStack extends cdk.Stack {
       exportName: `tap-source-bucket-${environmentSuffix}`,
     });
 
-    // ! All pipeline components are now integrated within this single stack
-    // ! The pipeline will automatically trigger on S3 source changes
-    // ! Remember to update Slack workspace and channel IDs in the Chatbot configuration
+    new cdk.CfnOutput(this, `VpcId-${environmentSuffix}`, {
+      value: vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, `ArtifactsBucketName-${environmentSuffix}`, {
+      value: artifactsBucket.bucketName,
+      description: 'Artifacts S3 Bucket Name',
+    });
+
+    new cdk.CfnOutput(this, `BuildSecretsArn-${environmentSuffix}`, {
+      value: buildSecrets.secretArn,
+      description: 'Build Secrets ARN',
+    });
+
+    new cdk.CfnOutput(this, `CodeBuildProjectName-${environmentSuffix}`, {
+      value: buildProject.projectName,
+      description: 'CodeBuild Project Name',
+    });
+
+    new cdk.CfnOutput(this, `CodeDeployApplicationName-${environmentSuffix}`, {
+      value: codeDeployApplication.applicationName,
+      description: 'CodeDeploy Application Name',
+    });
+
+    new cdk.CfnOutput(this, `DeploymentGroupName-${environmentSuffix}`, {
+      value: deploymentGroup.deploymentGroupName,
+      description: 'Deployment Group Name',
+    });
+
+    new cdk.CfnOutput(this, `AutoScalingGroupName-${environmentSuffix}`, {
+      value: autoScalingGroup.autoScalingGroupName,
+      description: 'Auto Scaling Group Name',
+    });
+
+    new cdk.CfnOutput(this, `LaunchTemplateId-${environmentSuffix}`, {
+      value: launchTemplate.launchTemplateId!,
+      description: 'Launch Template ID',
+    });
+
+    new cdk.CfnOutput(this, `SnsTopicArn-${environmentSuffix}`, {
+      value: pipelineTopic.topicArn,
+      description: 'SNS Topic ARN',
+    });
+
+    new cdk.CfnOutput(this, `BuildFailureAlarmName-${environmentSuffix}`, {
+      value: buildFailureAlarm.alarmName,
+      description: 'Build Failure Alarm Name',
+    });
+
+    new cdk.CfnOutput(this, `SecurityGroupId-${environmentSuffix}`, {
+      value: ec2SecurityGroup.securityGroupId,
+      description: 'Security Group ID',
+    });
   }
 }
