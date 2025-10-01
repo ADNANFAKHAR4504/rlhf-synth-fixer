@@ -1,6 +1,6 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Secure E-commerce Infrastructure with comprehensive security controls, compliance monitoring, and high availability",
+  "Description": "Secure E-commerce Infrastructure with comprehensive security controls, compliance monitoring, and high availability. Uses public subnets for cost optimization to avoid NAT Gateway charges.",
 
   "Parameters": {
     "EnvironmentSuffix": {
@@ -192,27 +192,6 @@
       }
     },
 
-    "NATGateway1EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc"
-      }
-    },
-
-    "NATGateway1": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": { "Fn::GetAtt": ["NATGateway1EIP", "AllocationId"] },
-        "SubnetId": { "Ref": "PublicSubnet1" },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": { "Fn::Sub": "ecommerce-nat-1-${EnvironmentSuffix}" }
-          }
-        ]
-      }
-    },
 
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
@@ -268,14 +247,6 @@
       }
     },
 
-    "PrivateRoute1": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": { "Ref": "PrivateRouteTable1" },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": { "Ref": "NATGateway1" }
-      }
-    },
 
     "PrivateSubnetRouteTableAssociation1": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
@@ -300,14 +271,6 @@
       }
     },
 
-    "PrivateRoute2": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "RouteTableId": { "Ref": "PrivateRouteTable2" },
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": { "Ref": "NATGateway1" }
-      }
-    },
 
     "PrivateSubnetRouteTableAssociation2": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
@@ -794,8 +757,8 @@
           "Fn::Sub": "ecommerce-asg-${EnvironmentSuffix}"
         },
         "VPCZoneIdentifier": [
-          { "Ref": "PrivateSubnet1" },
-          { "Ref": "PrivateSubnet2" }
+          { "Ref": "PublicSubnet1" },
+          { "Ref": "PublicSubnet2" }
         ],
         "LaunchTemplate": {
           "LaunchTemplateId": { "Ref": "LaunchTemplate" },

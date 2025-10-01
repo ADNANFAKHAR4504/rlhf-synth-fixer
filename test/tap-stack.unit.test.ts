@@ -110,11 +110,10 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
       });
     });
 
-    test('should have NAT gateways for private subnet internet access', () => {
-      expect(template.Resources.NATGateway1).toBeDefined();
-      expect(template.Resources.NATGateway2).toBeDefined();
-      expect(template.Resources.NATGateway1EIP).toBeDefined();
-      expect(template.Resources.NATGateway2EIP).toBeDefined();
+    test('should use cost-optimized architecture without NAT Gateway', () => {
+      // Using public subnets for cost optimization to avoid NAT Gateway charges
+      expect(template.Resources.NATGateway1).toBeUndefined();
+      expect(template.Resources.NATGateway1EIP).toBeUndefined();
     });
 
     test('should have Internet Gateway', () => {
@@ -323,11 +322,11 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
       expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
     });
 
-    test('Auto Scaling Group should be in private subnets', () => {
+    test('Auto Scaling Group should be in public subnets for cost optimization', () => {
       const asg = template.Resources.AutoScalingGroup;
       expect(asg.Properties.VPCZoneIdentifier).toEqual([
-        { 'Ref': 'PrivateSubnet1' },
-        { 'Ref': 'PrivateSubnet2' }
+        { 'Ref': 'PublicSubnet1' },
+        { 'Ref': 'PublicSubnet2' }
       ]);
     });
 
