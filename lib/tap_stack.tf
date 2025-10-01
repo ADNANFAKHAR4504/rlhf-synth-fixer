@@ -1,4 +1,3 @@
-
 # Variables
 variable "aws_region" {
   description = "The AWS region to deploy resources in (must match provider.tf var)"
@@ -365,15 +364,6 @@ resource "aws_security_group" "lambda" {
 
   # No ingress
 
-  # Egress: allow only to RDS on 3306
-  egress {
-    description     = "MySQL to RDS"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.rds.id]
-  }
-
   tags = {
     Name        = "${var.project}-lambda-sg"
     Environment = var.environment
@@ -387,20 +377,33 @@ resource "aws_security_group" "rds" {
   description = "RDS SG"
   vpc_id      = aws_vpc.main.id
 
-  ingress {
-    description     = "MySQL from Lambda"
-    from_port       = 3306
-    to_port         = 3306
-    protocol        = "tcp"
-    security_groups = [aws_security_group.lambda.id]
-  }
-
   tags = {
     Name        = "${var.project}-rds-sg"
     Environment = var.environment
     Owner       = var.owner
     Project     = var.project
   }
+}
+
+# Separate security group rules to avoid circular dependency
+resource "aws_security_group_rule" "lambda_to_rds" {
+  type                     = "egress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.rds.id
+  security_group_id        = aws_security_group.lambda.id
+  description              = "MySQL to RDS"
+}
+
+resource "aws_security_group_rule" "rds_from_lambda" {
+  type                     = "ingress"
+  from_port                = 3306
+  to_port                  = 3306
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.lambda.id
+  security_group_id        = aws_security_group.rds.id
+  description              = "MySQL from Lambda"
 }
 
 # S3 bucket for static assets (encrypted, private, TLS enforced)
