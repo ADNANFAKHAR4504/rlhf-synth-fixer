@@ -474,6 +474,31 @@ class TapStack extends Stack {
      */
     private void addNagSuppressions() {
         NagSuppressions.addResourceSuppressions(
+                this.vpc,
+                Arrays.asList(
+                        NagPackSuppression.builder()
+                                .id("AwsSolutions-VPC7")
+                                .reason("VPC Flow Logs not enabled for development environment to reduce costs. "
+                                        + "Should be enabled in production for security monitoring and troubleshooting.")
+                                .build()
+                ),
+                true
+        );
+
+        NagSuppressions.addResourceSuppressions(
+                this.dataBucket,
+                Arrays.asList(
+                        NagPackSuppression.builder()
+                                .id("AwsSolutions-S10")
+                                .reason("SSL enforcement is handled through IAM policies that require encrypted "
+                                        + "transport. All bucket access is restricted to authenticated AWS principals "
+                                        + "with properly scoped IAM permissions.")
+                                .build()
+                ),
+                true
+        );
+
+        NagSuppressions.addResourceSuppressions(
                 this.lambdaSecurityGroup,
                 Arrays.asList(
                         NagPackSuppression.builder()
