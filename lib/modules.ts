@@ -547,6 +547,9 @@ export class SecureWaf extends Construct {
               vendorName: 'AWS',
             },
           },
+          action: {
+            block: {},
+          },
           visibilityConfig: {
             cloudwatchMetricsEnabled: true,
             metricName: 'AWSManagedRulesCommonRuleSetMetric',
@@ -564,6 +567,9 @@ export class SecureWaf extends Construct {
               name: 'AWSManagedRulesKnownBadInputsRuleSet',
               vendorName: 'AWS',
             },
+          },
+          action: {
+            block: {},
           },
           visibilityConfig: {
             cloudwatchMetricsEnabled: true,
