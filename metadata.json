@@ -10,5 +10,27 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "IAM, WAF, security groups"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "CloudFront",
+    "S3",
+    "DynamoDB",
+    "KMS",
+    "IAM",
+    "WAF",
+    "CloudWatch",
+    "CloudTrail",
+    "GuardDuty",
+    "SNS",
+    "VPC Flow Logs",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups",
+    "EventBridge"
+  ],
+  "training_quality": 8
 }

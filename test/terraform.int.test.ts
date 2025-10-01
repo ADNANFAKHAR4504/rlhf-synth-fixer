@@ -24,10 +24,26 @@ function loadOutputs(): { found: boolean; json: Outputs } {
   const raw = fs.readFileSync(outputsPath, 'utf8');
   try {
     const parsed = JSON.parse(raw);
-    // Some pipelines wrap outputs under a property; allow both flat and nested
+
+    // Check if this is Terraform output format with { value, sensitive, type } structure
+    const firstKey = Object.keys(parsed)[0];
+    if (firstKey && parsed[firstKey] && typeof parsed[firstKey] === 'object' && 'value' in parsed[firstKey]) {
+      // Extract just the values from Terraform output format
+      const flatOutputs: Outputs = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        if (val && typeof val === 'object' && 'value' in val) {
+          flatOutputs[key as keyof Outputs] = (val as any).value;
+        }
+      }
+      return { found: true, json: flatOutputs };
+    }
+
+    // Handle nested outputs property
     if (parsed && parsed.outputs) {
       return { found: true, json: parsed.outputs as Outputs };
     }
+
+    // Handle already flat format
     return { found: true, json: parsed as Outputs };
   } catch (e) {
     throw new Error(`Failed to parse JSON at ${outputsPath}: ${(e as Error).message}`);
@@ -35,12 +51,12 @@ function loadOutputs(): { found: boolean; json: Outputs } {
 }
 
 // Validators
-const isVpcId = (s: unknown) => typeof s === 'string' && /^vpc-[0-9a-f]+$/.test(s);
-const isSubnetId = (s: unknown) => typeof s === 'string' && /^subnet-[0-9a-f]+$/.test(s);
-const isArn = (s: unknown) => typeof s === 'string' && /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:[0-9]{12}:.+/.test(s);
+const isVpcId = (s: unknown) => typeof s === 'string' && /^vpc-[0-9a-f]{8,17}$/.test(s);
+const isSubnetId = (s: unknown) => typeof s === 'string' && /^subnet-[0-9a-f]{8,17}$/.test(s);
+const isArn = (s: unknown) => typeof s === 'string' && /^arn:aws:[a-z0-9-]+:[a-z0-9-]*:\d{12}:.+/.test(s);
 const isKmsKeyId = (s: unknown) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(s);
-const isCloudFrontDomain = (s: unknown) => typeof s === 'string' && /^[a-z0-9.-]+\.cloudfront\.net$/.test(s);
-const isRdsEndpoint = (s: unknown) => typeof s === 'string' && /^[a-z0-9.-]+\.rds\.amazonaws\.com$/.test(s);
+const isCloudFrontDomain = (s: unknown) => typeof s === 'string' && /^[a-z0-9]+\.cloudfront\.net$/.test(s);
+const isRdsEndpoint = (s: unknown) => typeof s === 'string' && /^[a-z0-9-]+(\.[a-z0-9]+)*\.[a-z0-9-]+\.rds\.amazonaws\.com$/.test(s);
 const isBucketName = (s: unknown) => typeof s === 'string' && /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(s);
 
 describe('Terraform integration - outputs conformance', () => {
