@@ -14,7 +14,33 @@ describe("Terraform Infrastructure Integration Tests", () => {
   beforeAll(() => {
     // Check if outputs file exists
     if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+      const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+
+      // Handle different output formats
+      if (rawOutputs && typeof rawOutputs === 'object') {
+        // Check if outputs are in Terraform format with value/type/sensitive properties
+        const hasTerraformFormat = Object.values(rawOutputs).some(output =>
+          typeof output === 'object' && output !== null && 'value' in output
+        );
+
+        if (hasTerraformFormat) {
+          // Extract values from Terraform output format
+          outputs = {};
+          Object.keys(rawOutputs).forEach(key => {
+            const output = rawOutputs[key];
+            if (typeof output === 'object' && output !== null && 'value' in output) {
+              outputs[key] = output.value;
+            } else {
+              outputs[key] = output;
+            }
+          });
+        } else {
+          // Direct format
+          outputs = rawOutputs;
+        }
+      } else {
+        outputs = rawOutputs;
+      }
     } else {
       console.warn(`[integration] Outputs file not found at: ${outputsPath}`);
       console.warn("[integration] This is expected in local development. CI/CD will create this file.");
