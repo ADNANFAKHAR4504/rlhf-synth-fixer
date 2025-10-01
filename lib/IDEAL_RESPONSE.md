@@ -27,11 +27,15 @@ export interface TapStackProps extends cdk.StackProps {
   suffix?: string;
   environmentSuffix?: string;
   natGateways?: number; // default 0 for CI-friendly deployments
+  iacRlhfTagValue?: string; // optional tag value, defaults to "true"
 }
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps = {}) {
     super(scope, id, props);
+
+    // apply global tag so all taggable resources created by this stack carry an identifier
+    cdk.Tags.of(this).add('iac-rlhf-amazon', props.iacRlhfTagValue ?? 'true');
 
     // sanitize suffix: lowercase, keep alphanumerics and dash, truncate to safe length
     const sanitize = (s?: string) =>
