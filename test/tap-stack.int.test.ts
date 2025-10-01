@@ -3,7 +3,7 @@ import https from 'https';
 import http from 'http';
 import { EC2Client, DescribeInstancesCommand, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
 import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand } from '@aws-sdk/client-s3';
-import { IAMClient, GetRoleCommand, ListAttachedRolePoliciesCommand, GetRolePolicyCommand, ListRolesCommand } from '@aws-sdk/client-iam';
+import { IAMClient, GetRoleCommand, ListAttachedRolePoliciesCommand, GetRolePolicyCommand, ListRolesCommand, GetInstanceProfileCommand } from '@aws-sdk/client-iam';
 import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
@@ -275,32 +275,24 @@ describe('Blog Platform Infrastructure Integration Tests', () => {
       const iamInstanceProfile = instance.IamInstanceProfile?.Arn;
       expect(iamInstanceProfile).toBeDefined();
 
-      // Extract role name from instance profile ARN
-      const roleNameMatch = iamInstanceProfile!.match(/instance-profile\/(.+)/);
-      expect(roleNameMatch).toBeTruthy();
+      // Extract instance profile name from ARN
+      const instanceProfileNameMatch = iamInstanceProfile!.match(/instance-profile\/(.+)/);
+      expect(instanceProfileNameMatch).toBeTruthy();
       
-      // Get role details - the role name should match the instance profile name
-      let roleName = roleNameMatch![1];
+      const instanceProfileName = instanceProfileNameMatch![1];
+      console.log(`Instance profile name: ${instanceProfileName} (length: ${instanceProfileName.length})`);
       
-      // If role name is too long, try to find the actual role name by listing roles
-      if (roleName.length > 64) {
-        // The role name might be different from instance profile name due to CDK naming
-        // Let's find roles that start with our expected prefix
-        const listRolesCommand = new ListRolesCommand({});
-        const listRolesResponse = await iamClient.send(listRolesCommand);
-        
-        // Find the role that contains our naming pattern
-        const expectedPattern = `IAM-BlogApp-${region}-${environmentSuffix}`;
-        const matchingRole = listRolesResponse.Roles?.find(role => 
-          role.RoleName?.includes('BlogApp') && 
-          role.RoleName?.includes(environmentSuffix) &&
-          role.AssumeRolePolicyDocument?.includes('ec2.amazonaws.com')
-        );
-        
-        if (matchingRole) {
-          roleName = matchingRole.RoleName!;
-        }
-      }
+      // Get the instance profile to find the associated role
+      const getInstanceProfileCommand = new GetInstanceProfileCommand({
+        InstanceProfileName: instanceProfileName
+      });
+      
+      const instanceProfileResponse = await iamClient.send(getInstanceProfileCommand);
+      expect(instanceProfileResponse.InstanceProfile?.Roles).toBeDefined();
+      expect(instanceProfileResponse.InstanceProfile?.Roles).toHaveLength(1);
+      
+      const roleName = instanceProfileResponse.InstanceProfile!.Roles![0].RoleName!;
+      console.log(`Found role from instance profile: ${roleName} (length: ${roleName.length})`);
       
       const roleCommand = new GetRoleCommand({
         RoleName: roleName
