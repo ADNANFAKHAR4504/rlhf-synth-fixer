@@ -88,6 +88,12 @@ variable "lambda_runtime" {
   default     = "nodejs20.x"
 }
 
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway (requires available EIP quota)"
+  type        = bool
+  default     = false  # Set to false to avoid EIP quota issues
+}
+
 # Data sources
 data "aws_caller_identity" "current" {}
 
@@ -226,7 +232,10 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
+# Note: NAT Gateway requires an EIP. If you hit EIP quota limits, 
+# you may need to release unused EIPs or request a quota increase
 resource "aws_eip" "nat" {
+  count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
 
   tags = {
@@ -238,7 +247,8 @@ resource "aws_eip" "nat" {
 }
 
 resource "aws_nat_gateway" "nat" {
-  allocation_id = aws_eip.nat.id
+  count         = var.enable_nat_gateway ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
 
   depends_on = [aws_internet_gateway.igw]
@@ -270,9 +280,12 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat.id
+  dynamic "route" {
+    for_each = var.enable_nat_gateway ? [1] : []
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = aws_nat_gateway.nat[0].id
+    }
   }
 
   tags = {
@@ -968,17 +981,9 @@ resource "aws_api_gateway_stage" "prod" {
   deployment_id = aws_api_gateway_deployment.api.id
   stage_name    = "prod"
 
-  access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.apigw.arn
-    format          = jsonencode({
-      requestId = "$context.requestId",
-      sourceIp  = "$context.identity.sourceIp",
-      httpMethod = "$context.httpMethod",
-      resourcePath = "$context.resourcePath",
-      status = "$context.status",
-      responseLength = "$context.responseLength"
-    })
-  }
+  # Note: access_log_settings requires CloudWatch Logs role to be set at account level
+  # Run: aws apigateway update-account --patch-operations op=replace,path=/cloudwatchRoleArn,value=<role-arn>
+  # For now, we're disabling access logs to avoid account-level prerequisites
 
   tags = {
     Name        = "${var.project}-api-stage"
@@ -1161,6 +1166,38 @@ resource "aws_s3_bucket" "cloudtrail" {
     Owner       = var.owner
     Project     = var.project
   }
+}
+
+resource "aws_s3_bucket_policy" "cloudtrail" {
+  bucket = aws_s3_bucket.cloudtrail.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSCloudTrailAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.cloudtrail.arn
+      },
+      {
+        Sid    = "AWSCloudTrailWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
