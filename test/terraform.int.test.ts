@@ -49,6 +49,14 @@ let cloudWatchClient: CloudWatchClient;
 let ssmClient: SSMClient;
 let iamClient: IAMClient;
 
+// Helper function to extract value from Terraform output format
+function extractValue(output: any): any {
+  if (output && typeof output === 'object' && 'value' in output) {
+    return output.value;
+  }
+  return output;
+}
+
 describe('Terraform Infrastructure - Integration Tests', () => {
   beforeAll(() => {
     // Check if outputs file exists
@@ -57,7 +65,13 @@ describe('Terraform Infrastructure - Integration Tests', () => {
       return;
     }
 
-    outputs = JSON.parse(fs.readFileSync(OUTPUT_FILE, 'utf8'));
+    const rawOutputs = JSON.parse(fs.readFileSync(OUTPUT_FILE, 'utf8'));
+
+    // Extract values from Terraform output format
+    outputs = {};
+    for (const [key, value] of Object.entries(rawOutputs)) {
+      outputs[key] = extractValue(value);
+    }
 
     // Initialize AWS SDK clients
     apiGatewayClient = new APIGatewayClient({ region: AWS_REGION });
