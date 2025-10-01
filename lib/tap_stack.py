@@ -426,22 +426,8 @@ def handler(event, context):
             description=f"Serverless API for {self.stage} environment",
             deploy_options=apigw.StageOptions(
                 stage_name=self.stage,
-                logging_level=apigw.MethodLoggingLevel.INFO,
-                data_trace_enabled=True if self.stage != "prod" else False,
                 metrics_enabled=True,
                 tracing_enabled=True,
-                access_log_destination=apigw.LogGroupLogDestination(log_group),
-                access_log_format=apigw.AccessLogFormat.json_with_standard_fields(
-                    caller=True,
-                    http_method=True,
-                    ip=True,
-                    protocol=True,
-                    request_time=True,
-                    resource_path=True,
-                    response_length=True,
-                    status=True,
-                    user=True
-                )
             ),
             default_cors_preflight_options=apigw.CorsOptions(
                 allow_origins=apigw.Cors.ALL_ORIGINS,
