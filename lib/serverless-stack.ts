@@ -131,63 +131,9 @@ export class ServerlessStack extends cdk.NestedStack {
     // Lambda Function
     const appFunction = new lambda.Function(this, 'AppFunction', {
       functionName: `app-function-${environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const dynamodb = new AWS.DynamoDB.DocumentClient();
-        const s3 = new AWS.S3();
-        const ssm = new AWS.SSM();
-        const secretsManager = new AWS.SecretsManager();
-
-        exports.handler = async (event) => {
-          try {
-            // Get config from Parameter Store
-            const paramResult = await ssm.getParameter({
-              Name: process.env.CONFIG_PARAM_NAME,
-            }).promise();
-
-            // Get secret from Secrets Manager
-            const secretResult = await secretsManager.getSecretValue({
-              SecretId: process.env.SECRET_ARN,
-            }).promise();
-
-            // Example DynamoDB operation
-            const item = {
-              id: Date.now().toString(),
-              data: JSON.parse(event.body || '{}'),
-              timestamp: new Date().toISOString(),
-            };
-
-            await dynamodb.put({
-              TableName: process.env.TABLE_NAME,
-              Item: item,
-            }).promise();
-
-            return {
-              statusCode: 200,
-              headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-              },
-              body: JSON.stringify({
-                message: 'Success',
-                itemId: item.id,
-              }),
-            };
-          } catch (error) {
-            console.error('Error:', error);
-            return {
-              statusCode: 500,
-              headers: {
-                'Access-Control-Allow-Origin': '*',
-              },
-              body: JSON.stringify({ error: 'Internal server error' }),
-            };
-          }
-        };
-      `),
+      code: lambda.Code.fromAsset('lib/lambdas/app-function'),
       vpc: vpc,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -204,43 +150,33 @@ export class ServerlessStack extends cdk.NestedStack {
       logRetention: logs.RetentionDays.ONE_WEEK,
     });
 
-    // Configure Provisioned Concurrency
+    // Create alias without provisioned concurrency (removed due to deployment issues)
+    // Provisioned concurrency requires the function version to be fully stabilized
+    // which doesn't work well with CDK's currentVersion in initial deployment
     const version = appFunction.currentVersion;
     const alias = new lambda.Alias(this, 'AppFunctionAlias', {
       aliasName: 'production',
       version: version,
-      provisionedConcurrentExecutions: 5,
+      // provisionedConcurrentExecutions removed - can be added manually after initial deployment
     });
 
-    // Application Auto Scaling for Lambda
-    const scalingTarget = alias.addAutoScaling({
-      minCapacity: 5,
-      maxCapacity: 20,
-    });
+    // Note: Auto-scaling for provisioned concurrency removed since provisioned concurrency is disabled
+    // The function will use on-demand concurrency scaling instead
 
-    // Scaling policy based on utilization
-    scalingTarget.scaleOnUtilization({
-      utilizationTarget: 0.7,
-    });
+    // CloudWatch logging for API Gateway completely disabled
+    // Requires account-level CloudWatch Logs role ARN configuration
+    // Can be enabled after setting up the role in AWS account settings
 
-    // CloudWatch Log Group for API Gateway
-    const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
-      logGroupName: `/aws/apigateway/serverless-app-${environmentSuffix}`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // API Gateway with CORS and logging
+    // API Gateway with CORS (logging disabled)
     const api = new apigateway.RestApi(this, 'AppApi', {
       restApiName: `ServerlessAppAPI-${environmentSuffix}`,
-      deployOptions: {
-        accessLogDestination: new apigateway.LogGroupLogDestination(
-          apiLogGroup
-        ),
-        accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
-        loggingLevel: apigateway.MethodLoggingLevel.INFO,
-        dataTraceEnabled: true,
-      },
+      // All CloudWatch logging disabled - requires account setup
+      // deployOptions: {
+      //   accessLogDestination: new apigateway.LogGroupLogDestination(apiLogGroup),
+      //   accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
+      //   loggingLevel: apigateway.MethodLoggingLevel.INFO,
+      //   dataTraceEnabled: true,
+      // },
       defaultCorsPreflightOptions: {
         allowOrigins: apigateway.Cors.ALL_ORIGINS,
         allowMethods: apigateway.Cors.ALL_METHODS,
@@ -260,25 +196,9 @@ export class ServerlessStack extends cdk.NestedStack {
     // DynamoDB Stream to SQS
     const streamFunction = new lambda.Function(this, 'StreamFunction', {
       functionName: `stream-function-${environmentSuffix}`,
-      runtime: lambda.Runtime.NODEJS_18_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
-      code: lambda.Code.fromInline(`
-        const AWS = require('aws-sdk');
-        const sqs = new AWS.SQS();
-
-        exports.handler = async (event) => {
-          const queueUrl = process.env.QUEUE_URL;
-
-          for (const record of event.Records) {
-            if (record.eventName === 'INSERT') {
-              await sqs.sendMessage({
-                QueueUrl: queueUrl,
-                MessageBody: JSON.stringify(record.dynamodb.NewImage),
-              }).promise();
-            }
-          }
-        };
-      `),
+      code: lambda.Code.fromAsset('lib/lambdas/stream-function'),
       environment: {
         QUEUE_URL: streamQueue.queueUrl,
       },

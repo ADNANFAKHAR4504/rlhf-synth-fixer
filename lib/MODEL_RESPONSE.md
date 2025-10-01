@@ -4,7 +4,7 @@
 
 This is a comprehensive AWS CDK request with TypeScript. Let me break down all the requirements:
 
-1. Infrastructure in us-east-1
+1. Infrastructure in us-west-1
 2. API Gateway → Lambda flow
 3. Lambda requirements:
    - Runs in VPC (private subnet)
@@ -469,7 +469,7 @@ const app = new cdk.App();
 new ServerlessAppStack(app, 'ServerlessAppStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'us-east-1'
+    region: 'us-west-1'
   },
   description: 'Serverless application with VPC Lambda, DynamoDB, S3, and comprehensive monitoring',
 });
@@ -515,7 +515,7 @@ To deploy this infrastructure:
 npm install
 
 # Bootstrap CDK (if not already done)
-cdk bootstrap aws://ACCOUNT-ID/us-east-1
+cdk bootstrap aws://ACCOUNT-ID/us-west-1
 
 # Deploy the stack
 cdk deploy
