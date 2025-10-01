@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 describe('tap_stack.tf static verification', () => {
-  const tfPath = path.join(__dirname, '../tap_stack.tf');
+  const tfPath = path.join(__dirname, '../lib/tap_stack.tf');
   const content = fs.readFileSync(tfPath, 'utf-8');
 
   const has = (regex: RegExp) => regex.test(content);
