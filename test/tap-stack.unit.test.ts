@@ -66,8 +66,11 @@ jest.mock("cdktf", () => {
     }),
     Fn: {
       join: jest.fn((delimiter: string, list: string[]) => list.join(delimiter)),
+      jsonencode: jest.fn((value: any) => JSON.stringify(value)),
       conditional: jest.fn((condition: any, trueValue: any, falseValue: any) => {
-        return condition !== undefined ? trueValue : falseValue;
+        // Properly handle the condition check
+        const conditionResult = condition !== undefined && condition !== false;
+        return conditionResult ? trueValue : falseValue;
       }),
       lookup: jest.fn(),
     },
@@ -419,6 +422,143 @@ describe("TapStack Unit Tests", () => {
     });
   });
 
+  describe("Terraform Outputs", () => {
+    test("should create all expected outputs", () => {
+      const app = new App();
+      new TapStack(app, "TestOutputs");
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'vpc-id',
+        expect.objectContaining({
+          value: 'networking-vpc-id',
+          description: 'VPC ID',
+        })
+      );
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'load-balancer-dns-name',
+        expect.objectContaining({
+          value: 'load-balancer-alb-123456789.us-west-2.elb.amazonaws.com',
+          description: 'Load balancer DNS name',
+        })
+      );
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'target-group-arn',
+        expect.objectContaining({
+          value: 'arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/load-balancer-tg/1234567890123456',
+          description: 'Target group ARN',
+        })
+      );
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'auto-scaling-group-name',
+        expect.objectContaining({
+          value: 'auto-scaling-asg-name',
+          description: 'Auto Scaling Group name',
+        })
+      );
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'rds-endpoint',
+        expect.objectContaining({
+          value: 'rds-db.cluster-xyz.us-west-2.rds.amazonaws.com:3306',
+          description: 'RDS instance endpoint',
+        })
+      );
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        's3-bucket-name',
+        expect.objectContaining({
+          value: 's3-logs-bucket-123456',
+          description: 'S3 bucket name for logs',
+        })
+      );
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'sns-topic-arn',
+        expect.objectContaining({
+          value: 'arn:aws:sns:us-west-2:123456789012:sns-alerts-topic',
+          description: 'SNS topic ARN for alerts',
+        })
+      );
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'ec2-security-group-id',
+        expect.objectContaining({
+          value: 'security-groups-ec2-sg-id',
+          description: 'EC2 security group ID',
+        })
+      );
+    });
+
+    test("should properly use Fn.jsonencode for public subnet IDs output", () => {
+      const app = new App();
+      new TapStack(app, "TestJsonEncode");
+
+      // Verify Fn.jsonencode is called with the public subnet IDs
+      expect(Fn.jsonencode).toHaveBeenCalledWith([
+        "networking-public-subnet-1", 
+        "networking-public-subnet-2"
+      ]);
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'public-subnet-ids',
+        expect.objectContaining({
+          value: JSON.stringify(["networking-public-subnet-1", "networking-public-subnet-2"]),
+          description: 'Public subnet IDs as JSON',
+        })
+      );
+    });
+
+    test("should handle RDS secret ARN output with conditional when masterUserSecret exists", () => {
+      const app = new App();
+      new TapStack(app, "TestRdsSecretExists");
+
+      // Verify Fn.conditional is called
+      expect(Fn.conditional).toHaveBeenCalled();
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'rds-secret-arn',
+        expect.objectContaining({
+          value: 'Secret ARN available in AWS Secrets Manager',
+          description: 'RDS credentials secret status',
+        })
+      );
+    });
+
+    test("should handle RDS secret ARN output when masterUserSecret is undefined", () => {
+      // Mock RdsModule with undefined masterUserSecret
+      RdsModule.mockImplementationOnce((scope: any, id: string) => ({
+        dbInstance: { 
+          endpoint: `${id}-db.cluster-xyz.us-west-2.rds.amazonaws.com:3306`,
+          masterUserSecret: undefined
+        },
+      }));
+
+      const app = new App();
+      new TapStack(app, "TestRdsSecretUndefined");
+
+      expect(TerraformOutput).toHaveBeenCalledWith(
+        expect.anything(),
+        'rds-secret-arn',
+        expect.objectContaining({
+          value: 'managed-by-aws',
+          description: 'RDS credentials secret status',
+        })
+      );
+    });
+  });
 
   describe("Integration Tests", () => {
     test("should create stack with all components integrated", () => {
@@ -582,6 +722,89 @@ describe("TapStack Unit Tests", () => {
         "sns",
         expect.objectContaining({
           email: 'admin@example.com', // Default email
+        })
+      );
+    });
+
+    test("should handle undefined props object", () => {
+      const app = new App();
+      const stack = new TapStack(app, "TestUndefinedProps", undefined);
+
+      expect(stack).toBeDefined();
+      
+      // Should use all defaults
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-west-2',
+          defaultTags: [],
+        })
+      );
+    });
+
+    test("should handle empty arrays and objects in module responses", () => {
+      // Mock modules with empty responses
+      NetworkingModule.mockImplementationOnce((scope: any, id: string) => ({
+        vpc: { id: `${id}-vpc-id` },
+        publicSubnetIds: [],
+        privateSubnetIds: [],
+      }));
+
+      const app = new App();
+      new TapStack(app, "TestEmptyArrays");
+
+      // Should still create outputs even with empty arrays
+      expect(Fn.jsonencode).toHaveBeenCalledWith([]);
+      
+      // RdsModule should receive empty subnet arrays
+      expect(RdsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        "rds",
+        expect.objectContaining({
+          subnetIds: [],
+        })
+      );
+    });
+
+    test("should handle region precedence correctly", () => {
+      const app = new App();
+      
+      // Test 1: overrideRegion takes precedence
+      new TapStack(app, "TestRegionPrecedence1", {
+        awsRegion: 'eu-west-1',
+        overrideRegion: 'us-east-2'
+      });
+      
+      expect(AwsProvider).toHaveBeenLastCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-east-2',
+        })
+      );
+
+      // Test 2: awsRegion used when no overrideRegion
+      new TapStack(app, "TestRegionPrecedence2", {
+        awsRegion: 'eu-west-1'
+      });
+      
+      expect(AwsProvider).toHaveBeenLastCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'eu-west-1',
+        })
+      );
+
+      // Test 3: default used when neither provided
+      new TapStack(app, "TestRegionPrecedence3", {});
+      
+      expect(AwsProvider).toHaveBeenLastCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-west-2',
         })
       );
     });

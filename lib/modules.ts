@@ -66,13 +66,10 @@ export class NetworkingModule extends Construct {
   public readonly availabilityZones: DataAwsAvailabilityZones;
   public readonly publicSubnets: Subnet[];
   public readonly privateSubnets: Subnet[];
-  // Change these from string[] to token references
-  public get publicSubnetIds(): string[] {
-    return this.publicSubnets.map(subnet => subnet.id);
-  }
-  public get privateSubnetIds(): string[] {
-    return this.privateSubnets.map(subnet => subnet.id);
-  }
+
+  // Remove the getter methods and use Token.asList instead
+  public readonly publicSubnetIds: string[];
+  public readonly privateSubnetIds: string[];
 
   constructor(scope: Construct, id: string, props: NetworkingModuleProps) {
     super(scope, id);
@@ -104,7 +101,7 @@ export class NetworkingModule extends Construct {
 
     // Create public subnets (2 for high availability)
     this.publicSubnets = [];
-    // Remove: this.publicSubnetIds = [];
+    const publicSubnetIds: string[] = [];
 
     for (let i = 0; i < 2; i++) {
       const subnet = new Subnet(this, `public-subnet-${i}`, {
@@ -119,12 +116,13 @@ export class NetworkingModule extends Construct {
         },
       });
       this.publicSubnets.push(subnet);
-      // Remove: this.publicSubnetIds.push(subnet.id);
+      publicSubnetIds.push(subnet.id);
     }
+    this.publicSubnetIds = publicSubnetIds;
 
     // Create private subnets (2 for high availability)
     this.privateSubnets = [];
-    // Remove: this.privateSubnetIds = [];
+    const privateSubnetIds: string[] = [];
 
     for (let i = 0; i < 2; i++) {
       const subnet = new Subnet(this, `private-subnet-${i}`, {
@@ -138,8 +136,9 @@ export class NetworkingModule extends Construct {
         },
       });
       this.privateSubnets.push(subnet);
-      // Remove: this.privateSubnetIds.push(subnet.id);
+      privateSubnetIds.push(subnet.id);
     }
+    this.privateSubnetIds = privateSubnetIds;
 
     // Rest of the code remains the same...
     const publicRouteTable = new RouteTable(this, 'public-route-table', {

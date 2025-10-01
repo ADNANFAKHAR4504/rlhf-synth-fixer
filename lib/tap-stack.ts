@@ -2,7 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf'; // Add Fn import
+import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { Construct } from 'constructs';
 
 // Import your stacks/modules here
@@ -155,11 +155,10 @@ export class TapStack extends TerraformStack {
       description: 'VPC ID',
     });
 
-    // FIX 1: Don't use .join() on token arrays
-    // Replace the problematic output with:
+    // Replace the problematic public-subnet-ids output with:
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: JSON.stringify(networkingModule.publicSubnetIds),
-      description: 'Public subnet IDs (JSON array)',
+      value: Fn.jsonencode(networkingModule.publicSubnetIds),
+      description: 'Public subnet IDs as JSON',
     });
 
     new TerraformOutput(this, 'load-balancer-dns-name', {
