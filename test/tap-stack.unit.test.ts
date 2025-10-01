@@ -519,4 +519,147 @@ describe('TapStack Unit Tests', () => {
       });
     });
   });
+
+
+  describe('VPC Endpoints Disabled Configuration', () => {
+    let noVpcStack: TapStack;
+    let noVpcTemplate: Template;
+
+    beforeEach(() => {
+      const noVpcApp = new cdk.App();
+      noVpcStack = new TapStack(noVpcApp, 'NoVpcTapStack', {
+        environmentSuffix: 'test',
+        enableVpcEndpoints: false,
+        env: {
+          account: testAccount,
+          region: testRegion,
+        },
+      });
+      noVpcTemplate = Template.fromStack(noVpcStack);
+    });
+
+    test('should not create VPC when endpoints are disabled', () => {
+      noVpcTemplate.resourceCountIs('AWS::EC2::VPC', 0);
+    });
+
+    test('should not create VPC endpoints when disabled', () => {
+      noVpcTemplate.resourceCountIs('AWS::EC2::VPCEndpoint', 0);
+    });
+
+    test('should not include VPC access role for Lambda when VPC disabled', () => {
+      // Verify IAM role has only basic execution policy, not VPC access
+      const roles = noVpcTemplate.findResources('AWS::IAM::Role');
+      const roleProps = Object.values(roles)[0] as any;
+      const managedPolicies = roleProps.Properties.ManagedPolicyArns;
+      
+      // Should only have basic execution role, not VPC access role
+      expect(managedPolicies).toHaveLength(1);
+      
+      // Verify the policy is the basic execution role
+      const policyArn = managedPolicies[0];
+      const joinArray = policyArn['Fn::Join'][1];
+      expect(joinArray.some((part: any) => 
+        typeof part === 'string' && part.includes('AWSLambdaBasicExecutionRole')
+      )).toBe(true);
+    });
+
+    test('should not configure Lambda function with VPC when disabled', () => {
+      const functions = noVpcTemplate.findResources('AWS::Lambda::Function');
+      const lambdaProps = Object.values(functions)[0] as any;
+      
+      // VpcConfig should not be present when VPC is disabled
+      expect(lambdaProps.Properties.VpcConfig).toBeUndefined();
+    });
+  });
+
+  describe('Optional Notification Email Configuration', () => {
+    let noEmailStack: TapStack;
+    let noEmailTemplate: Template;
+
+    beforeEach(() => {
+      const noEmailApp = new cdk.App();
+      noEmailStack = new TapStack(noEmailApp, 'NoEmailTapStack', {
+        environmentSuffix: 'test',
+        // notificationEmail is not provided
+        env: {
+          account: testAccount,
+          region: testRegion,
+        },
+      });
+      noEmailTemplate = Template.fromStack(noEmailStack);
+    });
+
+    test('should create SNS topic without email subscription when email not provided', () => {
+      // SNS topic should still be created
+      noEmailTemplate.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: 'Backup System Notifications',
+      });
+      
+      // But no email subscription should be created
+      noEmailTemplate.resourceCountIs('AWS::SNS::Subscription', 0);
+    });
+  });
+
+  describe('Configuration Variations', () => {
+    test('should handle custom retention days', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'CustomRetentionTapStack', {
+        environmentSuffix: 'custom',
+        retentionDays: 90,
+        env: {
+          account: testAccount,
+          region: testRegion,
+        },
+      });
+      const customTemplate = Template.fromStack(customStack);
+
+      customTemplate.hasResourceProperties('AWS::S3::Bucket', {
+        LifecycleConfiguration: {
+          Rules: Match.arrayWith([
+            Match.objectLike({
+              ExpirationInDays: 90,
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should handle custom schedule expression', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'CustomScheduleTapStack', {
+        environmentSuffix: 'custom',
+        scheduleExpression: 'cron(0 6 * * ? *)',
+        env: {
+          account: testAccount,
+          region: testRegion,
+        },
+      });
+      const customTemplate = Template.fromStack(customStack);
+
+      customTemplate.hasResourceProperties('AWS::Events::Rule', {
+        ScheduleExpression: 'cron(0 6 * * ? *)',
+      });
+    });
+
+    test('should handle custom max concurrent backups', () => {
+      const customApp = new cdk.App();
+      const customStack = new TapStack(customApp, 'CustomConcurrentTapStack', {
+        environmentSuffix: 'custom',
+        maxConcurrentBackups: 20,
+        env: {
+          account: testAccount,
+          region: testRegion,
+        },
+      });
+      const customTemplate = Template.fromStack(customStack);
+
+      customTemplate.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            MAX_CONCURRENT_BACKUPS: '20',
+          },
+        },
+      });
+    });
+  });
 });
