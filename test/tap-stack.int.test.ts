@@ -13,10 +13,12 @@ describe('TapStack Integration Tests', () => {
   beforeAll(async () => {
     const cf = new CloudFormationClient({ region });
     const stacks = await cf.send(new DescribeStacksCommand({ StackName: stackName }));
-    const stack = stacks.Stacks?.[0];
+    const stack = stacks.Stacks && stacks.Stacks.length > 0 ? stacks.Stacks[0] : undefined;
     expect(stack).toBeDefined();
-    for (const output of stack.Outputs || []) {
-      stackOutputs[output.OutputKey!] = output.OutputValue;
+    if (stack && stack.Outputs) {
+      for (const output of stack.Outputs) {
+        stackOutputs[output.OutputKey!] = output.OutputValue;
+      }
     }
   });
 

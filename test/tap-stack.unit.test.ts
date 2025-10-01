@@ -93,8 +93,9 @@ describe('TapStack CloudFormation Template', () => {
 
   test('IAM roles should follow least privilege', () => {
     for (const [name, resource] of Object.entries(template.Resources)) {
-      if (resource.Type === 'AWS::IAM::Role') {
-        const policies = resource.Properties.Policies || [];
+      const res = resource as any;
+      if (res.Type === 'AWS::IAM::Role') {
+        const policies = res.Properties.Policies || [];
         for (const policy of policies) {
           const doc = policy.PolicyDocument;
           for (const stmt of doc.Statement) {
@@ -113,20 +114,22 @@ describe('TapStack CloudFormation Template', () => {
 
   test('resources should have encryption and policy where required', () => {
     for (const [name, resource] of Object.entries(template.Resources)) {
-      if (resource.Type === 'AWS::S3::Bucket') {
-        expect(resource.Properties.BucketEncryption).toBeDefined();
+      const res = resource as any;
+      if (res.Type === 'AWS::S3::Bucket') {
+        expect(res.Properties.BucketEncryption).toBeDefined();
       }
-      if (resource.Type === 'AWS::RDS::DBInstance') {
-        expect(resource.Properties.StorageEncrypted).toBe(true);
-        expect(resource.Properties.KmsKeyId).toBeDefined();
+      if (res.Type === 'AWS::RDS::DBInstance') {
+        expect(res.Properties.StorageEncrypted).toBe(true);
+        expect(res.Properties.KmsKeyId).toBeDefined();
       }
     }
   });
 
   test('all resources should match CloudFormation schema basics', () => {
     for (const [name, resource] of Object.entries(template.Resources)) {
-      expect(resource.Type).toMatch(/^AWS::[A-Za-z0-9]+::[A-Za-z0-9]+$/);
-      expect(resource.Properties).toBeDefined();
+      const res = resource as any;
+      expect(res.Type).toMatch(/^AWS::[A-Za-z0-9]+::[A-Za-z0-9]+$/);
+      expect(res.Properties).toBeDefined();
     }
   });
 });
