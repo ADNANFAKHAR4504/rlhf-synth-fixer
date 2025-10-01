@@ -65,7 +65,7 @@ locals {
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
   
   # Resource naming prefix
-  name_prefix = "tap-${var.environment}"
+  name_prefix = lower("tap-${var.environment}")
 }
 
 # ==========================================
@@ -588,7 +588,7 @@ resource "aws_db_instance" "main" {
   
   # Engine configuration
   engine               = "mysql"
-  engine_version       = "8.0.35"
+  engine_version       = "8.0.43"
   instance_class       = "db.t3.micro"
   allocated_storage    = 20
   storage_type         = "gp3"
@@ -739,7 +739,6 @@ resource "aws_launch_template" "main" {
   # Ensure no public IP
   network_interfaces {
     associate_public_ip_address = false
-    security_groups            = [aws_security_group.ec2.id]
     delete_on_termination      = true
   }
   
