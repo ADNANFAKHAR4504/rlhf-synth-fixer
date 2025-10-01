@@ -35,13 +35,14 @@ resource "aws_security_group" "rds_sg" {
 
 # Generate a secure password only when none provided
 resource "random_password" "db" {
-  count                = var.db_password == "" ? 1 : 0
-  length               = 32
-  override_characters  = "!@#%&*()-_+=[]{}:;<>?,."  # allowed characters
-  special              = true
-  upper                = true
-  lower                = true
-  number               = true
+  count  = var.db_password == "" ? 1 : 0
+  length = 32
+
+  # Keep character-class controls; do not use unsupported override_characters
+  special = true
+  upper   = true
+  lower   = true
+  number  = true
 }
 
 # Optionally store generated password in Secrets Manager (created only if we generated it)
