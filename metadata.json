@@ -10,5 +10,14 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "vpc"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "AutoScaling",
+    "ElasticLoadBalancingV2",
+    "IAM",
+    "RDS",
+    "S3"
+  ],
+  "training_quality": 8
 }
