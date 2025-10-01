@@ -471,6 +471,7 @@ export interface LambdaConfig {
   s3Bucket?: string;
   s3Key?: string;
   filename?: string;
+  inlineCode?: string; // Add support for inline code
   environment?: { [key: string]: string };
   vpcConfig?: {
     subnetIds: string[];
@@ -486,15 +487,12 @@ export class SecureLambdaFunction extends Construct {
   constructor(scope: Construct, name: string, config: LambdaConfig) {
     super(scope, name);
 
-    // Create Lambda function
-    this.function = new LambdaFunction(this, 'function', {
+    // Prepare the function configuration
+    const functionConfig: any = {
       functionName: config.functionName,
       handler: config.handler,
       runtime: config.runtime,
       role: config.role,
-      s3Bucket: config.s3Bucket,
-      s3Key: config.s3Key,
-      filename: config.filename,
       // Configure VPC access
       vpcConfig: config.vpcConfig,
       // Configure environment variables
@@ -506,11 +504,27 @@ export class SecureLambdaFunction extends Construct {
       // Set timeout
       timeout: config.timeout || 30,
       // Set memory size
-      memorySize: config.memorySize || 128,
+      memorySize: config.memorySize || 512,
       tags: {
         Environment: 'Production',
       },
-    });
+    };
+
+    // Handle different deployment methods
+    if (config.inlineCode) {
+      // Use inline code
+      functionConfig.inlineCode = config.inlineCode;
+    } else if (config.filename) {
+      // Use local file
+      functionConfig.filename = config.filename;
+    } else if (config.s3Bucket && config.s3Key) {
+      // Use S3
+      functionConfig.s3Bucket = config.s3Bucket;
+      functionConfig.s3Key = config.s3Key;
+    }
+
+    // Create Lambda function
+    this.function = new LambdaFunction(this, 'function', functionConfig);
   }
 }
 

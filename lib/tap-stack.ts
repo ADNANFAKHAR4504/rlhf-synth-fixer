@@ -237,14 +237,40 @@ export class TapStack extends TerraformStack {
       },
     });
 
-    // Create Lambda function
+    // Create Lambda function with inline code
+    const lambdaCode = `
+exports.handler = async (event) => {
+    console.log('Event received:', JSON.stringify(event, null, 2));
+    
+    // Example: Connect to database using environment variables
+    const dbHost = process.env.DB_HOST;
+    const dbName = process.env.DB_NAME;
+    
+    // Simulated database operation
+    const result = {
+        statusCode: 200,
+        body: JSON.stringify({
+            message: 'Hello from Lambda!',
+            timestamp: new Date().toISOString(),
+            environment: {
+                dbHost: dbHost,
+                dbName: dbName
+            },
+            event: event
+        }),
+    };
+    
+    console.log('Response:', result);
+    return result;
+};
+`;
+
     const lambda = new SecureLambdaFunction(this, 'lambda', {
       functionName: 'secure-tap-function',
       handler: 'index.handler',
       runtime: 'nodejs20.x',
       role: lambdaRole.role.arn,
-      s3Bucket: appBucket.bucket.bucket,
-      s3Key: 'lambda/function.zip',
+      inlineCode: lambdaCode, // Use inline code instead of S3
       vpcConfig: {
         subnetIds: vpc.privateSubnets.map(subnet => subnet.id),
         securityGroupIds: [lambdaSecurityGroup.id],
