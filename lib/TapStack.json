@@ -796,105 +796,6 @@
       }
     },
 
-    "CloudTrailBucket": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "BucketName": {
-          "Fn::Sub": "ecommerce-cloudtrail-${AWS::AccountId}-${EnvironmentSuffix}"
-        },
-        "BucketEncryption": {
-          "ServerSideEncryptionConfiguration": [
-            {
-              "ServerSideEncryptionByDefault": {
-                "SSEAlgorithm": "aws:kms",
-                "KMSMasterKeyID": { "Ref": "KMSKey" }
-              }
-            }
-          ]
-        },
-        "PublicAccessBlockConfiguration": {
-          "BlockPublicAcls": true,
-          "BlockPublicPolicy": true,
-          "IgnorePublicAcls": true,
-          "RestrictPublicBuckets": true
-        },
-        "LifecycleConfiguration": {
-          "Rules": [
-            {
-              "Id": "DeleteOldLogs",
-              "Status": "Enabled",
-              "ExpirationInDays": 90
-            }
-          ]
-        }
-      }
-    },
-
-    "CloudTrailBucketPolicy": {
-      "Type": "AWS::S3::BucketPolicy",
-      "Properties": {
-        "Bucket": { "Ref": "CloudTrailBucket" },
-        "PolicyDocument": {
-          "Statement": [
-            {
-              "Sid": "AWSCloudTrailAclCheck",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": "s3:GetBucketAcl",
-              "Resource": { "Fn::GetAtt": ["CloudTrailBucket", "Arn"] }
-            },
-            {
-              "Sid": "AWSCloudTrailWrite",
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "cloudtrail.amazonaws.com"
-              },
-              "Action": "s3:PutObject",
-              "Resource": { "Fn::Sub": "${CloudTrailBucket.Arn}/*" },
-              "Condition": {
-                "StringEquals": {
-                  "s3:x-amz-acl": "bucket-owner-full-control"
-                }
-              }
-            }
-          ]
-        }
-      }
-    },
-
-    "CloudTrail": {
-      "Type": "AWS::CloudTrail::Trail",
-      "DependsOn": "CloudTrailBucketPolicy",
-      "Properties": {
-        "TrailName": { "Fn::Sub": "ecommerce-trail-${EnvironmentSuffix}" },
-        "S3BucketName": { "Ref": "CloudTrailBucket" },
-        "IncludeGlobalServiceEvents": true,
-        "IsLogging": true,
-        "IsMultiRegionTrail": true,
-        "EnableLogFileValidation": true,
-        "EventSelectors": [
-          {
-            "IncludeManagementEvents": true,
-            "ReadWriteType": "All",
-            "DataResources": [
-              {
-                "Type": "AWS::S3::Object",
-                "Values": ["arn:aws:s3:::*/*"]
-              }
-            ]
-          }
-        ],
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": { "Fn::Sub": "ecommerce-trail-${EnvironmentSuffix}" }
-          }
-        ]
-      }
-    },
-
     "ConfigRecorder": {
       "Type": "AWS::Config::ConfigurationRecorder",
       "Properties": {
@@ -1230,13 +1131,6 @@
       "Value": { "Ref": "SecurityAlarmTopic" },
       "Export": {
         "Name": { "Fn::Sub": "${AWS::StackName}-Security-Topic-ARN" }
-      }
-    },
-    "CloudTrailName": {
-      "Description": "CloudTrail trail name",
-      "Value": { "Ref": "CloudTrail" },
-      "Export": {
-        "Name": { "Fn::Sub": "${AWS::StackName}-CloudTrail-Name" }
       }
     },
     "AutoScalingGroupName": {

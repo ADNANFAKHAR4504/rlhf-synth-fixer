@@ -270,17 +270,6 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
   });
 
   describe('Compliance and Monitoring', () => {
-    test('should have CloudTrail for audit logging', () => {
-      expect(template.Resources.CloudTrail).toBeDefined();
-      expect(template.Resources.CloudTrail.Type).toBe('AWS::CloudTrail::Trail');
-    });
-
-    test('CloudTrail should be multi-region', () => {
-      const cloudTrail = template.Resources.CloudTrail;
-      expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
-      expect(cloudTrail.Properties.IncludeGlobalServiceEvents).toBe(true);
-    });
-
     test('should have AWS Config for compliance monitoring', () => {
       expect(template.Resources.ConfigRecorder).toBeDefined();
       expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
@@ -363,7 +352,6 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
         'DatabaseSecretArn',
         'KMSKeyId',
         'SecurityAlarmTopicArn',
-        'CloudTrailName',
         'AutoScalingGroupName'
       ];
 
@@ -461,7 +449,7 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
 
     test('should have comprehensive output coverage', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(13);
+      expect(outputCount).toBe(12);
     });
   });
 });
