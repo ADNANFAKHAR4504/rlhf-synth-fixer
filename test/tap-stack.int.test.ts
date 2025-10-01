@@ -133,7 +133,8 @@ describe('Static Website Infrastructure Integration Tests', () => {
         expect(transitions?.[0]?.Days).toBe(30);
         expect(transitions?.[0]?.StorageClass).toBe('STANDARD_IA');
         expect(transitions?.[1]?.Days).toBe(60);
-        expect(transitions?.[1]?.StorageClass).toBe('GLACIER_INSTANT_RETRIEVAL');
+        // AWS API returns 'GLACIER_IR' instead of full 'GLACIER_INSTANT_RETRIEVAL'
+        expect(transitions?.[1]?.StorageClass).toBe('GLACIER_IR');
 
       } catch (error: any) {
         if (error.code === 'NoSuchBucket' || error.code === 'NotFound') {
@@ -176,11 +177,20 @@ describe('Static Website Infrastructure Integration Tests', () => {
 
         // Check error pages configuration
         const errorPagesConfig = distribution.Distribution?.DistributionConfig?.CustomErrorResponses;
-        expect(errorPagesConfig).toHaveLength(2);
 
-        const errorPages = errorPagesConfig as unknown as any[];
-        const errorCodes = errorPages?.map((page: any) => page.ErrorCode).sort();
-        expect(errorCodes).toEqual([403, 404]);
+        // AWS API returns an object with Items array and Quantity, not a direct array
+        if (errorPagesConfig && typeof errorPagesConfig === 'object' && 'Quantity' in errorPagesConfig) {
+          expect(errorPagesConfig.Quantity).toBe(2);
+          const errorPages = (errorPagesConfig as any).Items;
+          const errorCodes = errorPages?.map((page: any) => page.ErrorCode).sort();
+          expect(errorCodes).toEqual([403, 404]);
+        } else {
+          // Fallback for direct array format
+          expect(errorPagesConfig).toHaveLength(2);
+          const errorPages = errorPagesConfig as unknown as any[];
+          const errorCodes = errorPages?.map((page: any) => page.ErrorCode).sort();
+          expect(errorCodes).toEqual([403, 404]);
+        }
 
         // Check that compression is enabled
         expect(distribution.Distribution?.DistributionConfig?.DefaultCacheBehavior?.Compress).toBe(true);
