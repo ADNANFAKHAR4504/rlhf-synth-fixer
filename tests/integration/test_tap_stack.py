@@ -29,7 +29,7 @@ class TestTapStack(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up AWS clients and extract outputs"""
-        cls.region = 'us-west-2'
+        cls.region = 'us-east-2'
         
         # Initialize AWS clients
         cls.dynamodb = boto3.resource('dynamodb', region_name=cls.region)
