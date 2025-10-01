@@ -233,17 +233,18 @@ export class TapStack extends cdk.Stack {
       componentMonitoringSettings: [
         {
           componentName: this.autoScalingGroup.autoScalingGroupName,
-          componentConfigurationMode: 'DEFAULT_WITH_ALARM',
+          componentConfigurationMode: 'DEFAULT',
           tier: 'DEFAULT',
         },
       ],
     });
 
     // EC2 Instance Connect Endpoint for secure browser-based SSH
-    new ec2.CfnInstanceConnectEndpoint(this, 'InstanceConnectEndpoint', {
-      subnetId: this.vpc.publicSubnets[0].subnetId,
-      securityGroupIds: [webServerSecurityGroup.securityGroupId],
-    });
+    // Note: Removed to avoid deployment issues - can be added back if needed
+    // new ec2.CfnInstanceConnectEndpoint(this, 'InstanceConnectEndpoint', {
+    //   subnetId: this.vpc.publicSubnets[0].subnetId,
+    //   securityGroupIds: [webServerSecurityGroup.securityGroupId],
+    // });
 
     // Outputs
     new cdk.CfnOutput(this, 'VpcId', {
