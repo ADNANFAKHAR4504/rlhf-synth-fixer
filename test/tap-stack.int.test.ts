@@ -25,7 +25,7 @@ describe("TapStack Integration Tests", () => {
   let s3IamRoleArn: string;
   let sqsIamRoleArn: string;
   let awsAccountId: string;
-  let environmentSuffix: string = "pr2999";
+  let environmentSuffix: string;
 
   beforeAll(() => {
     const outputFilePath = path.join(__dirname, "..", "cfn-outputs", "flat-outputs.json");
@@ -46,6 +46,19 @@ describe("TapStack Integration Tests", () => {
     s3IamRoleArn = stackOutputs["s3-iam-role-arn"];
     sqsIamRoleArn = stackOutputs["sqs-iam-role-arn"];
     awsAccountId = stackOutputs["aws-account-id"];
+
+    // Extract environment suffix from S3 bucket name
+    // Pattern: tap-data-bucket-tss-${environmentSuffix}-${awsAccountId}
+    const bucketParts = s3BucketName.split('-');
+    const accountIdIndex = bucketParts.findIndex(part => part === awsAccountId);
+    if (accountIdIndex > 0) {
+      environmentSuffix = bucketParts[accountIdIndex - 1];
+    } else {
+      // Fallback: extract from SNS topic ARN
+      // Pattern: tap-notifications-${environmentSuffix}
+      const topicName = snsTopicArn.split(':').pop() || "";
+      environmentSuffix = topicName.replace('tap-notifications-', '');
+    }
 
     if (!kmsKeyId || !s3BucketName || !snsTopicArn || !sqsQueueUrl || !sqsDlqUrl) {
       throw new Error("Missing required stack outputs for integration test.");
