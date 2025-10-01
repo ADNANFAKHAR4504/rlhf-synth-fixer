@@ -42,13 +42,9 @@ import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscrip
 
 // Secrets Manager
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
-
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
+import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
+import { Fn } from 'cdktf';
 
 export interface StandardTags {
   Environment: string;
@@ -62,16 +58,12 @@ export interface NetworkingModuleProps {
 
 // Replace the existing NetworkingModule class
 export class NetworkingModule extends Construct {
-  public readonly vpc: Vpc;
+  public readonly vpc: DataAwsVpc;
   public readonly availabilityZones: DataAwsAvailabilityZones;
-  public readonly publicSubnets: Subnet[];
-  public readonly privateSubnets: Subnet[];
-
-  // Remove the getter methods and use Token.asList instead
   public readonly publicSubnetIds: string[];
   public readonly privateSubnetIds: string[];
 
-  constructor(scope: Construct, id: string, props: NetworkingModuleProps) {
+  constructor(scope: Construct, id: string, _props: NetworkingModuleProps) {
     super(scope, id);
 
     // Get availability zones
@@ -79,88 +71,27 @@ export class NetworkingModule extends Construct {
       state: 'available',
     });
 
-    // Create VPC
-    this.vpc = new Vpc(this, 'vpc', {
-      cidrBlock: '10.0.0.0/16',
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: {
-        ...props.standardTags,
-        Name: 'tap-vpc',
-      },
+    // Use the default VPC
+    this.vpc = new DataAwsVpc(this, 'vpc', {
+      default: true,
     });
 
-    // Create Internet Gateway
-    const internetGateway = new InternetGateway(this, 'igw', {
-      vpcId: this.vpc.id,
-      tags: {
-        ...props.standardTags,
-        Name: 'tap-internet-gateway',
-      },
-    });
-
-    // Create public subnets (2 for high availability)
-    this.publicSubnets = [];
-    const publicSubnetIds: string[] = [];
-
-    for (let i = 0; i < 2; i++) {
-      const subnet = new Subnet(this, `public-subnet-${i}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: `10.0.${i}.0/24`,
-        availabilityZone: this.availabilityZones.names[i],
-        mapPublicIpOnLaunch: true,
-        tags: {
-          ...props.standardTags,
-          Name: `tap-public-subnet-${i + 1}`,
-          Type: 'Public',
+    // Get existing public subnets from the default VPC
+    const publicSubnets = new DataAwsSubnets(this, 'public-subnets', {
+      filter: [
+        {
+          name: 'vpc-id',
+          values: [this.vpc.id],
         },
-      });
-      this.publicSubnets.push(subnet);
-      publicSubnetIds.push(subnet.id);
-    }
-    this.publicSubnetIds = publicSubnetIds;
-
-    // Create private subnets (2 for high availability)
-    this.privateSubnets = [];
-    const privateSubnetIds: string[] = [];
-
-    for (let i = 0; i < 2; i++) {
-      const subnet = new Subnet(this, `private-subnet-${i}`, {
-        vpcId: this.vpc.id,
-        cidrBlock: `10.0.${i + 10}.0/24`,
-        availabilityZone: this.availabilityZones.names[i],
-        tags: {
-          ...props.standardTags,
-          Name: `tap-private-subnet-${i + 1}`,
-          Type: 'Private',
+        {
+          name: 'default-for-az',
+          values: ['true'],
         },
-      });
-      this.privateSubnets.push(subnet);
-      privateSubnetIds.push(subnet.id);
-    }
-    this.privateSubnetIds = privateSubnetIds;
-
-    // Rest of the code remains the same...
-    const publicRouteTable = new RouteTable(this, 'public-route-table', {
-      vpcId: this.vpc.id,
-      tags: {
-        ...props.standardTags,
-        Name: 'tap-public-route-table',
-      },
+      ],
     });
 
-    new Route(this, 'public-route', {
-      routeTableId: publicRouteTable.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: internetGateway.id,
-    });
-
-    this.publicSubnets.forEach((subnet, index) => {
-      new RouteTableAssociation(this, `public-rta-${index}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
-    });
+    this.publicSubnetIds = Fn.tolist(publicSubnets.ids) as unknown as string[];
+    this.privateSubnetIds = Fn.tolist(publicSubnets.ids) as unknown as string[];
   }
 }
 
