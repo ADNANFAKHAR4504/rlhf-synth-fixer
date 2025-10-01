@@ -2,11 +2,12 @@
 
 ---
 
-The user requires a production-ready CloudFormation JSON template for the TAP (Task Assignment Platform) Stack. The requirements are:
+The user is asking for a production-ready CloudFormation template for the TAP (Task Assignment Platform)
+Stack. Let me break down the requirements:
 
 1. **Core Infrastructure:**
    - DynamoDB table for storing turnaround prompts
-   - Production-ready configuration with security best practices
+   - Production-ready configuration with security and monitoring
 
 2. **Security Requirements:**
    - Encryption at rest using AWS KMS
@@ -24,154 +25,546 @@ The user requires a production-ready CloudFormation JSON template for the TAP (T
 4. **Template Requirements:**
    - JSON format CloudFormation
    - Parameterized for reusability across environments
+   - No required parameters for easy deployment
    - Proper tagging strategy
    - Clean, maintainable structure
    - Deletable resources for testing/development
-   - No required parameters (all optional with defaults)
+
+Let me create a focused, production-ready CloudFormation template specifically for the TAP Stack requirements.
 
 ### Answer
 
 ---
 
+I'll create a production-ready CloudFormation template for the TAP Stack that focuses on the core
+requirements while maintaining security, monitoring, and operational excellence.
+
 ## CloudFormation Template - TAP Stack
 
-The complete production-ready CloudFormation template is implemented in `lib/TapStack.json` with the following architecture:
-
-### Architecture Overview
-
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template with security and monitoring",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": ["EnvironmentSuffix", "ProjectName"]
+        },
+        {
+          "Label": {
+            "default": "Monitoring Configuration"
+          },
+          "Parameters": ["AlertEmail"]
+        },
+        {
+          "Label": {
+            "default": "DynamoDB Configuration"
+          },
+          "Parameters": [
+            "DeletionProtectionEnabled",
+            "PointInTimeRecoveryEnabled"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "ProjectName": {
+      "Type": "String",
+      "Default": "tap",
+      "MinLength": 1,
+      "MaxLength": 50,
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "Description": "Project name (lowercase, alphanumeric and hyphens only)"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "Default": "",
+      "Description": "Email address for CloudWatch alarm notifications (optional)"
+    },
+    "DeletionProtectionEnabled": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enable deletion protection for DynamoDB table"
+    },
+    "PointInTimeRecoveryEnabled": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": ["true", "false"],
+      "Description": "Enable point-in-time recovery for DynamoDB table"
+    }
+  },
+  "Conditions": {
+    "EnableDeletionProtection": {
+      "Fn::Equals": [
+        {
+          "Ref": "DeletionProtectionEnabled"
+        },
+        "true"
+      ]
+    },
+    "EnablePointInTimeRecovery": {
+      "Fn::Equals": [
+        {
+          "Ref": "PointInTimeRecoveryEnabled"
+        },
+        "true"
+      ]
+    },
+    "HasAlertEmail": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AlertEmail"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for ${ProjectName}-${EnvironmentSuffix} TAP application"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": ["kms:Decrypt", "kms:DescribeKey", "kms:CreateGrant"],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow SNS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sns.amazonaws.com"
+              },
+              "Action": ["kms:Decrypt", "kms:GenerateDataKey"],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/${ProjectName}-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
+      }
+    },
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": {
+          "Fn::If": ["EnableDeletionProtection", true, false]
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS",
+          "KMSMasterKeyId": {
+            "Ref": "KMSKey"
+          }
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": {
+            "Fn::If": ["EnablePointInTimeRecovery", true, false]
+          }
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-alerts"
+        },
+        "DisplayName": {
+          "Fn::Sub": "${ProjectName} ${EnvironmentSuffix} Alerts"
+        },
+        "KmsMasterKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Subscription": {
+          "Fn::If": [
+            "HasAlertEmail",
+            [
+              {
+                "Endpoint": {
+                  "Ref": "AlertEmail"
+                },
+                "Protocol": "email"
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "DynamoDBThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-throttles"
+        },
+        "AlarmDescription": "Alarm when DynamoDB throttles exceed threshold",
+        "MetricName": "UserErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBSystemErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-system-errors"
+        },
+        "AlarmDescription": "Alarm when DynamoDB system errors occur",
+        "MetricName": "SystemErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBReadThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-read-throttle"
+        },
+        "AlarmDescription": "Alarm when DynamoDB read throttles occur",
+        "MetricName": "ReadThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBWriteThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-write-throttle"
+        },
+        "AlarmDescription": "Alarm when DynamoDB write throttles occur",
+        "MetricName": "WriteThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dashboard"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\", \"label\": \"Read Capacity\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\", \"label\": \"Write Capacity\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity Units\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"UserErrors\", {\"stat\": \"Sum\", \"label\": \"User Errors\"}],\n          [\".\", \"SystemErrors\", {\"stat\": \"Sum\", \"label\": \"System Errors\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Errors\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ReadThrottleEvents\", {\"stat\": \"Sum\", \"label\": \"Read Throttles\"}],\n          [\".\", \"WriteThrottleEvents\", {\"stat\": \"Sum\", \"label\": \"Write Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Throttle Events\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"SuccessfulRequestLatency\", {\"stat\": \"Average\", \"label\": \"Avg Latency\"}],\n          [\".\", \".\", {\"stat\": \"Maximum\", \"label\": \"Max Latency\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Latency\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        },\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    }\n  ]\n}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": ["TurnAroundPromptTable", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "TurnAroundPromptTableStreamArn": {
+      "Description": "Stream ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": ["TurnAroundPromptTable", "StreamArn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableStreamArn"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {
+        "Ref": "KMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN for encryption",
+      "Value": {
+        "Fn::GetAtt": ["KMSKey", "Arn"]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS Topic ARN for alerts",
+      "Value": {
+        "Ref": "SNSTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${EnvironmentSuffix}-dashboard"
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       TAP Stack                              │
-│                                                              │
-│  ┌──────────────┐      ┌─────────────────────────────┐    │
-│  │   KMS Key    │──────│  TurnAroundPromptTable      │    │
-│  │              │      │  - Hash Key: id             │    │
-│  │ Encryption   │      │  - On-demand billing        │    │
-│  │  at rest     │      │  - Streams enabled          │    │
-│  └──────┬───────┘      │  - TTL configured           │    │
-│         │              └─────────────────────────────┘    │
-│         │                                                   │
-│         │              ┌─────────────────────────────┐    │
-│         └──────────────│      SNS Topic              │    │
-│                        │  - Email notifications      │    │
-│                        │  - Encrypted                │    │
-│                        └──────────┬──────────────────┘    │
-│                                   │                        │
-│         ┌─────────────────────────┴────────────┐          │
-│         │                                       │          │
-│    ┌────▼──────┐  ┌────────────┐  ┌───────────▼──┐      │
-│    │ Throttle  │  │   System   │  │ Read/Write   │      │
-│    │  Alarm    │  │   Error    │  │   Throttle   │      │
-│    │           │  │   Alarm    │  │    Alarms    │      │
-│    └───────────┘  └────────────┘  └──────────────┘      │
-│                                                           │
-│         ┌─────────────────────────────────────┐         │
-│         │   CloudWatch Dashboard              │         │
-│         │   - Capacity metrics                │         │
-│         │   - Error metrics                   │         │
-│         │   - Throttle events                 │         │
-│         │   - Latency metrics                 │         │
-│         └─────────────────────────────────────┘         │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Key Features Implemented
-
-#### 1. Security (AWS Well-Architected - Security Pillar)
-
-- **Encryption at Rest:** KMS encryption for DynamoDB table
-- **Encrypted Notifications:** SNS topic encrypted with KMS  
-- **Least Privilege:** KMS key policy grants minimum required permissions
-- **Proper Tagging:** All resources tagged with Environment, Project, ManagedBy
-
-#### 2. Operational Excellence
-
-- **CloudWatch Monitoring:** 4 comprehensive alarms:
-  - User errors (throttles)
-  - System errors
-  - Read throttle events
-  - Write throttle events
-- **CloudWatch Dashboard:** Visual monitoring of DynamoDB metrics
-- **SNS Notifications:** Conditional email alerts (optional)
-- **Parameterized Configuration:** Environment-specific settings
-
-#### 3. Reliability
-
-- **On-Demand Billing:** Automatic scaling with PAY_PER_REQUEST
-- **DynamoDB Streams:** Data change tracking (NEW_AND_OLD_IMAGES)
-- **Point-in-Time Recovery:** Configurable backup capability
-- **TTL Support:** Automatic data lifecycle management
-- **Conditional Deletion Protection:** Prevent accidental deletions
-
-#### 4. Performance Efficiency
-
-- **On-Demand Capacity:** No pre-provisioning required
-- **Single-Digit Latency:** DynamoDB consistent performance
-- **Stream Processing:** Real-time data processing workflows
-
-#### 5. Cost Optimization
-
-- **Pay-Per-Request Billing:** Only pay for actual usage
-- **TTL for Data Cleanup:** Automatic removal of expired data
-- **Efficient Alarms:** Proper thresholds to avoid false positives
-
-### Resources
-
-1. **KMSKey** (`AWS::KMS::Key`) - Customer managed key for encryption
-2. **KMSKeyAlias** (`AWS::KMS::Alias`) - Friendly alias for the KMS key
-3. **TurnAroundPromptTable** (`AWS::DynamoDB::Table`) with:
-   - Hash key: id (String)
-   - KMS encryption
-   - Streams enabled (NEW_AND_OLD_IMAGES)
-   - TTL enabled (attribute: ttl)
-   - On-demand billing
-   - Conditional PITR
-   - Conditional deletion protection
-4. **SNSTopic** (`AWS::SNS::Topic`) - Alert notifications with conditional email subscription
-5. **CloudWatch Alarms** (4):
-   - DynamoDBThrottleAlarm (UserErrors)
-   - DynamoDBSystemErrorAlarm (SystemErrors)
-   - DynamoDBReadThrottleAlarm (ReadThrottleEvents)
-   - DynamoDBWriteThrottleAlarm (WriteThrottleEvents)
-6. **CloudWatchDashboard** (`AWS::CloudWatch::Dashboard`) - Operational monitoring
-
-### Parameters
-
-- **EnvironmentSuffix** (String, default: "dev") - Environment identifier
-- **ProjectName** (String, default: "tap") - Project name for resource naming
-- **AlertEmail** (String, default: "") - Email for notifications (optional)
-- **DeletionProtectionEnabled** (String, default: "false") - Toggle deletion protection
-- **PointInTimeRecoveryEnabled** (String, default: "false") - Toggle PITR backups
-
-### Conditions
-
-- **EnableDeletionProtection** - Enables deletion protection when parameter is "true"
-- **EnablePointInTimeRecovery** - Enables PITR when parameter is "true"
-- **HasAlertEmail** - Creates email subscription when email is provided
-
-### Outputs
-
-- TurnAroundPromptTableName
-- TurnAroundPromptTableArn
-- TurnAroundPromptTableStreamArn
-- KMSKeyId
-- KMSKeyArn
-- SNSTopicArn
-- DashboardURL
-- StackName
-- EnvironmentSuffix
 
 ## Deployment Instructions
 
-### Validate Template
+### 1. **Validate the Template**
 
 ```bash
+# CloudFormation validation
 aws cloudformation validate-template \
   --template-body file://lib/TapStack.json \
   --region us-east-1
+
+# CFN-Lint validation (optional)
+cfn-lint lib/TapStack.json
 ```
 
-### Deploy Stack (Minimal - No Parameters Required)
+### 2. **Create Stack (Minimal)**
 
 ```bash
 aws cloudformation deploy \
@@ -181,7 +574,7 @@ aws cloudformation deploy \
   --region us-east-1
 ```
 
-### Deploy Stack (With Optional Parameters)
+### 3. **Create Stack (With Configuration)**
 
 ```bash
 aws cloudformation deploy \
@@ -197,7 +590,7 @@ aws cloudformation deploy \
   --region us-east-1
 ```
 
-### Update Stack
+### 4. **Update Stack** (for changes)
 
 ```bash
 aws cloudformation deploy \
@@ -209,19 +602,50 @@ aws cloudformation deploy \
   --region us-east-1
 ```
 
-### Delete Stack
+## Key Features Implemented
 
-```bash
-aws cloudformation delete-stack \
-  --stack-name TapStackdev \
-  --region us-east-1
-```
+### **Security**
 
-## Real-World Usage Example
+- ✅ KMS encryption for DynamoDB using customer-managed keys
+- ✅ Encrypted SNS topics for secure notifications
+- ✅ Least privilege IAM policies via KMS key policies
+- ✅ Proper resource tagging for governance and compliance
 
-### Scenario: Task Assignment Platform for AI Training
+### **Production Readiness**
 
-The TAP Stack stores turnaround prompts used for AI model training and evaluation.
+- ✅ CloudWatch monitoring with 4 comprehensive alarms
+- ✅ CloudWatch dashboard for operational visibility
+- ✅ DynamoDB Streams for real-time data processing
+- ✅ Point-in-time recovery (configurable)
+- ✅ TTL for automatic data lifecycle management
+- ✅ Deletion protection (configurable)
+
+### **Simplicity**
+
+- ✅ Zero required parameters - deploy with defaults
+- ✅ Focused design - no unnecessary complexity
+- ✅ Single DynamoDB table with simple hash key schema
+- ✅ On-demand billing eliminates capacity planning
+
+### **Monitoring & Observability**
+
+- ✅ DynamoDB user error monitoring (UserErrors metric)
+- ✅ System error monitoring (SystemErrors metric)
+- ✅ Read throttle monitoring (ReadThrottleEvents metric)
+- ✅ Write throttle monitoring (WriteThrottleEvents metric)
+- ✅ CloudWatch dashboard with 4 metric widgets
+- ✅ Conditional email notifications via SNS
+
+### **Best Practices**
+
+- ✅ Parameterized template with sensible defaults
+- ✅ Conditional resource creation (email subscription, PITR, deletion protection)
+- ✅ Consistent naming conventions
+- ✅ Comprehensive outputs for cross-stack integration
+- ✅ Deletable resources for development environments
+- ✅ Proper metadata for CloudFormation UI organization
+
+## Real-World Usage Examples
 
 ### Python Example
 
@@ -231,20 +655,18 @@ import uuid
 from datetime import datetime, timedelta
 
 # Get table name from CloudFormation outputs
-cfn = boto3.client('cloudformation')
+cfn = boto3.client('cloudformation', region_name='us-east-1')
 response = cfn.describe_stacks(StackName='TapStackdev')
 outputs = {o['OutputKey']: o['OutputValue'] for o in response['Stacks'][0]['Outputs']}
-table_name = outputs['TurnAroundPromptTableName']
 
-# Initialize DynamoDB
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-table = dynamodb.Table(table_name)
+table = dynamodb.Table(outputs['TurnAroundPromptTableName'])
 
-# Create a turnaround prompt
+# Create turnaround prompt
 def create_prompt(prompt_text, task_type, priority='medium'):
     prompt_id = str(uuid.uuid4())
     ttl_timestamp = int((datetime.now() + timedelta(days=30)).timestamp())
-    
+
     item = {
         'id': prompt_id,
         'prompt_text': prompt_text,
@@ -254,159 +676,74 @@ def create_prompt(prompt_text, task_type, priority='medium'):
         'created_at': datetime.now().isoformat(),
         'ttl': ttl_timestamp
     }
-    
+
     table.put_item(Item=item)
     return prompt_id
 
-# Update prompt status
-def update_prompt_status(prompt_id, status, result=None):
-    update_expr = 'SET #status = :status, updated_at = :updated_at'
-    expr_values = {
-        ':status': status,
-        ':updated_at': datetime.now().isoformat()
-    }
-    
-    if result:
-        update_expr += ', result = :result'
-        expr_values[':result'] = result
-    
-    table.update_item(
-        Key={'id': prompt_id},
-        UpdateExpression=update_expr,
-        ExpressionAttributeNames={'#status': 'status'},
-        ExpressionAttributeValues=expr_values
-    )
-
-# Example workflow
+# Example usage
 prompt_id = create_prompt(
-    'Review code for security vulnerabilities',
+    'Review the following code for security vulnerabilities',
     'code_review',
     'high'
 )
-update_prompt_status(prompt_id, 'completed', {'score': 0.95})
+print(f"Created prompt: {prompt_id}")
 ```
 
 ### Node.js/TypeScript Example
 
-```typescript
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { 
-  DynamoDBDocumentClient, 
-  PutCommand, 
-  UpdateCommand, 
-  GetCommand 
-} from '@aws-sdk/lib-dynamodb';
-import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
+```javascript
+const {
+  CloudFormationClient,
+  DescribeStacksCommand,
+} = require('@aws-sdk/client-cloudformation');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
 const region = 'us-east-1';
+const cfnClient = new CloudFormationClient({ region });
 const client = new DynamoDBClient({ region });
 const docClient = DynamoDBDocumentClient.from(client);
 
 // Get table name from CloudFormation
 async function getTableName() {
-  const cfnClient = new CloudFormationClient({ region });
   const response = await cfnClient.send(
     new DescribeStacksCommand({ StackName: 'TapStackdev' })
   );
   const outputs = response.Stacks[0].Outputs;
-  return outputs.find(o => o.OutputKey === 'TurnAroundPromptTableName').OutputValue;
+  return outputs.find(o => o.OutputKey === 'TurnAroundPromptTableName')
+    .OutputValue;
 }
 
-// Create prompt
-async function createPrompt(tableName: string, promptText: string, taskType: string) {
+// Create and manage prompts
+async function createPrompt(promptText, taskType, priority = 'medium') {
+  const tableName = await getTableName();
   const promptId = crypto.randomUUID();
-  const ttl = Math.floor(Date.now() / 1000) + 86400 * 30;
-  
-  await docClient.send(new PutCommand({
-    TableName: tableName,
-    Item: {
-      id: promptId,
-      prompt_text: promptText,
-      task_type: taskType,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      ttl
-    }
-  }));
-  
+
+  await docClient.send(
+    new PutCommand({
+      TableName: tableName,
+      Item: {
+        id: promptId,
+        prompt_text: promptText,
+        task_type: taskType,
+        priority,
+        status: 'pending',
+        created_at: new Date().toISOString(),
+        ttl: Math.floor(Date.now() / 1000) + 86400 * 30,
+      },
+    })
+  );
+
   return promptId;
 }
 
-// Update prompt
-async function updatePrompt(tableName: string, promptId: string, status: string) {
-  await docClient.send(new UpdateCommand({
-    TableName: tableName,
-    Key: { id: promptId },
-    UpdateExpression: 'SET #status = :status, updated_at = :updated_at',
-    ExpressionAttributeNames: { '#status': 'status' },
-    ExpressionAttributeValues: {
-      ':status': status,
-      ':updated_at': new Date().toISOString()
-    }
-  }));
-}
+// Usage
+createPrompt('Analyze system performance metrics', 'analysis', 'high').then(
+  id => console.log(`Created prompt: ${id}`)
+);
 ```
 
-## Testing
-
-### Test Coverage
-
-- **83 Unit Tests:** Template structure, resources, security, best practices
-- **28 Integration Tests:** 14 template validation + 14 end-to-end AWS tests
-
-### Run Tests
-
-```bash
-# Lint
-npm run lint
-
-# Unit tests
-npm run test:unit
-
-# Integration tests (requires AWS credentials and deployed stack)
-npm run test:integration
-
-# All tests with coverage
-npm test
-```
-
-### Test Results
-
-```
-Test Suites: 2 passed, 2 total
-Tests:       97 passed (unit) + 28 (integration) = 125 total
-```
-
-## CloudFormation Template Validation
-
-The template passes all validations:
-
-```bash
-✅ CloudFormation syntax validation
-✅ cfn-lint checks (no warnings or errors)
-✅ Parameter validation
-✅ Resource dependencies verified
-✅ Security best practices implemented
-✅ Monitoring coverage complete
-```
-
-## Summary
-
-This CloudFormation template provides a production-ready TAP Stack with:
-
-✅ **Strong Security:** KMS encryption, least privilege policies, comprehensive tagging  
-✅ **Full Monitoring:** 4 CloudWatch alarms + dashboard for operational visibility  
-✅ **High Availability:** On-demand scaling, DynamoDB Streams, optional PITR  
-✅ **Cost Effective:** Pay-per-request billing, TTL for automatic cleanup  
-✅ **Developer Friendly:** No required parameters, clean outputs, extensive testing  
-✅ **Production Ready:** Conditional protections, proper deletion policies, real-world examples  
-
-The template follows AWS Well-Architected Framework principles and CloudFormation best practices, making it suitable for production workloads while remaining flexible for development and testing environments.
-
-### Key Differentiators
-
-- **Zero Required Parameters:** Can deploy with just stack name
-- **Conditional Features:** PITR, deletion protection, email alerts all optional
-- **Comprehensive Testing:** 125 tests including end-to-end AWS integration tests
-- **Real-World Examples:** Python and TypeScript code samples included
-- **Complete Documentation:** Architecture diagrams, usage patterns, deployment instructions
+This CloudFormation template provides a clean, focused, production-ready TAP Stack that eliminates
+complexity while maintaining enterprise-grade security, monitoring, and operational excellence.
+The template is designed to be deployed immediately with sensible defaults while offering full
+configurability for production environments.
