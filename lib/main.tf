@@ -31,6 +31,20 @@ variable "vpc_cidr" {
 variable "vault_address" {
   description = "Vault server address"
   type        = string
+  default     = ""
+}
+
+variable "allowed_ingress_cidrs" {
+  description = "Allowed CIDR blocks for ALB ingress"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
+variable "db_master_password" {
+  description = "Master password for RDS database"
+  type        = string
+  sensitive   = true
+  default     = "TestPassword123!"
 }
 
 # ===========================
@@ -64,29 +78,6 @@ data "aws_availability_zones" "available" {
 }
 
 data "aws_caller_identity" "current" {}
-
-# ===========================
-# VAULT PROVIDER & DATA SOURCES
-# ===========================
-
-provider "vault" {
-  address = var.vault_address
-}
-
-data "vault_kv_secret_v2" "ingress_cidrs" {
-  mount = "kv"
-  name  = "app/ingress"
-}
-
-data "vault_kv_secret_v2" "acm_certificate" {
-  mount = "kv"
-  name  = "app/acm"
-}
-
-data "vault_kv_secret_v2" "db_password" {
-  mount = "kv"
-  name  = "db/primary"
-}
 
 # ===========================
 # KMS KEY
@@ -333,10 +324,11 @@ resource "aws_iam_role_policy" "vpc_flow_logs" {
 }
 
 resource "aws_flow_log" "main" {
-  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
-  log_destination_arn = aws_cloudwatch_log_group.vpc_flow_logs.arn
-  traffic_type    = "ALL"
-  vpc_id          = aws_vpc.main.id
+  iam_role_arn         = aws_iam_role.vpc_flow_logs.arn
+  log_destination      = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  log_destination_type = "cloud-watch-logs"
+  traffic_type         = "ALL"
+  vpc_id               = aws_vpc.main.id
   
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-log"
@@ -358,7 +350,7 @@ resource "aws_security_group" "alb" {
       from_port   = ingress.value
       to_port     = ingress.value
       protocol    = "tcp"
-      cidr_blocks = split(",", data.vault_kv_secret_v2.ingress_cidrs.data["allowed_cidrs"])
+      cidr_blocks = var.allowed_ingress_cidrs
       description = "Allow HTTP${ingress.value == 443 ? "S" : ""} from allowlist"
     }
   }
@@ -535,36 +527,14 @@ resource "aws_lb_target_group" "app" {
   })
 }
 
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = data.vault_kv_secret_v2.acm_certificate.data["arn"]
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
-  }
-  
-  tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-https-listener"
-  })
-}
-
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
   
   default_action {
-    type = "redirect"
-    
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
   }
   
   tags = merge(local.common_tags, {
@@ -902,7 +872,7 @@ resource "aws_db_instance" "postgres" {
   
   db_name  = "appdb"
   username = "dbadmin"
-  password = data.vault_kv_secret_v2.db_password.data["password"]
+  password = var.db_master_password
   
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
@@ -1071,11 +1041,6 @@ output "alb_zone_id" {
 output "target_group_arn" {
   description = "Target group ARN"
   value       = aws_lb_target_group.app.arn
-}
-
-output "https_listener_arn" {
-  description = "HTTPS listener ARN"
-  value       = aws_lb_listener.https.arn
 }
 
 output "http_listener_arn" {

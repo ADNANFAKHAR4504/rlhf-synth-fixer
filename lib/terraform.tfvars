@@ -1,4 +1,8 @@
-vault_address = "http://localhost:8200"
-# aws_region = "us-west-2"   # Only if you want to override the default
-# project_name = "nova"      # Only if you want to override the default
-# environment = "prod"       # Only if you want to override the default
+# LocalStack test configuration
+aws_region = "us-east-1"  # LocalStack default region
+# project_name = "nova"      # Using default
+# environment = "prod"       # Using default
+
+# Test values for LocalStack
+allowed_ingress_cidrs = ["0.0.0.0/0"]
+db_master_password    = "TestPassword123!"
