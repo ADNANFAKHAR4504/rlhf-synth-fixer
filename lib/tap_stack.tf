@@ -900,31 +900,21 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   is_multi_region_trail        = true
   enable_logging               = true
-  
+
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-    
+
     data_resource {
       type   = "AWS::S3::Object"
       values = ["arn:aws:s3:::*/*"]
     }
   }
-  
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-    
-    data_resource {
-      type   = "AWS::RDS::DBCluster"
-      values = ["arn:aws:rds:*:*:cluster:*"]
-    }
-  }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-cloudtrail"
   })
-  
+
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
 
