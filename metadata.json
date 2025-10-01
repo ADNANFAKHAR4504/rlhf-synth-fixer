@@ -1,0 +1,20 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "39582146",
+  "team": "synth",
+  "startedAt": "2025-10-01T14:23:02+00:00",
+  "training_quality": 8,
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "CloudWatch Logs",
+    "AWS X-Ray",
+    "API Gateway Usage Plans"
+  ]
+}
