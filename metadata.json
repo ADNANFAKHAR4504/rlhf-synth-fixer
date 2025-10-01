@@ -1,0 +1,14 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350039",
+  "team": "2",
+  "startedAt": "2025-10-01T16:53:51.449Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": "S3 Bucket, VPC, EC2, SGs, RDS, CloudTrail, Lambda, API Gateway, AWS Config"
+}
