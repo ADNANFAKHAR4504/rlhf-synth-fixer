@@ -584,7 +584,7 @@ resource "aws_db_subnet_group" "main" {
 
 # RDS MySQL Instance
 resource "aws_db_instance" "main" {
-  identifier = "${local.name_prefix}-mysql-db"
+  identifier = lower("${local.name_prefix}-mysql-db")
   
   # Engine configuration
   engine               = "mysql"
@@ -620,7 +620,7 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot = true
   
   tags = merge(local.common_tags, {
-    Name = "${local.name_prefix}-mysql-db"
+    Name = lower("${local.name_prefix}-mysql-db")
   })
 }
 
