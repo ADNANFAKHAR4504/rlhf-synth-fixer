@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348786",
+  "team": "3",
+  "startedAt": "2025-10-01T14:27:59.194Z",
+  "subtask": "Security Configuration as Code",
+  "subject_labels": [
+    "Security, Compliance and Governance"
+  ],
+  "aws_services": "lambda, api  gateway, DynamoDB, cloudwatch"
+}
