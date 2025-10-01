@@ -1018,7 +1018,7 @@ resource "aws_cloudfront_origin_access_identity" "static" {
 }
 
 locals {
-  api_origin_domain = replace(aws_api_gateway_deployment.api.invoke_url, "https://", "")
+  api_origin_domain = replace(aws_api_gateway_stage.prod.invoke_url, "https://", "")
 }
 
 resource "aws_cloudfront_distribution" "cdn" {
@@ -1034,7 +1034,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
 
   origin {
-    domain_name = trimsuffix(local.api_origin_domain, "/prod")
+    domain_name = replace(local.api_origin_domain, "/prod", "")
     origin_id   = "api-gw"
     custom_origin_config {
       origin_protocol_policy = "https-only"
