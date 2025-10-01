@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348946",
+  "team": "4",
+  "startedAt": "2025-09-29T10:25:03.819Z",
+  "task_sub_category": "IaC-Cloud-Environment-Setup",
+  "use_case_category": "Provisioning Infrastructure Environments",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "CloudTrail",
+    "CloudWatch",
+    "Route53",
+    "Auto Scaling",
+    "ALB",
+    "IAM",
+    "EIP",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

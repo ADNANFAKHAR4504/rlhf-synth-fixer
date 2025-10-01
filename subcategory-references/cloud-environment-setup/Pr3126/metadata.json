@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "CES-TASK-2",
+  "team": "3",
+  "startedAt": "2025-09-30T05:51:29.533Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Subnets",
+    "Route Tables",
+    "Security Groups",
+    "RDS MySQL",
+    "DB Subnet Group",
+    "KMS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
+}
