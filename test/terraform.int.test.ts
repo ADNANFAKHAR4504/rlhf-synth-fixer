@@ -816,7 +816,7 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
       // Generate some API activity to test logging
       await safeAwsCall(async () => {
         const command = new DescribeVpcsCommand({
-          MaxResults: 1
+          MaxResults: 5
         });
         return await ec2Client.send(command);
       }, 'Generate API activity for CloudTrail');
