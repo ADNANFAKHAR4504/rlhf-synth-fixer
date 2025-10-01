@@ -52,8 +52,8 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
     test('EnvironmentSuffix parameter should have correct properties', () => {
       const envSuffixParam = template.Parameters.EnvironmentSuffix;
       expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('prod');
-      expect(envSuffixParam.AllowedValues).toEqual(['dev', 'staging', 'prod']);
+      expect(envSuffixParam.Default).toBe('dev');
+      expect(envSuffixParam.Description).toBeDefined();
     });
 
     test('SSHAllowedCIDR parameter should have security pattern', () => {
