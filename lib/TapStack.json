@@ -200,14 +200,6 @@
       }
     },
 
-    "NATGateway2EIP": {
-      "Type": "AWS::EC2::EIP",
-      "DependsOn": "AttachGateway",
-      "Properties": {
-        "Domain": "vpc"
-      }
-    },
-
     "NATGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
@@ -217,20 +209,6 @@
           {
             "Key": "Name",
             "Value": { "Fn::Sub": "ecommerce-nat-1-${EnvironmentSuffix}" }
-          }
-        ]
-      }
-    },
-
-    "NATGateway2": {
-      "Type": "AWS::EC2::NatGateway",
-      "Properties": {
-        "AllocationId": { "Fn::GetAtt": ["NATGateway2EIP", "AllocationId"] },
-        "SubnetId": { "Ref": "PublicSubnet2" },
-        "Tags": [
-          {
-            "Key": "Name",
-            "Value": { "Fn::Sub": "ecommerce-nat-2-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -327,7 +305,7 @@
       "Properties": {
         "RouteTableId": { "Ref": "PrivateRouteTable2" },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": { "Ref": "NATGateway2" }
+        "NatGatewayId": { "Ref": "NATGateway1" }
       }
     },
 
