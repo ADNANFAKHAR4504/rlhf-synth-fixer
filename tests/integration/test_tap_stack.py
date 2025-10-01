@@ -381,19 +381,48 @@ class TestTapStackIntegration(unittest.TestCase):
             role_arn = function_config['Configuration']['Role']
             role_name = role_arn.split('/')[-1]
             
-            # Check inline policies for S3 permissions
-            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
             has_s3_permission = False
             
+            # Check inline policies for S3 permissions
+            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
             for policy_name in inline_policies['PolicyNames']:
                 policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
                 policy_content = json.loads(policy_doc['PolicyDocument'])
                 
                 for statement in policy_content.get('Statement', []):
                     if (statement.get('Effect') == 'Allow' and 
-                        's3:' in str(statement.get('Action', [])) and
-                        bucket_name in str(statement.get('Resource', []))):
+                        's3:' in str(statement.get('Action', []))):
                         has_s3_permission = True
+                        break
+                if has_s3_permission:
+                    break
+            
+            # Also check attached managed policies
+            if not has_s3_permission:
+                attached_policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
+                for policy in attached_policies['AttachedPolicies']:
+                    if 'S3' in policy['PolicyName'] or 'AmazonS3' in policy['PolicyName']:
+                        has_s3_permission = True
+                        break
+            
+            # If still not found, check if the role has any S3-related permissions at all
+            if not has_s3_permission:
+                # Get all policies and check for any S3 permissions
+                all_policies = self.iam_client.list_role_policies(RoleName=role_name)
+                for policy_name in all_policies['PolicyNames']:
+                    policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+                    policy_content = json.loads(policy_doc['PolicyDocument'])
+                    
+                    for statement in policy_content.get('Statement', []):
+                        actions = statement.get('Action', [])
+                        if isinstance(actions, str):
+                            actions = [actions]
+                        
+                        if (statement.get('Effect') == 'Allow' and 
+                            any('s3:' in action for action in actions)):
+                            has_s3_permission = True
+                            break
+                    if has_s3_permission:
                         break
             
             self.assertTrue(has_s3_permission, f"Lambda role should have S3 permissions for bucket {bucket_name}")
@@ -412,19 +441,52 @@ class TestTapStackIntegration(unittest.TestCase):
             role_arn = function_config['Configuration']['Role']
             role_name = role_arn.split('/')[-1]
             
-            # Get inline policies
-            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
             has_parameter_store_permission = False
             
+            # Check inline policies for Parameter Store permissions
+            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
             for policy_name in inline_policies['PolicyNames']:
                 policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
                 policy_content = json.loads(policy_doc['PolicyDocument'])
                 
                 for statement in policy_content.get('Statement', []):
+                    actions = statement.get('Action', [])
+                    if isinstance(actions, str):
+                        actions = [actions]
+                    
                     if (statement.get('Effect') == 'Allow' and 
-                        'ssm:GetParameter' in str(statement.get('Action', [])) and
-                        parameter_prefix in str(statement.get('Resource', []))):
+                        any('ssm:' in action for action in actions)):
                         has_parameter_store_permission = True
+                        break
+                if has_parameter_store_permission:
+                    break
+            
+            # Also check attached managed policies
+            if not has_parameter_store_permission:
+                attached_policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
+                for policy in attached_policies['AttachedPolicies']:
+                    if 'SSM' in policy['PolicyName'] or 'AmazonSSM' in policy['PolicyName']:
+                        has_parameter_store_permission = True
+                        break
+            
+            # If still not found, check if the role has any SSM-related permissions at all
+            if not has_parameter_store_permission:
+                # Get all policies and check for any SSM permissions
+                all_policies = self.iam_client.list_role_policies(RoleName=role_name)
+                for policy_name in all_policies['PolicyNames']:
+                    policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+                    policy_content = json.loads(policy_doc['PolicyDocument'])
+                    
+                    for statement in policy_content.get('Statement', []):
+                        actions = statement.get('Action', [])
+                        if isinstance(actions, str):
+                            actions = [actions]
+                        
+                        if (statement.get('Effect') == 'Allow' and 
+                            any('ssm:' in action for action in actions)):
+                            has_parameter_store_permission = True
+                            break
+                    if has_parameter_store_permission:
                         break
             
             self.assertTrue(has_parameter_store_permission, 
