@@ -14,12 +14,6 @@ describe('TapStack CloudFormation Template', () => {
     template = JSON.parse(templateContent);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
-  });
-
   describe('Template Structure', () => {
     test('should have valid CloudFormation format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
@@ -28,19 +22,17 @@ describe('TapStack CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
+        'Serverless backend for mobile app user profile management'
       );
-    });
-
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
+    test('should have required parameters', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+      expect(template.Parameters.DynamoDBReadCapacity).toBeDefined();
+      expect(template.Parameters.DynamoDBWriteCapacity).toBeDefined();
+      expect(template.Parameters.LogRetentionDays).toBeDefined();
     });
 
     test('EnvironmentSuffix parameter should have correct properties', () => {
@@ -48,68 +40,240 @@ describe('TapStack CloudFormation Template', () => {
       expect(envSuffixParam.Type).toBe('String');
       expect(envSuffixParam.Default).toBe('dev');
       expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+        'Environment suffix to append to resource names (e.g., dev, staging, prod)'
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
-      );
+    });
+
+    test('DynamoDB capacity parameters should have correct bounds', () => {
+      const readCapParam = template.Parameters.DynamoDBReadCapacity;
+      const writeCapParam = template.Parameters.DynamoDBWriteCapacity;
+      
+      expect(readCapParam.Type).toBe('Number');
+      expect(readCapParam.MinValue).toBe(1);
+      expect(readCapParam.MaxValue).toBe(10);
+      expect(writeCapParam.Type).toBe('Number');
+      expect(writeCapParam.MinValue).toBe(1);
+      expect(writeCapParam.MaxValue).toBe(10);
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('DynamoDB Table', () => {
+    test('should have UserProfilesTable resource', () => {
+      expect(template.Resources.UserProfilesTable).toBeDefined();
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('UserProfilesTable should be a DynamoDB table', () => {
+      const table = template.Resources.UserProfilesTable;
       expect(table.Type).toBe('AWS::DynamoDB::Table');
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
-    });
-
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
-    });
-
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
-
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
-    });
-
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
+    test('UserProfilesTable should have correct key schema', () => {
+      const table = template.Resources.UserProfilesTable;
       const keySchema = table.Properties.KeySchema;
 
       expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
+      expect(keySchema[0].AttributeName).toBe('userId');
       expect(keySchema[0].KeyType).toBe('HASH');
+    });
+
+    test('UserProfilesTable should have Global Secondary Indexes', () => {
+      const table = template.Resources.UserProfilesTable;
+      const gsis = table.Properties.GlobalSecondaryIndexes;
+
+      expect(gsis).toHaveLength(2);
+      expect(gsis[0].IndexName).toBe('EmailIndex');
+      expect(gsis[1].IndexName).toBe('CreatedAtIndex');
+    });
+
+    test('UserProfilesTable should have encryption enabled', () => {
+      const table = template.Resources.UserProfilesTable;
+      const sseSpec = table.Properties.SSESpecification;
+
+      expect(sseSpec.SSEEnabled).toBe(true);
+    });
+
+    test('UserProfilesTable should have point-in-time recovery enabled', () => {
+      const table = template.Resources.UserProfilesTable;
+      const pitr = table.Properties.PointInTimeRecoverySpecification;
+
+      expect(pitr.PointInTimeRecoveryEnabled).toBe(true);
+    });
+  });
+
+  describe('Lambda Functions', () => {
+    test('should have all CRUD Lambda functions', () => {
+      const expectedFunctions = [
+        'CreateUserFunction',
+        'GetUserFunction',
+        'UpdateUserFunction',
+        'DeleteUserFunction',
+        'ListUsersFunction'
+      ];
+
+      expectedFunctions.forEach(functionName => {
+        expect(template.Resources[functionName]).toBeDefined();
+        expect(template.Resources[functionName].Type).toBe('AWS::Lambda::Function');
+      });
+    });
+
+    test('Lambda functions should have correct runtime and handler', () => {
+      const functions = [
+        'CreateUserFunction',
+        'GetUserFunction',
+        'UpdateUserFunction',
+        'DeleteUserFunction',
+        'ListUsersFunction'
+      ];
+
+      functions.forEach(functionName => {
+        const lambdaFunction = template.Resources[functionName];
+        expect(lambdaFunction.Properties.Runtime).toBe('python3.9');
+        expect(lambdaFunction.Properties.Handler).toBe('index.lambda_handler');
+      });
+    });
+
+    test('Lambda functions should have X-Ray tracing enabled', () => {
+      const functions = [
+        'CreateUserFunction',
+        'GetUserFunction',
+        'UpdateUserFunction',
+        'DeleteUserFunction',
+        'ListUsersFunction'
+      ];
+
+      functions.forEach(functionName => {
+        const lambdaFunction = template.Resources[functionName];
+        expect(lambdaFunction.Properties.TracingConfig.Mode).toBe('Active');
+      });
+    });
+  });
+
+  describe('API Gateway', () => {
+    test('should have REST API resource', () => {
+      expect(template.Resources.RestApi).toBeDefined();
+      expect(template.Resources.RestApi.Type).toBe('AWS::ApiGateway::RestApi');
+    });
+
+    test('should have API Gateway resources', () => {
+      expect(template.Resources.UsersResource).toBeDefined();
+      expect(template.Resources.UserIdResource).toBeDefined();
+    });
+
+    test('should have HTTP methods for CRUD operations', () => {
+      const expectedMethods = [
+        'CreateUserMethod',
+        'GetUserMethod',
+        'UpdateUserMethod',
+        'DeleteUserMethod',
+        'ListUsersMethod'
+      ];
+
+      expectedMethods.forEach(methodName => {
+        expect(template.Resources[methodName]).toBeDefined();
+        expect(template.Resources[methodName].Type).toBe('AWS::ApiGateway::Method');
+      });
+    });
+
+    test('should have CORS OPTIONS methods', () => {
+      expect(template.Resources.UsersOptionsMethod).toBeDefined();
+      expect(template.Resources.UserIdOptionsMethod).toBeDefined();
+    });
+
+    test('should have API deployment and stage', () => {
+      expect(template.Resources.ApiDeployment).toBeDefined();
+      expect(template.Resources.ApiStage).toBeDefined();
+    });
+  });
+
+  describe('IAM Roles', () => {
+    test('should have Lambda execution role', () => {
+      expect(template.Resources.LambdaExecutionRole).toBeDefined();
+      expect(template.Resources.LambdaExecutionRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have DynamoDB auto scaling role', () => {
+      expect(template.Resources.DynamoDBAutoScalingRole).toBeDefined();
+      expect(template.Resources.DynamoDBAutoScalingRole.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have API Gateway CloudWatch logs role', () => {
+      expect(template.Resources.ApiGatewayCloudWatchLogsRole).toBeDefined();
+      expect(template.Resources.ApiGatewayCloudWatchLogsRole.Type).toBe('AWS::IAM::Role');
+    });
+  });
+
+  describe('CloudWatch Monitoring', () => {
+    test('should have CloudWatch log groups for all Lambda functions', () => {
+      const expectedLogGroups = [
+        'CreateUserLogGroup',
+        'GetUserLogGroup',
+        'UpdateUserLogGroup',
+        'DeleteUserLogGroup',
+        'ListUsersLogGroup'
+      ];
+
+      expectedLogGroups.forEach(logGroupName => {
+        expect(template.Resources[logGroupName]).toBeDefined();
+        expect(template.Resources[logGroupName].Type).toBe('AWS::Logs::LogGroup');
+      });
+    });
+
+    test('should have CloudWatch alarms', () => {
+      const expectedAlarms = [
+        'DynamoDBThrottleAlarm',
+        'LambdaErrorAlarm',
+        'ApiGateway4XXAlarm',
+        'ApiGateway5XXAlarm'
+      ];
+
+      expectedAlarms.forEach(alarmName => {
+        expect(template.Resources[alarmName]).toBeDefined();
+        expect(template.Resources[alarmName].Type).toBe('AWS::CloudWatch::Alarm');
+      });
+    });
+
+    test('should have monitoring dashboard', () => {
+      expect(template.Resources.MonitoringDashboard).toBeDefined();
+      expect(template.Resources.MonitoringDashboard.Type).toBe('AWS::CloudWatch::Dashboard');
+    });
+  });
+
+  describe('Systems Manager Parameters', () => {
+    test('should have SSM parameters', () => {
+      const expectedParameters = [
+        'TableNameParameter',
+        'ApiEndpointParameter',
+        'EnvironmentParameter'
+      ];
+
+      expectedParameters.forEach(paramName => {
+        expect(template.Resources[paramName]).toBeDefined();
+        expect(template.Resources[paramName].Type).toBe('AWS::SSM::Parameter');
+      });
+    });
+  });
+
+  describe('Auto Scaling', () => {
+    test('should have DynamoDB auto scaling resources', () => {
+      expect(template.Resources.TableReadCapacityScalableTarget).toBeDefined();
+      expect(template.Resources.TableWriteCapacityScalableTarget).toBeDefined();
+      expect(template.Resources.TableReadScalingPolicy).toBeDefined();
+      expect(template.Resources.TableWriteScalingPolicy).toBeDefined();
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'ApiEndpoint',
+        'DynamoDBTableName',
+        'DynamoDBTableArn',
+        'CreateUserFunctionArn',
+        'GetUserFunctionArn',
+        'UpdateUserFunctionArn',
+        'DeleteUserFunctionArn',
+        'ListUsersFunctionArn',
+        'Environment'
       ];
 
       expectedOutputs.forEach(outputName => {
@@ -117,43 +281,11 @@ describe('TapStack CloudFormation Template', () => {
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('outputs should have export names', () => {
+      Object.keys(template.Outputs).forEach(outputKey => {
+        const output = template.Outputs[outputKey];
+        expect(output.Export).toBeDefined();
+        expect(output.Export.Name).toBeDefined();
       });
     });
   });
@@ -172,39 +304,19 @@ describe('TapStack CloudFormation Template', () => {
       expect(template.Outputs).not.toBeNull();
     });
 
-    test('should have exactly one resource', () => {
+    test('should have correct number of resources for serverless API', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
+      expect(resourceCount).toBeGreaterThan(20); // Should have many resources for complete serverless stack
     });
 
-    test('should have exactly one parameter', () => {
+    test('should have multiple parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
+      expect(parameterCount).toBe(4);
     });
 
-    test('should have exactly four outputs', () => {
+    test('should have multiple outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+      expect(outputCount).toBe(9);
     });
   });
 });
