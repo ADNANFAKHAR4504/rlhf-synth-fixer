@@ -1,38 +1,55 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+} from '@aws-sdk/client-cloudformation';
 import fs from 'fs';
+
+// Configuration - These are coming from cfn-outputs after cdk deploy
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment suffix from environment variable (set by CI/CD pipeline)
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'us-east-1';
+const cfnClient = new CloudFormationClient({ region });
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  describe('Write Integration TESTS', () => {
-    test('Placeholder test', async () => {
-      // TEMP: Log AWS credentials for GitHub Actions debugging
-      const accessKey = process.env.AWS_ACCESS_KEY_ID;
-      const secretKey = process.env.AWS_SECRET_ACCESS_KEY;
+describe('TapStack Integration Tests', () => {
+  describe('Stack Deployment Validation', () => {
+    test('all required outputs are present', () => {
+      expect(outputs.VPCId).toBeDefined();
+      expect(outputs.EC2InstanceId).toBeDefined();
+      expect(outputs.InstanceConnectEndpointId).toBeDefined();
+      expect(outputs.RDSEndpoint).toBeDefined();
+      expect(outputs.DatabaseSecretArn).toBeDefined();
+    });
 
-      if (accessKey) {
-        const mid = Math.floor(accessKey.length / 2);
-        const part1 = accessKey.substring(0, mid);
-        const part2 = accessKey.substring(mid);
-        console.log('AWS_ACCESS_KEY_ID part1:', part1, 'part2:', part2);
-      } else {
-        console.log('AWS_ACCESS_KEY_ID is not set');
-      }
+    test('output values have correct formats', () => {
+      expect(outputs.VPCId).toMatch(/^vpc-/);
+      expect(outputs.EC2InstanceId).toMatch(/^i-/);
+      expect(outputs.InstanceConnectEndpointId).toMatch(/^eice-/);
+      expect(outputs.RDSEndpoint).toContain('rds.amazonaws.com');
+      expect(outputs.DatabaseSecretArn).toMatch(/^arn:aws:secretsmanager:/);
+    });
 
-      if (secretKey) {
-        const mid = Math.floor(secretKey.length / 2);
-        const part1 = secretKey.substring(0, mid);
-        const part2 = secretKey.substring(mid);
-        console.log('AWS_SECRET_ACCESS_KEY part1:', part1, 'part2:', part2);
-      } else {
-        console.log('AWS_SECRET_ACCESS_KEY is not set');
-      }
+    test('WebAppStack was deployed successfully', async () => {
+      const allOutputs = JSON.parse(
+        fs.readFileSync('cfn-outputs/all-outputs.json', 'utf8')
+      );
 
-      expect(false).toBe(true);
+      const stackNames = Object.keys(allOutputs);
+      expect(stackNames.length).toBeGreaterThan(0);
+
+      // Get the first stack (should be TapStack or WebAppStack)
+      const stackName = stackNames[0];
+      const command = new DescribeStacksCommand({
+        StackName: stackName,
+      });
+      const response = await cfnClient.send(command);
+
+      expect(response.Stacks).toBeDefined();
+      expect(response.Stacks!.length).toBe(1);
+      expect(response.Stacks![0].StackStatus).toMatch(
+        /CREATE_COMPLETE|UPDATE_COMPLETE/
+      );
     });
   });
 });
