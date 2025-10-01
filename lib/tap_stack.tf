@@ -747,7 +747,7 @@ resource "aws_acm_certificate_validation" "main" {
 # ALB Listener for HTTPS
 # HTTPS Listener for ALB using the dev certificate
 resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.alb.arn
+  load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
 
