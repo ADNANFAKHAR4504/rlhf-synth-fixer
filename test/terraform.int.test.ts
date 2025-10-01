@@ -1,5 +1,5 @@
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from "@aws-sdk/client-cloudwatch-logs";
-import { DescribeInstancesCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
+import { CloudWatchLogsClient, DescribeLogGroupsCommand, DescribeLogStreamsCommand } from "@aws-sdk/client-cloudwatch-logs";
+import { DescribeInstancesCommand, DescribeNatGatewaysCommand, DescribeSecurityGroupsCommand, DescribeSubnetsCommand, DescribeVolumesCommand, DescribeVpcsCommand, EC2Client } from "@aws-sdk/client-ec2";
 import { DescribeDBInstancesCommand, RDSClient } from "@aws-sdk/client-rds";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { GetCallerIdentityCommand, STSClient } from "@aws-sdk/client-sts";
@@ -456,7 +456,7 @@ describe("Terraform AWS Infrastructure Integration", () => {
           { Name: "nat-gateway-id", Values: [natGatewayId] }
         ]
       };
-      natGateways = await ec2.send(new (await import("@aws-sdk/client-ec2")).DescribeNatGatewaysCommand(describeNatGatewaysCommand));
+      natGateways = await ec2.send(new DescribeNatGatewaysCommand(describeNatGatewaysCommand));
     } catch (err) {
       console.error("Error describing NAT Gateway:", err);
       throw err;
@@ -480,7 +480,7 @@ describe("Terraform AWS Infrastructure Integration", () => {
         logGroupName: flowLogGroupName,
         limit: 5
       };
-      logStreams = await logs.send(new (await import("@aws-sdk/client-cloudwatch-logs")).DescribeLogStreamsCommand(describeLogStreamsCommand));
+      logStreams = await logs.send(new DescribeLogStreamsCommand(describeLogStreamsCommand));
     } catch (err) {
       console.error("Error describing log streams:", err);
       throw err;
@@ -560,7 +560,7 @@ describe("Terraform AWS Infrastructure Integration", () => {
     const volumeIds = instance?.BlockDeviceMappings?.map(bdm => bdm.Ebs?.VolumeId).filter(Boolean);
 
     if (volumeIds && volumeIds.length > 0) {
-      const volumes = await ec2.send(new (await import("@aws-sdk/client-ec2")).DescribeVolumesCommand({
+      const volumes = await ec2.send(new DescribeVolumesCommand({
         VolumeIds: volumeIds as string[]
       }));
       volumes.Volumes?.forEach(volume => {
