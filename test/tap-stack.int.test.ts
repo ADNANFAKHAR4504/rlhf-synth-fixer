@@ -616,7 +616,7 @@ describe('TapStack Integration Tests', () => {
         }
 
         expect(createResponse.status).toBe(201);
-        const createResult = await createResponse.json();
+        const createResult = await createResponse.json() as any;
 
         expect(createResult.message).toBe('Task created successfully');
         expect(createResult.task).toBeDefined();
@@ -636,7 +636,7 @@ describe('TapStack Integration Tests', () => {
         const getResponse = await fetch(`${apiUrl}/tasks/${taskId}`);
 
         expect(getResponse.status).toBe(200);
-        const getResult = await getResponse.json();
+        const getResult = await getResponse.json() as any;
 
         expect(getResult.task).toBeDefined();
         expect(getResult.task.id).toBe(taskId);
@@ -649,7 +649,7 @@ describe('TapStack Integration Tests', () => {
         const listResponse = await fetch(`${apiUrl}/tasks`);
 
         expect(listResponse.status).toBe(200);
-        const listResult = await listResponse.json();
+        const listResult = await listResponse.json() as any;
 
         expect(listResult.tasks).toBeDefined();
         expect(Array.isArray(listResult.tasks)).toBe(true);
@@ -667,7 +667,7 @@ describe('TapStack Integration Tests', () => {
         const notFoundResponse = await fetch(`${apiUrl}/tasks/non-existent-id`);
 
         expect(notFoundResponse.status).toBe(404);
-        const notFoundResult = await notFoundResponse.json();
+        const notFoundResult = await notFoundResponse.json() as any;
         expect(notFoundResult.message).toBe('Task not found');
         console.log('✅ Error handling works correctly');
 
