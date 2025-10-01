@@ -1,4 +1,4 @@
-# Failures
+# Model Failures
 
 - **Region enforcement missing**  
   `aws.Provider("aws", region="us-east-1")` is created but **not passed** to resources — deployment could target the default provider/region.
