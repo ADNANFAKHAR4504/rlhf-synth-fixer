@@ -18,6 +18,13 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
+    // Region guard - enforce eu-central-1 deployment
+    if (this.region && this.region !== 'eu-central-1') {
+      throw new Error(
+        `Stack must be deployed in eu-central-1. Current region: ${this.region}`
+      );
+    }
+
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // 'VPC' with public and private subnets across 2 AZs
