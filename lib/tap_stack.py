@@ -130,7 +130,23 @@ class TapStack(Stack):
                             "kms:Encrypt",
                             "kms:Decrypt",
                             "kms:CreateGrant",
-                            "kms:DescribeKey"
+                            "kms:DescribeKey",
+                            "kms:GenerateDataKey"
+                        ],
+                        resources=["*"]
+                    ),
+                    iam.PolicyStatement(
+                        sid="Allow CloudTrail Service",
+                        effect=iam.Effect.ALLOW,
+                        principals=[
+                            iam.ServicePrincipal("cloudtrail.amazonaws.com")
+                        ],
+                        actions=[
+                            "kms:Encrypt",
+                            "kms:Decrypt",
+                            "kms:CreateGrant",
+                            "kms:DescribeKey",
+                            "kms:GenerateDataKey"
                         ],
                         resources=["*"]
                     )
