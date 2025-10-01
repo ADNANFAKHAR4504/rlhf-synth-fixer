@@ -180,7 +180,7 @@ export class TapStack extends cdk.Stack {
     ec2SecurityGroup.addIngressRule(
       albSecurityGroup,
       ec2.Port.tcp(80),
-      'Allow ALB -> EC2'
+      'Allow ALB to EC2'
     );
 
     // ALB
