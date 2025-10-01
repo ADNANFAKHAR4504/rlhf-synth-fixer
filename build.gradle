@@ -164,8 +164,9 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:codepipeline'
     integrationTestImplementation 'software.amazon.awssdk:codebuild'
     integrationTestImplementation 'software.amazon.awssdk:codedeploy'
+    integrationTestImplementation 'software.amazon.awssdk:codecommit'
+    integrationTestImplementation 'software.amazon.awssdk:cloudwatchevents'
     integrationTestImplementation 'software.amazon.awssdk:dynamodb'
-    integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
 
     // JSON parsing for integration tests
     integrationTestImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
