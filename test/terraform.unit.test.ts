@@ -104,7 +104,7 @@ describe('Data stores and encryption', () => {
     expect(tf).toMatch(/storage_encrypted\s*=\s*true/);
     expect(tf).toMatch(/publicly_accessible\s*=\s*false/);
     expect(tf).toMatch(/backup_retention_period\s*=\s*7/);
-    expect(tf).toMatch(/resource\s+"aws_db_parameter_group"[\s\S]*?require_secure_transport\s*"?=\s*"?ON"?/);
+    expect(tf).toMatch(/parameter\s*\{[\s\S]*?name\s*=\s*"require_secure_transport"[\s\S]*?value\s*=\s*"ON"/);
   });
 });
 
