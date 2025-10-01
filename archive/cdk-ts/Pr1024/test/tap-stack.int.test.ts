@@ -1,4 +1,4 @@
-﻿// Configuration - These are coming from cfn-outputs after cdk deploy
+// Configuration - These are coming from cfn-outputs after cdk deploy
 import {
   DeleteItemCommand,
   DynamoDBClient,

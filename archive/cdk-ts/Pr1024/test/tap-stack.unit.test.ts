@@ -1,4 +1,4 @@
-﻿import * as cdk from 'aws-cdk-lib';
+import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
