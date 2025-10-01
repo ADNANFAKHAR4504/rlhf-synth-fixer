@@ -247,6 +247,68 @@ describe('CICDPipelineStack Unit Tests', () => {
     }).toThrow(); // AWS CDK validates bucket name length and will throw
   });
 
+  test('Stack supports CodeStar connection for GitHub integration', () => {
+    const codeStarProps = {
+      ...defaultProps,
+      codeStarConnectionArn: 'arn:aws:codestar-connections:us-east-1:123456789012:connection/12345678-1234-1234-1234-123456789012',
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+    };
+
+    stack = new CICDPipelineStack(app, 'TestStackCodeStar', codeStarProps);
+    template = Template.fromStack(stack);
+
+    // Check that pipeline uses CodeStar connection instead of GitHub token
+    const pipeline = template.findResources('AWS::CodePipeline::Pipeline');
+    const pipelineActions = Object.values(pipeline)[0].Properties.Stages[0].Actions;
+    const sourceAction = pipelineActions[0];
+
+    expect(sourceAction.ActionTypeId.Provider).toBe('CodeStarSourceConnection');
+    expect(sourceAction.Configuration.ConnectionArn).toBe(codeStarProps.codeStarConnectionArn);
+  });
+
+  test('Stack creates proper outputs', () => {
+    stack = new CICDPipelineStack(app, 'TestStack', defaultProps);
+    template = Template.fromStack(stack);
+
+    // Check that all expected outputs are present
+    const outputs = template.findOutputs('*');
+    expect(outputs.PipelineName).toBeDefined();
+    expect(outputs.ArtifactsBucketName).toBeDefined();
+    expect(outputs.NotificationTopicArn).toBeDefined();
+    expect(outputs.GitHubTokenSecretName).toBeDefined();
+    expect(outputs.GitHubSetupInstructions).toBeDefined();
+  });
+
+  test('Stack handles optional props with context values', () => {
+    // Test with context values
+    app.node.setContext('environment', 'staging');
+    app.node.setContext('projectName', 'context-project');
+    app.node.setContext('costCenter', 'context-cost-center');
+
+    const minimalProps = {
+      githubOwner: 'test-owner',
+      githubRepo: 'test-repo',
+      githubBranch: 'main',
+      notificationEmail: 'test@example.com',
+      deploymentRegions: ['us-east-1'],
+      env: {
+        account: '123456789012',
+        region: 'us-east-1',
+      },
+    };
+
+    stack = new CICDPipelineStack(app, 'TestStackContext', minimalProps);
+    template = Template.fromStack(stack);
+
+    // Verify that resources use context values
+    const resources = template.findResources('AWS::S3::Bucket');
+    const bucketNames = Object.values(resources).map((r: any) => r.Properties?.BucketName).filter(Boolean);
+    expect(bucketNames.some(name => name.includes('context-project'))).toBeTruthy();
+  });
+
   test('Cost optimization features are enabled', () => {
     stack = new CICDPipelineStack(app, 'TestStack', defaultProps);
     template = Template.fromStack(stack);
