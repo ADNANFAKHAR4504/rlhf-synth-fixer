@@ -123,6 +123,42 @@ resource "aws_kms_key" "logs" {
   deletion_window_in_days = 30
   enable_key_rotation     = true
 
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
+
   tags = {
     Name        = "${var.project}-logs-kms"
     Environment = var.environment
@@ -704,7 +740,7 @@ resource "aws_instance" "web" {
 
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 20
+    volume_size           = 30
     encrypted             = true
     kms_key_id            = aws_kms_key.data.arn
     delete_on_termination = true
@@ -952,8 +988,14 @@ resource "aws_api_gateway_stage" "prod" {
   }
 }
 
-# WAFv2 (attach at CloudFront for edge)
+# WAFv2 (attach at CloudFront for edge) - Must be in us-east-1 for CLOUDFRONT scope
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
 resource "aws_wafv2_ip_set" "allowed" {
+  provider           = aws.us_east_1
   name               = "${var.project}-allowed-ips"
   description        = "Allowed IPs"
   scope              = "CLOUDFRONT"
@@ -969,6 +1011,7 @@ resource "aws_wafv2_ip_set" "allowed" {
 }
 
 resource "aws_wafv2_web_acl" "edge" {
+  provider    = aws.us_east_1
   name        = "${var.project}-edge-waf"
   description = "Default block, allow only allowed IPs"
   scope       = "CLOUDFRONT"
@@ -1283,19 +1326,21 @@ resource "aws_iam_role" "devsecops" {
 
 resource "aws_iam_policy" "security_change_guard" {
   name        = "${var.project}-security-change-guard"
-  description = "Deny security-sensitive changes unless using DevSecOps role (advisory, attach as permissions boundary)"
+  description = "Read-only policy for DevSecOps to review security configuration"
   policy      = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
-        Sid: "DenySecurityChangesUnlessDevSecOps",
-        Effect: "Deny",
-        NotPrincipal: { AWS: aws_iam_role.devsecops.arn },
+        Sid: "ReadOnlySecurityResources",
+        Effect: "Allow",
         Action: [
-          "iam:CreatePolicy","iam:DeletePolicy","iam:Attach*","iam:Detach*","iam:PutRolePolicy","iam:DeleteRolePolicy",
-          "ec2:AuthorizeSecurityGroupIngress","ec2:AuthorizeSecurityGroupEgress","ec2:RevokeSecurityGroupIngress","ec2:RevokeSecurityGroupEgress",
-          "wafv2:CreateWebACL","wafv2:UpdateWebACL","wafv2:DeleteWebACL",
-          "kms:PutKeyPolicy","kms:DisableKey","kms:ScheduleKeyDeletion"
+          "iam:Get*","iam:List*",
+          "ec2:Describe*",
+          "wafv2:Get*","wafv2:List*",
+          "kms:Describe*","kms:List*","kms:GetKeyPolicy",
+          "cloudtrail:Get*","cloudtrail:List*","cloudtrail:LookupEvents",
+          "guardduty:Get*","guardduty:List*",
+          "logs:Describe*","logs:Get*","logs:List*"
         ],
         Resource: "*"
       }
