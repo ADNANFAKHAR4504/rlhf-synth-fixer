@@ -302,7 +302,7 @@ resource "aws_api_gateway_gateway_response" "cors" {
   response_parameters = {
     "gatewayresponse.header.Access-Control-Allow-Origin" = join(",", var.api_cors_origins)
     "gatewayresponse.header.Access-Control-Allow-Headers" = "*"
-    "gatewayresponse.header.Access-Control-Allow-Methods" = "POST,OPTIONS"
+    "gatewayresponse.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
 }
 
