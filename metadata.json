@@ -10,5 +10,25 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Subnets",
+    "Route Tables",
+    "Security Groups",
+    "RDS PostgreSQL",
+    "DB Subnet Group",
+    "KMS",
+    "S3",
+    "Application Load Balancer (ALB)",
+    "Target Group",
+    "WAF v2",
+    "CloudWatch Logs",
+    "VPC Flow Logs",
+    "IAM Roles",
+    "IAM Policies",
+    "EC2 Launch Template"
+  ]
 }
