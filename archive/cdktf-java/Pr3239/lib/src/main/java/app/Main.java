@@ -1,9 +1,8 @@
 package app;
 
-import software.constructs.Construct;
-
 import com.hashicorp.cdktf.App;
-import com.hashicorp.cdktf.TerraformStack;
+import com.hashicorp.cdktf.S3Backend;
+import com.hashicorp.cdktf.S3BackendConfig;
 
 
 public final class Main {
@@ -16,9 +15,10 @@ public final class Main {
     }
 
     public static void main(final String[] args) {
+
         final App app = new App();
 
-        MainStack stack = new MainStack(app, "cdktf-java");
+        MainStack stack = new MainStack(app, "serverless-demo-stack");
 
         /*
          * Configures S3 backend for remote Terraform state storage.
