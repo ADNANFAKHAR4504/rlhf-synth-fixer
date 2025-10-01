@@ -346,3 +346,115 @@ class TestTapStackIntegration(unittest.TestCase):
         function_name = self.deployment_outputs['lambda_function_name']
         response = self.lambda_client.get_function(FunctionName=function_name)
         self.assertEqual(response['Configuration']['TracingConfig']['Mode'], 'Active')
+
+    def test_api_gateway_lambda_cross_service_integration(self):
+        """Test API Gateway can trigger Lambda function (cross-service interaction)."""
+        api_id = self.deployment_outputs['api_gateway_id']
+        lambda_function_name = self.deployment_outputs['lambda_function_name']
+        
+        try:
+            # Test that API Gateway has permission to invoke Lambda
+            lambda_policy = self.lambda_client.get_policy(FunctionName=lambda_function_name)
+            policy_doc = json.loads(lambda_policy['Policy'])
+            
+            # Verify API Gateway has invoke permission
+            has_api_permission = False
+            for statement in policy_doc['Statement']:
+                if (statement.get('Principal', {}).get('Service') == 'apigateway.amazonaws.com' and
+                    statement.get('Action') == 'lambda:InvokeFunction'):
+                    has_api_permission = True
+                    break
+            
+            self.assertTrue(has_api_permission, "API Gateway should have permission to invoke Lambda")
+            
+        except Exception as e:
+            self.fail(f"Failed to verify API Gateway Lambda cross-service integration: {e}")
+
+    def test_lambda_s3_cross_service_integration(self):
+        """Test Lambda has access to S3 bucket for saving logs (cross-service interaction)."""
+        lambda_function_name = self.deployment_outputs['lambda_function_name']
+        bucket_name = self.deployment_outputs['s3_bucket_name']
+        
+        try:
+            # Test Lambda IAM role has S3 permissions
+            function_config = self.lambda_client.get_function(FunctionName=lambda_function_name)
+            role_arn = function_config['Configuration']['Role']
+            role_name = role_arn.split('/')[-1]
+            
+            # Check inline policies for S3 permissions
+            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
+            has_s3_permission = False
+            
+            for policy_name in inline_policies['PolicyNames']:
+                policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+                policy_content = json.loads(policy_doc['PolicyDocument'])
+                
+                for statement in policy_content.get('Statement', []):
+                    if (statement.get('Effect') == 'Allow' and 
+                        's3:' in str(statement.get('Action', [])) and
+                        bucket_name in str(statement.get('Resource', []))):
+                        has_s3_permission = True
+                        break
+            
+            self.assertTrue(has_s3_permission, f"Lambda role should have S3 permissions for bucket {bucket_name}")
+            
+        except Exception as e:
+            self.fail(f"Failed to verify Lambda S3 cross-service integration: {e}")
+
+    def test_lambda_parameter_store_cross_service_integration(self):
+        """Test Lambda can access Parameter Store for configuration (cross-service interaction)."""
+        lambda_function_name = self.deployment_outputs['lambda_function_name']
+        parameter_prefix = self.deployment_outputs['parameter_prefix']
+        
+        try:
+            # Test Lambda IAM role has Parameter Store permissions
+            function_config = self.lambda_client.get_function(FunctionName=lambda_function_name)
+            role_arn = function_config['Configuration']['Role']
+            role_name = role_arn.split('/')[-1]
+            
+            # Get inline policies
+            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
+            has_parameter_store_permission = False
+            
+            for policy_name in inline_policies['PolicyNames']:
+                policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
+                policy_content = json.loads(policy_doc['PolicyDocument'])
+                
+                for statement in policy_content.get('Statement', []):
+                    if (statement.get('Effect') == 'Allow' and 
+                        'ssm:GetParameter' in str(statement.get('Action', [])) and
+                        parameter_prefix in str(statement.get('Resource', []))):
+                        has_parameter_store_permission = True
+                        break
+            
+            self.assertTrue(has_parameter_store_permission, 
+                          f"Lambda role should have Parameter Store permissions for prefix {parameter_prefix}")
+            
+        except Exception as e:
+            self.fail(f"Failed to verify Lambda Parameter Store cross-service integration: {e}")
+
+    def test_iam_least_privilege_cross_service_access(self):
+        """Test IAM permissions follow least privilege for cross-service access."""
+        lambda_function_name = self.deployment_outputs['lambda_function_name']
+        
+        try:
+            # Get Lambda execution role
+            function_config = self.lambda_client.get_function(FunctionName=lambda_function_name)
+            role_arn = function_config['Configuration']['Role']
+            role_name = role_arn.split('/')[-1]
+            
+            # Get all policies attached to the role
+            attached_policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
+            
+            # Verify no overly broad permissions
+            has_broad_permissions = False
+            for policy in attached_policies['AttachedPolicies']:
+                if policy['PolicyName'] in ['AdministratorAccess', 'PowerUserAccess']:
+                    has_broad_permissions = True
+                    break
+            
+            self.assertFalse(has_broad_permissions, 
+                           "Lambda role should not have overly broad permissions")
+            
+        except Exception as e:
+            self.fail(f"Failed to verify IAM least privilege cross-service access: {e}")
