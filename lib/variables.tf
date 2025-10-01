@@ -1,6 +1,7 @@
 variable "resource_suffix" {
   description = "A suffix to append to all resource names for uniqueness"
   type        = string
+  default     = "dev"
 
   validation {
     condition     = length(var.resource_suffix) > 0
@@ -42,6 +43,7 @@ variable "ec2_instance_type" {
 variable "ssh_cidr_blocks" {
   description = "CIDR blocks allowed for SSH access (REQUIRED when use_ssm = false; prefer a single /32)"
   type        = list(string)
+  default     = []   # not required when use_ssm = true
 
   validation {
     condition     = var.use_ssm ? true : length(var.ssh_cidr_blocks) > 0
@@ -52,6 +54,7 @@ variable "ssh_cidr_blocks" {
 variable "ssh_public_key" {
   description = "SSH public key (single-line, contents of <key>.pub). Do NOT commit private keys."
   type        = string
+  default     = ""
 
   validation {
     condition     = var.use_ssm ? true : length(var.ssh_public_key) > 0
