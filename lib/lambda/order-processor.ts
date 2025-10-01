@@ -49,7 +49,12 @@ export const handler = async (
     const order: Order = JSON.parse(event.body);
 
     // Basic validation
-    if (!order.customerId || !order.restaurantId || !order.items || order.items.length === 0) {
+    if (
+      !order.customerId ||
+      !order.restaurantId ||
+      !order.items ||
+      order.items.length === 0
+    ) {
       return {
         statusCode: 400,
         headers: {
@@ -58,7 +63,8 @@ export const handler = async (
         },
         body: JSON.stringify({
           success: false,
-          message: 'Missing required fields: customerId, restaurantId, or items',
+          message:
+            'Missing required fields: customerId, restaurantId, or items',
         }),
       };
     }
@@ -111,7 +117,8 @@ export const handler = async (
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+        'Access-Control-Allow-Headers':
+          'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
       },
       body: JSON.stringify({
         success: true,
@@ -120,7 +127,8 @@ export const handler = async (
         message: 'Order created successfully',
       }),
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Error processing order', error);
 
     // Send to DLQ for retry if configured
@@ -131,12 +139,12 @@ export const handler = async (
             QueueUrl: process.env.DLQ_URL,
             MessageBody: JSON.stringify({
               originalEvent: event,
-              error: error.message,
+              error: errorMessage,
               timestamp: new Date().toISOString(),
             }),
           })
         );
-      } catch (dlqError: any) {
+      } catch (dlqError: unknown) {
         console.error('Failed to send to DLQ', dlqError);
       }
     }
@@ -150,7 +158,7 @@ export const handler = async (
       body: JSON.stringify({
         success: false,
         message: 'Failed to process order',
-        error: error.message,
+        error: errorMessage,
       }),
     };
   }

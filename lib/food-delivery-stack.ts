@@ -36,7 +36,7 @@ export class FoodDeliveryStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PROVISIONED,
       readCapacity: 5,
       writeCapacity: 5,
-      pointInTimeRecovery: true,
+      pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
@@ -118,7 +118,7 @@ export class FoodDeliveryStack extends cdk.Stack {
           multiplePayments: false,
         }),
         description: 'Feature flags for gradual rollouts',
-        type: ssm.ParameterType.SECURE_STRING,
+        // Note: Removed deprecated 'type' property - defaults to String parameter
       }
     );
 
