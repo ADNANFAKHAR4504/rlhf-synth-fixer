@@ -3,6 +3,7 @@ import {
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
+import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 
@@ -117,7 +118,7 @@ export class TapStack extends TerraformStack {
     const cloudtrail = new SecureCloudTrail(this, 'cloudtrail', {
       name: 'secure-tap-cloudtrail',
       s3BucketName: cloudtrailBucket.bucket.bucket,
-      kmsKeyId: kmsKey.id,
+      kmsKeyId: kmsKey.arn,
     });
 
     // Create Lambda IAM role
@@ -208,6 +209,24 @@ export class TapStack extends TerraformStack {
       ],
     });
 
+    // In the TapStack class, create a security group for Lambda
+    const lambdaSecurityGroup = new SecurityGroup(this, 'lambda-sg', {
+      vpcId: vpc.vpc.id,
+      description: 'Security group for Lambda functions',
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      tags: {
+        Name: 'secure-tap-lambda-sg',
+        Environment: 'Production',
+      },
+    });
+
     // Create Lambda function
     const lambda = new SecureLambdaFunction(this, 'lambda', {
       functionName: 'secure-tap-function',
@@ -218,7 +237,7 @@ export class TapStack extends TerraformStack {
       s3Key: 'lambda/function.zip',
       vpcConfig: {
         subnetIds: vpc.privateSubnets.map(subnet => subnet.id),
-        securityGroupIds: vpc.privateSubnets.map(subnet => subnet.vpcId),
+        securityGroupIds: [lambdaSecurityGroup.id],
       },
       environment: {
         DB_HOST: 'secure-tap-db.instance.endpoint',
@@ -228,6 +247,25 @@ export class TapStack extends TerraformStack {
       },
       timeout: 30,
       memorySize: 512,
+    });
+
+    // Create a security group for RDS
+    const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
+      vpcId: vpc.vpc.id,
+      description: 'Security group for RDS instances',
+      ingress: [
+        {
+          description: 'MySQL/Aurora from Lambda',
+          fromPort: 3306,
+          toPort: 3306,
+          protocol: 'tcp',
+          securityGroups: [lambdaSecurityGroup.id],
+        },
+      ],
+      tags: {
+        Name: 'secure-tap-rds-sg',
+        Environment: 'Production',
+      },
     });
 
     // Create RDS instance
@@ -241,8 +279,8 @@ export class TapStack extends TerraformStack {
       username: 'admin',
       password: 'dummy-password-to-be-replaced-with-parameter',
       subnetIds: vpc.databaseSubnets.map(subnet => subnet.id),
-      vpcSecurityGroupIds: ['sg-placeholder'], // Replace with actual SG
-      kmsKeyId: kmsKey.id,
+      vpcSecurityGroupIds: [rdsSecurityGroup.id], // Replace with actual SG
+      kmsKeyId: kmsKey.arn,
     });
 
     // Store database credentials in Parameter Store
@@ -260,12 +298,39 @@ export class TapStack extends TerraformStack {
       kmsKeyId: kmsKey.id,
     });
 
+    // Create an actual security group for the EC2 instance
+    const ec2SecurityGroup = new SecurityGroup(this, 'ec2-sg', {
+      vpcId: vpc.vpc.id,
+      description: 'Security group for EC2 instances',
+      ingress: [
+        {
+          description: 'SSH from VPC',
+          fromPort: 22,
+          toPort: 22,
+          protocol: 'tcp',
+          cidrBlocks: [vpc.vpc.cidrBlock],
+        },
+      ],
+      egress: [
+        {
+          fromPort: 0,
+          toPort: 0,
+          protocol: '-1',
+          cidrBlocks: ['0.0.0.0/0'],
+        },
+      ],
+      tags: {
+        Name: 'secure-tap-ec2-sg',
+        Environment: 'Production',
+      },
+    });
+
     // Create EC2 instance
     new SecureEc2Instance(this, 'ec2', {
       instanceType: 't3.micro',
-      amiId: 'ami-0c55b159cbfafe1f0', // Use a secure, hardened AMI
+      amiId: 'ami-0c02fb55956c7d316',
       subnetId: vpc.privateSubnets[0].id,
-      securityGroupIds: ['sg-placeholder'], // Replace with actual SG
+      securityGroupIds: [ec2SecurityGroup.id], // Use the actual SG created above
       iamInstanceProfile: ec2Role.role.name,
       userData: `
         #!/bin/bash
