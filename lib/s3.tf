@@ -108,27 +108,13 @@ resource "aws_s3_bucket_public_access_block" "app_data" {
   restrict_public_buckets = true
 }
 
-# Bucket policy for CloudFront logging
+# Bucket policy for ALB and CloudTrail logging
 resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Sid    = "AllowCloudFrontLogging"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.logs.arn}/cloudfront/*"
-        Condition = {
-          StringEquals = {
-            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-          }
-        }
-      },
       {
         Sid    = "AllowALBLogging"
         Effect = "Allow"
@@ -137,6 +123,34 @@ resource "aws_s3_bucket_policy" "logs" {
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs.arn}/alb/*"
+      },
+      {
+        Sid    = "AllowCloudTrailLogging"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.logs.arn}/cloudtrail/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Sid    = "AllowCloudTrailGetBucketAcl"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudtrail.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-${var.environment}-trail-${var.aws_region}"
+          }
+        }
       }
     ]
   })

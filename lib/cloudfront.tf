@@ -59,11 +59,6 @@ resource "aws_cloudfront_distribution" "main" {
     cloudfront_default_certificate = true
   }
 
-  logging_config {
-    include_cookies = false
-    bucket          = aws_s3_bucket.logs.bucket_domain_name
-    prefix          = "cloudfront/"
-  }
 
   web_acl_id = aws_wafv2_web_acl.cloudfront.arn
 

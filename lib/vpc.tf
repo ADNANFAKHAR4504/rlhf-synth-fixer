@@ -126,10 +126,20 @@ resource "aws_route_table_association" "database" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
+# CloudWatch Log Group for VPC Flow Logs
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  name              = "/aws/vpc/flowlogs/${var.project_name}-${var.environment}-${var.aws_region}"
+  retention_in_days = 30
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-vpc-flow-logs-${var.aws_region}"
+  }
+}
+
 # VPC Flow Logs
 resource "aws_flow_log" "main" {
   iam_role_arn    = aws_iam_role.vpc_flow_log.arn
-  log_destination = aws_s3_bucket.logs.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
   traffic_type    = "ALL"
   vpc_id          = aws_vpc.main.id
 
@@ -235,12 +245,6 @@ resource "aws_route" "main_to_peer" {
   vpc_peering_connection_id = aws_vpc_peering_connection.main.id
 }
 
-resource "aws_route" "peer_to_main" {
-  provider                  = aws.peer
-  route_table_id            = aws_route_table.peer.id
-  destination_cidr_block    = var.vpc_cidr
-  vpc_peering_connection_id = aws_vpc_peering_connection.main.id
-}
 
 # Data sources
 data "aws_availability_zones" "available" {

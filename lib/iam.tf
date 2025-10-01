@@ -191,9 +191,13 @@ resource "aws_iam_role_policy" "vpc_flow_log" {
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject"
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
         ]
-        Resource = "${aws_s3_bucket.logs.arn}/vpc-flow-logs/*"
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc/flowlogs/*"
       }
     ]
   })

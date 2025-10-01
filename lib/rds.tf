@@ -43,7 +43,7 @@ resource "aws_db_instance" "main" {
   identifier = "${var.project_name}-${var.environment}-db-${var.aws_region}"
 
   engine         = "mysql"
-  engine_version = "8.0.35"
+  engine_version = "8.0.40"
   instance_class = "db.t3.medium"
 
   allocated_storage = 100
