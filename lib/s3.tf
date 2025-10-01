@@ -1,9 +1,9 @@
 # S3 bucket for logs
 resource "aws_s3_bucket" "logs" {
-  bucket = "${var.project_name}-${var.environment}-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.project_name}-${var.environment}-logs-${var.aws_region}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-logs"
+    Name = "${var.project_name}-${var.environment}-logs-${var.aws_region}"
   }
 }
 
@@ -67,10 +67,10 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 
 # Application data bucket
 resource "aws_s3_bucket" "app_data" {
-  bucket = "${var.project_name}-${var.environment}-data-${data.aws_caller_identity.current.account_id}"
+  bucket = "${var.project_name}-${var.environment}-data-${var.aws_region}-${data.aws_caller_identity.current.account_id}"
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-data"
+    Name = "${var.project_name}-${var.environment}-data-${var.aws_region}"
   }
 }
 

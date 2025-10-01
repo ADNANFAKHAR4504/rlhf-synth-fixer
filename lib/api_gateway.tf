@@ -1,6 +1,6 @@
 # API Gateway REST API
 resource "aws_api_gateway_rest_api" "main" {
-  name        = "${var.project_name}-${var.environment}-api"
+  name        = "${var.project_name}-${var.environment}-api-${var.aws_region}"
   description = "API Gateway for ${var.project_name}"
 
   endpoint_configuration {
@@ -79,6 +79,6 @@ resource "aws_api_gateway_stage" "main" {
 
 # CloudWatch Log Group for API Gateway
 resource "aws_cloudwatch_log_group" "api_gateway" {
-  name              = "/aws/apigateway/${var.project_name}-${var.environment}"
+  name              = "/aws/apigateway/${var.project_name}-${var.environment}-${var.aws_region}"
   retention_in_days = 30
 }

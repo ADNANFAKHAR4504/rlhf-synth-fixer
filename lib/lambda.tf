@@ -1,6 +1,6 @@
 # Security Group for Lambda
 resource "aws_security_group" "lambda" {
-  name        = "${var.project_name}-${var.environment}-lambda-sg"
+  name        = "${var.project_name}-${var.environment}-lambda-sg-${var.aws_region}"
   description = "Security group for Lambda function"
   vpc_id      = aws_vpc.main.id
 
@@ -13,14 +13,14 @@ resource "aws_security_group" "lambda" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-lambda-sg"
+    Name = "${var.project_name}-${var.environment}-lambda-sg-${var.aws_region}"
   }
 }
 
 # Lambda function
 resource "aws_lambda_function" "api" {
   filename         = "lambda.zip"
-  function_name    = "${var.project_name}-${var.environment}-api"
+  function_name    = "${var.project_name}-${var.environment}-api-${var.aws_region}"
   role             = aws_iam_role.lambda_execution.arn
   handler          = "index.handler"
   source_code_hash = filebase64sha256("lambda.zip")
@@ -43,7 +43,7 @@ resource "aws_lambda_function" "api" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-api"
+    Name = "${var.project_name}-${var.environment}-api-${var.aws_region}"
   }
 }
 

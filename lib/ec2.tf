@@ -1,6 +1,6 @@
 # Security Group for ALB
 resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-${var.environment}-alb-sg"
+  name        = "${var.project_name}-${var.environment}-alb-sg-${var.aws_region}"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
 
@@ -29,13 +29,13 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-alb-sg"
+    Name = "${var.project_name}-${var.environment}-alb-sg-${var.aws_region}"
   }
 }
 
 # Security Group for EC2 instances
 resource "aws_security_group" "ec2" {
-  name        = "${var.project_name}-${var.environment}-ec2-sg"
+  name        = "${var.project_name}-${var.environment}-ec2-sg-${var.aws_region}"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
 
@@ -64,13 +64,13 @@ resource "aws_security_group" "ec2" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-ec2-sg"
+    Name = "${var.project_name}-${var.environment}-ec2-sg-${var.aws_region}"
   }
 }
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-${var.environment}-alb"
+  name               = "${var.project_name}-${var.environment}-alb-${var.aws_region}"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -87,13 +87,13 @@ resource "aws_lb" "main" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-alb"
+    Name = "${var.project_name}-${var.environment}-alb-${var.aws_region}"
   }
 }
 
 # Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "${var.project_name}-${var.environment}-tg"
+  name     = "${var.project_name}-${var.environment}-tg-${var.aws_region}"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -111,7 +111,7 @@ resource "aws_lb_target_group" "main" {
   deregistration_delay = 30
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-tg"
+    Name = "${var.project_name}-${var.environment}-tg-${var.aws_region}"
   }
 }
 
@@ -129,7 +129,7 @@ resource "aws_lb_listener" "main" {
 
 # Launch Template
 resource "aws_launch_template" "main" {
-  name_prefix   = "${var.project_name}-${var.environment}-"
+  name_prefix   = "${var.project_name}-${var.environment}-${var.aws_region}-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = var.instance_type
 
@@ -175,14 +175,14 @@ resource "aws_launch_template" "main" {
     resource_type = "instance"
 
     tags = {
-      Name = "${var.project_name}-${var.environment}-instance"
+      Name = "${var.project_name}-${var.environment}-instance-${var.aws_region}"
     }
   }
 }
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.project_name}-${var.environment}-asg"
+  name                      = "${var.project_name}-${var.environment}-asg-${var.aws_region}"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
@@ -207,14 +207,14 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-${var.environment}-asg"
+    value               = "${var.project_name}-${var.environment}-asg-${var.aws_region}"
     propagate_at_launch = true
   }
 }
 
 # Auto Scaling Policy
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${var.project_name}-${var.environment}-scale-up"
+  name                   = "${var.project_name}-${var.environment}-scale-up-${var.aws_region}"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -222,7 +222,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${var.project_name}-${var.environment}-scale-down"
+  name                   = "${var.project_name}-${var.environment}-scale-down-${var.aws_region}"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300

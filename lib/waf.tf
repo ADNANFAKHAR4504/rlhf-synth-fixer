@@ -1,6 +1,6 @@
 # WAF for ALB
 resource "aws_wafv2_web_acl" "alb" {
-  name  = "${var.project_name}-${var.environment}-alb-waf"
+  name  = "${var.project_name}-${var.environment}-alb-waf-${var.aws_region}"
   scope = "REGIONAL"
 
   default_action {
@@ -78,12 +78,12 @@ resource "aws_wafv2_web_acl" "alb" {
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-${var.environment}-alb-waf"
+    metric_name                = "${var.project_name}-${var.environment}-alb-waf-${var.aws_region}"
     sampled_requests_enabled   = true
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-alb-waf"
+    Name = "${var.project_name}-${var.environment}-alb-waf-${var.aws_region}"
   }
 }
 
@@ -96,7 +96,7 @@ resource "aws_wafv2_web_acl_association" "alb" {
 # WAF for CloudFront (Global)
 resource "aws_wafv2_web_acl" "cloudfront" {
   provider = aws
-  name     = "${var.project_name}-${var.environment}-cf-waf"
+  name     = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
   scope    = "CLOUDFRONT"
 
   default_action {
@@ -151,11 +151,11 @@ resource "aws_wafv2_web_acl" "cloudfront" {
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project_name}-${var.environment}-cf-waf"
+    metric_name                = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
     sampled_requests_enabled   = true
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-cf-waf"
+    Name = "${var.project_name}-${var.environment}-cf-waf-${var.aws_region}"
   }
 }

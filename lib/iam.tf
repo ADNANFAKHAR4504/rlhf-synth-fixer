@@ -1,6 +1,6 @@
 # EC2 instance role
 resource "aws_iam_role" "ec2_instance" {
-  name = "${var.project_name}-${var.environment}-ec2-role"
+  name = "${var.project_name}-${var.environment}-ec2-role-${var.aws_region}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -18,7 +18,7 @@ resource "aws_iam_role" "ec2_instance" {
 
 # EC2 instance policy - least privilege
 resource "aws_iam_role_policy" "ec2_instance" {
-  name = "${var.project_name}-${var.environment}-ec2-policy"
+  name = "${var.project_name}-${var.environment}-ec2-policy-${var.aws_region}"
   role = aws_iam_role.ec2_instance.id
 
   policy = jsonencode({
@@ -56,13 +56,13 @@ resource "aws_iam_role_policy" "ec2_instance" {
 
 # EC2 instance profile
 resource "aws_iam_instance_profile" "ec2" {
-  name = "${var.project_name}-${var.environment}-ec2-profile"
+  name = "${var.project_name}-${var.environment}-ec2-profile-${var.aws_region}"
   role = aws_iam_role.ec2_instance.name
 }
 
 # Lambda execution role
 resource "aws_iam_role" "lambda_execution" {
-  name = "${var.project_name}-${var.environment}-lambda-role"
+  name = "${var.project_name}-${var.environment}-lambda-role-${var.aws_region}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -80,7 +80,7 @@ resource "aws_iam_role" "lambda_execution" {
 
 # Lambda policy - VPC and RDS access
 resource "aws_iam_role_policy" "lambda_execution" {
-  name = "${var.project_name}-${var.environment}-lambda-policy"
+  name = "${var.project_name}-${var.environment}-lambda-policy-${var.aws_region}"
   role = aws_iam_role.lambda_execution.id
 
   policy = jsonencode({
@@ -110,7 +110,7 @@ resource "aws_iam_role_policy" "lambda_execution" {
 
 # API Gateway role
 resource "aws_iam_role" "api_gateway" {
-  name = "${var.project_name}-${var.environment}-api-gateway-role"
+  name = "${var.project_name}-${var.environment}-api-gateway-role-${var.aws_region}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -128,7 +128,7 @@ resource "aws_iam_role" "api_gateway" {
 
 # API Gateway policy
 resource "aws_iam_role_policy" "api_gateway" {
-  name = "${var.project_name}-${var.environment}-api-gateway-policy"
+  name = "${var.project_name}-${var.environment}-api-gateway-policy-${var.aws_region}"
   role = aws_iam_role.api_gateway.id
 
   policy = jsonencode({
@@ -156,7 +156,7 @@ resource "aws_iam_role_policy" "api_gateway" {
 
 # VPC Flow Logs role
 resource "aws_iam_role" "vpc_flow_log" {
-  name = "${var.project_name}-${var.environment}-vpc-flow-log-role"
+  name = "${var.project_name}-${var.environment}-vpc-flow-log-role-${var.aws_region}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -174,7 +174,7 @@ resource "aws_iam_role" "vpc_flow_log" {
 
 # VPC Flow Logs policy
 resource "aws_iam_role_policy" "vpc_flow_log" {
-  name = "${var.project_name}-${var.environment}-vpc-flow-log-policy"
+  name = "${var.project_name}-${var.environment}-vpc-flow-log-policy-${var.aws_region}"
   role = aws_iam_role.vpc_flow_log.id
 
   policy = jsonencode({

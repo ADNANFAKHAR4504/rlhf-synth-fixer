@@ -1,16 +1,16 @@
 # RDS Subnet Group
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-${var.environment}-db-subnet-group"
+  name       = "${var.project_name}-${var.environment}-db-subnet-group-${var.aws_region}"
   subnet_ids = aws_subnet.database[*].id
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-db-subnet-group"
+    Name = "${var.project_name}-${var.environment}-db-subnet-group-${var.aws_region}"
   }
 }
 
 # Security Group for RDS
 resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-${var.environment}-rds-sg"
+  name        = "${var.project_name}-${var.environment}-rds-sg-${var.aws_region}"
   description = "Security group for RDS instance"
   vpc_id      = aws_vpc.main.id
 
@@ -34,13 +34,13 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-rds-sg"
+    Name = "${var.project_name}-${var.environment}-rds-sg-${var.aws_region}"
   }
 }
 
 # RDS Instance
 resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-${var.environment}-db"
+  identifier = "${var.project_name}-${var.environment}-db-${var.aws_region}"
 
   engine         = "mysql"
   engine_version = "8.0.35"
@@ -71,6 +71,6 @@ resource "aws_db_instance" "main" {
   final_snapshot_identifier = "${var.project_name}-${var.environment}-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-db"
+    Name = "${var.project_name}-${var.environment}-db-${var.aws_region}"
   }
 }

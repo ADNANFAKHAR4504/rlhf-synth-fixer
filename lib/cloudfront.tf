@@ -1,6 +1,6 @@
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "main" {
-  name                              = "${var.project_name}-${var.environment}-oac"
+  name                              = "${var.project_name}-${var.environment}-oac-${var.aws_region}"
   description                       = "Origin Access Control for ${var.project_name}"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -68,16 +68,16 @@ resource "aws_cloudfront_distribution" "main" {
   web_acl_id = aws_wafv2_web_acl.cloudfront.arn
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-cf"
+    Name = "${var.project_name}-${var.environment}-cf-${var.aws_region}"
   }
 }
 
 # Shield Advanced association (requires Shield Advanced subscription)
 resource "aws_shield_protection" "cloudfront" {
-  name         = "${var.project_name}-${var.environment}-cf-shield"
+  name         = "${var.project_name}-${var.environment}-cf-shield-${var.aws_region}"
   resource_arn = aws_cloudfront_distribution.main.arn
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-cf-shield"
+    Name = "${var.project_name}-${var.environment}-cf-shield-${var.aws_region}"
   }
 }

@@ -5,7 +5,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-vpc"
+    Name = "${var.project_name}-${var.environment}-vpc-${var.aws_region}"
   }
 }
 
@@ -14,7 +14,7 @@ resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-igw"
+    Name = "${var.project_name}-${var.environment}-igw-${var.aws_region}"
   }
 }
 
@@ -27,7 +27,7 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-public-subnet-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-public-subnet-${count.index + 1}-${var.aws_region}"
     Type = "Public"
   }
 }
@@ -40,7 +40,7 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-private-subnet-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-private-subnet-${count.index + 1}-${var.aws_region}"
     Type = "Private"
   }
 }
@@ -53,7 +53,7 @@ resource "aws_subnet" "database" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-db-subnet-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-db-subnet-${count.index + 1}-${var.aws_region}"
     Type = "Database"
   }
 }
@@ -64,7 +64,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-nat-eip-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-nat-eip-${count.index + 1}-${var.aws_region}"
   }
 }
 
@@ -75,7 +75,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-nat-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-nat-${count.index + 1}-${var.aws_region}"
   }
 }
 
@@ -89,7 +89,7 @@ resource "aws_route_table" "public" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-public-rt"
+    Name = "${var.project_name}-${var.environment}-public-rt-${var.aws_region}"
   }
 }
 
@@ -103,7 +103,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-private-rt-${count.index + 1}"
+    Name = "${var.project_name}-${var.environment}-private-rt-${count.index + 1}-${var.aws_region}"
   }
 }
 
@@ -134,7 +134,7 @@ resource "aws_flow_log" "main" {
   vpc_id          = aws_vpc.main.id
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-flow-logs"
+    Name = "${var.project_name}-${var.environment}-flow-logs-${var.aws_region}"
   }
 }
 
@@ -147,8 +147,61 @@ resource "aws_vpc" "peer" {
   enable_dns_support   = true
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-peer-vpc"
+    Name = "${var.project_name}-${var.environment}-peer-vpc-${var.peer_region}"
   }
+}
+
+# Peer VPC Internet Gateway
+resource "aws_internet_gateway" "peer" {
+  provider = aws.peer
+  vpc_id   = aws_vpc.peer.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-peer-igw-${var.peer_region}"
+  }
+}
+
+# Peer VPC Subnets
+resource "aws_subnet" "peer" {
+  provider                = aws.peer
+  count                   = 3
+  vpc_id                  = aws_vpc.peer.id
+  cidr_block              = cidrsubnet(var.peer_vpc_cidr, 4, count.index)
+  availability_zone       = data.aws_availability_zones.peer.names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-peer-subnet-${count.index + 1}-${var.peer_region}"
+    Type = "Public"
+  }
+}
+
+# Peer VPC Route Table
+resource "aws_route_table" "peer" {
+  provider = aws.peer
+  vpc_id   = aws_vpc.peer.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.peer.id
+  }
+
+  route {
+    cidr_block                = var.vpc_cidr
+    vpc_peering_connection_id = aws_vpc_peering_connection.main.id
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-peer-rt-${var.peer_region}"
+  }
+}
+
+# Peer VPC Route Table Associations
+resource "aws_route_table_association" "peer" {
+  provider       = aws.peer
+  count          = 3
+  subnet_id      = aws_subnet.peer[count.index].id
+  route_table_id = aws_route_table.peer.id
 }
 
 # VPC Peering Connection
@@ -159,7 +212,7 @@ resource "aws_vpc_peering_connection" "main" {
   auto_accept = false
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-vpc-peering"
+    Name = "${var.project_name}-${var.environment}-vpc-peering-${var.aws_region}-to-${var.peer_region}"
   }
 }
 
@@ -170,7 +223,7 @@ resource "aws_vpc_peering_connection_accepter" "peer" {
   auto_accept               = true
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-vpc-peering-accepter"
+    Name = "${var.project_name}-${var.environment}-vpc-peering-accepter-${var.peer_region}"
   }
 }
 
@@ -184,7 +237,7 @@ resource "aws_route" "main_to_peer" {
 
 resource "aws_route" "peer_to_main" {
   provider                  = aws.peer
-  route_table_id            = aws_vpc.peer.main_route_table_id
+  route_table_id            = aws_route_table.peer.id
   destination_cidr_block    = var.vpc_cidr
   vpc_peering_connection_id = aws_vpc_peering_connection.main.id
 }
@@ -192,4 +245,9 @@ resource "aws_route" "peer_to_main" {
 # Data sources
 data "aws_availability_zones" "available" {
   state = "available"
+}
+
+data "aws_availability_zones" "peer" {
+  provider = aws.peer
+  state    = "available"
 }
