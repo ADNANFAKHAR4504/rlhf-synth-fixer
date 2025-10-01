@@ -116,10 +116,10 @@ describe('InfrastructureStack', () => {
 
     test('configures private subnets with correct CIDR blocks', () => {
       template.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '10.30.10.0/24',
+        CidrBlock: '10.30.0.0/24',
       });
       template.hasResourceProperties('AWS::EC2::Subnet', {
-        CidrBlock: '10.30.20.0/24',
+        CidrBlock: '10.30.1.0/24',
       });
     });
 
