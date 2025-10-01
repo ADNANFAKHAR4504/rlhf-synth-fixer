@@ -189,7 +189,7 @@ class TapStack(Stack):
                     destination=ec2.FlowLogDestination.to_s3(
                         s3.Bucket(
                             self, "VPCFlowLogsBucket",
-                            bucket_name=f"vpc-flow-logs-{self.account}-{self.region}",
+                            bucket_name=f"vpc-flow-logs-{self.environment_suffix}-{self.account}-{self.region}",
                             encryption=s3.BucketEncryption.KMS,
                             encryption_key=self.master_key,
                             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -572,7 +572,7 @@ class TapStack(Stack):
         # Create S3 bucket for CloudTrail
         self.trail_bucket = s3.Bucket(
             self, "CloudTrailBucket",
-            bucket_name=f"cloudtrail-{self.account}-{self.region}",
+            bucket_name=f"cloudtrail-{self.environment_suffix}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.audit_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -665,22 +665,22 @@ class TapStack(Stack):
         self.security_hub = securityhub.CfnHub(
             self, "SecurityHub",
             control_finding_generator="SECURITY_CONTROL",
-            enable_default_standards=True,
+            enable_default_standards=False,
             tags={
-                "Name": "ZeroTrustSecurityHub"
+                "Name": f"ZeroTrustSecurityHub-{self.environment_suffix}"
             }
         )
 
-        # Enable compliance standards
+        # Enable compliance standards with correct ARN format
         standards = [
-            "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.4.0",
-            "arn:aws:securityhub:*::standards/pci-dss/v/3.2.1",
-            "arn:aws:securityhub:*::standards/aws-foundational-security-best-practices/v/1.0.0"
+            f"arn:aws:securityhub:{self.region}::standard/cis-aws-foundations-benchmark/v/1.4.0",
+            f"arn:aws:securityhub:{self.region}::standard/pci-dss/v/3.2.1",
+            f"arn:aws:securityhub:{self.region}::standard/aws-foundational-security-best-practices/v/1.0.0"
         ]
 
-        for standard_arn in standards:
+        for i, standard_arn in enumerate(standards):
             securityhub.CfnStandard(
-                self, f"Standard-{standard_arn.split('/')[-3]}",
+                self, f"SecurityHubStandard{i+1}",
                 standards_arn=standard_arn
             )
 
@@ -690,7 +690,7 @@ class TapStack(Stack):
         # SNS topic for security alerts
         self.alert_topic = sns.Topic(
             self, "SecurityAlertTopic",
-            topic_name="zero-trust-security-alerts",
+            topic_name=f"zero-trust-security-alerts-{self.environment_suffix}",
             master_key=self.master_key
         )
 
@@ -702,7 +702,7 @@ class TapStack(Stack):
         # Lambda function for automated response
         self.incident_response_lambda = lambda_.Function(
             self, "IncidentResponseFunction",
-            function_name="zero-trust-incident-response",
+            function_name=f"zero-trust-incident-response-{self.environment_suffix}",
             runtime=lambda_.Runtime.PYTHON_3_11,
             handler="incident_response.handler",
             code=lambda_.Code.from_inline(self._get_incident_response_code()),
@@ -1049,7 +1049,7 @@ def notify_security_team(event: Dict, response: Dict):
         # Create S3 bucket for Session Manager logs
         self.session_logs_bucket = s3.Bucket(
             self, "SessionLogsBucket",
-            bucket_name=f"session-logs-{self.account}-{self.region}",
+            bucket_name=f"session-logs-{self.environment_suffix}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.audit_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
@@ -1130,23 +1130,23 @@ def notify_security_team(event: Dict, response: Dict):
     def _create_config_rules(self):
         """Create AWS Config rules for compliance monitoring"""
         
-        # Config recorder
+        # Config service role with correct policy
         config_role = iam.Role(
             self, "ConfigRole",
             assumed_by=iam.ServicePrincipal("config.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/ConfigRole")
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWS_ConfigRole")
             ]
         )
 
-        # Config bucket
+        # Config bucket with environment suffix for uniqueness
         config_bucket = s3.Bucket(
             self, "ConfigBucket",
-            bucket_name=f"aws-config-{self.account}-{self.region}",
+            bucket_name=f"aws-config-{self.environment_suffix}-{self.account}-{self.region}",
             encryption=s3.BucketEncryption.KMS,
             encryption_key=self.audit_key,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.RETAIN
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         # Config recorder
