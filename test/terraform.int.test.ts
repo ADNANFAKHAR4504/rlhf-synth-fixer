@@ -151,9 +151,12 @@ describe('Terraform E2E Integration Tests', () => {
 					 req.end();
 				 });
 				 // Only accept 200 (success)
-				 expect(res.status).toBe(200);
-				 expect(res.body).toBeDefined();
-				 // Optionally check for expected keys in Lambda response
+					 if (res.status !== 200) {
+						 console.error(`API Gateway returned status ${res.status}. Response body:`, res.body);
+					 }
+					 expect(res.status).toBe(200);
+					 expect(res.body).toBeDefined();
+					 // Optionally check for expected keys in Lambda response
 		 });
 
 		test('Lambda can be invoked directly and returns expected result', async () => {
