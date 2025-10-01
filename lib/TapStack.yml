@@ -1,0 +1,494 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Media Storage System with S3, DynamoDB, Lambda, and CloudWatch'
+
+Parameters:
+  EnvironmentSuffix:
+    Description: Environment suffix to append to resource names (e.g., dev, test, prod)
+    Type: String
+    Default: dev
+    
+Resources:
+  # S3 Bucket for storing uploaded images with EventBridge notifications enabled
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join 
+        - '-'
+        - - 'media-storage'
+          - !Ref 'AWS::AccountId'
+          - !Ref EnvironmentSuffix
+      # Enable EventBridge notifications
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToInfrequentAccess
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 90
+
+  # S3 Bucket policy to allow Lambda function to access the bucket
+  MediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediaBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt ImageProcessorRole.Arn
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+            Resource: !Join ['', [!GetAtt MediaBucket.Arn, '/*']]
+
+  # DynamoDB table for image metadata
+  ImageMetadataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Join ['-', ['ImageMetadata', !Ref EnvironmentSuffix]]
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: uploadedBy
+          AttributeType: S
+        - AttributeName: uploadDate
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserUploadIndex
+          KeySchema:
+            - AttributeName: uploadedBy
+              KeyType: HASH
+            - AttributeName: uploadDate
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # IAM Role for Lambda functions
+  ImageProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: !Join ['-', ['ImageProcessorPolicy', !Ref EnvironmentSuffix]]
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Join ['', [!GetAtt MediaBucket.Arn, '/*']]
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource: !GetAtt ImageMetadataTable.Arn
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Query'
+                Resource: !Join ['', [!GetAtt ImageMetadataTable.Arn, '/index/*']]
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  # IAM Role for image retrieval Lambda function
+  ImageRetrieverRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: !Join ['-', ['ImageRetrieverPolicy', !Ref EnvironmentSuffix]]
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource: !Join ['', [!GetAtt MediaBucket.Arn, '/*']]
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource: !GetAtt ImageMetadataTable.Arn
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Query'
+                Resource: !Join ['', [!GetAtt ImageMetadataTable.Arn, '/index/*']]
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  # Lambda function for processing image uploads
+  ImageProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Join ['-', ['ImageProcessor', !Ref EnvironmentSuffix]]
+      Handler: index.handler
+      Role: !GetAtt ImageProcessorRole.Arn
+      Runtime: nodejs20.x  # Using latest LTS version
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref ImageMetadataTable
+          S3_BUCKET: !Ref MediaBucket
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const s3 = new AWS.S3();
+          const dynamoDB = new AWS.DynamoDB.DocumentClient();
+          const crypto = require('crypto');
+          
+          exports.handler = async (event) => {
+            try {
+              console.log('Received event:', JSON.stringify(event));
+              
+              // Handle EventBridge event structure
+              const bucket = event.detail.bucket.name;
+              const key = decodeURIComponent(event.detail.object.key.replace(/\+/g, ' '));
+              
+              console.log(`Processing object from bucket: ${bucket}, key: ${key}`);
+              
+              // Get S3 object metadata
+              const s3Object = await s3.headObject({
+                Bucket: bucket,
+                Key: key
+              }).promise();
+              
+              // Extract metadata from the S3 object
+              const metadata = s3Object.Metadata || {};
+              const contentType = s3Object.ContentType;
+              const fileSize = s3Object.ContentLength;
+              const uploadDate = new Date().toISOString();
+              const uploadedBy = metadata.uploadedby || 'unknown';
+              
+              // Generate a unique ID if not provided in metadata
+              const id = metadata.id || crypto.randomUUID();
+              
+              // Create item for DynamoDB
+              const item = {
+                id: id,
+                key: key,
+                contentType: contentType,
+                fileSize: fileSize,
+                uploadDate: uploadDate,
+                uploadedBy: uploadedBy,
+                bucket: bucket,
+                metadata: metadata
+              };
+              
+              // Save metadata to DynamoDB
+              await dynamoDB.put({
+                TableName: process.env.DYNAMODB_TABLE,
+                Item: item
+              }).promise();
+              
+              console.log(`Successfully processed image: ${key}`);
+              
+              return {
+                statusCode: 200,
+                body: JSON.stringify({
+                  message: 'Image processed successfully',
+                  id: id
+                })
+              };
+            } catch (error) {
+              console.error('Error processing image:', error);
+              throw error;
+            }
+          };
+
+  # Lambda function for retrieving images
+  ImageRetrieverFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Join ['-', ['ImageRetriever', !Ref EnvironmentSuffix]]
+      Handler: index.handler
+      Role: !GetAtt ImageRetrieverRole.Arn
+      Runtime: nodejs20.x  # Using latest LTS version
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref ImageMetadataTable
+          S3_BUCKET: !Ref MediaBucket
+          ENVIRONMENT: !Ref EnvironmentSuffix
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const s3 = new AWS.S3();
+          const dynamoDB = new AWS.DynamoDB.DocumentClient();
+          
+          exports.handler = async (event) => {
+            try {
+              // Parse the request parameters
+              const queryParams = event.queryStringParameters || {};
+              const imageId = queryParams.id;
+              const userId = queryParams.userId;
+              
+              let items;
+              
+              // Query by image ID
+              if (imageId) {
+                const result = await dynamoDB.get({
+                  TableName: process.env.DYNAMODB_TABLE,
+                  Key: { id: imageId }
+                }).promise();
+                
+                items = result.Item ? [result.Item] : [];
+              } 
+              // Query by user ID
+              else if (userId) {
+                const result = await dynamoDB.query({
+                  TableName: process.env.DYNAMODB_TABLE,
+                  IndexName: 'UserUploadIndex',
+                  KeyConditionExpression: 'uploadedBy = :userId',
+                  ExpressionAttributeValues: { ':userId': userId }
+                }).promise();
+                
+                items = result.Items || [];
+              } 
+              // Get all images
+              else {
+                const result = await dynamoDB.scan({
+                  TableName: process.env.DYNAMODB_TABLE,
+                  Limit: 100
+                }).promise();
+                
+                items = result.Items || [];
+              }
+              
+              // Generate pre-signed URLs for each image
+              const imagesWithUrls = await Promise.all(items.map(async (item) => {
+                const signedUrl = await s3.getSignedUrlPromise('getObject', {
+                  Bucket: item.bucket,
+                  Key: item.key,
+                  Expires: 3600 // URL expires in 1 hour
+                });
+                
+                return {
+                  ...item,
+                  url: signedUrl
+                };
+              }));
+              
+              return {
+                statusCode: 200,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  images: imagesWithUrls
+                })
+              };
+            } catch (error) {
+              console.error('Error retrieving images:', error);
+              return {
+                statusCode: 500,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Access-Control-Allow-Origin': '*'
+                },
+                body: JSON.stringify({
+                  message: 'Error retrieving images',
+                  error: error.message
+                })
+              };
+            }
+          };
+
+  # EventBridge Rule to trigger Lambda on S3 object creation
+  S3EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Join ['-', ['S3ImageUploadRule', !Ref EnvironmentSuffix]]
+      Description: 'Trigger Lambda when objects are uploaded to S3'
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref MediaBucket
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ImageProcessorFunction.Arn
+          Id: ImageProcessorTarget
+
+  # Permission for EventBridge to invoke Lambda
+  EventBridgeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ImageProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3EventRule.Arn
+
+  # CloudWatch Dashboard
+  MediaStorageDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Join ['-', ['MediaStorageDashboard', !Ref EnvironmentSuffix]]
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/S3", "NumberOfObjects", "BucketName", "${MediaBucket}", "StorageType", "AllStorageTypes" ],
+                  [ ".", "BucketSizeBytes", ".", ".", ".", "." ]
+                ],
+                "period": 86400,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "S3 Bucket Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${ImageProcessorFunction}" ],
+                  [ ".", "Errors", ".", "." ],
+                  [ ".", "Duration", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Image Processor Lambda Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${ImageRetrieverFunction}" ],
+                  [ ".", "Errors", ".", "." ],
+                  [ ".", "Duration", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Image Retriever Lambda Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${ImageMetadataTable}" ],
+                  [ ".", "ConsumedWriteCapacityUnits", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Metrics"
+              }
+            }
+          ]
+        }
+
+  # CloudWatch Alarm for Lambda errors
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Join ['-', ['LambdaErrorsAlarm', !Ref EnvironmentSuffix]]
+      AlarmDescription: 'Alarm if Lambda function has errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ImageProcessorFunction
+
+Outputs:
+  MediaBucketName:
+    Description: 'Name of the S3 bucket for media storage'
+    Value: !Ref MediaBucket
+  ImageMetadataTableName:
+    Description: 'Name of the DynamoDB table for image metadata'
+    Value: !Ref ImageMetadataTable
+  ImageProcessorFunctionName:
+    Description: 'Name of the Lambda function for processing images'
+    Value: !Ref ImageProcessorFunction
+  ImageRetrieverFunctionName:
+    Description: 'Name of the Lambda function for retrieving images'
+    Value: !Ref ImageRetrieverFunction
+  DashboardURL:
+    Description: 'URL for the CloudWatch Dashboard'
+    Value: !Sub 'https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${MediaStorageDashboard}'
+  EventRuleArn:
+    Description: 'ARN of the EventBridge rule'
+    Value: !GetAtt S3EventRule.Arn
