@@ -514,27 +514,25 @@ export class SecureParameter extends Construct {
   }
 }
 
-// WAF Module
+// Update the interface to include a region parameter
 export interface WafConfig {
   name: string;
-  scope: string;
+  scope: string; // This should be "REGIONAL" or "GLOBAL"
+  region: string; // This should be an actual AWS region like "us-east-1"
 }
 
-// WAF Module
 export class SecureWaf extends Construct {
   public readonly webAcl: Wafv2WebAcl;
 
   constructor(scope: Construct, name: string, config: WafConfig) {
     super(scope, name);
 
-    // Create WAF Web ACL
     this.webAcl = new Wafv2WebAcl(this, 'web-acl', {
       name: config.name,
-      scope: config.scope,
+      scope: config.scope, // "REGIONAL" or "GLOBAL"
       defaultAction: {
         allow: {},
       },
-      // Add rules to block common attacks
       rule: [
         {
           name: 'AWSManagedRulesCommonRuleSet',
@@ -543,9 +541,9 @@ export class SecureWaf extends Construct {
             none: {},
           },
           statement: {
-            // Try with different property structure
             rule_group_reference_statement: {
-              arn: `arn:aws:wafv2:${config.scope}:aws:managed-rule-set/AWSManagedRulesCommonRuleSet`,
+              // Use the actual region in the ARN, not the scope value
+              arn: `arn:aws:wafv2:${config.region}:aws:managed-rule-set/AWSManagedRulesCommonRuleSet`,
             },
           },
           visibilityConfig: {

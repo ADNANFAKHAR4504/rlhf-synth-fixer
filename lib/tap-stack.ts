@@ -286,6 +286,7 @@ export class TapStack extends TerraformStack {
     new SecureWaf(this, 'waf', {
       name: 'secure-tap-waf',
       scope: 'REGIONAL',
+      region: awsRegion,
     });
 
     // Outputs
