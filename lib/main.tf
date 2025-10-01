@@ -79,6 +79,8 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
+data "aws_elb_service_account" "main" {}
+
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
@@ -526,7 +528,7 @@ resource "aws_s3_bucket_policy" "logs" {
         Sid    = "AWSLogDeliveryWrite"
         Effect = "Allow"
         Principal = {
-          Service = "elasticloadbalancing.amazonaws.com"
+          AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs.arn}/alb-logs/*"
@@ -542,6 +544,10 @@ resource "aws_s3_bucket_policy" "logs" {
       }
     ]
   })
+  
+  depends_on = [
+    aws_s3_bucket_public_access_block.logs
+  ]
 }
 
 # ===========================
@@ -883,7 +889,7 @@ resource "aws_autoscaling_group" "app" {
   vpc_zone_identifier = aws_subnet.private_app[*].id
   target_group_arns  = [aws_lb_target_group.app.arn]
   health_check_type  = "ELB"
-  health_check_grace_period = 300
+  health_check_grace_period = 600
   
   min_size         = 2
   max_size         = 4
@@ -893,6 +899,10 @@ resource "aws_autoscaling_group" "app" {
     id      = aws_launch_template.app.id
     version = "$Latest"
   }
+  
+  depends_on = [
+    aws_lb_listener.http
+  ]
   
   tag {
     key                 = "Name"
