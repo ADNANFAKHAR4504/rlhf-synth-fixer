@@ -51,7 +51,7 @@
   "Mappings": {
     "RegionMap": {
       "us-east-1": {
-        "AMI": "ami-0c02fb55731490381"
+        "AMI": "ami-0c7217cdde317cfec"
       },
       "us-west-2": {
         "AMI": "ami-0352d5a37fb4f603f"
