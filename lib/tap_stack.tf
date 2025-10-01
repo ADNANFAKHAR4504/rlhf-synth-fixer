@@ -405,7 +405,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 # ==================== IAM ROLES ====================
 # EC2 Instance Role
 resource "aws_iam_role" "ec2" {
-  name = "${local.prefix}-ec2-role"
+  name = "${local.prefix}-ec2-role-ex2"
   
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -419,7 +419,7 @@ resource "aws_iam_role" "ec2" {
   })
   
   tags = merge(local.common_tags, {
-    Name = "${local.prefix}-ec2-role"
+    Name = "${local.prefix}-ec2-role-ex2"
   })
 }
 
@@ -743,7 +743,6 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
 resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux_2.id
   instance_type          = "t3.micro"
-  key_name               = var.key_pair_name
   vpc_security_group_ids = [aws_security_group.bastion.id]
   subnet_id              = aws_subnet.public[0].id
   
@@ -773,7 +772,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "mysql" {
   identifier     = "${local.prefix}-mysql-db"
   engine         = "mysql"
-  engine_version = "8.0.35"
+  engine_version = "8.0.43"
   instance_class = "db.t3.micro"
   
   allocated_storage     = 20
