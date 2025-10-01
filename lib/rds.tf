@@ -42,7 +42,7 @@ resource "random_password" "db" {
   special = true
   upper   = true
   lower   = true
-  number  = true
+  numeric  = true
 }
 
 # Optionally store generated password in Secrets Manager (created only if we generated it)

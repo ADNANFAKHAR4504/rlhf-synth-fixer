@@ -1,5 +1,17 @@
+data "aws_caller_identity" "current" {}
+
+resource "random_id" "bucket" {
+  byte_length = 4
+}
+
+locals {
+  raw_name   = format("app-storage-%s-%s-%s", data.aws_caller_identity.current.account_id, lower(var.resource_suffix), random_id.bucket.hex)
+  bucket_name = substr(local.raw_name, 0, 63)  # S3 bucket name max length 63
+}
+
 resource "aws_s3_bucket" "app_bucket" {
-  bucket = "app-storage-${var.resource_suffix}"  # NOT the terraform backend bucket
+  bucket = local.bucket_name
+  acl    = "private"
 
   tags = {
     Name = "app-storage-${var.resource_suffix}"
