@@ -2,7 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { Construct } from 'constructs';
 
 // Import your stacks/modules here
@@ -149,14 +149,15 @@ export class TapStack extends TerraformStack {
       standardTags,
     });
 
-    // Terraform Outputs - 10 outputs as requested
+    // Terraform Outputs - Fix the problematic outputs
     new TerraformOutput(this, 'vpc-id', {
       value: networkingModule.vpc.id,
       description: 'VPC ID',
     });
 
+    // FIX 1: Don't use .join() on token arrays
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: networkingModule.publicSubnetIds.join(','),
+      value: networkingModule.publicSubnetIds, // Output as array directly
       description: 'Public subnet IDs',
     });
 
@@ -195,10 +196,15 @@ export class TapStack extends TerraformStack {
       description: 'EC2 security group ID',
     });
 
+    // FIX 2: Use Fn.lookup for accessing list elements
     new TerraformOutput(this, 'rds-secret-arn', {
-      value:
-        rdsModule.dbInstance.masterUserSecret?.get(0).secretArn ??
-        'managed-by-aws',
+      value: rdsModule.dbInstance.masterUserSecret
+        ? Fn.lookup(
+            Fn.element(rdsModule.dbInstance.masterUserSecret, 0),
+            'secret_arn',
+            'managed-by-aws'
+          )
+        : 'managed-by-aws',
       description: 'RDS credentials secret ARN (managed by AWS)',
     });
   }
