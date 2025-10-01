@@ -62,7 +62,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
       if (outputs) {
         expect(outputs.db_endpoint).toBeDefined();
         expect(typeof outputs.db_endpoint).toBe("string");
-        expect(outputs.db_endpoint).toMatch(/\.rds\.amazonaws\.com$/);
+        // Handle both formats: with and without port
+        expect(outputs.db_endpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/);
       } else {
         expect(true).toBe(true); // Skip if no outputs
       }
@@ -138,7 +139,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
       if (outputs) {
         // Database endpoint should be internal (not have public IP)
         expect(outputs.db_endpoint).not.toMatch(/public/);
-        expect(outputs.db_endpoint).toMatch(/\.rds\.amazonaws\.com$/);
+        // Handle both formats: with and without port
+        expect(outputs.db_endpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/);
       } else {
         expect(true).toBe(true); // Skip if no outputs
       }
@@ -269,8 +271,8 @@ describe("Terraform Infrastructure Integration Tests", () => {
   describe("Infrastructure Health Checks", () => {
     test("database endpoint format is valid", () => {
       if (outputs) {
-        // RDS endpoint should be in format: identifier.xxxxxxxxx.region.rds.amazonaws.com
-        expect(outputs.db_endpoint).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com$/);
+        // RDS endpoint should be in format: identifier.xxxxxxxxx.region.rds.amazonaws.com (with optional port)
+        expect(outputs.db_endpoint).toMatch(/^[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-z0-9-]+\.rds\.amazonaws\.com(:\d+)?$/);
       } else {
         expect(true).toBe(true); // Skip if no outputs
       }
