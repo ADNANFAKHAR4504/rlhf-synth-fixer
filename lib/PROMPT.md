@@ -51,7 +51,7 @@ Your tasks include:
 
 ### Instructions
 
-- Do **not** change or omit any requirements or constraints.
+- Do not change or omit any requirements or constraints.
 - Output only valid Terraform HCL code.
 - Use best practices for security, scalability, and operational excellence.
 - The configuration must be ready for deployment with `terraform plan` and `terraform apply`.

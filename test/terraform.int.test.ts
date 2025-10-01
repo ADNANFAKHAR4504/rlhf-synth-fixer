@@ -15,21 +15,56 @@ function readAllOutputs(): OutputsRaw {
   if (!fs.existsSync(allOutputsPath)) throw new Error(`Outputs file not found: ${allOutputsPath}`);
   const raw = JSON.parse(fs.readFileSync(allOutputsPath, "utf8"));
 
-  // support CFN stack array and flat map
+  // helper to flatten common CFN shapes to a map of key -> rawValue
+  const map: Record<string, any> = {};
+
+  // Case: top-level is a map of stack -> array of {OutputKey, OutputValue}
+  if (Object.values(raw).some((v) => Array.isArray(v) && v.length && v[0]?.OutputKey)) {
+    Object.values(raw).forEach((arr: any) => {
+      const list = Array.isArray(arr) ? arr : [];
+      list.forEach((o: any) => { if (o?.OutputKey) map[o.OutputKey] = o.OutputValue ?? o.Value; });
+    });
+    return map;
+  }
+  // Case: top-level is an array like [ { StackName: [ { OutputKey, OutputValue }, ... ] } ]
   if (Array.isArray(raw)) {
     const first = raw[0];
-    const arr = Array.isArray(first) ? first : (Object.values(first)[0] as any[]);
-    const map: Record<string, any> = {};
-    (arr || []).forEach((o: any) => { if (o.OutputKey) map[o.OutputKey] = o.OutputValue; });
+    const arr = Array.isArray(first) ? first : Object.values(first)[0];
+    const list = Array.isArray(arr) ? arr : [];
+    list.forEach((o: any) => { if (o?.OutputKey) map[o.OutputKey] = o.OutputValue ?? o.Value; });
     return map;
   }
-  const firstVal = Object.values(raw)[0];
-  if (Array.isArray(firstVal)) {
-    const map: Record<string, any> = {};
-    Object.values(raw).forEach((arr: any) => (arr || []).forEach((o: any) => { if (o.OutputKey) map[o.OutputKey] = o.OutputValue; }));
-    return map;
+
+  // Case: flat map but values may be objects (e.g. { key: { value: "..."} } )
+  Object.entries(raw).forEach(([k, v]) => {
+    if (v && typeof v === "object") {
+      if ("OutputValue" in v) map[k] = v.OutputValue;
+      else if ("value" in v) map[k] = v.value;
+      else if ("Value" in v) map[k] = v.Value;
+      else map[k] = v; // leave as-is for further normalization
+    } else {
+      map[k] = v;
+    }
+  });
+
+  return map;
+}
+
+// Normalizer used by tests to coerce to string when possible
+function normalizeOutputValue(v: any): string | undefined {
+  if (v == null) return undefined;
+  if (typeof v === "string") return v;
+  if (typeof v === "object") {
+    if ("OutputValue" in v) return String(v.OutputValue);
+    if ("OutputKey" in v && "OutputValue" in v) return String(v.OutputValue);
+    if ("value" in v) return String(v.value);
+    if ("Value" in v) return String(v.Value);
+    // sometimes an array with scalar inside
+    if (Array.isArray(v) && v.length && typeof v[0] === "string") return v[0];
+    // fallback to JSON string
+    return JSON.stringify(v);
   }
-  return raw as OutputsRaw;
+  return String(v);
 }
 
 function chooseRegion(outputs: OutputsRaw): string {
