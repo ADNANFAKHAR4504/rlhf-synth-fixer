@@ -114,7 +114,13 @@ resource "aws_instance" "web" {
 
 ```hcl
 provider "aws" {
-  region = "us-east-1"
+  region = var.region
+
+  default_tags {
+    tags = {
+      iac-rlhf-amazon = var.iac_rlhf_tag_value
+    }
+  }
 }
 
 terraform {
@@ -461,6 +467,18 @@ variable "use_ssm" {
   description = "If true, enable AWS SSM Session Manager on the instance (recommended). If false, provision SSH key + security group rule."
   type        = bool
   default     = true
+}
+
+
+variable "region" {
+  type    = string
+  default = "ap-south-1"
+}
+
+variable "iac_rlhf_tag_value" {
+  description = "Value for the iac-rlhf-amazon tag (set to identify resources created by this IaC)"
+  type        = string
+  default     = "true"
 }
 ```
 

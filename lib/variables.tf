@@ -67,3 +67,14 @@ variable "use_ssm" {
   type        = bool
   default     = true
 }
+
+variable "region" {
+  type    = string
+  default = "ap-south-1"
+}
+
+variable "iac_rlhf_tag_value" {
+  description = "Value for the iac-rlhf-amazon tag (set to identify resources created by this IaC)"
+  type        = string
+  default     = "true"
+}

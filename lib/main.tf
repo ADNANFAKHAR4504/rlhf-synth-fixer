@@ -1,5 +1,11 @@
 provider "aws" {
-  region = "us-east-1"
+  region = var.region
+
+  default_tags {
+    tags = {
+      iac-rlhf-amazon = var.iac_rlhf_tag_value
+    }
+  }
 }
 
 terraform {
