@@ -1,0 +1,7 @@
+{
+  "api_endpoint": "https://4xn0a1qh8b.execute-api.us-west-2.amazonaws.com/synth68720415",
+  "dashboard_url": "https://console.aws.amazon.com/cloudwatch/home?region=us-west-2#dashboards:name=logistics-tracking-synth68720415",
+  "dlq_url": "https://sqs.us-west-2.amazonaws.com/342597974367/tracking-lambda-dlq-synth68720415-b8c501d",
+  "lambda_function_name": "tracking-processor-synth68720415-741ee66",
+  "table_name": "tracking-data-synth68720415-6abed62"
+}
