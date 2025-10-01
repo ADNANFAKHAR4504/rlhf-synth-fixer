@@ -1098,7 +1098,17 @@ resource "aws_cloudfront_distribution" "cdn" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+    
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+    
+    min_ttl     = 0
+    default_ttl = 3600
+    max_ttl     = 86400
   }
 
   ordered_cache_behavior {
@@ -1107,8 +1117,18 @@ resource "aws_cloudfront_distribution" "cdn" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods         = ["GET", "HEAD", "OPTIONS"]
-    cache_policy_id        = "216adef6-5c7f-47e4-b989-5492eafa07d3" # CachingDisabled
-    origin_request_policy_id = "88a5eaf4-2fd4-4709-b370-b4c650ea3fcf" # AllViewerExceptHostHeader
+    
+    forwarded_values {
+      query_string = true
+      headers      = ["Authorization", "Host"]
+      cookies {
+        forward = "all"
+      }
+    }
+    
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
   }
 
   restrictions {
@@ -1263,7 +1283,7 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true
-  cloud_watch_logs_group_arn    = aws_cloudwatch_log_group.cloudtrail.arn
+  cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.cloudtrail.arn}:*"
   cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail.arn
   kms_key_id                    = aws_kms_key.logs.arn
 
@@ -1271,6 +1291,11 @@ resource "aws_cloudtrail" "main" {
     read_write_type           = "All"
     include_management_events = true
   }
+
+  depends_on = [
+    aws_s3_bucket_policy.cloudtrail,
+    aws_iam_role_policy.cloudtrail
+  ]
 
   tags = {
     Name        = "${var.project}-trail"
