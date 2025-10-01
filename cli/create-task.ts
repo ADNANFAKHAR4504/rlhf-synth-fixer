@@ -287,9 +287,11 @@ async function main(): Promise<void> {
       }
     }
 
+    const label = subjectLabelsBySubtask[taskSubCategory];
+
     let deployEnv: string | undefined = undefined;
     if (
-      taskSubCategory === 'IaC-Multi-Environment-Management' &&
+      taskSubCategory === 'Multi-Environment Consistency' &&
       platform === 'tf'
     ) {
       deployEnv = await input({
