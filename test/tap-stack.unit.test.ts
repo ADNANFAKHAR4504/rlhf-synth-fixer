@@ -242,16 +242,18 @@ describe('TapStack', () => {
       }));
     });
 
-    // Extra defensive check: if CDK split ingress into AWS::EC2::SecurityGroupIngress resources,
-    // ensure at least one ingress for 80/443 exists.
-    const ingressResources = template.findResources('AWS::EC2::SecurityGroupIngress');
-    const has80or443 = Object.values(ingressResources).some((r: any) => {
-      const p = r.Properties ?? {};
-      // Ports might be numbers or strings depending on synthesis - coerce to number if possible
-      const from = typeof p.FromPort === 'string' ? Number(p.FromPort) : p.FromPort;
-      const proto = p.IpProtocol;
-      return proto === 'tcp' && (from === 80 || from === 443);
+    test('should have ingress rules for HTTP/HTTPS in separate SecurityGroupIngress resources if split', () => {
+      // Extra defensive check: if CDK split ingress into AWS::EC2::SecurityGroupIngress resources,
+      // ensure at least one ingress for 80/443 exists.
+      const ingressResources = template.findResources('AWS::EC2::SecurityGroupIngress');
+      const has80or443 = Object.values(ingressResources).some((r: any) => {
+        const p = r.Properties ?? {};
+        // Ports might be numbers or strings depending on synthesis - coerce to number if possible
+        const from = typeof p.FromPort === 'string' ? Number(p.FromPort) : p.FromPort;
+        const proto = p.IpProtocol;
+        return proto === 'tcp' && (from === 80 || from === 443);
+      });
+      expect(has80or443 || Object.keys(ingressResources).length === 0).toBe(true);
     });
-    expect(has80or443 || Object.keys(ingressResources).length === 0).toBe(true);
   });
 });
