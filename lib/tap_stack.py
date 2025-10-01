@@ -507,7 +507,7 @@ class TapStack(Stack):
                                 "DateLessThan": {
                                     "aws:CurrentTime": "18:00Z"
                                 },
-                                "ForAllValues:StringEquals": {
+                                "ForAnyValue:StringEquals": {
                                     "aws:PrincipalTag/Department": ["Security", "Operations"]
                                 }
                             }
