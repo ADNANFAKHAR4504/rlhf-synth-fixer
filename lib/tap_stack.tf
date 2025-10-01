@@ -1,6 +1,6 @@
 # Input Variables
 # -----------------------------
-variable "region" {
+variable "aws_region" {
   description = "AWS region for all resources"
   type        = string
   default     = "us-west-2"
@@ -194,7 +194,7 @@ resource "aws_iam_policy" "lambda_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:${var.region}:*:*"
+        Resource = "arn:aws:logs:${var.aws_region}:*:*"
       },
       {
         Effect = "Allow"
