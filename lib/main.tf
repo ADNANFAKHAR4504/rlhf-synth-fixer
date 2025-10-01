@@ -565,6 +565,10 @@ resource "aws_lb" "main" {
     enabled = true
   }
   
+  depends_on = [
+    aws_s3_bucket_policy.logs
+  ]
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
   })
@@ -786,7 +790,7 @@ resource "aws_launch_template" "app" {
     device_name = "/dev/xvda"
     
     ebs {
-      volume_size           = 20
+      volume_size           = 30
       volume_type           = "gp3"
       encrypted            = true
       kms_key_id           = aws_kms_key.main.arn
