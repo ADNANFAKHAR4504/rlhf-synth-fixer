@@ -165,7 +165,7 @@ export function createKmsKey(
               identifiers: [
                 'sns.amazonaws.com',
                 'sqs.amazonaws.com',
-                's3.amazonaws.com'
+                's3.amazonaws.com',
               ],
             },
           ],

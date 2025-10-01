@@ -105,6 +105,9 @@ export interface CreatedIamRoles {
 /**
  * Creates a customer-managed KMS key with rotation enabled and restrictive key policy
  */
+/**
+ * Creates a customer-managed KMS key with rotation enabled and restrictive key policy
+ */
 export function createKmsKey(
   scope: Construct,
   id: string,
@@ -151,6 +154,28 @@ export function createKmsKey(
             'kms:Decrypt',
             'kms:ReEncrypt*',
             'kms:GenerateDataKey*',
+            'kms:DescribeKey',
+          ],
+          resources: ['*'],
+        },
+        // Add this new statement to allow SNS and SQS services to use the key
+        {
+          sid: 'Allow services to use the key',
+          effect: 'Allow',
+          principals: [
+            {
+              type: 'Service',
+              identifiers: [
+                'sns.amazonaws.com',
+                'sqs.amazonaws.com',
+                's3.amazonaws.com',
+              ],
+            },
+          ],
+          actions: [
+            'kms:Decrypt',
+            'kms:GenerateDataKey',
+            'kms:CreateGrant',
             'kms:DescribeKey',
           ],
           resources: ['*'],
@@ -375,14 +400,17 @@ export function createSqsWithDlqAndKms(
     name: options.dlqName,
     kmsMasterKeyId: options.kmsKeyArn,
     kmsDataKeyReusePeriodSeconds: 300,
+    messageRetentionSeconds: 1209600, // 14 days
     tags: options.tags,
   });
 
-  // Create main queue
+  // Create main queue with proper visibility timeout
   const mainQueue = new SqsQueue(scope, id, {
     name: options.queueName,
     kmsMasterKeyId: options.kmsKeyArn,
     kmsDataKeyReusePeriodSeconds: 300,
+    visibilityTimeoutSeconds: 30, // ✅ Correct
+    messageRetentionSeconds: 345600, // 4 days
     redrivePolicy: JSON.stringify({
       deadLetterTargetArn: dlq.arn,
       maxReceiveCount: options.maxReceiveCount,
@@ -405,7 +433,10 @@ export function createSqsWithDlqAndKms(
               identifiers: ['sns.amazonaws.com'],
             },
           ],
-          actions: ['sqs:SendMessage'],
+          actions: [
+            'sqs:SendMessage',
+            'sqs:GetQueueAttributes', // Add this for SNS to check queue attributes
+          ],
           resources: [mainQueue.arn],
           condition: [
             {
@@ -424,11 +455,12 @@ export function createSqsWithDlqAndKms(
     policy: queuePolicyDoc.json,
   });
 
-  // Subscribe queue to SNS topic
+  // Subscribe queue to SNS topic with raw message delivery disabled
   const subscription = new SnsTopicSubscription(scope, `${id}-subscription`, {
     topicArn: options.snsTopicArn,
     protocol: 'sqs',
     endpoint: mainQueue.arn,
+    rawMessageDelivery: false, // Ensure messages are wrapped in SNS envelope
   });
 
   return { mainQueue, dlq, subscription, queuePolicy };
@@ -564,6 +596,7 @@ export function createLeastPrivilegeIamRoles(
 
   return { s3Role, snsRole, sqsRole };
 }
+
 
 ```
 
