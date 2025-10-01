@@ -1,0 +1,18 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "12849306",
+  "team": "synth",
+  "startedAt": "2025-10-02T00:00:54+05:30",
+  "subtask": "Serverless Infrastructure",
+  "training_quality": 8,
+  "aws_services": [
+    "SQS",
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch",
+    "IAM"
+  ]
+}
