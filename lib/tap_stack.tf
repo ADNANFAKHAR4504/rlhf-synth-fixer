@@ -5,6 +5,7 @@ variable "lambda_allowed_ips" {
   description = "List of known IP addresses allowed to access API Gateway"
   type        = list(string)
   default     = ["203.0.113.1", "198.51.100.2"]
+}
 
 variable "api_cors_origins" {
   description = "Allowed origins for CORS on API Gateway"
