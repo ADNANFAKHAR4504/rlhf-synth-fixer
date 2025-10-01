@@ -68,11 +68,12 @@ resource "aws_cloudfront_distribution" "main" {
 }
 
 # Shield Advanced association (requires Shield Advanced subscription)
-resource "aws_shield_protection" "cloudfront" {
-  name         = "${var.project_name}-${var.environment}-cf-shield-${var.aws_region}"
-  resource_arn = aws_cloudfront_distribution.main.arn
-
-  tags = {
-    Name = "${var.project_name}-${var.environment}-cf-shield-${var.aws_region}"
-  }
-}
+# Uncomment the following if you have Shield Advanced subscription:
+# resource "aws_shield_protection" "cloudfront" {
+#   name         = "${var.project_name}-${var.environment}-cf-shield-${var.aws_region}"
+#   resource_arn = aws_cloudfront_distribution.main.arn
+#   
+#   tags = {
+#     Name = "${var.project_name}-${var.environment}-cf-shield-${var.aws_region}"
+#   }
+# }
