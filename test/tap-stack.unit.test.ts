@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { InfrastructureStack } from '../lib/infrastructure-stack';
+import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack', () => {
   let app: cdk.App;
