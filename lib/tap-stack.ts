@@ -27,6 +27,7 @@ export interface CICDPipelineStackProps extends cdk.StackProps {
   environmentName?: string;
   projectName?: string;
   costCenter?: string;
+  codeStarConnectionArn?: string;
 }
 
 export class CICDPipelineStack extends cdk.Stack {
@@ -120,10 +121,10 @@ export class CICDPipelineStack extends cdk.Stack {
       new sns_subscriptions.EmailSubscription(props.notificationEmail)
     );
 
-    // Secrets Manager for GitHub token
+    // Secrets Manager for GitHub token - must be manually populated
     const githubToken = new secretsmanager.Secret(this, 'GitHubToken', {
       secretName: createResourceName('github-oauth-token'),
-      description: `GitHub OAuth token for ${projectName} repository access`,
+      description: `GitHub OAuth token for ${projectName} repository access - must be manually set with valid token`,
       encryptionKey: encryptionKey,
     });
     cdk.Tags.of(githubToken).add('iac-rlhf-amazon', 'true');
@@ -325,19 +326,30 @@ export class CICDPipelineStack extends cdk.Stack {
     // Build Artifact
     const buildOutput = new codepipeline.Artifact('BuildOutput');
 
-    // Source Stage
+    // Source Stage - Using CodeStar connection for better reliability or fallback to GitHub token
+    const sourceAction = props.codeStarConnectionArn
+      ? new codepipeline_actions.CodeStarConnectionsSourceAction({
+        actionName: 'GitHub_Source',
+        owner: props.githubOwner,
+        repo: props.githubRepo,
+        branch: props.githubBranch,
+        connectionArn: props.codeStarConnectionArn,
+        output: sourceOutput,
+        triggerOnPush: true,
+      })
+      : new codepipeline_actions.GitHubSourceAction({
+        actionName: 'GitHub_Source',
+        owner: props.githubOwner,
+        repo: props.githubRepo,
+        branch: props.githubBranch,
+        oauthToken: githubToken.secretValueFromJson('token'),
+        output: sourceOutput,
+        trigger: codepipeline_actions.GitHubTrigger.WEBHOOK,
+      });
+
     pipeline.addStage({
       stageName: 'Source',
-      actions: [
-        new codepipeline_actions.GitHubSourceAction({
-          actionName: 'GitHub_Source',
-          owner: props.githubOwner,
-          repo: props.githubRepo,
-          branch: props.githubBranch,
-          oauthToken: githubToken.secretValue,
-          output: sourceOutput,
-        }),
-      ],
+      actions: [sourceAction],
     });
 
     // Build Stage
@@ -553,6 +565,19 @@ export class CICDPipelineStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'NotificationTopicArn', {
       value: notificationTopic.topicArn,
       description: 'ARN of the notification topic',
+    });
+
+    new cdk.CfnOutput(this, 'GitHubTokenSecretName', {
+      value: githubToken.secretName,
+      description: 'Name of the GitHub token secret - must be manually populated with valid GitHub personal access token',
+    });
+
+    // Output instructions for setting up GitHub credentials
+    new cdk.CfnOutput(this, 'GitHubSetupInstructions', {
+      value: props.codeStarConnectionArn
+        ? 'Using CodeStar connection for GitHub integration'
+        : `Set GitHub token in AWS Secrets Manager: aws secretsmanager put-secret-value --secret-id ${githubToken.secretName} --secret-string '{"token":"your-github-personal-access-token"}'`,
+      description: 'Instructions for configuring GitHub integration',
     });
   }
 }
