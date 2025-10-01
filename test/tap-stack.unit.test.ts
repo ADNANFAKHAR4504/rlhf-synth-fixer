@@ -55,13 +55,7 @@ describe('TapStack CloudFormation Template', () => {
     test('should have AlertEmail parameter', () => {
       expect(template.Parameters.AlertEmail).toBeDefined();
       expect(template.Parameters.AlertEmail.Type).toBe('String');
-      expect(template.Parameters.AlertEmail.AllowedPattern).toBeDefined();
-    });
-
-    test('should have LogRetentionDays parameter', () => {
-      expect(template.Parameters.LogRetentionDays).toBeDefined();
-      expect(template.Parameters.LogRetentionDays.Type).toBe('Number');
-      expect(template.Parameters.LogRetentionDays.Default).toBe(30);
+      expect(template.Parameters.AlertEmail.Default).toBe('');
     });
 
     test('should have DeletionProtectionEnabled parameter', () => {
@@ -84,6 +78,10 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have EnablePointInTimeRecovery condition', () => {
       expect(template.Conditions.EnablePointInTimeRecovery).toBeDefined();
+    });
+
+    test('should have HasAlertEmail condition', () => {
+      expect(template.Conditions.HasAlertEmail).toBeDefined();
     });
   });
 
@@ -251,12 +249,16 @@ describe('TapStack CloudFormation Template', () => {
       expect(topic.KmsMasterKeyId).toEqual({ Ref: 'KMSKey' });
     });
 
-    test('SNS Topic should have email subscription', () => {
+    test('SNS Topic should have conditional email subscription', () => {
       const topic = template.Resources.SNSTopic.Properties;
       expect(topic.Subscription).toBeDefined();
-      expect(topic.Subscription.length).toBeGreaterThan(0);
-      expect(topic.Subscription[0].Protocol).toBe('email');
-      expect(topic.Subscription[0].Endpoint).toEqual({ Ref: 'AlertEmail' });
+      expect(topic.Subscription['Fn::If']).toBeDefined();
+      expect(topic.Subscription['Fn::If'][0]).toBe('HasAlertEmail');
+
+      const subscriptionArray = topic.Subscription['Fn::If'][1];
+      expect(subscriptionArray).toHaveLength(1);
+      expect(subscriptionArray[0].Protocol).toBe('email');
+      expect(subscriptionArray[0].Endpoint).toEqual({ Ref: 'AlertEmail' });
     });
 
     test('SNS Topic should have proper naming', () => {
@@ -485,7 +487,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have correct number of parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(5);
     });
 
     test('should have correct number of outputs', () => {
@@ -495,7 +497,7 @@ describe('TapStack CloudFormation Template', () => {
 
     test('should have conditions section', () => {
       expect(template.Conditions).toBeDefined();
-      expect(Object.keys(template.Conditions).length).toBeGreaterThan(0);
+      expect(Object.keys(template.Conditions).length).toBe(3);
     });
   });
 

@@ -18,8 +18,7 @@
             "default": "Monitoring Configuration"
           },
           "Parameters": [
-            "AlertEmail",
-            "LogRetentionDays"
+            "AlertEmail"
           ]
         },
         {
@@ -52,32 +51,8 @@
     },
     "AlertEmail": {
       "Type": "String",
-      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
-      "Description": "Email address for CloudWatch alarm notifications"
-    },
-    "LogRetentionDays": {
-      "Type": "Number",
-      "Default": 30,
-      "AllowedValues": [
-        1,
-        3,
-        5,
-        7,
-        14,
-        30,
-        60,
-        90,
-        120,
-        150,
-        180,
-        365,
-        400,
-        545,
-        731,
-        1827,
-        3653
-      ],
-      "Description": "CloudWatch Logs retention period in days"
+      "Default": "",
+      "Description": "Email address for CloudWatch alarm notifications (optional)"
     },
     "DeletionProtectionEnabled": {
       "Type": "String",
@@ -113,6 +88,18 @@
           "Ref": "PointInTimeRecoveryEnabled"
         },
         "true"
+      ]
+    },
+    "HasAlertEmail": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "AlertEmail"
+            },
+            ""
+          ]
+        }
       ]
     }
   },
@@ -278,14 +265,22 @@
         "KmsMasterKeyId": {
           "Ref": "KMSKey"
         },
-        "Subscription": [
-          {
-            "Endpoint": {
-              "Ref": "AlertEmail"
-            },
-            "Protocol": "email"
-          }
-        ],
+        "Subscription": {
+          "Fn::If": [
+            "HasAlertEmail",
+            [
+              {
+                "Endpoint": {
+                  "Ref": "AlertEmail"
+                },
+                "Protocol": "email"
+              }
+            ],
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
         "Tags": [
           {
             "Key": "Environment",
