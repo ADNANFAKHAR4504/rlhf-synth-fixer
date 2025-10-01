@@ -103,6 +103,14 @@ resource "aws_iam_role_policy" "lambda_execution" {
           "logs:PutLogEvents"
         ]
         Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/lambda/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:DescribeDBInstances",
+          "rds:DescribeDBClusters"
+        ]
+        Resource = "*"
       }
     ]
   })
