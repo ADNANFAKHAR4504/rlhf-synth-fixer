@@ -1,0 +1,546 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "TAP Stack - Task Assignment Platform CloudFormation Template with security and monitoring",
+  "Metadata": {
+    "AWS::CloudFormation::Interface": {
+      "ParameterGroups": [
+        {
+          "Label": {
+            "default": "Environment Configuration"
+          },
+          "Parameters": [
+            "EnvironmentSuffix",
+            "ProjectName"
+          ]
+        },
+        {
+          "Label": {
+            "default": "Monitoring Configuration"
+          },
+          "Parameters": [
+            "AlertEmail",
+            "LogRetentionDays"
+          ]
+        },
+        {
+          "Label": {
+            "default": "DynamoDB Configuration"
+          },
+          "Parameters": [
+            "DeletionProtectionEnabled",
+            "PointInTimeRecoveryEnabled"
+          ]
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev",
+      "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+      "AllowedPattern": "^[a-zA-Z0-9]+$",
+      "ConstraintDescription": "Must contain only alphanumeric characters"
+    },
+    "ProjectName": {
+      "Type": "String",
+      "Default": "tap",
+      "MinLength": 1,
+      "MaxLength": 50,
+      "AllowedPattern": "^[a-z0-9-]+$",
+      "Description": "Project name (lowercase, alphanumeric and hyphens only)"
+    },
+    "AlertEmail": {
+      "Type": "String",
+      "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+      "Description": "Email address for CloudWatch alarm notifications"
+    },
+    "LogRetentionDays": {
+      "Type": "Number",
+      "Default": 30,
+      "AllowedValues": [
+        1,
+        3,
+        5,
+        7,
+        14,
+        30,
+        60,
+        90,
+        120,
+        150,
+        180,
+        365,
+        400,
+        545,
+        731,
+        1827,
+        3653
+      ],
+      "Description": "CloudWatch Logs retention period in days"
+    },
+    "DeletionProtectionEnabled": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable deletion protection for DynamoDB table"
+    },
+    "PointInTimeRecoveryEnabled": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Description": "Enable point-in-time recovery for DynamoDB table"
+    }
+  },
+  "Conditions": {
+    "EnableDeletionProtection": {
+      "Fn::Equals": [
+        {
+          "Ref": "DeletionProtectionEnabled"
+        },
+        "true"
+      ]
+    },
+    "EnablePointInTimeRecovery": {
+      "Fn::Equals": [
+        {
+          "Ref": "PointInTimeRecoveryEnabled"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "KMSKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "Description": {
+          "Fn::Sub": "KMS key for ${ProjectName}-${EnvironmentSuffix} TAP application"
+        },
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "Enable IAM User Permissions",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow DynamoDB to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "dynamodb.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:DescribeKey",
+                "kms:CreateGrant"
+              ],
+              "Resource": "*"
+            },
+            {
+              "Sid": "Allow SNS to use the key",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "sns.amazonaws.com"
+              },
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+              ],
+              "Resource": "*"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "KMSKeyAlias": {
+      "Type": "AWS::KMS::Alias",
+      "Properties": {
+        "AliasName": {
+          "Fn::Sub": "alias/${ProjectName}-${EnvironmentSuffix}"
+        },
+        "TargetKeyId": {
+          "Ref": "KMSKey"
+        }
+      }
+    },
+    "TurnAroundPromptTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "DeletionPolicy": "Delete",
+      "UpdateReplacePolicy": "Delete",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "TurnAroundPromptTable${EnvironmentSuffix}"
+        },
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "id",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "id",
+            "KeyType": "HASH"
+          }
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "DeletionProtectionEnabled": {
+          "Fn::If": [
+            "EnableDeletionProtection",
+            true,
+            false
+          ]
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+          "SSEType": "KMS",
+          "KMSMasterKeyId": {
+            "Ref": "KMSKey"
+          }
+        },
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": {
+            "Fn::If": [
+              "EnablePointInTimeRecovery",
+              true,
+              false
+            ]
+          }
+        },
+        "StreamSpecification": {
+          "StreamViewType": "NEW_AND_OLD_IMAGES"
+        },
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "SNSTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-alerts"
+        },
+        "DisplayName": {
+          "Fn::Sub": "${ProjectName} ${EnvironmentSuffix} Alerts"
+        },
+        "KmsMasterKeyId": {
+          "Ref": "KMSKey"
+        },
+        "Subscription": [
+          {
+            "Endpoint": {
+              "Ref": "AlertEmail"
+            },
+            "Protocol": "email"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Environment",
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": {
+              "Ref": "ProjectName"
+            }
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "DynamoDBThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-throttles"
+        },
+        "AlarmDescription": "Alarm when DynamoDB throttles exceed threshold",
+        "MetricName": "UserErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBSystemErrorAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-system-errors"
+        },
+        "AlarmDescription": "Alarm when DynamoDB system errors occur",
+        "MetricName": "SystemErrors",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBReadThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-read-throttle"
+        },
+        "AlarmDescription": "Alarm when DynamoDB read throttles occur",
+        "MetricName": "ReadThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "DynamoDBWriteThrottleAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dynamodb-write-throttle"
+        },
+        "AlarmDescription": "Alarm when DynamoDB write throttles occur",
+        "MetricName": "WriteThrottleEvents",
+        "Namespace": "AWS/DynamoDB",
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 10,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "TableName",
+            "Value": {
+              "Ref": "TurnAroundPromptTable"
+            }
+          }
+        ],
+        "AlarmActions": [
+          {
+            "Ref": "SNSTopic"
+          }
+        ],
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": {
+          "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dashboard"
+        },
+        "DashboardBody": {
+          "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", {\"stat\": \"Sum\", \"label\": \"Read Capacity\"}],\n          [\".\", \"ConsumedWriteCapacityUnits\", {\"stat\": \"Sum\", \"label\": \"Write Capacity\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Capacity Units\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"UserErrors\", {\"stat\": \"Sum\", \"label\": \"User Errors\"}],\n          [\".\", \"SystemErrors\", {\"stat\": \"Sum\", \"label\": \"System Errors\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Errors\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"ReadThrottleEvents\", {\"stat\": \"Sum\", \"label\": \"Read Throttles\"}],\n          [\".\", \"WriteThrottleEvents\", {\"stat\": \"Sum\", \"label\": \"Write Throttles\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Throttle Events\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        }\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"properties\": {\n        \"metrics\": [\n          [\"AWS/DynamoDB\", \"SuccessfulRequestLatency\", {\"stat\": \"Average\", \"label\": \"Avg Latency\"}],\n          [\".\", \".\", {\"stat\": \"Maximum\", \"label\": \"Max Latency\"}]\n        ],\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n        \"title\": \"DynamoDB Latency\",\n        \"period\": 300,\n        \"dimensions\": {\n          \"TableName\": \"${TurnAroundPromptTable}\"\n        },\n        \"yAxis\": {\n          \"left\": {\n            \"min\": 0\n          }\n        }\n      }\n    }\n  ]\n}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TurnAroundPromptTableName": {
+      "Description": "Name of the DynamoDB table",
+      "Value": {
+        "Ref": "TurnAroundPromptTable"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableName"
+        }
+      }
+    },
+    "TurnAroundPromptTableArn": {
+      "Description": "ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableArn"
+        }
+      }
+    },
+    "TurnAroundPromptTableStreamArn": {
+      "Description": "Stream ARN of the DynamoDB table",
+      "Value": {
+        "Fn::GetAtt": [
+          "TurnAroundPromptTable",
+          "StreamArn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-TurnAroundPromptTableStreamArn"
+        }
+      }
+    },
+    "KMSKeyId": {
+      "Description": "KMS Key ID for encryption",
+      "Value": {
+        "Ref": "KMSKey"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyId"
+        }
+      }
+    },
+    "KMSKeyArn": {
+      "Description": "KMS Key ARN for encryption",
+      "Value": {
+        "Fn::GetAtt": [
+          "KMSKey",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-KMSKeyArn"
+        }
+      }
+    },
+    "SNSTopicArn": {
+      "Description": "SNS Topic ARN for alerts",
+      "Value": {
+        "Ref": "SNSTopic"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SNSTopicArn"
+        }
+      }
+    },
+    "DashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-${EnvironmentSuffix}-dashboard"
+      }
+    },
+    "StackName": {
+      "Description": "Name of this CloudFormation stack",
+      "Value": {
+        "Ref": "AWS::StackName"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-StackName"
+        }
+      }
+    },
+    "EnvironmentSuffix": {
+      "Description": "Environment suffix used for this deployment",
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    }
+  }
+}
