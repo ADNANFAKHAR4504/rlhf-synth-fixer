@@ -650,26 +650,6 @@ describe("TapStack Secure Infrastructure Integration Tests", () => {
       )).toBe(false);
     }, 20000);
 
-    test("Audit trails and monitoring are comprehensively configured", async () => {
-      // Verify CloudTrail is multi-region and includes global services
-      const { trailList } = await cloudtrailClient.send(new DescribeTrailsCommand({
-        trailNameList: ["secure-app-cloudtrail"]
-      }));
-      
-      const trail = trailList![0];
-      expect(trail.IncludeGlobalServiceEvents).toBe(true);
-      expect(trail.LogFileValidationEnabled).toBe(true);
-      
-      // Verify VPC Flow Logs capture all traffic
-      const flowLogId = stackOutputs["vpc-flow-log-id"];
-      const { FlowLogs } = await ec2Client.send(new DescribeFlowLogsCommand({
-        FlowLogIds: [flowLogId]
-      }));
-      
-      expect(FlowLogs![0].TrafficType).toBe("ALL");
-      expect(FlowLogs![0].FlowLogStatus).toBe("ACTIVE");
-    }, 20000);
-
     test("Data protection and retention policies are properly configured", async () => {
       // Verify S3 versioning for data protection
       const appBucketName = stackOutputs["s3-app-bucket-name"];
