@@ -20,7 +20,7 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
     test('should have correct description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Secure E-commerce Infrastructure with comprehensive security controls, compliance monitoring, and high availability'
+        'Secure E-commerce Infrastructure with comprehensive security controls, compliance monitoring, and high availability. Uses public subnets for cost optimization to avoid NAT Gateway charges.'
       );
     });
 
