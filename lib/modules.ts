@@ -409,7 +409,7 @@ export class AutoScalingModule extends Construct {
       name: 'tap-launch-template',
       imageId: ami.id,
       instanceType: 't3.micro',
-      keyName: 'compute-key1',
+      // keyName: 'compute-key1',
       vpcSecurityGroupIds: [props.securityGroupId],
       iamInstanceProfile: {
         name: props.instanceProfileName,
