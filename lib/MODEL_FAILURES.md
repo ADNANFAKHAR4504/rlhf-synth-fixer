@@ -1,3 +1,11 @@
+Generted response by model had following errors -
+
+1. Model used wrong DB version for Postgres DB and used the lower version which failed the deployment.
+
+2. Model was unable to create the ACM certificate and failed the deployment.
+
+3. Model made some mistakes in the launch template which caused the auto scaling deployment failures.
+
 ```
 
 │ Error: creating RDS DB Instance (production-tap-postgres): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: a95d2cf7-f96c-4bdd-a1b5-7fb4a39acf9d, api error InvalidParameterCombination: Cannot find version 15.5 for postgres
