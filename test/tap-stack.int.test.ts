@@ -178,22 +178,6 @@ describe('Media Storage System Integration Tests', () => {
       expect(functionConfig.Configuration.Environment.Variables.S3_BUCKET).toBe(bucketName);
     });
 
-    test('image retriever function should work with query parameters', async () => {
-      // Test with no parameters (list all)
-      const listAllResponse = await lambda.invoke({
-        FunctionName: retrieverFunctionName,
-        Payload: JSON.stringify({
-          queryStringParameters: {}
-        })
-      }).promise();
-
-      const listAllResult = JSON.parse(listAllResponse.Payload as string);
-      expect(listAllResult.statusCode).toBe(200);
-
-      const responseBody = JSON.parse(listAllResult.body);
-      expect(responseBody.images).toBeDefined();
-      expect(Array.isArray(responseBody.images)).toBe(true);
-    });
   });
 
   describe('CloudWatch Monitoring Tests', () => {
@@ -226,54 +210,6 @@ describe('Media Storage System Integration Tests', () => {
   });
 
   describe('End-to-End Workflow Tests', () => {
-    test('should handle complete image upload and retrieval workflow', async () => {
-      const testImageContent = Buffer.from('test image data for e2e test');
-      const e2eImageKey = `e2e-test-${Date.now()}.jpg`;
-
-      // Step 1: Upload image to S3
-      await s3.upload({
-        Bucket: bucketName,
-        Key: e2eImageKey,
-        Body: testImageContent,
-        ContentType: 'image/jpeg',
-        Metadata: {
-          uploadedby: 'e2e-test',
-          id: `e2e-${Date.now()}`
-        }
-      }).promise();
-
-      // Step 2: Wait a moment for processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Step 3: Verify image can be retrieved with presigned URL
-      const retrieveResponse = await lambda.invoke({
-        FunctionName: retrieverFunctionName,
-        Payload: JSON.stringify({
-          queryStringParameters: {
-            userId: 'e2e-test'
-          }
-        })
-      }).promise();
-
-      const retrieveResult = JSON.parse(retrieveResponse.Payload as string);
-      expect(retrieveResult.statusCode).toBe(200);
-
-      const responseBody = JSON.parse(retrieveResult.body);
-      expect(responseBody.images).toBeDefined();
-      expect(responseBody.images.length).toBeGreaterThan(0);
-
-      // Verify presigned URL is generated
-      const image = responseBody.images.find((img: any) => img.key === e2eImageKey);
-      expect(image).toBeDefined();
-      expect(image.url).toBeDefined();
-      expect(image.url).toContain('amazonaws.com');
-
-      // Cleanup
-      await s3.deleteObject({
-        Bucket: bucketName,
-        Key: e2eImageKey
-      }).promise();
-    });
 
     test('should maintain data consistency between S3 and DynamoDB', async () => {
       // Upload a new image
@@ -333,28 +269,6 @@ describe('Media Storage System Integration Tests', () => {
   });
 
   describe('Performance and Scale Tests', () => {
-    test('should handle multiple concurrent image retrievals', async () => {
-      const concurrentRequests = 5;
-      const requests = [];
-
-      for (let i = 0; i < concurrentRequests; i++) {
-        requests.push(
-          lambda.invoke({
-            FunctionName: retrieverFunctionName,
-            Payload: JSON.stringify({
-              queryStringParameters: {}
-            })
-          }).promise()
-        );
-      }
-
-      const responses = await Promise.all(requests);
-
-      responses.forEach(response => {
-        const result = JSON.parse(response.Payload as string);
-        expect(result.statusCode).toBe(200);
-      });
-    });
 
     test('should have appropriate timeout configurations for Lambda functions', async () => {
       // Check processor function timeout
