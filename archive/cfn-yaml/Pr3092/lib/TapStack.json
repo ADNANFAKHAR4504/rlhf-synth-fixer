@@ -1,0 +1,501 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure IAM Roles with Least Privilege and Permission Boundaries",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "production",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name for resource tagging"
+        }
+    },
+    "Resources": {
+        "PermissionBoundaryPolicy": {
+            "Type": "AWS::IAM::ManagedPolicy",
+            "Properties": {
+                "ManagedPolicyName": {
+                    "Fn::Sub": "SecurePermissionBoundary-${AWS::StackName}"
+                },
+                "Description": "Permission boundary to prevent privilege escalation",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowBasicReadOperations",
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogStreams",
+                                "cloudwatch:PutMetricData",
+                                "xray:PutTraceSegments",
+                                "xray:PutTelemetryRecords"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:RequestedRegion": {
+                                        "Ref": "AWS::Region"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowS3Operations",
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:DeleteObject",
+                                "s3:GetObjectVersion",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${Environment}-*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${Environment}-*/*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "AllowEC2Operations",
+                            "Effect": "Allow",
+                            "Action": [
+                                "ec2:DescribeInstances",
+                                "ec2:DescribeVolumes",
+                                "ec2:DescribeSecurityGroups",
+                                "ec2:DescribeNetworkInterfaces"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:RequestedRegion": {
+                                        "Ref": "AWS::Region"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyDangerousActions",
+                            "Effect": "Deny",
+                            "Action": [
+                                "iam:CreateAccessKey",
+                                "iam:DeleteRolePolicy",
+                                "iam:DeleteRole",
+                                "iam:PutRolePolicy",
+                                "iam:PutUserPolicy",
+                                "iam:CreateUser",
+                                "iam:CreateRole",
+                                "iam:AttachRolePolicy",
+                                "iam:DetachRolePolicy",
+                                "sts:AssumeRole"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "DenyWildcardActions",
+                            "Effect": "Deny",
+                            "Action": "*",
+                            "Resource": "*",
+                            "Condition": {
+                                "StringLike": {
+                                    "aws:userid": [
+                                        "AIDA*",
+                                        "AROA*"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "EC2InstanceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "SecureEC2Role-${AWS::StackName}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "EC2AssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "ec2.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "sts:ExternalId": {
+                                        "Fn::Sub": "${AWS::AccountId}-ec2-assume"
+                                    }
+                                },
+                                "IpAddress": {
+                                    "aws:SourceIp": [
+                                        "10.0.0.0/8",
+                                        "172.16.0.0/12"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PermissionsBoundary": {
+                    "Ref": "PermissionBoundaryPolicy"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "EC2Instance"
+                    }
+                ]
+            }
+        },
+        "EC2InstancePolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "EC2LeastPrivilegePolicy",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "CloudWatchLogsAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogStreams"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ec2/${AWS::StackName}:*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "S3BucketAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${Environment}-data"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${Environment}-data/*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "SSMParameterAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "ssm:GetParameter",
+                                "ssm:GetParameters"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Environment}/ec2/*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "CloudWatchMetrics",
+                            "Effect": "Allow",
+                            "Action": [
+                                "cloudwatch:PutMetricData"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "cloudwatch:namespace": {
+                                        "Fn::Sub": "${AWS::StackName}/EC2"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyWildcardActions",
+                            "Effect": "Deny",
+                            "Action": "*",
+                            "Resource": "*",
+                            "Condition": {
+                                "StringLike": {
+                                    "aws:userid": "AIDA*"
+                                },
+                                "StringNotEquals": {
+                                    "aws:RequestedRegion": {
+                                        "Ref": "AWS::Region"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "SecureEC2Profile-${AWS::StackName}"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2InstanceRole"
+                    }
+                ]
+            }
+        },
+        "LambdaFunctionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "SecureLambdaRole-${AWS::StackName}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "LambdaAssumeRole",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "PermissionsBoundary": {
+                    "Ref": "PermissionBoundaryPolicy"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Purpose",
+                        "Value": "LambdaFunction"
+                    }
+                ]
+            }
+        },
+        "LambdaFunctionPolicy": {
+            "Type": "AWS::IAM::Policy",
+            "Properties": {
+                "PolicyName": "LambdaLeastPrivilegePolicy",
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "CloudWatchLogsAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "logs:CreateLogGroup",
+                                "logs:CreateLogStream",
+                                "logs:PutLogEvents"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-*:*"
+                                }
+                            ]
+                        },
+                        {
+                            "Sid": "DynamoDBTableAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "dynamodb:GetItem",
+                                "dynamodb:PutItem",
+                                "dynamodb:Query",
+                                "dynamodb:UpdateItem"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-application-table"
+                                },
+                                {
+                                    "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${Environment}-application-table/index/*"
+                                }
+                            ],
+                            "Condition": {
+                                "ForAllValues:StringEquals": {
+                                    "dynamodb:LeadingKeys": [
+                                        {
+                                            "Fn::Sub": "${AWS::StackName}"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "S3ProcessingAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:s3:::${AWS::AccountId}-${Environment}-processing/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringLike": {
+                                    "s3:x-amz-server-side-encryption": "AES256"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "KMSAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "XRayAccess",
+                            "Effect": "Allow",
+                            "Action": [
+                                "xray:PutTraceSegments",
+                                "xray:PutTelemetryRecords"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "DenyWildcardActions",
+                            "Effect": "Deny",
+                            "Action": "*",
+                            "Resource": "*",
+                            "Condition": {
+                                "StringLike": {
+                                    "aws:userid": "AIDA*"
+                                },
+                                "StringNotEquals": {
+                                    "aws:RequestedRegion": {
+                                        "Ref": "AWS::Region"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Roles": [
+                    {
+                        "Ref": "LambdaFunctionRole"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "EC2RoleArn": {
+            "Description": "ARN of the EC2 Instance Role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EC2InstanceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2RoleArn"
+                }
+            }
+        },
+        "LambdaRoleArn": {
+            "Description": "ARN of the Lambda Function Role",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaFunctionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LambdaRoleArn"
+                }
+            }
+        },
+        "EC2InstanceProfileName": {
+            "Description": "Name of the EC2 Instance Profile",
+            "Value": {
+                "Ref": "EC2InstanceProfile"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EC2InstanceProfile"
+                }
+            }
+        },
+        "PermissionBoundaryArn": {
+            "Description": "ARN of the Permission Boundary Policy",
+            "Value": {
+                "Ref": "PermissionBoundaryPolicy"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PermissionBoundaryArn"
+                }
+            }
+        }
+    }
+}
