@@ -136,7 +136,6 @@ export class TapStack extends TerraformStack {
     // CloudWatch Module - Security monitoring
     const cloudwatchModule = new CloudWatchModule(this, 'cloudwatch', {
       cloudTrailLogGroupName: cloudtrailModule.logGroup.name,
-      // snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:security-alerts' // Optional
     });
 
     // IAM Module - Identity and access management
