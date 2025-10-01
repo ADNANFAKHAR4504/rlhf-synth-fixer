@@ -329,23 +329,23 @@ export class CICDPipelineStack extends cdk.Stack {
     // Source Stage - Using CodeStar connection for better reliability or fallback to GitHub token
     const sourceAction = props.codeStarConnectionArn
       ? new codepipeline_actions.CodeStarConnectionsSourceAction({
-        actionName: 'GitHub_Source',
-        owner: props.githubOwner,
-        repo: props.githubRepo,
-        branch: props.githubBranch,
-        connectionArn: props.codeStarConnectionArn,
-        output: sourceOutput,
-        triggerOnPush: true,
-      })
+          actionName: 'GitHub_Source',
+          owner: props.githubOwner,
+          repo: props.githubRepo,
+          branch: props.githubBranch,
+          connectionArn: props.codeStarConnectionArn,
+          output: sourceOutput,
+          triggerOnPush: true,
+        })
       : new codepipeline_actions.GitHubSourceAction({
-        actionName: 'GitHub_Source',
-        owner: props.githubOwner,
-        repo: props.githubRepo,
-        branch: props.githubBranch,
-        oauthToken: githubToken.secretValue,
-        output: sourceOutput,
-        trigger: codepipeline_actions.GitHubTrigger.POLL,
-      });
+          actionName: 'GitHub_Source',
+          owner: props.githubOwner,
+          repo: props.githubRepo,
+          branch: props.githubBranch,
+          oauthToken: githubToken.secretValue,
+          output: sourceOutput,
+          trigger: codepipeline_actions.GitHubTrigger.POLL,
+        });
 
     pipeline.addStage({
       stageName: 'Source',
