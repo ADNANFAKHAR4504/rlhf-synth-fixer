@@ -10,5 +10,18 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "(VPC,  S3 Bucket, KMS, SNS, SQS, IAM)"
+  "aws_services": [
+    "KMS",
+    "S3",
+    "SNS",
+    "SQS",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
