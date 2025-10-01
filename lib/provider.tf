@@ -31,11 +31,6 @@ provider "aws" {
 provider "aws" {
   alias  = "peer"
   region = var.peer_region
-
-  assume_role {
-    role_arn = var.peer_account_role_arn
-  }
-
   default_tags {
     tags = {
       Environment = var.environment

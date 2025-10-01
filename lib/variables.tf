@@ -39,11 +39,6 @@ variable "allowed_ssh_cidr" {
   sensitive   = true
 }
 
-variable "peer_account_role_arn" {
-  description = "IAM role ARN in peer account for VPC peering"
-  type        = string
-  sensitive   = true
-}
 
 variable "rds_username" {
   description = "Master username for RDS instance"
