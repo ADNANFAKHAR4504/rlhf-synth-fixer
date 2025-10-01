@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349493",
+  "team": "6",
+  "startedAt": "2025-10-01T07:38:05.388Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": "(VPC,  S3 Bucket, KMS, SNS, SQS, IAM)"
+}
