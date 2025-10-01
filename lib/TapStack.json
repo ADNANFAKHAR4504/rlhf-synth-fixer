@@ -881,7 +881,7 @@
             "DataResources": [
               {
                 "Type": "AWS::S3::Object",
-                "Values": ["arn:aws:s3:::*/"]
+                "Values": ["arn:aws:s3:::*/*"]
               }
             ]
           }
