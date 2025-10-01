@@ -1,6 +1,6 @@
 // Configuration - These are coming from cfn-outputs after deployment
-import fs from 'fs';
 import AWS from 'aws-sdk';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -14,7 +14,7 @@ const s3 = new AWS.S3();
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 const lambda = new AWS.Lambda();
 const cloudWatch = new AWS.CloudWatch();
-
+const dynamodbRef = new AWS.DynamoDB();
 describe('Media Storage System Integration Tests', () => {
   let bucketName: string;
   let tableName: string;
@@ -46,16 +46,16 @@ describe('Media Storage System Integration Tests', () => {
     test('should have the correct bucket name and be accessible', async () => {
       expect(bucketName).toBeDefined();
       expect(bucketName).toContain('media-storage');
-      
+
       const bucketExists = await s3.headBucket({ Bucket: bucketName }).promise();
       expect(bucketExists).toBeDefined();
     });
 
     test('should have CORS configuration enabled', async () => {
-      const corsConfig = await s3.getBucketCors({ Bucket: bucketName }).promise();
+      const corsConfig: any = await s3.getBucketCors({ Bucket: bucketName }).promise();
       expect(corsConfig.CORSRules).toBeDefined();
       expect(corsConfig.CORSRules.length).toBeGreaterThan(0);
-      
+
       const corsRule = corsConfig.CORSRules[0];
       expect(corsRule.AllowedMethods).toContain('GET');
       expect(corsRule.AllowedMethods).toContain('PUT');
@@ -64,7 +64,7 @@ describe('Media Storage System Integration Tests', () => {
 
     test('should allow object uploads', async () => {
       const testContent = Buffer.from('test image content');
-      
+
       const uploadResult = await s3.upload({
         Bucket: bucketName,
         Key: testImageKey,
@@ -82,26 +82,28 @@ describe('Media Storage System Integration Tests', () => {
   });
 
   describe('DynamoDB Table Tests', () => {
+
+
     test('should have the correct table name and be accessible', async () => {
       expect(tableName).toBeDefined();
       expect(tableName).toContain('ImageMetadata');
-      
-      const tableDescription = await dynamodb.describe({
+
+      const tableDescription: any = await dynamodbRef.describeTable({
         TableName: tableName
       }).promise();
-      
+
       expect(tableDescription.Table.TableName).toBe(tableName);
       expect(tableDescription.Table.BillingModeSummary.BillingMode).toBe('PAY_PER_REQUEST');
     });
 
     test('should have Global Secondary Index configured', async () => {
-      const tableDescription = await dynamodb.describe({
+      const tableDescription: any = await dynamodbRef.describeTable({
         TableName: tableName
       }).promise();
-      
+
       expect(tableDescription.Table.GlobalSecondaryIndexes).toBeDefined();
       expect(tableDescription.Table.GlobalSecondaryIndexes.length).toBe(1);
-      
+
       const gsi = tableDescription.Table.GlobalSecondaryIndexes[0];
       expect(gsi.IndexName).toBe('UserUploadIndex');
     });
@@ -125,7 +127,7 @@ describe('Media Storage System Integration Tests', () => {
       }).promise();
 
       // Get item
-      const getResult = await dynamodb.get({
+      const getResult: any = await dynamodb.get({
         TableName: tableName,
         Key: { id: testItem.id }
       }).promise();
@@ -135,7 +137,7 @@ describe('Media Storage System Integration Tests', () => {
       expect(getResult.Item.uploadedBy).toBe(testItem.uploadedBy);
 
       // Query by GSI
-      const queryResult = await dynamodb.query({
+      const queryResult: any = await dynamodb.query({
         TableName: tableName,
         IndexName: 'UserUploadIndex',
         KeyConditionExpression: 'uploadedBy = :userId',
@@ -152,8 +154,8 @@ describe('Media Storage System Integration Tests', () => {
   describe('Lambda Function Tests', () => {
     test('should have image processor function deployed and accessible', async () => {
       expect(processorFunctionName).toBeDefined();
-      
-      const functionConfig = await lambda.getFunction({
+
+      const functionConfig: any = await lambda.getFunction({
         FunctionName: processorFunctionName
       }).promise();
 
@@ -165,8 +167,8 @@ describe('Media Storage System Integration Tests', () => {
 
     test('should have image retriever function deployed and accessible', async () => {
       expect(retrieverFunctionName).toBeDefined();
-      
-      const functionConfig = await lambda.getFunction({
+
+      const functionConfig: any = await lambda.getFunction({
         FunctionName: retrieverFunctionName
       }).promise();
 
@@ -187,7 +189,7 @@ describe('Media Storage System Integration Tests', () => {
 
       const listAllResult = JSON.parse(listAllResponse.Payload as string);
       expect(listAllResult.statusCode).toBe(200);
-      
+
       const responseBody = JSON.parse(listAllResult.body);
       expect(responseBody.images).toBeDefined();
       expect(Array.isArray(responseBody.images)).toBe(true);
@@ -227,7 +229,7 @@ describe('Media Storage System Integration Tests', () => {
     test('should handle complete image upload and retrieval workflow', async () => {
       const testImageContent = Buffer.from('test image data for e2e test');
       const e2eImageKey = `e2e-test-${Date.now()}.jpg`;
-      
+
       // Step 1: Upload image to S3
       await s3.upload({
         Bucket: bucketName,
@@ -255,13 +257,13 @@ describe('Media Storage System Integration Tests', () => {
 
       const retrieveResult = JSON.parse(retrieveResponse.Payload as string);
       expect(retrieveResult.statusCode).toBe(200);
-      
+
       const responseBody = JSON.parse(retrieveResult.body);
       expect(responseBody.images).toBeDefined();
       expect(responseBody.images.length).toBeGreaterThan(0);
-      
+
       // Verify presigned URL is generated
-      const image = responseBody.images.find(img => img.key === e2eImageKey);
+      const image = responseBody.images.find((img: any) => img.key === e2eImageKey);
       expect(image).toBeDefined();
       expect(image.url).toBeDefined();
       expect(image.url).toContain('amazonaws.com');
@@ -302,7 +304,7 @@ describe('Media Storage System Integration Tests', () => {
       // Check DynamoDB record might exist (depending on EventBridge processing)
       // This is eventually consistent, so we don't fail if not found immediately
       try {
-        const dbItems = await dynamodb.query({
+        const dbItems: any = await dynamodb.query({
           TableName: tableName,
           IndexName: 'UserUploadIndex',
           KeyConditionExpression: 'uploadedBy = :userId',
@@ -310,9 +312,9 @@ describe('Media Storage System Integration Tests', () => {
             ':userId': testMetadata.uploadedby
           }
         }).promise();
-        
+
         if (dbItems.Items.length > 0) {
-          const dbItem = dbItems.Items.find(item => item.key === consistencyTestKey);
+          const dbItem = dbItems.Items.find((item: any) => item.key === consistencyTestKey);
           if (dbItem) {
             expect(dbItem.bucket).toBe(bucketName);
             expect(dbItem.contentType).toBe('image/jpeg');
@@ -347,7 +349,7 @@ describe('Media Storage System Integration Tests', () => {
       }
 
       const responses = await Promise.all(requests);
-      
+
       responses.forEach(response => {
         const result = JSON.parse(response.Payload as string);
         expect(result.statusCode).toBe(200);
@@ -356,13 +358,13 @@ describe('Media Storage System Integration Tests', () => {
 
     test('should have appropriate timeout configurations for Lambda functions', async () => {
       // Check processor function timeout
-      const processorConfig = await lambda.getFunction({
+      const processorConfig: any = await lambda.getFunction({
         FunctionName: processorFunctionName
       }).promise();
       expect(processorConfig.Configuration.Timeout).toBe(30);
 
       // Check retriever function timeout
-      const retrieverConfig = await lambda.getFunction({
+      const retrieverConfig: any = await lambda.getFunction({
         FunctionName: retrieverFunctionName
       }).promise();
       expect(retrieverConfig.Configuration.Timeout).toBe(10);
