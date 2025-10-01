@@ -1,132 +1,109 @@
 /* eslint-disable import/no-extraneous-dependencies */
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  QueryCommand,
-} from '@aws-sdk/lib-dynamodb';
-import { Logger } from '@aws-lambda-powertools/logger';
-import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
-import { captureAWSv3Client } from 'aws-xray-sdk-core';
-/* eslint-enable import/no-extraneous-dependencies */
+import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 
-// Initialize AWS SDK clients with X-Ray tracing
-const dynamodbClient = captureAWSv3Client(new DynamoDBClient({}));
-const docClient = DynamoDBDocumentClient.from(dynamodbClient);
+// Initialize AWS SDK client
+const dynamoClient = new DynamoDBClient({});
 
-// Initialize Powertools
-const logger = new Logger({ serviceName: 'query-orders' });
-const metrics = new Metrics({
-  namespace: 'FoodDelivery',
-  serviceName: 'query-orders',
-});
-
-const lambdaHandler = async (
+export const handler = async (
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> => {
+  console.log('Processing query orders request', JSON.stringify(event, null, 2));
+
   try {
-    logger.info('Processing query request', {
-      method: event.httpMethod,
-      path: event.path,
-      pathParameters: event.pathParameters,
-    });
+    const { customerId, restaurantId, status, limit } = event.queryStringParameters || {};
 
-    const orderId = event.pathParameters?.orderId;
-    const customerId = event.pathParameters?.customerId;
-
-    if (orderId) {
-      // Get specific order
-      const timestamp = event.queryStringParameters?.timestamp;
-
-      if (!timestamp) {
-        return {
-          statusCode: 400,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            error: 'Timestamp is required for order lookup',
-          }),
-        };
-      }
-
-      const result = await docClient.send(
-        new GetCommand({
-          TableName: process.env.TABLE_NAME!,
-          Key: {
-            orderId: orderId,
-            timestamp: Number(timestamp),
-          },
-        })
-      );
-
-      metrics.addMetric('OrderQueried', MetricUnit.Count, 1);
-
-      if (!result.Item) {
-        return {
-          statusCode: 404,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: 'Order not found' }),
-        };
-      }
-
-      return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Request-Id': event.requestContext.requestId,
+    let command;
+    
+    if (customerId) {
+      // Query orders by customer ID using GSI
+      command = new QueryCommand({
+        TableName: process.env.ORDERS_TABLE_NAME,
+        IndexName: 'CustomerIdIndex',
+        KeyConditionExpression: 'customerId = :customerId',
+        ExpressionAttributeValues: {
+          ':customerId': { S: customerId },
         },
-        body: JSON.stringify(result.Item),
+        Limit: limit ? parseInt(limit, 10) : 50,
+        ScanIndexForward: false, // Latest orders first
+      });
+    } else if (restaurantId) {
+      // Query orders by restaurant ID using GSI
+      command = new QueryCommand({
+        TableName: process.env.ORDERS_TABLE_NAME,
+        IndexName: 'RestaurantIdIndex', 
+        KeyConditionExpression: 'restaurantId = :restaurantId',
+        ExpressionAttributeValues: {
+          ':restaurantId': { S: restaurantId },
+        },
+        Limit: limit ? parseInt(limit, 10) : 50,
+        ScanIndexForward: false, // Latest orders first
+      });
+    } else {
+      // Scan all orders (use with caution in production)
+      command = new ScanCommand({
+        TableName: process.env.ORDERS_TABLE_NAME,
+        Limit: limit ? parseInt(limit, 10) : 50,
+      });
+    }
+
+    // Add status filter if specified
+    if (status) {
+      command.input.FilterExpression = '#status = :status';
+      command.input.ExpressionAttributeNames = {
+        '#status': 'status',
       };
-    } else if (customerId) {
-      // Query orders by customer
-      const result = await docClient.send(
-        new QueryCommand({
-          TableName: process.env.TABLE_NAME!,
-          IndexName: 'customerIdIndex',
-          KeyConditionExpression: 'customerId = :customerId',
-          ExpressionAttributeValues: {
-            ':customerId': customerId,
-          },
-          ScanIndexForward: false,
-          Limit: 50,
-        })
-      );
-
-      metrics.addMetric('CustomerOrdersQueried', MetricUnit.Count, 1);
-
-      return {
-        statusCode: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Request-Id': event.requestContext.requestId,
-        },
-        body: JSON.stringify({
-          orders: result.Items || [],
-          count: result.Items?.length || 0,
-        }),
+      command.input.ExpressionAttributeValues = {
+        ...command.input.ExpressionAttributeValues,
+        ':status': { S: status },
       };
     }
 
+    const result = await dynamoClient.send(command);
+
+    // Transform DynamoDB items to regular objects
+    const orders = (result.Items || []).map(item => ({
+      orderId: item.orderId?.S,
+      customerId: item.customerId?.S,
+      restaurantId: item.restaurantId?.S,
+      items: item.items?.S ? JSON.parse(item.items.S) : [],
+      totalAmount: item.totalAmount?.N ? parseFloat(item.totalAmount.N) : 0,
+      deliveryAddress: item.deliveryAddress?.S ? JSON.parse(item.deliveryAddress.S) : null,
+      status: item.status?.S,
+      createdAt: item.createdAt?.S,
+      updatedAt: item.updatedAt?.S,
+    }));
+
+    console.log(`Retrieved ${orders.length} orders`);
+
     return {
-      statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Invalid request parameters' }),
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+      },
+      body: JSON.stringify({
+        success: true,
+        orders,
+        count: orders.length,
+        hasMore: !!result.LastEvaluatedKey,
+      }),
     };
-  } catch (error) {
-    logger.error('Error querying orders', error as Error);
-    metrics.addMetric('QueryError', MetricUnit.Count, 1);
+  } catch (error: any) {
+    console.error('Error querying orders', error);
 
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
       body: JSON.stringify({
-        error: 'Internal server error',
-        requestId: event.requestContext.requestId,
+        success: false,
+        message: 'Failed to query orders',
+        error: error.message,
       }),
     };
-  } finally {
-    metrics.publishStoredMetrics();
   }
 };
-
-export const handler = lambdaHandler;
