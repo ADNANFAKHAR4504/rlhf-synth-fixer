@@ -79,6 +79,26 @@ data "aws_availability_zones" "available" {
 
 data "aws_caller_identity" "current" {}
 
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
+  
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+  
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+  
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+}
+
 # ===========================
 # KMS KEY
 # ===========================
@@ -87,6 +107,42 @@ resource "aws_kms_key" "main" {
   description             = "${local.name_prefix}-cmk"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "Enable IAM User Permissions"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow CloudWatch Logs"
+        Effect = "Allow"
+        Principal = {
+          Service = "logs.${var.aws_region}.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:CreateGrant",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+          }
+        }
+      }
+    ]
+  })
   
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-cmk"
@@ -474,6 +530,15 @@ resource "aws_s3_bucket_policy" "logs" {
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs.arn}/alb-logs/*"
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.logs.arn
       }
     ]
   })
@@ -708,7 +773,7 @@ resource "aws_iam_instance_profile" "ec2" {
 
 resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-lt-"
-  image_id      = "ami-0c94855ba95c574c8"  # Amazon Linux 2023 AMI
+  image_id      = data.aws_ami.amazon_linux_2023.id
   instance_type = "t3.micro"
   
   vpc_security_group_ids = [aws_security_group.app.id]
