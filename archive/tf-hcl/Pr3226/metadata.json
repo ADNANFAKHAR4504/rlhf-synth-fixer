@@ -30,5 +30,12 @@
     "IAM Roles",
     "IAM Policies",
     "EC2 Launch Template"
-  ]
+  ],
+  "training_quality": 3,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Ashwin-DevAsh",
+  "dockerS3Location": ""
 }
