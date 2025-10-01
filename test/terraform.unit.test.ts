@@ -489,13 +489,13 @@ describe("Terraform Infrastructure Files", () => {
     test("outputs include identifiers for key networking and security resources", () => {
       const content = fs.readFileSync(path.resolve(libPath, "outputs.tf"), "utf8");
       [
-        'output\s+"internet_gateway_id"',
-        'output\s+"nat_gateway_id"',
-        'output\s+"ec2_security_group_id"',
-        'output\s+"db_subnet_group_name"',
-        'output\s+"flow_log_id"',
-        'output\s+"flow_log_group_name"'
-      ].forEach((re) => expect(new RegExp(re).test(content)).toBe(true));
+        'output "internet_gateway_id"',
+        'output "nat_gateway_id"',
+        'output "ec2_security_group_id"',
+        'output "db_subnet_group_name"',
+        'output "flow_log_id"',
+        'output "flow_log_group_name"'
+      ].forEach((output) => expect(content.includes(output)).toBe(true));
     });
   });
 });
