@@ -81,19 +81,7 @@ export class TapStack extends cdk.Stack {
       serverAccessLogsPrefix: 'access-logs/',
     });
 
-    // Narrow EC2 role S3 permissions to only the needed buckets (least privilege)
-    ec2Role.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ['s3:GetObject', 's3:ListBucket'],
-        resources: [
-          mainBucket.bucketArn,
-          `${mainBucket.bucketArn}/*`,
-          logBucket.bucketArn,
-          `${logBucket.bucketArn}/*`,
-        ],
-      })
-    );
-
+    // --- REPLACE previous mainBucket.addReplicationRule(...) with explicit CFN replication config ---
     // Replication role for cross-bucket replication - use generated names (no hardcoded roleName)
     const replicationRole = new iam.Role(this, `ReplicationRole-${suffix}`, {
       assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
@@ -129,24 +117,34 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Add replication rule using supported CDK API
-    const mainBucketResource = mainBucket.node.findChild(
-      'Resource'
-    ) as s3.CfnBucket;
-    if (mainBucketResource) {
-      mainBucketResource.addPropertyOverride('ReplicationConfiguration.Rules', [
+    const cfnMain = mainBucket.node.defaultChild as s3.CfnBucket;
+    cfnMain.replicationConfiguration = {
+      role: replicationRole.roleArn,
+      rules: [
         {
-          Id: `ReplicationRule-${suffix}`,
-          Status: 'Enabled',
-          Destination: {
-            Bucket: replicationBucket.bucketArn,
-            StorageClass: 'STANDARD',
+          id: `ReplicationRule-${suffix}`,
+          status: 'Enabled',
+          destination: {
+            bucket: replicationBucket.bucketArn,
+            storageClass: 'STANDARD',
           },
-          Role: replicationRole.roleArn,
-          Filter: {},
+          // optional: prefix: '', priority not required for single rule
         },
-      ]);
-    }
+      ],
+    };
+
+    // Narrow EC2 role S3 permissions to only the needed buckets (least privilege)
+    ec2Role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject', 's3:ListBucket'],
+        resources: [
+          mainBucket.bucketArn,
+          `${mainBucket.bucketArn}/*`,
+          logBucket.bucketArn,
+          `${logBucket.bucketArn}/*`,
+        ],
+      })
+    );
 
     // Security groups
     const dbSecurityGroup = new ec2.SecurityGroup(this, `DBSG-${suffix}`, {
