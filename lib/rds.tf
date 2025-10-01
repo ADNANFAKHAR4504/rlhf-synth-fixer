@@ -69,7 +69,13 @@ resource "aws_db_instance" "mysql" {
   db_name                 = var.db_name
   username                = var.db_username
   password                = var.db_password != "" ? var.db_password : random_password.db[0].result
-  parameter_group_name    = "default.mysql8.0"
+
+  # Ensure encryption at rest
+  storage_encrypted = true
+
+  # Optional: provide a KMS key id if you want CMK encryption
+  # kms_key_id = var.rds_kms_key_id   # add variable if you want CMK
+
   db_subnet_group_name    = aws_db_subnet_group.default.name
   vpc_security_group_ids  = [aws_security_group.rds_sg.id]
   skip_final_snapshot     = true
@@ -77,7 +83,6 @@ resource "aws_db_instance" "mysql" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "Mon:04:00-Mon:05:00"
   identifier              = "mysql-db-${var.resource_suffix}"
-
   tags = {
     Name = "mysql-db-${var.resource_suffix}"
   }
