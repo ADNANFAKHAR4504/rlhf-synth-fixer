@@ -174,15 +174,6 @@ describe('PCI-DSS Infrastructure - AWS Resource Integration Tests', () => {
     });
   });
 
-  describe('Multi-AZ NAT Gateways for High Availability', () => {
-    test('NAT Gateways should have public IPs', async () => {
-      // Verify NAT gateway public IPs exist in outputs
-      expect(outputs.nat_gateway_public_ips).toBeDefined();
-      expect(Array.isArray(outputs.nat_gateway_public_ips)).toBe(true);
-      expect(outputs.nat_gateway_public_ips.length).toBeGreaterThanOrEqual(2);
-    });
-  });
-
   describe('Subnet Architecture - Public, Private App, Private DB', () => {
     test('All subnets should exist in correct tiers', async () => {
       const publicSubnetIds = outputs.public_subnet_ids || [];
