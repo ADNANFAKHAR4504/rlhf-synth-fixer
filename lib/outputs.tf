@@ -4,30 +4,8 @@
 # ===========================
 
 # ===========================
-# VPoutput "alb_dns_name" {
-  description = "Application Load Balancer DNS name"
-  value       = aws_lb.main.dns_name
-}
-
-output "alb_zone_id" {
-  description = "Application Load Balancer hosted zone ID"
-  value       = aws_lb.main.zone_id
-}
-
-output "alb_scheme" {
-  description = "Application Load Balancer scheme (internet-facing or internal)"
-  value       = aws_lb.main.internal ? "internal" : "internet-facing"
-}
-
-output "alb_type" {
-  description = "Application Load Balancer type"
-  value       = aws_lb.main.load_balancer_type
-}
-
-output "target_group_arn" {
-  description = "ALB target group ARN"
-  value       = aws_lb_target_group.app.arn
-}=========================
+# VPC OUTPUTS
+# ===========================
 
 output "vpc_id" {
   description = "VPC ID for payment processing environment"
@@ -168,6 +146,16 @@ output "alb_dns_name" {
 output "alb_zone_id" {
   description = "Application Load Balancer hosted zone ID"
   value       = aws_lb.main.zone_id
+}
+
+output "alb_scheme" {
+  description = "Application Load Balancer scheme (internet-facing or internal)"
+  value       = aws_lb.main.internal ? "internal" : "internet-facing"
+}
+
+output "alb_type" {
+  description = "Application Load Balancer type"
+  value       = aws_lb.main.load_balancer_type
 }
 
 output "target_group_arn" {
