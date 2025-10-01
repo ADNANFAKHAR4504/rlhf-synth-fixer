@@ -18,11 +18,6 @@ DELIVERABLES:
 5) id-mapping.csv sample (headers: resource,address,old_id,new_id,notes)
 6) runbook.md (cutover plan, roll-back, checks)
 
-OUTPUT FORMAT (IMPORTANT):
-- Provide each file in a separate fenced code block with its filename as the first line in a comment, e.g.:
-```hcl
-# main.tf
-...
 
 Create a single Terraform configuration file named tap_stack.tf containing all variables, locals, resources, and outputs (no provider block, no module references) that fulfills the following security and infrastructure requirements:
 1. There is requirement to have resources deployed in region  us-west-2. So Please create proper VPC in each region and set specific CIDR for the VPC. VPCs with CIDR blocks: 10.0.0.0/16 for the primary .

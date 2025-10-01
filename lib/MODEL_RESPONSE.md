@@ -570,7 +570,6 @@ resource "aws_launch_template" "app" {
   name_prefix   = "${local.prefix}-app-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
-  key_name      = var.key_pair_name
   
   vpc_security_group_ids = [aws_security_group.app.id]
   
