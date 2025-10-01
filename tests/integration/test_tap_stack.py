@@ -383,33 +383,22 @@ class TestTapStackIntegration(unittest.TestCase):
             
             has_s3_permission = False
             
-            # Check inline policies for S3 permissions
-            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
-            for policy_name in inline_policies['PolicyNames']:
-                policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
-                policy_content = json.loads(policy_doc['PolicyDocument'])
-                
-                for statement in policy_content.get('Statement', []):
-                    if (statement.get('Effect') == 'Allow' and 
-                        's3:' in str(statement.get('Action', []))):
-                        has_s3_permission = True
-                        break
-                if has_s3_permission:
+            # Check attached managed policies (this is where our custom policies are attached)
+            attached_policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
+            for policy in attached_policies['AttachedPolicies']:
+                # Check if it's our custom S3 policy
+                if 's3-access' in policy['PolicyName']:
+                    has_s3_permission = True
+                    break
+                # Also check for AWS managed S3 policies
+                if 'S3' in policy['PolicyName'] or 'AmazonS3' in policy['PolicyName']:
+                    has_s3_permission = True
                     break
             
-            # Also check attached managed policies
+            # If not found in attached policies, check inline policies
             if not has_s3_permission:
-                attached_policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
-                for policy in attached_policies['AttachedPolicies']:
-                    if 'S3' in policy['PolicyName'] or 'AmazonS3' in policy['PolicyName']:
-                        has_s3_permission = True
-                        break
-            
-            # If still not found, check if the role has any S3-related permissions at all
-            if not has_s3_permission:
-                # Get all policies and check for any S3 permissions
-                all_policies = self.iam_client.list_role_policies(RoleName=role_name)
-                for policy_name in all_policies['PolicyNames']:
+                inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
+                for policy_name in inline_policies['PolicyNames']:
                     policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
                     policy_content = json.loads(policy_doc['PolicyDocument'])
                     
@@ -443,37 +432,22 @@ class TestTapStackIntegration(unittest.TestCase):
             
             has_parameter_store_permission = False
             
-            # Check inline policies for Parameter Store permissions
-            inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
-            for policy_name in inline_policies['PolicyNames']:
-                policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
-                policy_content = json.loads(policy_doc['PolicyDocument'])
-                
-                for statement in policy_content.get('Statement', []):
-                    actions = statement.get('Action', [])
-                    if isinstance(actions, str):
-                        actions = [actions]
-                    
-                    if (statement.get('Effect') == 'Allow' and 
-                        any('ssm:' in action for action in actions)):
-                        has_parameter_store_permission = True
-                        break
-                if has_parameter_store_permission:
+            # Check attached managed policies (this is where our custom policies are attached)
+            attached_policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
+            for policy in attached_policies['AttachedPolicies']:
+                # Check if it's our custom SSM policy
+                if 'ssm-access' in policy['PolicyName']:
+                    has_parameter_store_permission = True
+                    break
+                # Also check for AWS managed SSM policies
+                if 'SSM' in policy['PolicyName'] or 'AmazonSSM' in policy['PolicyName']:
+                    has_parameter_store_permission = True
                     break
             
-            # Also check attached managed policies
+            # If not found in attached policies, check inline policies
             if not has_parameter_store_permission:
-                attached_policies = self.iam_client.list_attached_role_policies(RoleName=role_name)
-                for policy in attached_policies['AttachedPolicies']:
-                    if 'SSM' in policy['PolicyName'] or 'AmazonSSM' in policy['PolicyName']:
-                        has_parameter_store_permission = True
-                        break
-            
-            # If still not found, check if the role has any SSM-related permissions at all
-            if not has_parameter_store_permission:
-                # Get all policies and check for any SSM permissions
-                all_policies = self.iam_client.list_role_policies(RoleName=role_name)
-                for policy_name in all_policies['PolicyNames']:
+                inline_policies = self.iam_client.list_role_policies(RoleName=role_name)
+                for policy_name in inline_policies['PolicyNames']:
                     policy_doc = self.iam_client.get_role_policy(RoleName=role_name, PolicyName=policy_name)
                     policy_content = json.loads(policy_doc['PolicyDocument'])
                     
