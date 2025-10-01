@@ -1,0 +1,14 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349620",
+  "team": "3",
+  "startedAt": "2025-10-01T11:05:46.385Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": "S3 Bucket, CodeBuild, Ec2, VPC"
+}
