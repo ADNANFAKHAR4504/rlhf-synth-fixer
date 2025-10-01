@@ -50,9 +50,11 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('should create isolated subnets in different AZs', () => {
+    test('should create exactly 2 isolated subnets', () => {
       template.resourceCountIs('AWS::EC2::Subnet', 2);
-      
+    });
+
+    test('should create subnets with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::Subnet', Match.objectLike({
         MapPublicIpOnLaunch: false,
         Tags: Match.arrayWith([
@@ -74,15 +76,40 @@ describe('TapStack Unit Tests', () => {
       }));
     });
 
-    test('should create VPC endpoints for S3, DynamoDB, and KMS', () => {
+    test('should create exactly 3 VPC endpoints', () => {
       template.resourceCountIs('AWS::EC2::VPCEndpoint', 3);
-      
+    });
+
+    test('should create S3 gateway endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Gateway',
+        ServiceName: {
+          'Fn::Join': Match.arrayWith([
+            Match.arrayWith([
+              Match.stringLikeRegexp('.*s3.*'),
+            ]),
+          ]),
+        },
       });
+    });
 
+    test('should create DynamoDB gateway endpoint', () => {
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        VpcEndpointType: 'Gateway',
+        ServiceName: {
+          'Fn::Join': Match.arrayWith([
+            Match.arrayWith([
+              Match.stringLikeRegexp('.*dynamodb.*'),
+            ]),
+          ]),
+        },
+      });
+    });
+
+    test('should create KMS interface endpoint', () => {
       template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
         VpcEndpointType: 'Interface',
+        ServiceName: Match.stringLikeRegexp('.*kms.*'),
       });
     });
   });
@@ -109,12 +136,22 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('S3 Storage', () => {
-    test('should create primary backup bucket with correct configuration', () => {
+    test('should create exactly 4 S3 buckets', () => {
+      template.resourceCountIs('AWS::S3::Bucket', 4);
+    });
+
+    test('should create primary backup bucket with versioning', () => {
       template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
         BucketName: `backup-primary-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         VersioningConfiguration: Match.objectLike({
           Status: 'Enabled',
         }),
+      }));
+    });
+
+    test('should create primary backup bucket with KMS encryption', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketName: `backup-primary-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         BucketEncryption: Match.objectLike({
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
@@ -124,12 +161,24 @@ describe('TapStack Unit Tests', () => {
             }),
           ]),
         }),
+      }));
+    });
+
+    test('should create primary backup bucket with public access blocked', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketName: `backup-primary-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         PublicAccessBlockConfiguration: {
           BlockPublicAcls: true,
           BlockPublicPolicy: true,
           IgnorePublicAcls: true,
           RestrictPublicBuckets: true,
         },
+      }));
+    });
+
+    test('should create primary backup bucket with retention lifecycle rule', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketName: `backup-primary-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         LifecycleConfiguration: Match.objectLike({
           Rules: Match.arrayWith([
             Match.objectLike({
@@ -137,6 +186,16 @@ describe('TapStack Unit Tests', () => {
               Status: 'Enabled',
               ExpirationInDays: 60,
             }),
+          ]),
+        }),
+      }));
+    });
+
+    test('should create primary backup bucket with IA transition rule', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketName: `backup-primary-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
+        LifecycleConfiguration: Match.objectLike({
+          Rules: Match.arrayWith([
             Match.objectLike({
               Id: 'transition-to-ia',
               Status: 'Enabled',
@@ -147,6 +206,16 @@ describe('TapStack Unit Tests', () => {
                 },
               ]),
             }),
+          ]),
+        }),
+      }));
+    });
+
+    test('should create primary backup bucket with Glacier transition rule', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketName: `backup-primary-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
+        LifecycleConfiguration: Match.objectLike({
+          Rules: Match.arrayWith([
             Match.objectLike({
               Id: 'transition-to-glacier',
               Status: 'Enabled',
@@ -162,12 +231,18 @@ describe('TapStack Unit Tests', () => {
       }));
     });
 
-    test('should create replication bucket for disaster recovery', () => {
+    test('should create replication bucket with versioning', () => {
       template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
         BucketName: `backup-replications-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         VersioningConfiguration: Match.objectLike({
           Status: 'Enabled',
         }),
+      }));
+    });
+
+    test('should create replication bucket with KMS encryption', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketName: `backup-replications-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         BucketEncryption: Match.objectLike({
           ServerSideEncryptionConfiguration: Match.arrayWith([
             Match.objectLike({
@@ -177,6 +252,12 @@ describe('TapStack Unit Tests', () => {
             }),
           ]),
         }),
+      }));
+    });
+
+    test('should create replication bucket with retention policy', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
+        BucketName: `backup-replications-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         LifecycleConfiguration: Match.objectLike({
           Rules: Match.arrayWith([
             Match.objectLike({
@@ -189,11 +270,13 @@ describe('TapStack Unit Tests', () => {
       }));
     });
 
-    test('should create access logs and audit trail buckets', () => {
+    test('should create access logs bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: `backup-access-logs-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
       });
+    });
 
+    test('should create audit trail bucket', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
         BucketName: `backup-audit-trail-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
       });
@@ -201,35 +284,114 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('DynamoDB Tables', () => {
-    test('should create backup metadata table with point-in-time recovery', () => {
+    test('should create exactly 2 DynamoDB tables', () => {
+      template.resourceCountIs('AWS::DynamoDB::Table', 2);
+    });
+
+    test('should create backup metadata table with pay-per-request billing', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
         BillingMode: 'PAY_PER_REQUEST',
+        AttributeDefinitions: Match.arrayWith([
+          Match.objectLike({
+            AttributeName: 'backupId',
+            AttributeType: 'S',
+          }),
+          Match.objectLike({
+            AttributeName: 'timestamp',
+            AttributeType: 'S',
+          }),
+        ]),
+      }));
+    });
+
+    test('should create backup metadata table with point-in-time recovery', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
         PointInTimeRecoverySpecification: {
           PointInTimeRecoveryEnabled: true,
         },
+      }));
+    });
+
+    test('should create backup metadata table with encryption', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
         SSESpecification: Match.objectLike({
           SSEEnabled: true,
-        }),
-        GlobalSecondaryIndexes: Match.arrayWith([
-          Match.objectLike({
-            IndexName: 'StatusIndex',
-          }),
-        ]),
-        TimeToLiveSpecification: Match.objectLike({
-          Enabled: true,
         }),
       }));
     });
 
-    test('should create deduplication table for backup integrity', () => {
+    test('should create backup metadata table with TTL', () => {
       template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
-        BillingMode: 'PAY_PER_REQUEST',
-        SSESpecification: Match.objectLike({
-          SSEEnabled: true,
-        }),
         TimeToLiveSpecification: Match.objectLike({
           Enabled: true,
+          AttributeName: 'expirationTime',
         }),
+      }));
+    });
+
+    test('should create backup metadata table with StatusIndex GSI', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
+        GlobalSecondaryIndexes: Match.arrayWith([
+          Match.objectLike({
+            IndexName: 'StatusIndex',
+            KeySchema: Match.arrayWith([
+              Match.objectLike({
+                AttributeName: 'status',
+                KeyType: 'HASH',
+              }),
+            ]),
+          }),
+        ]),
+      }));
+    });
+
+    test('should create backup metadata table with UserIndex GSI', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
+        GlobalSecondaryIndexes: Match.arrayWith([
+          Match.objectLike({
+            IndexName: 'UserIndex',
+            KeySchema: Match.arrayWith([
+              Match.objectLike({
+                AttributeName: 'userId',
+                KeyType: 'HASH',
+              }),
+            ]),
+          }),
+        ]),
+      }));
+    });
+
+    test('should create deduplication table with content hash key', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
+        BillingMode: 'PAY_PER_REQUEST',
+        AttributeDefinitions: Match.arrayWith([
+          Match.objectLike({
+            AttributeName: 'contentHash',
+            AttributeType: 'S',
+          }),
+        ]),
+        KeySchema: Match.arrayWith([
+          Match.objectLike({
+            AttributeName: 'contentHash',
+            KeyType: 'HASH',
+          }),
+        ]),
+      }));
+    });
+
+    test('should create deduplication table with SizeIndex GSI', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', Match.objectLike({
+        GlobalSecondaryIndexes: Match.arrayWith([
+          Match.objectLike({
+            IndexName: 'SizeIndex',
+            KeySchema: Match.arrayWith([
+              Match.objectLike({
+                AttributeName: 'fileSize',
+                KeyType: 'HASH',
+              }),
+            ]),
+          }),
+        ]),
       }));
     });
   });
@@ -597,6 +759,41 @@ describe('TapStack Unit Tests', () => {
       
       // But no email subscription should be created
       noEmailTemplate.resourceCountIs('AWS::SNS::Subscription', 0);
+    });
+  });
+
+  describe('Cross-Account Access Configuration', () => {
+    let crossAccountStack: TapStack;
+    let crossAccountTemplate: Template;
+
+    beforeEach(() => {
+      const crossAccountApp = new cdk.App();
+      crossAccountStack = new TapStack(crossAccountApp, 'CrossAccountTapStack', {
+        environmentSuffix: 'test',
+        enableCrossAccountAccess: true,
+        trustedAccountIds: ['718240086340'],
+        env: {
+          account: testAccount,
+          region: testRegion,
+        },
+      });
+      crossAccountTemplate = Template.fromStack(crossAccountStack);
+    });
+
+    test('should create KMS key policies with cross-account access', () => {
+      // Verify cross-account policy statements exist in KMS key
+      const kmsKeys = crossAccountTemplate.findResources('AWS::KMS::Key');
+      const primaryKey = Object.values(kmsKeys)[0] as any;
+      const statements = primaryKey.Properties.KeyPolicy.Statement;
+      
+      // Should have cross-account access statements
+      const crossAccountStatements = statements.filter((stmt: any) => 
+        stmt.Sid && stmt.Sid.startsWith('CrossAccountAccess')
+      );
+      
+      expect(crossAccountStatements).toHaveLength(1);
+      expect(crossAccountStatements[0].Sid).toBe('CrossAccountAccess0');
+      expect(crossAccountStatements[0].Effect).toBe('Allow');
     });
   });
 
