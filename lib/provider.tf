@@ -1,7 +1,7 @@
 # provider.tf
 
 terraform {
-  required_version = ">= 1.4.0"
+  required_version = ">= 1.5.0"
 
   required_providers {
     aws = {
@@ -17,10 +17,30 @@ terraform {
 # Primary AWS provider for general resources
 provider "aws" {
   region = var.aws_region
+
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "Terraform"
+    }
+  }
 }
 
 # Aliased provider for peer region resources
 provider "aws" {
   alias  = "peer"
   region = var.peer_region
+
+  assume_role {
+    role_arn = var.peer_account_role_arn
+  }
+
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "Terraform"
+    }
+  }
 }
