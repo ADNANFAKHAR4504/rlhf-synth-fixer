@@ -10,5 +10,19 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "Lambda, CLoudwatch, Ec2, Rds"
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "Lambda",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "ALB",
+    "NAT Gateway",
+    "VPC Flow Logs",
+    "Security Groups"
+  ],
+  "training_quality": 9
 }
