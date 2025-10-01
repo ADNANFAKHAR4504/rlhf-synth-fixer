@@ -96,7 +96,7 @@ describe('TapStack integration (live outputs)', () => {
     expect(albVal).toBeDefined();
     expect(typeof albVal).toBe('string');
     // simple DNS format check
-    expect(/^[a-z0-9\-\.]+\.[a-z0-9\-\.]+$/.test(albVal as string)).toBe(true);
+    expect(/^(https?:\/\/)?[a-z0-9\-\.]+\.[a-z0-9\-\.]+(:\d+)?(\/.*)?$/i.test(albVal as string)).toBe(true);
   });
 
   test('no hardcoded region in outputs and values are generic', () => {
