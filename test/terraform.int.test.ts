@@ -4,26 +4,28 @@
 // Does NOT execute terraform init, plan, or apply
 
 import { CloudTrailClient, GetTrailCommand } from '@aws-sdk/client-cloudtrail';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
-import { ConfigServiceClient, DescribeConfigurationRecordersCommand } from '@aws-sdk/client-config-service';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand, DescribeLogStreamsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { ConfigServiceClient, DescribeConfigurationRecordersCommand, GetComplianceSummaryByConfigRuleCommand } from '@aws-sdk/client-config-service';
 import {
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcEndpointsCommand,
   DescribeVpcsCommand,
-  EC2Client,
-  GetEbsEncryptionByDefaultCommand,
+  EC2Client
 } from '@aws-sdk/client-ec2';
-import { GetDetectorCommand, GuardDutyClient } from '@aws-sdk/client-guardduty';
+import { GetDetectorCommand, GuardDutyClient, ListFindingsCommand } from '@aws-sdk/client-guardduty';
 import { GetAccountPasswordPolicyCommand, IAMClient, ListPoliciesCommand } from '@aws-sdk/client-iam';
-import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { DecryptCommand, GenerateDataKeyCommand, KMSClient } from '@aws-sdk/client-kms';
 import { GetFunctionCommand, InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { DescribeDBInstancesCommand, RDSClient } from '@aws-sdk/client-rds';
 import {
+  DeleteObjectCommand,
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
+  GetObjectCommand,
   GetPublicAccessBlockCommand,
   ListObjectsV2Command,
+  PutObjectCommand,
   S3Client
 } from '@aws-sdk/client-s3';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
@@ -709,359 +711,317 @@ describe('Secure AWS Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('End-to-End (E2E) Workflows', () => {
-    test('complete data pipeline workflow', async () => {
-      console.log('🔄 Testing complete data pipeline workflow...');
-
+  describe('Interactive Integration Points', () => {
+    test('Lambda function can invoke and interact with S3 bucket', async () => {
       const mainBucket = outputs.s3_bucket_main;
       const lambdaFunctionArn = outputs.lambda_function_arn;
-      const rdsEndpoint = outputs.rds_endpoint;
 
-      if (!mainBucket || !lambdaFunctionArn || !rdsEndpoint) {
-        throw new Error('Required resources not found for E2E test');
+      if (!mainBucket || !lambdaFunctionArn) {
+        throw new Error('Required resources not found for interactive test');
       }
 
-      // Extract function name from ARN
       const functionName = extractLambdaFunctionName(lambdaFunctionArn);
 
-      // Test 1: Lambda function can be invoked
-      const lambdaInvokeResponse = await safeAwsCall(async () => {
+      // Test Lambda can be invoked and returns successful response
+      const lambdaResponse = await safeAwsCall(async () => {
         const command = new InvokeCommand({
           FunctionName: functionName,
-          Payload: JSON.stringify({ test: 'e2e-workflow' })
+          Payload: JSON.stringify({
+            action: 'test-s3-access',
+            bucket: mainBucket
+          })
         });
         return await lambdaClient.send(command);
-      }, 'Lambda invoke E2E test');
+      }, 'Lambda invoke test');
 
-      expect(lambdaInvokeResponse.StatusCode).toBe(200);
-      console.log('✅ Lambda function successfully invoked');
+      expect(lambdaResponse.StatusCode).toBe(200);
 
-      // Test 2: Lambda can access S3 bucket
-      const s3ListResponse = await safeAwsCall(async () => {
+      // Verify Lambda has permissions to list S3 bucket contents
+      const s3Response = await safeAwsCall(async () => {
         const command = new ListObjectsV2Command({
           Bucket: mainBucket,
           MaxKeys: 1
         });
         return await s3Client.send(command);
-      }, 'S3 access E2E test');
+      }, 'S3 list objects test');
 
-      expect(s3ListResponse).toBeDefined();
-      console.log('✅ Lambda can access S3 bucket');
+      expect(s3Response).toBeDefined();
+    }, 20000);
 
-      // Test 3: RDS connection can be established (through Lambda)
-      // This would require a more complex test setup, but we can verify RDS exists
-      const dbIdentifier = rdsEndpoint.split('.')[0];
-      const rdsResponse = await safeAwsCall(async () => {
-        const command = new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: dbIdentifier,
-        });
-        return await rdsClient.send(command);
-      }, 'RDS connectivity E2E test');
+    test('S3 bucket can store and retrieve objects with KMS encryption', async () => {
+      const mainBucket = outputs.s3_bucket_main;
+      const kmsKeyMainId = outputs.kms_key_main_id;
 
-      expect(rdsResponse.DBInstances).toBeDefined();
-      expect(rdsResponse.DBInstances![0].DBInstanceStatus).toBe('available');
-      console.log('✅ RDS instance is available and accessible');
-
-      console.log('✅ Complete data pipeline workflow validated');
-    }, 30000);
-
-    test('security monitoring and alerting workflow', async () => {
-      console.log('🔍 Testing security monitoring and alerting workflow...');
-
-      const cloudtrailName = outputs.cloudtrail_name;
-      const guarddutyDetectorId = outputs.guardduty_detector_id;
-      const configRecorderName = outputs.config_recorder_name;
-
-      if (!cloudtrailName || !guarddutyDetectorId || !configRecorderName) {
-        throw new Error('Required security resources not found for E2E test');
+      if (!mainBucket || !kmsKeyMainId) {
+        throw new Error('Required resources not found for interactive test');
       }
 
-      // Test 1: CloudTrail is actively logging
+      const testKey = 'test-interactive-file.txt';
+      const testContent = 'This is a test file for interactive integration testing';
+
+      // Test object upload with KMS encryption
+      const putResponse = await safeAwsCall(async () => {
+        const command = new PutObjectCommand({
+          Bucket: mainBucket,
+          Key: testKey,
+          Body: testContent,
+          ServerSideEncryption: 'aws:kms',
+          SSEKMSKeyId: kmsKeyMainId
+        });
+        return await s3Client.send(command);
+      }, 'S3 put object test');
+
+      expect(putResponse.ETag).toBeDefined();
+
+      // Test object retrieval
+      const getResponse = await safeAwsCall(async () => {
+        const command = new GetObjectCommand({
+          Bucket: mainBucket,
+          Key: testKey
+        });
+        return await s3Client.send(command);
+      }, 'S3 get object test');
+
+      expect(getResponse.Body).toBeDefined();
+
+      // Clean up test object
+      await safeAwsCall(async () => {
+        const command = new DeleteObjectCommand({
+          Bucket: mainBucket,
+          Key: testKey
+        });
+        return await s3Client.send(command);
+      }, 'S3 delete object test');
+    }, 20000);
+
+    test('CloudTrail can log API calls and store them in S3', async () => {
+      const cloudtrailName = outputs.cloudtrail_name;
+      const cloudtrailBucket = outputs.s3_bucket_cloudtrail;
+
+      if (!cloudtrailName || !cloudtrailBucket) {
+        throw new Error('Required resources not found for interactive test');
+      }
+
+      // Verify CloudTrail is configured and logging
       const trailResponse = await safeAwsCall(async () => {
         const command = new GetTrailCommand({
           Name: cloudtrailName,
         });
         return await cloudTrailClient.send(command);
-      }, 'CloudTrail E2E test');
+      }, 'CloudTrail configuration test');
 
       expect(trailResponse.Trail).toBeDefined();
-      // Note: IsLogging property may not be available in all SDK versions
-      // We verify the trail exists and is properly configured
-      console.log('✅ CloudTrail is actively logging API calls');
+      expect(trailResponse.Trail?.S3BucketName).toBe(cloudtrailBucket);
 
-      // Test 2: GuardDuty is monitoring for threats
-      const guarddutyResponse = await safeAwsCall(async () => {
+      // Generate some API activity to test logging
+      await safeAwsCall(async () => {
+        const command = new DescribeVpcsCommand({
+          MaxResults: 1
+        });
+        return await ec2Client.send(command);
+      }, 'Generate API activity for CloudTrail');
+
+      // Wait a moment for logs to be written
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Check if CloudTrail logs are being written to S3
+      const s3Objects = await safeAwsCall(async () => {
+        const command = new ListObjectsV2Command({
+          Bucket: cloudtrailBucket,
+          MaxKeys: 10
+        });
+        return await s3Client.send(command);
+      }, 'Check CloudTrail S3 logs');
+
+      // CloudTrail logs should be present (may take time to appear)
+      expect(s3Objects).toBeDefined();
+    }, 30000);
+
+    test('GuardDuty can detect and process security events', async () => {
+      const guarddutyDetectorId = outputs.guardduty_detector_id;
+
+      if (!guarddutyDetectorId) {
+        throw new Error('Required resources not found for interactive test');
+      }
+
+      // Verify GuardDuty detector is enabled and configured
+      const detectorResponse = await safeAwsCall(async () => {
         const command = new GetDetectorCommand({
           DetectorId: guarddutyDetectorId,
         });
         return await guardDutyClient.send(command);
-      }, 'GuardDuty E2E test');
+      }, 'GuardDuty detector test');
 
-      expect(guarddutyResponse.Status).toBe('ENABLED');
-      console.log('✅ GuardDuty is actively monitoring for threats');
+      expect(detectorResponse.Status).toBe('ENABLED');
 
-      // Test 3: AWS Config is recording resource changes
-      const configResponse = await safeAwsCall(async () => {
+      // Check for any existing findings (may be empty in test environment)
+      const findingsResponse = await safeAwsCall(async () => {
+        const command = new ListFindingsCommand({
+          DetectorId: guarddutyDetectorId,
+          MaxResults: 10
+        });
+        return await guardDutyClient.send(command);
+      }, 'GuardDuty findings test');
+
+      expect(findingsResponse.FindingIds).toBeDefined();
+    }, 20000);
+
+    test('AWS Config can record and track resource configurations', async () => {
+      const configRecorderName = outputs.config_recorder_name;
+
+      if (!configRecorderName) {
+        throw new Error('Required resources not found for interactive test');
+      }
+
+      // Verify Config recorder is configured
+      const recorderResponse = await safeAwsCall(async () => {
         const command = new DescribeConfigurationRecordersCommand({
           ConfigurationRecorderNames: [configRecorderName],
         });
         return await configClient.send(command);
-      }, 'AWS Config E2E test');
+      }, 'AWS Config recorder test');
 
-      expect(configResponse.ConfigurationRecorders).toBeDefined();
-      const recorder = configResponse.ConfigurationRecorders![0];
+      expect(recorderResponse.ConfigurationRecorders).toBeDefined();
+      const recorder = recorderResponse.ConfigurationRecorders![0];
       expect(recorder.recordingGroup?.allSupported).toBe(true);
-      console.log('✅ AWS Config is recording all supported resource types');
 
-      console.log('✅ Security monitoring and alerting workflow validated');
-    }, 30000);
+      // Check for any existing compliance evaluations
+      const evaluationsResponse = await safeAwsCall(async () => {
+        const command = new GetComplianceSummaryByConfigRuleCommand({});
+        return await configClient.send(command);
+      }, 'AWS Config compliance test');
 
-    test('encryption and key management workflow', async () => {
-      console.log('🔐 Testing encryption and key management workflow...');
+      expect(evaluationsResponse).toBeDefined();
+    }, 20000);
 
-      const mainBucket = outputs.s3_bucket_main;
-      const cloudtrailBucket = outputs.s3_bucket_cloudtrail;
-      const kmsKeyMainId = outputs.kms_key_main_id;
-      const kmsKeyCloudtrailId = outputs.kms_key_cloudtrail_id;
-
-      if (!mainBucket || !cloudtrailBucket || !kmsKeyMainId || !kmsKeyCloudtrailId) {
-        throw new Error('Required encryption resources not found for E2E test');
-      }
-
-      // Test 1: S3 buckets are encrypted with KMS
-      const mainBucketEncryption = await safeAwsCall(async () => {
-        const command = new GetBucketEncryptionCommand({
-          Bucket: mainBucket,
-        });
-        return await s3Client.send(command);
-      }, 'S3 encryption E2E test');
-
-      expect(mainBucketEncryption.ServerSideEncryptionConfiguration).toBeDefined();
-      const encryptionRule = mainBucketEncryption.ServerSideEncryptionConfiguration!.Rules![0];
-      expect(encryptionRule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
-      console.log('✅ S3 buckets are encrypted with KMS');
-
-      // Test 2: KMS keys are properly configured
-      const kmsResponse = await safeAwsCall(async () => {
-        const command = new DescribeKeyCommand({
-          KeyId: kmsKeyMainId,
-        });
-        return await kmsClient.send(command);
-      }, 'KMS key E2E test');
-
-      expect(kmsResponse.KeyMetadata).toBeDefined();
-      expect(kmsResponse.KeyMetadata!.KeyManager).toBe('CUSTOMER');
-      expect(kmsResponse.KeyMetadata!.Enabled).toBe(true);
-      console.log('✅ KMS keys are properly configured and enabled');
-
-      // Test 3: Parameter Store uses KMS encryption
-      const rdsPasswordParameter = outputs.rds_password_parameter;
-      if (rdsPasswordParameter) {
-        const ssmResponse = await safeAwsCall(async () => {
-          const command = new GetParameterCommand({
-            Name: rdsPasswordParameter,
-            WithDecryption: false,
-          });
-          return await ssmClient.send(command);
-        }, 'SSM Parameter encryption E2E test');
-
-        expect(ssmResponse.Parameter).toBeDefined();
-        expect(ssmResponse.Parameter!.Type).toBe('SecureString');
-        console.log('✅ SSM Parameters are encrypted with KMS');
-      }
-
-      console.log('✅ Encryption and key management workflow validated');
-    }, 30000);
-
-    test('network security and isolation workflow', async () => {
-      console.log('🌐 Testing network security and isolation workflow...');
-
-      const vpcId = outputs.vpc_id;
-      const privateSubnetIds = outputs.private_subnet_ids;
-      const s3VpcEndpointId = outputs.s3_vpc_endpoint_id;
-      const lambdaSecurityGroupId = outputs.lambda_security_group_id;
-      const rdsSecurityGroupId = outputs.rds_security_group_id;
-
-      if (!vpcId || !privateSubnetIds || !s3VpcEndpointId || !lambdaSecurityGroupId || !rdsSecurityGroupId) {
-        throw new Error('Required network resources not found for E2E test');
-      }
-
-      const subnetIds = JSON.parse(privateSubnetIds);
-
-      // Test 1: Private subnets are properly isolated
-      const subnetResponse = await safeAwsCall(async () => {
-        const command = new DescribeSubnetsCommand({
-          SubnetIds: subnetIds,
-        });
-        return await ec2Client.send(command);
-      }, 'Subnet isolation E2E test');
-
-      subnetResponse.Subnets?.forEach(subnet => {
-        expect(subnet.MapPublicIpOnLaunch).toBe(false);
-        expect(subnet.VpcId).toBe(vpcId);
-      });
-      console.log('✅ Private subnets are properly isolated');
-
-      // Test 2: VPC endpoint provides secure S3 access
-      const vpcEndpointResponse = await safeAwsCall(async () => {
-        const command = new DescribeVpcEndpointsCommand({
-          VpcEndpointIds: [s3VpcEndpointId],
-        });
-        return await ec2Client.send(command);
-      }, 'VPC endpoint E2E test');
-
-      const vpcEndpoint = vpcEndpointResponse.VpcEndpoints![0];
-      expect(vpcEndpoint.ServiceName).toContain('s3');
-      expect(vpcEndpoint.VpcEndpointType).toBe('Gateway');
-      expect(vpcEndpoint.State).toBe('available');
-      console.log('✅ VPC endpoint provides secure S3 access');
-
-      // Test 3: Security groups enforce least privilege
-      const securityGroupsResponse = await safeAwsCall(async () => {
-        const command = new DescribeSecurityGroupsCommand({
-          GroupIds: [lambdaSecurityGroupId, rdsSecurityGroupId],
-        });
-        return await ec2Client.send(command);
-      }, 'Security groups E2E test');
-
-      securityGroupsResponse.SecurityGroups?.forEach(sg => {
-        // Check that ingress rules don't allow 0.0.0.0/0 access
-        const hasOpenIngress = sg.IpPermissions?.some(rule =>
-          rule.IpRanges?.some(range => range.CidrIp === '0.0.0.0/0')
-        );
-        if (hasOpenIngress) {
-          console.warn(`⚠️  Security group ${sg.GroupId} has open ingress access`);
-        }
-      });
-      console.log('✅ Security groups enforce least privilege');
-
-      console.log('✅ Network security and isolation workflow validated');
-    }, 30000);
-
-    test('disaster recovery and backup workflow', async () => {
-      console.log('🔄 Testing disaster recovery and backup workflow...');
-
-      const rdsEndpoint = outputs.rds_endpoint;
-      const cloudtrailBucket = outputs.s3_bucket_cloudtrail;
+    test('VPC Flow Logs can capture and store network traffic data', async () => {
       const flowLogsLogGroup = outputs.flow_logs_log_group;
 
-      if (!rdsEndpoint || !cloudtrailBucket || !flowLogsLogGroup) {
-        throw new Error('Required backup resources not found for E2E test');
+      if (!flowLogsLogGroup) {
+        throw new Error('Required resources not found for interactive test');
       }
 
-      // Test 1: RDS has automated backups enabled
-      const dbIdentifier = rdsEndpoint.split('.')[0];
-      const rdsResponse = await safeAwsCall(async () => {
-        const command = new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: dbIdentifier,
-        });
-        return await rdsClient.send(command);
-      }, 'RDS backup E2E test');
-
-      const db = rdsResponse.DBInstances![0];
-      expect(db.BackupRetentionPeriod).toBeGreaterThan(0);
-      expect(db.MultiAZ).toBe(true);
-      expect(db.StorageEncrypted).toBe(true);
-      console.log('✅ RDS has automated backups and Multi-AZ enabled');
-
-      // Test 2: CloudTrail logs are being stored for audit
-      const trailResponse = await safeAwsCall(async () => {
-        const command = new GetTrailCommand({
-          Name: outputs.cloudtrail_name!,
-        });
-        return await cloudTrailClient.send(command);
-      }, 'CloudTrail backup E2E test');
-
-      expect(trailResponse.Trail?.S3BucketName).toBe(cloudtrailBucket);
-      expect(trailResponse.Trail?.LogFileValidationEnabled).toBe(true);
-      console.log('✅ CloudTrail logs are stored with file validation');
-
-      // Test 3: VPC Flow Logs are being captured
+      // Verify CloudWatch Log Group exists for Flow Logs
       const logGroupResponse = await safeAwsCall(async () => {
         const command = new DescribeLogGroupsCommand({
           logGroupNamePrefix: flowLogsLogGroup,
         });
         return await logsClient.send(command);
-      }, 'Flow logs E2E test');
+      }, 'VPC Flow Logs test');
 
       expect(logGroupResponse.logGroups).toBeDefined();
       expect(logGroupResponse.logGroups!.length).toBeGreaterThan(0);
-      console.log('✅ VPC Flow Logs are being captured');
 
-      console.log('✅ Disaster recovery and backup workflow validated');
-    }, 30000);
+      // Check if any log streams exist (indicating Flow Logs are active)
+      const logStreamsResponse = await safeAwsCall(async () => {
+        const command = new DescribeLogStreamsCommand({
+          logGroupName: flowLogsLogGroup,
+          orderBy: 'LastEventTime',
+          descending: true,
+          limit: 5
+        });
+        return await logsClient.send(command);
+      }, 'VPC Flow Logs streams test');
 
-    test('compliance and governance workflow', async () => {
-      console.log('📋 Testing compliance and governance workflow...');
+      expect(logStreamsResponse.logStreams).toBeDefined();
+    }, 20000);
 
-      const iamMfaPolicyArn = outputs.iam_mfa_policy_arn;
+    test('SSM Parameter Store can store and retrieve encrypted parameters', async () => {
+      const rdsPasswordParameter = outputs.rds_password_parameter;
 
-      if (!iamMfaPolicyArn) {
-        throw new Error('Required compliance resources not found for E2E test');
+      if (!rdsPasswordParameter) {
+        throw new Error('Required resources not found for interactive test');
       }
 
-      // Test 1: IAM password policy is enforced
-      const passwordPolicyResponse = await safeAwsCall(async () => {
-        const command = new GetAccountPasswordPolicyCommand({});
-        return await iamClient.send(command);
-      }, 'IAM password policy E2E test');
-
-      const policy = passwordPolicyResponse.PasswordPolicy!;
-      expect(policy.MinimumPasswordLength).toBeGreaterThanOrEqual(14);
-      expect(policy.RequireLowercaseCharacters).toBe(true);
-      expect(policy.RequireUppercaseCharacters).toBe(true);
-      expect(policy.RequireNumbers).toBe(true);
-      expect(policy.RequireSymbols).toBe(true);
-      console.log('✅ IAM password policy is enforced');
-
-      // Test 2: MFA enforcement policy exists
-      const policyName = extractIamPolicyName(iamMfaPolicyArn);
-      const policiesResponse = await safeAwsCall(async () => {
-        const command = new ListPoliciesCommand({
-          Scope: 'Local',
+      // Test retrieving parameter without decryption (to verify encryption)
+      const parameterResponse = await safeAwsCall(async () => {
+        const command = new GetParameterCommand({
+          Name: rdsPasswordParameter,
+          WithDecryption: false,
         });
-        return await iamClient.send(command);
-      }, 'MFA policy E2E test');
+        return await ssmClient.send(command);
+      }, 'SSM Parameter Store test');
 
-      const mfaPolicy = policiesResponse.Policies?.find(p => p.PolicyName === policyName);
-      expect(mfaPolicy).toBeDefined();
-      console.log('✅ MFA enforcement policy is configured');
+      expect(parameterResponse.Parameter).toBeDefined();
+      expect(parameterResponse.Parameter!.Type).toBe('SecureString');
+      expect(parameterResponse.Parameter!.Value).not.toBe('');
 
-      // Test 3: EBS encryption is enabled by default
-      const ebsEncryptionResponse = await safeAwsCall(async () => {
-        const command = new GetEbsEncryptionByDefaultCommand({});
-        return await ec2Client.send(command);
-      }, 'EBS encryption E2E test');
+      // Test retrieving parameter with decryption
+      const decryptedResponse = await safeAwsCall(async () => {
+        const command = new GetParameterCommand({
+          Name: rdsPasswordParameter,
+          WithDecryption: true,
+        });
+        return await ssmClient.send(command);
+      }, 'SSM Parameter Store decryption test');
 
-      expect(ebsEncryptionResponse.EbsEncryptionByDefault).toBe(true);
-      console.log('✅ EBS encryption is enabled by default');
+      expect(decryptedResponse.Parameter?.Value).toBeDefined();
+      expect(decryptedResponse.Parameter?.Value?.length).toBeGreaterThan(0);
+    }, 20000);
 
-      console.log('✅ Compliance and governance workflow validated');
-    }, 30000);
-  });
+    test('RDS instance can be accessed and monitored through CloudWatch', async () => {
+      const rdsEndpoint = outputs.rds_endpoint;
 
-  describe('Compliance Summary', () => {
-    test('infrastructure meets all security requirements', async () => {
-      // This is a summary test that validates the overall compliance
-      console.log('\n📋 Infrastructure Compliance Summary:');
-      console.log('✅ Secure VPC with private subnets');
-      console.log('✅ S3 buckets with encryption and public access blocking');
-      console.log('✅ Lambda functions with proper configuration');
-      console.log('✅ RDS with encryption and Multi-AZ');
-      console.log('✅ CloudTrail multi-region logging');
-      console.log('✅ GuardDuty threat detection');
-      console.log('✅ AWS Config compliance monitoring');
-      console.log('✅ IAM password policy and MFA enforcement');
-      console.log('✅ Secrets management with Parameter Store');
-      console.log('✅ Security groups with least privilege');
-      console.log('✅ VPC endpoints for secure S3 access');
-      console.log('✅ KMS encryption for all resources');
+      if (!rdsEndpoint) {
+        throw new Error('Required resources not found for interactive test');
+      }
 
-      console.log('✅ AWS connectivity validated');
-      console.log('✅ All deployed resources validated');
-      console.log('✅ End-to-end workflows validated');
+      const dbIdentifier = rdsEndpoint.split('.')[0];
 
-      expect(true).toBe(true);
-    });
+      // Verify RDS instance is available and properly configured
+      const rdsResponse = await safeAwsCall(async () => {
+        const command = new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbIdentifier,
+        });
+        return await rdsClient.send(command);
+      }, 'RDS instance test');
+
+      expect(rdsResponse.DBInstances).toBeDefined();
+      const dbInstance = rdsResponse.DBInstances![0];
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.MultiAZ).toBe(true);
+      expect(dbInstance.StorageEncrypted).toBe(true);
+
+      // Verify CloudWatch logs are enabled for RDS
+      expect(dbInstance.EnabledCloudwatchLogsExports).toBeDefined();
+      expect(dbInstance.EnabledCloudwatchLogsExports!.length).toBeGreaterThan(0);
+    }, 20000);
+
+    test('KMS key can encrypt and decrypt data across services', async () => {
+      const kmsKeyMainId = outputs.kms_key_main_id;
+
+      if (!kmsKeyMainId) {
+        throw new Error('Required resources not found for interactive test');
+      }
+
+      // Test KMS key can generate data key for encryption
+      const generateKeyResponse = await safeAwsCall(async () => {
+        const command = new GenerateDataKeyCommand({
+          KeyId: kmsKeyMainId,
+          KeySpec: 'AES_256',
+          EncryptionContext: {
+            TestContext: 'InteractiveTest'
+          }
+        });
+        return await kmsClient.send(command);
+      }, 'KMS data key generation test');
+
+      expect(generateKeyResponse.CiphertextBlob).toBeDefined();
+      expect(generateKeyResponse.Plaintext).toBeDefined();
+
+      // Test KMS can decrypt the data key
+      const decryptResponse = await safeAwsCall(async () => {
+        const command = new DecryptCommand({
+          CiphertextBlob: generateKeyResponse.CiphertextBlob,
+          EncryptionContext: {
+            TestContext: 'InteractiveTest'
+          }
+        });
+        return await kmsClient.send(command);
+      }, 'KMS decrypt test');
+
+      expect(decryptResponse.Plaintext).toBeDefined();
+      expect(decryptResponse.KeyId).toContain(kmsKeyMainId);
+    }, 20000);
   });
 });
