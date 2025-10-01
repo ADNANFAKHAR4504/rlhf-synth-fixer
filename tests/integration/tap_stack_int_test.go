@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -59,7 +58,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Describe table
 		tableResp, err := dynamoClient.DescribeTable(ctx, &dynamodb.DescribeTableInput{
-			TableName: aws.String(outputs.TableName),
+			TableName: string(outputs.TableName),
 		})
 		require.NoError(t, err, "DynamoDB table should exist")
 
@@ -101,7 +100,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Get function configuration
 		funcResp, err := lambdaClient.GetFunction(ctx, &lambda.GetFunctionInput{
-			FunctionName: aws.String(functionName),
+			FunctionName: string(functionName),
 		})
 		require.NoError(t, err, "Lambda function should exist")
 
@@ -136,7 +135,7 @@ func TestTapStackIntegration(t *testing.T) {
 
 		// ACT - Get API information
 		apiResp, err := apiClient.GetRestApi(ctx, &apigateway.GetRestApiInput{
-			RestApiId: aws.String(apiID),
+			RestApiId: string(apiID),
 		})
 		require.NoError(t, err, "API Gateway should exist")
 
