@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349505",
+  "team": "2",
+  "startedAt": "2025-09-25T15:09:08.041Z",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "General Infrastructure Tooling QA",
+    "Security Configuration",
+    "Performance Optimization",
+    "Monitoring Setup",
+    "Access Control"
+  ],
+  "training_quality": 7,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "SNS",
+    "CloudWatch",
+    "VPC",
+    "IAM",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
