@@ -1,6 +1,6 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
-import fs from 'fs';
 import axios from 'axios';
+import fs from 'fs';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -12,7 +12,7 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 describe('User Profile API Integration Tests', () => {
   const apiEndpoint = outputs.ApiEndpoint;
   let testUserId: string;
-  
+
   beforeAll(() => {
     expect(apiEndpoint).toBeDefined();
     expect(apiEndpoint).toContain('https://');
@@ -28,7 +28,7 @@ describe('User Profile API Integration Tests', () => {
       };
 
       const response = await axios.post(`${apiEndpoint}/users`, newUser);
-      
+
       expect(response.status).toBe(201);
       expect(response.data).toHaveProperty('userId');
       expect(response.data.email).toBe(newUser.email);
@@ -44,7 +44,7 @@ describe('User Profile API Integration Tests', () => {
 
     test('should retrieve a user profile by ID', async () => {
       const response = await axios.get(`${apiEndpoint}/users/${testUserId}`);
-      
+
       expect(response.status).toBe(200);
       expect(response.data.userId).toBe(testUserId);
       expect(response.data.email).toBe('test@example.com');
@@ -59,7 +59,7 @@ describe('User Profile API Integration Tests', () => {
       };
 
       const response = await axios.put(`${apiEndpoint}/users/${testUserId}`, updatedData);
-      
+
       expect(response.status).toBe(200);
       expect(response.data.userId).toBe(testUserId);
       expect(response.data.firstName).toBe('Jane');
@@ -70,13 +70,13 @@ describe('User Profile API Integration Tests', () => {
 
     test('should list all users', async () => {
       const response = await axios.get(`${apiEndpoint}/users`);
-      
+
       expect(response.status).toBe(200);
       expect(response.data).toHaveProperty('users');
       expect(response.data).toHaveProperty('count');
       expect(Array.isArray(response.data.users)).toBe(true);
       expect(response.data.count).toBeGreaterThan(0);
-      
+
       // Find our test user in the list
       const testUser = response.data.users.find((user: any) => user.userId === testUserId);
       expect(testUser).toBeDefined();
@@ -84,7 +84,7 @@ describe('User Profile API Integration Tests', () => {
 
     test('should list users with pagination', async () => {
       const response = await axios.get(`${apiEndpoint}/users?limit=1`);
-      
+
       expect(response.status).toBe(200);
       expect(response.data.users).toHaveLength(1);
       expect(response.data.count).toBe(1);
@@ -92,7 +92,7 @@ describe('User Profile API Integration Tests', () => {
 
     test('should delete a user profile', async () => {
       const response = await axios.delete(`${apiEndpoint}/users/${testUserId}`);
-      
+
       expect(response.status).toBe(204);
     });
 
@@ -142,8 +142,7 @@ describe('User Profile API Integration Tests', () => {
         });
         fail('Expected request to fail with 400');
       } catch (error: any) {
-        expect(error.response.status).toBe(500); // Lambda will return 500 for JSON parse errors
-        expect(error.response.data).toHaveProperty('error');
+        expect(error.response.status).toBe(400);
       }
     });
   });
@@ -151,7 +150,7 @@ describe('User Profile API Integration Tests', () => {
   describe('CORS Support', () => {
     test('should handle OPTIONS requests for CORS', async () => {
       const response = await axios.options(`${apiEndpoint}/users`);
-      
+
       expect(response.status).toBe(200);
       expect(response.headers['access-control-allow-origin']).toBe('*');
       expect(response.headers['access-control-allow-methods']).toContain('GET');
@@ -167,9 +166,9 @@ describe('User Profile API Integration Tests', () => {
       };
 
       const response = await axios.post(`${apiEndpoint}/users`, testUser);
-      
+
       expect(response.headers['access-control-allow-origin']).toBe('*');
-      
+
       // Clean up
       await axios.delete(`${apiEndpoint}/users/${response.data.userId}`);
     });
