@@ -997,8 +997,12 @@ output "db_subnet_group_name" {
   description = "RDS DB subnet group name"
   value       = aws_db_subnet_group.main.name
 }
+```
+
 
 # provider.tf
+
+```hcl
 
 terraform {
   required_version = ">= 1.4.0"
