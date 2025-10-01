@@ -703,19 +703,11 @@ resource "aws_lb_listener" "http" {
 # Self-signed certificate for HTTPS (for demo purposes)
 
 resource "aws_acm_certificate" "main" {
-  domain_name       = "${local.name_prefix}.${var.domain_name}"
-  validation_method = "DNS"
-
-  lifecycle {
-    create_before_destroy = true
+  domain_name       = "dev.tapstack.internal"  # any FQDN placeholder
+  validation_method = "NONE"                    # skip DNS/EMAIL validation
+  tags = {
+    Environment = "dev"
   }
-
-  tags = merge(
-    local.common_tags,
-    {
-      Name = "${local.name_prefix}-certificate"
-    }
-  )
 }
 
 # --- Find the hosted zone in Route53 (must exist and be authoritative for var.domain_name) ---
@@ -753,21 +745,24 @@ resource "aws_acm_certificate_validation" "main" {
 }
 
 # ALB Listener for HTTPS
+# HTTPS Listener for ALB using the dev certificate
 resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.main.arn
+  load_balancer_arn = aws_lb.alb.arn
   port              = "443"
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
-  certificate_arn   = aws_acm_certificate.main.arn
-  
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.main.arn
-  }
-  
-  depends_on = [aws_acm_certificate.main]
-}
 
+  ssl_policy        = "ELBSecurityPolicy-2016-08" 
+  certificate_arn   = aws_acm_certificate.main.arn
+
+  default_action {
+    type             = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Hello from dev ALB"
+      status_code  = "200"
+    }
+  }
+}
 # ================================
 # Auto Scaling Group
 # ================================
