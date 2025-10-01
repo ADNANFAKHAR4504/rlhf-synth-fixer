@@ -1,0 +1,14 @@
+{
+  "platform": "cdktf",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349019",
+  "team": "6",
+  "startedAt": "2025-10-01T15:39:24.449Z",
+  "subtask": "Serverless Infrastructure (Functions as Code)",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": "S3 Bucket, DynamoDB, SNS, CloudWatch, API Gateway, IAM"
+}
