@@ -28,6 +28,10 @@ export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   natGateways?: number; // default 0 for CI-friendly deployments
   iacRlhfTagValue?: string; // optional tag value, defaults to "true"
+
+  // new configurable options
+  deletionProtection?: boolean; // default true
+  bucketRemovalPolicy?: cdk.RemovalPolicy; // default RETAIN
 }
 
 export class TapStack extends cdk.Stack {
@@ -48,6 +52,8 @@ export class TapStack extends cdk.Stack {
     const suffix = sanitize(rawSuffix || 'dev');
 
     const natGateways = props.natGateways ?? 0;
+    const bucketRemovalPolicy = props.bucketRemovalPolicy ?? cdk.RemovalPolicy.RETAIN;
+    const deletionProtection = props.deletionProtection ?? true;
 
     // Create VPC with public and private subnets
     const vpc = new ec2.Vpc(this, `VPC-${suffix}`, {
@@ -78,7 +84,7 @@ export class TapStack extends cdk.Stack {
     // Create S3 buckets (let CDK generate physical names to avoid global collisions)
     const logBucket = new s3.Bucket(this, `LogBucket-${suffix}`, {
       versioned: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: bucketRemovalPolicy,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
@@ -88,7 +94,7 @@ export class TapStack extends cdk.Stack {
       `ReplicationBucket-${suffix}`,
       {
         versioned: true,
-        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        removalPolicy: bucketRemovalPolicy,
         encryption: s3.BucketEncryption.S3_MANAGED,
         blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       }
@@ -96,7 +102,7 @@ export class TapStack extends cdk.Stack {
 
     const mainBucket = new s3.Bucket(this, `MainBucket-${suffix}`, {
       versioned: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: bucketRemovalPolicy,
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       serverAccessLogsBucket: logBucket,
@@ -257,7 +263,7 @@ export class TapStack extends cdk.Stack {
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [dbSecurityGroup],
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
-      deletionProtection: true,
+      deletionProtection: deletionProtection,
       multiAz: true,
       storageEncrypted: true,
       databaseName: dbName,
@@ -286,4 +292,5 @@ export class TapStack extends cdk.Stack {
 }
 
 // Remove runtime app/stack instantiation — tests and bin/tap.ts should create the app.
+
 ```
