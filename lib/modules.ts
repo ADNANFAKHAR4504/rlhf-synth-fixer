@@ -462,7 +462,11 @@ export class SecureRdsInstance extends Construct {
   }
 }
 
-// Lambda Module
+import { writeFileSync } from 'fs';
+import * as fs from 'fs';
+import { join } from 'path';
+import { createHash } from 'crypto';
+
 export interface LambdaConfig {
   functionName: string;
   handler: string;
@@ -471,7 +475,7 @@ export interface LambdaConfig {
   s3Bucket?: string;
   s3Key?: string;
   filename?: string;
-  inlineCode?: string; // Add support for inline code
+  inlineCode?: string;
   environment?: { [key: string]: string };
   vpcConfig?: {
     subnetIds: string[];
@@ -487,43 +491,44 @@ export class SecureLambdaFunction extends Construct {
   constructor(scope: Construct, name: string, config: LambdaConfig) {
     super(scope, name);
 
-    // Prepare the function configuration
     const functionConfig: any = {
       functionName: config.functionName,
       handler: config.handler,
       runtime: config.runtime,
       role: config.role,
-      // Configure VPC access
       vpcConfig: config.vpcConfig,
-      // Configure environment variables
       environment: config.environment
-        ? {
-            variables: config.environment,
-          }
+        ? { variables: config.environment }
         : undefined,
-      // Set timeout
       timeout: config.timeout || 30,
-      // Set memory size
       memorySize: config.memorySize || 512,
-      tags: {
-        Environment: 'Production',
-      },
+      tags: { Environment: 'Production' },
     };
 
-    // Handle different deployment methods
     if (config.inlineCode) {
-      // Use inline code
-      functionConfig.inlineCode = config.inlineCode;
+      const codeHash = createHash('md5')
+        .update(config.inlineCode)
+        .digest('hex');
+      const tempDir = '.cdktf.out/lambda-functions';
+      const tempFile = join(tempDir, `${config.functionName}-${codeHash}.js`);
+
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      writeFileSync(tempFile, config.inlineCode);
+      functionConfig.filename = tempFile;
     } else if (config.filename) {
-      // Use local file
       functionConfig.filename = config.filename;
     } else if (config.s3Bucket && config.s3Key) {
-      // Use S3
       functionConfig.s3Bucket = config.s3Bucket;
       functionConfig.s3Key = config.s3Key;
+    } else {
+      throw new Error(
+        'Lambda function must have either inlineCode, filename, or s3Bucket/s3Key specified'
+      );
     }
 
-    // Create Lambda function
     this.function = new LambdaFunction(this, 'function', functionConfig);
   }
 }
