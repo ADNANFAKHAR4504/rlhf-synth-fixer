@@ -300,9 +300,9 @@ resource "aws_api_gateway_gateway_response" "cors" {
   response_type = "DEFAULT_4XX"
   status_code   = "400"
   response_parameters = {
-    "gatewayresponse.header.Access-Control-Allow-Origin" = join(",", var.api_cors_origins)
-    "gatewayresponse.header.Access-Control-Allow-Headers" = "*"
-    "gatewayresponse.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+  "gatewayresponse.header.Access-Control-Allow-Origin"  = join(",", var.api_cors_origins)
+  "gatewayresponse.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+  "gatewayresponse.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
 }
 
