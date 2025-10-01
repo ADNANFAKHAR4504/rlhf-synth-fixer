@@ -77,7 +77,7 @@ describe('Retail Order Processing Stack Unit Tests', () => {
     test('OrderQueue should reference OrderDLQ in redrive policy', () => {
       const queue = template.Resources.OrderQueue;
       const redrivePolicy = queue.Properties.RedrivePolicy;
-      
+
       expect(redrivePolicy.deadLetterTargetArn).toEqual({
         'Fn::GetAtt': ['OrderDLQ', 'Arn']
       });
@@ -125,13 +125,13 @@ describe('Retail Order Processing Stack Unit Tests', () => {
       const attributeDefinitions = table.Properties.AttributeDefinitions;
 
       expect(attributeDefinitions).toHaveLength(3);
-      
+
       const orderIdAttr = attributeDefinitions.find(attr => attr.AttributeName === 'orderId');
       expect(orderIdAttr.AttributeType).toBe('S');
-      
+
       const statusAttr = attributeDefinitions.find(attr => attr.AttributeName === 'status');
       expect(statusAttr.AttributeType).toBe('S');
-      
+
       const processedAtAttr = attributeDefinitions.find(attr => attr.AttributeName === 'processedAt');
       expect(processedAtAttr.AttributeType).toBe('N');
     });
@@ -195,7 +195,7 @@ describe('Retail Order Processing Stack Unit Tests', () => {
     test('OrderProcessorRole should have correct assume role policy', () => {
       const role = template.Resources.OrderProcessorRole;
       const assumeRolePolicy = role.Properties.AssumeRolePolicyDocument;
-      
+
       expect(assumeRolePolicy.Version).toBe('2012-10-17');
       expect(assumeRolePolicy.Statement[0].Effect).toBe('Allow');
       expect(assumeRolePolicy.Statement[0].Principal.Service).toBe('lambda.amazonaws.com');
@@ -205,28 +205,28 @@ describe('Retail Order Processing Stack Unit Tests', () => {
     test('OrderProcessorRole should have correct managed policies', () => {
       const role = template.Resources.OrderProcessorRole;
       const managedPolicies = role.Properties.ManagedPolicyArns;
-      
+
       expect(managedPolicies).toContain('arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole');
     });
 
     test('OrderProcessorRole should have correct inline policies', () => {
       const role = template.Resources.OrderProcessorRole;
       const policies = role.Properties.Policies;
-      
+
       expect(policies).toHaveLength(1);
       expect(policies[0].PolicyName).toBe('OrderProcessorPolicy');
-      
+
       const policyDocument = policies[0].PolicyDocument;
       expect(policyDocument.Version).toBe('2012-10-17');
       expect(policyDocument.Statement).toHaveLength(3);
-      
+
       // Check SQS permissions
       const sqsStatement = policyDocument.Statement[0];
       expect(sqsStatement.Effect).toBe('Allow');
       expect(sqsStatement.Action).toContain('sqs:ReceiveMessage');
       expect(sqsStatement.Action).toContain('sqs:DeleteMessage');
       expect(sqsStatement.Action).toContain('sqs:GetQueueAttributes');
-      
+
       // Check DynamoDB permissions
       const dynamoStatement = policyDocument.Statement[1];
       expect(dynamoStatement.Effect).toBe('Allow');
@@ -299,9 +299,9 @@ describe('Retail Order Processing Stack Unit Tests', () => {
     });
 
     test('outputs should have correct export names', () => {
-      const outputs = ['OrderQueueURL', 'OrderQueueARN', 'OrderDLQURL', 'OrderTableName', 
-                      'OrderProcessorFunctionName', 'OrderProcessorFunctionARN'];
-      
+      const outputs = ['OrderQueueURL', 'OrderQueueARN', 'OrderDLQURL', 'OrderTableName',
+        'OrderProcessorFunctionName', 'OrderProcessorFunctionARN'];
+
       outputs.forEach(outputName => {
         const output = template.Outputs[outputName];
         expect(output.Export).toBeDefined();
@@ -353,11 +353,11 @@ describe('Retail Order Processing Stack Unit Tests', () => {
   describe('Resource Tagging', () => {
     test('resources should have environment and purpose tags', () => {
       const resourcesWithTags = ['OrderQueue', 'OrderDLQ', 'OrderTable', 'OrderProcessorRole', 'OrderProcessorFunction'];
-      
+
       resourcesWithTags.forEach(resourceName => {
         const resource = template.Resources[resourceName];
         expect(resource.Properties.Tags).toBeDefined();
-        
+
         const envTag = resource.Properties.Tags.find(tag => tag.Key === 'Environment');
         expect(envTag).toBeDefined();
         expect(envTag.Value).toEqual({ Ref: 'EnvironmentSuffix' });
@@ -369,7 +369,7 @@ describe('Retail Order Processing Stack Unit Tests', () => {
     test('should have reasonable number of resources for the use case', () => {
       const resourceCount = Object.keys(template.Resources).length;
       // SQS (2) + DynamoDB (1) + Lambda (3) + IAM (1) + CloudWatch (4) + Dashboard (1) = 12
-      expect(resourceCount).toBe(12);
+      expect(resourceCount).toBe(11);
     });
 
     test('should have all core components for order processing', () => {

@@ -1,9 +1,6 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
+import AWS from 'aws-sdk';
 import fs from 'fs';
-import { SQSClient, SendMessageCommand, ReceiveMessageCommand, GetQueueAttributesCommand } from '@aws-sdk/client-sqs';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, ScanCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
-import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -12,11 +9,13 @@ const outputs = JSON.parse(
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
+// Configure AWS SDK
+AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
+
 // AWS SDK clients
-const sqsClient = new SQSClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const lambdaClient = new LambdaClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const sqs = new AWS.SQS();
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+const lambda = new AWS.Lambda();
 
 describe('Retail Order Processing System Integration Tests', () => {
   const testOrderId = `test-order-${Date.now()}`;
@@ -34,25 +33,24 @@ describe('Retail Order Processing System Integration Tests', () => {
       const queueUrl = outputs.OrderQueueURL;
       expect(queueUrl).toBeDefined();
 
-      const command = new SendMessageCommand({
+      const params = {
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify(testOrder)
-      });
+      };
 
-      const response = await sqsClient.send(command);
+      const response = await sqs.sendMessage(params).promise();
       expect(response.MessageId).toBeDefined();
-      expect(response.$metadata.httpStatusCode).toBe(200);
     }, 30000);
 
     test('should have proper queue configuration', async () => {
       const queueUrl = outputs.OrderQueueURL;
-      
-      const command = new GetQueueAttributesCommand({
+
+      const params = {
         QueueUrl: queueUrl,
         AttributeNames: ['VisibilityTimeout', 'MessageRetentionPeriod', 'ReceiveMessageWaitTimeSeconds']
-      });
+      };
 
-      const response = await sqsClient.send(command);
+      const response: any = await sqs.getQueueAttributes(params).promise();
       expect(response.Attributes).toBeDefined();
       expect(response.Attributes.VisibilityTimeout).toBe('180');
       expect(response.Attributes.MessageRetentionPeriod).toBe('345600');
@@ -64,24 +62,24 @@ describe('Retail Order Processing System Integration Tests', () => {
     test('should process order and store in DynamoDB', async () => {
       // Send message to SQS
       const queueUrl = outputs.OrderQueueURL;
-      const sendCommand = new SendMessageCommand({
+      const sendParams = {
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify(testOrder)
-      });
-      
-      await sqsClient.send(sendCommand);
+      };
+
+      await sqs.sendMessage(sendParams).promise();
 
       // Wait for Lambda processing
       await new Promise(resolve => setTimeout(resolve, 10000));
 
       // Check if order was processed in DynamoDB
       const tableName = outputs.OrderTableName;
-      const getCommand = new GetCommand({
+      const getParams = {
         TableName: tableName,
         Key: { orderId: testOrderId }
-      });
+      };
 
-      const response = await docClient.send(getCommand);
+      const response: any = await dynamodb.get(getParams).promise();
       expect(response.Item).toBeDefined();
       expect(response.Item.orderId).toBe(testOrderId);
       expect(response.Item.status).toBe('PROCESSED');
@@ -90,26 +88,26 @@ describe('Retail Order Processing System Integration Tests', () => {
     }, 45000);
 
     test('should handle invalid order data gracefully', async () => {
-      const invalidOrder = { 
+      const invalidOrder = {
         customerName: 'Test Customer',
         // Missing required orderId field
         orderTotal: 100
       };
 
       const queueUrl = outputs.OrderQueueURL;
-      const sendCommand = new SendMessageCommand({
+      const sendParams = {
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify(invalidOrder)
-      });
-      
-      await sqsClient.send(sendCommand);
+      };
+
+      await sqs.sendMessage(sendParams).promise();
 
       // Wait for Lambda processing
       await new Promise(resolve => setTimeout(resolve, 10000));
 
       // Check if failed order was logged in DynamoDB
       const tableName = outputs.OrderTableName;
-      const scanCommand = new ScanCommand({
+      const scanParams = {
         TableName: tableName,
         FilterExpression: '#status = :status',
         ExpressionAttributeNames: {
@@ -118,12 +116,12 @@ describe('Retail Order Processing System Integration Tests', () => {
         ExpressionAttributeValues: {
           ':status': 'FAILED'
         }
-      });
+      };
 
-      const response = await docClient.send(scanCommand);
+      const response: any = await dynamodb.scan(scanParams).promise();
       expect(response.Items.length).toBeGreaterThan(0);
-      
-      const failedItem = response.Items.find(item => 
+
+      const failedItem = response.Items.find((item: any) =>
         item.originalMessage && item.originalMessage.includes('Test Customer')
       );
       expect(failedItem).toBeDefined();
@@ -141,9 +139,9 @@ describe('Retail Order Processing System Integration Tests', () => {
 
     test('should support querying by status using GSI', async () => {
       const tableName = outputs.OrderTableName;
-      
+
       // Query processed orders using the StatusIndex
-      const scanCommand = new ScanCommand({
+      const scanParams = {
         TableName: tableName,
         FilterExpression: '#status = :status',
         ExpressionAttributeNames: {
@@ -152,9 +150,9 @@ describe('Retail Order Processing System Integration Tests', () => {
         ExpressionAttributeValues: {
           ':status': 'PROCESSED'
         }
-      });
+      };
 
-      const response = await docClient.send(scanCommand);
+      const response: any = await dynamodb.scan(scanParams).promise();
       expect(response.Items).toBeDefined();
       // Should have at least our test order
       expect(response.Items.length).toBeGreaterThanOrEqual(0);
@@ -196,12 +194,12 @@ describe('Retail Order Processing System Integration Tests', () => {
 
       // Step 1: Send order to SQS
       const queueUrl = outputs.OrderQueueURL;
-      const sendCommand = new SendMessageCommand({
+      const sendParams = {
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify(workflowOrder)
-      });
-      
-      const sendResponse = await sqsClient.send(sendCommand);
+      };
+
+      const sendResponse = await sqs.sendMessage(sendParams).promise();
       expect(sendResponse.MessageId).toBeDefined();
 
       // Step 2: Wait for processing
@@ -209,12 +207,12 @@ describe('Retail Order Processing System Integration Tests', () => {
 
       // Step 3: Verify order processing in DynamoDB
       const tableName = outputs.OrderTableName;
-      const getCommand = new GetCommand({
+      const getParams = {
         TableName: tableName,
         Key: { orderId: workflowOrderId }
-      });
+      };
 
-      const getResponse = await docClient.send(getCommand);
+      const getResponse: any = await dynamodb.get(getParams).promise();
       expect(getResponse.Item).toBeDefined();
       expect(getResponse.Item.orderId).toBe(workflowOrderId);
       expect(getResponse.Item.status).toBe('PROCESSED');
@@ -226,15 +224,15 @@ describe('Retail Order Processing System Integration Tests', () => {
       expect(getResponse.Item.metadata.items).toHaveLength(2);
 
       // Step 4: Verify message was removed from queue (processed successfully)
-      const receiveCommand = new ReceiveMessageCommand({
+      const receiveParams = {
         QueueUrl: queueUrl,
         MaxNumberOfMessages: 10,
         WaitTimeSeconds: 1
-      });
+      };
 
-      const receiveResponse = await sqsClient.send(receiveCommand);
+      const receiveResponse = await sqs.receiveMessage(receiveParams).promise();
       // The message should not be in the queue anymore (processed and deleted)
-      const ourMessage = receiveResponse.Messages?.find(msg => 
+      const ourMessage = receiveResponse.Messages?.find(msg =>
         msg.Body && JSON.parse(msg.Body).orderId === workflowOrderId
       );
       expect(ourMessage).toBeUndefined();
