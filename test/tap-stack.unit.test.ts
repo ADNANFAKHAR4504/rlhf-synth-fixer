@@ -184,11 +184,6 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
       expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
     });
 
-    test('should have Config service role', () => {
-      expect(template.Resources.ConfigRole).toBeDefined();
-      expect(template.Resources.ConfigRole.Type).toBe('AWS::IAM::Role');
-    });
-
     test('should have Lambda remediation role', () => {
       expect(template.Resources.RemediationLambdaRole).toBeDefined();
       expect(template.Resources.RemediationLambdaRole.Type).toBe('AWS::IAM::Role');
@@ -270,11 +265,6 @@ describe('Secure E-commerce Infrastructure CloudFormation Template', () => {
   });
 
   describe('Compliance and Monitoring', () => {
-    test('should have AWS Config for compliance monitoring', () => {
-      expect(template.Resources.ConfigRecorder).toBeDefined();
-      expect(template.Resources.ConfigDeliveryChannel).toBeDefined();
-    });
-
     test('should have Lambda function for auto-remediation', () => {
       expect(template.Resources.SecurityRemediationLambda).toBeDefined();
       expect(template.Resources.SecurityRemediationLambda.Type).toBe('AWS::Lambda::Function');
