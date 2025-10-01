@@ -589,6 +589,27 @@ resource "aws_security_group" "db_us_west_2" {
   tags = merge(local.base_tags, { Name = "${var.app_name}-db-sg-west2" })
 }
 
+resource "aws_security_group" "bastion_us_west_2" {
+  count       = var.enable_bastion ? 1 : 0
+  provider    = aws.us_west_2
+  name        = "${var.app_name}-bastion-sg-west2"
+  description = "Bastion SG"
+  vpc_id      = aws_vpc.us_west_2.id
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.bastion_allowed_cidrs
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  tags = merge(local.base_tags, { Name = "${var.app_name}-bastion-sg-west2" })
+}
+
 ##############################
 # KMS Keys per region
 ##############################
@@ -1239,7 +1260,7 @@ resource "aws_flow_log" "us_east_1" {
   provider             = aws.us_east_1
   traffic_type         = "ALL"
   log_destination_type = "cloud-watch-logs"
-  log_group_name       = aws_cloudwatch_log_group.flow_logs_us_east_1.name
+  log_destination      = aws_cloudwatch_log_group.flow_logs_us_east_1.arn
   iam_role_arn         = aws_iam_role.flow_logs_us_east_1.arn
   vpc_id               = aws_vpc.us_east_1.id
   tags                 = merge(local.base_tags, { Name = "${var.app_name}-vpc-flow-east1" })
@@ -1249,7 +1270,7 @@ resource "aws_flow_log" "us_west_2" {
   provider             = aws.us_west_2
   traffic_type         = "ALL"
   log_destination_type = "cloud-watch-logs"
-  log_group_name       = aws_cloudwatch_log_group.flow_logs_us_west_2.name
+  log_destination      = aws_cloudwatch_log_group.flow_logs_us_west_2.arn
   iam_role_arn         = aws_iam_role.flow_logs_us_west_2.arn
   vpc_id               = aws_vpc.us_west_2.id
   tags                 = merge(local.base_tags, { Name = "${var.app_name}-vpc-flow-west2" })
