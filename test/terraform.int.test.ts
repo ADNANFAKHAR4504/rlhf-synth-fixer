@@ -23,8 +23,8 @@ function readAllOutputs(): OutputsRaw {
     Object.values(raw).forEach((arr: any) => {
       const list = Array.isArray(arr) ? arr : [];
       list.forEach((o: any) => { if (o?.OutputKey) map[o.OutputKey] = o.OutputValue ?? o.Value; });
+      return map;
     });
-    return map;
   }
   // Case: top-level is an array like [ { StackName: [ { OutputKey, OutputValue }, ... ] } ]
   if (Array.isArray(raw)) {
@@ -106,6 +106,18 @@ describe("LIVE integration tests (flat outputs)", () => {
     for (const k of expected) {
       const v = outputs[k] ?? outputs[k.toUpperCase()] ?? outputs[k.replace(/_/g, '')];
       expect(v).toBeDefined();
+    }
+
+    // explicit value shape checks (optional, non-failing if secret ARN is empty)
+    const vpc = normalizeOutputValue(outputs.vpc_id);
+    expect(typeof vpc).toBe("string");
+    expect(/^vpc-[0-9a-f]+$/.test(vpc as string)).toBe(true);
+
+    const secretArnRaw = outputs.rds_password_secret_arn;
+    // allow empty string (sometimes not created) but when present must look like an ARN
+    if (secretArnRaw && secretArnRaw !== "") {
+      const secretArn = normalizeOutputValue(secretArnRaw) as string;
+      expect(/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:/.test(secretArn)).toBe(true);
     }
   });
 

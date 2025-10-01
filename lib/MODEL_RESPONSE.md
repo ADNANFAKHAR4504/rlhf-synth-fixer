@@ -1,5 +1,3 @@
-<!-- AI-generated content — reviewed by Olatunjym on 2025-10-01 -->
-
 Overview
 ---
 - Scope: foundational AWS environment using Terraform.
