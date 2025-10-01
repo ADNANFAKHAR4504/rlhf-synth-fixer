@@ -13,12 +13,6 @@ variable "lambda_allowed_ips" {
   default     = ["203.0.113.1", "198.51.100.2"]
 }
 
-variable "api_cors_origins" {
-  description = "Allowed origins for CORS on API Gateway"
-  type        = list(string)
-  default     = ["https://google.com"]
-}
-
 variable "dynamodb_table_name" {
   description = "Name of the DynamoDB table"
   type        = string
@@ -300,7 +294,7 @@ resource "aws_api_gateway_gateway_response" "cors" {
   response_type = "DEFAULT_4XX"
   status_code   = "400"
   response_parameters = {
-  "gatewayresponse.header.Access-Control-Allow-Origin"  = join(",", var.api_cors_origins)
+  "gatewayresponse.header.Access-Control-Allow-Origin"  = "'https://google.com'"
   "gatewayresponse.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
   "gatewayresponse.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
