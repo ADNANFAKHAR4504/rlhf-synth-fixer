@@ -1,6 +1,6 @@
 /* eslint-disable import/no-extraneous-dependencies */
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient, QueryCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 // Initialize AWS SDK client
 const dynamoClient = new DynamoDBClient({});
@@ -14,7 +14,7 @@ export const handler = async (
     const { customerId, restaurantId, status, limit } = event.queryStringParameters || {};
 
     let command;
-    
+
     if (customerId) {
       // Query orders by customer ID using GSI
       command = new QueryCommand({
@@ -31,7 +31,7 @@ export const handler = async (
       // Query orders by restaurant ID using GSI
       command = new QueryCommand({
         TableName: process.env.ORDERS_TABLE_NAME,
-        IndexName: 'RestaurantIdIndex', 
+        IndexName: 'RestaurantIdIndex',
         KeyConditionExpression: 'restaurantId = :restaurantId',
         ExpressionAttributeValues: {
           ':restaurantId': { S: restaurantId },
@@ -61,8 +61,9 @@ export const handler = async (
 
     const result = await dynamoClient.send(command);
 
-    // Transform DynamoDB items to regular objects
-    const orders = (result.Items || []).map(item => ({
+    // Transform DynamoDB items to regular objects  
+    const items = 'Items' in result ? result.Items : [];
+    const orders = (items || []).map(item => ({
       orderId: item.orderId?.S,
       customerId: item.customerId?.S,
       restaurantId: item.restaurantId?.S,
@@ -87,7 +88,7 @@ export const handler = async (
         success: true,
         orders,
         count: orders.length,
-        hasMore: !!result.LastEvaluatedKey,
+        hasMore: !!(result as any).LastEvaluatedKey,
       }),
     };
   } catch (error: any) {

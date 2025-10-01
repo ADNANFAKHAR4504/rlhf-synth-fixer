@@ -1,5 +1,5 @@
 import axios from 'axios';
-import fs from 'fs';
+import * as fs from 'fs';
 
 // Configuration - These are coming from cfn-outputs after cdk deploy
 let outputs: Record<string, any> = {};
