@@ -36,6 +36,7 @@ import {
 import {
   KMSClient,
   DescribeKeyCommand,
+  GetKeyRotationStatusCommand,
 } from '@aws-sdk/client-kms';
 import {
   IAMClient,
@@ -80,8 +81,16 @@ type TerraformOutputs = {
   // RDS
   rds_instance_id?: TfOutputValue<string>;
   rds_endpoint?: TfOutputValue<string>;
-  rds_multi_az?: TfOutputValue<boolean>;
+  rds_address?: TfOutputValue<string>;
+  rds_port?: TfOutputValue<number>;
+  rds_database_name?: TfOutputValue<string>;
+  rds_username?: TfOutputValue<string>;
+  rds_engine_version?: TfOutputValue<string>;
   rds_instance_class?: TfOutputValue<string>;
+  rds_allocated_storage?: TfOutputValue<number>;
+  rds_availability_zone?: TfOutputValue<string>;
+  rds_multi_az?: TfOutputValue<boolean>;
+  rds_backup_window?: TfOutputValue<string>;
   rds_subnet_group_name?: TfOutputValue<string>;
   
   // S3
@@ -751,7 +760,9 @@ describe('Terraform Infrastructure Integration Tests', () => {
         
         if (!isLocal) {
           // LocalStack doesn't support rotation check
-          expect(key.KeyRotationEnabled).toBe(true);
+          const rotationCommand = new GetKeyRotationStatusCommand({ KeyId: keyId });
+          const rotationRes = await kmsClient.send(rotationCommand);
+          expect(rotationRes.KeyRotationEnabled).toBe(true);
         }
       },
       TEST_TIMEOUT
