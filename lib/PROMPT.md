@@ -4,7 +4,7 @@ Let's start with the network. Define a new VPC with the CIDR block 10.0.0.0/16. 
 
 For the application servers, let's place the EC2 instances in the private subnets for better security. Instead of using a bastion host or opening SSH ports from the internet, set up an EC2 Instance Connect Endpoint. This will be our modern, secure way to connect to the private instances for maintenance.
 
-Next, for the database, set up an RDS instance in the private subnet. It's critical to enable Multi-AZ for high availability. To make future database updates safer with near-zero downtime, also ensure the instance is configured to be compatible with RDS Blue/Green Deployments.
+Next, for the database, set up an RDS instance in the private subnet. It's critical to enable Multi-AZ for high availability. To make future database updates safer with near-zero downtime.
 
 The most important part is the secure connection between the application and the database. The RDS instance's security group must be configured to only allow inbound traffic on its database port from the EC2 security group.
 

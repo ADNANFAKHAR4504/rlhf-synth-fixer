@@ -19,7 +19,6 @@ The user wants a complete CDK TypeScript project for a secure web application fo
 3. **Database Setup**:
    - RDS instance in private subnet
    - Multi-AZ enabled
-   - Compatible with RDS Blue/Green Deployments
    - Security group allowing only EC2 security group traffic
 
 4. **Security**:
@@ -347,10 +346,9 @@ export class SecureWebAppFoundationStack extends cdk.Stack {
       },
     });
 
-    // Create RDS instance with Multi-AZ and Blue/Green deployment compatibility
     const database = new rds.DatabaseInstance(this, 'WebAppDatabase', {
       engine: rds.DatabaseInstanceEngine.mysql({
-        version: rds.MysqlEngineVersion.VER_8_0_35, // Latest version for Blue/Green support
+        version: rds.MysqlEngineVersion.VER_8_0_35,
       }),
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
@@ -378,8 +376,7 @@ export class SecureWebAppFoundationStack extends cdk.Stack {
           ),
         ],
       }),
-      // Blue/Green deployment compatibility settings
-      autoMinorVersionUpgrade: false, // Control version upgrades for Blue/Green
+      autoMinorVersionUpgrade: false,
       copyTagsToSnapshot: true,
     });
 
@@ -469,7 +466,7 @@ This CDK project sets up a secure foundation for a web application on AWS with t
   - Minimal IAM role with least-privilege principle
 
 - **RDS Database**:
-  - MySQL 8.0.35 (compatible with Blue/Green deployments)
+  - MySQL 8.0.35
   - Multi-AZ enabled for high availability
   - Security group only allows access from EC2 instances
   - Automated backups and encryption enabled
@@ -532,7 +529,7 @@ This CDK project provides a complete, secure foundation for your web application
 
 1. **Network Security**: VPC with proper subnet isolation, EC2 instances in private subnets
 2. **Modern Access**: EC2 Instance Connect Endpoint instead of bastion hosts
-3. **Database High Availability**: Multi-AZ RDS with Blue/Green deployment compatibility
+3. **Database High Availability**: Multi-AZ RDS
 4. **Monitoring**: CloudWatch detailed monitoring and dashboard
 5. **Security Best Practices**: Least-privilege IAM roles, encrypted storage, IMDSv2
 6. **Proper Tagging**: All resources tagged with 'iac-rlhf-amazon'
