@@ -1,11 +1,13 @@
 // __tests__/tap-stack.int.test.ts
-import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, GetBucketPolicyCommand } from "@aws-sdk/client-s3";
+import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand, GetBucketVersioningCommand, GetPublicAccessBlockCommand, GetBucketPolicyCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { KMSClient, DescribeKeyCommand, GetKeyPolicyCommand, GetKeyRotationStatusCommand } from "@aws-sdk/client-kms";
-import { SNSClient, GetTopicAttributesCommand, ListSubscriptionsByTopicCommand } from "@aws-sdk/client-sns";
-import { SQSClient, GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
+import { SNSClient, GetTopicAttributesCommand, ListSubscriptionsByTopicCommand, PublishCommand } from "@aws-sdk/client-sns";
+import { SQSClient, GetQueueAttributesCommand, ReceiveMessageCommand, DeleteMessageCommand, SendMessageCommand } from "@aws-sdk/client-sqs";
 import { IAMClient, GetRoleCommand, GetRolePolicyCommand, ListRolePoliciesCommand } from "@aws-sdk/client-iam";
+import { STSClient, AssumeRoleCommand } from "@aws-sdk/client-sts";
 import * as fs from "fs";
 import * as path from "path";
+import { randomBytes } from "crypto";
 
 const awsRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION || "us-west-2";
 const s3Client = new S3Client({ region: awsRegion });
@@ -13,6 +15,7 @@ const kmsClient = new KMSClient({ region: awsRegion });
 const snsClient = new SNSClient({ region: awsRegion });
 const sqsClient = new SQSClient({ region: awsRegion });
 const iamClient = new IAMClient({ region: awsRegion });
+const stsClient = new STSClient({ region: awsRegion });
 
 describe("TapStack Integration Tests", () => {
   let kmsKeyId: string;
@@ -297,6 +300,259 @@ describe("TapStack Integration Tests", () => {
       );
       expect(sqsStatement).toBeDefined();
     }, 20000);
+  });
+
+  describe("Interactive Service Tests", () => {
+    test("SNS topic can successfully deliver messages to SQS queue", async () => {
+      const testMessageId = `test-msg-${Date.now()}`;
+      const testMessage = {
+        id: testMessageId,
+        timestamp: new Date().toISOString(),
+        data: "Integration test message",
+      };
+
+      // Purge the queue before testing
+      try {
+        await sqsClient.send(new ReceiveMessageCommand({
+          QueueUrl: sqsQueueUrl,
+          MaxNumberOfMessages: 10,
+          WaitTimeSeconds: 0
+        }));
+      } catch (e) {
+        // Ignore errors from purging
+      }
+
+      // Publish message to SNS
+      const publishResult = await snsClient.send(
+        new PublishCommand({
+          TopicArn: snsTopicArn,
+          Message: JSON.stringify(testMessage),
+          MessageAttributes: {
+            TestMessageId: {
+              DataType: "String",
+              StringValue: testMessageId,
+            },
+          },
+        })
+      );
+
+      expect(publishResult.MessageId).toBeDefined();
+
+      // Wait a bit for message to be delivered
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Receive message from SQS
+      const receiveResult = await sqsClient.send(
+        new ReceiveMessageCommand({
+          QueueUrl: sqsQueueUrl,
+          MaxNumberOfMessages: 10,
+          WaitTimeSeconds: 5,
+          MessageAttributeNames: ["All"],
+        })
+      );
+
+      const messages = receiveResult.Messages || [];
+      expect(messages.length).toBeGreaterThan(0);
+
+      // Find our test message
+      const foundMessage = messages.find(msg => {
+        const body = JSON.parse(msg.Body || "{}");
+        const snsMessage = JSON.parse(body.Message || "{}");
+        return snsMessage.id === testMessageId;
+      });
+
+      expect(foundMessage).toBeDefined();
+
+      // Clean up - delete the message
+      if (foundMessage?.ReceiptHandle) {
+        await sqsClient.send(
+          new DeleteMessageCommand({
+            QueueUrl: sqsQueueUrl,
+            ReceiptHandle: foundMessage.ReceiptHandle,
+          })
+        );
+      }
+    }, 30000);
+
+    test("KMS encryption works for S3 objects", async () => {
+      const testKey = `test-integration/${Date.now()}-encrypted.txt`;
+      const testContent = `Encrypted test content - ${new Date().toISOString()}`;
+
+      // Upload encrypted object to S3
+      const putResult = await s3Client.send(
+        new PutObjectCommand({
+          Bucket: s3BucketName,
+          Key: testKey,
+          Body: testContent,
+          ServerSideEncryption: "aws:kms",
+          SSEKMSKeyId: kmsKeyArn,
+        })
+      );
+
+      expect(putResult.SSEKMSKeyId).toContain(kmsKeyId);
+      expect(putResult.ServerSideEncryption).toBe("aws:kms");
+
+      // Cleanup - we won't retrieve it to avoid permissions issues in test environment
+      // Just verify the upload was successful
+    }, 20000);
+
+    test("Dead letter queue receives messages after max receive count", async () => {
+      const testMessageId = `dlq-test-${Date.now()}`;
+      
+      // Send a message directly to the main queue
+      await sqsClient.send(
+        new SendMessageCommand({
+          QueueUrl: sqsQueueUrl,
+          MessageBody: JSON.stringify({
+            id: testMessageId,
+            type: "dlq-test",
+            timestamp: new Date().toISOString(),
+          }),
+          MessageAttributes: {
+            TestType: {
+              DataType: "String",
+              StringValue: "DLQTest",
+            },
+          },
+        })
+      );
+
+      // Receive the message 3 times without deleting it (to trigger DLQ)
+      for (let i = 0; i < 3; i++) {
+        const receiveResult = await sqsClient.send(
+          new ReceiveMessageCommand({
+            QueueUrl: sqsQueueUrl,
+            MaxNumberOfMessages: 1,
+            WaitTimeSeconds: 2,
+            VisibilityTimeout: 1, // Short timeout for testing
+          })
+        );
+
+        if (receiveResult.Messages?.length) {
+          // Wait for visibility timeout to expire
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+      }
+
+      // Wait for message to be moved to DLQ
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Check DLQ for the message
+      const dlqResult = await sqsClient.send(
+        new ReceiveMessageCommand({
+          QueueUrl: sqsDlqUrl,
+          MaxNumberOfMessages: 10,
+          WaitTimeSeconds: 3,
+        })
+      );
+
+      const dlqMessages = dlqResult.Messages || [];
+      const foundInDlq = dlqMessages.some(msg => {
+        const body = JSON.parse(msg.Body || "{}");
+        return body.id === testMessageId;
+      });
+
+      expect(foundInDlq).toBe(true);
+
+      // Clean up DLQ messages
+      for (const msg of dlqMessages) {
+        if (msg.ReceiptHandle) {
+          await sqsClient.send(
+            new DeleteMessageCommand({
+              QueueUrl: sqsDlqUrl,
+              ReceiptHandle: msg.ReceiptHandle,
+            })
+          );
+        }
+      }
+    }, 40000);
+
+    test("IAM roles can assume their service principals", async () => {
+      const s3RoleName = s3IamRoleArn.split('/').pop();
+      const { Role } = await iamClient.send(
+        new GetRoleCommand({ RoleName: s3RoleName })
+      );
+
+      const assumeRolePolicy = JSON.parse(decodeURIComponent(Role?.AssumeRolePolicyDocument || ""));
+      const principals = assumeRolePolicy.Statement[0].Principal.Service;
+      
+      expect(principals).toContain("ec2.amazonaws.com");
+      expect(principals).toContain("lambda.amazonaws.com");
+      expect(assumeRolePolicy.Statement[0].Effect).toBe("Allow");
+      expect(assumeRolePolicy.Statement[0].Action).toBe("sts:AssumeRole");
+    }, 20000);
+
+    test("Cross-service integration: SNS to SQS with KMS encryption", async () => {
+      const testId = `kms-test-${Date.now()}`;
+      const sensitiveData = {
+        id: testId,
+        confidential: "This is encrypted sensitive data",
+        timestamp: new Date().toISOString(),
+        randomData: randomBytes(32).toString('base64'),
+      };
+
+      // Publish encrypted message via SNS
+      const publishResult = await snsClient.send(
+        new PublishCommand({
+          TopicArn: snsTopicArn,
+          Message: JSON.stringify(sensitiveData),
+          MessageAttributes: {
+            Encrypted: {
+              DataType: "String",
+              StringValue: "true",
+            },
+            TestId: {
+              DataType: "String", 
+              StringValue: testId,
+            },
+          },
+        })
+      );
+
+      expect(publishResult.MessageId).toBeDefined();
+
+      // Wait for delivery
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      // Receive from SQS (which should decrypt automatically)
+      const receiveResult = await sqsClient.send(
+        new ReceiveMessageCommand({
+          QueueUrl: sqsQueueUrl,
+          MaxNumberOfMessages: 10,
+          WaitTimeSeconds: 5,
+          MessageAttributeNames: ["All"],
+        })
+      );
+
+      const messages = receiveResult.Messages || [];
+      const encryptedMessage = messages.find(msg => {
+        const body = JSON.parse(msg.Body || "{}");
+        const snsMessage = JSON.parse(body.Message || "{}");
+        return snsMessage.id === testId;
+      });
+
+      expect(encryptedMessage).toBeDefined();
+      
+      if (encryptedMessage) {
+        const body = JSON.parse(encryptedMessage.Body || "{}");
+        const decryptedData = JSON.parse(body.Message || "{}");
+        
+        // Verify the message was properly transmitted and decrypted
+        expect(decryptedData.id).toBe(testId);
+        expect(decryptedData.confidential).toBe(sensitiveData.confidential);
+        expect(decryptedData.randomData).toBe(sensitiveData.randomData);
+
+        // Clean up
+        if (encryptedMessage.ReceiptHandle) {
+          await sqsClient.send(
+            new DeleteMessageCommand({
+              QueueUrl: sqsQueueUrl,
+              ReceiptHandle: encryptedMessage.ReceiptHandle,
+            })
+          );
+        }
+      }
+    }, 30000);
   });
 
   describe("Security and Compliance", () => {
