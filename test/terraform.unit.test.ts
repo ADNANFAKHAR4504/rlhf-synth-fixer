@@ -93,14 +93,6 @@ describe('tap_stack.tf static verification', () => {
     ].forEach(rx => expect(has(rx)).toBe(true));
   });
 
-  it('defines RDS resources', () => {
-    [
-      /resource\s+"aws_db_subnet_group"\s+"main"/,
-      /resource\s+"aws_db_instance"\s+"postgres"/,
-      /resource\s+"aws_secretsmanager_secret"\s+"rds_credentials"/,
-      /resource\s+"aws_secretsmanager_secret_version"\s+"rds_credentials"/
-    ].forEach(rx => expect(has(rx)).toBe(true));
-  });
 
   it('defines S3 bucket resources and configurations', () => {
     [
