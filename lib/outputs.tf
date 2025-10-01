@@ -26,44 +26,34 @@ output "vpc_arn" {
 # SUBNET OUTPUTS
 # ===========================
 
-output "dmz_subnet_ids" {
-  description = "DMZ/Public subnet IDs"
-  value       = aws_subnet.dmz[*].id
+output "public_subnet_ids" {
+  description = "Public subnet IDs"
+  value       = aws_subnet.public[*].id
 }
 
-output "dmz_subnet_cidrs" {
-  description = "DMZ subnet CIDR blocks"
-  value       = aws_subnet.dmz[*].cidr_block
+output "public_subnet_cidrs" {
+  description = "Public subnet CIDR blocks"
+  value       = aws_subnet.public[*].cidr_block
 }
 
-output "app_subnet_ids" {
-  description = "Application tier subnet IDs"
-  value       = aws_subnet.app[*].id
+output "private_app_subnet_ids" {
+  description = "Private application tier subnet IDs"
+  value       = aws_subnet.private_app[*].id
 }
 
-output "app_subnet_cidrs" {
-  description = "Application subnet CIDR blocks"
-  value       = aws_subnet.app[*].cidr_block
+output "private_app_subnet_cidrs" {
+  description = "Private application subnet CIDR blocks"
+  value       = aws_subnet.private_app[*].cidr_block
 }
 
-output "db_subnet_ids" {
-  description = "Database tier subnet IDs"
-  value       = aws_subnet.db[*].id
+output "private_db_subnet_ids" {
+  description = "Private database tier subnet IDs"
+  value       = aws_subnet.private_db[*].id
 }
 
-output "db_subnet_cidrs" {
-  description = "Database subnet CIDR blocks"
-  value       = aws_subnet.db[*].cidr_block
-}
-
-output "management_subnet_ids" {
-  description = "Management tier subnet IDs"
-  value       = aws_subnet.management[*].id
-}
-
-output "management_subnet_cidrs" {
-  description = "Management subnet CIDR blocks"
-  value       = aws_subnet.management[*].cidr_block
+output "private_db_subnet_cidrs" {
+  description = "Private database subnet CIDR blocks"
+  value       = aws_subnet.private_db[*].cidr_block
 }
 
 # ===========================
@@ -94,38 +84,20 @@ output "availability_zones" {
 # KMS KEY OUTPUTS
 # ===========================
 
-output "kms_key_ids" {
-  description = "Map of KMS key IDs by tier"
-  value = {
-    dmz     = aws_kms_key.dmz_tier.id
-    app     = aws_kms_key.app_tier.id
-    db      = aws_kms_key.db_tier.id
-    log     = aws_kms_key.log_tier.id
-    backup  = aws_kms_key.backup_tier.id
-  }
+output "kms_key_id" {
+  description = "KMS key ID"
+  value       = aws_kms_key.main.id
 }
 
-output "kms_key_arns" {
-  description = "Map of KMS key ARNs by tier"
-  value = {
-    dmz     = aws_kms_key.dmz_tier.arn
-    app     = aws_kms_key.app_tier.arn
-    db      = aws_kms_key.db_tier.arn
-    log     = aws_kms_key.log_tier.arn
-    backup  = aws_kms_key.backup_tier.arn
-  }
-  sensitive = true
+output "kms_key_arn" {
+  description = "KMS key ARN"
+  value       = aws_kms_key.main.arn
+  sensitive   = true
 }
 
-output "kms_key_aliases" {
-  description = "Map of KMS key aliases by tier"
-  value = {
-    dmz     = aws_kms_alias.dmz_tier.name
-    app     = aws_kms_alias.app_tier.name
-    db      = aws_kms_alias.db_tier.name
-    log     = aws_kms_alias.log_tier.name
-    backup  = aws_kms_alias.backup_tier.name
-  }
+output "kms_key_alias" {
+  description = "KMS key alias"
+  value       = aws_kms_alias.main.name
 }
 
 # ===========================
