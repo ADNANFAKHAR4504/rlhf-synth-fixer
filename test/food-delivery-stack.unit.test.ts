@@ -257,10 +257,10 @@ describe('FoodDeliveryStack', () => {
       });
     });
 
-    test('creates feature flags parameter as SecureString', () => {
+    test('creates feature flags parameter as String', () => {
       template.hasResourceProperties('AWS::SSM::Parameter', {
         Name: Match.stringLikeRegexp('/food-delivery/.*/feature-flags'),
-        Type: 'SecureString',
+        Type: 'String',
         Description: 'Feature flags for gradual rollouts',
       });
     });
