@@ -239,9 +239,9 @@ resource "aws_db_instance" "main" {
   
   # Monitoring
   enabled_cloudwatch_logs_exports       = ["error", "general", "slowquery"]
-  performance_insights_enabled          = var.performance_insights_enabled
-  performance_insights_kms_key_id       = var.performance_insights_enabled ? aws_kms_key.rds.arn : null
-  performance_insights_retention_period = var.performance_insights_enabled ? var.performance_insights_retention_period : null
+  performance_insights_enabled          = var.performance_insights_enabled && var.db_instance_class != "db.t3.micro"
+  performance_insights_kms_key_id       = (var.performance_insights_enabled && var.db_instance_class != "db.t3.micro") ? aws_kms_key.rds.arn : null
+  performance_insights_retention_period = (var.performance_insights_enabled && var.db_instance_class != "db.t3.micro") ? var.performance_insights_retention_period : null
   
   monitoring_interval = var.enhanced_monitoring_enabled ? var.enhanced_monitoring_interval : 0
   monitoring_role_arn = var.enhanced_monitoring_enabled ? aws_iam_role.rds_enhanced_monitoring[0].arn : null

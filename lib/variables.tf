@@ -100,7 +100,7 @@ variable "maintenance_window" {
 }
 
 variable "performance_insights_enabled" {
-  description = "Enable Performance Insights"
+  description = "Enable Performance Insights (not supported on db.t3.micro - requires db.t3.small or larger)"
   type        = bool
   default     = true
 }
