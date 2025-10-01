@@ -51,3 +51,35 @@ Error: creating RDS DB Subnet Group (production-db-subnet-group): operation erro
    ```
 
 **Lesson Learned**: RDS requires multi-AZ subnet coverage for high availability. Always ensure DB subnet groups span at least 2 availability zones.
+
+## RDS Password Character Restriction Issue
+
+**Problem**: RDS deployment failed due to invalid characters in the randomly generated master password.
+
+**Error**: 
+```
+Error: creating RDS DB Instance (production-database): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: 17182a38-2dfd-4c64-b823-5be31881412c, api error InvalidParameterValue: The parameter MasterUserPassword is not a valid password. Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
+```
+
+**Root Cause**: The `random_password` resource was generating passwords with special characters that are not allowed by RDS, including `/`, `@`, `"`, and spaces.
+
+**Fix**: Updated the `random_password` resource in `database.tf` to explicitly override special characters:
+
+**Before**:
+```hcl
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+}
+```
+
+**After**:
+```hcl
+resource "random_password" "db_password" {
+  length           = 32
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}<>:?"
+}
+```
+
+**Lesson Learned**: RDS has specific password requirements that exclude certain special characters (`/`, `@`, `"`, and spaces). Always use `override_special` with `random_password` to ensure compliance with AWS service password policies.
