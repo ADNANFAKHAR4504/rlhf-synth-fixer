@@ -1,3 +1,8 @@
+1. Model had failures wrt to the wrong use of upper characters in the subnet group name which is not allowed.
+
+2. Model had failures wrt RDS cluster being wrongly used as the events selector for cloudtrails which is not allowed again.
+
+
 ```
 ⚠️ Terraform plan file not found, creating new plan and deploying...
 ╷
