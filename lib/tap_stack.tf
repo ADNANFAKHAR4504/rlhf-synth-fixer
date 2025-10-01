@@ -316,11 +316,11 @@ resource "aws_route_table_association" "public_us_east_1" {
 
 resource "aws_route_table" "private_us_east_1" {
   provider = aws.us_east_1
-  for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(aws_nat_gateway.us_east_1))[0] } : aws_nat_gateway.us_east_1
+  for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(var.private_subnet_cidrs_us_east_1))[0] } : var.private_subnet_cidrs_us_east_1
   vpc_id   = aws_vpc.us_east_1.id
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_east_1[values(aws_nat_gateway.us_east_1)[0].subnet_id == aws_subnet.public_us_east_1[sort(keys(var.public_subnet_cidrs_us_east_1))[0]].id ? sort(keys(aws_nat_gateway.us_east_1))[0] : sort(keys(aws_nat_gateway.us_east_1))[0]].id : aws_nat_gateway.us_east_1[each.key].id
+    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_east_1[sort(keys(aws_nat_gateway.us_east_1))[0]].id : aws_nat_gateway.us_east_1[each.key].id
   }
   tags = merge(local.base_tags, { Name = var.one_nat_gateway_per_region ? "${var.app_name}-rt-private-east1" : "${var.app_name}-rt-private-${each.key}" })
 }
@@ -410,11 +410,11 @@ resource "aws_route_table_association" "public_us_west_2" {
 
 resource "aws_route_table" "private_us_west_2" {
   provider = aws.us_west_2
-  for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(aws_nat_gateway.us_west_2))[0] } : aws_nat_gateway.us_west_2
+  for_each = var.one_nat_gateway_per_region ? { "shared" = sort(keys(var.private_subnet_cidrs_us_west_2))[0] } : var.private_subnet_cidrs_us_west_2
   vpc_id   = aws_vpc.us_west_2.id
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_west_2[values(aws_nat_gateway.us_west_2)[0].subnet_id == aws_subnet.public_us_west_2[sort(keys(var.public_subnet_cidrs_us_west_2))[0]].id ? sort(keys(aws_nat_gateway.us_west_2))[0] : sort(keys(aws_nat_gateway.us_west_2))[0]].id : aws_nat_gateway.us_west_2[each.key].id
+    nat_gateway_id = var.one_nat_gateway_per_region ? aws_nat_gateway.us_west_2[sort(keys(aws_nat_gateway.us_west_2))[0]].id : aws_nat_gateway.us_west_2[each.key].id
   }
   tags = merge(local.base_tags, { Name = var.one_nat_gateway_per_region ? "${var.app_name}-rt-private-west2" : "${var.app_name}-rt-private-${each.key}" })
 }
@@ -1280,6 +1280,133 @@ resource "aws_flow_log" "us_west_2" {
 # Compute: AMIs
 ##############################
 
+# Create a production-ready Lambda deployment package
+data "archive_file" "lambda_placeholder" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_placeholder.zip"
+  
+  source {
+    content  = <<-EOT
+      const AWS = require('aws-sdk');
+      const s3 = new AWS.S3();
+
+      /**
+       * Production Lambda Handler for TAP Stack
+       * Demonstrates secure S3 interaction with KMS encryption
+       * Environment variables are encrypted via KMS (configured in Lambda resource)
+       */
+      exports.handler = async (event, context) => {
+        console.log('Event received:', JSON.stringify(event, null, 2));
+        
+        const bucketName = process.env.BUCKET_NAME;
+        const appEnv = process.env.APP_ENV;
+        
+        try {
+          // Health check endpoint
+          if (event.httpMethod === 'GET' && event.path === '/health') {
+            return {
+              statusCode: 200,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                status: 'healthy',
+                environment: appEnv,
+                timestamp: new Date().toISOString(),
+                function: context.functionName,
+                region: process.env.AWS_REGION
+              })
+            };
+          }
+          
+          // List objects in the S3 bucket (demonstrates IAM permissions)
+          if (event.httpMethod === 'GET' && event.path === '/list') {
+            const params = {
+              Bucket: bucketName,
+              MaxKeys: 10
+            };
+            
+            const data = await s3.listObjectsV2(params).promise();
+            
+            return {
+              statusCode: 200,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bucket: bucketName,
+                objectCount: data.KeyCount,
+                objects: data.Contents?.map(obj => ({
+                  key: obj.Key,
+                  size: obj.Size,
+                  lastModified: obj.LastModified
+                })) || []
+              })
+            };
+          }
+          
+          // Upload a test object to S3 (KMS-encrypted server-side)
+          if (event.httpMethod === 'POST' && event.path === '/upload') {
+            const timestamp = Date.now();
+            const key = `test-uploads/lambda-upload-${timestamp}.json`;
+            
+            const uploadParams = {
+              Bucket: bucketName,
+              Key: key,
+              Body: JSON.stringify({
+                uploadedAt: new Date().toISOString(),
+                source: 'lambda-function',
+                environment: appEnv,
+                functionName: context.functionName
+              }),
+              ContentType: 'application/json',
+              ServerSideEncryption: 'aws:kms'
+            };
+            
+            await s3.putObject(uploadParams).promise();
+            
+            return {
+              statusCode: 201,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: 'Object uploaded successfully',
+                bucket: bucketName,
+                key: key,
+                encryption: 'KMS (SSE-KMS)'
+              })
+            };
+          }
+          
+          // Default response
+          return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: 'TAP Stack Lambda Function',
+              environment: appEnv,
+              availableEndpoints: [
+                { method: 'GET', path: '/health', description: 'Health check' },
+                { method: 'GET', path: '/list', description: 'List S3 objects' },
+                { method: 'POST', path: '/upload', description: 'Upload test object' }
+              ]
+            })
+          };
+          
+        } catch (error) {
+          console.error('Error:', error);
+          
+          return {
+            statusCode: 500,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              error: 'Internal Server Error',
+              message: error.message,
+              environment: appEnv
+            })
+          };
+        }
+      };
+    EOT
+    filename = "index.js"
+  }
+}
+
 data "aws_ami" "al2_us_east_1" {
   provider    = aws.us_east_1
   most_recent = true
@@ -1567,14 +1694,17 @@ resource "aws_db_instance" "us_west_2" {
 ##############################
 
 resource "aws_lambda_function" "us_east_1" {
-  provider         = aws.us_east_1
-  function_name    = "${var.app_name}-fn-east1"
-  role             = aws_iam_role.lambda_us_east_1.arn
-  handler          = var.lambda_handler
-  runtime          = var.lambda_runtime
-  filename         = var.lambda_zip_path
-  source_code_hash = filebase64sha256(var.lambda_zip_path)
-  kms_key_arn      = aws_kms_key.lambda_us_east_1.arn
+  provider      = aws.us_east_1
+  function_name = "${var.app_name}-fn-east1"
+  role          = aws_iam_role.lambda_us_east_1.arn
+  handler       = var.lambda_handler
+  runtime       = var.lambda_runtime
+  
+  # Use inline code instead of requiring a zip file
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
+  
+  kms_key_arn = aws_kms_key.lambda_us_east_1.arn
   environment {
     variables = {
       APP_ENV     = "Production"
@@ -1582,17 +1712,22 @@ resource "aws_lambda_function" "us_east_1" {
     }
   }
   tags = merge(local.base_tags, { Name = "${var.app_name}-fn-east1" })
+  
+  depends_on = [data.archive_file.lambda_placeholder]
 }
 
 resource "aws_lambda_function" "us_west_2" {
-  provider         = aws.us_west_2
-  function_name    = "${var.app_name}-fn-west2"
-  role             = aws_iam_role.lambda_us_west_2.arn
-  handler          = var.lambda_handler
-  runtime          = var.lambda_runtime
-  filename         = var.lambda_zip_path
-  source_code_hash = filebase64sha256(var.lambda_zip_path)
-  kms_key_arn      = aws_kms_key.lambda_us_west_2.arn
+  provider      = aws.us_west_2
+  function_name = "${var.app_name}-fn-west2"
+  role          = aws_iam_role.lambda_us_west_2.arn
+  handler       = var.lambda_handler
+  runtime       = var.lambda_runtime
+  
+  # Use inline code instead of requiring a zip file
+  filename         = "${path.module}/lambda_placeholder.zip"
+  source_code_hash = data.archive_file.lambda_placeholder.output_base64sha256
+  
+  kms_key_arn = aws_kms_key.lambda_us_west_2.arn
   environment {
     variables = {
       APP_ENV     = "Production"
@@ -1600,6 +1735,8 @@ resource "aws_lambda_function" "us_west_2" {
     }
   }
   tags = merge(local.base_tags, { Name = "${var.app_name}-fn-west2" })
+  
+  depends_on = [data.archive_file.lambda_placeholder]
 }
 
 ##############################
