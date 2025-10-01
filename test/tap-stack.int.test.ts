@@ -470,8 +470,11 @@ describe('TapStack Integration Tests', () => {
       await dynamoClient.send(new UpdateItemCommand({
         TableName: outputs.TurnAroundPromptTableName,
         Key: { id: { S: workflowId } },
-        UpdateExpression: 'SET #status = :status, result = :result',
-        ExpressionAttributeNames: { '#status': 'status' },
+        UpdateExpression: 'SET #status = :status, #result = :result',
+        ExpressionAttributeNames: {
+          '#status': 'status',
+          '#result': 'result'
+        },
         ExpressionAttributeValues: {
           ':status': { S: 'completed' },
           ':result': { S: 'success' }
