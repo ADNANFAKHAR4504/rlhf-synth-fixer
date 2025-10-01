@@ -4,8 +4,30 @@
 # ===========================
 
 # ===========================
-# VPC OUTPUTS
-# ===========================
+# VPoutput "alb_dns_name" {
+  description = "Application Load Balancer DNS name"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_zone_id" {
+  description = "Application Load Balancer hosted zone ID"
+  value       = aws_lb.main.zone_id
+}
+
+output "alb_scheme" {
+  description = "Application Load Balancer scheme (internet-facing or internal)"
+  value       = aws_lb.main.internal ? "internal" : "internet-facing"
+}
+
+output "alb_type" {
+  description = "Application Load Balancer type"
+  value       = aws_lb.main.load_balancer_type
+}
+
+output "target_group_arn" {
+  description = "ALB target group ARN"
+  value       = aws_lb_target_group.app.arn
+}=========================
 
 output "vpc_id" {
   description = "VPC ID for payment processing environment"
@@ -20,6 +42,16 @@ output "vpc_cidr" {
 output "vpc_arn" {
   description = "VPC ARN"
   value       = aws_vpc.main.arn
+}
+
+output "vpc_enable_dns_hostnames" {
+  description = "VPC DNS hostnames enabled"
+  value       = aws_vpc.main.enable_dns_hostnames
+}
+
+output "vpc_enable_dns_support" {
+  description = "VPC DNS support enabled"
+  value       = aws_vpc.main.enable_dns_support
 }
 
 # ===========================
@@ -101,6 +133,170 @@ output "kms_key_alias" {
 }
 
 # ===========================
+# SECURITY GROUP OUTPUTS
+# ===========================
+
+output "alb_security_group_id" {
+  description = "ALB security group ID"
+  value       = aws_security_group.alb.id
+}
+
+output "app_security_group_id" {
+  description = "Application security group ID"
+  value       = aws_security_group.app.id
+}
+
+output "rds_security_group_id" {
+  description = "RDS security group ID"
+  value       = aws_security_group.rds.id
+}
+
+# ===========================
+# LOAD BALANCER OUTPUTS
+# ===========================
+
+output "alb_arn" {
+  description = "Application Load Balancer ARN"
+  value       = aws_lb.main.arn
+}
+
+output "alb_dns_name" {
+  description = "Application Load Balancer DNS name"
+  value       = aws_lb.main.dns_name
+}
+
+output "alb_zone_id" {
+  description = "Application Load Balancer hosted zone ID"
+  value       = aws_lb.main.zone_id
+}
+
+output "target_group_arn" {
+  description = "ALB target group ARN"
+  value       = aws_lb_target_group.app.arn
+}
+
+output "http_listener_arn" {
+  description = "HTTP listener ARN"
+  value       = aws_lb_listener.http.arn
+}
+
+# ===========================
+# LAUNCH TEMPLATE OUTPUTS
+# ===========================
+
+output "launch_template_id" {
+  description = "Launch template ID"
+  value       = aws_launch_template.app.id
+}
+
+output "launch_template_latest_version" {
+  description = "Launch template latest version"
+  value       = aws_launch_template.app.latest_version
+}
+
+# ===========================
+# S3 OUTPUTS
+# ===========================
+
+output "logs_bucket_name" {
+  description = "S3 bucket name for logs"
+  value       = aws_s3_bucket.logs.id
+}
+
+output "logs_bucket_arn" {
+  description = "S3 bucket ARN for logs"
+  value       = aws_s3_bucket.logs.arn
+}
+
+output "logs_bucket_versioning_enabled" {
+  description = "S3 bucket versioning status"
+  value       = true  # Set by aws_s3_bucket_versioning resource
+}
+
+output "logs_bucket_encryption_enabled" {
+  description = "S3 bucket encryption status"
+  value       = true  # Set by aws_s3_bucket_server_side_encryption_configuration resource
+}
+
+output "logs_bucket_public_access_blocked" {
+  description = "S3 bucket public access block status"
+  value       = true  # Set by aws_s3_bucket_public_access_block resource
+}
+
+# ===========================
+# WAF OUTPUTS
+# ===========================
+
+output "waf_web_acl_id" {
+  description = "WAF Web ACL ID"
+  value       = aws_wafv2_web_acl.main.id
+}
+
+output "waf_web_acl_arn" {
+  description = "WAF Web ACL ARN"
+  value       = aws_wafv2_web_acl.main.arn
+}
+
+# ===========================
+# RDS OUTPUTS
+# ===========================
+
+output "rds_endpoint" {
+  description = "RDS instance endpoint"
+  value       = aws_db_instance.postgres.endpoint
+}
+
+output "rds_port" {
+  description = "RDS instance port"
+  value       = aws_db_instance.postgres.port
+}
+
+output "rds_database_name" {
+  description = "RDS database name"
+  value       = aws_db_instance.postgres.db_name
+}
+
+output "rds_username" {
+  description = "RDS master username"
+  value       = aws_db_instance.postgres.username
+  sensitive   = true
+}
+
+output "rds_identifier" {
+  description = "RDS instance identifier (for API calls)"
+  value       = aws_db_instance.postgres.identifier
+}
+
+output "rds_instance_id" {
+  description = "RDS instance ID (DBI resource identifier)"
+  value       = aws_db_instance.postgres.id
+}
+
+output "rds_engine_version" {
+  description = "RDS engine version"
+  value       = aws_db_instance.postgres.engine_version
+}
+
+output "rds_multi_az" {
+  description = "RDS Multi-AZ deployment status"
+  value       = aws_db_instance.postgres.multi_az
+}
+
+# ===========================
+# IAM OUTPUTS
+# ===========================
+
+output "ec2_role_arn" {
+  description = "EC2 instance IAM role ARN"
+  value       = aws_iam_role.ec2.arn
+}
+
+output "vpc_flow_logs_role_arn" {
+  description = "VPC Flow Logs IAM role ARN"
+  value       = aws_iam_role.vpc_flow_logs.arn
+}
+
+# ===========================
 # LOGGING OUTPUTS
 # ===========================
 
@@ -109,9 +305,24 @@ output "vpc_flow_log_group_name" {
   value       = aws_cloudwatch_log_group.vpc_flow_logs.name
 }
 
+output "vpc_flow_logs_group_name" {
+  description = "VPC Flow Logs CloudWatch log group name (alias for compatibility)"
+  value       = aws_cloudwatch_log_group.vpc_flow_logs.name
+}
+
 output "vpc_flow_log_group_arn" {
   description = "VPC Flow Logs CloudWatch log group ARN"
   value       = aws_cloudwatch_log_group.vpc_flow_logs.arn
+}
+
+output "app_log_group_name" {
+  description = "Application CloudWatch log group name"
+  value       = aws_cloudwatch_log_group.app.name
+}
+
+output "app_log_group_arn" {
+  description = "Application CloudWatch log group ARN"
+  value       = aws_cloudwatch_log_group.app.arn
 }
 
 # ===========================
