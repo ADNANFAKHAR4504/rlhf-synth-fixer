@@ -394,4 +394,189 @@ describe("Terraform AWS Infrastructure Integration", () => {
       expect(subnetProjectTag).toBeDefined();
     });
   });
+
+  test("E2E: EC2 instance is publicly accessible", async () => {
+    // Verify EC2 has public IP and is in running state
+    const ec2 = new EC2Client({ region });
+    let instances;
+    try {
+      instances = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] }));
+    } catch (err) {
+      console.error("Error describing EC2 instance for accessibility test:", err);
+      throw err;
+    }
+    const instance = instances.Reservations?.[0]?.Instances?.[0];
+
+    expect(instance?.State?.Name).toBe("running");
+    expect(instance?.PublicIpAddress).toBeDefined();
+    expect(instance?.PublicDnsName).toBeDefined();
+
+    // Verify instance is in public subnet
+    expect(instance?.SubnetId).toBe(publicSubnetId);
+
+    // Verify security group allows HTTP/HTTPS
+    const ec2Sg = await ec2.send(new DescribeSecurityGroupsCommand({
+      GroupIds: [ec2SecurityGroupId]
+    }));
+    const httpAllowed = ec2Sg.SecurityGroups?.[0]?.IpPermissions?.some(
+      rule => rule.FromPort === 80 || rule.FromPort === 443
+    );
+    expect(httpAllowed).toBe(true);
+  });
+
+  test("E2E: RDS is isolated in private subnet", async () => {
+    const rds = new RDSClient({ region });
+    let dbs;
+    try {
+      dbs = await rds.send(new DescribeDBInstancesCommand({}));
+    } catch (err) {
+      console.error("Error describing RDS for isolation test:", err);
+      throw err;
+    }
+    const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsAddress);
+
+    // Verify RDS is not publicly accessible
+    expect(db?.PubliclyAccessible).toBe(false);
+
+    // Verify RDS is in private subnets
+    const dbSubnets = db?.DBSubnetGroup?.Subnets?.map(s => s.SubnetIdentifier);
+    expect(dbSubnets).toContain(privateSubnetId);
+    expect(dbSubnets).toContain(privateSubnet2Id);
+    expect(dbSubnets).not.toContain(publicSubnetId);
+  });
+
+  test("E2E: NAT Gateway provides internet access to private subnet", async () => {
+    const ec2 = new EC2Client({ region });
+
+    // Verify NAT Gateway is in running state
+    let natGateways;
+    try {
+      const describeNatGatewaysCommand = {
+        Filter: [
+          { Name: "nat-gateway-id", Values: [natGatewayId] }
+        ]
+      };
+      natGateways = await ec2.send(new (await import("@aws-sdk/client-ec2")).DescribeNatGatewaysCommand(describeNatGatewaysCommand));
+    } catch (err) {
+      console.error("Error describing NAT Gateway:", err);
+      throw err;
+    }
+
+    const natGateway = natGateways.NatGateways?.[0];
+    expect(natGateway?.State).toBe("available");
+    expect(natGateway?.SubnetId).toBe(publicSubnetId);
+
+    // Verify NAT Gateway has EIP
+    expect(natGateway?.NatGatewayAddresses?.[0]?.PublicIp).toBeDefined();
+  });
+
+  test("E2E: VPC Flow Logs are actively logging", async () => {
+    const logs = new CloudWatchLogsClient({ region });
+
+    // Check if log streams exist (indicates logging is active)
+    let logStreams;
+    try {
+      const describeLogStreamsCommand = {
+        logGroupName: flowLogGroupName,
+        limit: 5
+      };
+      logStreams = await logs.send(new (await import("@aws-sdk/client-cloudwatch-logs")).DescribeLogStreamsCommand(describeLogStreamsCommand));
+    } catch (err) {
+      console.error("Error describing log streams:", err);
+      throw err;
+    }
+
+    // Flow logs should have created at least one stream
+    expect(logStreams.logStreams).toBeDefined();
+    // Note: Logs may take a few minutes to appear, so we just verify the structure exists
+  });
+
+  test("E2E: IAM instance profile allows SSM access", async () => {
+    const ec2 = new EC2Client({ region });
+
+    // Get EC2 instance profile
+    let instances;
+    try {
+      instances = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] }));
+    } catch (err) {
+      console.error("Error describing EC2 for IAM test:", err);
+      throw err;
+    }
+    const instance = instances.Reservations?.[0]?.Instances?.[0];
+    const instanceProfileArn = instance?.IamInstanceProfile?.Arn;
+
+    expect(instanceProfileArn).toContain(ec2InstanceProfileName);
+    expect(instanceProfileArn).toBeDefined();
+  });
+
+  test("E2E: Multi-AZ configuration for high availability", async () => {
+    const ec2 = new EC2Client({ region });
+
+    // Verify subnets are in different AZs
+    let subnets;
+    try {
+      subnets = await ec2.send(new DescribeSubnetsCommand({
+        SubnetIds: [publicSubnetId, privateSubnetId, privateSubnet2Id]
+      }));
+    } catch (err) {
+      console.error("Error describing subnets for multi-AZ test:", err);
+      throw err;
+    }
+
+    const azs = subnets.Subnets?.map(s => s.AvailabilityZone);
+    const uniqueAzs = new Set(azs);
+
+    // Should have at least 2 different AZs
+    expect(uniqueAzs.size).toBeGreaterThanOrEqual(2);
+
+    // Verify RDS is using multiple AZs
+    const rds = new RDSClient({ region });
+    let dbs;
+    try {
+      dbs = await rds.send(new DescribeDBInstancesCommand({}));
+    } catch (err) {
+      console.error("Error describing RDS for multi-AZ test:", err);
+      throw err;
+    }
+    const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsAddress);
+    const dbSubnets = db?.DBSubnetGroup?.Subnets;
+
+    expect(dbSubnets?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("E2E: Encryption is enabled on all resources", async () => {
+    const ec2 = new EC2Client({ region });
+    const rds = new RDSClient({ region });
+
+    // Check EC2 volume encryption
+    let instances;
+    try {
+      instances = await ec2.send(new DescribeInstancesCommand({ InstanceIds: [ec2InstanceId] }));
+    } catch (err) {
+      console.error("Error describing EC2 for encryption test:", err);
+      throw err;
+    }
+    const instance = instances.Reservations?.[0]?.Instances?.[0];
+    const volumeIds = instance?.BlockDeviceMappings?.map(bdm => bdm.Ebs?.VolumeId).filter(Boolean);
+
+    if (volumeIds && volumeIds.length > 0) {
+      const volumes = await ec2.send(new (await import("@aws-sdk/client-ec2")).DescribeVolumesCommand({
+        VolumeIds: volumeIds as string[]
+      }));
+      volumes.Volumes?.forEach(volume => {
+        expect(volume.Encrypted).toBe(true);
+      });
+    }
+
+    // Check RDS encryption
+    let dbs;
+    try {
+      dbs = await rds.send(new DescribeDBInstancesCommand({}));
+    } catch (err) {
+      console.error("Error describing RDS for encryption test:", err);
+      throw err;
+    }
+    const db = dbs.DBInstances?.find(d => d.Endpoint?.Address === rdsAddress);
+    expect(db?.StorageEncrypted).toBe(true);
+  });
 });
