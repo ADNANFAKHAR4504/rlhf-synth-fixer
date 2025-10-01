@@ -100,6 +100,7 @@ export class TapStack extends TerraformStack {
     // 3. IAM Module - Create IAM roles and policies for EC2
     const iamModule = new IamModule(this, 'iam', {
       standardTags,
+      environmentSuffix, // Add this
     });
 
     // 4. S3 Module - Create S3 bucket for logs

@@ -295,8 +295,10 @@ export class SecurityGroupsModule extends Construct {
 
 export interface IamModuleProps {
   standardTags: StandardTags;
+  environmentSuffix?: string; // Add this
 }
 
+// Update the IamModule constructor
 export class IamModule extends Construct {
   public readonly ec2Role: IamRole;
   public readonly instanceProfile: IamInstanceProfile;
@@ -304,9 +306,14 @@ export class IamModule extends Construct {
   constructor(scope: Construct, id: string, props: IamModuleProps) {
     super(scope, id);
 
-    // EC2 IAM Role
+    // Create unique name with suffix
+    const suffix = props.environmentSuffix || 'default';
+    const roleName = `tap-ec2-role-${suffix}`;
+    const profileName = `tap-ec2-instance-profile-${suffix}`;
+
+    // EC2 IAM Role with unique name
     this.ec2Role = new IamRole(this, 'ec2-role', {
-      name: 'tap-ec2-role',
+      name: roleName, // Use unique name
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -324,7 +331,7 @@ export class IamModule extends Construct {
 
     // EC2 IAM Role Policy
     new IamRolePolicy(this, 'ec2-policy', {
-      name: 'tap-ec2-policy',
+      name: `tap-ec2-policy-${suffix}`, // Make this unique too
       role: this.ec2Role.id,
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -353,12 +360,12 @@ export class IamModule extends Construct {
       }),
     });
 
-    // Instance Profile
+    // Instance Profile with unique name
     this.instanceProfile = new IamInstanceProfile(
       this,
       'ec2-instance-profile',
       {
-        name: 'tap-ec2-instance-profile',
+        name: profileName, // Use unique name
         role: this.ec2Role.name,
       }
     );
