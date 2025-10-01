@@ -93,15 +93,6 @@ dependencies {
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
     testImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     
-    // AWS SDK BOM for unit tests (for real integration tests)
-    testImplementation platform("software.amazon.awssdk:bom:${awsSdkVersion}")
-    testImplementation 'software.amazon.awssdk:cloudformation'
-    testImplementation 'software.amazon.awssdk:s3'
-    testImplementation 'software.amazon.awssdk:elasticloadbalancingv2'
-    testImplementation 'software.amazon.awssdk:route53'
-    testImplementation 'software.amazon.awssdk:ec2'
-    testImplementation 'software.amazon.awssdk:auth'
-    
     // SLF4J implementation for tests
     testImplementation 'org.slf4j:slf4j-simple:2.0.7'
 }
@@ -173,7 +164,8 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:codepipeline'
     integrationTestImplementation 'software.amazon.awssdk:codebuild'
     integrationTestImplementation 'software.amazon.awssdk:codedeploy'
-    integrationTestImplementation 'software.amazon.awssdk:route53'
+    integrationTestImplementation 'software.amazon.awssdk:dynamodb'
+    integrationTestImplementation 'software.amazon.awssdk:cloudwatchlogs'
 
     // JSON parsing for integration tests
     integrationTestImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"

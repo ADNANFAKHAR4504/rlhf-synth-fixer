@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349539",
+  "team": "2",
+  "startedAt": "2025-09-26T09:30:39.306Z",
+  "task_sub_category": "Cloud Environment Setup",
+  "use_case_category": "Serverless Infrastructure (Functions as Code)",
+  "training_quality": 8,
+  "aws_services": [
+    "AWS Lambda",
+    "Amazon S3",
+    "Amazon DynamoDB",
+    "AWS KMS",
+    "Amazon CloudWatch",
+    "Amazon SNS",
+    "AWS X-Ray",
+    "AWS IAM",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
