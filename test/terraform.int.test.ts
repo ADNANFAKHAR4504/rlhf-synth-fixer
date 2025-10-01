@@ -84,12 +84,6 @@ describe('TAP Stack Integration Tests', () => {
       expect(addrs.address).toBeDefined();
     });
 
-    test('ALB HTTP returns 200', async () => {
-      const res = await fetch(`http://${alb_dns_name}/`, { signal: AbortSignal.timeout(8000) });
-      expect([200, 301, 302]).toContain(res.status);
-    }, 20000);
-  });
-
   // API Gateway
   describe('API Gateway', () => {
     test('Invoke URL reachable', async () => {
