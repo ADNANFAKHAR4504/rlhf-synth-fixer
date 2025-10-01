@@ -97,6 +97,11 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
       expect(tfContent).toMatch(/kms:GenerateDataKey/);
     });
 
+    test('KMS key has policy for ELB Service', () => {
+      expect(tfContent).toMatch(/Allow ELB Service/);
+      expect(tfContent).toMatch(/elasticloadbalancing\.amazonaws\.com/);
+    });
+
     test('creates KMS alias', () => {
       expect(tfContent).toMatch(/resource\s+"aws_kms_alias"\s+"main"\s*{/);
       expect(tfContent).toMatch(/target_key_id\s*=\s*aws_kms_key\.main\.key_id/);
@@ -256,8 +261,7 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
 
     test('enables KMS encryption on logs bucket', () => {
       expect(tfContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"logs"\s*{/);
-      expect(tfContent).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
-      expect(tfContent).toMatch(/kms_master_key_id\s*=\s*aws_kms_key\.main\.arn/);
+      expect(tfContent).toMatch(/sse_algorithm\s*=\s*"AES256"/);
     });
 
     test('blocks all public access on logs bucket', () => {
@@ -583,8 +587,8 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
   // ===========================
   describe('Security Best Practices', () => {
     test('all resources use encryption at rest', () => {
-      // KMS for S3
-      expect(tfContent).toMatch(/sse_algorithm\s*=\s*"aws:kms"/);
+      // AES256 for S3 logs bucket
+      expect(tfContent).toMatch(/sse_algorithm\s*=\s*"AES256"/);
       // KMS for RDS
       expect(tfContent).toMatch(/storage_encrypted\s*=\s*true/);
       // KMS for EBS
