@@ -892,46 +892,6 @@ resource "aws_launch_template" "app" {
 }
 
 # ===========================
-# AUTO SCALING GROUP
-# ===========================
-
-resource "aws_autoscaling_group" "app" {
-  name               = "${local.name_prefix}-asg"
-  vpc_zone_identifier = aws_subnet.private_app[*].id
-  target_group_arns  = [aws_lb_target_group.app.arn]
-  health_check_type  = "ELB"
-  health_check_grace_period = 600
-  
-  min_size         = 2
-  max_size         = 4
-  desired_capacity = 2
-  
-  launch_template {
-    id      = aws_launch_template.app.id
-    version = "$Latest"
-  }
-  
-  depends_on = [
-    aws_lb_listener.http
-  ]
-  
-  tag {
-    key                 = "Name"
-    value               = "${local.name_prefix}-asg-instance"
-    propagate_at_launch = true
-  }
-  
-  dynamic "tag" {
-    for_each = local.common_tags
-    content {
-      key                 = tag.key
-      value               = tag.value
-      propagate_at_launch = true
-    }
-  }
-}
-
-# ===========================
 # RDS SUBNET GROUP
 # ===========================
 
@@ -1138,12 +1098,7 @@ output "http_listener_arn" {
   value       = aws_lb_listener.http.arn
 }
 
-# Auto Scaling Outputs
-output "asg_name" {
-  description = "Auto Scaling Group name"
-  value       = aws_autoscaling_group.app.name
-}
-
+# Launch Template Outputs
 output "launch_template_id" {
   description = "Launch Template ID"
   value       = aws_launch_template.app.id

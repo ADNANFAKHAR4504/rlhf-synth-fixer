@@ -380,38 +380,6 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
     });
   });
 
-  describe('Auto Scaling Group', () => {
-    test('creates auto scaling group', () => {
-      expect(tfContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"app"\s*{/);
-      expect(tfContent).toMatch(/min_size\s*=\s*2/);
-      expect(tfContent).toMatch(/max_size\s*=\s*4/);
-      expect(tfContent).toMatch(/desired_capacity\s*=\s*2/);
-    });
-
-    test('ASG uses launch template', () => {
-      expect(tfContent).toMatch(/launch_template\s*{/);
-      expect(tfContent).toMatch(/id\s*=\s*aws_launch_template\.app\.id/);
-      expect(tfContent).toMatch(/version\s*=\s*"\$Latest"/);
-    });
-
-    test('ASG spans multiple availability zones', () => {
-      expect(tfContent).toMatch(/vpc_zone_identifier\s*=\s*aws_subnet\.private_app\[\*\]\.id/);
-    });
-
-    test('ASG has health check configuration', () => {
-      expect(tfContent).toMatch(/health_check_type\s*=\s*"ELB"/);
-      expect(tfContent).toMatch(/health_check_grace_period\s*=\s*600/);
-    });
-
-    test('ASG attaches to target group', () => {
-      expect(tfContent).toMatch(/target_group_arns\s*=\s*\[aws_lb_target_group\.app\.arn\]/);
-    });
-
-    test('ASG depends on ALB listener', () => {
-      expect(tfContent).toMatch(/depends_on\s*=\s*\[\s*aws_lb_listener\.http\s*\]/);
-    });
-  });
-
   // ===========================
   // RDS
   // ===========================
@@ -537,8 +505,7 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
       expect(tfContent).toMatch(/output\s+"http_listener_arn"\s*{/);
     });
 
-    test('outputs Auto Scaling information', () => {
-      expect(tfContent).toMatch(/output\s+"asg_name"\s*{/);
+    test('outputs Launch Template information', () => {
       expect(tfContent).toMatch(/output\s+"launch_template_id"\s*{/);
     });
 
@@ -648,11 +615,6 @@ describe('Terraform Infrastructure Unit Tests - main.tf', () => {
 
     test('RDS is Multi-AZ', () => {
       expect(tfContent).toMatch(/multi_az\s*=\s*true/);
-    });
-
-    test('Auto Scaling Group has redundancy', () => {
-      expect(tfContent).toMatch(/min_size\s*=\s*2/);
-      expect(tfContent).toMatch(/desired_capacity\s*=\s*2/);
     });
 
     test('ALB spans multiple subnets', () => {

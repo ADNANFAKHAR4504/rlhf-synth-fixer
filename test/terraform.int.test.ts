@@ -25,11 +25,6 @@ import {
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  AutoScalingClient,
-  DescribeAutoScalingGroupsCommand,
-  DescribeLaunchConfigurationsCommand,
-} from '@aws-sdk/client-auto-scaling';
-import {
   WAFV2Client,
   GetWebACLCommand,
 } from '@aws-sdk/client-wafv2';
@@ -74,8 +69,7 @@ type TerraformOutputs = {
   target_group_arn?: TfOutputValue<string>;
   http_listener_arn?: TfOutputValue<string>;
   
-  // Auto Scaling
-  asg_name?: TfOutputValue<string>;
+  // Launch Template
   launch_template_id?: TfOutputValue<string>;
   
   // RDS
@@ -187,14 +181,13 @@ describe('Terraform Infrastructure Integration Tests', () => {
   const rdsClient = new RDSClient(clientConfig);
   const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
   const cwLogsClient = new CloudWatchLogsClient(clientConfig);
-  const asgClient = new AutoScalingClient(clientConfig);
   const wafClient = new WAFV2Client(clientConfig);
   const kmsClient = new KMSClient(clientConfig);
   const iamClient = new IAMClient(clientConfig);
 
   afterAll(async () => {
     // Clean up clients
-    [ec2Client, rdsClient, elbClient, cwLogsClient, asgClient, wafClient, kmsClient, iamClient].forEach(
+    [ec2Client, rdsClient, elbClient, cwLogsClient, wafClient, kmsClient, iamClient].forEach(
       (client) => {
         try {
           client.destroy();
@@ -513,31 +506,6 @@ describe('Terraform Infrastructure Integration Tests', () => {
         expect(listener.Protocol).toBe('HTTP');
         expect(listener.DefaultActions).toHaveLength(1);
         expect(listener.DefaultActions?.[0].Type).toBe('forward');
-      },
-      TEST_TIMEOUT
-    );
-  });
-
-  describe('Auto Scaling', () => {
-    test(
-      'Auto Scaling Group should exist with correct configuration',
-      async () => {
-        const asgName = getOutputValue<string>(outputs, 'asg_name', 'asg_name missing in outputs');
-        
-        const command = new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [asgName],
-        });
-        const res = await asgClient.send(command);
-        
-        const asg = assertDefined(
-          res.AutoScalingGroups?.[0],
-          `ASG ${asgName} not found`
-        );
-        
-        expect(asg.MinSize).toBe(2);
-        expect(asg.MaxSize).toBe(4);
-        expect(asg.DesiredCapacity).toBe(2);
-        expect(asg.HealthCheckType).toBe('ELB');
       },
       TEST_TIMEOUT
     );
