@@ -20,13 +20,6 @@ export class TapStack extends cdk.Stack {
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
-    // Region guard enforcement
-    if (this.region !== 'eu-central-1') {
-      throw new Error(
-        `Stack must be deployed in eu-central-1. Current region: ${this.region}`
-      );
-    }
-
     // 'VPC' with public and private subnets across 2 AZs
     const vpc = new ec2.Vpc(this, `ProductionVpc${environmentSuffix}`, {
       maxAzs: 2,
