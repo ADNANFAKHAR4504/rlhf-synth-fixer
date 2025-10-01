@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
 export interface InfrastructureStackProps extends cdk.StackProps {
@@ -35,11 +35,15 @@ export class InfrastructureStack extends cdk.Stack {
     });
 
     // Create KMS key for encryption at rest
-    const encryptionKey = new kms.Key(this, `AuroraEncryptionKey-${environmentSuffix}`, {
-      enableKeyRotation: true,
-      description: 'KMS key for Aurora database encryption',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const encryptionKey = new kms.Key(
+      this,
+      `AuroraEncryptionKey-${environmentSuffix}`,
+      {
+        enableKeyRotation: true,
+        description: 'KMS key for Aurora database encryption',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     new kms.Alias(this, `AuroraKeyAlias-${environmentSuffix}`, {
       aliasName: `alias/aurora-db-key-${environmentSuffix}`,
@@ -152,10 +156,14 @@ export class InfrastructureStack extends cdk.Stack {
     );
 
     // Create SNS topic for database alarms
-    const alarmTopic = new sns.Topic(this, `DbAlarmTopic-${environmentSuffix}`, {
-      displayName: 'Aurora Database Alarms',
-      topicName: `aurora-alarms-${environmentSuffix}`,
-    });
+    const alarmTopic = new sns.Topic(
+      this,
+      `DbAlarmTopic-${environmentSuffix}`,
+      {
+        displayName: 'Aurora Database Alarms',
+        topicName: `aurora-alarms-${environmentSuffix}`,
+      }
+    );
 
     // Create CloudWatch alarms for monitoring
     const capacityAlarm = new cloudwatch.Alarm(
