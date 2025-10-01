@@ -61,7 +61,6 @@ export class TapStack extends cdk.Stack {
     const maxConcurrentBackups = props?.maxConcurrentBackups || 10;
     const enableVpcEndpoints = props?.enableVpcEndpoints ?? true;
     const enableCrossAccountAccess = props?.enableCrossAccountAccess ?? false;
-    const enableCloudTrail = props?.enableCloudTrail ?? true;
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
