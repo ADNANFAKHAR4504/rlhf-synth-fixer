@@ -7,7 +7,8 @@ import { TapStack } from "../lib/tap-stack";
 jest.mock("../lib/modules", () => ({
   NetworkingModule: jest.fn().mockImplementation((scope: any, id: string) => ({
     vpc: { id: `${id}-vpc-id` },
-    publicSubnets: { ids: [`${id}-public-subnet-1`, `${id}-public-subnet-2`] },
+    publicSubnetIds: [`${id}-public-subnet-1`, `${id}-public-subnet-2`],
+    privateSubnetIds: [], // Default to empty array
   })),
   SecurityGroupsModule: jest.fn().mockImplementation((scope: any, id: string) => ({
     albSecurityGroup: { id: `${id}-alb-sg-id` },
@@ -345,12 +346,35 @@ describe("TapStack Unit Tests", () => {
         })
       );
 
-      // Verify RdsModule gets correct dependencies
+      // Verify RdsModule gets correct dependencies - should use public subnets when private is empty
       expect(RdsModule).toHaveBeenCalledWith(
         expect.anything(),
         "rds",
         expect.objectContaining({
           subnetIds: ["networking-public-subnet-1", "networking-public-subnet-2"],
+          securityGroupId: "security-groups-rds-sg-id",
+          standardTags: expect.any(Object)
+        })
+      );
+    });
+
+    test("should use private subnets for RDS when available", () => {
+      // Mock NetworkingModule with private subnets
+      NetworkingModule.mockImplementationOnce((scope: any, id: string) => ({
+        vpc: { id: `${id}-vpc-id` },
+        publicSubnetIds: [`${id}-public-subnet-1`, `${id}-public-subnet-2`],
+        privateSubnetIds: [`${id}-private-subnet-1`, `${id}-private-subnet-2`],
+      }));
+
+      const app = new App();
+      new TapStack(app, "TestPrivateSubnets");
+
+      // Verify RdsModule uses private subnets when available
+      expect(RdsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        "rds",
+        expect.objectContaining({
+          subnetIds: ["networking-private-subnet-1", "networking-private-subnet-2"],
           securityGroupId: "security-groups-rds-sg-id",
           standardTags: expect.any(Object)
         })
@@ -397,7 +421,7 @@ describe("TapStack Unit Tests", () => {
         expect.anything(),
         'public-subnet-ids',
         expect.objectContaining({
-          value: ["networking-public-subnet-1", "networking-public-subnet-2"],
+          value: 'networking-public-subnet-1,networking-public-subnet-2',
           description: 'Public subnet IDs',
         })
       );
@@ -497,6 +521,7 @@ describe("TapStack Unit Tests", () => {
         })
       );
     });
+
   });
 
   describe("Integration Tests", () => {
@@ -555,6 +580,112 @@ describe("TapStack Unit Tests", () => {
         "networking",
         expect.objectContaining({
           standardTags: expectedStandardTags
+        })
+      );
+    });
+
+    test("should handle all props simultaneously", () => {
+      const app = new App();
+      const customTags = {
+        tags: {
+          CustomTag1: 'Value1',
+          CustomTag2: 'Value2',
+        },
+      };
+
+      const stack = new TapStack(app, "TestAllProps", {
+        environmentSuffix: 'qa',
+        stateBucket: 'qa-state-bucket',
+        stateBucketRegion: 'ap-southeast-2',
+        awsRegion: 'ap-southeast-2',
+        defaultTags: customTags,
+        notificationEmail: 'qa-team@example.com',
+        overrideRegion: 'eu-central-1'
+      });
+
+      expect(stack).toBeDefined();
+      
+      // Verify overrideRegion takes precedence
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'eu-central-1',
+          defaultTags: [customTags],
+        })
+      );
+
+      // Verify S3 backend configuration
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: 'qa-state-bucket',
+          key: 'qa/TestAllProps.tfstate',
+          region: 'ap-southeast-2',
+          encrypt: true,
+        })
+      );
+
+      // Verify notification email
+      expect(SnsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        "sns",
+        expect.objectContaining({
+          email: 'qa-team@example.com',
+        })
+      );
+    });
+  });
+
+  describe("Edge Cases and Error Scenarios", () => {
+    test("should handle falsy environment suffix", () => {
+      const app = new App();
+      new TapStack(app, "TestFalsyEnv", {
+        environmentSuffix: null as any
+      });
+
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          key: 'dev/TestFalsyEnv.tfstate', // Should use default 'dev'
+        })
+      );
+    });
+
+    test("should handle all empty string props", () => {
+      const app = new App();
+      new TapStack(app, "TestEmptyProps", {
+        environmentSuffix: '',
+        stateBucket: '',
+        stateBucketRegion: '',
+        awsRegion: '',
+        notificationEmail: '',
+        overrideRegion: ''
+      });
+
+      // Should fall back to all defaults
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-west-2', // Default region
+        })
+      );
+
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: 'iac-rlhf-tf-states',
+          key: 'dev/TestEmptyProps.tfstate',
+          region: 'us-east-1',
+        })
+      );
+
+      expect(SnsModule).toHaveBeenCalledWith(
+        expect.anything(),
+        "sns",
+        expect.objectContaining({
+          email: 'admin@example.com', // Default email
         })
       );
     });

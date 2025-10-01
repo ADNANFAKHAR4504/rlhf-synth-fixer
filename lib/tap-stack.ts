@@ -115,7 +115,7 @@ export class TapStack extends TerraformStack {
 
     // 6. Load Balancer Module - Create ALB and target group
     const loadBalancerModule = new LoadBalancerModule(this, 'load-balancer', {
-      subnetIds: networkingModule.publicSubnets.ids,
+      subnetIds: networkingModule.publicSubnetIds,
       securityGroupId: securityGroupsModule.albSecurityGroup.id,
       vpcId: networkingModule.vpc.id,
       standardTags,
@@ -123,7 +123,7 @@ export class TapStack extends TerraformStack {
 
     // 7. Auto Scaling Module - Create launch template and ASG
     const autoScalingModule = new AutoScalingModule(this, 'auto-scaling', {
-      subnetIds: networkingModule.publicSubnets.ids,
+      subnetIds: networkingModule.publicSubnetIds,
       securityGroupId: securityGroupsModule.ec2SecurityGroup.id,
       instanceProfileName: iamModule.instanceProfile.name,
       targetGroupArn: loadBalancerModule.targetGroup.arn,
@@ -141,7 +141,10 @@ export class TapStack extends TerraformStack {
 
     // 9. RDS Module - Create RDS instance
     const rdsModule = new RdsModule(this, 'rds', {
-      subnetIds: networkingModule.publicSubnets.ids,
+      subnetIds:
+        networkingModule.privateSubnetIds.length > 0
+          ? networkingModule.privateSubnetIds
+          : networkingModule.publicSubnetIds,
       securityGroupId: securityGroupsModule.rdsSecurityGroup.id,
       standardTags,
     });
@@ -153,7 +156,7 @@ export class TapStack extends TerraformStack {
     });
 
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: networkingModule.publicSubnets.ids,
+      value: networkingModule.publicSubnetIds.join(','),
       description: 'Public subnet IDs',
     });
 

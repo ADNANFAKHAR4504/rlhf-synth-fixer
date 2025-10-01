@@ -3,8 +3,6 @@ import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy
 
 // Data Sources
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
-import { DataAwsVpc } from '@cdktf/provider-aws/lib/data-aws-vpc';
-import { DataAwsSubnets } from '@cdktf/provider-aws/lib/data-aws-subnets';
 import { DataAwsAmi } from '@cdktf/provider-aws/lib/data-aws-ami';
 
 // Security Groups
@@ -45,6 +43,13 @@ import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscrip
 // Secrets Manager
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
+import { Route } from '@cdktf/provider-aws/lib/route';
+import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
+
 export interface StandardTags {
   Environment: string;
   [key: string]: string;
@@ -55,51 +60,104 @@ export interface NetworkingModuleProps {
   standardTags: StandardTags;
 }
 
+// Replace the existing NetworkingModule class
 export class NetworkingModule extends Construct {
-  public readonly vpc: DataAwsVpc;
+  public readonly vpc: Vpc;
   public readonly availabilityZones: DataAwsAvailabilityZones;
-  public readonly publicSubnets: DataAwsSubnets;
-  public readonly privateSubnets: DataAwsSubnets;
+  public readonly publicSubnets: Subnet[];
+  public readonly privateSubnets: Subnet[];
+  public readonly publicSubnetIds: string[];
+  public readonly privateSubnetIds: string[];
 
-  constructor(scope: Construct, id: string, _props: NetworkingModuleProps) {
+  constructor(scope: Construct, id: string, props: NetworkingModuleProps) {
     super(scope, id);
-
-    // Get default VPC
-    this.vpc = new DataAwsVpc(this, 'default-vpc', {
-      default: true,
-    });
 
     // Get availability zones
     this.availabilityZones = new DataAwsAvailabilityZones(this, 'azs', {
       state: 'available',
     });
 
-    // Get public subnets in default VPC
-    this.publicSubnets = new DataAwsSubnets(this, 'public-subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [this.vpc.id],
-        },
-        {
-          name: 'default-for-az',
-          values: ['true'],
-        },
-      ],
+    // Create VPC
+    this.vpc = new Vpc(this, 'vpc', {
+      cidrBlock: '10.0.0.0/16',
+      enableDnsHostnames: true,
+      enableDnsSupport: true,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-vpc',
+      },
     });
 
-    // Get private subnets (if any exist, otherwise use public)
-    this.privateSubnets = new DataAwsSubnets(this, 'private-subnets', {
-      filter: [
-        {
-          name: 'vpc-id',
-          values: [this.vpc.id],
+    // Create Internet Gateway
+    const internetGateway = new InternetGateway(this, 'igw', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-internet-gateway',
+      },
+    });
+
+    // Create public subnets (2 for high availability)
+    this.publicSubnets = [];
+    this.publicSubnetIds = [];
+
+    for (let i = 0; i < 2; i++) {
+      const subnet = new Subnet(this, `public-subnet-${i}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: `10.0.${i}.0/24`,
+        availabilityZone: this.availabilityZones.names[i],
+        mapPublicIpOnLaunch: true,
+        tags: {
+          ...props.standardTags,
+          Name: `tap-public-subnet-${i + 1}`,
+          Type: 'Public',
         },
-        {
-          name: 'default-for-az',
-          values: ['true'],
+      });
+      this.publicSubnets.push(subnet);
+      this.publicSubnetIds.push(subnet.id);
+    }
+
+    // Create private subnets (2 for high availability)
+    this.privateSubnets = [];
+    this.privateSubnetIds = [];
+
+    for (let i = 0; i < 2; i++) {
+      const subnet = new Subnet(this, `private-subnet-${i}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: `10.0.${i + 10}.0/24`,
+        availabilityZone: this.availabilityZones.names[i],
+        tags: {
+          ...props.standardTags,
+          Name: `tap-private-subnet-${i + 1}`,
+          Type: 'Private',
         },
-      ],
+      });
+      this.privateSubnets.push(subnet);
+      this.privateSubnetIds.push(subnet.id);
+    }
+
+    // Create route table for public subnets
+    const publicRouteTable = new RouteTable(this, 'public-route-table', {
+      vpcId: this.vpc.id,
+      tags: {
+        ...props.standardTags,
+        Name: 'tap-public-route-table',
+      },
+    });
+
+    // Add route to internet gateway for public subnets
+    new Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: internetGateway.id,
+    });
+
+    // Associate public subnets with public route table
+    this.publicSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `public-rta-${index}`, {
+        subnetId: subnet.id,
+        routeTableId: publicRouteTable.id,
+      });
     });
   }
 }
