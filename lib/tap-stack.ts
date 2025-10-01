@@ -28,7 +28,9 @@ export class TapStack extends cdk.Stack {
 
     const region = this.region || 'us-east-1';
     // Use a safe naming suffix that doesn't include tokens for construct IDs
-    const namingSuffix = region.includes('Token') ? 'BlogApp-us-east-1' : `BlogApp-${region}`;
+    const namingSuffix = region.includes('Token')
+      ? 'BlogApp-us-east-1'
+      : `BlogApp-${region}`;
 
     this.vpc = new ec2.Vpc(this, `VPC-${namingSuffix}`, {
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -45,9 +47,10 @@ export class TapStack extends cdk.Stack {
     });
 
     // Only set bucket name if we have resolved account and region (not tokens)
-    const bucketName = this.account && !region.includes('Token') ? 
-      `s3-blogapp-${region}-${this.account}-${environmentSuffix}`.toLowerCase() : 
-      undefined;
+    const bucketName =
+      this.account && !region.includes('Token')
+        ? `s3-blogapp-${region}-${this.account}-${environmentSuffix}`.toLowerCase()
+        : undefined;
 
     this.bucket = new s3.Bucket(this, `S3-${namingSuffix}`, {
       bucketName,
