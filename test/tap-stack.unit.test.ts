@@ -164,7 +164,7 @@ describe('TapStack Unit Tests', () => {
 
     test('should create replication bucket for disaster recovery', () => {
       template.hasResourceProperties('AWS::S3::Bucket', Match.objectLike({
-        BucketName: `backup-replication-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
+        BucketName: `backup-replications-${testEnvironmentSuffix}-${testAccount}-${testRegion}`,
         VersioningConfiguration: Match.objectLike({
           Status: 'Enabled',
         }),

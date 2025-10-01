@@ -268,7 +268,7 @@ export class TapStack extends cdk.Stack {
 
     // Create replication bucket for disaster recovery
     this.replicationBucket = new s3.Bucket(this, 'ReplicationBackupBucket', {
-      bucketName: `backup-replication-${environmentSuffix}-${this.account}-${this.region}`,
+      bucketName: `backup-replications-${environmentSuffix}-${this.account}-${this.region}`,
       versioned: true,
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.replicationKey,
