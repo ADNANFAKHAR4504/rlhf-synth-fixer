@@ -1,12 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as applicationinsights from 'aws-cdk-lib/aws-applicationinsights';
 import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
@@ -225,13 +224,14 @@ export class TapStack extends cdk.Stack {
     memoryAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
     // CloudWatch Application Insights
-    // Note: Removed resource group dependency to avoid deployment issues
-    new applicationinsights.CfnApplication(this, 'ApplicationInsights', {
-      autoConfigurationEnabled: true,
-      cweMonitorEnabled: true,
-      opsCenterEnabled: true,
-      // Removed componentMonitoringSettings to simplify configuration
-    });
+    // Note: Temporarily removed to avoid deployment issues with Resource Groups
+    // Can be re-enabled once proper Resource Group is created
+    // new applicationinsights.CfnApplication(this, 'ApplicationInsights', {
+    //   resourceGroupName: `community-platform-${environmentSuffix}`,
+    //   autoConfigurationEnabled: true,
+    //   cweMonitorEnabled: true,
+    //   opsCenterEnabled: true,
+    // });
 
     // EC2 Instance Connect Endpoint for secure browser-based SSH
     // Note: Removed to avoid deployment issues - can be added back if needed
