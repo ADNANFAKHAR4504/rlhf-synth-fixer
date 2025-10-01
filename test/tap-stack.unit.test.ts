@@ -1,10 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
-
-// Mock the nested stacks to verify they are called correctly
-jest.mock('../lib/ddb-stack');
-jest.mock('../lib/rest-api-stack');
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -14,17 +10,241 @@ describe('TapStack', () => {
   let template: Template;
 
   beforeEach(() => {
-    // Reset mocks before each test
-    jest.clearAllMocks();
-
     app = new cdk.App();
-    stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
+    // Set environment to eu-central-1 to match requirements
+    stack = new TapStack(app, 'TestTapStack', { 
+      environmentSuffix,
+      env: { region: 'eu-central-1' }
+    });
     template = Template.fromStack(stack);
   });
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
+  describe('Region Guard Tests', () => {
+    test('should enforce eu-central-1 region', () => {
+      expect(stack.region).toBe('eu-central-1');
+    });
+
+    test('should reject us-east-1 region', () => {
+      expect(() => {
+        new TapStack(new cdk.App(), 'TestStack', {
+          environmentSuffix,
+          env: { region: 'us-east-1' }
+        });
+      }).toThrow('Stack must be deployed in eu-central-1. Current region: us-east-1');
+    });
+
+    test('should reject us-west-2 region', () => {
+      expect(() => {
+        new TapStack(new cdk.App(), 'TestStack', {
+          environmentSuffix,
+          env: { region: 'us-west-2' }
+        });
+      }).toThrow('Stack must be deployed in eu-central-1. Current region: us-west-2');
+    });
+  });
+
+  describe('VPC Configuration Tests', () => {
+    test('should create VPC with correct configuration', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+        EnableDnsHostnames: true,
+        EnableDnsSupport: true
+      });
+    });
+
+    test('should create public subnets in multiple AZs', () => {
+      template.resourceCountIs('AWS::EC2::Subnet', 6); // 2 public + 2 private + 2 database
+    });
+
+    test('should create NAT gateways for high availability', () => {
+      template.resourceCountIs('AWS::EC2::NatGateway', 2);
+    });
+  });
+
+  describe('EC2 Instance Tests', () => {
+    test('should create two EC2 instances', () => {
+      template.resourceCountIs('AWS::EC2::Instance', 2);
+    });
+
+    test('should use latest Amazon Linux 2 AMI', () => {
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        ImageId: Match.anyValue(), // AMI ID is resolved at deployment
+        InstanceType: 't3.micro'
+      });
+    });
+
+    test('should enable detailed monitoring', () => {
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        Monitoring: true
+      });
+    });
+  });
+
+  describe('Load Balancer Tests', () => {
+    test('should create Application Load Balancer', () => {
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+    });
+
+    test('should configure ALB as internet-facing', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+        Scheme: 'internet-facing'
+      });
+    });
+
+    test('should create target group for EC2 instances', () => {
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 1);
+    });
+  });
+
+  describe('RDS Configuration Tests', () => {
+    test('should create RDS instance', () => {
+      template.resourceCountIs('AWS::RDS::DBInstance', 1);
+    });
+
+    test('should configure RDS as db.t3.micro', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        DBInstanceClass: 'db.t3.micro'
+      });
+    });
+
+    test('should make RDS publicly accessible', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        PubliclyAccessible: true
+      });
+    });
+
+    test('should enable storage encryption', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        StorageEncrypted: true
+      });
+    });
+  });
+
+  describe('S3 Bucket Tests', () => {
+    test('should create S3 buckets with AES-256 encryption', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256'
+              }
+            }
+          ]
+        }
+      });
+    });
+
+    test('should block public access on S3 buckets', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true
+        }
+      });
+    });
+  });
+
+  describe('IAM Role Tests', () => {
+    test('should create EC2 IAM role', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'ec2.amazonaws.com'
+              }
+            }
+          ]
+        }
+      });
+    });
+
+    test('should create Lambda IAM role', () => {
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: [
+            {
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'lambda.amazonaws.com'
+              }
+            }
+          ]
+        }
+      });
+    });
+  });
+
+  describe('Tagging Tests', () => {
+    test('should tag VPC with Environment=Production', () => {
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'Environment',
+            Value: 'Production'
+          }
+        ])
+      });
+    });
+
+    test('should tag EC2 instances with Environment=Production', () => {
+      template.hasResourceProperties('AWS::EC2::Instance', {
+        Tags: Match.arrayWith([
+          {
+            Key: 'Environment',
+            Value: 'Production'
+          }
+        ])
+      });
+    });
+  });
+
+  describe('Security Group Tests', () => {
+    test('should create ALB security group with HTTP/HTTPS ingress', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'tap-pr3221-alb-sg',
+        SecurityGroupIngress: Match.arrayWith([
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow HTTP traffic from internet',
+            FromPort: 80,
+            IpProtocol: 'tcp',
+            ToPort: 80
+          },
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow HTTPS traffic from internet',
+            FromPort: 443,
+            IpProtocol: 'tcp',
+            ToPort: 443
+          }
+        ])
+      });
+    });
+
+    test('should create EC2 security group allowing ALB traffic', () => {
+      template.resourceCountIs('AWS::EC2::SecurityGroupIngress', 1);
+    });
+
+    test('should create RDS security group with public MySQL access', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroup', {
+        GroupName: 'tap-pr3221-rds-sg',
+        SecurityGroupIngress: [
+          {
+            CidrIp: '0.0.0.0/0',
+            Description: 'Allow MySQL access from anywhere (as required - security risk)',
+            FromPort: 3306,
+            IpProtocol: 'tcp',
+            ToPort: 3306
+          }
+        ]
+      });
     });
   });
 });

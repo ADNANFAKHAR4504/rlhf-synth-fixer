@@ -21,9 +21,9 @@ export class TapStack extends cdk.Stack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
 
     // Region guard enforcement
-    if (this.region !== 'us-east-1') {
+    if (this.region !== 'eu-central-1') {
       throw new Error(
-        `Stack must be deployed in us-east-1. Current region: ${this.region}`
+        `Stack must be deployed in eu-central-1. Current region: ${this.region}`
       );
     }
 
