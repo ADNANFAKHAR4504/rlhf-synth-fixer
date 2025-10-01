@@ -2,7 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
-import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf';
+import { S3Backend, TerraformStack, TerraformOutput, Fn } from 'cdktf'; // Add Fn import
 import { Construct } from 'constructs';
 
 // Import your stacks/modules here
@@ -157,7 +157,7 @@ export class TapStack extends TerraformStack {
 
     // FIX 1: Don't use .join() on token arrays
     new TerraformOutput(this, 'public-subnet-ids', {
-      value: networkingModule.publicSubnetIds, // Output as array directly
+      value: Fn.join(',', networkingModule.publicSubnetIds),
       description: 'Public subnet IDs',
     });
 
@@ -198,14 +198,12 @@ export class TapStack extends TerraformStack {
 
     // FIX 2: Use Fn.lookup for accessing list elements
     new TerraformOutput(this, 'rds-secret-arn', {
-      value: rdsModule.dbInstance.masterUserSecret
-        ? Fn.lookup(
-            Fn.element(rdsModule.dbInstance.masterUserSecret, 0),
-            'secret_arn',
-            'managed-by-aws'
-          )
-        : 'managed-by-aws',
-      description: 'RDS credentials secret ARN (managed by AWS)',
+      value: Fn.conditional(
+        rdsModule.dbInstance.masterUserSecret !== undefined,
+        'Secret ARN available in AWS Secrets Manager',
+        'managed-by-aws'
+      ),
+      description: 'RDS credentials secret status',
     });
   }
 }

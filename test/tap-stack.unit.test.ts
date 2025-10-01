@@ -1,4 +1,4 @@
-// __tests__/tap-stack.unit.test.ts
+// test/tap-stack.unit.test.ts
 import { App } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
 import { TapStack } from "../lib/tap-stack";
@@ -47,13 +47,30 @@ jest.mock("../lib/modules", () => ({
   StandardTags: {},
 }));
 
-// Mock TerraformOutput and S3Backend to prevent duplicate construct errors
+// Mock TerraformOutput, S3Backend, and Fn to prevent duplicate construct errors
 jest.mock("cdktf", () => {
   const actual = jest.requireActual("cdktf");
+  
+  // Create a mock TerraformStack that includes addOverride method
+  class MockTerraformStack {
+    addOverride = jest.fn();
+  }
+  
   return {
     ...actual,
+    TerraformStack: MockTerraformStack,
     TerraformOutput: jest.fn(),
-    S3Backend: jest.fn(),
+    S3Backend: jest.fn().mockImplementation(function(this: any) {
+      // Make sure the mock has access to the stack's addOverride method
+      return {};
+    }),
+    Fn: {
+      join: jest.fn((delimiter: string, list: string[]) => list.join(delimiter)),
+      conditional: jest.fn((condition: any, trueValue: any, falseValue: any) => {
+        return condition !== undefined ? trueValue : falseValue;
+      }),
+      lookup: jest.fn(),
+    },
   };
 });
 
@@ -74,7 +91,7 @@ describe("TapStack Unit Tests", () => {
     S3Module,
     SnsModule
   } = require("../lib/modules");
-  const { TerraformOutput, S3Backend } = require("cdktf");
+  const { TerraformOutput, S3Backend, Fn } = require("cdktf");
   const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
 
   beforeEach(() => {
@@ -398,11 +415,24 @@ describe("TapStack Unit Tests", () => {
       );
 
       // Verify the escape hatch for state locking is set
-      expect(stack.addOverride).toBeDefined();
+      expect(stack.addOverride).toHaveBeenCalledWith('terraform.backend.s3.use_lockfile', true);
     });
   });
 
   describe("Terraform Outputs", () => {
+    test("should create all expected outputs", () => {
+      const app = new App();
+      new TapStack(app, "TestOutputs");
+
+      // Should create 10 outputs total
+      expect(TerraformOutput).toHaveBeenCalledTimes(10);
+      
+      // Verify Fn.join is called for public subnet IDs
+      expect(Fn.join).toHaveBeenCalledWith(',', ["networking-public-subnet-1", "networking-public-subnet-2"]);
+      
+      // Verify Fn.conditional is called for RDS secret ARN
+      expect(Fn.conditional).toHaveBeenCalled();
+    });
 
     test("should handle missing RDS masterUserSecret gracefully", () => {
       // Mock RdsModule to return dbInstance without masterUserSecret
@@ -410,23 +440,20 @@ describe("TapStack Unit Tests", () => {
       RdsModule.mockImplementationOnce((scope: any, id: string) => ({
         dbInstance: { 
           endpoint: `${id}-db.cluster-xyz.us-west-2.rds.amazonaws.com:3306`,
-          masterUserSecret: null
+          masterUserSecret: undefined
         },
       }));
 
       const app = new App();
       new TapStack(app, "TestMissingSecret");
 
-      expect(TerraformOutput).toHaveBeenCalledWith(
-        expect.anything(),
-        'rds-secret-arn',
-        expect.objectContaining({
-          value: 'managed-by-aws',
-          description: 'RDS credentials secret ARN (managed by AWS)',
-        })
+      // Verify Fn.conditional handles undefined masterUserSecret
+      expect(Fn.conditional).toHaveBeenCalledWith(
+        false, // undefined !== undefined is false
+        'Secret ARN available in AWS Secrets Manager',
+        'managed-by-aws'
       );
     });
-
   });
 
   describe("Integration Tests", () => {
