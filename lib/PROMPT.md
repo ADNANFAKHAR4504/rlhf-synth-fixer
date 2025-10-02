@@ -1,4 +1,4 @@
-markdown# CDK Java Implementation Requirements
+CDK Java Implementation Requirements
 
 ## What I Need
 
