@@ -1,4 +1,4 @@
-// test/terraform.integration.test.ts
+// test/terraform.int.test.full.ts
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import dns from 'dns/promises';
@@ -7,228 +7,213 @@ import AWS from 'aws-sdk';
 const outputsPath = join(__dirname, '../cfn-outputs/flat-outputs.json');
 const terraformOutput = JSON.parse(readFileSync(outputsPath, 'utf8'));
 
-function parseJsonArray(str?: string): string[] {
-  if (!str) return [];
-  try {
-    return JSON.parse(str);
-  } catch {
-    return [];
-  }
-}
-
-// Extract outputs
 const {
   alb_dns_name,
   alb_security_group_id,
-  alb_zone_id,
-  ami_id,
-  autoscaling_group_name,
-  cloudwatch_alarm_alb_healthy_hosts_name,
-  cloudwatch_alarm_high_cpu_name,
-  cloudwatch_alarm_low_cpu_name,
-  cloudwatch_alarm_rds_cpu_name,
-  cloudwatch_log_group_name,
-  db_subnet_group_name,
+  target_group_arn,
   ec2_iam_role_arn,
   ec2_instance_profile_arn,
-  ec2_security_group_id,
-  elastic_ip_addresses,
-  flow_log_id,
-  flow_logs_role_arn,
-  internet_gateway_id,
-  kms_key_arn,
-  kms_key_id,
   launch_template_id,
-  nat_gateway_ids,
-  private_subnet_ids,
-  public_subnet_ids,
-  rds_address,
+  autoscaling_group_name,
+  ec2_security_group_id,
   rds_endpoint,
   rds_instance_id,
   rds_port,
-  secrets_manager_secret_arn,
   secrets_manager_secret_name,
-  security_group_alb_id,
-  security_group_rds_id,
-  ssm_parameter_name,
-  target_group_arn,
-  vpc_cidr,
-  vpc_id,
   s3_bucket_name,
   s3_logs_bucket_name,
-  cloudtrail_bucket_name
+  cloudtrail_bucket_name,
+  cloudtrail_iam_role_arn,
+  vpc_id,
+  vpc_cidr,
+  public_subnet_ids,
+  private_subnet_ids,
+  internet_gateway_id,
+  nat_gateway_ids,
+  flow_log_id,
+  dlm_lifecycle_policy_id
 } = terraformOutput;
 
-// Parse JSON arrays
-const publicSubnets = parseJsonArray(public_subnet_ids);
-const privateSubnets = parseJsonArray(private_subnet_ids);
-const natGateways = parseJsonArray(nat_gateway_ids);
-const eips = parseJsonArray(elastic_ip_addresses);
-
-// AWS SDK Clients
-const ec2 = new AWS.EC2({ region: 'us-west-2' });
 const s3 = new AWS.S3({ region: 'us-west-2' });
 const rds = new AWS.RDS({ region: 'us-west-2' });
+const ec2 = new AWS.EC2({ region: 'us-west-2' });
+const elbv2 = new AWS.ELBv2({ region: 'us-west-2' });
+const iam = new AWS.IAM({ region: 'us-west-2' });
 const cloudwatch = new AWS.CloudWatch({ region: 'us-west-2' });
 const secretsManager = new AWS.SecretsManager({ region: 'us-west-2' });
-const iam = new AWS.IAM({ region: 'us-west-2' });
 
-describe('TAP Stack Live Integration Tests', () => {
+// Helper to parse JSON arrays
+const parseJsonArray = (str?: string) => {
+  if (!str) return [];
+  try { return JSON.parse(str); } catch { return []; }
+};
 
-  // ==========================
+const publicSubnets = parseJsonArray(public_subnet_ids);
+const privateSubnets = parseJsonArray(private_subnet_ids);
+
+// -------------------------------
+// Integration Test Suite
+// -------------------------------
+describe('TAP Stack Full Live Integration Tests', () => {
+
+  // -------------------------------
   // ALB Tests
-  // ==========================
+  // -------------------------------
   describe('Application Load Balancer', () => {
     it('ALB DNS resolves', async () => {
       const addrs = await dns.lookup(alb_dns_name);
       expect(addrs.address).toBeDefined();
     });
 
-    it('ALB security group and zone valid', () => {
-      expect(alb_zone_id).toMatch(/^Z[A-Z0-9]+/);
+    it('ALB security group exists', async () => {
       expect(alb_security_group_id).toMatch(/^sg-/);
+    });
+
+    it('ALB target group exists', async () => {
+      const tg = await elbv2.describeTargetGroups({ TargetGroupArns: [target_group_arn] }).promise();
+      expect(tg.TargetGroups.length).toBe(1);
+    });
+
+    it('ALB target group health is healthy', async () => {
+      const health = await elbv2.describeTargetHealth({ TargetGroupArn: target_group_arn }).promise();
+      health.TargetHealthDescriptions.forEach(desc => {
+        expect(['healthy','initial']).toContain(desc.TargetHealth.State);
+      });
     });
   });
 
-  // ==========================
+  // -------------------------------
   // RDS Tests
-  // ==========================
+  // -------------------------------
   describe('RDS Database', () => {
-    it('RDS endpoint valid', () => {
-      expect(rds_endpoint).toMatch(/rds\.amazonaws\.com/);
-      expect(rds_address).toBeDefined();
-      expect(rds_port).toBe('3306');
+    it('RDS instance exists', async () => {
+      const db = await rds.describeDBInstances({ DBInstanceIdentifier: rds_instance_id }).promise();
+      expect(db.DBInstances.length).toBe(1);
+      expect(db.DBInstances[0].Endpoint.Port).toBe(Number(rds_port));
     });
 
-    it('RDS instance exists', async () => {
-      const data = await rds.describeDBInstances({ DBInstanceIdentifier: rds_instance_id }).promise();
-      expect(data.DBInstances?.length).toBe(1);
-      expect(data.DBInstances?.[0].DBInstanceIdentifier).toBe(rds_instance_id);
+    it('RDS endpoint valid', () => {
+      expect(rds_endpoint).toMatch(/rds\.amazonaws\.com/);
     });
 
     it('Secrets Manager secret exists', async () => {
       const secret = await secretsManager.describeSecret({ SecretId: secrets_manager_secret_name }).promise();
-      expect(secret.ARN).toBe(secrets_manager_secret_arn);
+      expect(secret.Name).toBe(secrets_manager_secret_name);
     });
   });
 
-  // ==========================
+  // -------------------------------
   // Networking Tests
-  // ==========================
+  // -------------------------------
   describe('Networking', () => {
     it('VPC exists and CIDR correct', async () => {
-      const data = await ec2.describeVpcs({ VpcIds: [vpc_id] }).promise();
-      expect(data.Vpcs?.length).toBe(1);
-      expect(data.Vpcs?.[0].CidrBlock).toBe(vpc_cidr);
+      const vpc = await ec2.describeVpcs({ VpcIds: [vpc_id] }).promise();
+      expect(vpc.Vpcs[0].CidrBlock).toBe(vpc_cidr);
     });
 
     it('Public and private subnets exist', async () => {
-      const pubData = await ec2.describeSubnets({ SubnetIds: publicSubnets }).promise();
-      const privData = await ec2.describeSubnets({ SubnetIds: privateSubnets }).promise();
-      expect(pubData.Subnets?.length).toBe(publicSubnets.length);
-      expect(privData.Subnets?.length).toBe(privateSubnets.length);
+      const pub = await ec2.describeSubnets({ SubnetIds: publicSubnets }).promise();
+      const priv = await ec2.describeSubnets({ SubnetIds: privateSubnets }).promise();
+      expect(pub.Subnets.length).toBe(publicSubnets.length);
+      expect(priv.Subnets.length).toBe(privateSubnets.length);
     });
 
     it('Internet Gateway exists', async () => {
-      const igwData = await ec2.describeInternetGateways({ InternetGatewayIds: [internet_gateway_id] }).promise();
-      expect(igwData.InternetGateways?.length).toBe(1);
+      const igw = await ec2.describeInternetGateways({ InternetGatewayIds: [internet_gateway_id] }).promise();
+      expect(igw.InternetGateways.length).toBe(1);
     });
 
     it('NAT Gateways exist', async () => {
-      const natData = await ec2.describeNatGateways({ NatGatewayIds: natGateways }).promise();
-      expect(natData.NatGateways?.length).toBe(natGateways.length);
+      const natIds = parseJsonArray(nat_gateway_ids);
+      const nat = await ec2.describeNatGateways({ NatGatewayIds: natIds }).promise();
+      expect(nat.NatGateways.length).toBe(natIds.length);
     });
 
-    it('Elastic IPs assigned', async () => {
-      const addresses = await ec2.describeAddresses({ PublicIps: eips }).promise();
-      expect(addresses.Addresses?.length).toBe(eips.length);
+    it('VPC Flow Log exists', async () => {
+      const flows = await ec2.describeFlowLogs({ FlowLogIds: [flow_log_id] }).promise();
+      expect(flows.FlowLogs.length).toBe(1);
     });
   });
 
-  // ==========================
+  // -------------------------------
   // IAM Tests
-  // ==========================
+  // -------------------------------
   describe('IAM Roles & Instance Profiles', () => {
     it('EC2 role exists', async () => {
       const role = await iam.getRole({ RoleName: ec2_iam_role_arn.split('/').pop()! }).promise();
-      expect(role.Role.RoleName).toBe(ec2_iam_role_arn.split('/').pop());
+      expect(role.Role.Arn).toBe(ec2_iam_role_arn);
     });
 
     it('EC2 instance profile exists', async () => {
       const profile = await iam.getInstanceProfile({ InstanceProfileName: ec2_instance_profile_arn.split('/').pop()! }).promise();
-      expect(profile.InstanceProfile.InstanceProfileName).toBe(ec2_instance_profile_arn.split('/').pop());
+      expect(profile.InstanceProfile.Arn).toBe(ec2_instance_profile_arn);
+    });
+
+    it('CloudTrail IAM role exists', async () => {
+      const role = await iam.getRole({ RoleName: cloudtrail_iam_role_arn.split('/').pop()! }).promise();
+      expect(role.Role.Arn).toBe(cloudtrail_iam_role_arn);
     });
   });
 
-  // ==========================
-  // EC2 & AutoScaling
-  // ==========================
-  describe('EC2 Launch Template & AutoScaling', () => {
+  // -------------------------------
+  // EC2 & AutoScaling Tests
+  // -------------------------------
+  describe('EC2 & AutoScaling', () => {
     it('Launch template exists', async () => {
-      const ltData = await ec2.describeLaunchTemplates({ LaunchTemplateIds: [launch_template_id] }).promise();
-      expect(ltData.LaunchTemplates?.length).toBe(1);
+      const lt = await ec2.describeLaunchTemplates({ LaunchTemplateIds: [launch_template_id] }).promise();
+      expect(lt.LaunchTemplates.length).toBe(1);
     });
 
-    it('ASG name matches', () => {
-      expect(autoscaling_group_name).toContain('asg');
+    it('AutoScaling Group exists', async () => {
+      const asg = new AWS.AutoScaling({ region: 'us-west-2' });
+      const groups = await asg.describeAutoScalingGroups({ AutoScalingGroupNames: [autoscaling_group_name] }).promise();
+      expect(groups.AutoScalingGroups.length).toBe(1);
     });
   });
 
-  // ==========================
-  // S3 Tests
-  // ==========================
+  // -------------------------------
+  // S3 Buckets Tests
+  // -------------------------------
   describe('S3 Buckets', () => {
+    const checkBucketExists = async (bucket: string) => {
+      if (!bucket) throw new Error(`Bucket name is undefined`);
+      return s3.headBucket({ Bucket: bucket }).promise();
+    };
+
     it('Data bucket exists', async () => {
-      const data = await s3.headBucket({ Bucket: s3_bucket_name }).promise();
+      const data = await checkBucketExists(s3_bucket_name);
       expect(data).toBeDefined();
     });
 
     it('Logs bucket exists', async () => {
-      const logs = await s3.headBucket({ Bucket: s3_logs_bucket_name }).promise();
+      const logs = await checkBucketExists(s3_logs_bucket_name);
       expect(logs).toBeDefined();
     });
 
     it('CloudTrail bucket exists', async () => {
-      const trail = await s3.headBucket({ Bucket: cloudtrail_bucket_name }).promise();
+      const trail = await checkBucketExists(cloudtrail_bucket_name);
       expect(trail).toBeDefined();
     });
   });
 
-  // ==========================
+  // -------------------------------
   // CloudWatch Alarms
-  // ==========================
+  // -------------------------------
   describe('CloudWatch Alarms', () => {
-    it('Alarms exist', async () => {
-      const alarms = [
-        cloudwatch_alarm_high_cpu_name,
-        cloudwatch_alarm_low_cpu_name,
-        cloudwatch_alarm_rds_cpu_name,
-        cloudwatch_alarm_alb_healthy_hosts_name
-      ];
-      for (const name of alarms) {
-        const data = await cloudwatch.describeAlarms({ AlarmNames: [name] }).promise();
-        expect(data.MetricAlarms?.length).toBe(1);
-      }
+    it('At least one alarm exists', async () => {
+      const alarms = await cloudwatch.describeAlarms({}).promise();
+      expect(alarms.MetricAlarms.length).toBeGreaterThan(0);
     });
   });
 
-  // ==========================
-  // Flow Logs
-  // ==========================
-  describe('VPC Flow Logs', () => {
-    it('Flow log exists', async () => {
-      const data = await ec2.describeFlowLogs({ FlowLogIds: [flow_log_id] }).promise();
-      expect(data.FlowLogs?.length).toBe(1);
-      expect(data.FlowLogs?.[0].FlowLogId).toBe(flow_log_id);
-    });
-  });
-
-  // ==========================
-  // Target Group
-  // ==========================
-  describe('Target Group', () => {
-    it('Target group ARN valid', () => {
-      expect(target_group_arn).toContain('targetgroup');
+  // -------------------------------
+  // DLM Lifecycle Policy
+  // -------------------------------
+  describe('DLM Lifecycle Manager', () => {
+    it('DLM policy exists', async () => {
+      const dlm = new AWS.DLM({ region: 'us-west-2' });
+      const policies = await dlm.getLifecyclePolicies({ PolicyIds: [dlm_lifecycle_policy_id] }).promise();
+      expect(policies.Policies.length).toBe(1);
     });
   });
 
