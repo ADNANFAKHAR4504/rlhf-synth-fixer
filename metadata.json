@@ -10,5 +10,5 @@
   "subject_labels": [
     "Provisioning of Infrastructure Environments"
   ],
-  "aws_services": "S3 Bucket, CloudFormation, Lambda, EventBridge, CloudWatch LogGroup, VPC"
+  "aws_services": "VPC, EC2 (Instance, Security Groups, EIP, NAT Gateway, Subnets, Route Tables, Internet Gateway), RDS (MySQL DBInstance, DB Subnet Group), S3 Bucket, IAM (Role, Instance Profile, Policies), CloudFront Distribution, SNS Topic, CloudWatch (Alarms, Dashboard)"
 }
