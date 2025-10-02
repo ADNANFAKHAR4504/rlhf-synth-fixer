@@ -30,6 +30,8 @@ ext {
     awsCdkConstructsVersion = '10.4.2'
     hashicorpCdktfVersion = '0.21.0'
     hashicorpCdktfAwsVersion = '21.0.0'
+    hashicorpCdktfRandomVersion = '12.0.0'
+    hashicorpCdktfArchiveVersion = '11.0.0'
     guavaVersion = '33.0.0-jre'
     jacksonVersion = '2.17.1'
     awsSdkVersion = '2.25.16'
@@ -75,6 +77,9 @@ dependencies {
     implementation "com.pulumi:aws:${pulumiAwsVersion}"
     implementation "com.hashicorp:cdktf:${hashicorpCdktfVersion}"
     implementation "com.hashicorp:cdktf-provider-aws:${hashicorpCdktfAwsVersion}"
+    implementation "com.hashicorp:cdktf-provider-random:${hashicorpCdktfRandomVersion}"
+    implementation "com.hashicorp:cdktf-provider-archive:${hashicorpCdktfArchiveVersion}"
+    implementation "com.hashicorp:cdktf-provider-tls:11.0.0"
     implementation 'com.pulumi:tls:5.2.0'
 
     // AWS CDK dependencies
@@ -158,6 +163,8 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:rds'
     integrationTestImplementation 'software.amazon.awssdk:lambda'
     integrationTestImplementation 'software.amazon.awssdk:apigateway'
+    integrationTestImplementation 'software.amazon.awssdk:dynamodb'
+    integrationTestImplementation 'software.amazon.awssdk:sqs'
     integrationTestImplementation 'software.amazon.awssdk:networkfirewall'
     integrationTestImplementation 'software.amazon.awssdk:config'
     integrationTestImplementation 'software.amazon.awssdk:secretsmanager'
