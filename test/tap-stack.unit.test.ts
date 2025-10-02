@@ -24,7 +24,7 @@ describe('Email Notification System CloudFormation Template', () => {
       if (template) {
         expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
       } else {
-        expect(templateContent).toContain("AWSTemplateFormatVersion: '2010-09-09'");
+        expect(templateContent).toContain('AWSTemplateFormatVersion: "2010-09-09"');
       }
     });
 
@@ -79,7 +79,7 @@ describe('Email Notification System CloudFormation Template', () => {
         expect(param.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
       } else {
         expect(templateContent).toContain('EnvironmentSuffix:');
-        expect(templateContent).toContain("Default: 'dev'");
+        expect(templateContent).toContain('Default: "dev"');
         expect(templateContent).toContain('AllowedPattern:');
       }
     });
@@ -92,7 +92,7 @@ describe('Email Notification System CloudFormation Template', () => {
         expect(param.AllowedValues).toEqual(['true', 'false']);
       } else {
         expect(templateContent).toContain('EnableProductionSES:');
-        expect(templateContent).toContain("Default: 'false'");
+        expect(templateContent).toContain('Default: "false"');
         expect(templateContent).toContain('AllowedValues:');
       }
     });
@@ -120,7 +120,7 @@ describe('Email Notification System CloudFormation Template', () => {
       } else {
         expect(templateContent).toContain('SNSTopicOrderConfirmations:');
         expect(templateContent).toContain('Type: AWS::SNS::Topic');
-        expect(templateContent).toContain("KmsMasterKeyId: 'alias/aws/sns'");
+        expect(templateContent).toContain('KmsMasterKeyId: "alias/aws/sns"');
       }
     });
 
@@ -186,8 +186,8 @@ describe('Email Notification System CloudFormation Template', () => {
         expect(templateContent).toContain('EmailDeliveriesTable:');
         expect(templateContent).toContain('Type: AWS::DynamoDB::Table');
         expect(templateContent).toContain('BillingMode: PAY_PER_REQUEST');
-        expect(templateContent).toContain("AttributeName: 'orderId'");
-        expect(templateContent).toContain("AttributeName: 'messageId'");
+        expect(templateContent).toContain('AttributeName: "orderId"');
+        expect(templateContent).toContain('AttributeName: "messageId"');
       }
     });
 
@@ -201,8 +201,8 @@ describe('Email Notification System CloudFormation Template', () => {
         expect(gsis[1].IndexName).toBe('StatusIndex');
       } else {
         expect(templateContent).toContain('GlobalSecondaryIndexes:');
-        expect(templateContent).toContain("IndexName: 'EmailIndex'");
-        expect(templateContent).toContain("IndexName: 'StatusIndex'");
+        expect(templateContent).toContain('IndexName: "EmailIndex"');
+        expect(templateContent).toContain('IndexName: "StatusIndex"');
       }
     });
 
@@ -217,7 +217,7 @@ describe('Email Notification System CloudFormation Template', () => {
         expect(templateContent).toContain('SSESpecification:');
         expect(templateContent).toContain('SSEEnabled: true');
         expect(templateContent).toContain('TimeToLiveSpecification:');
-        expect(templateContent).toContain("AttributeName: 'ttl'");
+        expect(templateContent).toContain('AttributeName: "ttl"');
         expect(templateContent).toContain('PointInTimeRecoverySpecification:');
       }
     });
@@ -361,7 +361,7 @@ describe('Email Notification System CloudFormation Template', () => {
         } else {
           expect(templateContent).toContain(`${functionName}:`);
           expect(templateContent).toContain('Type: AWS::Lambda::Function');
-          expect(templateContent).toContain("Runtime: 'python3.12'");
+          expect(templateContent).toContain('Runtime: "python3.12"');
         }
       });
     });
