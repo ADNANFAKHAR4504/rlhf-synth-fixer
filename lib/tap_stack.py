@@ -181,9 +181,7 @@ class TapStack(pulumi.ComponentResource):
             role=self.lambda_role.arn,
             runtime="python3.11",
             handler="index.handler",
-            code=pulumi.AssetArchive({
-                ".": pulumi.FileArchive("./lib/lambda")
-            }),
+            code=pulumi.FileArchive("./lib/lambda-package/lambda-package.zip"),
             timeout=30,
             memory_size=512,
             reserved_concurrent_executions=10,
