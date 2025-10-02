@@ -11,8 +11,12 @@ cdktf-cdktf-provider-aws = "21.9.1"
 pulumi_random = "*"
 pulumi = "==3.192.0"
 pulumi-aws = "7.6.0"
-pytest-cov = "*"
 cfn-lint = "*"
+pytest = "*"
+pytest-cov = "*"
+pytest-testdox = "*"
+pytest-env = "*"
+aws-lambda-powertools = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -25,7 +29,6 @@ requests = "*"
 pytest-cov = "*"
 cfn-lint = "*"
 cfn-flip = "*"
-
 
 [requires]
 python_version = "3.12.11"

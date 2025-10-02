@@ -79,13 +79,23 @@ class TestTapStackResources(unittest.TestCase):
                                             mock_lambda, mock_attachment, mock_policy, mock_role,
                                             mock_table, mock_queue):
         """Test that TapStack creates all expected resources."""
-        # Configure mocks to return MagicMock objects with required attributes
+        # Create mock resources that inherit from pulumi.Resource
+        from pulumi import Resource
+        from pulumi import Output
+        
+        class MockResource(Resource):
+            def __init__(self, name, **kwargs):
+                super().__init__('mock:test:MockResource', name, None, None)
+                # Add common Pulumi resource attributes
+                self.arn = Output.from_input(f"arn:aws:mock:us-west-1:123456789012:mock/{name}")
+                self.url = Output.from_input(f"https://mock.amazonaws.com/{name}")
+                self.name = Output.from_input(name)
+        
+        # Configure mocks to return MockResource objects
         for mock in [mock_queue, mock_table, mock_role, mock_policy,
                      mock_attachment, mock_lambda, mock_event_mapping,
                      mock_alarm, mock_log_group]:
-            mock_instance = MagicMock()
-            mock_instance.urn = MagicMock()
-            mock_instance.id = MagicMock()
+            mock_instance = MockResource('mock-resource')
             mock.return_value = mock_instance
 
         # Create stack
