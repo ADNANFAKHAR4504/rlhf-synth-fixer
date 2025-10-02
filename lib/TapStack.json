@@ -762,7 +762,7 @@
         ],
         "LaunchTemplate": {
           "LaunchTemplateId": { "Ref": "LaunchTemplate" },
-          "Version": "$Latest"
+          "Version": { "Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"] }
         },
         "MinSize": { "Ref": "MinAutoScalingSize" },
         "MaxSize": { "Ref": "MaxAutoScalingSize" },
