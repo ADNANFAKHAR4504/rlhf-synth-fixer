@@ -1,22 +1,34 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
-import { APIGatewayClient, GetResourcesCommand, GetRestApiCommand } from '@aws-sdk/client-api-gateway';
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
+﻿// Configuration - These are coming from cfn-outputs after cdk deploy
+import {
+  APIGatewayClient,
+  GetResourcesCommand,
+  GetRestApiCommand,
+} from '@aws-sdk/client-api-gateway';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import { DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
-import { GetBucketVersioningCommand, HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { ListTopicsCommand, SNSClient } from '@aws-sdk/client-sns';
 import fs from 'fs';
 
-// AWS SDK clients
-const dynamoDBClient = new DynamoDBClient({ region: 'us-west-2' });
-const s3Client = new S3Client({ region: 'us-west-2' });
-const lambdaClient = new LambdaClient({ region: 'us-west-2' });
-const apiGatewayClient = new APIGatewayClient({ region: 'us-west-2' });
-const snsClient = new SNSClient({ region: 'us-west-2' });
-const cloudWatchClient = new CloudWatchClient({ region: 'us-west-2' });
-
-// Get environment suffix from environment variable (set by CI/CD pipeline)
+// Get environment suffix and region from environment variables (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const awsRegion = process.env.AWS_REGION || 'us-west-2';
+
+// AWS SDK clients
+const dynamoDBClient = new DynamoDBClient({ region: awsRegion });
+const s3Client = new S3Client({ region: awsRegion });
+const lambdaClient = new LambdaClient({ region: awsRegion });
+const apiGatewayClient = new APIGatewayClient({ region: awsRegion });
+const snsClient = new SNSClient({ region: awsRegion });
+const cloudWatchClient = new CloudWatchClient({ region: awsRegion });
 
 // Helper function to get stack outputs
 function getStackOutputs() {
@@ -26,7 +38,9 @@ function getStackOutputs() {
     );
     return outputs;
   } catch (error) {
-    console.warn('Could not read cfn-outputs/flat-outputs.json, using environment variables');
+    console.warn(
+      'Could not read cfn-outputs/flat-outputs.json, using environment variables'
+    );
     return {
       APIEndpoint: process.env.API_ENDPOINT,
       RecipeMediaBucket: process.env.RECIPE_MEDIA_BUCKET,
@@ -39,10 +53,12 @@ function getStackOutputs() {
 
 // Helper function to check if AWS credentials are available
 function hasAWSCredentials() {
-  return !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) ||
-    !!(process.env.AWS_PROFILE) ||
+  return (
+    !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) ||
+    !!process.env.AWS_PROFILE ||
     fs.existsSync(process.env.HOME + '/.aws/credentials') ||
-    fs.existsSync(process.env.HOME + '/.aws/config');
+    fs.existsSync(process.env.HOME + '/.aws/config')
+  );
 }
 
 // Skip tests if AWS credentials are not available
@@ -57,10 +73,12 @@ skipIfNoCredentials('Meal Planning System Integration Tests', () => {
     });
 
     test('Should have stack outputs or environment variables', () => {
-      const hasOutputs = Object.values(outputs).some(value => value !== undefined);
+      const hasOutputs = Object.values(outputs).some(
+        value => value !== undefined
+      );
       if (!hasOutputs) {
         console.warn(`
-⚠️  No stack outputs found. Integration tests require deployed infrastructure.
+âš ï¸  No stack outputs found. Integration tests require deployed infrastructure.
    
 To run these tests:
 1. Deploy the CDK stack: npm run cdk:deploy
@@ -116,7 +134,7 @@ To run these tests:
 
     test('User Preferences Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: `UserPreferences-${environmentSuffix}`
+        TableName: `UserPreferences-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -124,7 +142,7 @@ To run these tests:
 
     test('Meal Plans Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: `MealPlans-${environmentSuffix}`
+        TableName: `MealPlans-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -132,7 +150,7 @@ To run these tests:
 
     test('Grocery Lists Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: `GroceryLists-${environmentSuffix}`
+        TableName: `GroceryLists-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -140,7 +158,7 @@ To run these tests:
 
     test('Nutritional Data Table should exist and be active', async () => {
       const command = new DescribeTableCommand({
-        TableName: `NutritionalData-${environmentSuffix}`
+        TableName: `NutritionalData-${environmentSuffix}`,
       });
       const response = await dynamoDBClient.send(command);
       expect(response.Table?.TableStatus).toBe('ACTIVE');
@@ -228,7 +246,8 @@ To run these tests:
       const command = new GetResourcesCommand({ restApiId: apiId });
       const response = await apiGatewayClient.send(command);
 
-      const resourcePaths = response.items?.map(item => item.pathPart).filter(Boolean) || [];
+      const resourcePaths =
+        response.items?.map(item => item.pathPart).filter(Boolean) || [];
 
       // Check for key API endpoints
       expect(resourcePaths).toContain('recipes');
@@ -245,8 +264,9 @@ To run these tests:
       const response = await snsClient.send(command);
 
       const topicArns = response.Topics?.map(topic => topic.TopicArn) || [];
-      const groceryReminderTopic = topicArns.find(arn =>
-        arn?.includes('GroceryReminder') && arn?.includes(environmentSuffix)
+      const groceryReminderTopic = topicArns.find(
+        arn =>
+          arn?.includes('GroceryReminder') && arn?.includes(environmentSuffix)
       );
 
       expect(groceryReminderTopic).toBeDefined();
@@ -257,8 +277,10 @@ To run these tests:
       const response = await snsClient.send(command);
 
       const topicArns = response.Topics?.map(topic => topic.TopicArn) || [];
-      const mealPlanNotificationTopic = topicArns.find(arn =>
-        arn?.includes('MealPlanNotification') && arn?.includes(environmentSuffix)
+      const mealPlanNotificationTopic = topicArns.find(
+        arn =>
+          arn?.includes('MealPlanNotification') &&
+          arn?.includes(environmentSuffix)
       );
 
       expect(mealPlanNotificationTopic).toBeDefined();
@@ -268,20 +290,24 @@ To run these tests:
   describe('CloudWatch Alarms', () => {
     test('High API Error Rate Alarm should exist', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [`HighAPIErrorRate-${environmentSuffix}`]
+        AlarmNames: [`HighAPIErrorRate-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
       expect(response.MetricAlarms).toHaveLength(1);
-      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(`HighAPIErrorRate-${environmentSuffix}`);
+      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(
+        `HighAPIErrorRate-${environmentSuffix}`
+      );
     });
 
     test('Lambda High Error Rate Alarm should exist', async () => {
       const command = new DescribeAlarmsCommand({
-        AlarmNames: [`LambdaHighErrorRate-${environmentSuffix}`]
+        AlarmNames: [`LambdaHighErrorRate-${environmentSuffix}`],
       });
       const response = await cloudWatchClient.send(command);
       expect(response.MetricAlarms).toHaveLength(1);
-      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(`LambdaHighErrorRate-${environmentSuffix}`);
+      expect(response.MetricAlarms?.[0]?.AlarmName).toBe(
+        `LambdaHighErrorRate-${environmentSuffix}`
+      );
     });
   });
 
@@ -289,7 +315,11 @@ To run these tests:
     test('API endpoint should be accessible', async () => {
       const apiEndpoint = outputs.APIEndpoint;
       expect(apiEndpoint).toBeDefined();
-      expect(apiEndpoint).toMatch(/^https:\/\/.*\.execute-api\.us-west-2\.amazonaws\.com\/prod$/);
+      expect(apiEndpoint).toMatch(
+        new RegExp(
+          `^https://.*\\.execute-api\\.${awsRegion}\\.amazonaws\\.com/prod$`
+        )
+      );
     });
 
     test('Recipes endpoint should respond', async () => {
@@ -327,7 +357,9 @@ To run these tests:
       const documentsBucket = outputs.MealPlanDocumentsBucket;
 
       const recipeCommand = new HeadBucketCommand({ Bucket: recipeBucket });
-      const documentsCommand = new HeadBucketCommand({ Bucket: documentsBucket });
+      const documentsCommand = new HeadBucketCommand({
+        Bucket: documentsBucket,
+      });
 
       await expect(s3Client.send(recipeCommand)).resolves.toBeDefined();
       await expect(s3Client.send(documentsCommand)).resolves.toBeDefined();
@@ -338,7 +370,11 @@ To run these tests:
     test('CloudWatch Dashboard should be accessible', async () => {
       const dashboardUrl = outputs.DashboardURL;
       expect(dashboardUrl).toBeDefined();
-      expect(dashboardUrl).toMatch(/^https:\/\/console\.aws\.amazon\.com\/cloudwatch/);
+      expect(dashboardUrl).toMatch(
+        new RegExp(
+          `^https://console\\.aws\\.amazon\\.com/cloudwatch.*region=${awsRegion}`
+        )
+      );
     });
 
     test('All Lambda functions should have CloudWatch logs', async () => {
@@ -350,7 +386,7 @@ To run these tests:
         `RecipeManagement-${environmentSuffix}`,
         `UserPreferences-${environmentSuffix}`,
         `BatchMealPlanGenerator-${environmentSuffix}`,
-        `GroceryReminder-${environmentSuffix}`
+        `GroceryReminder-${environmentSuffix}`,
       ];
 
       for (const functionName of functionNames) {
@@ -367,7 +403,7 @@ if (!hasAWSCredentials()) {
   describe('Meal Planning System Integration Tests (Skipped)', () => {
     test('AWS credentials not configured - tests skipped', () => {
       console.log(`
-🔧 Integration tests require AWS credentials and deployed infrastructure.
+ðŸ”§ Integration tests require AWS credentials and deployed infrastructure.
 
 To run integration tests:
 1. Configure AWS credentials:
@@ -375,17 +411,21 @@ To run integration tests:
    - Or configure AWS CLI: aws configure
    - Or set AWS_PROFILE environment variable
 
-2. Deploy the infrastructure:
+2. Set AWS region (optional):
+   - Set AWS_REGION environment variable (defaults to us-west-2)
+
+3. Deploy the infrastructure:
    - npm run cdk:deploy
 
-3. Run integration tests:
+4. Run integration tests:
    - npm run test:integration
 
 Current environment:
-- AWS_ACCESS_KEY_ID: ${process.env.AWS_ACCESS_KEY_ID ? '✅ Set' : '❌ Not set'}
-- AWS_SECRET_ACCESS_KEY: ${process.env.AWS_SECRET_ACCESS_KEY ? '✅ Set' : '❌ Not set'}
-- AWS_PROFILE: ${process.env.AWS_PROFILE || '❌ Not set'}
-- Stack outputs: ${fs.existsSync('cfn-outputs/flat-outputs.json') ? '✅ Available' : '❌ Not found'}
+- AWS_ACCESS_KEY_ID: ${process.env.AWS_ACCESS_KEY_ID ? 'âœ… Set' : 'âŒ Not set'}
+- AWS_SECRET_ACCESS_KEY: ${process.env.AWS_SECRET_ACCESS_KEY ? 'âœ… Set' : 'âŒ Not set'}
+- AWS_PROFILE: ${process.env.AWS_PROFILE || 'âŒ Not set'}
+- AWS_REGION: ${process.env.AWS_REGION || 'âŒ Not set (using default: us-west-2)'}
+- Stack outputs: ${fs.existsSync('cfn-outputs/flat-outputs.json') ? 'âœ… Available' : 'âŒ Not found'}
       `);
       expect(true).toBe(true); // Always pass
     });
