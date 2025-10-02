@@ -1924,7 +1924,7 @@ resource "aws_api_gateway_deployment" "app" {
 
 resource "aws_config_configuration_recorder" "main" {
   name     = "default"
-  role_arn = aws_iam_role..config_role.arn
+  role_arn = aws_iam_role.config_role.arn
 
   recording_group {
     all_supported                 = true
