@@ -1406,13 +1406,125 @@ def handler(event, context):
             }
         )
 
-        # Delivery channel
-        config.CfnDeliveryChannel(
+        # Config Delivery Channel Handler Lambda Role
+        config_delivery_handler_role = iam.Role(
+            self, "ConfigDeliveryHandlerRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ],
+            inline_policies={
+                "ConfigDeliveryChannelPolicy": iam.PolicyDocument(
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "config:DescribeDeliveryChannels",
+                                "config:PutDeliveryChannel",
+                                "config:DeleteDeliveryChannel"
+                            ],
+                            resources=["*"]
+                        )
+                    ]
+                )
+            }
+        )
+
+        # Lambda function to handle Config delivery channel
+        config_delivery_handler = lambda_.Function(
+            self, "ConfigDeliveryHandlerFunction",
+            runtime=lambda_.Runtime.PYTHON_3_9,
+            handler="index.handler",
+            role=config_delivery_handler_role,
+            timeout=Duration.minutes(5),
+            code=lambda_.Code.from_inline("""
+import boto3
+import json
+import cfnresponse
+
+def handler(event, context):
+    config_client = boto3.client('config')
+    
+    try:
+        print(f"Event: {json.dumps(event)}")
+        
+        request_type = event['RequestType']
+        properties = event['ResourceProperties']
+        s3_bucket_name = properties['S3BucketName']
+        
+        if request_type == 'Create' or request_type == 'Update':
+            # Check existing delivery channels
+            response = config_client.describe_delivery_channels()
+            existing_channels = response.get('DeliveryChannels', [])
+            
+            if existing_channels:
+                # Use existing delivery channel, update it with our bucket
+                existing_channel = existing_channels[0]
+                channel_name = existing_channel['name']
+                print(f"Found existing delivery channel: {channel_name}")
+                
+                # Update the existing channel with our configuration
+                config_client.put_delivery_channel(
+                    DeliveryChannel={
+                        'name': channel_name,
+                        's3BucketName': s3_bucket_name,
+                        'configSnapshotDeliveryProperties': {
+                            'deliveryFrequency': 'TwentyFour_Hours'
+                        }
+                    }
+                )
+                
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                    'DeliveryChannelName': channel_name,
+                    'Message': f'Updated existing delivery channel: {channel_name}'
+                })
+            else:
+                # Create new delivery channel
+                channel_name = f"zero-trust-delivery-channel-{properties.get('UniqueId', 'default')}"
+                print(f"Creating new delivery channel: {channel_name}")
+                
+                config_client.put_delivery_channel(
+                    DeliveryChannel={
+                        'name': channel_name,
+                        's3BucketName': s3_bucket_name,
+                        'configSnapshotDeliveryProperties': {
+                            'deliveryFrequency': 'TwentyFour_Hours'
+                        }
+                    }
+                )
+                
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                    'DeliveryChannelName': channel_name,
+                    'Message': f'Created new delivery channel: {channel_name}'
+                })
+        
+        elif request_type == 'Delete':
+            # Don't delete the delivery channel as it might be used by other stacks
+            print("Skipping delivery channel deletion to avoid disrupting other resources")
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        cfnresponse.send(event, context, cfnresponse.FAILED, {
+            'Error': str(e)
+        })
+""")
+        )
+
+        # Custom resource provider
+        config_delivery_provider = cr.Provider(
+            self, "ConfigDeliveryProvider",
+            on_event_handler=config_delivery_handler
+        )
+
+        # Custom resource for Config delivery channel
+        config_delivery_channel = CustomResource(
             self, "ConfigDeliveryChannel",
-            s3_bucket_name=config_bucket.bucket_name,
-            config_snapshot_delivery_properties=config.CfnDeliveryChannel.ConfigSnapshotDeliveryPropertiesProperty(
-                delivery_frequency="TwentyFour_Hours"
-            )
+            service_token=config_delivery_provider.service_token,
+            properties={
+                'S3BucketName': config_bucket.bucket_name,
+                'UniqueId': self.unique_suffix
+            }
         )
 
         # Compliance rules
