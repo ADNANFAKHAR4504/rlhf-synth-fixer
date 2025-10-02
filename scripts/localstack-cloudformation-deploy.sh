@@ -60,9 +60,11 @@ cd "$(dirname "$0")/../lib"
 echo -e "${YELLOW}📁 Working directory: $(pwd)${NC}"
 
 # Check if CloudFormation template exists
-TEMPLATE_FILE="TapStack.yml"
-if [ ! -f "$TEMPLATE_FILE" ]; then
-    echo -e "${RED}❌ CloudFormation template not found: $TEMPLATE_FILE${NC}"
+# Use LocalStack-compatible template if available, otherwise use main template
+if [ -f "TapStack.yml" ]; then
+    TEMPLATE_FILE="TapStack.yml"
+else
+    echo -e "${RED}❌ CloudFormation template not found${NC}"
     exit 1
 fi
 
@@ -120,14 +122,28 @@ echo -e "${YELLOW}⏳ Waiting for stack creation to complete...${NC}"
 while true; do
     STACK_STATUS=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "UNKNOWN")
 
-    if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]]; then
-        echo -e "${GREEN}✅ Stack creation completed successfully${NC}"
+    # Check for final states (both success and failure)
+    if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]] || [[ "$STACK_STATUS" == "ROLLBACK_COMPLETE" ]] || [[ "$STACK_STATUS" == "UPDATE_ROLLBACK_COMPLETE" ]]; then
+        if [[ "$STACK_STATUS" == "CREATE_COMPLETE" ]]; then
+            echo -e "${GREEN}✅ Stack creation completed successfully${NC}"
+        else
+            echo -e "${YELLOW}⚠️  Stack creation completed with status: $STACK_STATUS${NC}"
+            echo -e "${YELLOW}📋 Failed resources:${NC}"
+            awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+                --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
+                --output table
+            echo -e "${YELLOW}📋 Continuing to extract outputs from successfully created resources...${NC}"
+        fi
         break
-    elif [[ "$STACK_STATUS" == "CREATE_FAILED" ]] || [[ "$STACK_STATUS" == *"ROLLBACK"* ]]; then
+    elif [[ "$STACK_STATUS" == "CREATE_FAILED" ]] || [[ "$STACK_STATUS" == "DELETE_COMPLETE" ]]; then
         echo -e "${RED}❌ Stack creation failed with status: $STACK_STATUS${NC}"
         echo -e "${YELLOW}📋 Failed resources:${NC}"
         awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
             --query 'StackEvents[?ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatusReason]' \
+            --output table
+        echo -e "${YELLOW}📋 Full stack events for debugging:${NC}"
+        awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+            --query 'StackEvents[].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
             --output table
         exit 1
     else
@@ -135,14 +151,27 @@ while true; do
 
         # Show resources being created/updated
         awslocal cloudformation list-stack-resources --stack-name $STACK_NAME \
-            --query 'StackResourceSummaries[?ResourceStatus==`CREATE_IN_PROGRESS` || ResourceStatus==`CREATE_COMPLETE`].[LogicalResourceId,ResourceType,ResourceStatus]' \
+            --query 'StackResourceSummaries[?ResourceStatus==`CREATE_IN_PROGRESS` || ResourceStatus==`CREATE_COMPLETE` || ResourceStatus==`CREATE_FAILED`].[LogicalResourceId,ResourceType,ResourceStatus]' \
             --output table 2>/dev/null || true
     fi
 
     sleep 3
 done
 
-echo -e "${GREEN}✅ CloudFormation stack deployed successfully${NC}"
+# Check if there were any failures during deployment
+echo -e "${YELLOW}🔍 Checking for any failures during deployment...${NC}"
+FAILED_EVENTS=$(awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+    --query 'StackEvents[?contains(ResourceStatus,`FAILED`) || contains(ResourceStatus,`ROLLBACK`)]' \
+    --output json 2>/dev/null)
+
+if [ "$FAILED_EVENTS" != "[]" ] && [ ! -z "$FAILED_EVENTS" ]; then
+    echo -e "${YELLOW}⚠️  Some resources failed during deployment:${NC}"
+    awslocal cloudformation describe-stack-events --stack-name $STACK_NAME \
+        --query 'StackEvents[?contains(ResourceStatus,`FAILED`) || contains(ResourceStatus,`ROLLBACK`)].[Timestamp,LogicalResourceId,ResourceStatus,ResourceStatusReason]' \
+        --output table
+fi
+
+echo -e "${GREEN}✅ CloudFormation stack deployment completed${NC}"
 
 # Get stack outputs
 echo -e "${YELLOW}📊 Retrieving stack outputs...${NC}"
@@ -153,7 +182,7 @@ mkdir -p ../cfn-outputs
 # Get stack description and extract outputs
 STACK_INFO=$(awslocal cloudformation describe-stacks --stack-name $STACK_NAME)
 
-# Parse outputs to JSON format compatible with integration tests (same format as Terraform)
+# Parse outputs to JSON format - directly from CloudFormation stack outputs
 OUTPUT_JSON=$(echo "$STACK_INFO" | python3 -c "
 import sys
 import json
@@ -161,7 +190,7 @@ import json
 try:
     data = json.load(sys.stdin)
     outputs = {}
-    
+
     # Extract outputs from CloudFormation stack
     if 'Stacks' in data and len(data['Stacks']) > 0:
         stack_outputs = data['Stacks'][0].get('Outputs', [])
@@ -169,88 +198,17 @@ try:
             key = output['OutputKey']
             value = output['OutputValue']
             outputs[key] = value
-    
-    # If no outputs found, print empty JSON
-    if not outputs:
-        print('{}')
-    else:
-        print(json.dumps(outputs, indent=2))
+
+    print(json.dumps(outputs, indent=2))
 except Exception as e:
     print('{}', file=sys.stderr)
     print(f'Error parsing stack outputs: {e}', file=sys.stderr)
-    sys.exit(0)
 ")
 
-# If no outputs, try to extract resource IDs from successfully created resources
+# Check if we got valid outputs
 if [ "$OUTPUT_JSON" = "{}" ] || [ -z "$OUTPUT_JSON" ]; then
-    echo -e "${YELLOW}⚠️  No stack outputs available, extracting resource IDs from resources...${NC}"
-    
-    # Get all resources without complex jmespath query
-    RESOURCES=$(awslocal cloudformation list-stack-resources --stack-name $STACK_NAME --output json 2>/dev/null || echo '{"StackResourceSummaries":[]}')
-    
-    OUTPUT_JSON=$(echo "$RESOURCES" | python3 -c "
-import sys
-import json
-
-try:
-    data = json.load(sys.stdin)
-    resources = data.get('StackResourceSummaries', [])
-    outputs = {}
-    
-    # Map logical resource IDs to output keys based on common CloudFormation patterns
-    resource_map = {
-        'RecipeBlogVPC': 'vpc_id',
-        'VPC': 'vpc_id',
-        'PublicSubnet': 'public_subnet_id',
-        'PublicSubnet1': 'public_subnet_1_id',
-        'PublicSubnet2': 'public_subnet_2_id',
-        'PrivateSubnet': 'private_subnet_id',
-        'PrivateSubnet1': 'private_subnet_1_id',
-        'PrivateSubnet2': 'private_subnet_2_id',
-        'MediaBucket': 's3_bucket_name',
-        'LogsBucket': 'logs_bucket_name',
-        'AlarmNotificationTopic': 'sns_topic_arn',
-        'WordPressDatabase': 'rds_endpoint',
-        'Database': 'rds_endpoint',
-        'DBInstance': 'rds_endpoint',
-        'LoadBalancer': 'alb_arn',
-        'ALB': 'alb_arn',
-        'ApplicationLoadBalancer': 'alb_arn',
-    }
-    
-    # Extract resource IDs
-    for resource in resources:
-        status = resource.get('ResourceStatus', '')
-        if status == 'CREATE_COMPLETE':
-            logical_id = resource.get('LogicalResourceId', '')
-            physical_id = resource.get('PhysicalResourceId', '')
-            
-            if logical_id in resource_map:
-                output_key = resource_map[logical_id]
-                outputs[output_key] = physical_id
-    
-    # Collect private subnets if multiple exist
-    private_subnets = []
-    public_subnets = []
-    for resource in resources:
-        logical_id = resource.get('LogicalResourceId', '')
-        status = resource.get('ResourceStatus', '')
-        if status == 'CREATE_COMPLETE':
-            if 'PrivateSubnet' in logical_id and logical_id not in ['PrivateSubnetRouteTable']:
-                private_subnets.append(resource.get('PhysicalResourceId', ''))
-            if 'PublicSubnet' in logical_id and logical_id not in ['PublicSubnetRouteTable']:
-                public_subnets.append(resource.get('PhysicalResourceId', ''))
-    
-    if private_subnets:
-        outputs['private_subnet_ids'] = private_subnets
-    if public_subnets:
-        outputs['public_subnet_ids'] = public_subnets
-    
-    print(json.dumps(outputs, indent=2))
-except Exception as e:
-    print('{}')
-    print(f'Error extracting resources: {e}', file=sys.stderr)
-")
+    echo -e "${YELLOW}⚠️  No stack outputs defined in the CloudFormation template${NC}"
+    echo -e "${YELLOW}⚠️  Add Outputs section to your template to export resource information${NC}"
 fi
 
 # Write outputs to file (same format as Terraform)
