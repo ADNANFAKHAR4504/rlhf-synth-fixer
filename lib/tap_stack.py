@@ -166,7 +166,7 @@ class TapStack(pulumi.ComponentResource):
         # Lambda function for inventory processing
         self.inventory_processor = lambda_.Function(
             f"inventory-processor-{self.environment_suffix}",
-            code=pulumi.FileArchive("./lib/lambda"),
+            code=pulumi.FileArchive("./lib/handlers"),
             handler="inventory_processor.handler",
             runtime="python3.10",
             role=self.lambda_role.arn,
@@ -232,7 +232,7 @@ class TapStack(pulumi.ComponentResource):
         # Daily summary Lambda function
         self.summary_processor = lambda_.Function(
             f"inventory-summary-processor-{self.environment_suffix}",
-            code=pulumi.FileArchive("./lib/lambda"),
+            code=pulumi.FileArchive("./lib/handlers"),
             handler="summary_processor.handler",
             runtime="python3.10",
             role=self.lambda_role.arn,

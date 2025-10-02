@@ -76,7 +76,7 @@ PROD-003,75,30.00,WH-001"""
         mock_boto_resource.return_value = mock_dynamodb_resource
 
         # Import handler after mocking
-        from lib.lambda.inventory_processor import handler
+        from lib.handlers.inventory_processor import handler
 
         # Call the handler
         response = handler(self.sample_event, None)
@@ -91,7 +91,7 @@ PROD-003,75,30.00,WH-001"""
     def test_process_csv_row(self, mock_boto_client, mock_boto_resource):
         """Test processing a single CSV row."""
         # Import function after mocking
-        from lib.lambda.inventory_processor import process_csv_row
+        from lib.handlers.inventory_processor import process_csv_row
 
         row = {
             'product_id': 'PROD-001',
@@ -100,7 +100,7 @@ PROD-003,75,30.00,WH-001"""
             'warehouse_id': 'WH-001'
         }
 
-        with patch('lib.lambda.inventory_processor.time.time', return_value=1234567890.0):
+        with patch('lib.handlers.inventory_processor.time.time', return_value=1234567890.0):
             item = process_csv_row(row, 'test-file.csv')
 
             self.assertEqual(item['product_id'], 'PROD-001')
@@ -133,25 +133,19 @@ class TestSummaryProcessor(unittest.TestCase):
             }
         ]
 
-    @patch('boto3.resource')
-    @patch('boto3.client')
-    def test_summary_handler(self, mock_boto_client, mock_boto_resource):
+    @patch('lib.handlers.summary_processor.cloudwatch')
+    @patch('lib.handlers.summary_processor.dynamodb')
+    def test_summary_handler(self, mock_dynamodb, mock_cloudwatch):
         """Test summary Lambda handler."""
-        # Mock CloudWatch client
-        mock_cloudwatch = MagicMock()
-        mock_boto_client.return_value = mock_cloudwatch
-
-        # Mock DynamoDB resource
+        # Mock DynamoDB table
         mock_table = MagicMock()
         mock_table.scan.return_value = {
             'Items': self.sample_items
         }
-        mock_dynamodb_resource = MagicMock()
-        mock_dynamodb_resource.Table.return_value = mock_table
-        mock_boto_resource.return_value = mock_dynamodb_resource
+        mock_dynamodb.Table.return_value = mock_table
 
         # Import handler after mocking
-        from lib.lambda.summary_processor import handler
+        from lib.handlers.summary_processor import handler
 
         # Call the handler
         response = handler({}, None)
@@ -165,7 +159,7 @@ class TestSummaryProcessor(unittest.TestCase):
 
     def test_decimal_encoder(self):
         """Test DecimalEncoder for JSON serialization."""
-        from lib.lambda.summary_processor import DecimalEncoder
+        from lib.handlers.summary_processor import DecimalEncoder
 
         # Test Decimal encoding
         data = {'value': Decimal('123.45')}
