@@ -710,14 +710,53 @@ resource "aws_autoscaling_policy" "scale_down" {
 # LAMBDA RESOURCES
 # =============================================================================
 
+data "archive_file" "inline_lambda" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_inline.zip"
+
+  source {
+    content  = <<-JS
+      // index.js
+      // Simple processor: accepts an array of numbers and returns { sum, avg, count }
+      exports.handler = async (event) => {
+        // Expect event.body as JSON string or event as object with 'data'
+        let payload;
+        try {
+          payload = (typeof event?.body === "string") ? JSON.parse(event.body) : event;
+        } catch (e) {
+          return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON" }) };
+        }
+
+        const items = Array.isArray(payload?.data) ? payload.data : [];
+        if (!Array.isArray(items) || items.some(n => typeof n !== "number")) {
+          return { statusCode: 400, body: JSON.stringify({ error: "data must be an array of numbers" }) };
+        }
+
+        const count = items.length;
+        const sum   = items.reduce((a, b) => a + b, 0);
+        const avg   = count ? sum / count : 0;
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ count, sum, avg })
+        };
+      };
+    JS
+    filename = "index.js"
+  }
+}
+
 resource "aws_lambda_function" "app" {
   function_name = "app-processor"
   role          = aws_iam_role.lambda_role.arn
-  handler       = "index.handler"
-  runtime       = "nodejs18.x" # Latest at time of creation
 
-  filename         = "${path.module}/lambda_function.zip"
-  source_code_hash = filebase64sha256("${path.module}/lambda_function.zip")
+  # Matches the inline file above
+  handler = "index.handler"
+  runtime = "nodejs18.x"
+
+  # Use the inline-archived ZIP
+  filename         = data.archive_file.inline_lambda.output_path
+  source_code_hash = data.archive_file.inline_lambda.output_base64sha256
 
   environment {
     variables = {
@@ -727,7 +766,6 @@ resource "aws_lambda_function" "app" {
 
   tags = local.common_tags
 }
-
 resource "aws_lambda_permission" "allow_bucket" {
   statement_id  = "AllowExecutionFromS3Bucket"
   action        = "lambda:InvokeFunction"
@@ -823,7 +861,7 @@ resource "aws_api_gateway_method" "app" {
   rest_api_id   = aws_api_gateway_rest_api.app.id
   resource_id   = aws_api_gateway_resource.app.id
   http_method   = "GET"
-  authorization_type = "NONE"
+  authorization = "NONE"
 }
 
 resource "aws_api_gateway_integration" "lambda" {
