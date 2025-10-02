@@ -11,19 +11,14 @@ import software.amazon.awscdk.StackProps;
 import software.amazon.awscdk.services.apigateway.Cors;
 import software.amazon.awscdk.services.apigateway.CorsOptions;
 import software.amazon.awscdk.services.apigateway.LambdaIntegration;
-import software.amazon.awscdk.services.apigateway.MethodOptions;
 import software.amazon.awscdk.services.apigateway.RestApi;
 import software.amazon.awscdk.services.apigateway.StageOptions;
 import software.amazon.awscdk.services.cloudwatch.Alarm;
-import software.amazon.awscdk.services.cloudwatch.AlarmProps;
 import software.amazon.awscdk.services.cloudwatch.ComparisonOperator;
 import software.amazon.awscdk.services.cloudwatch.Dashboard;
-import software.amazon.awscdk.services.cloudwatch.DashboardProps;
 import software.amazon.awscdk.services.cloudwatch.GraphWidget;
-import software.amazon.awscdk.services.cloudwatch.GraphWidgetProps;
 import software.amazon.awscdk.services.cloudwatch.IMetric;
 import software.amazon.awscdk.services.cloudwatch.Metric;
-import software.amazon.awscdk.services.cloudwatch.MetricProps;
 import software.amazon.awscdk.services.cloudwatch.TreatMissingData;
 import software.amazon.awscdk.services.dynamodb.Attribute;
 import software.amazon.awscdk.services.dynamodb.AttributeType;
@@ -31,42 +26,39 @@ import software.amazon.awscdk.services.dynamodb.BillingMode;
 import software.amazon.awscdk.services.dynamodb.GlobalSecondaryIndexProps;
 import software.amazon.awscdk.services.dynamodb.StreamViewType;
 import software.amazon.awscdk.services.dynamodb.Table;
-import software.amazon.awscdk.services.dynamodb.TableProps;
 import software.amazon.awscdk.services.events.Rule;
-import software.amazon.awscdk.services.events.RuleProps;
 import software.amazon.awscdk.services.events.Schedule;
 import software.amazon.awscdk.services.events.targets.LambdaFunction;
 import software.amazon.awscdk.services.iam.Effect;
-import software.amazon.awscdk.services.iam.PolicyDocument;
+
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Role;
-import software.amazon.awscdk.services.iam.RoleProps;
+
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.kendra.CfnIndex;
-import software.amazon.awscdk.services.kendra.CfnIndexProps;
+
 import software.amazon.awscdk.services.lambda.Code;
 import software.amazon.awscdk.services.lambda.Function;
-import software.amazon.awscdk.services.lambda.FunctionProps;
 import software.amazon.awscdk.services.lambda.Runtime;
 import software.amazon.awscdk.services.lambda.Tracing;
 import software.amazon.awscdk.services.s3.BlockPublicAccess;
 import software.amazon.awscdk.services.s3.Bucket;
 import software.amazon.awscdk.services.s3.BucketEncryption;
-import software.amazon.awscdk.services.s3.BucketProps;
+
 import software.amazon.awscdk.services.s3.LifecycleRule;
 import software.amazon.awscdk.services.s3.StorageClass;
 import software.amazon.awscdk.services.s3.Transition;
 import software.amazon.awscdk.services.sns.Topic;
-import software.amazon.awscdk.services.sns.TopicProps;
+
 import software.amazon.awscdk.services.sqs.DeadLetterQueue;
 import software.amazon.awscdk.services.sqs.Queue;
-import software.amazon.awscdk.services.sqs.QueueProps;
+
 import software.amazon.awscdk.services.stepfunctions.Chain;
 import software.amazon.awscdk.services.stepfunctions.Choice;
 import software.amazon.awscdk.services.stepfunctions.Condition;
 import software.amazon.awscdk.services.stepfunctions.Pass;
 import software.amazon.awscdk.services.stepfunctions.StateMachine;
-import software.amazon.awscdk.services.stepfunctions.StateMachineProps;
+
 import software.amazon.awscdk.services.stepfunctions.StateMachineType;
 import software.amazon.awscdk.services.stepfunctions.tasks.LambdaInvoke;
 import software.constructs.Construct;
@@ -74,7 +66,7 @@ import software.constructs.Construct;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
+
 import java.util.Map;
 import java.util.Optional;
 
@@ -84,7 +76,7 @@ import java.util.Optional;
  * This class provides a simple container for stack-specific configuration
  * including environment suffix for resource naming.
  */
-class TapStackProps {
+final class TapStackProps {
     private final String environmentSuffix;
     private final StackProps stackProps;
 
@@ -109,12 +101,12 @@ class TapStackProps {
         private String environmentSuffix;
         private StackProps stackProps;
 
-        public Builder environmentSuffix(String environmentSuffix) {
+        public Builder environmentSuffix(final String environmentSuffix) {
             this.environmentSuffix = environmentSuffix;
             return this;
         }
 
-        public Builder stackProps(StackProps stackProps) {
+        public Builder stackProps(final StackProps stackProps) {
             this.stackProps = stackProps;
             return this;
         }
