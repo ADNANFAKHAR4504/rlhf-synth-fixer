@@ -78,9 +78,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   export TF_INIT_OPTS="-backend-config=bucket=${TERRAFORM_STATE_BUCKET} \
       -backend-config=key=$STATE_KEY \
       -backend-config=region=${TERRAFORM_STATE_BUCKET_REGION} \
-
-      -backend-config=encrypt=true \
-      -backend-config=use_lockfile=false"
+      -backend-config=encrypt=true"
 
   
   # Initialize Terraform (no fallback init without backend)

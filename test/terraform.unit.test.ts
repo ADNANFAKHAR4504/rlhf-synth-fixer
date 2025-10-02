@@ -42,7 +42,7 @@ describe('Terraform Infrastructure Unit Tests', () => {
       const content = allTerraformFiles['provider.tf'];
       expect(content).toContain('terraform {');
       expect(content).toContain('required_version = ">= 1.4.0"');
-      expect(content).toContain('backend "local"');
+      expect(content).toContain('backend "s3"');
       expect(content).toContain('provider "aws"');
     });
   });
