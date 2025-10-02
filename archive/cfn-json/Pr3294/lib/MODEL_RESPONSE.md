@@ -1,0 +1,497 @@
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Charity Web Platform Infrastructure for 1,500 daily donors with secure access and monitoring",
+  "Parameters": {
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "prod",
+      "Description": "Environment suffix for resource naming",
+      "AllowedValues": ["dev", "staging", "prod"]
+    },
+    "LatestAmiId": {
+      "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+      "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
+    }
+  },
+  "Mappings": {
+    "SubnetConfig": {
+      "VPC": {
+        "CIDR": "10.50.0.0/16"
+      },
+      "PublicSubnet1": {
+        "CIDR": "10.50.1.0/24"
+      },
+      "PublicSubnet2": {
+        "CIDR": "10.50.2.0/24"
+      },
+      "PrivateSubnet1": {
+        "CIDR": "10.50.10.0/24"
+      },
+      "PrivateSubnet2": {
+        "CIDR": "10.50.11.0/24"
+      }
+    }
+  },
+  "Resources": {
+    "CharityVPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": { "Fn::FindInMap": ["SubnetConfig", "VPC", "CIDR"] },
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "CharityVPC-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "CharityIGW-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": { "Ref": "CharityVPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "CharityVPC" },
+        "CidrBlock": { "Fn::FindInMap": ["SubnetConfig", "PublicSubnet1", "CIDR"] },
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "PublicSubnet1-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PublicSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "CharityVPC" },
+        "CidrBlock": { "Fn::FindInMap": ["SubnetConfig", "PublicSubnet2", "CIDR"] },
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "MapPublicIpOnLaunch": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "PublicSubnet2-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "CharityVPC" },
+        "CidrBlock": { "Fn::FindInMap": ["SubnetConfig", "PrivateSubnet1", "CIDR"] },
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "PrivateSubnet1-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": { "Ref": "CharityVPC" },
+        "CidrBlock": { "Fn::FindInMap": ["SubnetConfig", "PrivateSubnet2", "CIDR"] },
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "PrivateSubnet2-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "NatGatewayEIP": {
+      "Type": "AWS::EC2::EIP",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "Domain": "vpc"
+      }
+    },
+    "NatGateway": {
+      "Type": "AWS::EC2::NatGateway",
+      "Properties": {
+        "AllocationId": { "Fn::GetAtt": ["NatGatewayEIP", "AllocationId"] },
+        "SubnetId": { "Ref": "PublicSubnet1" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "NatGateway-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PublicRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "CharityVPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "PublicRouteTable-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PublicRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "AttachGateway",
+      "Properties": {
+        "RouteTableId": { "Ref": "PublicRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "PublicSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet1" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "PublicSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PublicSubnet2" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
+      }
+    },
+    "PrivateRouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "CharityVPC" },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "PrivateRouteTable-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "PrivateRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": { "Ref": "PrivateRouteTable" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "NatGatewayId": { "Ref": "NatGateway" }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet1" },
+        "RouteTableId": { "Ref": "PrivateRouteTable" }
+      }
+    },
+    "PrivateSubnetRouteTableAssociation2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet2" },
+        "RouteTableId": { "Ref": "PrivateRouteTable" }
+      }
+    },
+    "WebServerSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupName": { "Fn::Sub": "WebServerSG-${EnvironmentSuffix}" },
+        "GroupDescription": "Security group for web servers",
+        "VpcId": { "Ref": "CharityVPC" },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTPS from anywhere"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow HTTP from anywhere"
+          },
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "CidrIp": "10.0.0.0/8",
+            "Description": "Allow SSH from internal network only"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "WebServerSG-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "EC2InstanceConnectEndpoint": {
+      "Type": "AWS::EC2::InstanceConnectEndpoint",
+      "Properties": {
+        "SubnetId": { "Ref": "PrivateSubnet1" },
+        "SecurityGroupIds": [{ "Ref": "WebServerSecurityGroup" }],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "EC2ConnectEndpoint-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "StaticAssetsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": { "Fn::Sub": "charity-static-assets-${AWS::AccountId}-${EnvironmentSuffix}" },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "StaticAssets-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
+    "EC2Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "EC2Role-${EnvironmentSuffix}" },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "S3AccessPolicy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": [
+                    { "Fn::GetAtt": ["StaticAssetsBucket", "Arn"] },
+                    { "Fn::Sub": "${StaticAssetsBucket.Arn}/*" }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": { "Fn::Sub": "EC2Profile-${EnvironmentSuffix}" },
+        "Roles": [{ "Ref": "EC2Role" }]
+      }
+    },
+    "LaunchTemplate": {
+      "Type": "AWS::EC2::LaunchTemplate",
+      "Properties": {
+        "LaunchTemplateName": { "Fn::Sub": "WebServerTemplate-${EnvironmentSuffix}" },
+        "LaunchTemplateData": {
+          "ImageId": { "Ref": "LatestAmiId" },
+          "InstanceType": "t3.micro",
+          "IamInstanceProfile": {
+            "Arn": { "Fn::GetAtt": ["EC2InstanceProfile", "Arn"] }
+          },
+          "SecurityGroupIds": [{ "Ref": "WebServerSecurityGroup" }],
+          "Monitoring": {
+            "Enabled": true
+          },
+          "UserData": {
+            "Fn::Base64": {
+              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y httpd\nsystemctl start httpd\nsystemctl enable httpd\necho '<html><body><h1>Welcome to Charity Platform</h1><p>Supporting 1,500+ donors daily</p></body></html>' > /var/www/html/index.html\nwget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm\nrpm -U ./amazon-cloudwatch-agent.rpm\n"
+            }
+          },
+          "TagSpecifications": [
+            {
+              "ResourceType": "instance",
+              "Tags": [
+                {
+                  "Key": "Name",
+                  "Value": { "Fn::Sub": "WebServer-${EnvironmentSuffix}" }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "WebServerInstance1": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "LaunchTemplate": {
+          "LaunchTemplateId": { "Ref": "LaunchTemplate" },
+          "Version": "$Latest"
+        },
+        "SubnetId": { "Ref": "PublicSubnet1" }
+      }
+    },
+    "WebServerInstance2": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "LaunchTemplate": {
+          "LaunchTemplateId": { "Ref": "LaunchTemplate" },
+          "Version": "$Latest"
+        },
+        "SubnetId": { "Ref": "PublicSubnet2" }
+      }
+    },
+    "CPUAlarmHigh1": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "CPU-High-Instance1-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alarm if CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": { "Ref": "WebServerInstance1" }
+          }
+        ]
+      }
+    },
+    "CPUAlarmHigh2": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": { "Fn::Sub": "CPU-High-Instance2-${EnvironmentSuffix}" },
+        "AlarmDescription": "Alarm if CPU exceeds 80%",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": 300,
+        "EvaluationPeriods": 2,
+        "Threshold": 80,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": { "Ref": "WebServerInstance2" }
+          }
+        ]
+      }
+    },
+    "CloudWatchDashboard": {
+      "Type": "AWS::CloudWatch::Dashboard",
+      "Properties": {
+        "DashboardName": { "Fn::Sub": "CharityPlatform-${EnvironmentSuffix}" },
+        "DashboardBody": {
+          "Fn::Sub": "{\"widgets\":[{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/EC2\",\"CPUUtilization\",{\"stat\":\"Average\",\"label\":\"Instance 1\"},[\".\",\".\",{\"stat\":\"Average\",\"label\":\"Instance 2\"}]],\"dimensions\":[[\"InstanceId\",\"${WebServerInstance1}\"],[\"InstanceId\",\"${WebServerInstance2}\"]]],\"period\":300,\"stat\":\"Average\",\"region\":\"us-east-2\",\"title\":\"EC2 Instance CPU\"}},{\"type\":\"metric\",\"properties\":{\"metrics\":[[\"AWS/EC2\",\"NetworkIn\",{\"stat\":\"Sum\"}],[\".\",\"NetworkOut\",{\"stat\":\"Sum\"}]],\"period\":300,\"stat\":\"Sum\",\"region\":\"us-east-2\",\"title\":\"Network Traffic\"}}]}"
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "VPCId": {
+      "Description": "VPC ID",
+      "Value": { "Ref": "CharityVPC" },
+      "Export": {
+        "Name": { "Fn::Sub": "${AWS::StackName}-VPCId" }
+      }
+    },
+    "WebServerInstance1Id": {
+      "Description": "Instance ID of Web Server 1",
+      "Value": { "Ref": "WebServerInstance1" }
+    },
+    "WebServerInstance2Id": {
+      "Description": "Instance ID of Web Server 2",
+      "Value": { "Ref": "WebServerInstance2" }
+    },
+    "WebServerInstance1PublicIP": {
+      "Description": "Public IP of Web Server 1",
+      "Value": { "Fn::GetAtt": ["WebServerInstance1", "PublicIp"] }
+    },
+    "WebServerInstance2PublicIP": {
+      "Description": "Public IP of Web Server 2",
+      "Value": { "Fn::GetAtt": ["WebServerInstance2", "PublicIp"] }
+    },
+    "StaticAssetsBucketName": {
+      "Description": "Name of S3 bucket for static assets",
+      "Value": { "Ref": "StaticAssetsBucket" }
+    },
+    "EC2ConnectEndpointId": {
+      "Description": "EC2 Instance Connect Endpoint ID",
+      "Value": { "Ref": "EC2InstanceConnectEndpoint" }
+    },
+    "CloudWatchDashboardURL": {
+      "Description": "CloudWatch Dashboard URL",
+      "Value": {
+        "Fn::Sub": "https://console.aws.amazon.com/cloudwatch/home?region=us-east-2#dashboards:name=${CloudWatchDashboard}"
+      }
+    }
+  }
+}
+```
