@@ -1,31 +1,25 @@
-Create infrastructure code using AWS CDK TypeScript for a web application hosting platform that needs to serve 3,000 daily users on a job board website. The infrastructure should be deployed in us-west-1 region.
+Need to build infrastructure for our job board app using AWS CDK with TypeScript. We're expecting around 3000 users per day and want to deploy this in us-west-1.
 
-Requirements:
+Here's what I need:
 
-1. Create a VPC with CIDR block 10.20.0.0/16 with public and private subnets across multiple availability zones for high availability
+VPC setup with CIDR 10.20.0.0/16 - needs both public and private subnets across multiple AZs for HA
 
-2. Deploy EC2 instances using t3.micro instance type running Apache web server. Configure the instances with user data script to install and start Apache automatically
+For the compute side, I want t3.micro EC2 instances running Apache. The user data should handle installing and starting Apache automatically.
 
-3. Set up an Application Load Balancer (ALB) configured for HTTPS traffic on port 443. Enable the new Automatic Target Weights feature for improved traffic distribution and configure health checks with appropriate thresholds
+Set up an ALB for the front end - it should handle HTTPS on 443. Also want to enable that new Automatic Target Weights feature I read about for better traffic distribution. Need health checks configured too.
 
-4. Configure Security Groups:
-   - ALB security group allowing inbound HTTPS (443) from anywhere
-   - EC2 security group allowing HTTP traffic from ALB and SSH access restricted to CIDR 10.0.0.0/16
+Security groups:
+- ALB needs to accept HTTPS (443) from the internet
+- EC2 instances should only take HTTP from the ALB, plus SSH but only from 10.0.0.0/16
 
-5. Create an S3 bucket for storing static files with appropriate bucket policies for web hosting
+An S3 bucket for static files would be good, with the right policies for web hosting
 
-6. Set up CloudWatch monitoring for EC2 instance health checks including CPU utilization metrics and custom alarms that trigger when instances become unhealthy
+CloudWatch monitoring is important - track CPU on the EC2s and set up alarms for when instances go unhealthy
 
-7. Implement EC2 Instance Connect Endpoint for secure SSH access without requiring public IPs on EC2 instances
+Also need EC2 Instance Connect Endpoint so we can SSH without public IPs on the instances
 
-8. Configure AWS WAF v2 with Bot Control managed rule group on the Application Load Balancer to protect against malicious bot traffic and web scraping. Enable rate limiting rules to prevent abuse and configure logging to S3 for security analysis
+For security, we should add AWS WAF v2 with the Bot Control managed rules on the ALB to stop bots and scrapers. Rate limiting too. WAF logs should go to S3.
 
-9. Implement CloudWatch Network Monitor to provide near real-time visibility of network performance between EC2 instances and the Application Load Balancer. Configure flow monitors with TCP-based metrics for monitoring packet loss and latency to ensure optimal application performance
+One more thing - can you set up CloudWatch Network Monitor between the EC2 instances and ALB? Want near real-time visibility on network performance, TCP metrics for packet loss and latency.
 
-Please provide the complete CDK TypeScript code including:
-- Stack definition with all resources
-- Proper imports and dependencies
-- Configuration for high availability across availability zones
-- Security best practices implementation
-- AWS WAF integration with ALB for enhanced security
-- Network monitoring configuration for performance insights
+Make sure everything follows AWS best practices for security and high availability.
