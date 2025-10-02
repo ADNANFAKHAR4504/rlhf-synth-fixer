@@ -22,24 +22,29 @@ export class DatabaseStack extends Construct {
     // Get the current region for region-specific configuration
     const region = cdk.Stack.of(this).region;
 
-    // Define PostgreSQL version based on region support
-    // us-west-1 has limited version support, use older stable versions
-    const getPostgresVersion = (region: string): rds.PostgresEngineVersion => {
+    // Define database engine and version based on region support
+    // us-west-1 has extremely limited PostgreSQL support, may need to use MySQL
+    const getDatabaseEngine = (region: string): rds.IInstanceEngine => {
       if (region === 'us-west-1') {
-        // us-west-1 region supports older PostgreSQL versions more reliably
-        return rds.PostgresEngineVersion.VER_11_16;
+        // us-west-1 has very limited PostgreSQL support - use MySQL as fallback
+        return rds.DatabaseInstanceEngine.mysql({
+          version: rds.MysqlEngineVersion.VER_8_0_35,
+        });
       } else {
-        // Other regions typically support newer versions  
-        return rds.PostgresEngineVersion.VER_13_7;
+        // Other regions typically support PostgreSQL
+        return rds.DatabaseInstanceEngine.postgres({
+          version: rds.PostgresEngineVersion.VER_13_7,
+        });
       }
     };
 
-    const postgresVersion = getPostgresVersion(region);
+    const databaseEngine = getDatabaseEngine(region);
+    const isMySql = region === 'us-west-1'; // Use MySQL for us-west-1 due to limited PostgreSQL support
 
-    // Output the selected PostgreSQL version for debugging
-    new cdk.CfnOutput(this, 'PostgreSQLVersionUsed', {
-      value: `PostgreSQL version selected for region ${region}: ${postgresVersion}`,
-      description: 'PostgreSQL version automatically selected based on region',
+    // Output the selected database engine for debugging
+    new cdk.CfnOutput(this, 'DatabaseEngineUsed', {
+      value: `Database engine selected for region ${region}: ${isMySql ? 'MySQL 8.0.35' : 'PostgreSQL 13.7'}`,
+      description: 'Database engine automatically selected based on region compatibility',
     });
 
     // Create KMS key for database encryption
@@ -79,9 +84,7 @@ export class DatabaseStack extends Construct {
     // Create RDS PostgreSQL instance
     this.database = new rds.DatabaseInstance(this, 'RetailDatabase', {
       instanceIdentifier: `retail-db-${props.environmentSuffix}`,
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: postgresVersion,
-      }),
+      engine: databaseEngine,
       instanceType: ec2.InstanceType.of(
         ec2.InstanceClass.T3,
         ec2.InstanceSize.MICRO
@@ -108,10 +111,14 @@ export class DatabaseStack extends Construct {
       monitoringInterval: cdk.Duration.seconds(60),
       databaseName: 'retaildb',
       parameterGroup: new rds.ParameterGroup(this, 'ParameterGroup', {
-        engine: rds.DatabaseInstanceEngine.postgres({
-          version: postgresVersion,
-        }),
-        parameters: {
+        engine: databaseEngine,
+        parameters: isMySql ? {
+          // MySQL parameters
+          general_log: '1',
+          slow_query_log: '1',
+          long_query_time: '2',
+        } : {
+          // PostgreSQL parameters
           log_statement: 'all',
           log_duration: 'on',
           shared_preload_libraries: 'pg_stat_statements',
@@ -125,12 +132,12 @@ export class DatabaseStack extends Construct {
     // Output database endpoint
     new cdk.CfnOutput(this, 'DatabaseEndpoint', {
       value: this.database.dbInstanceEndpointAddress,
-      description: 'RDS PostgreSQL endpoint',
+      description: 'RDS database endpoint',
     });
 
     new cdk.CfnOutput(this, 'DatabasePort', {
       value: this.database.dbInstanceEndpointPort,
-      description: 'RDS PostgreSQL port',
+      description: 'RDS database port',
     });
 
     // Tag resources
