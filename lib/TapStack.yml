@@ -80,7 +80,7 @@ Parameters:
 
   ImageId:
     Type: AWS::EC2::Image::Id
-    Default: 'ami-ff0fea8310f3'
+    Default: 'ami-df5de72bdb3b'
     Description: 'AMI ID for EC2 instance (Amazon Linux 2023 in us-east-1, or dummy for LocalStack)'
 
 Conditions:
