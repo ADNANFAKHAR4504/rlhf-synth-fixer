@@ -71,11 +71,14 @@ resource "aws_vpc" "main" {
 resource "aws_s3_bucket" "lambda_logs" {
   bucket = var.lambda_log_bucket_name
   tags   = local.common_tags
+}
 
-  versioning {
-    enabled = true
+# S3 bucket versioning configuration
+resource "aws_s3_bucket_versioning" "lambda_logs" {
+  bucket = aws_s3_bucket.lambda_logs.id
+  versioning_configuration {
+    status = "Enabled"
   }
-
 }
 
 # Recommended: S3 bucket server-side encryption configuration
@@ -603,7 +606,7 @@ output "cors_allowed_origins" {
 }
 
 output "s3_sse_algorithm" {
-  value = aws_s3_bucket_server_side_encryption_configuration.lambda_logs.rule[0].apply_server_side_encryption_by_default[0].sse_algorithm
+  value = tolist(aws_s3_bucket_server_side_encryption_configuration.lambda_logs.rule)[0].apply_server_side_encryption_by_default[0].sse_algorithm
 }
 
 output "dynamodb_read_target_id" {
