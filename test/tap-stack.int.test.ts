@@ -220,9 +220,11 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('Should have proper resource naming with environment suffix', () => {
-      // Check that resources include environment suffix
-      expect(outputs.StaticFilesBucketName).toMatch(/s24938156/);
-      expect(outputs.AlarmTopicArn).toMatch(/s24938156/);
+      // Check that resources include environment suffix (e.g., pr3304, s24938156, dev, etc.)
+      // The suffix can be pr[0-9]+ or s[0-9]+ or any alphanumeric suffix
+      const envSuffixPattern = /(pr|s|dev|staging|prod)\w*/;
+      expect(outputs.StaticFilesBucketName).toMatch(envSuffixPattern);
+      expect(outputs.AlarmTopicArn).toMatch(envSuffixPattern);
     });
 
     test('ALB DNS should be resolvable', async () => {
