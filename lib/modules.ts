@@ -462,22 +462,13 @@ export class SecureRdsInstance extends Construct {
   }
 }
 
-import { writeFileSync } from 'fs';
-import * as fs from 'fs';
-import { join } from 'path';
-import { createHash } from 'crypto';
-import archiver from 'archiver';
-import { createWriteStream } from 'fs';
-
 export interface LambdaConfig {
   functionName: string;
   handler: string;
   runtime: string;
   role: string;
-  s3Bucket?: string;
-  s3Key?: string;
-  filename?: string;
-  inlineCode?: string;
+  s3Bucket: string;
+  s3Key: string;
   environment?: { [key: string]: string };
   vpcConfig?: {
     subnetIds: string[];
@@ -493,69 +484,23 @@ export class SecureLambdaFunction extends Construct {
   constructor(scope: Construct, name: string, config: LambdaConfig) {
     super(scope, name);
 
-    const functionConfig: any = {
+    this.function = new LambdaFunction(this, 'function', {
       functionName: config.functionName,
       handler: config.handler,
       runtime: config.runtime,
       role: config.role,
+      s3Bucket: config.s3Bucket,
+      s3Key: config.s3Key,
       vpcConfig: config.vpcConfig,
       environment: config.environment
         ? { variables: config.environment }
         : undefined,
       timeout: config.timeout || 30,
       memorySize: config.memorySize || 512,
-      tags: { Environment: 'Production' },
-    };
-
-    if (config.inlineCode) {
-      const codeHash = createHash('md5')
-        .update(config.inlineCode)
-        .digest('hex');
-      const tempDir = '.cdktf.out/lambda-functions';
-      const tempJsFile = join(tempDir, `${config.functionName}-${codeHash}.js`);
-      const tempZipFile = join(
-        tempDir,
-        `${config.functionName}-${codeHash}.zip`
-      );
-
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-      // Write the JavaScript code to a file
-      writeFileSync(tempJsFile, config.inlineCode);
-
-      // Create a ZIP file containing the JavaScript file
-      const output = createWriteStream(tempZipFile);
-      const archive = archiver('zip', { zlib: { level: 9 } });
-
-      archive.pipe(output);
-
-      // Add the JS file to the archive as 'index.js' since the handler is 'index.handler'
-      archive.file(tempJsFile, { name: 'index.js' });
-
-      archive.finalize();
-
-      // Wait for the ZIP file to be written
-      output.on('close', () => {
-        console.log(
-          `Lambda ZIP file created: ${tempZipFile} (${archive.pointer()} bytes)`
-        );
-      });
-
-      functionConfig.filename = tempZipFile;
-    } else if (config.filename) {
-      functionConfig.filename = config.filename;
-    } else if (config.s3Bucket && config.s3Key) {
-      functionConfig.s3Bucket = config.s3Bucket;
-      functionConfig.s3Key = config.s3Key;
-    } else {
-      throw new Error(
-        'Lambda function must have either inlineCode, filename, or s3Bucket/s3Key specified'
-      );
-    }
-
-    this.function = new LambdaFunction(this, 'function', functionConfig);
+      tags: {
+        Environment: 'Production',
+      },
+    });
   }
 }
 
