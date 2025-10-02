@@ -1,8 +1,8 @@
 ## Terraform HCL Code for Foundational AWS Cloud Environment
 
-**Objective:**  
+Objective:
 Generate a complete, production-ready Terraform HCL configuration for the foundational AWS cloud environment as described.  
-**Important:** Ensure a string suffix variable is appended to all resource names where needed.
+Important: Ensure a string suffix variable is appended to all resource names where needed.
 
 ---
 
@@ -11,25 +11,25 @@ Generate a complete, production-ready Terraform HCL configuration for the founda
 You are required to set up a foundational AWS cloud environment using Terraform.  
 Your tasks include:
 
-1. **Amazon RDS MySQL Database:**  
+1. Amazon RDS MySQL Database: 
    - Create an Amazon RDS MySQL database in the 'us-east-1' region.
    - Automated backups must be enabled.
    - Secure storage of database credentials is required.
 
-2. **Amazon EC2 Instance:**  
+2. Amazon EC2 Instance:  
    - Provision an EC2 instance using the latest Amazon Linux 2 AMI.
    - Place the EC2 instance within a public subnet.
    - Configure a security group allowing SSH access from a configurable IP address.
 
-3. **Terraform Syntax & Variables:**  
+3. Terraform Syntax & Variables:
    - All resources must be defined using Terraform 1.0 HCL syntax.
    - Use Terraform variables to manage sensitive information such as database credentials and EC2 instance type.
 
-4. **State Management:**  
+4. State Management: 
    - Store the Terraform state file remotely in an S3 bucket in 'us-east-1'.
    - S3 bucket must have versioning enabled for state management.
 
-5. **General Best Practices:**  
+5. General Best Practices: 
    - All resources must follow AWS best practices for security and scalability.
    - All resources must be provisioned in the 'us-east-1' region.
    - Resource names must include a string suffix variable for uniqueness and environment separation.
@@ -60,5 +60,5 @@ Your tasks include:
 
 ---
 
-**Expected Output:**  
+## Expected Output: 
 A complete Terraform HCL configuration that implements all requirements and constraints above, ready for deployment.
