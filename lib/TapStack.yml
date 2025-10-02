@@ -384,7 +384,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'recipeblog-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'recipeblog-1-${AWS::AccountId}-${Environment}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -416,7 +416,7 @@ Resources:
             MaxAge: 3000
       Tags:
         - Key: Name
-          Value: !Sub 'RecipeBlog-Bucket-${Environment}'
+          Value: !Sub 'RecipeBlog-1-Bucket-${Environment}'
         - Key: Environment
           Value: !Ref Environment
         - Key: Project
