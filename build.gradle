@@ -171,6 +171,13 @@ dependencies {
     integrationTestImplementation 'software.amazon.awssdk:codepipeline'
     integrationTestImplementation 'software.amazon.awssdk:codebuild'
     integrationTestImplementation 'software.amazon.awssdk:codedeploy'
+    
+    // Additional AWS SDK dependencies for comprehensive integration tests
+    integrationTestImplementation 'software.amazon.awssdk:kendra'
+    integrationTestImplementation 'software.amazon.awssdk:sfn'
+    integrationTestImplementation 'software.amazon.awssdk:eventbridge'
+    integrationTestImplementation 'software.amazon.awssdk:auth'
+    integrationTestImplementation 'software.amazon.awssdk:regions'
 
     // JSON parsing for integration tests
     integrationTestImplementation "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
