@@ -65,15 +65,6 @@ variable "db_username" {
   default     = "dbadmin"
 }
 
-variable "db_password" {
-  description = "Password for the database"
-  sensitive   = true
-}
-
-# =============================================================================
-# DATA SOURCES
-# =============================================================================
-
 data "aws_caller_identity" "current" {}
 data "aws_availability_zones" "available" {}
 
@@ -104,40 +95,26 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true
 
-  tags = merge(local.common_tags, {
-    Name = "main-vpc"
-  })
+  tags = merge(local.common_tags, { Name = "main-vpc" })
 }
 
-# Internet Gateway
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-
-  tags = merge(local.common_tags, {
-    Name = "main-igw"
-  })
+  tags   = merge(local.common_tags, { Name = "main-igw" })
 }
 
-# Public Subnets
 resource "aws_subnet" "public" {
   count                   = length(var.public_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = element(local.availability_zones, count.index)
   map_public_ip_on_launch = true
-
-  tags = merge(local.common_tags, {
-    Name = "public-subnet-${count.index + 1}"
-  })
+  tags                    = merge(local.common_tags, { Name = "public-subnet-${count.index + 1}" })
 }
 
-# Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
-  tags = merge(local.common_tags, {
-    Name = "public-route-table"
-  })
+  tags   = merge(local.common_tags, { Name = "public-route-table" })
 }
 
 resource "aws_route" "public_igw" {
@@ -146,53 +123,37 @@ resource "aws_route" "public_igw" {
   gateway_id             = aws_internet_gateway.igw.id
 }
 
-# Public Route Table Association
 resource "aws_route_table_association" "public" {
   count          = length(var.public_subnet_cidrs)
   subnet_id      = element(aws_subnet.public.*.id, count.index)
   route_table_id = aws_route_table.public.id
 }
 
-# Private Subnets
 resource "aws_subnet" "private" {
   count                   = length(var.private_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
   cidr_block              = var.private_subnet_cidrs[count.index]
   availability_zone       = element(local.availability_zones, count.index)
   map_public_ip_on_launch = false
-
-  tags = merge(local.common_tags, {
-    Name = "private-subnet-${count.index + 1}"
-  })
+  tags                    = merge(local.common_tags, { Name = "private-subnet-${count.index + 1}" })
 }
 
-# NAT Gateway (if enabled)
 resource "aws_eip" "nat" {
   count  = var.enable_nat_gateway ? 1 : 0
   domain = "vpc"
-
-  tags = merge(local.common_tags, {
-    Name = "nat-eip"
-  })
+  tags   = merge(local.common_tags, { Name = "nat-eip" })
 }
 
 resource "aws_nat_gateway" "nat" {
   count         = var.enable_nat_gateway ? 1 : 0
   allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
-
-  tags = merge(local.common_tags, {
-    Name = "main-nat-gateway"
-  })
+  tags          = merge(local.common_tags, { Name = "main-nat-gateway" })
 }
 
-# Private Route Table
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.main.id
-
-  tags = merge(local.common_tags, {
-    Name = "private-route-table"
-  })
+  tags   = merge(local.common_tags, { Name = "private-route-table" })
 }
 
 resource "aws_route" "private_nat" {
@@ -202,7 +163,6 @@ resource "aws_route" "private_nat" {
   nat_gateway_id         = aws_nat_gateway.nat[0].id
 }
 
-# Private Route Table Association
 resource "aws_route_table_association" "private" {
   count          = length(var.private_subnet_cidrs)
   subnet_id      = element(aws_subnet.private.*.id, count.index)
@@ -242,9 +202,7 @@ resource "aws_security_group" "web" {
     description = "Allow all outbound traffic"
   }
 
-  tags = merge(local.common_tags, {
-    Name = "web-sg"
-  })
+  tags = merge(local.common_tags, { Name = "web-sg" })
 }
 
 resource "aws_security_group" "db" {
@@ -268,9 +226,7 @@ resource "aws_security_group" "db" {
     description = "Allow all outbound traffic"
   }
 
-  tags = merge(local.common_tags, {
-    Name = "db-sg"
-  })
+  tags = merge(local.common_tags, { Name = "db-sg" })
 }
 
 resource "aws_security_group" "alb" {
@@ -294,9 +250,7 @@ resource "aws_security_group" "alb" {
     description = "Allow all outbound traffic"
   }
 
-  tags = merge(local.common_tags, {
-    Name = "alb-sg"
-  })
+  tags = merge(local.common_tags, { Name = "alb-sg" })
 }
 
 # =============================================================================
@@ -305,13 +259,11 @@ resource "aws_security_group" "alb" {
 
 resource "aws_s3_bucket" "app" {
   bucket = local.s3_bucket_name
-
-  tags = local.common_tags
+  tags   = local.common_tags
 }
 
 resource "aws_s3_bucket_public_access_block" "app" {
-  bucket = aws_s3_bucket.app.id
-
+  bucket                  = aws_s3_bucket.app.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -320,23 +272,18 @@ resource "aws_s3_bucket_public_access_block" "app" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "app" {
   bucket = aws_s3_bucket.app.id
-
   rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
   }
 }
 
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = local.cloudtrail_bucket_name
-
-  tags = local.common_tags
+  tags   = local.common_tags
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
-  bucket = aws_s3_bucket.cloudtrail.id
-
+  bucket                  = aws_s3_bucket.cloudtrail.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -345,41 +292,30 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-
   rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
   }
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
   policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [
       {
-        Sid    = "AWSCloudTrailAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
+        Sid      = "AWSCloudTrailAclCheck",
+        Effect   = "Allow",
+        Principal = { Service = "cloudtrail.amazonaws.com" },
+        Action   = "s3:GetBucketAcl",
         Resource = "arn:aws:s3:::${local.cloudtrail_bucket_name}"
       },
       {
-        Sid    = "AWSCloudTrailWrite"
-        Effect = "Allow"
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "arn:aws:s3:::${local.cloudtrail_bucket_name}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
+        Sid      = "AWSCloudTrailWrite",
+        Effect   = "Allow",
+        Principal = { Service = "cloudtrail.amazonaws.com" },
+        Action   = "s3:PutObject",
+        Resource = "arn:aws:s3:::${local.cloudtrail_bucket_name}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+        Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
       }
     ]
   })
@@ -393,16 +329,8 @@ resource "aws_iam_role" "ec2_role" {
   name = "ec2-s3-access-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "ec2.amazonaws.com"
-        }
-      }
-    ]
+    Version = "2012-10-17",
+    Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" } }]
   })
 
   tags = local.common_tags
@@ -413,21 +341,12 @@ resource "aws_iam_policy" "s3_access" {
   description = "Policy that grants access to specific S3 bucket"
 
   policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "s3:GetObject",
-          "s3:ListBucket",
-          "s3:PutObject"
-        ]
-        Effect = "Allow"
-        Resource = [
-          "arn:aws:s3:::${local.s3_bucket_name}",
-          "arn:aws:s3:::${local.s3_bucket_name}/*"
-        ]
-      }
-    ]
+    Version = "2012-10-17",
+    Statement = [{
+      Action   = ["s3:GetObject", "s3:ListBucket", "s3:PutObject"],
+      Effect   = "Allow",
+      Resource = ["arn:aws:s3:::${local.s3_bucket_name}", "arn:aws:s3:::${local.s3_bucket_name}/*"]
+    }]
   })
 }
 
@@ -445,16 +364,8 @@ resource "aws_iam_role" "lambda_role" {
   name = "lambda-s3-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
+    Version = "2012-10-17",
+    Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" } }]
   })
 
   tags = local.common_tags
@@ -465,14 +376,12 @@ resource "aws_iam_policy" "lambda_s3_policy" {
   description = "Allow Lambda to access S3"
 
   policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action   = ["s3:GetObject"]
-        Effect   = "Allow"
-        Resource = "${aws_s3_bucket.app.arn}/*"
-      }
-    ]
+    Version = "2012-10-17",
+    Statement = [{
+      Action   = ["s3:GetObject"],
+      Effect   = "Allow",
+      Resource = "${aws_s3_bucket.app.arn}/*"
+    }]
   })
 }
 
@@ -490,16 +399,8 @@ resource "aws_iam_role" "config_role" {
   name = "aws-config-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "config.amazonaws.com"
-        }
-      }
-    ]
+    Version = "2012-10-17",
+    Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "config.amazonaws.com" } }]
   })
 
   tags = local.common_tags
@@ -517,8 +418,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 resource "aws_kms_key" "rds" {
   description         = "KMS key for RDS encryption"
   enable_key_rotation = true
-
-  tags = local.common_tags
+  tags                = local.common_tags
 }
 
 resource "aws_kms_alias" "rds" {
@@ -529,8 +429,7 @@ resource "aws_kms_alias" "rds" {
 resource "aws_db_subnet_group" "default" {
   name       = "main-db-subnet-group"
   subnet_ids = aws_subnet.private.*.id
-
-  tags = local.common_tags
+  tags       = local.common_tags
 }
 
 resource "aws_db_parameter_group" "postgres" {
@@ -545,6 +444,18 @@ resource "aws_db_parameter_group" "postgres" {
   tags = local.common_tags
 }
 
+# ── Generate a strong random DB password (no manual input).
+#    RDS forbids certain characters in master password; we use a safe set.
+resource "random_password" "db_master" {
+  length           = 24
+  special          = true
+  override_special = "_#%+=-"
+  min_lower        = 1
+  min_upper        = 1
+  min_numeric      = 1
+  min_special      = 1
+}
+
 resource "aws_db_instance" "postgres" {
   allocated_storage            = 20
   storage_type                 = "gp3"
@@ -553,7 +464,7 @@ resource "aws_db_instance" "postgres" {
   instance_class               = var.db_instance_class
   db_name                      = var.db_name
   username                     = var.db_username
-  password                     = var.db_password
+  password                     = random_password.db_master.result
   parameter_group_name         = aws_db_parameter_group.postgres.name
   vpc_security_group_ids       = [aws_security_group.db.id]
   db_subnet_group_name         = aws_db_subnet_group.default.name
@@ -574,16 +485,14 @@ resource "aws_db_instance" "postgres" {
 # =============================================================================
 
 resource "aws_lb" "app" {
-  name               = "app-load-balancer"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public.*.id
-
-  enable_deletion_protection = true
-  drop_invalid_header_fields = true
-
-  tags = local.common_tags
+  name                        = "app-load-balancer"
+  internal                    = false
+  load_balancer_type          = "application"
+  security_groups             = [aws_security_group.alb.id]
+  subnets                     = aws_subnet.public.*.id
+  enable_deletion_protection  = true
+  drop_invalid_header_fields  = true
+  tags                        = local.common_tags
 }
 
 resource "aws_lb_target_group" "app" {
@@ -611,8 +520,6 @@ resource "aws_lb_listener" "https" {
   port              = 443
   protocol          = "HTTPS"
   ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-
-  # This would typically come from ACM and be provided as a variable
   # certificate_arn   = var.certificate_arn
 
   default_action {
@@ -623,14 +530,12 @@ resource "aws_lb_listener" "https" {
 
 resource "aws_launch_template" "app" {
   name_prefix   = "app-launch-template"
-  image_id      = "ami-0c65adc9a5c1b5d7c" # Latest Amazon Linux 2023 (you might want to use a data source here)
+  image_id      = "ami-0c65adc9a5c1b5d7c"
   instance_type = "t3.micro"
 
   vpc_security_group_ids = [aws_security_group.web.id]
 
-  iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_profile.name
-  }
+  iam_instance_profile { name = aws_iam_instance_profile.ec2_profile.name }
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
@@ -643,7 +548,6 @@ resource "aws_launch_template" "app" {
 
   block_device_mappings {
     device_name = "/dev/xvda"
-
     ebs {
       volume_size           = 20
       volume_type           = "gp3"
@@ -652,9 +556,7 @@ resource "aws_launch_template" "app" {
     }
   }
 
-  monitoring {
-    enabled = true
-  }
+  monitoring { enabled = true }
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -719,27 +621,20 @@ data "archive_file" "inline_lambda" {
       // index.js
       // Simple processor: accepts an array of numbers and returns { sum, avg, count }
       exports.handler = async (event) => {
-        // Expect event.body as JSON string or event as object with 'data'
         let payload;
         try {
           payload = (typeof event?.body === "string") ? JSON.parse(event.body) : event;
         } catch (e) {
           return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON" }) };
         }
-
         const items = Array.isArray(payload?.data) ? payload.data : [];
         if (!Array.isArray(items) || items.some(n => typeof n !== "number")) {
           return { statusCode: 400, body: JSON.stringify({ error: "data must be an array of numbers" }) };
         }
-
         const count = items.length;
         const sum   = items.reduce((a, b) => a + b, 0);
         const avg   = count ? sum / count : 0;
-
-        return {
-          statusCode: 200,
-          body: JSON.stringify({ count, sum, avg })
-        };
+        return { statusCode: 200, body: JSON.stringify({ count, sum, avg }) };
       };
     JS
     filename = "index.js"
@@ -749,12 +644,8 @@ data "archive_file" "inline_lambda" {
 resource "aws_lambda_function" "app" {
   function_name = "app-processor"
   role          = aws_iam_role.lambda_role.arn
-
-  # Matches the inline file above
-  handler = "index.handler"
-  runtime = "nodejs18.x"
-
-  # Use the inline-archived ZIP
+  handler       = "index.handler"
+  runtime       = "nodejs18.x"
   filename         = data.archive_file.inline_lambda.output_path
   source_code_hash = data.archive_file.inline_lambda.output_base64sha256
 
@@ -766,6 +657,7 @@ resource "aws_lambda_function" "app" {
 
   tags = local.common_tags
 }
+
 resource "aws_lambda_permission" "allow_bucket" {
   statement_id  = "AllowExecutionFromS3Bucket"
   action        = "lambda:InvokeFunction"
@@ -782,9 +674,7 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
     events              = ["s3:ObjectCreated:*"]
   }
 
-  depends_on = [
-    aws_lambda_permission.allow_bucket,
-  ]
+  depends_on = [aws_lambda_permission.allow_bucket]
 }
 
 # =============================================================================
@@ -794,8 +684,7 @@ resource "aws_s3_bucket_notification" "bucket_notification" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${aws_lambda_function.app.function_name}"
   retention_in_days = 14
-
-  tags = local.common_tags
+  tags              = local.common_tags
 }
 
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
@@ -809,12 +698,8 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   threshold           = 80
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
-  }
-
-  tags = local.common_tags
+  dimensions          = { AutoScalingGroupName = aws_autoscaling_group.app.name }
+  tags                = local.common_tags
 }
 
 resource "aws_cloudwatch_metric_alarm" "low_cpu" {
@@ -828,12 +713,8 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   threshold           = 20
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
-
-  dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.app.name
-  }
-
-  tags = local.common_tags
+  dimensions          = { AutoScalingGroupName = aws_autoscaling_group.app.name }
+  tags                = local.common_tags
 }
 
 # =============================================================================
@@ -843,11 +724,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 resource "aws_api_gateway_rest_api" "app" {
   name        = "app-api"
   description = "API Gateway for web application"
-
-  endpoint_configuration {
-    types = ["REGIONAL"]
-  }
-
+  endpoint_configuration { types = ["REGIONAL"] }
   tags = local.common_tags
 }
 
@@ -875,12 +752,9 @@ resource "aws_api_gateway_integration" "lambda" {
 
 resource "aws_api_gateway_deployment" "app" {
   depends_on = [aws_api_gateway_integration.lambda]
-
   rest_api_id = aws_api_gateway_rest_api.app.id
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  lifecycle { create_before_destroy = true }
 }
 
 # =============================================================================
@@ -919,12 +793,8 @@ resource "aws_cloudtrail" "main" {
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true
-
-  depends_on = [
-    aws_s3_bucket_policy.cloudtrail
-  ]
-
-  tags = local.common_tags
+  depends_on                    = [aws_s3_bucket_policy.cloudtrail]
+  tags                          = local.common_tags
 }
 
 # =============================================================================
@@ -1019,4 +889,11 @@ output "lambda_function_arn" {
 output "config_recorder_status" {
   description = "Status of the AWS Config recorder"
   value       = aws_config_configuration_recorder_status.main.is_enabled
+}
+
+# Optional: expose the generated DB password (kept sensitive).
+output "db_password" {
+  description = "Generated master DB password"
+  value       = random_password.db_master.result
+  sensitive   = true
 }
