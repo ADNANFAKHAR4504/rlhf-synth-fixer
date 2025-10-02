@@ -70,7 +70,7 @@ resource "aws_security_group" "ec2" {
 
 # Application Load Balancer
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-${var.environment}-alb-${var.aws_region}"
+  name               = "${var.project_name}-${var.environment}-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -87,13 +87,13 @@ resource "aws_lb" "main" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-alb-${var.aws_region}"
+    Name = "${var.project_name}-${var.environment}-alb"
   }
 }
 
 # Target Group
 resource "aws_lb_target_group" "main" {
-  name     = "${var.project_name}-${var.environment}-tg-${var.aws_region}"
+  name     = "${var.project_name}-${var.environment}-tg"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
@@ -111,7 +111,7 @@ resource "aws_lb_target_group" "main" {
   deregistration_delay = 30
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-tg-${var.aws_region}"
+    Name = "${var.project_name}-${var.environment}-tg"
   }
 }
 
@@ -182,7 +182,7 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.project_name}-${var.environment}-asg-${var.aws_region}"
+  name                      = "${var.project_name}-${var.environment}-asg"
   vpc_zone_identifier       = aws_subnet.private[*].id
   target_group_arns         = [aws_lb_target_group.main.arn]
   health_check_type         = "ELB"
@@ -207,14 +207,14 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-${var.environment}-asg-${var.aws_region}"
+    value               = "${var.project_name}-${var.environment}-asg"
     propagate_at_launch = true
   }
 }
 
 # Auto Scaling Policy
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${var.project_name}-${var.environment}-scale-up-${var.aws_region}"
+  name                   = "${var.project_name}-${var.environment}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -222,7 +222,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${var.project_name}-${var.environment}-scale-down-${var.aws_region}"
+  name                   = "${var.project_name}-${var.environment}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
