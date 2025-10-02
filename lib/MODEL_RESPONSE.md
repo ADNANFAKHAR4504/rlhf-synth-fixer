@@ -1,7 +1,7 @@
 ### Reasoning Trace
 ---
 
-Let me plan out a comprehensive Terraform file that meets all the requirements stated. I'll structure the `tap_stack.tf` file in a logical manner, covering all the components required for a secure, multi-region deployment.
+Let me plan out a comprehensive Terraform file that meets all the requirements stated. I'll structure the file in a logical manner, covering all the components required for a secure, multi-region deployment.
 
 Here's the outline of how I'll structure the file:
 
