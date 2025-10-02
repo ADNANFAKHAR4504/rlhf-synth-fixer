@@ -1197,14 +1197,15 @@ def handler(event, context):
             opts=ResourceOptions(parent=self, depends_on=[self.lambda_policy])
         )
         
-        # CloudWatch Log Group for Lambda
+        # CloudWatch Log Group for Lambda - FIXED: use apply to handle Output[str]
         self.lambda_log_group = aws.cloudwatch.LogGroup(
             f"tap-lambda-log-group-{self.environment_suffix}",
-            name=f"/aws/lambda/{self.tenant_provisioning_lambda.name}",
+            name=self.tenant_provisioning_lambda.name.apply(lambda name: f"/aws/lambda/{name}"),  # ✅ Correct
             retention_in_days=7,
             tags={**self.tags, 'Name': f'tap-lambda-log-group-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
+
         
         # ═══════════════════════════════════════════════════════════════
         # MONITORING - CloudWatch Log Groups Per Tenant
