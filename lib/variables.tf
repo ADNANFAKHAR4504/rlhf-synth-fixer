@@ -1,13 +1,13 @@
 variable "aws_region" {
   description = "AWS region for primary resources"
   type        = string
-  default     = "ca-central-1"
+  default     = "eu-central-1"
 }
 
 variable "peer_region" {
   description = "AWS region for peer VPC"
   type        = string
-  default     = "ca-west-1"
+  default     = "eu-west-1"
 }
 
 variable "environment" {
