@@ -9,21 +9,16 @@ import { CloudWatchClient, GetDashboardCommand, DescribeAlarmsCommand } from '@a
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Mock outputs for testing (in real deployment, these would come from cfn-outputs)
-const mockOutputs = {
-  [`NewsWebsiteBucket-${environmentSuffix}`]: `news-website-content-${environmentSuffix}-123456789012`,
-  [`NewsDistributionId-${environmentSuffix}`]: 'E1234567890ABC',
-  [`NewsDistributionDomain-${environmentSuffix}`]: 'd1234567890abc.cloudfront.net',
-  [`NewsKMSKeyId-${environmentSuffix}`]: '12345678-1234-1234-1234-123456789012'
-};
-
-// Try to read actual outputs, fall back to mock for testing
+// Read actual deployment outputs (required for integration tests)
 let outputs;
 try {
   outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
+  console.log('✅ Loaded deployment outputs from cfn-outputs/flat-outputs.json');
 } catch (error) {
-  console.log('Using mock outputs for testing');
-  outputs = mockOutputs;
+  console.error('❌ Failed to load deployment outputs:', error.message);
+  console.error('💡 Integration tests require real deployment outputs from cfn-outputs/flat-outputs.json');
+  console.error('🚀 Deploy the stack first using: ./scripts/deploy.sh');
+  process.exit(1);
 }
 
 // AWS clients
@@ -78,6 +73,23 @@ describe('News Website Infrastructure Integration Tests', () => {
   const distributionId = outputs[`NewsDistributionId-${environmentSuffix}`];
   const distributionDomain = outputs[`NewsDistributionDomain-${environmentSuffix}`];
   const kmsKeyId = outputs[`NewsKMSKeyId-${environmentSuffix}`];
+
+  beforeAll(() => {
+    // Validate that all required outputs are present
+    if (!bucketName || !distributionId || !distributionDomain || !kmsKeyId) {
+      console.error('❌ Missing required deployment outputs:');
+      console.error(`  - Bucket Name: ${bucketName || 'MISSING'}`);
+      console.error(`  - Distribution ID: ${distributionId || 'MISSING'}`);
+      console.error(`  - Distribution Domain: ${distributionDomain || 'MISSING'}`);
+      console.error(`  - KMS Key ID: ${kmsKeyId || 'MISSING'}`);
+      throw new Error('Integration tests require all deployment outputs to be present');
+    }
+    
+    console.log('✅ All deployment outputs validated successfully');
+    console.log(`🗄️  Bucket: ${bucketName}`);
+    console.log(`🌐 Distribution: ${distributionId} (${distributionDomain})`);
+    console.log(`🔐 KMS Key: ${kmsKeyId}`);
+  });
 
   describe('S3 Bucket Operations', () => {
     test('should upload content to S3 bucket with KMS encryption', async () => {
