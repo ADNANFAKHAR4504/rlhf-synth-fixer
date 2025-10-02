@@ -27,7 +27,7 @@ if [ "$LANGUAGE" = "java" ]; then
   chmod +x ./gradlew
   ./gradlew integrationTest jacocoIntegrationTestReport --build-cache --no-daemon
 
-elif [ "$LANGUAGE" = "py" ]; then
+elif [ "$LANGUAGE" = "py" ] || [ "$LANGUAGE" = "python" ]; then
   echo "✅ Python project detected, running integration tests..."
   pipenv run test-py-integration
 
