@@ -144,17 +144,18 @@ class TapStack(pulumi.ComponentResource):
         # Elastic IPs for NAT Gateways
         self.eip_nat_a = aws.ec2.Eip(
             f"tap-eip-nat-a-{self.environment_suffix}",
-            vpc=True,
-            tags={**self.tags, 'Name': f'tap-eip-nat-a-{self.environment_suffix}'},
+            domain="vpc",  # Use domain parameter instead
+            tags={**self.tags, "Name": f"tap-eip-nat-a-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
 
         self.eip_nat_b = aws.ec2.Eip(
             f"tap-eip-nat-b-{self.environment_suffix}",
-            vpc=True,
-            tags={**self.tags, 'Name': f'tap-eip-nat-b-{self.environment_suffix}'},
+            domain="vpc",  # Use domain parameter instead
+            tags={**self.tags, "Name": f"tap-eip-nat-b-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
         )
+
 
         # NAT Gateways for private subnet internet access (high availability)
         self.nat_gateway_a = aws.ec2.NatGateway(
